@@ -42,7 +42,7 @@ export interface V2Db {
   intake_runs?: Record<string, { run_id: string; answer_ids: string[]; document?: string }>;
   /** C5 late answers: the answers given after drafting started that became feedback items
    * on the PRD (answer id -> where), as late_answers.on_answer makes them. */
-  late_answer_feedback?: Record<string, { intake_id: string; slug: string; version: number }>;
+  late_answer_feedback?: Record<string, { intake_id: string; slug: string; version: number; withheld?: boolean }>;
 }
 
 /** URL segment after /v1 -> the table it lists. */

@@ -82,9 +82,10 @@ export interface IntakeContext {
     document: string,
     item: { summary: string; author_id: string | null; intake_question_id: string; intake_answer_id: string },
   ) => { slug: string; version: number } | null;
-  /** Withdraws (deletes) the late answers' feedback items of these answers, as
-   * late_answers.on_sharing does when their finding goes back to private or counts. */
-  withdrawFeedback?: (answerIds: string[]) => void;
+  /** Withdraws the late answers' feedback items of these answers, as late_answers.on_sharing
+   * does when their finding goes back to private or counts: deletes the ones nobody acted on,
+   * keeps the others with their quote withheld; returns the answer ids of the kept ones. */
+  withdrawFeedback?: (answerIds: string[]) => string[];
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -328,7 +329,7 @@ function drafting(
   if (!run) return { draft_run_id: null, answers_since_run: 0, late_answers_as_feedback: 0, draft_document: null, draft_version: null };
   const mine = new Set(db.questions.filter((q) => q.intake_id === intake.id).map((q) => q.id));
   const since = db.answers.filter((a) => mine.has(a.question_id) && !run.answer_ids.includes(a.id)).length;
-  const raised = Object.values(db.late_answer_feedback ?? {}).filter((r) => r.intake_id === intake.id);
+  const raised = Object.values(db.late_answer_feedback ?? {}).filter((r) => r.intake_id === intake.id && !r.withheld);
   const last = raised.at(-1);
   return {
     draft_run_id: run.run_id,
@@ -341,6 +342,8 @@ function drafting(
 
 /** The prefix of a late answer's feedback item, as late_answers.LEAD. */
 export const LATE_ANSWER_LEAD = "Answered after drafting started";
+/** A kept item's summary while its finding is not shared in full, as late_answers.WITHHELD. */
+export const LATE_ANSWER_WITHHELD = `${LATE_ANSWER_LEAD} (withheld while its finding is not shared in full)`;
 
 /**
  * C5 late answers, as late_answers.on_answer: an answer with a body given after the intake's
@@ -352,7 +355,8 @@ function raiseLateAnswer(db: V2Db, ctx: IntakeContext, question: Question, answe
   if (!intake || !run || intake.status !== "converted" || run.answer_ids.includes(answer.id)) return;
   if (answer.kind !== "answer" || !answer.body || !ctx.raiseFeedback) return;
   const gap = db.gaps.find((g) => g.id === question.gap_id);
-  if ((gap && !quotable(db, gap)) || db.late_answer_feedback?.[answer.id]) return;
+  const before = db.late_answer_feedback?.[answer.id];
+  if ((gap && !quotable(db, gap)) || (before && !before.withheld)) return;
   const document = intake.document_id ?? run.document;
   if (!document) return;
   const at = ctx.raiseFeedback(document, {
@@ -361,7 +365,8 @@ function raiseLateAnswer(db: V2Db, ctx: IntakeContext, question: Question, answe
     intake_question_id: question.id,
     intake_answer_id: answer.id,
   });
-  if (at) db.late_answer_feedback = { ...db.late_answer_feedback, [answer.id]: { intake_id: intake.id, ...at } };
+  // A kept item reads in full again (raiseFeedback restores its summary).
+  if (at) db.late_answer_feedback = { ...db.late_answer_feedback, [answer.id]: { intake_id: intake.id, ...(before ?? at), withheld: false } };
 }
 
 /**
@@ -382,8 +387,11 @@ function lateAnswersOnSharing(db: V2Db, ctx: IntakeContext, gapId: string) {
   const answers = db.answers.filter((a) => questions.some((q) => q.id === a.question_id));
   if (!quotable(db, gap)) {
     const ids = answers.map((a) => a.id).filter((id) => db.late_answer_feedback?.[id]);
-    ctx.withdrawFeedback?.(ids);
-    for (const id of ids) delete db.late_answer_feedback![id];
+    const kept = ctx.withdrawFeedback?.(ids) ?? [];
+    for (const id of ids) {
+      if (kept.includes(id)) db.late_answer_feedback![id] = { ...db.late_answer_feedback![id], withheld: true };
+      else delete db.late_answer_feedback![id];
+    }
     return;
   }
   for (const a of answers) raiseLateAnswer(db, ctx, questions.find((q) => q.id === a.question_id)!, a);

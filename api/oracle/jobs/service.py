@@ -13,7 +13,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import yaml
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -778,6 +778,21 @@ async def apply_refinement(
     if base.number != await latest_number(db, document.id):
         raise JobError(409, "a newer version exists; refine the section again")
     key = out["section_key"]
+    # A newer refinement of the section replaced this preview: Undo no longer waits on it
+    # (_in_use), so applying it could mark a re-opened suggestion applied (#595 re-review).
+    newer = await db.scalar(
+        select(LlmJob.id)
+        .where(
+            LlmJob.document_id == job.document_id,
+            LlmJob.kind == "refinement",
+            LlmJob.section_key == job.section_key,
+            LlmJob.status.in_(("queued", "running", "succeeded")),
+            tuple_(LlmJob.created_at, LlmJob.id) > tuple_(job.created_at, job.id),
+        )
+        .limit(1)
+    )
+    if newer is not None:
+        raise JobError(409, "a newer refinement of this section replaced it; apply that one")
     locked = await locked_section_keys(db, base.id)
     if key in locked:
         raise JobError(409, f"section {key!r} is approved and locked; it is never changed")

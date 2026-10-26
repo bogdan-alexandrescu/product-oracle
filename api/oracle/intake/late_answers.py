@@ -11,25 +11,30 @@ Raised when the answer is given if the PRD has a version, else when the run impo
 its draft (:func:`sync`). An answer to a gap others may not read in full (S6: private,
 or shared at counts only) is never quoted in feedback, which every approver reads: the
 intake page still counts it. The item follows the finding's level (:func:`on_sharing`):
-withdrawn (deleted) when the finding goes back to private or to counts, raised when it is
-shared from summary up, also for an answer given while it was private. Nothing here commits.
+withdrawn when the finding goes back to private or to counts (deleted when nobody acted on
+it; kept with its quote withheld when someone did: triaged it, or decided a suggestion on
+it), raised or read in full again when it is shared from summary up, also for an answer
+given while it was private. Nothing here commits.
 """
 
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
 from oracle.docs.models import DocumentVersion
 from oracle.intake import drafting
+from oracle.jobs.models import LlmSuggestion
 from oracle.review.models import FeedbackItem
 from oracle.runs.models import Run
 from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderAnswer, StakeholderQuestion
 
 #: How a late answer reads as a feedback item (owner's wording; questions.json).
 LEAD = "Answered after drafting started"
+#: The summary of an item kept while its finding is not shared in full (#595 re-review).
+WITHHELD = f"{LEAD} (withheld while its finding is not shared in full)"
 
 
 def summary_of(question: StakeholderQuestion, answer: StakeholderAnswer) -> str:
@@ -72,7 +77,14 @@ async def _raise(
         return None
     if not await _quotable(db, intake, question):
         return None
-    if await db.scalar(select(FeedbackItem.id).where(FeedbackItem.intake_answer_id == answer.id)):
+    kept = await db.scalar(select(FeedbackItem).where(FeedbackItem.intake_answer_id == answer.id))
+    if kept is not None:
+        if kept.summary == WITHHELD:
+            kept.summary = summary_of(question, answer)
+            await audit.record(
+                db, audit.ORACLE, "feedback.unwithhold", "feedback_item", kept.id,
+                {"intake_id": str(intake.id), "reason": "finding_shared"},
+            )  # fmt: skip
         return None
     item = FeedbackItem(
         document_id=document_id,
@@ -158,7 +170,8 @@ async def sync(db: AsyncSession, run: Run, document_id: uuid.UUID) -> int:
 async def on_sharing(db: AsyncSession, intake: ProductIntake, gaps: list[KnowledgeGap]) -> None:
     """These gaps' findings changed level (S6): the items quoting their late answers are
     withdrawn when others may no longer read the answers in full, and raised when they may
-    (#587 review)."""
+    (#587 review). An item someone acted on (triaged, staged, or with a suggestion decided)
+    is kept with its quote withheld, so nothing others did on it goes (#595 re-review)."""
     from oracle.intake.answers import proposal_mode
 
     hidden = [g.id for g in gaps if proposal_mode(intake, g) != "full"]
@@ -166,18 +179,39 @@ async def on_sharing(db: AsyncSession, intake: ProductIntake, gaps: list[Knowled
         questions = select(StakeholderQuestion.id).where(
             StakeholderQuestion.intake_id == intake.id, StakeholderQuestion.gap_id.in_(hidden)
         )
-        gone = list(
+        items = list(
             await db.scalars(
-                delete(FeedbackItem)
-                .where(FeedbackItem.intake_question_id.in_(questions))
-                .returning(FeedbackItem.id)
+                select(FeedbackItem).where(FeedbackItem.intake_question_id.in_(questions))
             )
         )
-        for item_id in gone:
+        decided = set(
+            await db.scalars(
+                select(LlmSuggestion.feedback_item_id).where(
+                    LlmSuggestion.feedback_item_id.in_([i.id for i in items]),
+                    LlmSuggestion.status.not_in(("open", "superseded")),
+                )
+            )
+        )
+        for item in items:
+            acted = (
+                item.status != "open"
+                or item.resolution_note
+                or item.staged_for_agents_at
+                or item.id in decided
+            )
+            if acted and item.summary == WITHHELD:
+                continue
+            if acted:
+                item.summary = WITHHELD
+                action = "feedback.withhold"
+            else:
+                await db.delete(item)
+                action = "feedback.withdraw"
             await audit.record(
-                db, audit.ORACLE, "feedback.withdraw", "feedback_item", item_id,
+                db, audit.ORACLE, action, "feedback_item", item.id,
                 {"intake_id": str(intake.id), "reason": "finding_not_shared"},
             )  # fmt: skip
+        await db.flush()
     shown = [g.id for g in gaps if g.id not in hidden]
     if not shown or (target := await _target(db, intake)) is None:
         return
@@ -203,12 +237,13 @@ async def on_sharing(db: AsyncSession, intake: ProductIntake, gaps: list[Knowled
 
 
 async def counted(db: AsyncSession, intake: ProductIntake) -> int:
-    """How many of the intake's answers became feedback items."""
+    """How many of the intake's answers became feedback items (not counting ones whose
+    quote is withheld)."""
     return (
         await db.scalar(
             select(func.count(FeedbackItem.id))
             .join(StakeholderQuestion, StakeholderQuestion.id == FeedbackItem.intake_question_id)
-            .where(StakeholderQuestion.intake_id == intake.id)
+            .where(StakeholderQuestion.intake_id == intake.id, FeedbackItem.summary != WITHHELD)
         )
         or 0
     )

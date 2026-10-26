@@ -74,7 +74,7 @@ import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
 import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { BEFORE_DRAFTING, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
+import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
@@ -3905,6 +3905,13 @@ async function route(db: Db, req: Request): Promise<Response> {
       const latest = doc ? docVersions(db, doc).pop() : undefined;
       if (!doc || !latest) return null;
       const at = now();
+      // An item kept with its quote withheld reads in full again.
+      const kept = db.feedback.find((f) => f.intake_answer_id === input.intake_answer_id);
+      if (kept) {
+        Object.assign(kept, { summary: input.summary, updated_at: at });
+        touch(db, kept.document_id);
+        return { slug: doc.slug, version: kept.raised_on_version };
+      }
       db.feedback.push({
         id: uuid(), document_id: doc.id, raised_on_version: latest.number, kind: "general", comment_id: null, section_review_id: null,
         section_key: null, summary: input.summary, author_id: input.author_id, anchor: null, verdict: null, status: "open",
@@ -3916,15 +3923,24 @@ async function route(db: Db, req: Request): Promise<Response> {
       onFeedback(llm, doc.id, latest.number);
       return { slug: doc.slug, version: latest.number };
     };
+    // As late_answers.on_sharing: an item nobody acted on goes, with its suggestions (the
+    // API's cascade); one someone triaged, staged or decided a suggestion on stays, its quote withheld.
     const withdrawFeedback = (answerIds: string[]) => {
+      const kept: string[] = [];
       for (let i = db.feedback.length - 1; i >= 0; i--) {
         const f = db.feedback[i];
         if (!f.intake_answer_id || !answerIds.includes(f.intake_answer_id)) continue;
-        db.feedback.splice(i, 1);
-        // Its suggestions go with it, as the API's cascade.
-        if (db.llm) db.llm.suggestions = db.llm.suggestions.filter((x) => x.feedback_item_id !== f.id);
+        const decided = db.llm?.suggestions.some((x) => x.feedback_item_id === f.id && x.status !== "open" && x.status !== "superseded");
+        if (f.status !== "open" || f.resolution_note || f.staged_for_agents_at || decided) {
+          Object.assign(f, { summary: LATE_ANSWER_WITHHELD, updated_at: now() });
+          kept.push(f.intake_answer_id);
+        } else {
+          db.feedback.splice(i, 1);
+          if (db.llm) db.llm.suggestions = db.llm.suggestions.filter((x) => x.feedback_item_id !== f.id);
+        }
         touch(db, f.document_id);
       }
+      return kept;
     };
     const intake = await routeIntake(
       v2db,
