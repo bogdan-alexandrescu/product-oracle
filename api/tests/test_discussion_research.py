@@ -110,7 +110,7 @@ async def test_research_starts_one_run_and_says_so(client):
         assert line["author_kind"] == "system" and line["reply_to"] == asked["id"]
         assert line["body"] == research.started_line("Approver")
         (run,) = await _runs(ctx.tenant_id)
-        assert line["research"] == {"run_id": str(run.id), "status": "running"}
+        assert line["research"] == {"run_id": str(run.id), "status": "running", "error": None}
         assert float(run.estimate_usd) == 2.0
         assert run.created_by == ctx.users["approver"].id
         assert run.status == "running", run.status
@@ -189,7 +189,7 @@ async def test_the_answer_comes_back_as_oracles_with_its_sources(client):
         assert run.status == "succeeded", run.status
         rows = await _messages(client, ctx, d["id"], "viewer")
         line = next(m for m in rows if m["id"] == line_id)
-        assert line["research"] == {"run_id": str(run.id), "status": "done"}
+        assert line["research"] == {"run_id": str(run.id), "status": "done", "error": None}
         (answer,) = [m for m in rows if m["research"] and m["author_kind"] == "oracle"]
         assert answer["reply_to"] == asked["id"] and answer["status"] == "complete"
         assert answer["body"] == ANSWER.replace(" [c:99]", "")
@@ -376,7 +376,8 @@ async def test_an_answer_stored_before_the_fix_is_withheld_from_a_commenter(clie
                                 headers=ctx.as_("commenter"))  # fmt: skip
         assert resp.status_code == 200, resp.text
         assert not _names_memo(resp.text, memo_id)
-        answers = [m for m in resp.json()["items"] if m["author_kind"] == "oracle"]
+        answers = [m for m in resp.json()["items"]
+                   if m["author_kind"] == "oracle" and m["research"]]  # fmt: skip
         assert len(answers) == 2 and all(m["citations"] == [] for m in answers)
         assert {m["body"] for m in answers} == {research.WITHHELD, "It is settled."}
         theirs = await _messages(client, ctx, d["id"], "approver")

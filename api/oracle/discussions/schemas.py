@@ -242,6 +242,8 @@ class DiscussionMessageOut(BaseModel):
 class MessageResearch(BaseModel):
     run_id: uuid.UUID
     status: Literal["running", "done", "failed"]
+    # Why it failed, in words, when the run could not start (a budget, one build at a time).
+    error: str | None = None
 
 
 class ResearchIn(BaseModel):

@@ -828,10 +828,18 @@ def message_out(
         )
         if m.author_kind == "oracle" and role == "owner"
         else None,
-        research=MessageResearch(run_id=m.run_id, status=research.get(m.run_id, "running"))  # type: ignore[arg-type]
+        research=_research_out(m, research)
         if m.run_id is not None and research is not None
         else None,
     )
+
+
+def _research_out(m: DiscussionMessage, states: dict[uuid.UUID, str]) -> MessageResearch:
+    assert m.run_id is not None
+    state = states.get(m.run_id, "running")
+    # A line whose run could not start keeps why, in words (#584 review).
+    why = m.error if m.author_kind == "system" and state == "failed" else None
+    return MessageResearch(run_id=m.run_id, status=state, error=why)  # type: ignore[arg-type]
 
 
 async def messages_out(
@@ -841,7 +849,9 @@ async def messages_out(
     users = await users_by_id(db, ids)
     role = principal.role if principal is not None else None
     states = await research.statuses(db, rows)
-    return [message_out(m, users, role, states) for m in rows]
+    outs = [message_out(m, users, role, states) for m in rows]
+    await research.for_reader(db, rows, outs)
+    return outs
 
 
 async def list_messages(

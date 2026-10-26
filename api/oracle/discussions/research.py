@@ -6,15 +6,25 @@ the discussion as ``me.research_usd`` before it starts). It runs in SwarmCloud l
 other run (the same runtime, a run token with the flow's read scopes only), and:
 
 - a system line says who asked, replying to the message, with the run's id;
-- its prompt carries the question and the discussion's context exactly as Oracle's live
-  reply reads it (oracle.discussions.context: S6, no one's own sources, wrapped as data),
-  numbered ``[c:n]``; the context's entries are kept on the line;
-- when the run succeeds, its ``answer.md`` comes back into the thread as Oracle's message
-  (replying to the question, ``run_id`` set), each ``[c:n]`` it used a citation from those
-  entries and a marker that points at nothing removed (as a reply's).
+- its prompt carries the question and the discussion's context as Oracle's live reply
+  reads it (oracle.discussions.context: S6, no one's own sources, wrapped as data), built
+  with a commenter's view (``visibility.MEMBER``) whoever started it: the flow is
+  ``member_output``, every member in the discussion reads the answer, so its context,
+  prompt, tools and citations see only what a commenter may (#584 review); numbered
+  ``[c:n]``, the context's entries kept on the line;
+- it may also read the open web (``read:web``: search_web and fetch_web_page), each search
+  counted against the company's monthly allowance (oracle.web.router);
+- when the run succeeds, its ``answer.md`` comes back into the thread once as Oracle's
+  message (replying to the question, ``run_id`` set), each ``[c:n]`` it used a citation
+  from those entries a commenter may see, each ``[w-n]`` a web result or page this run read
+  (a ``web`` citation linking to it), and a marker that points at nothing removed;
+- at read time an answer naming a hidden document or decision is withheld from a reader
+  who may not see it, and a citation naming one is dropped (:func:`for_reader`), answers
+  stored before the fix included.
 
 The line reads ``running`` while the run is under way, ``done`` once the answer is in, and
-``failed`` when the run ended without one; then Research this may be asked again.
+``failed`` when the run ended without one or could not start (the line keeps why, in
+words); then Research this may be asked again.
 """
 
 import re
@@ -34,6 +44,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
 from oracle.discussions import access, context, replies
 from oracle.discussions.models import MAX_BODY, Discussion, DiscussionMessage
+from oracle.docs import visibility
 from oracle.members.names import display_name
 from oracle.runs import extensions, flows
 from oracle.runs.models import Run
@@ -46,8 +57,13 @@ ALREADY = "Oracle is already researching this"
 APPROVERS = "Approvers and owners start research"
 PEOPLE_ONLY = "Only a person's message can be researched"
 NOT_FOUND = "Message not found"
+# What a reader sees in place of an answer that names something they may not see.
+WITHHELD = "This answer is withheld: it names something you can't see."
 # The space a removed marker leaves before punctuation, or doubled.
 _GAP = re.compile(r"[ \t]+(?=[.,;:!?])|(?<=[ \t])[ \t]+")
+# A web result or page the run read, as the answer cites it (oracle.web: ``w-<n>``).
+_WEB = re.compile(r"\[w-(\d{1,4})\]")
+_CITE = re.compile(r"\[c:(\d{1,4})\]")
 
 
 def started_line(name: str) -> str:
@@ -136,7 +152,7 @@ async def start(
     )
     db.add(line)
     await db.flush()
-    ctx = await context.build(db, d, line.id)
+    ctx = await member_context(current_tenant(db), d.id, line.id)
     line.prompt = ctx.text()
     line.citations = list(ctx.entries.values())
     body = RunCreate(flow=FLOW, knobs=KnobsIn(depth=flows.FLOWS[FLOW].default_depth))  # type: ignore[arg-type]
@@ -162,9 +178,42 @@ async def start(
         await runs_service.estimate(db, principal, run_id)
         await runs_service.start(db, principal, run_id)
     except runs_service.RunError as e:
-        raise service.DiscussionError(e.status, str(e)) from e
+        # The runs refused it (a budget, one build at a time): the line says so, in words,
+        # and the run ends, so Research this may be asked again (#584 review).
+        await db.rollback()
+        await _failed_start(db, line.id, run_id, str(e))
     await db.refresh(line)
     return line
+
+
+async def _failed_start(db: AsyncSession, line_id: uuid.UUID, run_id: uuid.UUID, why: str) -> None:
+    now = datetime.now(UTC)
+    await db.execute(
+        sql_update(Run)
+        .where(Run.id == run_id, Run.status.in_(("draft", "awaiting_approval")))
+        .values(status="failed", error=why, finished_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    await db.execute(
+        sql_update(DiscussionMessage)
+        .where(DiscussionMessage.id == line_id)
+        .values(error=why[:MAX_BODY])
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
+
+
+async def member_context(
+    tenant_id: uuid.UUID, discussion_id: uuid.UUID, line_id: uuid.UUID
+) -> context.Context:
+    """The discussion's context as a commenter may see it (``visibility.MEMBER``),
+    whoever asked: read on its own session, so nothing the caller's session loaded with
+    their view (an approver's) reaches it."""
+    async with tenant_session(tenant_id) as s:
+        visibility.bind(s, visibility.MEMBER)
+        d = await s.get(Discussion, discussion_id)
+        assert d is not None
+        return await context.build(s, d, line_id)
 
 
 # --- the run ----------------------------------------------------------------------------
@@ -207,9 +256,24 @@ async def import_answer(
         line = await s.get(DiscussionMessage, ids[0], with_for_update=True)
         if line is None or line.run_id != run.id:
             return {"error": "the discussion line is gone"}
+        # Run again (the tick died after this commit, before the step was marked done):
+        # the answer is in already, and posts once (#584 review).
+        posted = await s.scalar(
+            select(DiscussionMessage.id).where(
+                DiscussionMessage.run_id == run.id, DiscussionMessage.author_kind == "oracle"
+            )
+        )
+        if posted is not None:
+            return {}
         if not text:
             return {"error": f"the run left no {FILE}"}
         entries = {int(e["n"]): e for e in line.citations or []}
+        text = await _web_markers(s, run.id, text, entries)
+        # Every citation as a commenter may see it, whatever the line kept: one stored
+        # before the fix had the approver's view (#584 review).
+        hidden = await visibility.hidden_for_reader(s, as_member=True)
+        if hidden is not None:
+            entries = {n: e for n, e in entries.items() if not _hides(hidden, e)}
         body, cites = replies.citations_of(text, SimpleNamespace(entries=entries))  # type: ignore[arg-type]
         now = datetime.now(UTC)
         s.add(
@@ -232,6 +296,74 @@ async def import_answer(
         )
         await s.commit()
     return {}
+
+
+async def _web_markers(
+    s: AsyncSession, run_id: uuid.UUID, text: str, entries: dict[int, dict[str, Any]]
+) -> str:
+    """Each ``[w-n]`` a result or page this run read, as a ``[c:n]`` numbered after the
+    context's entries, its ``web`` citation added to ``entries``; one it never read is
+    removed."""
+    from oracle.web.models import WebResult
+
+    refs = {f"w-{n}" for n in _WEB.findall(text)}
+    if not refs:
+        return text
+    rows = {
+        r.ref: r
+        for r in await s.scalars(
+            select(WebResult).where(WebResult.run_id == run_id, WebResult.ref.in_(refs))
+        )
+    }
+    numbers: dict[str, int] = {}
+
+    def swap(m: re.Match) -> str:
+        ref = f"w-{m.group(1)}"
+        row = rows.get(ref)
+        if row is None:
+            return ""
+        if ref not in numbers:
+            n = max(entries, default=0) + 1
+            numbers[ref] = n
+            entries[n] = {"n": n, "kind": "web", "ref": ref, "title": row.title or row.host,
+                          "url": row.url}  # fmt: skip
+        return f"[c:{numbers[ref]}]"
+
+    return _WEB.sub(swap, text)
+
+
+def _hides(hidden: visibility.Hidden, entry: dict[str, Any]) -> bool:
+    """Whether a citation names a document or decision ``hidden`` holds (its ref, title,
+    link or excerpt)."""
+    return str(entry.get("ref")) in hidden.ids or hidden.names(
+        " ".join(str(entry.get(k) or "") for k in ("ref", "title", "url", "excerpt"))
+    )
+
+
+def _without(body: str, gone: set[int]) -> str:
+    return _CITE.sub(lambda x: "" if int(x.group(1)) in gone else x.group(0), body)
+
+
+async def for_reader(db: AsyncSession, rows: list[DiscussionMessage], outs: list[Any]) -> None:
+    """Oracle's messages as the session's reader may see them (BLOCKER 1, #584 review):
+    one whose text names a document or decision hidden from them is withheld, and a
+    citation naming one is dropped with its marker. Owners and approvers read everything;
+    answers stored before the fix are caught here too."""
+    if not any(m.author_kind == "oracle" for m in rows):
+        return
+    hidden = await visibility.hidden_for_reader(db)
+    if hidden is None:
+        return
+    for m, out in zip(rows, outs, strict=True):
+        if m.author_kind != "oracle" or out.deleted:
+            continue
+        if hidden.names(out.body) or hidden.names(str(out.pushback or "")):
+            out.body, out.citations, out.pushback = WITHHELD, [], None
+            continue
+        gone = {int(c["n"]) for c in out.citations if _hides(hidden, c)}
+        if gone:
+            out.citations = [c for c in out.citations if int(c["n"]) not in gone]
+            out.body = _GAP.sub("", _without(out.body, gone)).strip()
 
 
 extensions.register_prompt_lines(FLOW, prompt_lines)

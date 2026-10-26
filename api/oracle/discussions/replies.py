@@ -45,6 +45,7 @@ from oracle import audit
 from oracle.authz import has_role
 from oracle.discussions import changes, context
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
+from oracle.docs import visibility
 from oracle.jobs import prompting
 from oracle.jobs.worker import _cost, _tokens
 from oracle.llm import gateway
@@ -354,6 +355,10 @@ async def _produce(
         assert reply is not None
         d = await db.get(Discussion, reply.discussion_id)
         assert d is not None
+        # Every member in the discussion reads the reply: its context is what a commenter
+        # may see, not Oracle's full view (#584 review), unless only approvers can be in it.
+        if await context.member_view(db, d):
+            visibility.bind(db, visibility.MEMBER)
         ctx = await context.build(db, d, reply.id)
         name, system = prompting.current(JOB)
         # B6: on a goal, the goals interview's instructions follow the house rules.
