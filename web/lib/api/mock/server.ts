@@ -1466,6 +1466,8 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
     uuid,
     now,
     lockedKeys: (v) => lockedKeys(db, v as VersionRow),
+    sentToAgents: (sid) =>
+      (db.runs?.runs ?? []).some((r) => !["succeeded", "failed", "cancelled"].includes(r.status) && !!(r as SentRun).sent?.suggestion_ids.includes(sid)),
     reply: (feedbackId, body) => {
       const parent = db.comments.find((c) => c.id === db.feedback.find((f) => f.id === feedbackId)?.comment_id);
       if (!parent) return;
@@ -3914,9 +3916,19 @@ async function route(db: Db, req: Request): Promise<Response> {
       onFeedback(llm, doc.id, latest.number);
       return { slug: doc.slug, version: latest.number };
     };
+    const withdrawFeedback = (answerIds: string[]) => {
+      for (let i = db.feedback.length - 1; i >= 0; i--) {
+        const f = db.feedback[i];
+        if (!f.intake_answer_id || !answerIds.includes(f.intake_answer_id)) continue;
+        db.feedback.splice(i, 1);
+        // Its suggestions go with it, as the API's cascade.
+        if (db.llm) db.llm.suggestions = db.llm.suggestions.filter((x) => x.feedback_item_id !== f.id);
+        touch(db, f.document_id);
+      }
+    };
     const intake = await routeIntake(
       v2db,
-      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, raiseFeedback },
+      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, raiseFeedback, withdrawFeedback },
       req,
       p,
       q,

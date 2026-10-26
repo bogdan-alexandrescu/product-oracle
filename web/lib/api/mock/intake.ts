@@ -82,6 +82,9 @@ export interface IntakeContext {
     document: string,
     item: { summary: string; author_id: string | null; intake_question_id: string; intake_answer_id: string },
   ) => { slug: string; version: number } | null;
+  /** Withdraws (deletes) the late answers' feedback items of these answers, as
+   * late_answers.on_sharing does when their finding goes back to private or counts. */
+  withdrawFeedback?: (answerIds: string[]) => void;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -349,7 +352,7 @@ function raiseLateAnswer(db: V2Db, ctx: IntakeContext, question: Question, answe
   if (!intake || !run || intake.status !== "converted" || run.answer_ids.includes(answer.id)) return;
   if (answer.kind !== "answer" || !answer.body || !ctx.raiseFeedback) return;
   const gap = db.gaps.find((g) => g.id === question.gap_id);
-  if (gap && privateGap(db, gap)) return;
+  if ((gap && !quotable(db, gap)) || db.late_answer_feedback?.[answer.id]) return;
   const document = intake.document_id ?? run.document;
   if (!document) return;
   const at = ctx.raiseFeedback(document, {
@@ -359,6 +362,31 @@ function raiseLateAnswer(db: V2Db, ctx: IntakeContext, question: Question, answe
     intake_answer_id: answer.id,
   });
   if (at) db.late_answer_feedback = { ...db.late_answer_feedback, [answer.id]: { intake_id: intake.id, ...at } };
+}
+
+/**
+ * Whether others read the gap's answers in full (S6, as answers.proposal_mode "full"): not a
+ * private gap, and not a finding of the author's that is private or shared at counts only.
+ */
+function quotable(db: V2Db, gap: Gap): boolean {
+  if (privateGap(db, gap)) return false;
+  const finding = Object.values(db.intake_findings ?? {}).flat().find((f) => f.gap_id === gap.id);
+  return !finding || finding.sharing === "summary" || finding.sharing === "full";
+}
+
+/** A finding's level changed: its late answers' feedback items follow it (late_answers.on_sharing). */
+function lateAnswersOnSharing(db: V2Db, ctx: IntakeContext, gapId: string) {
+  const gap = db.gaps.find((g) => g.id === gapId);
+  if (!gap) return;
+  const questions = db.questions.filter((q) => q.gap_id === gap.id);
+  const answers = db.answers.filter((a) => questions.some((q) => q.id === a.question_id));
+  if (!quotable(db, gap)) {
+    const ids = answers.map((a) => a.id).filter((id) => db.late_answer_feedback?.[id]);
+    ctx.withdrawFeedback?.(ids);
+    for (const id of ids) delete db.late_answer_feedback![id];
+    return;
+  }
+  for (const a of answers) raiseLateAnswer(db, ctx, questions.find((q) => q.id === a.question_id)!, a);
 }
 
 /** The draft gate (C5): the critical blockers neither answered nor decided. */
@@ -608,7 +636,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (!changes) return null;
       const missing = changes.find((c) => !all.some((f) => f.id === c.finding_id));
       if (missing) return fail(404, `Finding ${missing.finding_id} not found`);
-      for (const c of changes) all.find((f) => f.id === c.finding_id)!.sharing = c.sharing;
+      for (const c of changes) {
+        const finding = all.find((f) => f.id === c.finding_id)!;
+        const before = finding.sharing;
+        finding.sharing = c.sharing;
+        if (finding.gap_id && before !== c.sharing) lateAnswersOnSharing(db, ctx, finding.gap_id);
+      }
       const set = new Set(changes.map((c) => c.finding_id));
       const out = findingsFor(db, intake, ctx.userId).filter((f) => set.has(f.id));
       return json(200, m === "PATCH" ? out[0] : out);
