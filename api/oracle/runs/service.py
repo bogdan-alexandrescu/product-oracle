@@ -6627,6 +6627,18 @@ async def _take_answer(
         # Oracle's own post: the label is the one Oracle sent, for its Inbox user.
         cp.decided_by = await db.scalar(select(User.id).where(User.email == record.on_behalf_of))
     _set_wait(cp, wait)
+    if approved and cp.kind == eng_dates.KIND:
+        # F4 lane B: a counted console approval records the dates as Oracle's Approve does
+        # (decide_checkpoint), for the member who answered (or Oracle's own Inbox user).
+        decider = member or (await db.get(User, cp.decided_by) if cp.decided_by else None)
+        if decider is not None and decider.disabled_at is None:
+            staged = await db.scalars(
+                select(CheckpointAction)
+                .where(CheckpointAction.checkpoint_id == cp.id, CheckpointAction.state == "staged")
+                .order_by(CheckpointAction.created_at, CheckpointAction.id)
+            )
+            principal = _creator(current_tenant(db), decider, None)
+            await eng_dates.on_approved(db, principal, run, cp, list(staged))
     # H1: a counted answer from the console (or Oracle's own lost post) is the stop's
     # decision: a checkpoint record, unless one was recorded when it was decided here.
     await decisions_capture.checkpoint(

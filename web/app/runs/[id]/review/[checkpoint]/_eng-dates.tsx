@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
-import { Button, Chip, Inspector, InspectorSection, Page, PageHeader, Sheet, Split } from "@/components/ds";
+import { Button, Chip, Icon, Inspector, InspectorSection, Page, PageHeader, Sheet, Split } from "@/components/ds";
 import { RawFileSheet } from "@/components/review/RawFileSheet";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -284,13 +284,13 @@ export function EngDates({
                         {stages && (
                           <span className="relative">
                             <Button
-                              
                               variant="ghost"
                               aria-label={`More for ${i.title}`}
                               aria-expanded={more === i.key}
                               onClick={() => setMore((m) => (m === i.key ? null : i.key))}
                             >
-                              ⋯
+                              {/* An icon, as the shell's More: a text glyph (⋯) needs a font that has it, and without one Chromium crashed the lead's screen. */}
+                              <Icon name="more" size={16} />
                             </Button>
                             {more === i.key && (
                               <span className="absolute top-full right-0 z-20 mt-1 rounded-button border border-line bg-surface p-1 shadow-tip">
