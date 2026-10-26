@@ -12,7 +12,7 @@ import { displayName } from "@/lib/names";
 
 import { mockUuid, seeded } from "./ids";
 import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
-import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
+import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
@@ -2266,6 +2266,7 @@ function load(): Db {
     if (merged && into) db.autonomy.actions.push(seedRequestDid(db.user_id, uuid(), merged, into));
   }
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
+  if (scenario === BLOCKER_NARROWED_SCENARIO) narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {
     const prd = db.documents.find((d) => d.kind === "prd");

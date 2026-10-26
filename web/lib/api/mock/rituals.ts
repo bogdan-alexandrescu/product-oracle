@@ -767,9 +767,12 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   }
   if (p.length === 4 && m === "POST" && p[3] === "summary") {
     if (!atLeast(role, "approver")) return fail(403, "Requires the approver role");
+    // The API's order (oracle.rituals.summaries.on_demand): readiness, a run under way, a
+    // Baseline rebuild, then Observe.
+    if (!["ready", "held", "missed", "skipped"].includes(o.status) || !o.pre_read) return fail(409, "The pre-read is not ready yet");
+    if (o.summary_state === "running") return fail(409, "Oracle is already writing this summary");
     if (r.kind === REBUILD) return fail(409, "Start the baseline rebuild from the Baseline page");
     if (r.kind === DIGEST.kind && !ctx.marketWrites()) return fail(409, "Oracle does not write the digest at Observe");
-    if (o.summary_state === "running") return fail(409, "A summary of this pre-read is being written");
     const special = FLOW_FOR_KIND[r.kind];
     if (special?.flow === "metrics_variance" && !ctx.openVariances?.(o.id)) return fail(409, "No open variance to explain");
     const id = ctx.uuid();

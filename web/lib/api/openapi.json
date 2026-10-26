@@ -48260,6 +48260,22 @@
             },
             "type": "array",
             "title": "Documents"
+          },
+          "can_set_status": {
+            "type": "boolean",
+            "title": "Can Set Status",
+            "default": true
+          },
+          "set_status_why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Status Why Not"
           }
         },
         "type": "object",

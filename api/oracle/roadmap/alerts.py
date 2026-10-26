@@ -132,7 +132,7 @@ async def situations(db: AsyncSession, track: ProductTrack, found: "TrackRead") 
     if track.status != "active":
         return []
     out: list[Situation] = []
-    ctx, now = found.ctx, today()
+    ctx, now = found.ctx, await today(db)
     dated = dated_items(found.milestones)
     slips: list[tuple[RoadmapItem, TrackerRecord, date]] = []
     for item in found.rows:
