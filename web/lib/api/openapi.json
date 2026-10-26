@@ -79305,6 +79305,66 @@
         ],
         "title": "NextDraftResolution"
       },
+      "NextDraftRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "flow": {
+            "type": "string",
+            "title": "Flow"
+          },
+          "flow_title": {
+            "type": "string",
+            "title": "Flow Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StagedChange"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "agent_items": {
+            "items": {
+              "$ref": "#/components/schemas/AgentItem"
+            },
+            "type": "array",
+            "title": "Agent Items",
+            "default": []
+          },
+          "next_draft_changes": {
+            "items": {
+              "$ref": "#/components/schemas/StagedDiscussionChange"
+            },
+            "type": "array",
+            "title": "Next Draft Changes",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "flow",
+          "flow_title",
+          "status",
+          "created_at"
+        ],
+        "title": "NextDraftRun",
+        "description": "#574 review: the agents' run under way on a document (Build next draft sent it the\nitems below): what it was sent is not staged for another build until it ends, and no\nother build of the document starts meanwhile."
+      },
       "NextDraftRunIn": {
         "properties": {
           "suggestion_ids": {
@@ -101571,6 +101631,16 @@
             "type": "array",
             "title": "Next Draft Changes",
             "default": []
+          },
+          "agents_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextDraftRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

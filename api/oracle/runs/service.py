@@ -129,7 +129,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, autonomy, company_time, confidence, safe_yaml, wording
@@ -2461,21 +2461,42 @@ async def _loop_feedback(db: AsyncSession, run: Run) -> list[dict[str, Any]]:
     ]
 
 
+async def _imported_numbers(db: AsyncSession, run: Run) -> set[int]:
+    """The version numbers this run's drafts were imported as, any attempt (each attempt's
+    import is on its checkpoint's payload, the current one on its segment)."""
+    segments = await db.scalars(select(RunSegment).where(RunSegment.run_id == run.id))
+    checkpoints = await db.scalars(select(Checkpoint).where(Checkpoint.run_id == run.id))
+    imports = [(s.artifacts or {}).get("import") for s in segments]
+    imports += [(c.payload or {}).get("import") for c in checkpoints]
+    return {
+        int(imp["version"])
+        for imp in imports
+        if isinstance(imp, dict) and imp.get("version") is not None and not imp.get("error")
+    }
+
+
 async def _loop_section_changes(db: AsyncSession, run: Run) -> list[dict[str, Any]]:
     """G4: the section changes staged from discussions that a feedback loop started from
-    Build next draft was given, oldest first: still staged, or applied by this run's
-    draft (a later attempt keeps them)."""
+    Build next draft was given, oldest first: still staged, or applied in a draft this run
+    imported (a later attempt keeps them); never one another build applied."""
     from oracle.staging.models import NextDraftChange
 
     ids = [uuid.UUID(str(i)) for i in (run.knobs or {}).get("next_draft_change_ids") or []]
     if not ids:
         return []
+    mine = await _imported_numbers(db, run)
     rows = await db.scalars(
         select(NextDraftChange)
         .where(
             NextDraftChange.id.in_(ids),
             NextDraftChange.document_id == run.document_id,
-            NextDraftChange.status.in_(("staged", "applied")),
+            or_(
+                NextDraftChange.status == "staged",
+                and_(
+                    NextDraftChange.status == "applied",
+                    NextDraftChange.applied_in_version.in_(mine),
+                ),
+            ),
         )
         .order_by(NextDraftChange.created_at, NextDraftChange.id)
     )

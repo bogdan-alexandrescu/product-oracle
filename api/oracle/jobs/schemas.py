@@ -288,6 +288,23 @@ class StagedDiscussionChange(BaseModel):
     lock_version: int
 
 
+class NextDraftRun(BaseModel):
+    """#574 review: the agents' run under way on a document (Build next draft sent it the
+    items below): what it was sent is not staged for another build until it ends, and no
+    other build of the document starts meanwhile."""
+
+    id: uuid.UUID
+    flow: str
+    flow_title: str
+    status: str
+    created_at: datetime
+    # What it was sent that is still staged: back in the lists if the run ends without
+    # a draft (failed, cancelled); applied when its draft is imported.
+    items: list[StagedChange] = []
+    agent_items: list[AgentItem] = []
+    next_draft_changes: list[StagedDiscussionChange] = []
+
+
 class StagedChanges(BaseModel):
     document_id: uuid.UUID
     slug: str
@@ -307,6 +324,9 @@ class StagedChanges(BaseModel):
     # G4: section changes staged from discussions, oldest first (gone ones only with
     # include_gone).
     next_draft_changes: list[StagedDiscussionChange] = []
+    # #574 review: the agents' run under way on the document, with what it was sent (left
+    # out of the lists above).
+    agents_run: NextDraftRun | None = None
 
 
 class NextDraftIn(BaseModel):
