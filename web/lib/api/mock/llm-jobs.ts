@@ -13,6 +13,7 @@ import {
   KIND as BATCH,
   nextDraftRoute,
   runBatch,
+  shownJob,
   shownNote,
   shownSuggestion,
   stageRoute,
@@ -160,7 +161,7 @@ const live = (db: LlmDb, feedbackId: string) =>
 /** The feedback item with Oracle's suggestion and its C1e state, as GET /feedback returns it. */
 export function withSuggestion(db: LlmDb | undefined, f: Feedback, latest: number | null = null): Schemas["FeedbackItemOut"] {
   const suggestion = db ? live(db, f.id) : null;
-  return { ...f, resolution_note: shownNote(f, suggestion), suggestion: shownSuggestion(f, suggestion), ...stateOf(f, suggestion, latest) };
+  return { ...f, resolution_note: shownNote(f, db), suggestion: shownSuggestion(f, suggestion), ...stateOf(f, suggestion, latest) };
 }
 
 function versionsOf(ctx: LlmContext, doc: Doc) {
@@ -558,19 +559,6 @@ function reportsMarkdown(doc: Doc, n: number, out: Record<string, unknown> | nul
   ].join("\n");
 }
 
-/** A report's lines, the withheld items' read as late_answers.WITHHELD without note or explanation (jobs.service.version_reports). */
-function withheldLines(ctx: LlmContext, resolution: unknown) {
-  const r = resolution as Schemas["ResolutionNarrative"] | null | undefined;
-  if (!r) return null;
-  const withheld = new Set(ctx.feedback.filter((f) => f.withheld_at).map((f) => f.id));
-  return {
-    ...r,
-    items: r.items.map((i) =>
-      withheld.has(i.feedback_id) ? { ...i, summary: ctx.feedback.find((f) => f.id === i.feedback_id)!.summary, resolution_note: null, explanation: "" } : i,
-    ),
-  };
-}
-
 /** Handles the built-in job routes, or returns null for any other path. */
 export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   const m = req.method;
@@ -611,18 +599,18 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
   if (jobRoute) {
     const job = db.jobs.find((j) => j.id === p[2]);
     if (!job) return fail(404, "Job not found");
-    if (!p[3] && m === "GET") return json(200, job);
+    if (!p[3] && m === "GET") return json(200, shownJob(ctx, job));
     if (p[3] === "cancel" && m === "POST") {
       if (!["queued", "running"].includes(job.status)) return fail(409, `a ${job.status} job cannot be cancelled`);
       Object.assign(job, { status: "cancelled", finished_at: ctx.now() });
-      return json(200, job);
+      return json(200, shownJob(ctx, job));
     }
     if (p[3] === "retry" && m === "POST") {
       if (!["failed", "cancelled"].includes(job.status)) return fail(409, `a ${job.status} job cannot be retried`);
       const doc = ctx.documents.find((d) => d.id === job.document_id);
       if (doc && !enabled(doc, job.kind)) return fail(409, turnedOff(switchOf(job.kind)));
       Object.assign(job, { status: "queued", attempts: 0, error: null, error_reason: null, next_reset_at: null, started_at: null, finished_at: null });
-      return json(200, job);
+      return json(200, shownJob(ctx, job));
     }
     if (p[3] === "preview" && m === "GET") {
       if (job.kind !== "refinement" || job.status !== "succeeded") return fail(409, "only a finished refinement has a preview");
@@ -777,7 +765,10 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     }
     return json(
       200,
-      db.jobs.filter((j) => j.document_id === doc.id).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+      db.jobs
+        .filter((j) => j.document_id === doc.id)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((j) => shownJob(ctx, j)),
     );
   }
   if (p[3] === "suggestions") {
@@ -794,7 +785,8 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
   if (!v) return fail(404, "Version not found");
   if (p[5] === "reports") {
     const jobs = db.jobs.filter((j) => j.document_id === doc.id && j.kind === "reporting" && j.version_number === v.number).sort((a, b) => b.created_at.localeCompare(a.created_at));
-    const done = jobs.find((j) => j.status === "succeeded" && j.output);
+    // As the API: a withheld item's lines are withheld in the reports, their export and latest_job.
+    const done = shownJob(ctx, jobs.find((j) => j.status === "succeeded" && j.output));
     if (p[6] === "export") {
       const md = reportsMarkdown(doc, v.number, done?.output ?? null);
       return new Response(md, { headers: { "content-type": q.get("format") === "html" ? "text/html" : "text/markdown" } });
@@ -804,9 +796,9 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       version: v.number,
       report_job_id: done?.id ?? null,
       generated_at: done?.finished_at ?? null,
-      resolution: withheldLines(ctx, done?.output?.resolution),
+      resolution: done?.output?.resolution ?? null,
       changes: done?.output?.changes ?? null,
-      latest_job: jobs[0] ?? null,
+      latest_job: shownJob(ctx, jobs[0]) ?? null,
     });
   }
   // .../sections/{key}/refine

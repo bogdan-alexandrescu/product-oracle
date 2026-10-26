@@ -260,7 +260,7 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
     items,
     gone_count: gone,
     estimate_usd: sections.size ? Math.round(sections.size * 0.0312 * 10000) / 10000 : null,
-    draft_job: job,
+    draft_job: shownJob(ctx, job),
     agent_items: agentItems(ctx, doc.id),
     next_draft_changes: changes,
   };
@@ -315,7 +315,7 @@ export async function stageRoute(ctx: LlmContext, req: Request, p: string[], liv
   if (!on) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
   f.updated_at = ctx.now();
   const latest = latestOf(ctx, f.document_id)?.number ?? null;
-  return json(200, { ...f, resolution_note: shownNote(f, s), suggestion: shownSuggestion(f, s), ...stateOf(f, s, latest) });
+  return json(200, { ...f, resolution_note: shownNote(f, ctx.db), suggestion: shownSuggestion(f, s), ...stateOf(f, s, latest) });
 }
 
 /** A withheld item's suggestion: what its pushback says instead of its reason (jobs.service.WITHHELD_REASON). */
@@ -329,13 +329,48 @@ export function shownSuggestion<S extends Suggestion | null>(f: Pick<Feedback, "
   return { ...s, text: null, edited_text: null, rationale: null, pushback: s.pushback ? { ...s.pushback, reason: WITHHELD_REASON } : null };
 }
 
-/** The item's resolution note as outputs serve it (jobs.service.shown_note): on a withheld item
- * a note Accept wrote from its suggestion is withheld with it; a person's note is shown as written. */
-export function shownNote(f: Feedback, s: Suggestion | null): string | null {
+type Lines = Record<string, unknown>[];
+const listOf = (x: unknown): Lines => (Array.isArray(x) ? x.filter((y): y is Record<string, unknown> => !!y && typeof y === "object") : []);
+
+/** The resolutions a refinement (top level) or a next draft (per section) wrote (jobs.service._resolutions_of). */
+function resolutionsOf(out: Record<string, unknown>): Lines {
+  return [...listOf(out.resolutions), ...listOf(out.sections).flatMap((s) => listOf(s.resolutions))];
+}
+
+/** A report's narrative while a line it was written from is withheld (jobs.service.withheld_narrative). */
+export const withheldNarrative = (n: number) =>
+  `${n} feedback item(s) were raised on earlier versions; the rest of this summary is withheld while one of them is not shared in full.`;
+
+/** A job as readers get it (jobs.service.withheld_output, #645 re-review): a withheld item's report
+ * line reads its withheld summary without note or explanation, the report's narrative is withheld
+ * with it, and the resolution notes a refinement or next draft wrote from it read WITHHELD_REASON. */
+export function shownJob<J extends Job | null | undefined>(ctx: LlmContext, job: J): J {
+  if (!job?.output) return job;
+  const withheld = new Map(ctx.feedback.filter((f) => f.withheld_at).map((f) => [f.id, f]));
+  if (!withheld.size) return job;
+  const out = structuredClone(job.output) as Record<string, unknown>;
+  const resolution = out.resolution as { summary?: string; items?: unknown } | undefined;
+  const lines = listOf(resolution?.items);
+  const hit = lines.filter((l) => withheld.has(String(l.feedback_id)));
+  for (const l of hit) Object.assign(l, { summary: withheld.get(String(l.feedback_id))!.summary, resolution_note: null, explanation: "" });
+  if (resolution && hit.length) resolution.summary = withheldNarrative(lines.length);
+  for (const r of resolutionsOf(out)) if (withheld.has(String(r.feedback_id)) && r.note) r.note = WITHHELD_REASON;
+  return { ...job, output: out } as J;
+}
+
+/** The item's resolution note as outputs serve it (jobs.service.shown_note, oracle_notes): on a
+ * withheld item a note Oracle wrote from it (from any of its suggestions, or a refinement's or next
+ * draft's resolution note) is withheld with it; a person's note is shown as written. */
+export function shownNote(f: Feedback, db: LlmContext["db"] | undefined): string | null {
   const note = f.resolution_note ?? null;
-  if (!f.withheld_at || note == null || !s) return note;
-  if ([`Answered: ${s.edited_text ?? s.text}`, s.rationale, s.pushback?.reason].includes(note)) return WITHHELD_REASON;
-  return note;
+  if (!f.withheld_at || note == null || !db) return note;
+  const fromSuggestions = db.suggestions
+    .filter((s) => s.feedback_item_id === f.id)
+    .flatMap((s) => [s.edited_text ?? s.text ? `Answered: ${s.edited_text ?? s.text}` : null, s.rationale, s.pushback?.reason]);
+  const fromDrafts = db.jobs
+    .filter((j) => j.document_id === f.document_id && (j.kind === "refinement" || j.kind === KIND) && j.status === "succeeded" && j.output)
+    .flatMap((j) => resolutionsOf(j.output!).filter((r) => r.feedback_id === f.id).map((r) => r.note));
+  return [...fromSuggestions, ...fromDrafts].includes(note) ? WITHHELD_REASON : note;
 }
 
 function strip(body: string) {
@@ -395,7 +430,9 @@ export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
   };
 }
 
-function preview(ctx: LlmContext, job: Job): Schemas["NextDraftPreview"] {
+function preview(ctx: LlmContext, stored: Job): Schemas["NextDraftPreview"] {
+  // #645 re-review: a withheld item's resolution notes are withheld (the build keeps them).
+  const job = shownJob(ctx, stored);
   const out = (job.output ?? null) as BatchOutput | null;
   const base = (job.input.version as number | undefined) ?? null;
   const latest = latestOf(ctx, job.document_id ?? "")?.number ?? null;
@@ -650,7 +687,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
       title: doc.title,
       latest_version: latest,
       state,
-      resolution_note: shownNote(f, s),
+      resolution_note: shownNote(f, ctx.db),
       addressed_in_version: f.addressed_in_version ?? null,
       staged_for_version,
       staged_for_agents,
