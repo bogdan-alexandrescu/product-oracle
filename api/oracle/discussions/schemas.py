@@ -367,6 +367,13 @@ class ChangeProposeIn(ChangeActIn):
     payload: dict[str, Any] | None = None
 
 
+class ChangeApplyIn(ChangeActIn):
+    # C9: the reason the move or pin is logged with (the change's own when absent).
+    reason: str | None = Field(default=None, max_length=500)
+    # C9: keep it after Oracle's pushback (no second check), as on the Priorities screen.
+    confirm: bool = False
+
+
 class ChangeDismissIn(ChangeActIn):
     note: str | None = Field(default=None, max_length=1000)
 

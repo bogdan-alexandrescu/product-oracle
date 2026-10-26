@@ -41,6 +41,7 @@ type DraftActionRow = Omit<Schemas["ReviewAction"], "created_by" | "updated_by" 
   /** G4: staged from a discussion (row actions have none), and whether it was private then. */
   origin?: "row" | "discussion";
   discussion_id?: string | null;
+  discussion_change_id?: string | null;
   from_private?: boolean;
   /** C2: a question action's question, asked through the questions store (the member's Inbox). */
   question_id?: string | null;
@@ -3260,6 +3261,100 @@ const RANK: Record<Schemas["Me"]["role"], number> = { viewer: 0, commenter: 1, a
 /** `role` is `min` or above (lib/me hasRole); an unknown caller has every role (the seed owner). */
 function atLeast(role: Schemas["Me"]["role"] | null | undefined, min: string): boolean {
   return role == null || RANK[role] >= (RANK[min as Schemas["Me"]["role"]] ?? 0);
+}
+
+/** As oracle.runs.actions.QUESTION_STOPS (discussions.changes): the stops Ask asks at. */
+const QUESTION_STOPS = ["roadmap_items", "feature_set", "eng_review"];
+
+/**
+ * G4, as oracle.runs.actions.put_action with a source: a discussion change's D8 action at a
+ * waiting stop, shown on the review screen as from the discussion. `mode`: "stage" needs the
+ * stop's approver role, "suggest" only suggests, "auto" stages when the caller may (Ask).
+ * A question asks through C2 (`ctx.ask`). Never applied at once (C7 applies only an
+ * approver's own row edit).
+ */
+export function putDiscussionAction(
+  ctx: RunsContext,
+  at: { run_id: string; checkpoint_id: string },
+  a: Schemas["ActionIn"],
+  source: { discussion_id: string; change_id: string; from_private: boolean },
+  mode: "stage" | "suggest" | "auto",
+): { id: string; question_id: string | null } | Response {
+  const r = ctx.db.runs.find((x) => x.id === at.run_id);
+  const cp = r?.checkpoints.find((c) => c.id === at.checkpoint_id);
+  if (!r || !cp) return fail(404, `checkpoint ${at.checkpoint_id} not found`);
+  if (cp.status !== "pending") return fail(409, "this checkpoint is decided");
+  const me = ctx.member ?? null;
+  const role = me?.role ?? ctx.userRole ?? null;
+  const may = mayStage(ctx, r, cp, role);
+  if (mode === "stage" && !may) return fail(403, `Requires the ${cp.approver_role} role`);
+  const stages = may && mode !== "suggest";
+  const draft = draftOf(ctx, cp.id);
+  const who = me?.id ?? ctx.userId;
+  const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
+  const row: DraftActionRow = {
+    id: existing?.id ?? ctx.uuid(),
+    item_key: a.item_key,
+    kind: a.kind,
+    field: a.field ?? null,
+    value: a.value ?? null,
+    answers: a.answers ?? [],
+    note: a.note ?? null,
+    state: stages ? "staged" : "suggested",
+    created_by: who,
+    updated_by: who,
+    updated_at: ctx.now(),
+    origin: "discussion",
+    discussion_id: source.discussion_id,
+    discussion_change_id: source.change_id,
+    from_private: source.from_private,
+    question_id: null,
+  };
+  if (a.kind === "question" && ctx.ask) {
+    if (existing?.question_id) ctx.withdraw?.(existing.question_id);
+    const v = (a.value ?? {}) as { asked_to?: string; text?: string };
+    row.question_id = ctx.ask({ asked_to: v.asked_to ?? "", prompt: v.text ?? "", checkpoint_id: cp.id, item_ref: a.item_key });
+  }
+  draft.actions = existing ? draft.actions.map((x) => (x === existing ? row : x)) : [...draft.actions, row];
+  bump(draft, displayName(me?.email ?? ctx.userName ?? "admin@example.com"));
+  return { id: row.id, question_id: row.question_id ?? null };
+}
+
+/** Whether Ask on this stop is its D8 question action (a waiting stop that takes questions). */
+export function asksAtStop(ctx: Pick<RunsContext, "db">, at: { run_id: string; checkpoint_id: string }): boolean {
+  const cp = ctx.db.runs.find((x) => x.id === at.run_id)?.checkpoints.find((c) => c.id === at.checkpoint_id);
+  return !!cp && cp.status === "pending" && QUESTION_STOPS.includes(cp.kind);
+}
+
+/**
+ * As oracle.staging.service._scope_action: the waiting feature-set stop whose proposed scope
+ * holds `named` (a feature's or requirement's row id or baseline entity id), the
+ * discussion's own run first, then the newest; with nothing named, the subject's item at
+ * that stop. Its row key; null when no such stop waits. The mock's rows link no entity
+ * (`entity_id` null), so `keysOf` stands in: the row keys a baseline entity's id reads as
+ * (the API links a row to the entity of its key).
+ */
+export function scopeStop(
+  ctx: Pick<RunsContext, "db">,
+  named: string | null,
+  own: { run_id: string | null; checkpoint_id?: string | null; item_key?: string | null },
+  keysOf: (entityId: string) => string[] = () => [],
+): { run_id: string; checkpoint_id: string; item_key: string } | null {
+  const keys = named === null ? [] : keysOf(named);
+  const names = (row: { id: string; key: string; entity_id?: string | null }) => row.id === named || row.entity_id === named || keys.includes(row.key);
+  const runs = [...ctx.db.runs].sort((x, y) => Number(y.id === own.run_id) - Number(x.id === own.run_id));
+  for (const r of runs) {
+    const cp = r.checkpoints.find((c) => c.kind === "feature_set" && c.status === "pending");
+    const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "proposed").pop();
+    if (!cp || !scope) continue;
+    if (named === null && cp.id !== own.checkpoint_id) continue;
+    for (const f of scope.features) {
+      if (named === null ? f.key === own.item_key : names(f)) return { run_id: r.id, checkpoint_id: cp.id, item_key: f.key };
+      const req = named === null ? undefined : f.requirements.find(names);
+      if (req) return { run_id: r.id, checkpoint_id: cp.id, item_key: req.key };
+    }
+  }
+  return null;
 }
 
 function draftOf(ctx: RunsContext, cpId: string): DraftRow {

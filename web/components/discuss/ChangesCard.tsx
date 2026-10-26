@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, Chip, type ChipKind } from "@/components/ds";
@@ -7,6 +8,8 @@ import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import {
   actOnChange,
+  applyChange,
+  ApplyPushback,
   askSummary,
   createChange,
   editChange,
@@ -19,6 +22,7 @@ import {
   type ChangeKindOut,
   type ChangeOut,
   type ChangeVerb,
+  type PushbackItem,
 } from "@/lib/api/discussion-changes";
 import { useMe, type Operation } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -45,6 +49,9 @@ const VERB_OP: Partial<Record<ChangeVerb, Operation>> = {
   Resolve: "resolve_discussion_change",
   "Use as answer": "answer_with_discussion_change",
   Record: "record_discussion_change",
+  // G3's Ask and Apply.
+  Ask: "ask_discussion_change",
+  Apply: "apply_discussion_change",
 };
 
 /** The API's words without the status suffix the client adds ("… (403)"). */
@@ -118,9 +125,66 @@ function StageForm({
   );
 }
 
+/** Apply's pushback: Oracle's reasons, then why to apply it anyway (the reason everyone sees). */
+function ApplyForm({
+  items,
+  busy,
+  onApply,
+  onCancel,
+}: {
+  items: PushbackItem[];
+  busy: boolean;
+  onApply: (reason: string) => void;
+  onCancel: () => void;
+}) {
+  const [why, setWhy] = useState("");
+  return (
+    <form
+      className="mt-2 flex flex-col gap-2"
+      data-testid="apply-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (why.trim()) onApply(why.trim());
+      }}
+    >
+      <div className="rounded-lg bg-warn-bg px-2.5 py-2 text-sm leading-5 text-text" data-testid="apply-pushback" role="note">
+        <p className="font-semibold text-warn">Oracle pushed back on this:</p>
+        <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-5">
+          {items.map((x, i) => (
+            <li key={`${x.code}:${i}`}>{x.message}</li>
+          ))}
+        </ul>
+      </div>
+      <label className={FIELD_LABEL}>
+        Why apply it anyway?
+        <textarea aria-label="Why apply it anyway?" rows={2} maxLength={500} className={TEXTAREA} value={why} onChange={(e) => setWhy(e.target.value)} />
+      </label>
+      <span className="flex gap-2">
+        <Button type="submit" variant="solid" disabled={busy || !why.trim()}>
+          Apply anyway
+        </Button>
+        <Button variant="ghost" onClick={onCancel}>
+          Cancel
+        </Button>
+      </span>
+    </form>
+  );
+}
+
+/** A proposed decision's link in the decision log ("Open D-12"), from the change's result. */
+function decisionLink(c: ChangeOut): { href: string; label: string } | null {
+  const ref = c.result_ref ?? {};
+  const id = typeof ref.decision_id === "string" ? ref.decision_id : null;
+  if (c.kind !== "decision" || c.status !== "done" || !id) return null;
+  const number = typeof ref.number === "string" || typeof ref.number === "number" ? String(ref.number) : null;
+  const label = number ? (number.startsWith("D-") ? number : `D-${number}`) : "the decision";
+  return { href: `/company/decisions?d=${encodeURIComponent(id)}`, label: `Open ${label}` };
+}
+
 /** One change: its sentence, why (with citation chips), who put it forward, and what the reader may do. */
 function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () => Promise<void> }) {
-  const [mode, setMode] = useState<"edit" | "stage" | null>(null);
+  const [mode, setMode] = useState<"edit" | "stage" | "apply" | null>(null);
+  const [pushback, setPushback] = useState<PushbackItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { can } = useMe();
@@ -145,11 +209,33 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
       setBusy(false);
     }
   };
+  /** Apply: Oracle may push back first (nothing stored); then "Apply anyway" with a reason. */
+  const apply = async (opts: { reason?: string; confirm?: boolean } = {}) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await applyChange(c, opts);
+      setMode(null);
+      await onDone();
+    } catch (e) {
+      if (e instanceof ApplyPushback) {
+        setPushback(e.pushback);
+        setMode("apply");
+      } else {
+        setError(detail(e));
+        await onDone();
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
   const act = () => {
     if (!action) return;
     if (action.verb === "Stage" && (c.pushback || c.needs_reason)) setMode("stage");
+    else if (action.verb === "Apply") void apply();
     else void run(() => actOnChange(c, VERB_ROUTE[action.verb]));
   };
+  const opened = decisionLink(c);
   const buttons = live && (action || c.can.suggest || c.can.edit || c.can.withdraw || c.can.dismiss);
   const status = STATUS[c.status];
 
@@ -168,6 +254,11 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
         {byWhom(c)}
       </p>
       {c.decision_note && !isOpen(c) && <p className="text-[13px] text-text2">{c.decision_note}</p>}
+      {opened && (
+        <Link href={opened.href} className="text-sm font-medium text-accent-ink hover:underline" data-testid="change-decision-link">
+          {opened.label}
+        </Link>
+      )}
       {buttons && mode === null && (
         <span className="flex flex-wrap gap-1" data-testid="change-actions">
           {action && (
@@ -200,6 +291,7 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
       {mode === "stage" && (
         <StageForm c={c} subject={d.subject_label} busy={busy} onStage={(extra) => void run(() => actOnChange(c, "stage", extra))} onCancel={() => setMode(null)} />
       )}
+      {mode === "apply" && <ApplyForm items={pushback} busy={busy} onApply={(reason) => void apply({ reason, confirm: true })} onCancel={() => setMode(null)} />}
       {mode === "edit" && (
         <div className="mt-1">
           <ChangeForm
@@ -254,7 +346,17 @@ function ProposeChange({ d, onDone }: { d: Discussion; onDone: () => Promise<voi
         ? { item_key: itemKey, horizon: "next" }
         : k === "basis_record"
           ? { prd_document_id: subject.document_id ?? "", kind: "estimate", reference: "", supports_date: "", ...(itemKey ? { item_key: itemKey } : {}) }
-          : {};
+          : k === "scope_feature"
+            ? { decision: "include", reason: "" }
+            : k === "scope_requirement"
+              ? { op: "add" }
+              : k === "priority_pin"
+                ? { position: 1, reason: "" }
+                : k === "decision"
+                  ? { title: "", reversibility: "reversible" }
+                  : {};
+  // The feature the subject names (an entity, or a checkpoint's item), prefilled where a kind picks one.
+  const featureHint = typeof subject.entity_id === "string" ? subject.entity_id : itemKey || undefined;
 
   if (!kinds)
     return (
@@ -288,6 +390,7 @@ function ProposeChange({ d, onDone }: { d: Discussion; onDone: () => Promise<voi
           key={kind}
           kind={kind}
           initial={initial(kind)}
+          featureHint={featureHint}
           fresh
           withRationale
           saveLabel="Propose"
