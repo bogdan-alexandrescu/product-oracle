@@ -81,6 +81,12 @@ export type MessageRow = {
   script_citations?: Record<string, unknown>[];
   /** Where it was written: "web" unless stored otherwise (G8: a reply in the Slack thread). */
   via?: Schemas["DiscussionMessageOut"]["via"];
+  /** G2 §4 Research this: the research run this line started, or whose answer this is. */
+  run_id?: string | null;
+  /** The mock's research run finishes on the thread's second read after it started (as a ritual summary's). */
+  research_reads?: number;
+  /** A research line whose run could not start: why, in words (the API keeps it in `error`). */
+  research_error?: string;
 };
 
 /** G3/B6: a change Oracle or a person offered in a discussion (a section_edit, a goal_measure version); people by id, `action`, `can` and `needs_reason` computed per reader. */
@@ -151,6 +157,10 @@ export type DiscussionsContext = {
   slack?: (d: DiscussionRow, req: Request) => Promise<Response | null>;
   /** The gateway's refusal while the Claude account pool is spent, worded; null otherwise. */
   refusal?: () => string | null;
+  /** G2 §4: the runs' refusal of a research start, worded; null when they start it. */
+  researchRefusal?: () => string | null;
+  /** The address the research's web citation carries instead of its own; null: its own. */
+  researchLink?: () => string | null;
   /** #406: the text of the document version a discussion is on, the section it is on first. */
   documentText?: (d: DiscussionRow) => DocumentSection[];
   /** F3 Date bases' rights for me (leads.date_rights): verify, propose, or none. */
@@ -173,7 +183,24 @@ export const NO_ACCOUNT_MESSAGE =
   "No Claude account: an owner adds one on Settings > Claude accounts (or sets a fallback setup-token or API key there)";
 /** The mock's canned reply, citing the seed's "Raise activation" goal. */
 export const CANNED_REPLY = ["Yes, if caps ", "read the plan thresholds only ", "[c:1]. Detection can follow ", "once activation holds; ", "the goal does not depend on it."];
+/** G2 §4: one discussion_research run, the researcher at quick depth (the API's cost table). */
+export const RESEARCH_USD = 2;
+export const RESEARCH_ANSWER =
+  "Teams on the starter plan asked for caps in the last two check-ins [c:1]. Others cap by seat on their starter plans [c:2]. Nothing Oracle can read says detection has to ship first.";
+/** The "research-refused" scenario: the runs refuse the first research start (as a spent budget or one build at a time would). */
+export const RESEARCH_REFUSED_SCENARIO = "research-refused";
+export const RESEARCH_REFUSED = "The company's monthly run budget is spent.";
+/** What a commenter or a viewer reads of a refused start (the API's research.START_FAILED): approvers read why. */
+export const RESEARCH_START_FAILED = "Oracle couldn't start this research.";
+/** The "research-unsafe-link" scenario: the web page the research cites has an address that is not http(s) (#606 re-review). */
+export const RESEARCH_UNSAFE_LINK_SCENARIO = "research-unsafe-link";
+export const RESEARCH_UNSAFE_LINK = "javascript:alert(document.domain)";
 const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Raise activation", url: "/baseline", confidence: 0.82, low_confidence: false }];
+/** The web page the mock's research read (read:web): a `web` citation linking to it. */
+const RESEARCH_CITATIONS: Record<string, unknown>[] = [
+  ...CANNED_CITATIONS,
+  { n: 2, kind: "web", ref: "w-1", title: "Caps at Example", url: "https://news.example/caps" },
+];
 const STOPWORDS = new Set(["what", "when", "where", "which", "does", "this", "that", "draft", "document", "about", "with", "from", "have", "there", "their", "they"]);
 const words = (text: string) => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !STOPWORDS.has(w)));
 
@@ -759,12 +786,25 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       me: {
         ...s.me,
         can_manage: starter(d) && readable(d),
+        can_research: canResearch(d),
+        research_usd: canResearch(d) ? RESEARCH_USD : null,
         ...(d.private_findings?.author === me.id ? { private_findings: { count: d.private_findings.count, intake_id: d.private_findings.intake_id } } : {}),
       },
       exposure: d.visibility === "private" && starter(d) ? exposure(d) : null,
       slack: d.slack ?? null,
     };
   };
+  /** Who may post in it (the API's access.can_write): commenters and up who read it. */
+  const canWrite = (d: DiscussionRow) => readable(d) && atLeast(me.role, "commenter");
+  /** G2 §4: an approver or owner who can write in it, while it is open (as the API's research.can_research). */
+  const canResearch = (d: DiscussionRow) => d.status === "open" && canWrite(d) && atLeast(me.role, "approver");
+  /** A research run's state: done once its answer is in, failed when it could not start (with why), else running. */
+  const researchOf = (x: MessageRow): Schemas["MessageResearch"] | null =>
+    x.run_id
+      ? x.research_error
+        ? { run_id: x.run_id, status: "failed", error: atLeast(me.role, "approver") ? x.research_error : RESEARCH_START_FAILED }
+        : { run_id: x.run_id, status: db.messages.some((y) => y.run_id === x.run_id && y.author_kind === "oracle") ? "done" : "running", error: null }
+      : null;
   const messageOut = (x: MessageRow): Schemas["DiscussionMessageOut"] => ({
     id: x.id,
     discussion_id: x.discussion_id,
@@ -776,7 +816,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     mentions_oracle: x.mentions_oracle,
     reply_to: x.reply_to,
     status: x.status ?? "complete",
-    citations: x.citations ?? [],
+    citations: x.author_kind === "system" ? [] : (x.citations ?? []),
     created_at: x.created_at,
     edited_at: x.edited_at,
     deleted: !!x.deleted_at,
@@ -785,6 +825,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     error: x.status === "failed" ? (x.error_reason === "no_account" && atLeast(me.role, "approver") ? (readableRefusal(x.error ?? ctx.refusal?.(), true) ?? NO_ACCOUNT_MESSAGE) : "Oracle can't reply right now.") : null,
     pushback: x.pushback ?? null,
     usage: null,
+    research: researchOf(x),
   });
   const add = (d: DiscussionRow, user_id: string, added_via: ParticipantRow["added_via"]) => {
     const row = parts(d).find((x) => x.user_id === user_id);
@@ -1182,8 +1223,49 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     return null;
   };
 
+  if (p[3] === "research" && m === "POST") {
+    const refused = writer();
+    if (refused) return refused;
+    if (!atLeast(me.role, "approver")) return refuse(403, "Approvers and owners start research");
+    const { message_id } = await body<Schemas["ResearchIn"]>();
+    const asked = db.messages.find((x) => x.id === message_id && x.discussion_id === d.id && !x.deleted_at);
+    if (!asked) return refuse(404, "Message not found");
+    if (asked.author_kind !== "person") return refuse(422, "Only a person's message can be researched");
+    const lines = db.messages.filter((x) => x.reply_to === asked.id && x.author_kind === "system" && x.run_id);
+    if (lines.some((x) => researchOf(x)?.status === "running")) return refuse(409, "Oracle is already researching this");
+    // The runs refuse the first start in the "research-refused" scenario: the line says why, and the next ask starts.
+    const refusal = lines.some((x) => x.research_error) ? null : (ctx.researchRefusal?.() ?? null);
+    const line = push(d, {
+      author_kind: "system",
+      author_id: null,
+      body: `${displayName(member(me.id)!.email)} asked Oracle to research this`,
+      mentions: [],
+      mentions_oracle: false,
+      reply_to: asked.id,
+      run_id: ctx.uuid(),
+      research_reads: 0,
+      ...(refusal ? { research_error: refusal } : {}),
+    });
+    return json(201, messageOut(line));
+  }
+
   if (p[3] === "messages") {
     if (!p[4] && m === "GET") {
+      // The mock's research run answers on the thread's second read after it started.
+      for (const x of db.messages.filter((y) => y.discussion_id === d.id && y.author_kind === "system" && y.run_id)) {
+        if (researchOf(x)?.status !== "running" || (x.research_reads = (x.research_reads ?? 0) + 1) < 2) continue;
+        push(d, {
+          author_kind: "oracle",
+          author_id: null,
+          body: RESEARCH_ANSWER,
+          mentions: [],
+          mentions_oracle: false,
+          reply_to: x.reply_to,
+          status: "complete",
+          citations: RESEARCH_CITATIONS.map((c) => (c.kind === "web" && ctx.researchLink?.() ? { ...c, url: ctx.researchLink() } : c)),
+          run_id: x.run_id,
+        });
+      }
       const rows = db.messages.filter((x) => x.discussion_id === d.id).sort((a, b) => a.created_at.localeCompare(b.created_at));
       return json(200, { items: rows.map(messageOut), has_more: false });
     }

@@ -471,6 +471,22 @@ async def _conversation(db: AsyncSession, ctx: Context, d: Discussion, reply_id:
             ctx.note(f"- {p.get('reason', '')}")
 
 
+async def member_view(db: AsyncSession, d: Discussion) -> bool:
+    """Whether a reply in ``d`` reads as a commenter would (``visibility.MEMBER``): every
+    discussion a commenter may be in (#584 review), all but one on an approvers-only
+    document, which only owners and approvers read."""
+    from oracle.docs import visibility
+
+    doc = (d.subject or {}).get("document_id")
+    if d.subject_kind not in ("section", "document", "roadmap_item") or not doc:
+        return True
+    try:
+        doc_id = uuid.UUID(str(doc))
+    except ValueError:
+        return True
+    return not await visibility.hidden_document_ids(db, [doc_id], as_member=True)
+
+
 async def build(db: AsyncSession, d: Discussion, reply_id: uuid.UUID) -> Context:
     weights = await _thresholds(db)
     ctx = Context(low=float(weights.get("low", 0.4)), pushback=float(weights["pushback"]))

@@ -3320,6 +3320,72 @@
         "x-per-item": null
       }
     },
+    "/v1/discussions/{discussion_id}/research": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Research Discussion Message",
+        "description": "Research this (G2 \u00a74): an approver or owner who can write in an open discussion\nstarts one ``discussion_research`` run on a person's message (its cost is\n``me.research_usd`` on the discussion). The run reads the discussion's context as\nOracle's replies do, and its answer comes back into the thread as Oracle's message,\nciting its sources. Answers the line that says so (``research``: the run and its\nstate); 409 while that message's research runs.",
+        "operationId": "research_discussion_message",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Approvers and owners start research; or private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Closed, or Oracle is already researching this message"
+          },
+          "422": {
+            "description": "Only a person's message can be researched"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
     "/v1/discussions/{discussion_id}/messages/{reply_id}/stream": {
       "get": {
         "tags": [
@@ -42076,7 +42142,7 @@
             }
           },
           "403": {
-            "description": "Web search is for Oracle's monthly digest, or the URL is not from this run"
+            "description": "Web search is for Oracle's own research runs, or the URL is not from this run"
           },
           "409": {
             "description": "robots.txt asks bots not to read the page"
@@ -42140,7 +42206,7 @@
             }
           },
           "403": {
-            "description": "Web search is for Oracle's monthly digest, or the URL is not from this run"
+            "description": "Web search is for Oracle's own research runs, or the URL is not from this run"
           },
           "409": {
             "description": "robots.txt asks bots not to read the page"
@@ -58195,6 +58261,22 @@
                 "type": "null"
               }
             ]
+          },
+          "can_research": {
+            "type": "boolean",
+            "title": "Can Research",
+            "default": false
+          },
+          "research_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Usd"
           }
         },
         "type": "object",
@@ -58426,6 +58508,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ReplyUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "research": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageResearch"
               },
               {
                 "type": "null"
@@ -65119,7 +65211,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Key"
           },
@@ -68215,7 +68308,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Flow"
           },
@@ -77092,6 +77186,41 @@
           "status"
         ],
         "title": "MemoDecision"
+      },
+      "MessageResearch": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "MessageResearch"
       },
       "MetricCreate": {
         "properties": {
@@ -90968,6 +91097,21 @@
         ],
         "title": "RescoreResult"
       },
+      "ResearchIn": {
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Message Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message_id"
+        ],
+        "title": "ResearchIn",
+        "description": "Research this: the person's message to research."
+      },
       "Resolution": {
         "properties": {
           "feedback_id": {
@@ -93807,7 +93951,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Flow"
           },
@@ -94277,7 +94422,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Flow"
           },
@@ -95094,7 +95240,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Flow"
           },

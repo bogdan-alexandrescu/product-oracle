@@ -45,7 +45,7 @@ from tests.conftest import make_tenant
 
 PUBLIC_IP = "93.184.216.34"
 METADATA_IP = "169.254.169.254"
-REFUSED = "Web search is for Oracle's monthly digest"
+REFUSED = "Web search is for Oracle's own research runs"
 
 
 class FakeProvider(WebSearchProvider):

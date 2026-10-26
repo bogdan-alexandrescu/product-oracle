@@ -1,12 +1,13 @@
 """``POST /v1/web/search`` (``search_web``) and ``POST /v1/web/fetch`` (``fetch_web_page``).
 
-Run-only: the caller must be a run's token holding ``read:web`` (only the competitive
-digest's segment gets it). People, API tokens, MCP clients and other runs get 403 "Web
-search is for Oracle's monthly digest".
+Run-only: the caller must be a run's token holding ``read:web`` (the competitive digest's
+segment and discussion research's, G2 §4). People, API tokens, MCP clients and other runs
+get 403 "Web search is for Oracle's own research runs".
 
 Caps: ``ORACLE_WEB_SEARCH_MAX_PER_RUN`` searches and ``ORACLE_WEB_FETCH_MAX_PER_RUN`` page
 reads per run, and the company's ``web_searches_per_month`` searches in the Company time
-zone's month (0 turns web search off): 429 ``web_cap_reached`` beyond them. The company's
+zone's month (0 turns web search off): 429 ``web_cap_reached`` beyond them, in words
+(:func:`_spent`). The company's
 web calls take one advisory lock, so the counts and the run's refs never race.
 """
 
@@ -34,7 +35,7 @@ from oracle.web.search import NOTE, ProviderError, WebSearchProvider, get_search
 router = APIRouter(prefix="/v1/web", tags=["web"])
 
 SCOPE = "read:web"
-REFUSED = "Web search is for Oracle's monthly digest"
+REFUSED = "Web search is for Oracle's own research runs"
 UNCONFIGURED = (
     "Web search is not set up: an owner adds the search provider's key (oracle-web-search-key)."
 )
@@ -75,11 +76,29 @@ async def _month_start(db: AsyncSession, now: datetime) -> datetime:
     return local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
 
-async def _searches_left(db: AsyncSession, run_id: uuid.UUID, now: datetime) -> int:
+async def _left(db: AsyncSession, run_id: uuid.UUID, now: datetime) -> tuple[int, int, int]:
+    """(searches left in the run, left this month, the monthly allowance)."""
     per_run = get_settings().web_search_max_per_run - await models.searches_in_run(db, run_id)
     monthly = int(await get_setting(db, "web_searches_per_month"))
     this_month = await models.searches_since(db, await _month_start(db, now))
-    return max(0, min(per_run, monthly - this_month))
+    return per_run, monthly - this_month, monthly
+
+
+async def _searches_left(db: AsyncSession, run_id: uuid.UUID, now: datetime) -> int:
+    per_run, month, _monthly = await _left(db, run_id, now)
+    return max(0, min(per_run, month))
+
+
+def _spent(per_run: int, month: int, monthly: int) -> str:
+    """Why no search is left, in words: the month's allowance, or this run's cap."""
+    if month <= 0:
+        if monthly <= 0:
+            return "Web search is off for this company. An owner can turn it on in Settings."
+        return (
+            f"This month's web searches are used up (the company allows {monthly} a month). "
+            "An owner can raise the allowance in Settings."
+        )
+    return "No web searches are left for this run."
 
 
 @router.post(
@@ -99,10 +118,9 @@ async def search_web(
     assert run_id is not None
     await _lock(db, principal.tenant_id)
     now = datetime.now(UTC)
-    if await _searches_left(db, run_id, now) <= 0:
-        return _failed(
-            429, "web_cap_reached", "No web searches are left for this run or this month."
-        )
+    per_run, month, monthly = await _left(db, run_id, now)
+    if min(per_run, month) <= 0:
+        return _failed(429, "web_cap_reached", _spent(per_run, month, monthly))
     try:
         found = await provider.search(body.query, body.max_results)
     except ProviderError as exc:

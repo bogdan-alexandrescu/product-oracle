@@ -28,6 +28,7 @@ Flow = Literal[
     "metrics_variance",
     "pricing_memo",
     "competitive_digest",
+    "discussion_research",
 ]
 Depth = Literal["quick", "standard", "deep"]
 RunStatus = Literal[

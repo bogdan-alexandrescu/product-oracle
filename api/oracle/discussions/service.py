@@ -20,7 +20,7 @@ from sqlalchemy.orm.attributes import set_committed_value
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role, recheck_caller
-from oracle.discussions import access, inbox, replies
+from oracle.discussions import access, inbox, replies, research
 from oracle.discussions.models import (
     MAX_BODY,
     MAX_SUMMARY,
@@ -47,6 +47,7 @@ from oracle.discussions.schemas import (
     DiscussionStarter,
     DiscussionSummary,
     HiddenDiscussion,
+    MessageResearch,
     PrivateFindings,
     ReplyUsage,
 )
@@ -671,6 +672,9 @@ async def discussion_out(db: AsyncSession, principal: "Principal", d: Discussion
         messages, people = await exposure(db, d)
         out.exposure = DiscussionExposure(messages=messages, people=people)
     out.me.private_findings = await private_findings(db, principal, d)
+    if research.can_research(d, seat) and principal.user_id is not None:
+        out.me.can_research = True
+        out.me.research_usd = float(research.estimate_usd())
     from oracle.slack import bridge  # G8; it builds on this module
 
     out.slack = await bridge.slack_out(db, await bridge.live_link(db, d.id))
@@ -786,6 +790,7 @@ def message_out(
     users: dict[uuid.UUID, User],
     role: str | None = None,
     zone: str = company_time.DEFAULT_ZONE,
+    research: dict[uuid.UUID, str] | None = None,
 ) -> DiscussionMessageOut:
     def ref(uid: uuid.UUID) -> DiscussionPerson:
         user = users.get(uid)
@@ -805,7 +810,8 @@ def message_out(
         mentions_oracle=m.mentions_oracle,
         reply_to=m.reply_to,
         status=m.status,  # type: ignore[arg-type]
-        citations=m.citations,
+        # A research line keeps its run's context entries; only Oracle's answer cites.
+        citations=[] if m.author_kind == "system" else m.citations,
         created_at=m.created_at,
         edited_at=m.edited_at,
         deleted=deleted,
@@ -823,7 +829,24 @@ def message_out(
         )
         if m.author_kind == "oracle" and role == "owner"
         else None,
+        research=_research_out(m, research, role)
+        if m.run_id is not None and research is not None
+        else None,
     )
+
+
+def _research_out(
+    m: DiscussionMessage, states: dict[uuid.UUID, str], role: str | None = None
+) -> MessageResearch:
+    assert m.run_id is not None
+    state = states.get(m.run_id, "running")
+    # A line whose run could not start keeps why, in words (#584 review): the runs' own
+    # words (which can name another run) for approvers and owners, who start research;
+    # a plain sentence for everyone else (#606 re-review).
+    why = m.error if m.author_kind == "system" and state == "failed" else None
+    if why is not None and not (role and has_role(role, "approver")):
+        why = research.START_FAILED
+    return MessageResearch(run_id=m.run_id, status=state, error=why)  # type: ignore[arg-type]
 
 
 async def messages_out(
@@ -835,7 +858,10 @@ async def messages_out(
     # Once a page, and only when a failed reply has a stored error to read (#644 re-review).
     failed = any(m.status == "failed" and m.error for m in rows)
     zone = await company_time.company_time_zone(db) if failed else company_time.DEFAULT_ZONE
-    return [message_out(m, users, role, zone) for m in rows]
+    states = await research.statuses(db, rows)
+    outs = [message_out(m, users, role, zone, states) for m in rows]
+    await research.for_reader(db, rows, outs)
+    return outs
 
 
 async def list_messages(

@@ -524,11 +524,16 @@ def flow_catalog() -> FlowCatalog:
 
 
 async def _get_run(db: AsyncSession, run_id: uuid.UUID, *, lock: bool = False) -> Run:
-    stmt = select(Run).where(Run.id == run_id)
     if lock:
         # Read again as it is now: the caller may have read it unlocked before.
-        stmt = stmt.with_for_update().execution_options(populate_existing=True)
-    run = await db.scalar(stmt)
+        stmt = select(Run).where(Run.id == run_id)
+        run = await db.scalar(stmt.with_for_update().execution_options(populate_existing=True))
+    else:
+        # The run this request already read (the research gate, runs.router) is reused;
+        # one deleted since in this session is as absent as the read would find it.
+        run = await db.get(Run, run_id)
+        if run is not None and run.deleted_at is not None:
+            run = None
     # H8: a run on a document the principal may not see (an update, for a commenter or a
     # viewer) is as absent as its document, with its segments and files.
     if run is None or (

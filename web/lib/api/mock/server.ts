@@ -29,6 +29,10 @@ import { goalCheck } from "./goals";
 import {
   discussionInboxRows,
   emptyDiscussions,
+  RESEARCH_REFUSED,
+  RESEARCH_REFUSED_SCENARIO,
+  RESEARCH_UNSAFE_LINK,
+  RESEARCH_UNSAFE_LINK_SCENARIO,
   routeDiscussions,
   seedDiscussionInbox,
   seedDiscussionReplies,
@@ -2218,7 +2222,7 @@ function load(): Db {
   db.discussions =
     scenario === "discussions"
       ? seedDiscussionInboxScenario(db, seedDiscussionsScenario(db))
-      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO || scenario === STORED_REFUSALS_SCENARIO
+      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO || scenario === STORED_REFUSALS_SCENARIO || scenario === RESEARCH_REFUSED_SCENARIO || scenario === RESEARCH_UNSAFE_LINK_SCENARIO
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
         : scenario === SLACK_SCENARIO
           ? seedDiscussionsScenario(db, seedSlackBridge)
@@ -3811,6 +3815,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       uuid,
       now,
       refusal: () => poolRefusal(localStorage.getItem(MOCK_SCENARIO_KEY)),
+      researchRefusal: () => (localStorage.getItem(MOCK_SCENARIO_KEY) === RESEARCH_REFUSED_SCENARIO ? RESEARCH_REFUSED : null),
+      researchLink: () => (localStorage.getItem(MOCK_SCENARIO_KEY) === RESEARCH_UNSAFE_LINK_SCENARIO ? RESEARCH_UNSAFE_LINK : null),
       // A streaming reply writes after its response: in turn with every other request.
       persist: (change) => {
         const next = queue.then(() => {

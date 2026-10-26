@@ -134,6 +134,7 @@ DECIDED_PER_ITEM = frozenset(
 # review's rows (C7) the feature-set stop's approver role's. A discussion's change (G3) is a
 # writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
+# Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
 # The capabilities answer
 # carries this as ``per_item``, so the web app's can() asks the item too.
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
@@ -207,6 +208,7 @@ PER_ITEM: dict[str, Role | None] = {
     "regenerate_spec": "owner",
     "remove_evidence": "approver",
     "reopen_track_alert": None,
+    "research_discussion_message": "approver",
     "resolve_discussion_change": "approver",
     "retry_discussion_reply": "approver",
     "retry_draft_import": "owner",

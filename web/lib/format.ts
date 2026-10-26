@@ -37,6 +37,9 @@ export const isHttpUrl = (ref: string): boolean => HTTP_URL.test(ref);
 export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null =>
   c.source !== "oracle" && HTTP_URL.test(c.ref) ? c.ref : null;
 
+/** Whether `url` is an http(s) address (as a browser reads it: spaces and controls dropped). */
+export const isWebLink = (url: string | null | undefined): url is string => !!url && /^https?:/i.test(url.replace(/[\u0000-\u0020]/g, ""));
+
 /**
  * What a citation's writer said of it: its confidence as "0.75", else (no score) its note,
  * e.g. "owner decision, locked"; null when it says neither.
