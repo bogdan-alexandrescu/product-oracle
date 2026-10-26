@@ -8,11 +8,14 @@ import { api, unwrap } from "@/lib/api/client";
 export type DocumentView = "brief" | "full";
 
 let cached: DocumentView | null = null;
+/** Counts the choices made in this page, so a read begun before one never lands over it. */
+let choices = 0;
 const listeners = new Set<(v: DocumentView) => void>();
 
 /**
  * The signed-in user's document view. Starts on the brief until the saved choice
- * loads; `setView` saves the new choice for this user.
+ * loads; `setView` saves the new choice for this user. A choice made while the saved one
+ * is still loading (Show full document, or v, on the brief shown meanwhile) wins.
  */
 export function useDocumentView(): [DocumentView, (v: DocumentView) => void, boolean] {
   const [view, setLocal] = useState<DocumentView>(cached ?? "brief");
@@ -22,15 +25,16 @@ export function useDocumentView(): [DocumentView, (v: DocumentView) => void, boo
     const on = (v: DocumentView) => setLocal(v);
     listeners.add(on);
     let alive = true;
+    const asked = choices;
     unwrap(api.GET("/v1/me/preferences"))
       .then((p) => {
+        // Read before the reader's latest choice: that choice stands (its PATCH saves it).
+        if (asked !== choices) return;
         cached = p.document_view;
-        if (alive) {
-          setLocal(p.document_view);
-          setLoaded(true);
-        }
+        if (alive) setLocal(p.document_view);
       })
-      .catch(() => alive && setLoaded(true));
+      .catch(() => {})
+      .finally(() => alive && setLoaded(true));
     return () => {
       alive = false;
       listeners.delete(on);
@@ -38,6 +42,7 @@ export function useDocumentView(): [DocumentView, (v: DocumentView) => void, boo
   }, []);
 
   const setView = useCallback((v: DocumentView) => {
+    choices += 1;
     cached = v;
     listeners.forEach((l) => l(v));
     void api.PATCH("/v1/me/preferences", { body: { document_view: v } });
