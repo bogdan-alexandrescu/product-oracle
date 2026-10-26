@@ -7327,6 +7327,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/intakes/{intake_id}/analysis-input": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake Analysis Input
+         * @description The intake's brief, goals and the author's chosen source excerpts, exactly as
+         *     Oracle's built-in job reads them, for this intake's own read run only (its token,
+         *     holding read:intake-input). Everything under untrusted_data is untrusted data.
+         */
+        get: operations["get_intake_analysis_input"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/ai-read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Intake Read
+         * @description Analyse with Oracle (the author only): start Oracle's read of the brief and the
+         *     author's pinned sources ($1.50 on SwarmCloud; Oracle's built-in model when that cannot
+         *     start or fails). 409 while a read is under way, on a converted or archived intake, or
+         *     when Oracle's read is off for the company. Re-analyse runs the rules only.
+         */
+        post: operations["start_intake_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/intakes/{intake_id}/analyze": {
         parameters: {
             query?: never;
@@ -12506,6 +12551,67 @@ export interface components {
             model?: boolean | null;
             /** Human */
             human?: number | null;
+        };
+        /** AiReadCount */
+        AiReadCount: {
+            /** Items */
+            items: number;
+            /** Gaps */
+            gaps: number;
+        };
+        /** AiReadNote */
+        AiReadNote: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * AiReadOut
+         * @description INT2 Oracle's read of the intake, the author's only (``IntakeSummary.ai_read`` is
+         *     null for anyone else). ``path``: what produced or is producing the read, a SwarmCloud
+         *     run or Oracle's built-in job (the fallback, with ``fallback`` saying why, or the
+         *     rollback); ``off_reason``: ``company`` (the switch on Settings › Company is off) or
+         *     ``intake`` (no read was asked for this intake).
+         */
+        AiReadOut: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "off" | "queued" | "running" | "done" | "failed";
+            /** Path */
+            path?: ("swarmcloud" | "job") | null;
+            /** Off Reason */
+            off_reason?: ("company" | "intake") | null;
+            /** Run Id */
+            run_id?: string | null;
+            /** Job Id */
+            job_id?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /**
+             * Sources
+             * @default 0
+             */
+            sources: number;
+            added?: components["schemas"]["AiReadCount"] | null;
+            /**
+             * Dropped Refs
+             * @default 0
+             */
+            dropped_refs: number;
+            error?: components["schemas"]["AiReadNote"] | null;
+            fallback?: components["schemas"]["AiReadNote"] | null;
+            /** Note */
+            note?: string | null;
+            /**
+             * Failures
+             * @default 0
+             */
+            failures: number;
         };
         /** AlignmentItem */
         AlignmentItem: {
@@ -20061,7 +20167,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "intake_analysis";
             /** Title */
             title: string;
             /** Description */
@@ -21281,7 +21387,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "intake_analysis";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -21643,6 +21749,24 @@ export interface components {
             suggestion_rationale?: string | null;
         };
         /**
+         * InboxIntakeRead
+         * @description INT2: Oracle couldn't read an intake of mine twice or more in a row (the fallback
+         *     job failing too); counted until a read succeeds or the intake closes.
+         */
+        InboxIntakeRead: {
+            /**
+             * Intake Id
+             * Format: uuid
+             */
+            intake_id: string;
+            /** Title */
+            title: string;
+            /** Failures */
+            failures: number;
+            /** At */
+            at?: string | null;
+        };
+        /**
          * InboxLaunch
          * @description A launch row of the Inbox: Ready to launch (owner), Set tier (approvers), Notes
          *     to send (owner) are counted; Shipped (a member's personal note) is shown only.
@@ -21896,6 +22020,11 @@ export interface components {
              * @default []
              */
             requests: components["schemas"]["InboxRequestReply"][];
+            /**
+             * Intake Reads
+             * @default []
+             */
+            intake_reads: components["schemas"]["InboxIntakeRead"][];
         };
         /**
          * InboxOutcome
@@ -22799,6 +22928,7 @@ export interface components {
              * @default 0
              */
             answers_since_run: number;
+            ai_read?: components["schemas"]["AiReadOut"] | null;
         };
         /** InterviewCreate */
         InterviewCreate: {
@@ -30412,7 +30542,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "intake_analysis";
             /** Document */
             document?: string | null;
             /** Source */
@@ -30577,7 +30707,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "intake_analysis";
             /** Flow Title */
             flow_title: string;
             /**
@@ -30839,7 +30969,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "intake_analysis";
             /** Flow Title */
             flow_title: string;
             /**
@@ -51806,6 +51936,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IntakeSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_intake_analysis_input: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description This is for Oracle's read of an intake */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_intake_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiReadOut"];
                 };
             };
             /** @description Validation Error */
