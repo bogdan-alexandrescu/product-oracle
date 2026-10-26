@@ -731,10 +731,20 @@ def brand_context(ev: ExportVersion, accent: bool = True) -> dict:
     from oracle.branding import BRAND_CSS, accent_css, render_brand_header
 
     return {
-        "brand_header": render_brand_header(ev.brand),
+        "brand_header": render_brand_header(ev.brand, dark=brand_dark(ev)),
         "brand_css": Markup(BRAND_CSS) if ev.brand is not None else Markup(""),
         "accent_css": accent_css(ev.brand) if accent else Markup(""),
     }
+
+
+def brand_dark(ev: ExportVersion) -> bool:
+    """Whether ``ev``'s exports and deck show the dark logo: its theme's background is
+    dark and a dark logo is uploaded (owner decision, 2026-10-26; no theme: white)."""
+    from oracle.branding import theme_background
+
+    if ev.brand is None or ev.theme is None:
+        return False
+    return ev.brand.uses_dark(theme_background(ev.theme.tokens))
 
 
 @cache

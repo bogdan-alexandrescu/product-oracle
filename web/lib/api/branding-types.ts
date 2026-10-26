@@ -40,17 +40,30 @@ export function normalHex(value: string): string | null {
   return null;
 }
 
-/** WCAG 2 contrast ratio of a hex colour against white (#ffffff). */
-export function contrastOnWhite(hex: string): number {
+/** WCAG 2 relative luminance of a hex colour, 0-1; NaN when it is not one. */
+export function luminance(hex: string): number {
   const full = normalHex(hex);
   if (!full) return NaN;
   const [r, g, b] = [1, 3, 5].map((i) => {
     const c = parseInt(full.slice(i, i + 2), 16) / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
-  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return 1.05 / (lum + 0.05);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
+
+/** WCAG 2 contrast ratio of a hex colour against white (#ffffff). */
+export function contrastOnWhite(hex: string): number {
+  return 1.05 / (luminance(hex) + 0.05);
+}
+
+/** A background below this relative luminance is dark: exports put the dark logo on it. */
+export const DARK_LUMINANCE = 0.5;
+
+/** Whether a background takes the dark logo (oracle.branding.dark_background). */
+export const darkBackground = (hex: string | null | undefined) => !!hex && luminance(hex) < DARK_LUMINANCE;
+
+/** Which logo a built-in theme's exports and decks use (GET /v1/branding's `theme_logos`). */
+export type ThemeLogo = S["ThemeLogo"];
 
 /** AA for normal text: at least 4.5:1. */
 export const passesAA = (ratio: number) => ratio >= 4.5;

@@ -1368,6 +1368,10 @@ export function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/** The built-in themes' keys, names and page backgrounds (the Branding preview's note). */
+export const builtinThemeBackgrounds = () =>
+  THEME_SEEDS.map((t) => ({ key: t.key, name: t.name, background: t.tokens.colors?.background ?? "#ffffff" }));
+
 export function checkTheme(t: Tokens | null | undefined, css: string, slideCss?: string | null): Problem[] {
   const problems: Problem[] = [];
   const colours = t?.colors ?? {};

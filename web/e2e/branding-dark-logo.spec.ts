@@ -72,7 +72,7 @@ test("branding: an owner uploads a dark logo and the preview says which logo eac
     await expect(rows.nth(i)).toHaveText(`${name}: light background, uses the logo`);
   }
 
-  // It sticks after a reload, for a viewer's eyes as well as the owner's.
+  // It sticks after a reload.
   await page.reload();
   await expect(card.getByTestId("brand-theme-logos").getByRole("listitem")).toHaveCount(BUILT_IN.length);
 
