@@ -8,12 +8,16 @@ from sqlalchemy import select
 
 from oracle.claude_accounts.pool import readable_refusal
 from oracle.docs.models import Document, DocumentVersion
+from oracle.engineering.models import CodeMap
 from oracle.jobs.models import LlmJob
 from oracle.roadmap.models import DraftRoadmap
 from oracle.runs.models import Run, RunSegment
 from oracle.tenancy import tenant_session
 from oracle.tenant_settings_api import DEFAULTS
 from tests.baseline_helpers import make_ctx
+from tests.conftest import make_tenant
+from tests.connection_helpers import make_person
+from tests.test_code_maps import github_source, request_map
 from tests.test_draft_roadmaps import new_version, person
 from tests.test_draft_roadmaps import read as read_items
 from tests.test_draft_roadmaps import rows as draft_rows
@@ -206,7 +210,7 @@ async def test_failed_roadmap_items_read_the_refusal_in_the_past(client, owner, 
 
 def test_a_refusal_after_a_lead_in_reads_in_the_past_too():
     # As runs.service writes a draft's failure: "{segment}: {error}" (#604 re-review).
-    assert readable_refusal(f"Draft: {OLD}", "America/Los_Angeles", past=True) == (f"Draft: {PAST}")
+    assert readable_refusal(f"Draft: {OLD}", "America/Los_Angeles", past=True) == f"Draft: {PAST}"
     assert readable_refusal(f"Draft: {OLD}", "America/Los_Angeles") == f"Draft: {NOW}"
 
 
@@ -237,3 +241,50 @@ async def test_a_queued_interview_guides_wait_stays_in_the_present(client, membe
     guide = (await get_interview(client, members, iv["id"]))["guide_job"]
     assert guide["status"] == "queued" and guide["error"] == NOW
     assert guide["finished_at"] is None
+
+
+async def test_a_failed_triage_says_its_refusal_in_the_past(client, members):
+    # As runs.service stores a run's failure: "{segment}: {error}" (#633 re-review).
+    async with tenant_session(members.tenant_id) as s:
+        s.add(
+            Run(
+                flow="request_triage",
+                status="failed",
+                error=f"triage: {OLD}",
+                finished_at=FAILED_AT,
+            )
+        )
+        await s.commit()
+    resp = await client.get("/v1/requests/triage", headers=members.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["error"] == f"triage: {PAST}"
+    assert datetime.fromisoformat(body["finished_at"]) == FAILED_AT
+
+
+async def test_a_running_triages_wait_stays_in_the_present(client, members):
+    async with tenant_session(members.tenant_id) as s:
+        s.add(Run(flow="request_triage", status="running", error=f"triage: {OLD}"))
+        await s.commit()
+    body = (await client.get("/v1/requests/triage", headers=members.as_("viewer"))).json()
+    assert body["error"] == f"triage: {NOW}"
+
+
+async def test_a_failed_code_map_says_when_it_failed_the_refusal_in_the_past(client):
+    # codemaps.end_builds stores "The code map run failed: {run.error}" (#633 re-review).
+    tenant_id = await make_tenant()
+    dev = await make_person(tenant_id, "dev@example.com", "owner")
+    source_id = await github_source(tenant_id, dev)
+    out = (await request_map(client, dev, source_id)).json()
+    stored = f"The code map run failed: index: {OLD}"
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(CodeMap, uuid.UUID(out["id"]))
+        run = await s.get(Run, row.run_id)
+        run.status, run.error, run.finished_at = "failed", f"index: {OLD}", FAILED_AT
+        row.status, row.error = "failed", stored
+        await s.commit()
+    got = (await client.get(f"/v1/code-maps/{out['id']}", headers=dev.headers)).json()
+    assert got["error"] == f"The code map run failed: index: {PAST}"
+    assert datetime.fromisoformat(got["failed_at"]) == FAILED_AT
+    listed = (await client.get("/v1/code-maps", headers=dev.headers)).json()
+    assert [(m["error"], m["failed_at"] is not None) for m in listed] == [(got["error"], True)]
