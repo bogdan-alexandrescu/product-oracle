@@ -60,7 +60,7 @@ test("webhooks: an owner creates one, gets the secret once, sends a test event t
   const draft = page.getByRole("dialog", { name: "New webhook" });
   await draft.getByLabel("Name").fill("Tracker bot");
   await draft.getByLabel("URL").fill("http://hooks.example.test/oracle");
-  await draft.getByRole("checkbox", { name: "Run started" }).check();
+  await draft.getByRole("checkbox", { name: "A run started" }).check();
   await draft.getByRole("button", { name: "Create" }).click();
   await expect(draft.getByRole("alert")).toContainText("https://");
   await draft.getByRole("button", { name: "Close New webhook" }).click();
@@ -191,7 +191,7 @@ test("webhooks: an approver sees only their own and gets no owners-and-approvers
   await expect(page.getByTestId("webhook-inspector").getByRole("button", { name: "Take over" })).toHaveCount(0);
   await page.getByRole("button", { name: "New webhook" }).click();
   const sheet = page.getByRole("dialog", { name: "New webhook" });
-  await expect(sheet.getByRole("checkbox", { name: "Run started" })).toBeVisible();
+  await expect(sheet.getByRole("checkbox", { name: "A run started" })).toBeVisible();
   await expect(sheet.getByRole("switch", { name: "Include owners-and-approvers content" })).toHaveCount(0);
 });
 
