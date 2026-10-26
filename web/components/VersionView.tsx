@@ -117,7 +117,7 @@ function readSelection(): Selection | null {
 export function VersionView({ doc, n, pane = "document" }: { doc: string; n: number; pane?: "document" | "items" | "roadmap" | "evidence" }) {
   const router = useRouter();
   const onDocument = pane === "document";
-  const { me, can, capsReady } = useMe();
+  const { me, can, capsReady, capsError } = useMe();
   // #370: what the signed-in person may call. Comments (create_comment); section verdicts
   // (review_section), which also stand for the other decisions on a version.
   const canComment = can("create_comment");
@@ -948,6 +948,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         readOnly,
         canComment,
         canDecide,
+        rolesReady: capsReady || !!capsError,
         userId: me?.user_id ?? me?.token_id ?? null,
         showLayer: hasBrief,
         goTo,

@@ -67,7 +67,7 @@ const shortHash = (h: string | null | undefined) => (h ? `${h.slice(0, 4)}…${h
  * pins over it: annotation numbers are the labels Oracle writes into each wireframe.
  */
 export function DesignReview({ specId, versionId }: { specId: string; versionId: string }) {
-  const { me, can } = useMe();
+  const { me, can, capsReady, capsError } = useMe();
   const phone = useIsPhone();
   const specQ = useQuery(`spec-request|${specId}`, () =>
     unwrap(api.GET("/v1/spec-requests/{request_id}", { params: { path: { request_id: specId } } })),
@@ -96,7 +96,9 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
   }
   const spec = specQ.data;
   const d = designQ.data;
-  if (!spec || !d) return <LoadingState />;
+  // Who may comment or decide comes from the role's capabilities: until they answer, the page
+  // would offer a viewer's review to anyone.
+  if (!spec || !d || !(capsReady || capsError)) return <LoadingState />;
 
   const v = d.version;
   const output = d.outputs.find((o) => o.name === picked) ?? d.outputs[0];

@@ -1,3 +1,5 @@
+import { MOCK_SLOW_KEY } from "../lib/api/mock/server";
+
 import { expect, test, type Page } from "./test";
 
 import { feedbackState, login, section } from "./helpers";
@@ -183,6 +185,24 @@ test("comment feedback items: Resolve and Reopen at the top", async ({ page }) =
   await expect(done).toHaveCount(0);
   await feedbackState(page, "Open");
   await expect(item(page, "s-5-3").getByRole("button", { name: "Resolve", exact: true })).toBeVisible();
+});
+
+test("on a slow network, the author's Resolve waits for their role: it resolves the item, not only its thread", async ({ page }) => {
+  await login(page);
+  // The role's capabilities answer late; the comment is the signed-in owner's own.
+  await page.evaluate(([key, path]) => localStorage.setItem(key, path), [MOCK_SLOW_KEY, "/v1/me/capabilities"]);
+  await page.goto("/documents/checkout-redesign/v/2?feedback=open#s-5-3");
+  const comment = item(page, "s-5-3");
+  await expect(comment).toContainText("most recently used address");
+  await comment.getByRole("button", { name: "Resolve", exact: true }).click();
+  await expect(items(page)).toHaveCount(0);
+  await feedbackState(page, "Done");
+  const done = item(page, "s-5-3").filter({ hasText: "most recently used address" });
+  await expect(done.getByTestId("feedback-state-chip")).toHaveText("Done");
+  // The item itself is resolved: Reopen, nothing left to resolve or stage.
+  await expect(done.getByRole("button", { name: "Reopen" })).toBeVisible();
+  await expect(done.getByRole("button", { name: "Resolve", exact: true })).toHaveCount(0);
+  await expect(done.getByRole("button", { name: "Stage for agents" })).toHaveCount(0);
 });
 
 test("phone: arriving from the inbox shows the first open item and its actions", async ({ page }) => {
