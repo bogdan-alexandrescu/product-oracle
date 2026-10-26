@@ -150,7 +150,7 @@ export function MeSync() {
   const pathname = usePathname();
   const { refresh } = useMe();
   useEffect(() => {
-    if (pathname.startsWith("/i/")) return;
+    if (pathname.startsWith("/i/") || pathname.startsWith("/s/")) return;
     void refresh();
   }, [pathname, refresh]);
   return null;

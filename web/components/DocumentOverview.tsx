@@ -7,6 +7,7 @@ import { useState } from "react";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { DocToolbar } from "@/components/DocToolbar";
+import { RoadmapSharing } from "@/components/share/RoadmapSharing";
 import { PricingDecide } from "@/components/PricingDecide";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
 import {
@@ -333,6 +334,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 </>
               }
             />
+            {d.kind === "roadmap" && <RoadmapSharing d={d} />}
             <Split inspector={selected ? <VersionInspector doc={doc} kind={d.kind} v={selected} latest={d.latest_version} /> : undefined}>
               <Panel title="Versions" count={versions.length}>
                 <DataTable

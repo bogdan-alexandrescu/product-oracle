@@ -50,7 +50,7 @@ import {
 import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
-import { llmJobsRoute, onFeedback, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { llmJobsRoute, onFeedback, queueJob, queueQualityReview, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
 import { draftRefusal, emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
 import { nudges } from "./learned";
@@ -155,6 +155,21 @@ import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience } from "./audience";
+import {
+  draftPublicTexts,
+  emptyShares,
+  routePublicShares,
+  routeShares,
+  seedShares,
+  shareInboxRows,
+  SHARING_PUBLIC_SCENARIO,
+  SHARING_ROADMAP_SLUG,
+  SHARING_ROADMAP_TITLE,
+  SHARING_SCENARIO,
+  SHARING_SECTIONS,
+  type SharesContext,
+  type SharesDb,
+} from "./shares";
 
 /**
  * latest_version, approved_version, source and an update's period are read off the versions;
@@ -225,6 +240,8 @@ export interface Db {
   impact_runs?: Record<string, string>;
   /** I1: Settings › Webhooks, their events and delivery log (./webhooks.ts). */
   webhooks?: WebhooksDb;
+  /** O5: share links, view log, public texts and checks (./shares.ts). */
+  shares?: SharesDb;
   /** Outcome records and learnings (./quality.ts); absent in data saved before CR-08. */
   quality?: QualityDb;
   /** Module catalogue and compositions (./modules.ts); absent in older saved data. */
@@ -1531,7 +1548,84 @@ function seed(): Db {
   db.runs = seeded("runs", () => seedRuns(runsContext(db)));
   db.llm = seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
   seeded("updates", () => seedUpdates(db));
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  if (scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO) seeded("sharing", () => seedSharingRoadmap(db, scenario === SHARING_PUBLIC_SCENARIO ? "public" : "team"));
   return db;
+}
+
+/** O5 "sharing": an approved roadmap (v1, published when the review state is seeded); "sharing-public" defaults it to Public. */
+function seedSharingRoadmap(db: Db, audience: "team" | "public") {
+  const created = "2026-10-12T09:00:00Z";
+  const doc: DocumentRow = {
+    id: uuid(), slug: SHARING_ROADMAP_SLUG, title: SHARING_ROADMAP_TITLE, status: "approved", kind: "roadmap", template: "now-next-later",
+    template_version: "1", theme: null, audience, created_at: created, updated_at: created,
+  };
+  db.documents.push(doc);
+  const v = buildVersion(doc, { number: 1, created_at: created, sections: SHARING_SECTIONS, citations: [], brief: ["summary", "brief-items"] });
+  v.approved_at = "2026-10-13T09:00:00Z";
+  db.versions.push(v);
+}
+
+/** The v2 review state (publications among it), seeded on first use. */
+function ensureReviewV2(db: Db): ReviewV2Db {
+  if (db.review_v2) return db.review_v2;
+  const prd = db.documents.find((d) => d.kind === "prd");
+  db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
+  // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
+  const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+  const decider = db.members.find((x) => x.email === "approver@example.com");
+  // The "impact" scenarios (./impact.ts): the commenter decides usage-alerts-roadmap.
+  const impactDecider = db.members.find((x) => x.email === "commenter@example.com");
+  if (localStorage.getItem(MOCK_SCENARIO_KEY)?.startsWith("impact") && roadmapDoc && impactDecider) {
+    db.review_v2.policies.push({
+      document_id: roadmapDoc.id, decider_id: impactDecider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+      section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
+    });
+  }
+  if (localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" && roadmapDoc && decider) {
+    db.review_v2.policies.push({
+      document_id: roadmapDoc.id, decider_id: decider.id, mandatory_reviewer_ids: [], required_section_keys: [],
+      section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
+    });
+  }
+  // O5 "sharing": the roadmap's v1 is publication 1.
+  const shared = db.documents.find((d) => d.slug === SHARING_ROADMAP_SLUG);
+  const sv = shared && docVersions(db, shared)[0];
+  if (shared && sv) {
+    db.review_v2.publications.push({
+      id: uuid(), document_id: shared.id, number: 1, version_id: sv.id, version_number: sv.number, content_hash: sv.content_hash,
+      manifest_hash: hash(`${sv.content_hash}:1`), published_by: db.user_id, created_at: "2026-10-13T10:00:00Z", has_brief: true,
+      manifest: { format: 1, document: { id: shared.id, slug: shared.slug, title: shared.title }, version: { id: sv.id, number: sv.number, content_hash: sv.content_hash }, approval: { approved_at: sv.approved_at ?? null, decider_id: db.user_id }, sections: [] },
+      markdown: "", html: exportHtml(shared, sv),
+    });
+  }
+  return db.review_v2;
+}
+
+/** O5: the share links' context (./shares.ts); `me` is null for a link holder. */
+function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesContext {
+  const publications = ensureReviewV2(db).publications;
+  const base = { documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now };
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  db.shares ??= scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO
+    ? seeded("shares", () => seedShares(base, db.user_id, db.members.find((m) => m.status === "disabled")?.id ?? null, scenario === SHARING_SCENARIO))
+    : emptyShares();
+  const shares = db.shares;
+  return {
+    ...base,
+    db: shares,
+    me,
+    observesOutside: () => levelFor((db.autonomy ??= emptyAutonomy()), "external_messages") === "observe",
+    queueDraft: (doc, v) => {
+      db.llm ??= seeded("llm", () => seedLlm(llmContext(db, db.user_id, "owner")));
+      return queueJob(llmContext(db, me?.id ?? db.user_id, me?.role ?? "owner"), doc.id, "public_text", v.number);
+    },
+    renderAudience: (doc, v, audience) => {
+      const row = db.documents.find((d) => d.id === doc.id)!;
+      const version = db.versions.find((x) => x.id === v.id)!;
+      return exportHtml(row, { ...version, sections: audienceSections(version.sections, audience) }, audienceLabel(audience));
+    },
+  };
 }
 
 /**
@@ -1608,6 +1702,8 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       return { level: levelFor(a, "next_drafts"), min_staged: Number.isFinite(min) && min >= 3 ? min : 5 };
     },
     runQualityReview: (job, versionId) => storeModelReview(ensureV2(db), job, versionId),
+    // O5: the public_text job drafts into the share mock's texts.
+    publicText: (job) => draftPublicTexts(sharesContext(db, null), job.document_id!, job.version_number!),
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
@@ -3958,6 +4054,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const out = await routePublicInterviews(ensureInterviews(db), interviewsContext(db, db.user_id, "viewer"), req, p);
     if (out) return out;
   }
+  // O5: a link holder's routes carry no member credential, only the token and its cookie.
+  if (p[1] === "public" && p[2] === "shares") {
+    const out = await routePublicShares(sharesContext(db, null), req, p);
+    if (out) return out;
+  }
   // A5: where a Google sign-in without membership stands (the access-* scenarios); /v1/me is then 401.
   const access = ACCESS_SCENARIOS[localStorage.getItem(MOCK_SCENARIO_KEY) ?? ""];
   if (p[1] === "auth" && p[2] === "access") {
@@ -4021,32 +4122,15 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (trashOut) return trashOut;
   // v2 review routes (./review-v2.ts) check roles themselves.
-  if (!db.review_v2) {
-    const prd = db.documents.find((d) => d.kind === "prd");
-    db.review_v2 = seedReviewV2(prd, prd ? docVersions(db, prd).pop() : undefined, db.user_id, hash);
-    // The "plan-decider" scenario (#346): the approver is usage-alerts-roadmap's designated decider.
-    const roadmapDoc = db.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
-    const decider = db.members.find((x) => x.email === "approver@example.com");
-    // The "impact" scenarios (./impact.ts): the commenter decides usage-alerts-roadmap.
-    const impactDecider = db.members.find((x) => x.email === "commenter@example.com");
-    if (localStorage.getItem(MOCK_SCENARIO_KEY)?.startsWith("impact") && roadmapDoc && impactDecider) {
-      db.review_v2.policies.push({
-        document_id: roadmapDoc.id, decider_id: impactDecider.id, mandatory_reviewer_ids: [], required_section_keys: [],
-        section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
-      });
-    }
-    if (localStorage.getItem(MOCK_SCENARIO_KEY) === "plan-decider" && roadmapDoc && decider) {
-      db.review_v2.policies.push({
-        document_id: roadmapDoc.id, decider_id: decider.id, mandatory_reviewer_ids: [], required_section_keys: [],
-        section_approval: "none", rereview_on_change: true, source: "document", lock_version: 1,
-      });
-    }
-  }
+  ensureReviewV2(db);
   // I1: webhooks check roles themselves; seeded before the notifications they write are read.
   const hooks = await webhooksRoute(webhooksContext(db, me), req, p, q);
   if (hooks) return hooks;
   const reviewV2 = await routeReviewV2(reviewV2Context(db, me.id, me.role), req, p, q);
   if (reviewV2) return reviewV2;
+  // O5: share links, the view log, public texts and the public check (./shares.ts).
+  const shares = await routeShares(sharesContext(db, me), req, p, q);
+  if (shares) return shares;
   if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
     const caps = await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0);
     for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(",")) if (op.trim()) caps.operations[op.trim()] = false;
@@ -4796,8 +4880,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const discussing = discussions.filter((r) => r.state !== "done").length;
     // A5: pending access requests, for owners and approvers; each counts.
     const accessRequestRows = inboxAccessRequests(db, me);
+    // O5-Q10: links revoked with their creator or document, for owners.
+    const shareRevocations = shareInboxRows(sharesContext(db, me));
     return json(200, {
       ...inbox,
+      share_revocations: shareRevocations,
       access_requests: accessRequestRows,
       tracks: tracked.tracks,
       revoke_failures: failures,
@@ -4808,7 +4895,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       oracle_actions: did,
       dates,
       discussions,
-      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing + accessRequestRows.length,
+      total: inbox.total + failures.length + accessFailures.length + reported.unread + (strategy ? 1 : 0) + open + dates.length + tracked.total + discussing + accessRequestRows.length + shareRevocations.length,
     });
   }
   if (runs) return runs;

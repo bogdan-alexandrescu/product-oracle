@@ -437,7 +437,8 @@ async def test_the_page_title_intro_quarter_and_changelog(client, ctx):
     assert "What Example Labs is building" in text and "Our plans." in text
     assert "Q4 2026" in text
     assert 'href="https://changelog.example.org/import"' in html
-    assert 'rel="noopener noreferrer nofollow"' in html
+    # It opens in a new tab: the app shows the page in a sandboxed frame (#651 review).
+    assert 'target="_blank" rel="noopener noreferrer nofollow"' in html
 
 
 async def test_a_changed_internal_item_drops_its_text_until_approved_again(client, ctx):
