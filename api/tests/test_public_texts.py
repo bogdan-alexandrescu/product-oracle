@@ -575,3 +575,86 @@ async def test_a_prd_has_no_public_texts(client, ctx):
 def test_source_hash_is_title_and_outcome():
     assert public.source_hash("A", "B") == hashlib.sha256(b"A\nB").hexdigest()
     assert public.source_hash("A", None) == public.source_hash("A", "")
+
+
+# --- #640 review: look-alike and invisible characters, and the page's own texts ----------
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("Built with Pri​ya Quill​feather", "person_name"),  # zero-width spaces
+        ("Built with Ｐｒｉｙａ Quillfeather", "person_name"),  # fullwidth
+        ("As North­wind Traders asked", "customer_name"),  # soft hyphen
+        ("As Nοrthwind Traders asked", "customer_name"),  # Greek omicron
+        ("As Нorthwind Traders asked", "customer_name"),  # Cyrillic En
+        ("Faster than Rival⁠Co", "alternative_name"),  # word joiner
+        ("Closes ENG‑412", "internal_code"),  # non-breaking hyphen
+        ("Closes ENG−412", "internal_code"),  # minus sign
+        ("Write to priya＠example.com", "email_or_phone"),  # fullwidth at
+    ],
+)
+def test_look_alike_and_invisible_characters_are_still_found(text, code):
+    """protects=#640 review: the leak check normalises (NFKC, casefold, format characters
+    stripped, look-alike letters and dashes mapped) before matching; fails_when=a name
+    spelled with invisible or look-alike characters passes; no_claim=every confusable."""
+    findings = leak_check.check(text, _ctx())
+    assert code in [f.code for f in findings if f.severity == "blocking"], findings
+
+
+def test_a_customer_is_found_by_its_distinctive_part():
+    """protects=#640 review: a customer label matches by its distinctive parts, like a
+    person's surname; fails_when="Northwind" passes; no_claim=generic company words."""
+    found = leak_check.check("Built for Northwind first", _ctx())
+    assert [f.code for f in found] == ["customer_name"]
+    assert found[0].words == ["Northwind"]
+    # A generic company word ("Traders", "Inc") is not a name on its own.
+    assert leak_check.check("A tool for traders", _ctx()) == []
+    assert leak_check.check("For every software team", _ctx(customers=["Acme Software Inc"])) == []
+
+
+def test_format_characters_are_told():
+    assert leak_check.format_characters("Plain text, with a dash - and émigré") == []
+    assert leak_check.format_characters("Ja​ne­") == ["U+200B", "U+00AD"]
+
+
+async def test_a_text_holding_format_characters_is_not_saved(client, ctx):
+    """protects=#640 review: a public text, title or intro holding invisible format
+    characters is refused (422 format_characters) whatever its state; fails_when=it is
+    saved; no_claim=look-alike letters (the check normalises them)."""
+    await seed(ctx)
+    for over in ({"title": "Import​ fast"}, {"description": "Day­one", "state": "draft"}):
+        resp = await put_text(client, ctx, "bulk-import", **over)
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"]["code"] == "format_characters"
+    resp = await client.put(PAGE, json={"public_intro": "Our⁠plans"},
+                            headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 422 and resp.json()["detail"]["code"] == "format_characters"
+
+
+async def test_a_page_title_and_intro_that_now_leak_are_dropped(client, ctx):
+    """protects=#640 review: the public title and intro are re-checked at every render
+    like item texts; once one names a new member it is left out of the page and the
+    check no longer holds; fails_when=the name stays on the preview or the check stays
+    checked; no_claim=the shared page (lane 3)."""
+    await seed(ctx)
+    await approve_both(client, ctx)
+    resp = await client.put(
+        PAGE,
+        json={"public_title": "What Lumen is building", "public_intro": "Made with Quarry."},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200, resp.text
+    assert (await client.post(CHECK, headers=ctx.as_("approver"))).status_code == 201
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "What Lumen is building" in text and "Made with Quarry." in text
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(User(email="lq@example.com", password_hash="x", role="viewer", name="Lumen Quarry"))
+        await s.commit()
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "Lumen" not in text and "Quarry" not in text
+    assert "Example Labs roadmap" in text
+    body = (await client.get(TEXTS, headers=ctx.as_("approver"))).json()
+    assert body["check"]["state"] != "checked"
+    assert {f["code"] for f in body["page_findings"]} == {"person_name"}
+    assert {"item_key": None, "reason": "page_findings"} in body["not_ready"]
