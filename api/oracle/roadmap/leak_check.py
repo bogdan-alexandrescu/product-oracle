@@ -262,9 +262,17 @@ def _prototype(char: str) -> str:
     return "i" if prototype == "l" and char.isupper() else prototype
 
 
-# Rounds of mapping and casefolding before the strict skeleton stops changing (two or
-# three in practice: "M" -> "m" -> "rn").
+# Rounds of mapping and casefolding allowed before the strict skeleton stops changing: three
+# at most in practice ("M" -> "m" -> "rn"); a test checks every character settles in fewer,
+# so the limit only bounds the loop and never cuts it short.
 _STRICT_ROUNDS = 8
+
+
+def _strict_round(text: str) -> str:
+    """One round of :func:`strict_skeleton`: marks and invisibles dropped, each character
+    mapped through confusables.txt as it is, then casefolded."""
+    text = _strip_invisible(_drop_marks(text, _MARKS)).translate(SKELETON_MAP)
+    return _drop_marks(text, _MARKS).casefold()
 
 
 @_cached
@@ -278,11 +286,66 @@ def strict_skeleton(text: str) -> str:
     written "maIIory" are both "rnallory")."""
     for _ in range(_STRICT_ROUNDS):
         before = text
-        text = _strip_invisible(_drop_marks(text, _MARKS)).translate(SKELETON_MAP)
-        text = _drop_marks(text, _MARKS).casefold()
+        text = _strict_round(text)
         if text == before:
             break
     return text
+
+
+def _char_forms(char: str, *, cached: bool = True) -> frozenset[str]:
+    """Each way a character is read: its skeleton (case folded first, :func:`skeleton`), its
+    strict skeleton as written and its strict skeleton after case folding. A capital I is
+    "i" or "l", a capital L only "l", a small l only "l"."""
+    sk, strict = (
+        (skeleton, strict_skeleton)
+        if cached
+        else (
+            skeleton.__wrapped__,
+            strict_skeleton.__wrapped__,
+        )
+    )
+    return frozenset((sk(char), strict(char), strict(char.casefold())))
+
+
+_char_forms_cached = functools.lru_cache(maxsize=8192)(_char_forms)
+
+
+def _ambiguous_sets() -> list[frozenset[str]]:
+    """Every set of more than one reading a character can have, once each ({"i", "l"} for a
+    capital I, {"n", "v"} for Greek capital Nu...). Only a letter that confusables.txt maps,
+    that case folding changes or that decomposes can have more than one."""
+    found: dict[frozenset[str], None] = {}
+    for cp in range(0x110000):
+        char = chr(cp)
+        if cp in SKELETON_MAP or char.casefold() != char or unicodedata.decomposition(char):
+            forms = _char_forms(char, cached=False)
+            if len(forms) > 1 and any(_TOKEN.search(f) for f in forms):
+                found[forms] = None
+    return list(found)
+
+
+# A word in a text's mixed form (:func:`_mixed`): letters, digits and the stand-ins below.
+_TOKEN = re.compile("[\\w\U000f0000-\U000ffffd]+")
+# A written character with more than one reading stands for all of them in the mixed form,
+# as one stand-in character (Supplementary Private Use Area-A) per set of readings; a name's
+# letter matches every stand-in holding one of its own readings.
+_STAND_INS = {forms: chr(0xF0000 + i) for i, forms in enumerate(_ambiguous_sets())}
+_STAND_INS_FOR: dict[str, str] = {}
+for _forms_set, _stand_in in _STAND_INS.items():
+    for _form in _forms_set:
+        _STAND_INS_FOR[_form] = _STAND_INS_FOR.get(_form, "") + _stand_in
+
+
+def _mixed(read: str) -> str:
+    """``read`` (a :func:`_read` text) letter by letter: each character's one reading, or
+    the stand-in for its readings when it has several, so a capital I written for an "i"
+    and another for an "l" both match within one name."""
+    out = []
+    for char in read:
+        forms = _char_forms_cached(char)
+        stand_in = _STAND_INS.get(forms) if len(forms) > 1 else None
+        out.append(stand_in or min(forms))
+    return "".join(out)
 
 
 _GENERIC_SKELETONS = frozenset(map(skeleton, GENERIC_COMPANY_WORDS))
@@ -367,25 +430,89 @@ def _norm(text: str) -> str:
 
 # The few texts a check is reading (each name list is matched against the same text).
 @functools.lru_cache(maxsize=8)
-def _forms(text: str) -> tuple[str, str]:
-    """``text``'s words on each skeleton (:func:`skeleton`, :func:`strict_skeleton`), one
-    space apart: a name is found when either form holds it."""
+def _forms(text: str) -> tuple[str, ...]:
+    """``text``'s words on each of its forms, one space apart: its skeleton
+    (:func:`skeleton`), its strict skeleton as written and after case folding
+    (:func:`strict_skeleton`), and its mixed form (:func:`_mixed`, each character on all of
+    its readings at once). A name is found when any form holds it."""
     read = _read(text)
-    return tuple(" ".join(_WORD.findall(fn(read))) for fn in (skeleton, strict_skeleton))
-
-
-def _record_strict(text: str) -> str:
-    """The strict skeleton of a company's own record (a name, note or slug): its capital I
-    is a real I, so case is folded first ("GOLD MINE" is "gold rnine", not "gold rnlne")."""
-    return strict_skeleton(_read(text).casefold())
-
-
-def _record_forms(text: str) -> tuple[str, str]:
-    """:func:`_forms` of a company's own record, its strict form by :func:`_record_strict`."""
-    return (
-        " ".join(_WORD.findall(skeleton(_read(text)))),
-        " ".join(_WORD.findall(_record_strict(text))),
+    forms = (
+        skeleton(read),
+        strict_skeleton(read),
+        strict_skeleton(read.casefold()),
+        _mixed(read),
     )
+    return tuple(" ".join(_TOKEN.findall(form)) for form in forms)
+
+
+@functools.lru_cache(maxsize=8)
+def _slug_forms(text: str) -> tuple[str, ...]:
+    """:func:`_forms` with every character kept (a slug's hyphens and underscores)."""
+    read = _read(text)
+    return (
+        skeleton(read),
+        strict_skeleton(read),
+        strict_skeleton(read.casefold()),
+        _mixed(read),
+    )
+
+
+def _letter(char: str) -> str | None:
+    """The pattern of one character of a company's own record (a name, note or slug): any
+    of its readings (:func:`_char_forms`), or a stand-in holding one; None when every
+    reading is a space or punctuation."""
+    forms = _char_forms_cached(char)
+    words = {"".join(_TOKEN.findall(f)) for f in forms} - {""}
+    if not words:
+        return None
+    stand_ins = "".join(dict.fromkeys(c for f in forms for c in _STAND_INS_FOR.get(f, "")))
+    alts = [re.escape(w) for w in sorted(words, key=lambda w: (-len(w), w))]
+    if stand_ins:
+        alts.append(f"[{stand_ins}]")
+    return alts[0] if len(alts) == 1 else f"(?:{'|'.join(alts)})"
+
+
+@functools.lru_cache(maxsize=4096)
+def _record_words(text: str) -> tuple[tuple[str, str], ...]:
+    """A company's own record word by word: each word's pattern, letter by letter on all of
+    its readings (:func:`_letter`), with the word on its skeleton. A record is found on any
+    of its forms, the strict skeleton as stored (a capital I as "l") or after case folding
+    (as "i"), and on a different one letter by letter: a stored "INGRID" written
+    "lngrid"."""
+    words: list[tuple[str, str]] = []
+    pattern: list[str] = []
+    plain: list[str] = []
+    for char in _read(text) + " ":
+        letter = _letter(char)
+        if letter is not None:
+            pattern.append(letter)
+            plain.append(skeleton(char))
+        elif pattern:
+            words.append(("".join(pattern), "".join(plain)))
+            pattern, plain = [], []
+    return tuple(words)
+
+
+@functools.lru_cache(maxsize=4096)
+def _record_pattern(text: str) -> re.Pattern[str] | None:
+    """:func:`_record_words` as whole words, one space apart (None for a record without
+    one)."""
+    words = _record_words(text)
+    if not words:
+        return None
+    return re.compile(" " + " ".join(p for p, _ in words) + " ")
+
+
+@functools.lru_cache(maxsize=4096)
+def _slug_pattern(slug: str) -> re.Pattern[str]:
+    """A slug letter by letter (:func:`_letter`), its hyphens and underscores as they are,
+    as a whole token: no letter, digit, hyphen or underscore on either side."""
+    parts = []
+    for char in _read(slug):
+        letter = _letter(char)
+        parts.append(letter if letter is not None else re.escape(skeleton(char)))
+    edge = "[\\w\U000f0000-\U000ffffd-]"
+    return re.compile(f"(?<!{edge})" + "".join(parts) + f"(?!{edge})")
 
 
 def _plain(text: str) -> str:
@@ -394,15 +521,15 @@ def _plain(text: str) -> str:
 
 
 def _names(text: str, names: list[str]) -> list[str]:
-    """Each of ``names`` that ``text`` holds as whole words, both on their confusable
-    skeleton or both on their strict one."""
+    """Each of ``names`` that ``text`` holds as whole words, on any form of the name
+    (:func:`_record_words`) and any form of the text (:func:`_forms`)."""
     padded = [f" {form} " for form in _forms(text)]
     out: list[str] = []
     for name in names:
-        forms = _record_forms(name or "")
-        if len(forms[0]) < MIN_NAME or name in out:
+        if len(_norm(name or "")) < MIN_NAME or name in out:
             continue
-        if any(f" {n} " in p for n, p in zip(forms, padded, strict=True)):
+        pattern = _record_pattern(name)
+        if pattern and any(pattern.search(p) for p in padded):
             out.append(name)
     return out
 
@@ -411,21 +538,11 @@ def _norm_email(email: str) -> str:
     return normalize(email).casefold()
 
 
-def _slug_in(slug: str, lowered: str) -> bool:
-    """A document slug as a whole token. Only hyphenated slugs count: a one-word slug
-    ("import") is an ordinary word."""
+def _slug_in(slug: str) -> bool:
+    """Whether a document slug is matched at all. Only hyphenated slugs count: a one-word
+    slug ("import") is an ordinary word."""
     slug = (slug or "").casefold()
-    if "-" not in slug or len(slug) < MIN_NAME:
-        return False
-    start = lowered.find(slug)
-    while start != -1:
-        end = start + len(slug)
-        before = lowered[start - 1] if start else " "
-        after = lowered[end] if end < len(lowered) else " "
-        if not (before.isalnum() or before in "-_") and not (after.isalnum() or after in "-_"):
-            return True
-        start = lowered.find(slug, start + 1)
-    return False
+    return "-" in slug and len(slug) >= MIN_NAME
 
 
 def _person_names(ctx: LeakContext) -> list[str]:
@@ -491,14 +608,22 @@ def _note_copies(text: str, notes: list[str]) -> list[str]:
     texts = [f" {form} " for form in _forms(text)]
     out: list[str] = []
     for note in notes:
-        for form, words in zip(_record_forms(note or ""), texts, strict=True):
-            parts = form.split()
-            runs = (" ".join(parts[i : i + NOTE_WORDS]) for i in range(len(parts) - NOTE_WORDS + 1))
-            run = next((r for r in runs if f" {r} " in words), None)
-            if run:
-                out.append(run)
-                break
+        run = next((w for p, w in _note_runs(note or "") if any(p.search(t) for t in texts)), None)
+        if run:
+            out.append(run)
     return out
+
+
+@functools.lru_cache(maxsize=256)
+def _note_runs(note: str) -> tuple[tuple[re.Pattern[str], str], ...]:
+    """Each run of NOTE_WORDS words of an internal note: its pattern (:func:`_record_words`)
+    and its words on their skeleton."""
+    words = _record_words(note)
+    runs = (words[i : i + NOTE_WORDS] for i in range(len(words) - NOTE_WORDS + 1))
+    return tuple(
+        (re.compile(" " + " ".join(p for p, _ in run) + " "), " ".join(w for _, w in run))
+        for run in runs
+    )
 
 
 def _quarter_months(quarter: str | None) -> set[str]:
@@ -536,12 +661,9 @@ def check(
     add("customer_name", _names(raw, _customer_names(ctx)))
     add("alternative_name", _names(raw, ctx.alternatives))
     codes = [m.group(0) for p in (_TRACKER, _GOAL, _DECISION) for m in p.finditer(text)]
-    skel = skeleton(_read(raw))
-    strict = strict_skeleton(_read(raw))
+    slug_forms = _slug_forms(raw)
     codes += [
-        s
-        for s in ctx.slugs
-        if _slug_in(skeleton(_read(s)), skel) or _slug_in(_record_strict(s), strict)
+        s for s in ctx.slugs if _slug_in(s) and any(_slug_pattern(s).search(f) for f in slug_forms)
     ]
     add("internal_code", codes)
     add("internal_host", _hosts(text, ctx))
