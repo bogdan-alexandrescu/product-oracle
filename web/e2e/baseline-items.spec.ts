@@ -71,7 +71,9 @@ test("baseline: the Goals table's Add proposes a goal, and the drawer confirms i
   const d = page.getByRole("dialog", { name: "Halve support tickets" });
   await expect(d.getByText("Proposed").first()).toBeVisible();
   await d.getByRole("button", { name: "Confirm" }).click();
-  await expect(d.getByRole("status")).toContainText("Confirmed");
+  // The drawer's Measurements and History sections are statuses too ("Loading…" until they
+  // load), so the assertion names the notice it waits for.
+  await expect(d.getByRole("status").filter({ hasText: "Confirmed" })).toContainText("Confirmed “Halve support tickets”");
   await expect(d.getByRole("button", { name: "Archive" })).toBeVisible();
 });
 

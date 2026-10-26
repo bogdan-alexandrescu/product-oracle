@@ -15,6 +15,7 @@ from oracle import audit, company_time
 from oracle.auth.deps import Principal
 from oracle.auth.models import User
 from oracle.baseline.public_links import LinkFetcher
+from oracle.docs import visibility
 from oracle.market import robots, watch
 from oracle.market.blocks import LABEL_TITLES
 from oracle.market.findings import plain
@@ -596,11 +597,16 @@ async def positioning_out(db: AsyncSession, viewer: uuid.UUID | None = None) -> 
     row = await _positioning(db)
     fields = _fields(row)
     suggestions = []
+    # A digest run's suggestion naming a decision or document the reader may not see (one
+    # written before #541 part 4, when the run read as its creator) is not shown to them.
+    hidden = await visibility.hidden_for_reader(db)
     for s in await db.scalars(
         select(PositioningSuggestion)
         .where(PositioningSuggestion.status == "open")
         .order_by(PositioningSuggestion.created_at, PositioningSuggestion.id)
     ):
+        if hidden is not None and (hidden.names(s.text) or hidden.names(s.rationale)):
+            continue
         suggestions.append(
             PositioningSuggestionOut(
                 id=s.id, field=s.field, action=s.action, item_id=s.item_id, text=s.text,  # type: ignore[arg-type]

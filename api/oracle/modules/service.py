@@ -54,6 +54,7 @@ from oracle.modules.schemas import (
     RevisionSummary,
     VersionChange,
 )
+from oracle.quality import learned
 from oracle.templates.builtins import DEFAULT_TEMPLATE_FOR_KIND, ensure_builtins
 from oracle.templates.models import Template, TemplateVersion
 from oracle.templates.service import company_draft_defaults
@@ -490,6 +491,7 @@ async def build(
         provenance=provenance,
         advisory={k: Advisory(a.score, a.rationale) for k, a in data.advisory.items()},
         field_values=data.field_values,
+        learned=await learned.nudges(db, "module"),
     )
     ctx.prior_decisions, ctx.prior_order = prior_decisions(previous)
     return Built(ctx, typed, template, template_version, intake)

@@ -541,10 +541,13 @@ def question_view(
     raw: dict[uuid.UUID, KnowledgeGap],
     views: dict[uuid.UUID, Any],
     priorities: dict[uuid.UUID, int] | None = None,
+    learned: dict[uuid.UUID, Any] | None = None,
 ) -> Any | None:
     """A question as the reader may see it: hidden with its gap, reworded with it.
     ``priorities``: its place among what everyone may see (anyone but the author), so a
-    priority stored while private facts still moved it never shows."""
+    priority stored while private facts still moved it never shows. ``learned``: the
+    nudges the last sync ranked with (engine.synced_learned), whose reason a reworded
+    rationale keeps."""
     if q.gap_id is None or q.gap_id not in raw:
         return q
     view = views.get(q.gap_id)
@@ -556,9 +559,10 @@ def question_view(
         changes["priority"] = priorities[q.gap_id]
     if view is not gap:
         cat = cats.BY_KEY[gap.category]
-        changes["rationale"] = cats.rank_reason(
-            cat, view.importance, list(view.impact), view.knowledge_state
-        )
+        rationale = cats.rank_reason(cat, view.importance, list(view.impact), view.knowledge_state)
+        if (nudge := (learned or {}).get(gap.id)) is not None:
+            rationale = f"{rationale} {nudge.reason()}"
+        changes["rationale"] = rationale
         if view.statement != gap.statement:
             # Only the summary of a model-written gap is shared: never its own words.
             changes["prompt"] = question_prompt(view, rule=False)
@@ -683,6 +687,7 @@ def analysis_view(intake: ProductIntake, v: Viewer) -> dict[str, Any]:
     shared = shared_item_ids(reg, v, "summary")
     analysis.pop("findings", None)
     analysis.pop("public_coverage", None)
+    analysis.pop("learned", None)  # keyed by gap id, hidden gaps' too
     analysis["items"] = [
         x
         for x in (item_view(i, reg, v, shared) for i in analysis.get("items") or [])

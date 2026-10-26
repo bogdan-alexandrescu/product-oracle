@@ -100,7 +100,6 @@ export default function PlanPage() {
     { keepPrevious: true },
   );
   const { goals, history } = useGoals("plan");
-  const latestReport = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
   const tags = useMemo(() => new Map((goals ?? []).map((g) => [g.id, g])), [goals]);
   const [by, setBy] = useState<GroupBy>("horizon");
   // F2: /plan?item=<key> (an Inbox track alert's Open) selects that item.
@@ -188,7 +187,7 @@ export default function PlanPage() {
         action={
           <>
             {/* F6: the latest weekly alignment report, the Plan's header button. */}
-            <LinkButton href={latestReport.data?.[0] ? `/plan/reports/${latestReport.data[0].id}` : "/plan/reports"}>
+            <LinkButton href="/plan/reports/latest">
               Alignment report
             </LinkButton>
             <SegmentedControl<PlanScope>
