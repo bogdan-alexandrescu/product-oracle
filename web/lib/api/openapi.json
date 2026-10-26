@@ -26391,7 +26391,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/intakes/{intake_id}/composition-inputs": {
@@ -37037,7 +37038,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/request-candidates/{candidate_id}/dismiss": {
