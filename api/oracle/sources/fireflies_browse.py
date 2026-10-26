@@ -38,6 +38,7 @@ from oracle.connections import service as connections
 from oracle.connections.models import Connection
 from oracle.connections.router import FirefliesHttp, UserPrincipal
 from oracle.live import budget
+from oracle.live.fireflies import backend_of
 from oracle.sources import base
 from oracle.sources.connectors import fireflies
 from oracle.sources.connectors.fireflies import FirefliesConnector, Meeting
@@ -69,6 +70,18 @@ _OTHER_HOST_WINDOWS: budget.Windows = (
 
 def _budget(conn: Connection) -> budget.Windows:
     return _WINDOWS if fireflies.fireflies_host(conn.endpoint_url) else _OTHER_HOST_WINDOWS
+
+
+def _counted(conn: Connection) -> tuple[str, ...] | None:
+    """On api.fireflies.ai picker and live calls share one quota; elsewhere the picker
+    counts its own calls only (oracle.live.budget)."""
+    return budget.picker_counted(backend_of(conn.endpoint_url)[0] == "graphql")
+
+
+async def _reserve(db: TenantDB, conn: Connection, calls: int) -> budget.Refusal | None:
+    return await budget.spend(
+        db, conn.id, calls, _budget(conn), _now(), kind=budget.BROWSE, counted=_counted(conn)
+    )
 
 
 _clock = time.monotonic
@@ -157,8 +170,9 @@ def _limited(detail: str, seconds: int | None) -> HTTPException:
 
 async def _spend(db: TenantDB, conn: Connection, calls: int) -> None:
     """Reserve ``calls`` Fireflies calls for this connection, or answer 429. Commits.
-    Counted in the one browse budget of every picker (oracle.connections.browse)."""
-    refused = await budget.spend(db, conn.id, calls, _budget(conn), _now())
+    Counted in the one browse budget of every picker (oracle.connections.browse); live
+    reads (#710) count against it on api.fireflies.ai only."""
+    refused = await _reserve(db, conn, calls)
     if refused is not None:
         raise _limited(
             f"Browsing may make {refused.limit} Fireflies calls a {refused.per} for this "
@@ -171,7 +185,7 @@ async def _spend(db: TenantDB, conn: Connection, calls: int) -> None:
 async def _more(db: TenantDB, conn: Connection) -> bool:
     """Reserve one more Fireflies call for a series list's next page: False when the
     browse budget refuses it."""
-    return await budget.spend(db, conn.id, 1, _budget(conn), _now()) is None
+    return await _reserve(db, conn, 1) is None
 
 
 async def _cached(

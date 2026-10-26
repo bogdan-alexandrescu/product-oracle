@@ -4,7 +4,9 @@ Both count in ``browse_calls`` (oracle.connections.browse.reserve): the Fireflie
 (oracle.sources.fireflies_browse) as ``browse``, live reads (#710) as ``live``.
 
 - The picker: 10 a minute and 25 a day on Fireflies' own hosts (the lower Fireflies
-  plans allow 50 API calls a day), 60 and 1,000 on another host; it counts every kind.
+  plans allow 50 API calls a day), 60 and 1,000 on another host. On ``api.fireflies.ai``
+  it counts every kind (one Fireflies quota); on every other host only its own
+  (``browse``) calls, so live reads never block it (BGD, after #717's review).
 - Live reads (BGD, 2026-10-26): on ``api.fireflies.ai`` they share the picker's 10 a
   minute and 25 a day (every kind counts, one Fireflies quota); on another host (the
   archive key allows 1,500 a minute) 120 a minute and 3,000 a day of live calls.
@@ -86,6 +88,15 @@ async def spend(
     seconds, index = refused
     _, limit, per = windows[index]
     return Refusal(seconds=seconds, limit=limit, per=per)
+
+
+BROWSE = "browse"
+
+
+def picker_counted(api_host: bool) -> tuple[str, ...] | None:
+    """The kinds the picker's windows count: every kind on api.fireflies.ai, else only
+    the picker's own calls."""
+    return None if api_host else (BROWSE,)
 
 
 def live_windows(api_host: bool) -> tuple[Windows, tuple[str, ...] | None]:
