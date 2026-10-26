@@ -91989,6 +91989,31 @@
         ],
         "title": "QuestionsWithdrawn"
       },
+      "QueueWait": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Since"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "text",
+          "since"
+        ],
+        "title": "QueueWait",
+        "description": "Why SwarmCloud holds the run's current step (oracle.runs.waits), as Oracle last\nread it: SwarmCloud's park reason, in plain words, and since when."
+      },
       "RankedFeature": {
         "properties": {
           "rank": {
@@ -100169,6 +100194,16 @@
             ],
             "title": "Stuck"
           },
+          "queue_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueWait"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "can_retry": {
             "type": "boolean",
             "title": "Can Retry",
@@ -101011,6 +101046,16 @@
               }
             ],
             "title": "Stuck"
+          },
+          "queue_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueWait"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "can_retry": {
             "type": "boolean",
@@ -105225,6 +105270,16 @@
               }
             ],
             "title": "Checked At"
+          },
+          "queue_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueWait"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

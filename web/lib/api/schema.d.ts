@@ -30138,6 +30138,22 @@ export interface components {
             /** Question Ids */
             question_ids: string[];
         };
+        /**
+         * QueueWait
+         * @description Why SwarmCloud holds the run's current step (oracle.runs.waits), as Oracle last
+         *     read it: SwarmCloud's park reason, in plain words, and since when.
+         */
+        QueueWait: {
+            /** Code */
+            code: string;
+            /** Text */
+            text: string;
+            /**
+             * Since
+             * Format: date-time
+             */
+            since: string;
+        };
         /** RankedFeature */
         RankedFeature: {
             /** Rank */
@@ -32904,6 +32920,7 @@ export interface components {
             error?: string | null;
             /** Stuck */
             stuck?: string | null;
+            queue_wait?: components["schemas"]["QueueWait"] | null;
             /**
              * Can Retry
              * @default false
@@ -33169,6 +33186,7 @@ export interface components {
             error?: string | null;
             /** Stuck */
             stuck?: string | null;
+            queue_wait?: components["schemas"]["QueueWait"] | null;
             /**
              * Can Retry
              * @default false
@@ -34714,6 +34732,7 @@ export interface components {
             agents: components["schemas"]["SegmentAgent"][];
             /** Checked At */
             checked_at?: string | null;
+            queue_wait?: components["schemas"]["QueueWait"] | null;
         };
         /** SettingIn */
         SettingIn: {

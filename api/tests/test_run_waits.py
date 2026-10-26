@@ -253,7 +253,9 @@ async def test_restart_once_then_a_second_queued_expiry_fails_the_run(client, ow
     clocks = _Clocks(monkeypatch, swarm)
     run = await started(client, auth)
     await _expire_in_queue(client, auth, swarm, clocks)
-    # The restart is queued by the tick that read the failure, submitted after it.
+    # The restart is queued by the tick that read the failure, submitted after it; its
+    # step is held again.
+    swarm.held[FIRST] = "PROVIDER_QUOTA_EXHAUSTED"
     await tick(client, auth)
     out = await get(client, auth, run["id"])
     assert out["status"] == "running", out["error"]

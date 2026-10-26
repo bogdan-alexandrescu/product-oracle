@@ -182,6 +182,7 @@ from oracle.runs import (
     reuse,
     review_link,
     roadmap,
+    waits,
     workflow,
 )
 from oracle.runs import resolutions as answers
@@ -218,6 +219,7 @@ from oracle.runs.schemas import (
     NeedsAgents,
     PrdScopeOut,
     PreviousAttempt,
+    QueueWait,
     RunCreate,
     RunDecision,
     RunNoteRefs,
@@ -683,7 +685,8 @@ def _summary(
         waiting_on=waiting.kind if waiting else None,  # type: ignore[arg-type]
         review_link=review_link.link(waiting) if waiting else None,
         error=readable_refusal(run.error, refs.zone, past=run.status == "failed"),
-        stuck=_stuck(run),
+        stuck=_stuck(run, refs.zone),
+        queue_wait=_queue_wait_out(run),
         can_retry=_can_retry(run),
         can_stop_cancelling=_cancel_stuck(run) is not None,
         can_retry_lookup=_cost_unknown(run) is not None,
@@ -764,10 +767,12 @@ def _can_retry(run: Run) -> bool:
     return run.status == "running" and isinstance((run.knobs or {}).get("stuck_lookup"), dict)
 
 
-def _stuck(run: Run) -> str | None:
+def _stuck(run: Run, zone: str = company_time.DEFAULT_ZONE) -> str | None:
     """What the Inbox says of a run that waits for an owner or its creator: its lost
-    submission is past the lookup cap (Retry or Cancel), or SwarmCloud answered a cancel
-    or an answer post with :data:`NOT_FOUND_TRIES` 404s that prove nothing (Cancel)."""
+    submission is past the lookup cap (Retry or Cancel), SwarmCloud answered a cancel
+    or an answer post with :data:`NOT_FOUND_TRIES` 404s that prove nothing (Cancel), or
+    its current workflow started no agent in :data:`waits.NOT_STARTED_SECONDS` (Cancel;
+    ``zone``: the Company time zone its moment is shown in)."""
     knobs = run.knobs or {}
     if _can_retry(run):
         label = knobs["stuck_lookup"].get("label")
@@ -843,7 +848,7 @@ def _stuck(run: Run) -> str | None:
             f"times, without saying the wait does not exist ({post.get('error')}): nothing "
             "was recorded. Decide again later, or in the Inbox, Cancel ends the run."
         )
-    return None
+    return _not_started(run, zone)
 
 
 def _overrun_shown(run: Run) -> dict[str, Any] | None:
@@ -1133,6 +1138,7 @@ def _segment_out(
         # #258: only while it runs, and only what was read of its current workflow.
         agents=[SegmentAgent(**a) for a in progress.get("agents") or []],
         checked_at=progress.get("checked_at"),
+        queue_wait=_queue_wait_out(run, segment.seq) if segment.status == "running" else None,
     )
 
 
@@ -3291,6 +3297,127 @@ def _record_running(wf: dict[str, Any], status: WorkflowStatus, segments: list[R
     _record_agents(current, wf["id"], status, own)
 
 
+def _record_workflow_wait(
+    run: Run, wf: dict[str, Any], status: WorkflowStatus, segments: list[RunSegment]
+) -> None:
+    """:func:`_record_wait` for the running segment of the live workflow just read."""
+    current = next((s for s in segments if s.status == "running"), None)
+    if current is None or current.swarm_workflow_id != wf["id"]:
+        return
+    entry = _plan_entry(wf, current.seq)
+    own = {*(entry.get("work") or []), *(entry.get("revises") or [])} if entry else None
+    _record_wait(run, current, wf["id"], wf.get("submitted_at"), status, own)
+
+
+def _record_wait(
+    run: Run,
+    segment: RunSegment,
+    workflow_id: str,
+    submitted_at: Any,
+    status: WorkflowStatus,
+    own: set[str] | None = None,
+) -> None:
+    """Why SwarmCloud holds the running segment's step, as this read saw it, in the run's
+    ``queue_wait`` knob (oracle.runs.waits): whether any agent of the workflow started,
+    the steps seen started, since when each step waits to start, and the first of the
+    segment's own steps (``own``; None: every step) parked for a reason shown in words.
+    A moment is kept while the step waits the same way; on the workflow's first read it
+    is its submission (it waited from there)."""
+    prev = (run.knobs or {}).get("queue_wait") or {}
+    first = prev.get("workflow_id") != workflow_id
+    if first:
+        prev = {}
+    now = _now().isoformat()
+    since = (_parse_at(submitted_at) or _now()).isoformat() if first else now
+    started_steps = set(prev.get("started_steps") or [])
+    waiting = dict(prev.get("waiting") or {})
+    held = None
+    for st in status.steps:
+        if waits.began(st):
+            started_steps.add(st.step_id)
+            waiting.pop(st.step_id, None)
+            continue
+        if not waits.waits(st):
+            continue
+        waiting.setdefault(st.step_id, since)
+        if (
+            held is None
+            and (own is None or st.step_id in own)
+            and st.state == "PARKED"
+            and waits.words(st.park_reason)
+        ):
+            was = prev.get("held") or {}
+            kept = was.get("step_id") == st.step_id and was.get("code") == st.park_reason
+            held = {
+                "step_id": st.step_id,
+                "code": st.park_reason,
+                "since": was["since"] if kept else since,
+            }
+    _set_knob(
+        run,
+        "queue_wait",
+        {
+            "workflow_id": workflow_id,
+            "seq": segment.seq,
+            "submitted_at": submitted_at,
+            "checked_at": now,
+            "started": bool(prev.get("started")) or bool(started_steps),
+            "started_steps": sorted(started_steps),
+            "waiting": waiting,
+            "held": held,
+        },
+    )
+
+
+def _queue_wait(run: Run) -> dict[str, Any] | None:
+    """The ``queue_wait`` knob while it is the running run's current workflow's."""
+    qw = (run.knobs or {}).get("queue_wait")
+    if run.status != "running" or not isinstance(qw, dict):
+        return None
+    wf = _live(run)
+    if wf is not None and wf.get("id") != qw.get("workflow_id"):
+        return None
+    return qw
+
+
+def _queue_wait_out(run: Run, seq: int | None = None) -> QueueWait | None:
+    """What the Runs row (and with ``seq``, that segment) shows of a held step."""
+    qw = _queue_wait(run)
+    held = (qw or {}).get("held")
+    if not held or (seq is not None and qw.get("seq") != seq):  # type: ignore[union-attr]
+        return None
+    text = waits.words(held.get("code"))
+    since = _parse_at(held.get("since"))
+    if text is None or since is None:
+        return None
+    return QueueWait(code=held["code"], text=text, since=since)
+
+
+def _not_started(run: Run, zone: str) -> str | None:
+    """The Inbox's words for a run whose current workflow started no agent
+    :data:`waits.NOT_STARTED_SECONDS` after its submission (Cancel, Open)."""
+    qw = _queue_wait(run)
+    if qw is None or qw.get("started"):
+        return None
+    submitted = _parse_at(qw.get("submitted_at"))
+    if submitted is None:
+        return None
+    age = (_now() - submitted).total_seconds()
+    if age < waits.NOT_STARTED_SECONDS:
+        return None
+    said = (
+        f"SwarmCloud has started no agent of this run {waits.minutes(age)} after it was submitted."
+    )
+    shown = _queue_wait_out(run)
+    if shown is not None:
+        why = f"{shown.text}, since {company_time.in_words(shown.since, zone)}."
+    else:
+        moments = [m for m in map(_parse_at, (qw.get("waiting") or {}).values()) if m]
+        since = min(moments, default=submitted)
+        why = f"Its first step is queued there since {company_time.in_words(since, zone)}."
+    return f"{said} {why} It starts on its own once SwarmCloud lets it; Cancel ends the run."
+
+
 @dataclass
 class _Cancelled:
     """What SwarmCloud said to cancelling a workflow, then to reading it: the network half
@@ -3796,6 +3923,8 @@ def _accepted(
     art.pop("claim", None)
     art.pop("pending_note", None)
     art.pop("pending_review", None)
+    # A new workflow: what was read of the last one's waits no longer applies.
+    _set_knob(run, "queue_wait", None)
     art["attempts"].append(
         {
             # The number in its key: submissions given up on (Retry) keep theirs.
@@ -5752,6 +5881,9 @@ async def _tick_run(db: AsyncSession, run: Run, stats: _TickStats, deadline: flo
         )
     _recompute_spend(run, segments)
     _record_agents(running, workflow_id, status)
+    _record_wait(
+        run, running, workflow_id, _current_attempt(art, running).get("submitted_at"), status
+    )
     art = _art(running)
 
     if status.terminal:
@@ -6605,6 +6737,7 @@ async def _tick_workflow(
     start = _take_cost(run, wf, status, segments)
     current = next((s for s in segments if s.status == "running"), None)
     _record_running(wf, status, segments)
+    _record_workflow_wait(run, wf, status, segments)
     for parked in status.parked:
         if parked.reason == "CREDENTIAL_MISSING":
             _note(current or start or segments[0], workflow.ADVICE["CREDENTIAL_MISSING"])
@@ -6689,6 +6822,7 @@ async def _tick_workflow(
             stats.advanced += 1
     # A segment that started during this check shows what the check read.
     _record_running(wf, status, segments)
+    _record_workflow_wait(run, wf, status, segments)
 
     if status.terminal and run.status == "running" and _live(run) is not None:
         current = next((s for s in segments if s.status == "running"), None)
@@ -6700,12 +6834,102 @@ async def _tick_workflow(
         else:
             fallback = f"the workflow ended {status.state}: {status.error or 'no reason given'}"
             error = workflow.advice(status.error_code, fallback)
+            waited = (
+                _queued_expiry(run, wf, status)
+                if status.error_code == "mcp_credential_expired" and current is not None
+                else None
+            )
+            if waited is not None and current is not None:
+                if _may_restart(run, wf, status, current):
+                    await _restart_queued(db, run, wf, current, segments, waited)
+                    return
+                error = waits.queued_expiry(waited, restarted="queue_restart" in run.knobs)
         if current is not None:
             current.status = "failed" if status.state != "cancelled" else "cancelled"
             current.error = error
             current.finished_at = _now()
         await _finish(db, run, "failed", f"{current.name if current else 'workflow'}: {error}")
         await audit.record(db, None, "run.failed", "run", run.id, {"workflow": wf["id"]})
+
+
+def _queued_expiry(run: Run, wf: dict[str, Any], status: WorkflowStatus) -> float | None:
+    """How long the failing step waited in SwarmCloud's queue when the workflow's key
+    expired before it started (mcp_credential_expired), else None: it started before
+    the key's ``expires_at`` (SwarmCloud's start time, else Oracle saw it working), or
+    the failure came before that moment (its start time not served)."""
+    expires = _parse_at(wf.get("expires_at"))
+    failed = next((st for st in status.steps if st.state in ("FAILED", "DEAD_LETTERED")), None)
+    if expires is None or failed is None:
+        return None
+    qw = (run.knobs or {}).get("queue_wait") or {}
+    if qw.get("workflow_id") != wf.get("id"):
+        qw = {}
+    if failed.step_id in (qw.get("started_steps") or []):
+        return None
+    if failed.started_at is not None:
+        if failed.started_at < expires:
+            return None
+    elif _now() < expires:
+        return None
+    submitted = _parse_at(wf.get("submitted_at"))
+    since = _parse_at((qw.get("waiting") or {}).get(failed.step_id)) or submitted or expires
+    if submitted is not None:
+        since = max(since, submitted)
+    return max((expires - since).total_seconds(), 0.0)
+
+
+def _may_restart(run: Run, wf: dict[str, Any], status: WorkflowStatus, current: RunSegment) -> bool:
+    """A queued expiry restarts once per run, and never when the segment's failed attempt
+    (or its failing step) cost anything."""
+    if "queue_restart" in (run.knobs or {}):
+        return False
+    spent = sum(
+        Decimal(str(a.get("cost_usd") or 0))
+        for a in _art(current)["attempts"]
+        if a.get("workflow_id") == wf.get("id")
+    )
+    failed = next((st for st in status.steps if st.state in ("FAILED", "DEAD_LETTERED")), None)
+    return spent == 0 and not (failed is not None and failed.cost_usd)
+
+
+async def _restart_queued(
+    db: AsyncSession,
+    run: Run,
+    wf: dict[str, Any],
+    current: RunSegment,
+    segments: list[RunSegment],
+    waited: float,
+) -> None:
+    """Owner, 2026-10-26: a run whose key expired while its step waited in SwarmCloud's
+    queue is submitted again once, as a new attempt of the same segment with the same
+    knobs and a fresh key (:func:`_submit`, which the spend ceiling rules as any other)."""
+    art = _art(current)
+    attempt = _current_attempt(art, current)
+    if attempt:
+        attempt["state"] = "failed"
+    _set_art(current, art)
+    _note(current, waits.restarted_note(waited))
+    _set_knob(
+        run,
+        "queue_restart",
+        {
+            "seq": current.seq,
+            "workflow_id": wf.get("id"),
+            "at": _now().isoformat(),
+            "waited_seconds": round(waited),
+        },
+    )
+    _set_knob(run, "queue_wait", None)
+    await _detach(db, run, cancel=False, state="ended")
+    await _submit(db, run, current, segments)
+    await audit.record(
+        db,
+        None,
+        "run.restarted",
+        "run",
+        run.id,
+        {"workflow": wf.get("id"), "reason": "mcp_credential_expired"},
+    )
 
 
 async def _pause_workflow(
@@ -10533,6 +10757,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
                 | Run.knobs.has_key("post_404")
                 | Run.knobs.has_key("searches")
                 | Run.knobs.has_key("overrun_after_end")
+                | Run.knobs.has_key("queue_wait")
                 | live
             )
             .order_by(Run.created_at)
