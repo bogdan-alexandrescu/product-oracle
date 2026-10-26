@@ -196,15 +196,14 @@ async def _for_run(principal: Principal, raw: str) -> Principal:
 
 
 async def _member_run(principal: Principal) -> bool:
-    """Whether the principal's run is of a flow whose output every member reads."""
-    from sqlalchemy import select
-
-    from oracle.runs.flows import reads_as_member
+    """Whether the principal's run reads as a member: a flow whose output every member
+    reads, or a draft of a company-wide document (oracle.runs.service.reads_as_member)."""
     from oracle.runs.models import Run
+    from oracle.runs.service import reads_as_member
 
     async with tenant_session(principal.tenant_id) as s:
-        flow = await s.scalar(select(Run.flow).where(Run.id == principal.run_id))
-    return reads_as_member(flow)
+        run = await s.get(Run, principal.run_id)
+        return run is not None and await reads_as_member(s, run)
 
 
 def _run_of(request: Request, principal: Principal) -> uuid.UUID | None:

@@ -727,8 +727,16 @@ async def for_reader(
         db, [_ref(r, "document_id") for r in rows], as_member=as_member
     )
 
+    # #541 part 5: a row whose text names what the reader may not see (a changelog draft
+    # a launch kit run wrote as its starter) goes too.
+    named = await visibility.hidden_for_reader(db, as_member=as_member) if rows else None
+
     def hidden(r: dict[str, Any]) -> bool:
-        return _ref(r, "decision_id") in decisions or _ref(r, "document_id") in documents
+        if _ref(r, "decision_id") in decisions or _ref(r, "document_id") in documents:
+            return True
+        return named is not None and any(
+            named.names(r.get(k)) for k in ("text", "title") if isinstance(r.get(k), str)
+        )
 
     if not any(hidden(r) for r in rows):
         return None

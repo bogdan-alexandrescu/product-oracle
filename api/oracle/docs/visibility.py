@@ -197,12 +197,18 @@ class Hidden:
 
     def names(self, text: str | None) -> bool:
         """Whether ``text`` names a hidden decision (``D-<n>``, its title, its id or its
-        entity's) or a hidden document (its title, slug or id). Paraphrase is not caught."""
+        entity's) or a hidden document (its title, slug or id), whatever the case; an id
+        also without its dashes. Paraphrase is not caught: a decision described without
+        its number, title or id, a title shorter than ``_MIN_TITLE``, a one-word slug, a
+        number written another way ("decision 7"), an id cut up or re-encoded. Those need
+        the meaning of the text, which a read-time check does not have; a run that reads
+        as a member never reads them, so only output written before #541 part 4/5 or by
+        hand can hold them."""
         if not text:
             return False
-        if any(i in text for i in self.ids):
-            return True
         folded = text.casefold()
+        if any(i in folded for i in self.ids):
+            return True
         if any(w in folded for w in self.words):
             return True
         return any(int(n) in self.numbers for n in _D_NUMBER.findall(text))
@@ -221,6 +227,11 @@ def _words_of(*titles: str | None) -> set[str]:
             if len(t) >= _MIN_TITLE:
                 out.add(t)
     return out
+
+
+def _id_forms(*ids: uuid.UUID | None) -> set[str]:
+    """An id as text, lower case, with and without its dashes."""
+    return {f for i in ids if i is not None for f in (str(i).lower(), uuid.UUID(str(i)).hex)}
 
 
 async def hidden_for_reader(session: AsyncSession, *, as_member: bool = False) -> Hidden | None:
@@ -251,10 +262,10 @@ async def hidden_for_reader(session: AsyncSession, *, as_member: bool = False) -
     ids: set[str] = set()
     for _id, _n, title, entity_id in d_rows:
         words |= _words_of(title)
-        ids |= {str(_id), *([str(entity_id)] if entity_id else [])}
+        ids |= _id_forms(_id, entity_id)
     for _id, slug, title in doc_rows:
         words |= _words_of(title, slug if "-" in (slug or "") else None)
-        ids.add(str(_id))
+        ids |= _id_forms(_id)
     return Hidden(
         decision_ids=frozenset(r[0] for r in d_rows),
         document_ids=frozenset(r[0] for r in doc_rows),
@@ -381,6 +392,12 @@ def _attached_visible(cls: Any) -> ColumnElement[bool]:
         or_(cls.entity_id.is_(None), cls.entity_id.not_in(_hidden_entities())),
         or_(cls.edge_id.is_(None), cls.edge_id.not_in(_hidden_edges())),
     )
+
+
+def member_entity_visible(cls: Any) -> ColumnElement[bool]:
+    """A baseline entity a commenter may see, whoever reads (what Oracle puts in the
+    prompt of a run that reads as a member)."""
+    return _entity_visible(cls)
 
 
 def member_attached_visible(cls: Any) -> ColumnElement[bool]:
