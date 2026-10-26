@@ -530,7 +530,8 @@ async def test_oracle_drafts_texts_and_never_approves_or_dates(client, ctx, fake
                 {
                     "item_key": i["item_key"],
                     "title": "Import in one go " + "x" * 100,
-                    "description": "Bring every account over.",
+                    # An invisible mark the job strips (#660 re-review).
+                    "description": "Bring every acc\u034fount over.",
                     "stage": "in_progress",
                     "announced_quarter": "2026-Q4",
                 }
@@ -551,6 +552,7 @@ async def test_oracle_drafts_texts_and_never_approves_or_dates(client, ctx, fake
     assert rows["bulk-import"].state == "draft" and rows["bulk-import"].drafted_by == "oracle"
     assert len(rows["bulk-import"].title) <= 80
     assert rows["bulk-import"].announced_quarter is None
+    assert rows["bulk-import"].description == "Bring every account over."
     assert rows["csv-parser"].title == "A person's own words"
 
 
@@ -584,10 +586,17 @@ def test_source_hash_is_title_and_outcome():
     ("text", "code"),
     [
         ("Built with Pri\u200bya Quill\u200bfeather", "person_name"),  # zero-width spaces
-        ("Built with \uff30\uff52\uff49\uff59\uff41 Quillfeather", "person_name"),  # fullwidth
+        # Fullwidth, with no plain-ASCII part left to match.
+        (
+            "Built with \uff31\uff55\uff49\uff4c\uff4c\uff46\uff45\uff41\uff54\uff48\uff45\uff52",
+            "person_name",
+        ),
         ("As North\u00adwind Traders asked", "customer_name"),  # soft hyphen
         ("As N\u03bfrthwind Traders asked", "customer_name"),  # Greek omicron
         ("As N\u043erthwind Tr\u0430ders asked", "customer_name"),  # Cyrillic o and a
+        ("See \u13e2roject Bluebird acquisition", "internal_document"),  # Cherokee P
+        ("Faster than \u0251cme Rival", "alternative_name"),  # Latin alpha
+        ("Faster than A\u13dfme Rival", "alternative_name"),  # Cherokee C (#660 re-review)
         ("Faster than Rival\u2060Co", "alternative_name"),  # word joiner
         ("Closes ENG\u2011412", "internal_code"),  # non-breaking hyphen
         ("Closes ENG\u2212412", "internal_code"),  # minus sign
@@ -658,3 +667,74 @@ async def test_a_page_title_and_intro_that_now_leak_are_dropped(client, ctx):
     assert body["check"]["state"] != "checked"
     assert {f["code"] for f in body["page_findings"]} == {"person_name"}
     assert {"item_key": None, "reason": "page_findings"} in body["not_ready"]
+
+
+# --- #660 re-review: every Default_Ignorable_Code_Point, and emoji sequences -----------
+
+# Invisible characters outside category Cf: marks (U+034F, variation selectors, U+17B4)
+# and Hangul fillers (letters).
+HIDDEN = ["\u034f", "\ufe0f", "\U000e0100", "\u17b4", "\u3164", "\u115f", "\u1160", "\uffa0"]
+# Ordinary emoji: a ZWJ sequence with a skin tone, a tag-sequence flag (Scotland), an
+# emoji with its presentation selector and a keycap.
+EMOJI = (
+    "Built by \U0001f469\U0001f3fd\u200d\U0001f4bb in "
+    "\U0001f3f4\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f "
+    "with \u2764\ufe0f\u200d\U0001f525 and 1\ufe0f\u20e3"
+)
+
+
+@pytest.mark.parametrize("hidden", HIDDEN, ids=lambda c: f"U+{ord(c):04X}")
+def test_every_invisible_character_is_stripped_told_and_found(hidden):
+    """protects=#660 re-review: every Default_Ignorable_Code_Point, not only category Cf,
+    is stripped before matching, told by format_characters and stripped from a draft;
+    fails_when="Nort\\u034fhwind" passes the check or is kept; no_claim=other look-alikes."""
+    found = leak_check.check(f"As Nort{hidden}hwind Traders asked", _ctx())
+    assert "customer_name" in [f.code for f in leak_check.blocking(found)], found
+    found = leak_check.check(f"Built with Quill{hidden}feather", _ctx())
+    assert "person_name" in [f.code for f in leak_check.blocking(found)], found
+    assert leak_check.format_characters(f"Nort{hidden}hwind") == [f"U+{ord(hidden):04X}"]
+    assert leak_check.strip_format(f"Nort{hidden}hwind") == "Northwind"
+
+
+@pytest.mark.parametrize("hidden", HIDDEN, ids=lambda c: f"U+{ord(c):04X}")
+async def test_a_text_holding_any_invisible_character_is_not_saved(client, ctx, hidden):
+    """protects=#660 re-review: saving refuses every invisible character (422
+    format_characters) in a text and in the page's intro; fails_when=it is saved."""
+    await seed(ctx)
+    resp = await put_text(client, ctx, "bulk-import", title=f"Import{hidden} fast")
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"]["characters"] == [f"U+{ord(hidden):04X}"]
+    resp = await client.put(PAGE, json={"public_intro": f"Our{hidden}plans"},
+                            headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 422 and resp.json()["detail"]["code"] == "format_characters"
+
+
+def test_emoji_sequences_are_kept_and_the_names_around_them_checked():
+    """protects=#660 re-review minor: a ZWJ, a variation selector or a flag's tags inside
+    an ordinary emoji sequence is not refused or stripped, while a name beside the emoji,
+    joined inside a word, or spelled in a flag's tags is still caught; fails_when=a ZWJ emoji or
+    the Scotland flag is refused, or a name hides in them."""
+    assert leak_check.format_characters(EMOJI) == []
+    assert leak_check.strip_format(EMOJI) == EMOJI
+    assert leak_check.check(EMOJI, _ctx()) == []
+    found = leak_check.check("\U0001f469\u200d\U0001f4bbNorthwind", _ctx())
+    assert [f.code for f in found] == ["customer_name"]
+    # Joiners and selectors between letters are not part of an emoji.
+    assert leak_check.format_characters("Nort\u200dhwind") == ["U+200D"]
+    assert leak_check.format_characters("Nort\ufe0fhwind") == ["U+FE0F"]
+    assert leak_check.format_characters("\u200d\U0001f4bb") == ["U+200D"]
+    # Tag letters spelling a name are no flag: refused, and the check reads them.
+    tags = "".join(chr(0xE0000 + ord(c)) for c in "quillfeather")
+    hidden = f"Built with \U0001f3f4{tags}\U000e007f"
+    assert leak_check.format_characters(hidden)
+    assert "person_name" in [f.code for f in leak_check.check(hidden, _ctx())]
+
+
+async def test_a_text_with_emoji_is_saved(client, ctx):
+    """protects=#660 re-review minor: a public text holding ordinary emoji is saved;
+    fails_when=it is refused as format_characters."""
+    await seed(ctx)
+    title = "Import fast \U0001f469\u200d\U0001f4bb"
+    resp = await put_text(client, ctx, "bulk-import", title=title, description=EMOJI)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["description"] == EMOJI
