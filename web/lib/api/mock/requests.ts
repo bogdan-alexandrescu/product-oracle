@@ -846,6 +846,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
           ctx.decisions!.reverse(row.decision_id!, `Request reopened${why ? `: ${why}` : ""}`);
           for (const x of rootReplies(row).filter((y) => y.status === "drafted")) Object.assign(x, { status: "withdrawn", job_at: null, lock_version: x.lock_version + 1 });
         }
+        // Its own drafted reply goes too (Asked again, when it was merged into a no), as the API.
+        for (const x of replies.filter((y) => y.request_id === row.id && y.status === "drafted")) Object.assign(x, { status: "withdrawn", job_at: null, lock_version: x.lock_version + 1 });
         Object.assign(row, { state: "new", merged_into_id: null, disqualify_reason: null, decision_note: null, decided_by: null, decided_at: null, basis_in: null, asked_again_since: null, loop_closed_on: null });
       } else if (verb === "suggestion/decline") {
         if (row.state !== "new") return fail(409, "Only a New request takes Oracle's suggestions");
