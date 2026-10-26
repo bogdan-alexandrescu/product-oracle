@@ -46,6 +46,16 @@ export interface DecisionsContext {
   visible?: (d: { origin: string; run_id?: string | null }) => boolean;
   uuid: () => string;
   now: () => string;
+  /**
+   * H11 Decide reversible calls, read per request: its level and limits, who set it, and the
+   * "Oracle did" row Oracle leaves when it decides (the API's decide_within_limits).
+   */
+  autonomy?: {
+    level: () => "observe" | "draft" | "recommend" | "act";
+    limits: () => { origins?: string[]; max_cost_usd?: number } | null;
+    setBy: () => string;
+    acted: (a: { summary: string; subject: Record<string, unknown>; undo: { method: string; path: string; body: unknown }; notify: string[] }) => void;
+  };
 }
 
 const REVIEW_DAYS = 90;
@@ -732,7 +742,11 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       mk("smallest-step", option("smallest-step", "Take the smallest reversible step", { summary: "Ship the narrow version first and measure", pros: ["Cheap to undo"], cons: ["Slower to the full outcome"], cost_if_wrong: "A few weeks", recommended: true })),
       mk("full-scope", option("full-scope", "Commit to the full scope", { summary: "Build everything in one release", pros: ["One launch"], cons: ["Hard to undo"], cost_if_wrong: "A quarter of work" })),
     ].filter((o): o is Option => !!o);
-    d.options = [...d.options.map((o) => ({ ...o, recommended: false })), ...added].slice(0, 6);
+    // H11 Decide reversible calls at Observe or Draft: options with evidence, no default.
+    const level = ctx.autonomy?.level() ?? "recommend";
+    const offered = level === "observe" || level === "draft" ? added.map((o) => ({ ...o, recommended: false })) : added;
+    d.options = [...d.options.map((o) => ({ ...o, recommended: false })), ...offered].slice(0, 6);
+    const decided = decideWithinLimits(ctx, d);
     touch();
     const job: Schemas["LlmJobOut"] = {
       id: ctx.uuid(),
@@ -742,7 +756,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       decision_id: d.id,
       status: "succeeded",
       input: { decision: d.number },
-      output: { options: added.map((o) => o.key), recommended: added.find((o) => o.recommended)?.key ?? null },
+      output: { options: offered.map((o) => o.key), recommended: offered.find((o) => o.recommended)?.key ?? null, decided_by_oracle: decided },
       attempts: 1,
       created_at: at,
       started_at: at,
@@ -751,6 +765,50 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     return json(201, job);
   }
   return fail(404, "Route not found");
+}
+
+/** The highest dollar amount an option's cost of being wrong states, 0 with none (as the API's stated_cost). */
+function statedCost(o: Option): number {
+  const amounts = [...(o.cost_if_wrong ?? "").matchAll(/(?:\$|\bUSD\s?)\s?(\d[\d,]*(?:\.\d+)?)/gi)].map((m) => Number(m[1].replace(/,/g, "")));
+  return Math.max(0, ...amounts);
+}
+
+/**
+ * H11 at "Act within limits" (the API's decide_within_limits): Oracle decides a reversible
+ * proposal of a listed origin on the option it recommends, within the cost limit, unless it
+ * revisits a decision or is about an approvers-only document; the approver's "Oracle did" row
+ * has an Undo that hands it back (a revisit).
+ */
+function decideWithinLimits(ctx: DecisionsContext, d: Row): boolean {
+  const a = ctx.autonomy;
+  if (!a || a.level() !== "act") return false;
+  if (d.status !== "proposed" || d.origin === "checkpoint" || d.reversibility !== "reversible" || d.supersedes_id) return false;
+  if (d.subjects.some((s) => (s.kind === "document" || s.kind === "document_version") && ctx.hiddenDocument(String(s.id)))) return false;
+  const limits = a.limits();
+  const pick = d.options.find((o) => o.recommended);
+  if (!limits || !pick || d.options.length < 2) return false;
+  if (!(limits.origins ?? []).includes(d.origin)) return false;
+  if (statedCost(pick) > (limits.max_cost_usd ?? 0)) return false;
+  const why = (pick.summary || pick.label || "").trim();
+  const kept = d.review_at && d.review_at >= day() ? d.review_at : null;
+  Object.assign(d, {
+    status: "decided",
+    chosen_option: pick.key,
+    rationale: `Decided by Oracle within limits set by ${a.setBy()}. It recommended ${pick.label || pick.key}${why ? `: ${why}` : "."}`,
+    expected_outcome: d.expected_outcome || why || pick.label || pick.key,
+    review_at: kept ?? day(REVIEW_DAYS),
+    decided_by: null,
+    decided_actor: "oracle",
+    decided_at: ctx.now(),
+    entity_id: ctx.uuid(),
+  });
+  a.acted({
+    summary: `Decided ${ref(d.number)}: ${pick.label || pick.key}`,
+    subject: { kind: "decision", key: d.id, href: `/company/decisions?d=${d.number}` },
+    undo: { method: "POST", path: `/v1/decisions/${d.id}/reviews`, body: { verdict: "revisit", note: "Handed Oracle's decision back from the Inbox" } },
+    notify: [d.approver_id],
+  });
+  return true;
 }
 
 /** The decision rows of my Inbox, as GET /v1/inbox serves them (checkpoint records add none). */
