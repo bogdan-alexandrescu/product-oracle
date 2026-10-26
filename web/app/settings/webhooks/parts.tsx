@@ -47,6 +47,17 @@ export function WebhookStatus({ hook }: { hook: Webhook }) {
   );
 }
 
+/** "Just now", "2 min ago", "4 h ago", "3 days ago": how long ago `iso` was. */
+export function ago(iso: string, now: number = Date.now()): string {
+  const min = Math.floor((now - Date.parse(iso)) / 60_000);
+  if (min < 1) return "Just now";
+  if (min < 60) return `${min} min ago`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h} h ago`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? "" : "s"} ago`;
+}
+
 /** "✓ 200", "✕ 500", "✕ connect", "Pending", "Withheld". */
 export function outcomeText(d: { status: string; http_status?: number | null; error?: string | null }): string {
   if (d.status === "succeeded") return `✓ ${d.http_status ?? ""}`.trim();

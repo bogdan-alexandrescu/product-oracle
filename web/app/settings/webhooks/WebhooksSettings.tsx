@@ -5,12 +5,12 @@ import { useState } from "react";
 
 import { Button, type Column, DataTable, Icon, InfoTip, Notice, PageHeader, Panel, Split } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime, formatDay } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { NewWebhookSheet } from "./NewWebhookSheet";
-import { outcomeText, WebhookStatus, type Webhook } from "./parts";
+import { ago, outcomeText, WebhookStatus, type Webhook } from "./parts";
 import { WebhookInspector } from "./WebhookInspector";
 
 /**
@@ -67,7 +67,7 @@ export function WebhooksSettings() {
         h.last_delivery ? (
           <span className="tnum truncate" title={h.last_delivery.at ? formatDateTime(h.last_delivery.at) : undefined}>
             {outcomeText(h.last_delivery)}
-            {h.last_delivery.at && <span className="text-text2"> · {formatDay(h.last_delivery.at)}</span>}
+            {h.last_delivery.at && <span className="text-text2"> · {ago(h.last_delivery.at)}</span>}
           </span>
         ) : (
           <span className="text-text2">None yet</span>

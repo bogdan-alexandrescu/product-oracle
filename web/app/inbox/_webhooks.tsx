@@ -27,8 +27,8 @@ export function useWebhookRows(busy: string | null, act: Act, seenBefore: string
     .map((n) => {
       const id = webhookOf(n);
       const href = id ? `/settings/webhooks?webhook=${id}` : "/settings/webhooks";
-      // A pause Oracle made itself (no person's actor) is the failing pause: Resume is offered.
-      const failing = n.kind === "webhook_paused" && !n.actor.startsWith("user:");
+      // The failing pause (the row's reason, as the API names it): Resume is offered.
+      const failing = n.kind === "webhook_paused" && n.data?.reason === "failing";
       const key = `webhook-${n.id}`;
       const done = !!n.read_at;
       return {

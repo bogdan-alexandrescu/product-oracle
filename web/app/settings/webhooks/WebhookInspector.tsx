@@ -12,11 +12,13 @@ import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import { DeliveryLog } from "./DeliveryLog";
+import { EditWebhookSheet } from "./EditWebhookSheet";
 import { TestEvent } from "./NewWebhookSheet";
 import { SecretOnce, WebhookStatus, type EventType, type Webhook } from "./parts";
 
 /**
- * The selected webhook: its settings; Send test event, Rotate secret (a confirm naming the
+ * The selected webhook: its settings, with Edit (name, URL, events; an owner's
+ * owners-and-approvers switch, with a reason); Send test event, Rotate secret (a confirm naming the
  * 24-hour overlap), Pause or Resume, Delete (confirm by name), Take over (owners, on a
  * paused webhook of someone else); then its Delivery log.
  */
@@ -38,6 +40,7 @@ export function WebhookInspector({
   const [endOld, setEndOld] = useState(false);
   const [typed, setTyped] = useState("");
   const [secret, setSecret] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   // Bumped when a delivery was added here, so the log reads again.
   const [version, setVersion] = useState(0);
   const path = { params: { path: { webhook_id: hook.id } } };
@@ -88,11 +91,18 @@ export function WebhookInspector({
         <InspectorRow value={<span className="font-normal text-text2">{formatDateTime(hook.secret_rotated_at)}</span>}>Secret made</InspectorRow>
         <InspectorRow value={hook.created_by.name}>Created by</InspectorRow>
         <InspectorRow value={hook.api_version}>API version</InspectorRow>
-        <InspectorRow value={hook.include_approvers_content ? "On" : "Off"}>Owners-and-approvers content</InspectorRow>
+        <InspectorRow value={<span data-testid="approvers-content">{hook.include_approvers_content ? "On" : "Off"}</span>}>Owners-and-approvers content</InspectorRow>
         <div className="mt-2 text-[13px] leading-[18px] text-text2">
           {hook.event_types.length} event{hook.event_types.length === 1 ? "" : "s"}:{" "}
           {hook.event_types.map((t) => labels.get(t) ?? t).join(" · ")}
         </div>
+        {can("update_webhook") && (
+          <div className="mt-3">
+            <Button onClick={() => setEditing(true)}>
+              Edit
+            </Button>
+          </div>
+        )}
       </InspectorSection>
       {can("update_webhook") && (
         <InspectorSection label="Actions">
@@ -185,6 +195,15 @@ export function WebhookInspector({
           <input className={INPUT} value={typed} onChange={(e) => setTyped(e.target.value)} />
         </Field>
       </ConfirmDialog>
+      <EditWebhookSheet
+        hook={hook}
+        open={editing}
+        onClose={() => setEditing(false)}
+        eventTypes={eventTypes}
+        // Owners-and-approvers content is an owner's choice: the owner-only operation says who that is (#370).
+        ownerChoices={can("take_over_webhook")}
+        onSaved={onChanged}
+      />
       <Sheet open={!!secret} title="New signing secret" onClose={() => setSecret(null)} testId="rotated-secret-sheet">
         {secret && (
           <div className="flex flex-col gap-4 p-4">

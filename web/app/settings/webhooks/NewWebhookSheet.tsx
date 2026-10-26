@@ -68,7 +68,6 @@ export function NewWebhookSheet({
     }
   }
 
-  const toggle = (t: string, on: boolean) => setTypes((prev) => (on ? [...new Set([...prev, t])] : prev.filter((x) => x !== t)));
   const ready = name.trim() && url.trim() && types.length > 0 && (!approvers || why.trim());
 
   return (
@@ -94,59 +93,21 @@ export function NewWebhookSheet({
             if (ready) void create();
           }}
         >
-          <Field label="Name">
-            <input className={INPUT} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} data-autofocus />
-          </Field>
-          <Field label="URL">
-            <input className={INPUT} value={url} inputMode="url" placeholder="https://" onChange={(e) => setUrl(e.target.value)} />
-          </Field>
-          <fieldset className="flex flex-col gap-3">
-            <legend className="mb-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Events</legend>
-            {GROUPS.map((g) => {
-              const of = eventTypes.filter((t) => t.group === g.id);
-              if (!of.length) return null;
-              const all = of.every((t) => types.includes(t.type));
-              return (
-                <div key={g.id} className="flex flex-col gap-1.5" data-testid={`events-${g.id}`}>
-                  <label className="flex items-center gap-2 text-[15px] font-semibold">
-                    <input
-                      type="checkbox"
-                      aria-label={`All ${g.label}`}
-                      className="size-4 accent-[var(--accent)]"
-                      checked={all}
-                      onChange={(e) => of.forEach((t) => toggle(t.type, e.target.checked))}
-                    />
-                    {g.label} <span className="font-normal text-text2">· All</span>
-                  </label>
-                  {of.map((t) => (
-                    <label key={t.type} className="flex items-start gap-2 pl-6 text-[15px]" title={t.type}>
-                      <input
-                        type="checkbox"
-                        className="mt-1 size-4 flex-none accent-[var(--accent)]"
-                        checked={types.includes(t.type)}
-                        onChange={(e) => toggle(t.type, e.target.checked)}
-                      />
-                      <span className="min-w-0">{t.label}</span>
-                    </label>
-                  ))}
-                </div>
-              );
-            })}
-          </fieldset>
-          {ownerChoices && (
-            <div className="flex flex-col gap-2">
-              <label className="inline-flex items-center gap-2 text-[15px] font-semibold">
-                <input type="checkbox" role="switch" className="size-4 accent-[var(--accent)]" checked={approvers} onChange={(e) => setApprovers(e.target.checked)} />
-                Include owners-and-approvers content
-              </label>
-              <p className="text-[13px] leading-[18px] text-text2">Updates, pricing memos, their runs, checkpoints and approvals. Off unless you say why.</p>
-              {approvers && (
-                <Field label="Why">
-                  <textarea className={TEXTAREA} rows={2} maxLength={500} value={why} onChange={(e) => setWhy(e.target.value)} />
-                </Field>
-              )}
-            </div>
-          )}
+          <WebhookFields
+            eventTypes={eventTypes}
+            name={name}
+            setName={setName}
+            url={url}
+            setUrl={setUrl}
+            types={types}
+            setTypes={setTypes}
+            approvers={ownerChoices ? approvers : null}
+            setApprovers={setApprovers}
+            why={why}
+            setWhy={setWhy}
+            askWhy={approvers}
+            autoFocus
+          />
           {error && <ErrorNote>{error}</ErrorNote>}
           <div className="flex justify-end gap-2">
             <Button onClick={close}>Cancel</Button>
@@ -191,5 +152,101 @@ export function TestEvent({ hook, onSent }: { hook: Webhook; onSent?: (d: Delive
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
+  );
+}
+
+/**
+ * A webhook's Name, URL, its events grouped Runs · Drafts · Approvals with "All" per group,
+ * and (owners: `approvers` not null) Include owners-and-approvers content with a Why.
+ * New webhook and Edit webhook share them; they stack in one column on a phone too.
+ */
+export function WebhookFields({
+  eventTypes,
+  name,
+  setName,
+  url,
+  setUrl,
+  types,
+  setTypes,
+  approvers,
+  setApprovers,
+  why,
+  setWhy,
+  askWhy,
+  autoFocus = false,
+}: {
+  eventTypes: EventType[];
+  name: string;
+  setName: (v: string) => void;
+  url: string;
+  setUrl: (v: string) => void;
+  types: string[];
+  setTypes: (f: (prev: string[]) => string[]) => void;
+  /** null: no switch (not an owner). */
+  approvers: boolean | null;
+  setApprovers: (v: boolean) => void;
+  why: string;
+  setWhy: (v: string) => void;
+  /** The switch changed: a Why is required. */
+  askWhy: boolean;
+  autoFocus?: boolean;
+}) {
+  const toggle = (t: string, on: boolean) => setTypes((prev) => (on ? [...new Set([...prev, t])] : prev.filter((x) => x !== t)));
+  return (
+    <>
+      <Field label="Name">
+        <input className={INPUT} value={name} maxLength={80} onChange={(e) => setName(e.target.value)} data-autofocus={autoFocus || undefined} />
+      </Field>
+      <Field label="URL">
+        <input className={INPUT} value={url} inputMode="url" placeholder="https://" onChange={(e) => setUrl(e.target.value)} />
+      </Field>
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-1 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Events</legend>
+        {GROUPS.map((g) => {
+          const of = eventTypes.filter((t) => t.group === g.id);
+          if (!of.length) return null;
+          const all = of.every((t) => types.includes(t.type));
+          return (
+            <div key={g.id} className="flex flex-col gap-1.5" data-testid={`events-${g.id}`}>
+              <label className="flex items-center gap-2 text-[15px] font-semibold">
+                <input
+                  type="checkbox"
+                  aria-label={`All ${g.label}`}
+                  className="size-4 accent-[var(--accent)]"
+                  checked={all}
+                  onChange={(e) => of.forEach((t) => toggle(t.type, e.target.checked))}
+                />
+                {g.label} <span className="font-normal text-text2">· All</span>
+              </label>
+              {of.map((t) => (
+                <label key={t.type} className="flex items-start gap-2 pl-6 text-[15px]" title={t.type}>
+                  <input
+                    type="checkbox"
+                    className="mt-1 size-4 flex-none accent-[var(--accent)]"
+                    checked={types.includes(t.type)}
+                    onChange={(e) => toggle(t.type, e.target.checked)}
+                  />
+                  <span className="min-w-0">{t.label}</span>
+                </label>
+              ))}
+            </div>
+          );
+        })}
+      </fieldset>
+      {approvers !== null && (
+        <div className="flex flex-col gap-2">
+          <label className="inline-flex items-center gap-2 text-[15px] font-semibold">
+            <input type="checkbox" role="switch" className="size-4 accent-[var(--accent)]" checked={approvers} onChange={(e) => setApprovers(e.target.checked)} />
+            Include owners-and-approvers content
+          </label>
+          <p className="text-[13px] leading-[18px] text-text2">Updates, pricing memos, their runs, checkpoints and approvals. Off unless you say why.</p>
+          {askWhy && (
+            <Field label="Why">
+              <textarea className={TEXTAREA} rows={2} maxLength={500} value={why} onChange={(e) => setWhy(e.target.value)} />
+            </Field>
+          )}
+        </div>
+      )}
+    </>
   );
 }

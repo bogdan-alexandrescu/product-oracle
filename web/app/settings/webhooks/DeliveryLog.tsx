@@ -37,9 +37,21 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
     ),
   );
   const columns: Column<Delivery>[] = [
-    { key: "when", header: "When", width: "40%", cell: (d) => <span className="tnum truncate">{formatDateTime(d.last_at ?? d.created_at)}</span> },
+    { key: "when", header: "When", width: "34%", cell: (d) => <span className="tnum truncate">{formatDateTime(d.last_at ?? d.created_at)}</span> },
     { key: "event", header: "Event", cell: (d) => <span className="truncate font-mono text-[13px]" title={d.event_id}>{d.event_type}</span> },
     { key: "status", header: "Status", width: "88px", cell: (d) => <Outcome d={d} /> },
+    {
+      key: "http",
+      header: "HTTP",
+      width: "56px",
+      align: "right",
+      hideOnPhone: true,
+      cell: (d) => (
+        <span className="tnum text-text2" data-testid="delivery-http">
+          {d.http_status ?? "–"}
+        </span>
+      ),
+    },
     { key: "time", header: "Time", width: "64px", align: "right", hideOnPhone: true, cell: (d) => <span className="tnum text-text2">{d.duration_ms != null ? `${d.duration_ms} ms` : "–"}</span> },
   ];
   return (
@@ -67,6 +79,7 @@ export function DeliveryLog({ hook, eventTypes, version, onChanged }: { hook: We
           </select>
         </Field>
       </div>
+      <p className="text-[13px] leading-[18px] text-text2">Times are in Company time.</p>
       {q.error ? (
         <Notice tone="error">{q.error}</Notice>
       ) : (

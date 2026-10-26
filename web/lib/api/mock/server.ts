@@ -117,7 +117,7 @@ import {
 } from "./pricing";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
-import { seedWebhooks, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
+import { captureRunChanges, runMarks, seedWebhooks, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
 
 /**
@@ -3114,6 +3114,12 @@ function webhooksContext(db: Db, me: { id: string; role: Role }): WebhooksContex
   return { ...base, db: db.webhooks };
 }
 
+/** The webhooks mock's view for sending run events: the signed-in member (who acted), if any. */
+function webhooksDeliveryContext(db: Db): WebhooksContext {
+  const member = db.members.find((x) => x.email === sessionOf(db)) ?? db.members.find((m) => m.id === db.user_id)!;
+  return webhooksContext(db, withMockRole(member));
+}
+
 /** The v2 review mock's view of the db; a section save copies the latest version. */
 function reviewV2Context(db: Db, userId: string, role: Role) {
   return {
@@ -4485,7 +4491,10 @@ export async function mockFetch(req: Request): Promise<Response> {
   }
   const next = queue.then(async () => {
     const db = load();
+    const marks = db.webhooks?.hooks.length ? runMarks(db.runs?.runs) : null;
     const res = await route(db, req);
+    // I1: the runs' changes this call made, as webhook events (./webhooks.ts).
+    if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
     save(db);
     return res;
   });

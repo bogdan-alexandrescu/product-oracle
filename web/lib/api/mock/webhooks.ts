@@ -10,6 +10,9 @@
  * that refuses connections is. Bodies are signed as oracle/webhooks/sign.py signs them
  * (Standard Webhooks), with every secret in its 24-hour overlap.
  *
+ * Runs' changes become run.* events (captureRunChanges, called around every mock call), sent
+ * at once to each active webhook subscribed to them, as the minute tick would send them.
+ *
  * The "webhooks" scenario seeds an approver's webhook paused for failing (with its 500s),
  * an approver's webhook an owner paused, and their Inbox rows (review-v2 notifications).
  */
@@ -55,6 +58,8 @@ type HookRow = Omit<WebhookOut, "created_by" | "last_delivery" | "failing_since"
   secret: string;
   previous_secret: string | null;
   previous_expires_at: string | null;
+  /** When a person last resumed it: the failing count starts again there (API resumed_at). */
+  resumed_at?: string | null;
 };
 type EventRow = { id: string; public_id: string; type: string; occurred_at: string; data: Record<string, unknown> };
 type DeliveryRow = Omit<DeliveryOut, "event_id" | "event_type"> & { webhook_id: string; event: string };
@@ -141,38 +146,43 @@ function nameOf(ctx: WebhooksContext, id: string) {
   return ctx.members.find((m) => m.id === id)?.name ?? "Someone";
 }
 
-function notify(ctx: WebhooksContext, to: string[], kind: Notification["kind"], title: string, hook: HookRow, actor: string) {
+function notify(ctx: WebhooksContext, to: string[], kind: Notification["kind"], title: string, hook: HookRow, actor: string, reason?: HookRow["paused_reason"]) {
   for (const user_id of new Set(to)) {
     if (actor === `user:${user_id}`) continue;
     ctx.notifications.push({
       id: ctx.uuid(), user_id, kind, title, document_id: null, version_number: null, section_key: null, comment_id: null, campaign_id: null,
-      actor, data: { webhook_id: hook.id, href: "/settings/webhooks" }, read_at: null, created_at: ctx.now(),
+      actor, data: { webhook_id: hook.id, href: "/settings/webhooks", ...(reason ? { reason } : {}) }, read_at: null, created_at: ctx.now(),
     });
   }
 }
 const owners = (ctx: WebhooksContext) => ctx.members.filter((m) => m.role === "owner").map((m) => m.id);
 
-/** The first failure of an unbroken run of failures, newest back; null after a success. */
-function failingSince(db: WebhooksDb, hookId: string): string | null {
-  const ds = db.deliveries.filter((d) => d.webhook_id === hookId && d.last_at).sort((a, b) => b.last_at!.localeCompare(a.last_at!));
+/**
+ * The first failure of an unbroken run of failures, newest back; null after a success. A
+ * resume starts the count again (outbox.failing_since): only tries after it count, and the
+ * failing runs from the resume at the earliest.
+ */
+function failingSince(db: WebhooksDb, hook: HookRow): string | null {
+  const resumed = hook.resumed_at ?? "";
+  const ds = db.deliveries.filter((d) => d.webhook_id === hook.id && d.last_at && d.last_at > resumed).sort((a, b) => b.last_at!.localeCompare(a.last_at!));
   let since: string | null = null;
   for (const d of ds) {
     if (d.status === "succeeded") break;
     if (d.status === "failed" || d.status === "retrying") since = d.last_at;
   }
-  return since;
+  return since && resumed > since ? resumed : since;
 }
 
 function hookOut(ctx: WebhooksContext, h: HookRow): WebhookOut {
   const rest: Partial<HookRow> = { ...h };
-  for (const k of ["secret", "previous_secret", "previous_expires_at", "created_by"] as const) delete rest[k];
+  for (const k of ["secret", "previous_secret", "previous_expires_at", "created_by", "resumed_at"] as const) delete rest[k];
   const created_by = h.created_by;
   const last = ctx.db.deliveries.filter((d) => d.webhook_id === h.id && d.last_at && d.status !== "withheld").sort((a, b) => b.last_at!.localeCompare(a.last_at!))[0];
   return {
-    ...(rest as Omit<HookRow, "secret" | "previous_secret" | "previous_expires_at" | "created_by">),
+    ...(rest as Omit<HookRow, "secret" | "previous_secret" | "previous_expires_at" | "created_by" | "resumed_at">),
     created_by: { name: nameOf(ctx, created_by) },
     last_delivery: last ? { status: last.status, at: last.last_at, http_status: last.http_status } : null,
-    failing_since: failingSince(ctx.db, h.id),
+    failing_since: failingSince(ctx.db, h),
     can_take_over: ctx.me.role === "owner" && h.status === "paused" && created_by !== ctx.me.id,
   };
 }
@@ -254,15 +264,15 @@ export function seedWebhooks(ctx: Omit<WebhooksContext, "db">, scenario: string 
       body: { id: event.public_id, type: event.type }, redelivery_of: null, created_at: at(h),
     });
   }
-  const note = (user_id: string, kind: Notification["kind"], title: string, hookId: string, actor: string, h: number): Notification => ({
+  const note = (user_id: string, kind: Notification["kind"], title: string, hookId: string, actor: string, h: number, reason?: string): Notification => ({
     id: ctx.uuid(), user_id, kind, title, document_id: null, version_number: null, section_key: null, comment_id: null, campaign_id: null,
-    actor, data: { webhook_id: hookId, href: "/settings/webhooks" }, read_at: null, created_at: at(h),
+    actor, data: { webhook_id: hookId, href: "/settings/webhooks", ...(reason ? { reason } : {}) }, read_at: null, created_at: at(h),
   });
   ctx.notifications.push(
-    note(owner.id, "webhook_paused", `Webhook ${deploy.name} paused: failing for 3 days`, deploy.id, "system", 2),
-    note(approver.id, "webhook_paused", `Webhook ${deploy.name} paused: failing for 3 days`, deploy.id, "system", 2),
+    note(owner.id, "webhook_paused", `Webhook ${deploy.name} paused: failing for 3 days`, deploy.id, "system", 2, "failing"),
+    note(approver.id, "webhook_paused", `Webhook ${deploy.name} paused: failing for 3 days`, deploy.id, "system", 2, "failing"),
     note(owner.id, "webhook_url_changed", `${approver.name} changed where webhook ${deploy.name} sends`, deploy.id, `user:${approver.id}`, 3),
-    note(approver.id, "webhook_paused", `${owner.name} paused your webhook ${notes.name}`, notes.id, `user:${owner.id}`, 5),
+    note(approver.id, "webhook_paused", `${owner.name} paused your webhook ${notes.name}`, notes.id, `user:${owner.id}`, 5, "manual"),
   );
   return db;
 }
@@ -339,8 +349,9 @@ export async function webhooksRoute(ctx: WebhooksContext, req: Request, p: strin
     if ((b.status === "active" || b.status === "paused") && b.status !== hook.status) {
       hook.status = b.status;
       hook.paused_reason = b.status === "paused" ? "manual" : null;
+      if (b.status === "active") hook.resumed_at = ctx.now();
       if (b.status === "paused" && hook.created_by !== ctx.me.id) {
-        notify(ctx, [hook.created_by], "webhook_paused", `${nameOf(ctx, ctx.me.id)} paused your webhook ${hook.name}`, hook, actor);
+        notify(ctx, [hook.created_by], "webhook_paused", `${nameOf(ctx, ctx.me.id)} paused your webhook ${hook.name}`, hook, actor, "manual");
       }
     }
     return json(200, hookOut(ctx, hook));
@@ -404,4 +415,56 @@ function newDelivery(ctx: WebhooksContext, hook: HookRow, event: string, of: str
   };
   ctx.db.deliveries.push(d);
   return d;
+}
+
+/** What captureRunChanges compares: each run's status and its checkpoints' statuses. */
+type RunLike = { id: string; flow: string; status: string; checkpoints: { id: string; kind: string; status: string; approver_role: string }[] };
+export type RunMarks = Record<string, { status: string; checkpoints: Record<string, string> }>;
+
+export function runMarks(runs: RunLike[] | undefined): RunMarks {
+  return Object.fromEntries((runs ?? []).map((r) => [r.id, { status: r.status, checkpoints: Object.fromEntries(r.checkpoints.map((c) => [c.id, c.status])) }]));
+}
+
+const STARTS_FROM = new Set([undefined, "draft", "awaiting_approval"]);
+const RUN_STATUS_EVENT: Record<string, string> = {
+  awaiting_approval: "run.awaiting_approval",
+  paused_overrun: "run.paused_overrun",
+  succeeded: "run.succeeded",
+  failed: "run.failed",
+  cancelled: "run.cancelled",
+};
+
+/**
+ * The run.* events a mock call made (oracle.webhooks.capture in the runs' transactions):
+ * a run started (or resumed) first, then its checkpoints waiting or decided, then the run's
+ * own new state; each sent at once to the active webhooks subscribed to it.
+ */
+export async function captureRunChanges(ctx: WebhooksContext, before: RunMarks, runs: RunLike[] | undefined): Promise<void> {
+  const hooks = ctx.db.hooks.filter((h) => h.status === "active");
+  if (!hooks.length) return;
+  for (const r of runs ?? []) {
+    const was = before[r.id];
+    const runOut = { id: r.id, flow: r.flow, status: r.status, title: null, url: `/runs/${r.id}`, error_kind: null };
+    const actor = { kind: "person", name: nameOf(ctx, ctx.me.id) };
+    const types: [string, Record<string, unknown>][] = [];
+    if (was?.status !== r.status) {
+      if (r.status === "running" && STARTS_FROM.has(was?.status)) types.push(["run.started", { run: runOut, actor }]);
+      if (r.status === "running" && was?.status === "paused_overrun") types.push(["run.resumed", { run: runOut, actor }]);
+    }
+    for (const c of r.checkpoints) {
+      const prev = was?.checkpoints[c.id];
+      if (prev === c.status) continue;
+      const checkpoint = { id: c.id, kind: c.kind, approver_role: c.approver_role, url: `/runs/${r.id}#decide` };
+      if (c.status === "pending") types.push(["run.checkpoint_waiting", { run: runOut, checkpoint, actor: { kind: "oracle", name: null } }]);
+      if (prev === "pending" && (c.status === "approved" || c.status === "changes_requested")) {
+        types.push(["run.checkpoint_decided", { run: runOut, checkpoint: { ...checkpoint, outcome: c.status }, actor }]);
+      }
+    }
+    if (was?.status !== r.status && RUN_STATUS_EVENT[r.status]) types.push([RUN_STATUS_EVENT[r.status], { run: runOut, actor }]);
+    for (const [type, data] of types) {
+      const event: EventRow = { id: ctx.uuid(), public_id: publicId(), type, occurred_at: ctx.now(), data };
+      ctx.db.events.push(event);
+      for (const hook of hooks.filter((h) => h.event_types.includes(type))) await sendNow(ctx, hook, newDelivery(ctx, hook, event.id, null));
+    }
+  }
 }

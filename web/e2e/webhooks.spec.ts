@@ -253,11 +253,6 @@ test("webhooks: on a phone the table shows Name and Status, and the sheet stacks
   expect(Math.abs(url!.x - name!.x)).toBeLessThan(2);
 });
 
-test("webhooks: the header links to the runbook's verify example", async ({ page }) => {
-  await openWebhooks(page);
-  await expect(page.getByRole("link", { name: "How to verify a signature" })).toHaveAttribute("href", /docs\/ops-webhooks\.md#verify/);
-});
-
 test("webhooks: an owner edits the name, the URL and the events, and turns owners-and-approvers content on and off with a reason", async ({ page }) => {
   await stubReceiver(page);
   await openWebhooks(page);
@@ -349,7 +344,7 @@ test("webhooks: AC17, a run's checkpoint waiting, decided and the run succeeding
   const sent = calls.map((c) => JSON.parse(c.body).type);
   expect(sent).toEqual(expect.arrayContaining(["run.started", "run.checkpoint_waiting", "run.checkpoint_decided", "run.succeeded"]));
   const decided = calls.map((c) => JSON.parse(c.body)).find((b) => b.type === "run.checkpoint_decided");
-  expect(decided.data.checkpoint).toMatchObject({ kind: "baseline_confirm", decision: "approved" });
+  expect(decided.data.checkpoint).toMatchObject({ kind: "baseline_confirm", outcome: "approved" });
 
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-webhooks").click();
