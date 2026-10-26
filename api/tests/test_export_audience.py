@@ -745,3 +745,216 @@ async def test_board_hides_internal_item_detail_in_every_template(client, ctx, t
         ).text
     )
     assert "ENG-412" in eng and ESTIMATE_MARK in eng
+
+
+# --- #659 review: tables survive redaction; every written owner and estimate form -----
+
+
+def _tables(html: str) -> int:
+    return len(re.findall(r"<table\b", html))
+
+
+MILESTONES_TABLE = (
+    "| Milestone | Date | Kind | Owner | Depends on |\n|---|---|---|---|---|\n"
+    "| Import beta | Nov 20 | estimate | Dana Markerson | CSV parser |"
+)
+CARD_TABLE = "| Step | Date |\n|:---|---:|\n| Beta | Nov 20 |\n| GA | Dec 15 |"
+
+
+def _with_tables(template: str) -> list:
+    """The template's sections with a table in an item card (and quarterly-timeline's
+    Key milestones table, as its template asks), as a writer fills them in."""
+    out = []
+    for key, level, heading, body in TEMPLATE_SECTIONS[template][2]:
+        if key in ("release-2-4", "lane-import", "bet-bulk-import"):
+            body = f"{body}\n\n{CARD_TABLE}"
+        if key == "milestones":
+            body = MILESTONES_TABLE
+        out.append((key, level, heading, body))
+    return out
+
+
+@pytest.mark.parametrize("audience", ["board", "team", "engineering"])
+@pytest.mark.parametrize("template", list(TEMPLATE_SECTIONS))
+async def test_tables_in_item_areas_survive_redaction(client, ctx, template, audience):
+    """protects=#659 re-review major 1: a markdown table in an item area (a card's table,
+    quarterly-timeline's Key milestones) keeps its separator row and renders as a table in
+    every audience, only the hidden columns dropped; fails_when=the |---| row is dropped
+    and the table shows as raw "| … |" text; no_claim=tables outside the item areas."""
+    await seed_roadmap(ctx, sections=_with_tables(template), template=template)
+    resp = await client.get(EXPORT, params={"audience": audience}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    html = resp.text
+    assert not re.search(r"<p>\s*\|", html), html
+    # The brief table, the card's table and (quarterly-timeline) Key milestones.
+    assert _tables(html) == (3 if template == "quarterly-timeline" else 2), html
+    assert re.search(r"<td[^>]*>\s*Beta\s*</td>", html), html
+    if template == "quarterly-timeline":
+        assert re.search(r"<td[^>]*>\s*Import beta\s*</td>", html), html
+        owner_shown = audience != "board"
+        assert ("Dana Markerson" in html) is owner_shown
+
+
+@pytest.mark.parametrize("audience", ["board", "team", "engineering"])
+async def test_a_roadmap_with_no_items_keeps_its_tables(client, ctx, audience):
+    """protects=#659 re-review major 1: a roadmap with no structured items keeps its
+    written brief table and quarterly-timeline's Key milestones table as tables;
+    fails_when=the separator rows are dropped; no_claim=rebuilt rows (no items)."""
+    sections = _with_tables("quarterly-timeline")
+    await seed_roadmap(ctx, sections=sections, template="quarterly-timeline", items=[])
+    resp = await client.get(EXPORT, params={"audience": audience}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    html = resp.text
+    assert not re.search(r"<p>\s*\|", html), html
+    assert _tables(html) == 3, html
+    assert re.search(r"<th[^>]*>\s*Quarter\s*</th>", html), html
+
+
+# Written owner, estimate and tracker parts as writers put them: (text, field).
+WRITTEN_PARTS = [
+    ("Owner: Dana M. Markerson.", "owner"),
+    ("Owner: Dr. Markerson.", "owner"),
+    ("Owners: Dana Markerson, Lee Q. Parkwood.", "owner"),
+    ("**Owner:** Dana Markerson.", "owner"),
+    ("Lead: Dana Markerson.", "owner"),
+    ("DRI: Dana Markerson.", "owner"),
+    ("Assignee: Dana Markerson.", "owner"),
+    ("Owner (PM): Dana Markerson.", "owner"),
+    ("Owned by Dana Markerson.", "owner"),
+    ("Owner — Dana Markerson.", "owner"),
+    ("Owner - Dana Markerson.", "owner"),
+    ("Story points: 8 est-marker.", "effort"),
+    ("Points: 8 est-marker.", "effort"),
+    ("Size: L est-marker.", "effort"),
+    ("Est: 3w est-marker.", "effort"),
+    ("Est.: 3w est-marker.", "effort"),
+    ("Estimate: 3 weeks est-marker.", "effort"),
+    ("Jira: ENG-9 est-marker.", "tracker"),
+    ("Ticket: ENG-9 est-marker.", "tracker"),
+    ("Tracker: ENG-9 est-marker.", "tracker"),
+]
+SECRET = {"owner": "Markerson", "effort": "est-marker", "tracker": "est-marker"}
+
+
+@pytest.mark.parametrize("part,field_", WRITTEN_PARTS)
+@pytest.mark.parametrize("audience", ["board", "team", "engineering"])
+def test_every_written_form_of_owner_estimate_and_tracker(part, field_, audience):
+    """protects=#659 re-review major 2: Board hides owners, estimates and tracker keys in
+    every common written form (names with initials and titles removed whole); Team hides
+    estimates and tracker keys and keeps owners; Engineering keeps all three;
+    fails_when=a form leaks, or a name is cut at an initial's full stop, or the text
+    around it is lost; no_claim=owners in Team and Engineering (an open owner question)."""
+    variant = variants.VARIANTS[audience]
+    line = f"- Bulk import (must). {part} Why: day one (G1)."
+    out = variants.redact(line, variant, [], [])
+    hidden = field_ in variants.hidden_fields(variant)
+    assert (SECRET[field_] not in out) is hidden, out
+    assert out.startswith("- Bulk import (must).") and out.endswith("Why: day one (G1)."), out
+    if field_ == "owner" and hidden:
+        assert "Dana" not in out and "Dr." not in out and "Parkwood" not in out, out
+
+
+HEADERS = [
+    ("Owner(s)", "owner"),
+    ("Owners", "owner"),
+    ("Assignee", "owner"),
+    ("Lead", "owner"),
+    ("DRI", "owner"),
+    ("Owner (PM)", "owner"),
+    ("Story points", "effort"),
+    ("Points", "effort"),
+    ("Size", "effort"),
+    ("Est.", "effort"),
+    ("Estimate", "effort"),
+    ("Jira", "tracker"),
+    ("Ticket", "tracker"),
+    ("Tracker", "tracker"),
+]
+
+
+@pytest.mark.parametrize("header,field_", HEADERS)
+@pytest.mark.parametrize("audience", ["board", "team", "engineering"])
+def test_table_columns_headed_by_any_form_are_dropped(header, field_, audience):
+    """protects=#659 re-review major 2: a column headed Owner(s), Assignee, Est., Jira…
+    is dropped where the audience hides that field, and the table stays a table;
+    fails_when=the column shows, or the separator row is lost; no_claim=prose."""
+    variant = variants.VARIANTS[audience]
+    table = f"| Item | {header} | Goal |\n|---|---|---|\n| Bulk import | est-marker | G1 |"
+    out = variants.redact(table, variant, [], []).split("\n")
+    hidden = field_ in variants.hidden_fields(variant)
+    assert len(out) == 3 and variants._TABLE_SEP.match(out[1]), out
+    assert ("est-marker" not in "\n".join(out)) is hidden, out
+    assert len(variants._split_row(out[1])) == len(variants._split_row(out[0])), out
+
+
+def test_prose_that_only_looks_like_a_label_is_kept():
+    """protects=Board keeps prose: "Key points:" or "lead to" are not owner or estimate
+    labels; fails_when=a sentence is cut; no_claim=labelled parts."""
+    board = variants.VARIANTS["board"]
+    line = "Key points: imports lead to reports. Sizes vary by plan."
+    assert variants.redact(line, board, [], []) == line
+
+
+def _item(key: str, title: str, *, no_goal: bool = False) -> variants.ItemView:
+    return variants.ItemView(key=key, title=title, outcome=None, horizon="now", position=0,
+                             no_goal=no_goal)  # fmt: skip
+
+
+def test_a_short_goalless_title_does_not_drop_other_items_lines():
+    """protects=#659 re-review minor: a goal-less item titled "Import" drops its own
+    lines (and a wrapped bullet's continuation), never a shown item's line that merely
+    contains the word; fails_when="- Bulk import …" is dropped, or the wrapped line of
+    "- Import …" stays; no_claim=mentions under another name."""
+    board = variants.VARIANTS["board"]
+    items = [_item("bulk", "Bulk import"), _item("imp", "Import", no_goal=True)]
+    text = (
+        "- Bulk import: new accounts import on day one.\n"
+        "- Import: a second importer\n"
+        "  wrapped-marker for the second importer.\n"
+        "- CSV parser: parses every import."
+    )
+    out = variants.redact(text, board, items, ["Import"])
+    assert "Bulk import: new accounts" in out and "parses every import" in out, out
+    assert "second importer" not in out and "wrapped-marker" not in out, out
+
+
+async def test_a_tenant_with_no_confirmed_goals_shows_board_as_before(client, ctx):
+    """protects=#659 re-review minor: with no confirmed goal in the tenant there is
+    nothing to serve, so Board shows every item rather than none; fails_when=Board is
+    empty with "4 items serve no confirmed goal"; no_claim=tenants with goals."""
+    await seed_roadmap(ctx, served=())
+    async with tenant_session(ctx.tenant_id) as s:
+        for goal in await s.scalars(select(Entity).where(Entity.type == "goal")):
+            goal.status = "proposed"
+        await s.commit()
+    resp = await client.get(EXPORT, params={"audience": "board"}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    text = _text(resp.text)
+    assert "Bulk import" in text and "CSV parser" in text, text
+    assert "serve no confirmed goal" not in text and "serves no confirmed goal" not in text
+
+
+async def test_loading_the_items_reads_the_goals_once(ctx, monkeypatch):
+    """protects=#659 re-review minor: a render loads the confirmed goals once, not per
+    item; fails_when=the goals query runs per item; no_claim=query count of the rest."""
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+    from oracle.export import render
+
+    await seed_roadmap(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        ev = await render.load_export_version(s, SLUG, 1)
+        goal_reads = []
+
+        def count(conn, cursor, statement, *args):
+            if "entities.type = " in statement and "entities.status = " in statement:
+                goal_reads.append(statement)
+
+        event.listen(get_engine().sync_engine, "before_cursor_execute", count)
+        try:
+            await render.load_audience(s, ev)
+        finally:
+            event.remove(get_engine().sync_engine, "before_cursor_execute", count)
+    assert len(ev.items) == len(ITEMS)
+    assert len(goal_reads) == 1, goal_reads
