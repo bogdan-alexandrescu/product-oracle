@@ -7,7 +7,7 @@ import { INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
 
-import { diffOf, type Changes, type InspectorOut, type Module, type Problem, type Recommendation } from "./_lib";
+import { changesIn, diffOf, type Changes, type InspectorOut, type Module, type Problem, type Recommendation } from "./_lib";
 
 const MONO = "font-mono text-[13px]";
 
@@ -123,7 +123,7 @@ export function ConfirmStep({
     let live = true;
     unwrap(
       api.POST("/v1/compositions/recommend", {
-        body: { ...EMPTY_INPUTS, document: doc, changes: changes.add.length || changes.remove.length ? { add: changes.add, remove: changes.remove } : null },
+        body: { ...EMPTY_INPUTS, document: doc, changes: changesIn(changes) },
       }),
     )
       .then((r) => live && setPreview(r))
@@ -153,7 +153,7 @@ export function ConfirmStep({
         base_revision: data.head_revision ?? null,
         reason: trimmed,
         status,
-        changes: changes.add.length || changes.remove.length ? { add: changes.add, remove: changes.remove } : null,
+        changes: changesIn(changes),
       },
     });
     const err = result.error as { problems?: Problem[] } | undefined;

@@ -125,6 +125,37 @@ test("removing a mandatory module shows the API's required_module problem and bl
   await expect(dialog.getByRole("button", { name: "Confirm rev 2", exact: true })).toBeDisabled();
 });
 
+test("an approver moves a module up and confirms a reorder that is not material", async ({ page }) => {
+  // protects=A's Move up sends changes.order (every included module); the Confirm step shows
+  // a reorder-only change as not material, and the confirmed order holds; fails_when=the order
+  // is not sent or the screen calls a reorder material.
+  await openComposition(page, "approver");
+  await expect(row(page, "risks.register").locator("td").first()).toHaveText("50");
+  await row(page, "risks.register").click();
+  await inspector(page).getByRole("button", { name: "Move up" }).click();
+  await expect(page.getByTestId("draft-changes")).toContainText("↕ Custom order (7 modules)");
+  await expect(row(page, "risks.register").locator("td").first()).toHaveText("40");
+  await page.getByRole("button", { name: "Confirm rev 2…" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Confirm rev 2" });
+  await expect(dialog.getByTestId("confirm-diff")).toContainText("Reordered only · not material");
+  await dialog.getByLabel("Reason (required)").fill("Risks read better before constraints.");
+  await dialog.getByRole("button", { name: "Confirm rev 2", exact: true }).click();
+  await expect(page.getByTestId("composition-in-force")).toHaveText("Rev 2 in force");
+  await expect(row(page, "risks.register").locator("td").first()).toHaveText("40");
+});
+
+test("moving a module after Sources and data points shows the API's order_violation", async ({ page }) => {
+  await openComposition(page, "approver");
+  await row(page, "agents.tool-policies").click();
+  await inspector(page).getByRole("button", { name: "Move down" }).click();
+  await page.getByRole("button", { name: "Confirm rev 2…" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "Confirm rev 2" });
+  await expect(dialog.getByTestId("preview-problems")).toContainText("order_violation");
+  await expect(dialog.getByTestId("preview-problems")).toContainText("Tool policies must come before Sources and data points.");
+  await dialog.getByLabel("Reason (required)").fill("Try it.");
+  await expect(dialog.getByRole("button", { name: "Confirm rev 2", exact: true })).toBeDisabled();
+});
+
 test("an owner-review module: an approver cannot add it, an owner can", async ({ page }) => {
   // protects=a module whose contract asks for the owner role is off for an approver with
   // "Requires the owner role" and on for an owner; fails_when=the approver is offered it.
@@ -245,6 +276,18 @@ test.describe("on a phone", () => {
     await expect(sheet).toBeVisible();
     await expect(sheet).toContainText("Why it is here");
     await sheet.getByRole("button", { name: "Close" }).click();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test("the Confirm step opens as a sheet and confirms", async ({ page }) => {
+    await openComposition(page, "approver");
+    await page.getByRole("button", { name: "Confirm rev 2…" }).click();
+    const sheet = page.getByRole("dialog", { name: "Confirm rev 2" });
+    await expect(sheet.getByTestId("confirm-diff")).toContainText("No change");
+    await sheet.getByLabel("Reason (required)").fill("Re-confirm after the policy review.");
+    await sheet.getByRole("button", { name: "Confirm rev 2", exact: true }).click();
+    await expect(page.getByTestId("composition-in-force")).toHaveText("Rev 2 in force");
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(overflow).toBeLessThanOrEqual(0);
   });

@@ -21,8 +21,10 @@ import {
   POLICY_SOURCE,
   SELECTION_LABEL,
   diffLine,
+  draftOrder,
   hasProblems,
   matches,
+  move,
   sortModules,
   toggle,
   type Changes,
@@ -141,7 +143,10 @@ export function CompositionView({ doc }: { doc: string }) {
     if (data.current) sources.push({ value: "current", label: `Confirmed rev ${data.current.number}`, modules: data.current.modules });
     if (preview || data.recommendation) sources.push({ value: "preview", label: "Recommendation", modules: (preview ?? data.recommendation)!.modules });
     const source = sources.find((s) => s.value === view) ?? sources[0];
-    const all = sortModules(source?.modules ?? []);
+    // A new revision starts from the newest one: the draft's order is over its modules.
+    const base = (data.working ?? data.current ?? data.recommendation)?.modules ?? [];
+    const custom = changes.order;
+    const all = sortModules((source?.modules ?? []).map((m) => (custom?.includes(m.key) ? { ...m, order: (custom.indexOf(m.key) + 1) * 10 } : m)));
     const rows = all.filter((m) => matches(m, filter));
     const selected = all.find((m) => m.key === picked) ?? null;
     const count = (f: Filter) => all.filter((m) => matches(m, f)).length;
@@ -153,6 +158,15 @@ export function CompositionView({ doc }: { doc: string }) {
         canChange={mayConfirm}
         ownerOnly={m.required_review_role === "owner" && !ownerRole}
         onToggle={() => setChanges((c) => toggle(c, m.key, m.included))}
+        onMove={(() => {
+          const order = draftOrder(changes, base);
+          const at = order.indexOf(m.key);
+          if (at < 0) return null;
+          return {
+            up: at > 0 ? () => setChanges((c) => move(c, base, m.key, -1)) : null,
+            down: at < order.length - 1 ? () => setChanges((c) => move(c, base, m.key, 1)) : null,
+          };
+        })()}
         bare={bare}
       />
     );
@@ -213,7 +227,7 @@ export function CompositionView({ doc }: { doc: string }) {
         ),
       },
     ];
-    const staged = changes.add.length + changes.remove.length > 0;
+    const staged = changes.add.length + changes.remove.length > 0 || changes.order !== null;
     body = (
       <Split inspector={!phone && selected ? detail(selected, false) : undefined}>
         {data.legacy && data.recommendation && (
@@ -315,6 +329,14 @@ export function CompositionView({ doc }: { doc: string }) {
                   </Button>
                 </li>
               ))}
+              {changes.order && (
+                <li className="flex items-center gap-2">
+                  <span>↕ Custom order ({changes.order.length} modules)</span>
+                  <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => ({ ...c, order: null }))}>
+                    Reset
+                  </Button>
+                </li>
+              )}
             </ul>
             <p className="mt-2 text-sm text-text2">Nothing is written until you confirm or save a working draft.</p>
           </Panel>

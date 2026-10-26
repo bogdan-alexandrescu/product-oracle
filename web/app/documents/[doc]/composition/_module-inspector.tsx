@@ -34,6 +34,7 @@ export function ModuleDetail({
   canChange,
   ownerOnly,
   onToggle,
+  onMove,
   bare = false,
 }: {
   m: Module;
@@ -43,6 +44,8 @@ export function ModuleDetail({
   /** The module asks for the owner role and the caller does not have it. */
   ownerOnly: boolean;
   onToggle: () => void;
+  /** Moves it up (-1) or down (+1) in the draft's order; null where it cannot move that way. */
+  onMove: { up: (() => void) | null; down: (() => void) | null } | null;
   /** In a phone sheet: the head is the sheet's. */
   bare?: boolean;
 }) {
@@ -184,6 +187,16 @@ export function ModuleDetail({
             <Button variant={staged ? "ghost" : m.included ? "danger" : "solid"} disabled={ownerOnly} onClick={onToggle}>
               {staged ? "Undo" : m.included ? "Remove from draft" : "Add to draft"}
             </Button>
+            {onMove && (
+              <>
+                <Button disabled={!onMove.up} onClick={() => onMove.up?.()}>
+                  Move up
+                </Button>
+                <Button disabled={!onMove.down} onClick={() => onMove.down?.()}>
+                  Move down
+                </Button>
+              </>
+            )}
             {ownerOnly && <span className="text-sm text-text2">Requires the owner role</span>}
           </div>
         </InspectorSection>

@@ -228,6 +228,8 @@ function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, 
       }
       return out;
     });
+  let n = 0;
+  for (const m of modules) m.order = m.included ? (n += 10) : 0;
   return {
     document_id: null,
     intake_id: null,
@@ -246,6 +248,7 @@ function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, 
 /** Carries a person's earlier decisions from `head` and applies `changes`, as the composer
  * does; returns the problems (fatal ones refuse a confirm, a preview reports them). */
 function applyChanges(
+  db: ModulesDb,
   rec: Schemas["RecommendationOut"],
   head: Revision | null,
   changes: Schemas["ChangesIn"] | null | undefined,
@@ -289,11 +292,72 @@ function applyChanges(
     }
     Object.assign(target, { included: true, decided_by: "user", user_reason: reason, overridden_by: ctx.userId });
   }
+  orderModules(db, rec, head, changes, problem);
   rec.summary = summary(rec.modules);
   rec.problems = problems;
   rec.valid = !problems.some((x) => x.fatal);
   rec.outline = outlineOf(rec.modules);
   return problems;
+}
+
+/** Step 6 of the composer: the default order (display_order, Sources always last), an
+ * earlier person's order carried over, or the order in `changes`. */
+function orderModules(
+  db: ModulesDb,
+  rec: Schemas["RecommendationOut"],
+  head: Revision | null,
+  changes: Schemas["ChangesIn"] | null | undefined,
+  problem: (code: string, message: string, module: string | null) => void,
+) {
+  const display = (key: string) => Number(db.catalog.find((c) => c.key === key)?.contract.display_order ?? 500);
+  const included = rec.modules.filter((m) => m.included);
+  const isSources = (key: string) => included.find((m) => m.key === key)?.section_ids.includes("sources") ?? false;
+  const defaults = included.map((m) => m.key).sort((a, b) => Number(isSources(a)) - Number(isSources(b)) || display(a) - display(b));
+  let order = defaults;
+  const wanted = changes?.order;
+  if (wanted) {
+    const missing = defaults.filter((k) => !wanted.includes(k));
+    const extra = wanted.filter((k) => !defaults.includes(k));
+    if (missing.length || extra.length || new Set(wanted).size !== wanted.length) {
+      problem(
+        "order_mismatch",
+        "The order must list every included module exactly once" +
+          (missing.length ? `; missing ${missing.join(", ")}` : "") +
+          (extra.length ? `; not included ${extra.join(", ")}` : "") +
+          ".",
+        null,
+      );
+    } else {
+      const sources = wanted.filter(isSources);
+      const late = sources.filter((s) => wanted.indexOf(s) !== wanted.length - sources.length + sources.indexOf(s));
+      for (const s of late) {
+        const after = wanted.slice(wanted.indexOf(s) + 1).find((k) => !isSources(k))!;
+        problem("order_violation", `${titleOf(rec, after)} must come before ${titleOf(rec, s)}.`, s);
+      }
+      if (!late.length) order = wanted;
+    }
+  } else if (head?.modules.some((m) => m.ordered_by_user)) {
+    // An earlier person's order over today's modules; new ones follow their default predecessor.
+    const prior = [...head.modules].filter((m) => m.included).sort((a, b) => a.order - b.order).map((m) => m.key);
+    const out = prior.filter((k) => defaults.includes(k));
+    defaults.forEach((key, i) => {
+      if (out.includes(key)) return;
+      const before = [...defaults.slice(0, i)].reverse().find((k) => out.includes(k));
+      out.splice(before ? out.indexOf(before) + 1 : 0, 0, key);
+    });
+    order = out;
+  }
+  const byUser = order !== defaults;
+  rec.modules.forEach((m) => {
+    m.order = m.included ? (order.indexOf(m.key) + 1) * 10 : 0;
+    m.ordered_by_user = m.included && byUser;
+  });
+  rec.modules.sort((a, b) => Number(b.included) - Number(a.included) || a.order - b.order || a.key.localeCompare(b.key));
+  rec.outline = outlineOf(rec.modules);
+}
+
+function titleOf(rec: Schemas["RecommendationOut"], key: string): string {
+  return rec.modules.find((m) => m.key === key)?.title ?? key;
 }
 
 function outlineOf(modules: Composed[]): Schemas["OutlineEntry"][] {
@@ -317,7 +381,14 @@ function diffOf(before: Revision | null, after: Composed[]): Schemas["RevisionDi
   const added = [...now].filter((k) => !was.has(k)).sort();
   const removed = [...was].filter((k) => !now.has(k)).sort();
   const affected = [...before.modules, ...after].filter((m) => added.includes(m.key) || removed.includes(m.key)).flatMap((m) => m.section_ids);
-  return { added, removed, version_changed: [], reordered: false, material: added.length + removed.length > 0, affected_sections: [...new Set(affected)].sort() };
+  const kept = (ms: Composed[]) =>
+    ms
+      .filter((m) => m.included && was.has(m.key) && now.has(m.key))
+      .sort((a, b) => a.order - b.order)
+      .map((m) => m.key)
+      .join();
+  const reordered = kept(before.modules) !== kept(after);
+  return { added, removed, version_changed: [], reordered, material: added.length + removed.length > 0, affected_sections: [...new Set(affected)].sort() };
 }
 
 function revisionOf(
@@ -511,7 +582,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const pack = data.packs?.[0] ?? head?.packs[0] ?? (data.inputs?.category === "ai_agent_platform" ? PACK_B : PACK_A);
     const extra = data.inputs && Object.keys(data.inputs).length ? data.inputs : head ? { scope: head.inputs.scope } : {};
     const rec = { ...recommend(db, pack, extra, data.template ?? doc?.template ?? "oracle-default"), document_id: doc?.id ?? null };
-    applyChanges(rec, head, data.changes, ctx, null);
+    applyChanges(db, rec, head, data.changes, ctx, null);
     return json(200, rec);
   }
 
@@ -537,7 +608,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       const extra = data.inputs && Object.keys(data.inputs).length ? data.inputs : head ? { scope: head.inputs.scope } : {};
       const rec = recommend(db, pack, extra, data.template ?? doc.template ?? "oracle-default");
       rec.inputs.policy = { ...rec.inputs.policy, packs_source: packsSource };
-      const problems = applyChanges(rec, head, data.changes, ctx, data.reason);
+      const problems = applyChanges(db, rec, head, data.changes, ctx, data.reason);
       const fatal = problems.filter((x) => x.fatal);
       if (fatal.length) return json(422, { detail: fatal[0].message, problems: fatal });
       rec.summary = summary(rec.modules);

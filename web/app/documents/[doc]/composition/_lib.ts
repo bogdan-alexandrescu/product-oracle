@@ -4,9 +4,10 @@ export type InspectorOut = Schemas["InspectorOut"];
 export type Recommendation = Schemas["RecommendationOut"];
 export type Module = Schemas["InspectedModule"] | Schemas["ComposedModule"];
 export type Problem = Schemas["CompositionProblem"];
-export type Changes = { add: string[]; remove: string[] };
+/** Draft changes as the API takes them; `order` lists every included module, or null. */
+export type Changes = { add: string[]; remove: string[]; order: string[] | null };
 
-export const NO_CHANGES: Changes = { add: [], remove: [] };
+export const NO_CHANGES: Changes = { add: [], remove: [], order: null };
 
 export type Filter = "all" | "mandatory" | "suggested" | "optional" | "excluded" | "problems";
 
@@ -79,8 +80,39 @@ export function toggle(changes: Changes, key: string, included: boolean): Change
   const add = changes.add.filter((k) => k !== key);
   const remove = changes.remove.filter((k) => k !== key);
   const staged = changes.add.includes(key) || changes.remove.includes(key);
-  if (staged) return { add, remove };
-  return included ? { add, remove: [...remove, key] } : { add: [...add, key], remove };
+  // A custom order lists every included module: one leaving drops out, one coming goes last.
+  const goesOut = staged ? changes.add.includes(key) : included;
+  const order = changes.order && (goesOut ? changes.order.filter((k) => k !== key) : [...changes.order, key]);
+  if (staged) return { add, remove, order };
+  return included ? { add, remove: [...remove, key], order } : { add: [...add, key], remove, order };
+}
+
+/** The draft's included modules in order: its custom order, else the newest revision's
+ * order with removals dropped and additions last. */
+export function draftOrder(changes: Changes, modules: Module[]): string[] {
+  return (
+    changes.order ??
+    modules
+      .filter((m) => (m.included && !changes.remove.includes(m.key)) || changes.add.includes(m.key))
+      .sort((a, b) => (a.included ? a.order : 1e9) - (b.included ? b.order : 1e9))
+      .map((m) => m.key)
+  );
+}
+
+/** Moves an included module one place up (-1) or down (+1) in the draft's order. */
+export function move(changes: Changes, modules: Module[], key: string, by: -1 | 1): Changes {
+  const order = draftOrder(changes, modules);
+  const at = order.indexOf(key);
+  const to = at + by;
+  if (at < 0 || to < 0 || to >= order.length) return changes;
+  const next = [...order];
+  [next[at], next[to]] = [next[to], next[at]];
+  return { ...changes, order: next };
+}
+
+/** The changes as the API's ChangesIn, or null for none. */
+export function changesIn(c: Changes): { add: string[]; remove: string[]; order: string[] | null } | null {
+  return c.add.length || c.remove.length || c.order ? { add: c.add, remove: c.remove, order: c.order } : null;
 }
 
 export type Diff = {
