@@ -136,7 +136,7 @@ function decidedText(cp: Schemas["CheckpointOut"]): string {
  * Approvers stage, commenters suggest, viewers read.
  */
 export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
-  const { can, me } = useMe();
+  const { can, me, capsReady, capsError } = useMe();
   const phone = usePhone();
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
   const reviewQ = useQuery(draftKey(run.id, cp.id), () => loadDraft(run.id, cp.id));
@@ -199,7 +199,9 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   }, [items, filter]);
 
   if (reviewQ.error) return <Page className="py-6"><ErrorNote>{reviewQ.error}</ErrorNote></Page>;
-  if (!review) return <div className="px-6 py-8"><Loading /></div>;
+  // The rows wait for what the role may do too: drawn before it they are a viewer's, and Enter
+  // on a row would pick it instead of asking to confirm its fix (a failed read: a viewer's).
+  if (!review || (!capsReady && !capsError)) return <div className="px-6 py-8"><Loading /></div>;
 
   const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? key;
   const byKey = new Map(items.map((x) => [x.key, x]));

@@ -4196,7 +4196,12 @@ async function route(db: Db, req: Request): Promise<Response> {
         documents: db.documents,
         versions: db.versions,
         entityTitle: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? planEntityTitle(id),
-        leadApprovers: () => engineeringLeads(db).filter((id) => atLeast(db.members.find((x) => x.id === id)!.role, "approver")),
+        // As the API's _lead_approvers: the leads of approver rank or above, by email.
+        leadApprovers: () =>
+          db.members
+            .filter((x) => engineeringLeads(db).includes(x.id) && atLeast(x.role, "approver"))
+            .sort((a, b) => a.email.localeCompare(b.email))
+            .map((x) => x.id),
         techBrief: techBriefOf,
         draftRun: async (input) => {
           db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
