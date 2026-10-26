@@ -11,7 +11,18 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Index, Text, Uuid, text
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    text,
+)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -117,3 +128,134 @@ class SimpleChange(TenantScoped, Base):
     undoes_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("simple_changes.id", ondelete="CASCADE")
     )
+    # S3b: the working drafts an applied change of a versioned document wrote (one per
+    # roadmap it touched); empty for a proposal and for non-versioned targets.
+    draft_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+
+
+DRAFT_STATUSES = ("working", "submitted", "approved", "discarded")
+TASK_STATUSES = ("todo", "doing", "done", "dropped")
+ACTION_STATUSES = ("open", "done", "dropped")
+
+
+class SimpleDraft(TenantScoped, Base):
+    """Simple S3b: the working draft of one versioned document (a roadmap's items): the
+    applied changes of owners and the decider land here, never in the published version
+    (oracle.simple.drafts). ``overlay`` holds each changed item's fields as the draft has
+    them, keyed by the published item's id; ``base_version_id`` is the version it was
+    opened on. Submitting imports the next version (``version_id``) through the
+    roadmap's change-set path and the document's review policy; the decider's approval
+    waits in ``decider_approval`` while required reviewers in ``waiting_on`` have not
+    approved. At most one working draft per document; sessions join it
+    (``simple_session_drafts``)."""
+
+    __tablename__ = "simple_drafts"
+    __table_args__ = (
+        CheckConstraint(_in("status", DRAFT_STATUSES), name="status"),
+        Index(
+            "uq_simple_drafts_working",
+            "document_id",
+            unique=True,
+            postgresql_where=text("status = 'working'"),
+        ),
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    base_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="SET NULL")
+    )
+    version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="working")
+    overlay: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    # Who took part: every session's starter that joined it, and meeting attendees.
+    participant_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    submitted_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # {"by", "at", "session_id"}: the decider's approval, held until every required
+    # reviewer has approved.
+    decider_approval: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    waiting_on: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SimpleSessionDraft(TenantScoped, Base):
+    """Simple S3b: a session's working draft of one document (one per session and
+    document); ``draft_version_id`` is the version the draft became once submitted."""
+
+    __tablename__ = "simple_session_drafts"
+    __table_args__ = (UniqueConstraint("session_id", "document_id"),)
+
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_sessions.id", ondelete="CASCADE"), nullable=False
+    )
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    draft_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_drafts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    draft_version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="SET NULL")
+    )
+
+
+class RoadmapItemTask(TenantScoped, Base):
+    """Simple S3b: work under a roadmap item (#723 data model). Not versioned: owners and
+    the decider change it directly, others propose (oracle.simple.targets). Anchored by
+    the item's roadmap and key as well as its id, so a later version's item keeps it."""
+
+    __tablename__ = "roadmap_item_tasks"
+    __table_args__ = (
+        CheckConstraint(_in("status", TASK_STATUSES), name="status"),
+        Index("ix_roadmap_item_tasks_item", "roadmap_document_id", "item_key"),
+    )
+
+    item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("roadmap_items.id", ondelete="SET NULL")
+    )
+    roadmap_document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    item_key: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="todo")
+    due_date: Mapped[date | None] = mapped_column(Date)
+    tracker_record_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("tracker_records.id", ondelete="SET NULL")
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+
+
+class SimpleActionItem(TenantScoped, Base):
+    """Simple S3b: a meeting's (or an editing session's) action item (#723 data model),
+    optionally under a roadmap item. ``meeting_id`` names S8's meeting (no key yet)."""
+
+    __tablename__ = "simple_action_items"
+    __table_args__ = (CheckConstraint(_in("status", ACTION_STATUSES), name="status"),)
+
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    item_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("roadmap_items.id", ondelete="SET NULL")
+    )
+    roadmap_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE")
+    )
+    item_key: Mapped[str | None] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    due_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)

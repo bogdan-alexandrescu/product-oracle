@@ -593,6 +593,10 @@ async def _flags(db: AsyncSession, c: SimpleChange) -> list[SimpleItemFlags]:
 
 
 async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
+    from oracle.simple import targets
+
+    if body.op in targets.OPS:
+        return await targets.create(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -647,8 +651,12 @@ async def decide(
     db: AsyncSession, principal: Any, change_id: uuid.UUID, action: str, reason: str | None
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
+    from oracle.simple import targets
+
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in targets.OPS:
+        return await targets.decide(db, principal, c, action, reason)
     read_ = await service.load(db)
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -677,8 +685,12 @@ async def decide(
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
+    from oracle.simple import targets
+
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in targets.OPS:
+        return await targets.undo(db, principal, c)
     if c.status != "applied":
         raise ChangeError(409, f"Only an applied change undoes; this one is {c.status}")
     if c.by != me:
@@ -742,6 +754,10 @@ class _View:
             return None
 
     def may_decide(self, c: SimpleChange) -> bool:
+        from oracle.simple import targets
+
+        if c.op in targets.OPS:
+            return targets.may_decide(self.principal, c, self)
         e = self.entry(c)
         return e is not None and service.can_decide(self.principal, e, self.deciders)
 

@@ -183,6 +183,16 @@ ChangeOp = Literal[
     "accept_risk",
     "shift_dependents",
     "move_dependency",
+    # S3b: non-versioned targets (oracle.simple.targets), applied directly or proposed.
+    "override_priority",
+    "add_item_task",
+    "edit_item_task",
+    "set_item_task_status",
+    "add_action_item",
+    "edit_action_item",
+    "set_action_item_status",
+    "add_launch_task",
+    "set_launch_task_status",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
