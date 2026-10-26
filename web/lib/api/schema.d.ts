@@ -24654,6 +24654,8 @@ export interface components {
              * @enum {string}
              */
             status: "running" | "done" | "failed";
+            /** Error */
+            error?: string | null;
         };
         /** MetricCreate */
         MetricCreate: {
@@ -61083,7 +61085,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebSearchOut"];
                 };
             };
-            /** @description Web search is for Oracle's monthly digest, or the URL is not from this run */
+            /** @description Web search is for Oracle's own research runs, or the URL is not from this run */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -61144,7 +61146,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebPageOut"];
                 };
             };
-            /** @description Web search is for Oracle's monthly digest, or the URL is not from this run */
+            /** @description Web search is for Oracle's own research runs, or the URL is not from this run */
             403: {
                 headers: {
                     [name: string]: unknown;

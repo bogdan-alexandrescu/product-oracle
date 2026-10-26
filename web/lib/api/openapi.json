@@ -42138,7 +42138,7 @@
             }
           },
           "403": {
-            "description": "Web search is for Oracle's monthly digest, or the URL is not from this run"
+            "description": "Web search is for Oracle's own research runs, or the URL is not from this run"
           },
           "409": {
             "description": "robots.txt asks bots not to read the page"
@@ -42202,7 +42202,7 @@
             }
           },
           "403": {
-            "description": "Web search is for Oracle's monthly digest, or the URL is not from this run"
+            "description": "Web search is for Oracle's own research runs, or the URL is not from this run"
           },
           "409": {
             "description": "robots.txt asks bots not to read the page"
@@ -76892,6 +76892,17 @@
               "failed"
             ],
             "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
           }
         },
         "type": "object",

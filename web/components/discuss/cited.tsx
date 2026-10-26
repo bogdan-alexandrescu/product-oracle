@@ -17,7 +17,8 @@ export type Cite = {
 
 /** A discussion citation as the document citation chip reads it. */
 function chipCitation(c: Cite): CitationOut {
-  const link = c.kind === "public_link" && !!c.url;
+  // A public link, or a web page a research run read (G2 §4, read:web): it opens the page.
+  const link = (c.kind === "public_link" || c.kind === "web") && !!c.url;
   return {
     id: `c${c.n}`,
     cite_key: `c:${c.n}`,

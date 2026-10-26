@@ -653,8 +653,19 @@ export function DiscussionThread({
   const researching = state?.kind === "ok" && state.messages.some((x) => x.research?.status === "running");
   useEffect(() => {
     if (!researching) return;
-    const timer = setInterval(() => void load(id).then(setState), RESEARCH_POLL_MS);
-    return () => clearInterval(timer);
+    // Backs off from 10 s to a minute, and stops after RESEARCH_POLLS looks (a reload looks again).
+    let polls = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const next = () => {
+      if (polls >= RESEARCH_POLLS) return;
+      timer = setTimeout(() => {
+        polls += 1;
+        void load(id).then(setState);
+        next();
+      }, Math.min(RESEARCH_POLL_MS * 2 ** polls, RESEARCH_POLL_MAX_MS));
+    };
+    next();
+    return () => clearTimeout(timer);
   }, [researching, id]);
   // Reading the thread marks it read to its last message: the Inbox's invitation and
   // mentions read past are done (G6), and the rail's count reads again.
@@ -1118,8 +1129,10 @@ export function DiscussionThread({
   );
 }
 
-/** How often the thread looks for a research run's answer while it runs. */
+/** How often the thread looks for a research run's answer while it runs: first after 10 s, doubling to a minute, at most 30 looks. */
 const RESEARCH_POLL_MS = 10_000;
+const RESEARCH_POLL_MAX_MS = 60_000;
+const RESEARCH_POLLS = 30;
 
 /**
  * Research this (G2 §4) under a person's message, for an approver or owner who can write in
@@ -1173,7 +1186,14 @@ function ResearchThis({ m, d, onStarted }: { m: Message; d: Discussion; onStarte
 /** The line a research run leaves in the thread: who asked, where it stands, and its run. */
 function ResearchLine({ m }: { m: Message }) {
   const r = m.research!;
-  const where = r.status === "running" ? "Oracle is researching…" : r.status === "done" ? "Research done" : "Research didn't finish. Research this to try again.";
+  const where =
+    r.status === "running"
+      ? "Oracle is researching…"
+      : r.status === "done"
+        ? "Research done"
+        : r.error
+          ? `Research didn't start: ${r.error} Research this to try again.`
+          : "Research didn't finish. Research this to try again.";
   return (
     <li data-testid="research-line" data-status={r.status} className="text-center text-[13px] text-text2">
       {m.body} · {where} ·{" "}

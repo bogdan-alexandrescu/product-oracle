@@ -82,6 +82,8 @@ export type MessageRow = {
   run_id?: string | null;
   /** The mock's research run finishes on the thread's second read after it started (as a ritual summary's). */
   research_reads?: number;
+  /** A research line whose run could not start: why, in words (the API keeps it in `error`). */
+  research_error?: string;
 };
 
 /** G3/B6: a change Oracle or a person offered in a discussion (a section_edit, a goal_measure version); people by id, `action`, `can` and `needs_reason` computed per reader. */
@@ -152,6 +154,8 @@ export type DiscussionsContext = {
   slack?: (d: DiscussionRow, req: Request) => Promise<Response | null>;
   /** The gateway's refusal while the Claude account pool is spent, worded; null otherwise. */
   refusal?: () => string | null;
+  /** G2 §4: the runs' refusal of a research start, worded; null when they start it. */
+  researchRefusal?: () => string | null;
   /** #406: the text of the document version a discussion is on, the section it is on first. */
   documentText?: (d: DiscussionRow) => DocumentSection[];
   /** F3 Date bases' rights for me (leads.date_rights): verify, propose, or none. */
@@ -171,8 +175,16 @@ export const CANNED_REPLY = ["Yes, if caps ", "read the plan thresholds only ", 
 /** G2 §4: one discussion_research run, the researcher at quick depth (the API's cost table). */
 export const RESEARCH_USD = 2;
 export const RESEARCH_ANSWER =
-  "Teams on the starter plan asked for caps in the last two check-ins [c:1]. Nothing Oracle can read says detection has to ship first.";
+  "Teams on the starter plan asked for caps in the last two check-ins [c:1]. Others cap by seat on their starter plans [c:2]. Nothing Oracle can read says detection has to ship first.";
+/** The "research-refused" scenario: the runs refuse the first research start (as a spent budget or one build at a time would). */
+export const RESEARCH_REFUSED_SCENARIO = "research-refused";
+export const RESEARCH_REFUSED = "The company's monthly run budget is spent.";
 const CANNED_CITATIONS = [{ n: 1, kind: "entity", ref: "g.activation", title: "Goal: Raise activation", url: "/baseline", confidence: 0.82, low_confidence: false }];
+/** The web page the mock's research read (read:web): a `web` citation linking to it. */
+const RESEARCH_CITATIONS: Record<string, unknown>[] = [
+  ...CANNED_CITATIONS,
+  { n: 2, kind: "web", ref: "w-1", title: "Caps at Example", url: "https://news.example/caps" },
+];
 const STOPWORDS = new Set(["what", "when", "where", "which", "does", "this", "that", "draft", "document", "about", "with", "from", "have", "there", "their", "they"]);
 const words = (text: string) => new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !STOPWORDS.has(w)));
 
@@ -748,11 +760,17 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       slack: d.slack ?? null,
     };
   };
+  /** Who may post in it (the API's access.can_write): commenters and up who read it. */
+  const canWrite = (d: DiscussionRow) => readable(d) && atLeast(me.role, "commenter");
   /** G2 §4: an approver or owner who can write in it, while it is open (as the API's research.can_research). */
-  const canResearch = (d: DiscussionRow) => d.status === "open" && readable(d) && atLeast(me.role, "approver");
-  /** A research run's state: done once its answer is in, else running (the mock's runs do not fail). */
+  const canResearch = (d: DiscussionRow) => d.status === "open" && canWrite(d) && atLeast(me.role, "approver");
+  /** A research run's state: done once its answer is in, failed when it could not start (with why), else running. */
   const researchOf = (x: MessageRow): Schemas["MessageResearch"] | null =>
-    x.run_id ? { run_id: x.run_id, status: db.messages.some((y) => y.run_id === x.run_id && y.author_kind === "oracle") ? "done" : "running" } : null;
+    x.run_id
+      ? x.research_error
+        ? { run_id: x.run_id, status: "failed", error: x.research_error }
+        : { run_id: x.run_id, status: db.messages.some((y) => y.run_id === x.run_id && y.author_kind === "oracle") ? "done" : "running", error: null }
+      : null;
   const messageOut = (x: MessageRow): Schemas["DiscussionMessageOut"] => ({
     id: x.id,
     discussion_id: x.discussion_id,
@@ -1168,6 +1186,8 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
     if (asked.author_kind !== "person") return refuse(422, "Only a person's message can be researched");
     const lines = db.messages.filter((x) => x.reply_to === asked.id && x.author_kind === "system" && x.run_id);
     if (lines.some((x) => researchOf(x)?.status === "running")) return refuse(409, "Oracle is already researching this");
+    // The runs refuse the first start in the "research-refused" scenario: the line says why, and the next ask starts.
+    const refusal = lines.some((x) => x.research_error) ? null : (ctx.researchRefusal?.() ?? null);
     const line = push(d, {
       author_kind: "system",
       author_id: null,
@@ -1177,6 +1197,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
       reply_to: asked.id,
       run_id: ctx.uuid(),
       research_reads: 0,
+      ...(refusal ? { research_error: refusal } : {}),
     });
     return json(201, messageOut(line));
   }
@@ -1194,7 +1215,7 @@ export async function routeDiscussions(ctx: DiscussionsContext, req: Request, p:
           mentions_oracle: false,
           reply_to: x.reply_to,
           status: "complete",
-          citations: CANNED_CITATIONS,
+          citations: RESEARCH_CITATIONS,
           run_id: x.run_id,
         });
       }
