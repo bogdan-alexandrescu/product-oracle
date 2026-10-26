@@ -16,8 +16,11 @@ selectors, Hangul fillers), look-alike letters (Unicode's confusables, via
 :mod:`oracle.specs.confusables`) and dashes mapped to their Latin and ASCII forms; names
 then match casefolded. A public text holding an invisible character is refused when saved
 (:func:`format_characters`), so what an approver reads is what was checked; only the
-joiners, selectors and tags of an ordinary emoji sequence (a ZWJ emoji, a keycap, a
-subdivision flag) are kept, and the letters a flag's tags spell are checked too.
+joiners, selectors and tags of an ordinary emoji sequence (a ZWJ emoji, a keycap, the
+England, Scotland or Wales flag) are kept. Any other tag run is refused, and the check
+reads it as the ASCII it spells, in place, so a name split across two flags is found.
+Characters that render blank without being Default_Ignorable (a braille blank, the
+ideographic space) read as spaces.
 
 Every pattern reads untrusted text and stays linear (no nested quantifiers).
 """
@@ -76,6 +79,8 @@ _MONTH = re.compile(
 _ISO_DATE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b")
 _WORD = re.compile(r"\w+")
 
+# Not Default_Ignorable, yet drawn as a blank: they read as a space.
+_BLANKS = "\u2800\u3000\U0001d159"
 # Dashes and minus signs that read as "-" (NFKC keeps them apart).
 _DASHES = "\u2010\u2011\u2012\u2013\u2014\u2015\u2212\u2043\ufe58\ufe63\uff0d"
 
@@ -96,7 +101,14 @@ _LOOK_ALIKE = {
     for cp, prototype in CONFUSABLES.items()
     if prototype.isalpha()
 }
-_FOLD = str.maketrans({**dict.fromkeys(map(ord, _DASHES), "-"), **_LOOK_ALIKE, ord("κ"): "k"})
+_FOLD = str.maketrans(
+    {
+        **dict.fromkeys(map(ord, _DASHES), "-"),
+        **_LOOK_ALIKE,
+        ord("κ"): "k",
+        **dict.fromkeys(map(ord, _BLANKS), " "),
+    }
+)
 # Default_Ignorable_Code_Point (DerivedCoreProperties.txt): what renders as nothing,
 # whatever its category (Cf, but also the marks U+034F, U+17B4/5 and the variation
 # selectors, and the Hangul fillers, which are letters).
@@ -105,9 +117,19 @@ _IGNORABLE = re.compile(
     "\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufff8"
     "\U0001bca0-\U0001bca3\U0001d173-\U0001d17a\U000e0000-\U000e0fff]"
 )
-# A subdivision flag: the black flag, two to six tag letters or digits, the cancel tag.
-_FLAG_TAGS = re.compile("\U0001f3f4([\U000e0030-\U000e0039\U000e0061-\U000e007a]{2,6}\U000e007f)")
-_TAG_RUN = re.compile("[\U000e0020-\U000e007e]+")
+
+
+def _tags(text: str) -> str:
+    return "".join(chr(0xE0000 + ord(c)) for c in text)
+
+
+# The three subdivision flags Unicode recommends (England, Scotland, Wales): the black
+# flag, their tag letters, the cancel tag. Any other tag run could spell hidden text.
+_FLAG_TAGS = re.compile(
+    "\U0001f3f4(" + "|".join(_tags(f) for f in ("gbeng", "gbsct", "gbwls")) + ")(\U000e007f)"
+)
+# Any other run of tags, with the black flag before it and the cancel tag after it.
+_TAG_RUN = re.compile("\U0001f3f4?([\U000e0020-\U000e007e]+)\U000e007f?|\U000e007f")
 _KEYCAP = "\u20e3"
 # Words in a company's name that do not tell it apart ("Northwind Traders" is named by
 # "Northwind" alone; "Traders" is anyone's).
@@ -167,7 +189,7 @@ def _emoji_parts(text: str) -> set[int]:
     subdivision flag's tags. None of them can split a word."""
     keep: set[int] = set()
     for m in _FLAG_TAGS.finditer(text):
-        keep.update(range(m.start(1), m.end(1)))
+        keep.update(range(m.start(1), m.end(2)))
     for i, char in enumerate(text):
         if char not in "\u200d\ufe0e\ufe0f":
             continue
@@ -191,14 +213,16 @@ def _hidden(text: str) -> list[int]:
 
 
 def _tag_letters(m: re.Match[str]) -> str:
-    return " " + "".join(chr(ord(c) - 0xE0000) for c in m.group(0)) + " "
+    return "".join(chr(ord(c) - 0xE0000) for c in m.group(1) or "")
 
 
 def normalize(text: str) -> str:
-    """``text`` as a reader sees it: NFKC, no invisible characters, look-alike letters and
-    dashes mapped. Tag characters are read as the ASCII they spell, so a name hidden in
-    a flag is found. Case is kept (tracker keys and "May" read it)."""
-    text = _strip_invisible(_TAG_RUN.sub(_tag_letters, text or ""))
+    """``text`` as a reader sees it: NFKC, no invisible characters, look-alike letters,
+    dashes and blanks mapped. A real flag reads as a space; any other tag run is read as
+    the ASCII it spells, in place and without its flag, as a decoder would, so a name or
+    number split across two flags is found. Case is kept (tracker keys and "May" read it)."""
+    text = _FLAG_TAGS.sub(" ", text or "")
+    text = _strip_invisible(_TAG_RUN.sub(_tag_letters, text))
     text = _strip_invisible(unicodedata.normalize("NFKC", text))
     return text.translate(_FOLD)
 

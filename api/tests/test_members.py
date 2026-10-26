@@ -253,6 +253,8 @@ MATRIX: list[tuple[str, str, str, dict]] = [
     ("POST", V2 + "/approve", "approver", {}),
     ("GET", V + "/export", "viewer", {"params": {"format": "md"}}),
     ("GET", V + "/deck", "viewer", {}),
+    # O5: the audience registry (what each audience hides); any member reads it.
+    ("GET", "/v1/roadmap-audiences", "viewer", {}),
     ("GET", "/v1/members", "owner", {}),
     ("PATCH", "/v1/members/{user_id}", "owner", {"json": {"role": "commenter"}}),
     ("DELETE", "/v1/members/{user_id}", "owner", {}),
