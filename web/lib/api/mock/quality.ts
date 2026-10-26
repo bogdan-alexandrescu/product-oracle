@@ -145,6 +145,25 @@ function outcomeRow(over: Partial<Outcome> & Pick<Outcome, "title" | "goal_id" |
   };
 }
 
+/** H1: the outcome record deciding a decision with a prediction makes (tracking), as the API's. */
+export function addDecisionOutcome(
+  db: QualityDb,
+  d: { title: string; goal_id: string; prediction: Record<string, unknown>; evidence_ids: string[]; owner_id: string },
+  me: string,
+): string {
+  const at = new Date().toISOString();
+  const row = outcomeRow(
+    {
+      title: d.title, goal_id: d.goal_id, status: "tracking", prediction: d.prediction as Prediction,
+      confidence_at_prediction: null, created_at: at, updated_at: at,
+    },
+    d.owner_id,
+  );
+  row.created_by = me;
+  db.outcomes.push(row);
+  return row.id;
+}
+
 /**
  * The "outcomes" scenario (synthetic): Saved payment methods is due for its check (38% → 42%,
  * now 41%), Guided setup checklist needs a prediction, Order status emails is measuring, and

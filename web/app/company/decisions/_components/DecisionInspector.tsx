@@ -11,11 +11,13 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import {
   ORIGIN_LABEL,
+  OUTCOME_KIND,
+  OUTCOME_LABEL,
   REVERSIBILITY_LABEL,
   STATE_KIND,
   STATE_LABEL,
-  SUBJECT_LABEL,
   VERDICT_LABEL,
+  entityTypeLabel,
   isCheckpoint,
   isoDay,
   shortDate,
@@ -23,6 +25,7 @@ import {
   type DecisionOption,
   type Person,
 } from "./lib";
+import { LinksPicker, linksOf, subjectLabel, type Links } from "./LinksPicker";
 import { OptionsEditor, People, optionsOf, type Draft } from "./ProposeDialog";
 
 type Done = (updated?: Decision) => Promise<void> | void;
@@ -164,7 +167,7 @@ export function DecisionInspector({
               </p>
             </InspectorSection>
           )}
-          {(d.expected_outcome || d.prediction) && (
+          {(d.expected_outcome || d.prediction || d.outcome_status) && (
             <InspectorSection label="Expected">
               {d.expected_outcome && <p className="text-[15px]">{d.expected_outcome}</p>}
               {d.prediction && (
@@ -172,6 +175,51 @@ export function DecisionInspector({
                   {String(d.prediction.metric ?? "")}: {String(d.prediction.baseline ?? "?")} → {String(d.prediction.predicted ?? "?")}
                   {d.prediction.by ? ` by ${shortDate(String(d.prediction.by))}` : ""}
                 </p>
+              )}
+              {d.outcome_status && d.outcome_id && (
+                <p data-testid="decision-outcome" className="mt-1.5 flex flex-wrap items-center gap-2 text-sm">
+                  <span className="font-semibold text-text2">Outcome</span>
+                  {d.outcome_check_due ? <Chip kind="warn">Check due</Chip> : <Chip kind={OUTCOME_KIND[d.outcome_status]}>{OUTCOME_LABEL[d.outcome_status]}</Chip>}
+                  <Link href={`/plan/outcomes?outcome=${encodeURIComponent(d.outcome_id)}`} className="font-medium text-accent-ink hover:underline">
+                    Open in Outcomes
+                  </Link>
+                </p>
+              )}
+            </InspectorSection>
+          )}
+          {(d.entities.length > 0 || d.evidence.length > 0) && (
+            <InspectorSection label="Rests on" testId="decision-rests-on">
+              {d.entities.length > 0 && (
+                <ul className="flex flex-col gap-1 text-sm">
+                  {d.entities.map((e) => (
+                    <li key={e.id}>
+                      <Link href={`/baseline?entity=${encodeURIComponent(e.id)}`} className="font-medium text-accent-ink hover:underline">
+                        {e.title}
+                      </Link>
+                      <span className="text-text2"> · {entityTypeLabel(e.type)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {d.evidence.length > 0 && (
+                <ul className={`flex flex-col gap-1.5 text-sm ${d.entities.length > 0 ? "mt-2" : ""}`}>
+                  {d.evidence.map((e) => (
+                    <li key={e.id} data-testid="decision-evidence" className="border-l-2 border-line pl-2">
+                      {e.excerpt ? <q>{e.excerpt}</q> : null}
+                      {(e.ref || e.url) && (
+                        <span className="block text-text2">
+                          {e.url ? (
+                            <a href={e.url} target="_blank" rel="noreferrer" className="hover:underline">
+                              {e.ref ?? e.url}
+                            </a>
+                          ) : (
+                            e.ref
+                          )}
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </InspectorSection>
           )}
@@ -231,9 +279,9 @@ function reviewFile(d: Decision): string | null {
 
 function SubjectLink({ subject: s }: { subject: Decision["subjects"][number] }) {
   const kind = String(s.kind);
-  const label = `${SUBJECT_LABEL[kind] ?? kind} ${String(s.ref ?? "")}`.trim();
+  const label = subjectLabel({ kind, ref: s.ref == null ? null : String(s.ref) });
   const href =
-    kind === "run" ? `/runs/${String(s.id)}` : kind === "document" && s.ref ? `/documents/${String(s.ref)}` : kind === "document_version" && s.ref ? versionHref(String(s.ref)) : null;
+    kind === "run" ? `/runs/${String(s.id)}` : kind === "entity" ? `/baseline?entity=${encodeURIComponent(String(s.id))}` : kind === "document" && s.ref ? `/documents/${String(s.ref)}` : kind === "document_version" && s.ref ? versionHref(String(s.ref)) : null;
   return href ? (
     <Link href={href} className="font-medium text-accent-ink hover:underline">
       {label}
@@ -448,6 +496,7 @@ function EditForm({ d, people, onDone, onCancel }: { d: Decision; people: Person
   const [reversibility, setReversibility] = useState(d.reversibility);
   const [contributors, setContributors] = useState<string[]>(d.contributor_ids);
   const [informed, setInformed] = useState<string[]>(d.informed_ids);
+  const [links, setLinks] = useState<Links>(linksOf(d));
   const [review, setReview] = useState(d.review_at ?? "");
   const [expected, setExpected] = useState(d.expected_outcome ?? "");
   const [goal, setGoal] = useState(text(p.goal_id));
@@ -481,6 +530,9 @@ function EditForm({ d, people, onDone, onCancel }: { d: Decision; people: Person
                 reversibility,
                 contributor_ids: contributors,
                 informed_ids: informed,
+                entity_ids: links.entity_ids,
+                evidence_ids: links.evidence_ids,
+                subjects: links.subjects,
                 review_at: review || null,
                 expected_outcome: expected.trim() || null,
                 prediction: goal
@@ -510,6 +562,7 @@ function EditForm({ d, people, onDone, onCancel }: { d: Decision; people: Person
       </Field>
       <People label="Contributors" people={people} chosen={contributors} onToggle={(id) => setContributors((c) => toggle(c, id))} />
       <People label="Informed" people={people} chosen={informed} onToggle={(id) => setInformed((c) => toggle(c, id))} />
+      <LinksPicker value={links} onChange={setLinks} known={d} />
       <Field label="Review date">
         <input type="date" className={INPUT} value={review} min={isoDay(0)} max={isoDay(365)} onChange={(e) => setReview(e.target.value)} />
       </Field>

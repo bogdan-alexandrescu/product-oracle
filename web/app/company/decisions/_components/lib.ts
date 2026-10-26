@@ -95,6 +95,28 @@ export const SUBJECT_LABEL: Record<string, string> = {
   discussion: "Discussion",
 };
 
+/** A baseline item's type in words: "acceptance_criterion" reads "Acceptance criterion". */
+export const entityTypeLabel = (type: string) => type.charAt(0).toUpperCase() + type.slice(1).replace(/_/g, " ");
+
+/** H3's outcome status in the Outcomes tab's words. */
+export const OUTCOME_LABEL: Record<NonNullable<Decision["outcome_status"]>, string> = {
+  predicted: "Predicted",
+  tracking: "Measuring",
+  held: "Held",
+  partially_held: "Partly held",
+  not_held: "Not held",
+  inconclusive: "Inconclusive",
+};
+
+export const OUTCOME_KIND: Record<NonNullable<Decision["outcome_status"]>, ChipKind> = {
+  predicted: "na",
+  tracking: "acc",
+  held: "pass",
+  partially_held: "acc",
+  not_held: "crit",
+  inconclusive: "line",
+};
+
 /** YYYY-MM-DD, `days` from today (local). */
 export function isoDay(days = 0): string {
   const d = new Date();

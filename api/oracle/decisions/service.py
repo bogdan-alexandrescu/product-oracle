@@ -29,6 +29,8 @@ from oracle.decisions.models import CAPTURED_ORIGINS, Decision, DecisionReview
 from oracle.decisions.schemas import (
     DecideIn,
     DecisionCreate,
+    DecisionEntityRef,
+    DecisionEvidenceRef,
     DecisionOut,
     DecisionPatch,
     DecisionReviewOut,
@@ -209,12 +211,12 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         driver=d.driver,
         contributor_ids=list(d.contributor_ids or []),
         informed_ids=list(d.informed_ids or []),
-        evidence_ids=list(d.evidence_ids or []),
-        entity_ids=list(d.entity_ids or []),
         subjects=list(d.subjects or []),
         expected_outcome=d.expected_outcome,
         prediction=d.prediction,
         outcome_id=d.outcome_id,
+        **await _outcome(db, d),
+        **await _linked(db, d),
         supersedes_id=d.supersedes_id,
         revisit_id=revisit.id if revisit and d.status == "decided" else None,
         superseded_by_id=revisit.id if revisit and d.status == "superseded" else None,
@@ -235,6 +237,42 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         ],
         **can,
     )
+
+
+async def _linked(db: AsyncSession, d: Decision) -> dict[str, Any]:
+    """entity_ids and evidence_ids as the reader reads them, in the order picked. A row gone
+    since, or one the reader's session hides (a hidden decision's baseline entity and its
+    evidence, oracle.docs.visibility), is left out, its id too; it stays on the decision
+    (:func:`_keep_unseen`)."""
+    entities: list[DecisionEntityRef] = []
+    evidence: list[DecisionEvidenceRef] = []
+    if d.entity_ids:
+        found = {
+            e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(d.entity_ids)))
+        }
+        entities = [
+            DecisionEntityRef(id=e.id, type=e.type, key=e.key, title=e.title, status=e.status)
+            for e in (found.get(i) for i in d.entity_ids)
+            if e is not None
+        ]
+    if d.evidence_ids:
+        rows = {
+            e.id: e
+            for e in await db.scalars(select(Evidence).where(Evidence.id.in_(d.evidence_ids)))
+        }
+        evidence = [
+            DecisionEvidenceRef(
+                id=e.id, entity_id=e.entity_id, excerpt=e.excerpt, url=e.url, ref=e.ref
+            )
+            for e in (rows.get(i) for i in d.evidence_ids)
+            if e is not None
+        ]
+    return {
+        "entities": entities,
+        "evidence": evidence,
+        "entity_ids": [e.id for e in entities],
+        "evidence_ids": [e.id for e in evidence],
+    }
 
 
 async def _withdrawn(db: AsyncSession, d: Decision) -> dict[str, Any]:
@@ -401,6 +439,24 @@ async def _check_ids(db: AsyncSession, model: Any, ids: list[uuid.UUID], what: s
     return ids
 
 
+async def _keep_unseen(
+    db: AsyncSession, model: Any, ids: list[uuid.UUID], stored: list[uuid.UUID], what: str
+) -> list:
+    """An edit's new list: ``ids`` as sent, then the stored ids the editor's session does not
+    resolve (a row gone since, or one hidden from them), which the editor neither read nor
+    could remove; an id sent that is already stored is not checked again."""
+    ids = list(dict.fromkeys(ids))
+    found = (
+        set(await db.scalars(select(model.id).where(model.id.in_([*ids, *stored]))))
+        if ids or stored
+        else set()
+    )
+    missing = [str(i) for i in ids if i not in found and i not in stored]
+    if missing:
+        raise DecisionError(422, f"unknown {what}: {', '.join(missing)}")
+    return ids + [i for i in stored if i not in found and i not in ids]
+
+
 def _options(options: list[Any]) -> list[dict[str, Any]]:
     return [o.model_dump(mode="json") for o in options]
 
@@ -555,9 +611,13 @@ async def update(
     if "informed_ids" in fields and body.informed_ids is not None:
         d.informed_ids = await _check_members(db, body.informed_ids, "informed_ids")
     if "evidence_ids" in fields and body.evidence_ids is not None:
-        d.evidence_ids = await _check_ids(db, Evidence, body.evidence_ids, "evidence_ids")
+        d.evidence_ids = await _keep_unseen(
+            db, Evidence, body.evidence_ids, list(d.evidence_ids or []), "evidence_ids"
+        )
     if "entity_ids" in fields and body.entity_ids is not None:
-        d.entity_ids = await _check_ids(db, Entity, body.entity_ids, "entity_ids")
+        d.entity_ids = await _keep_unseen(
+            db, Entity, body.entity_ids, list(d.entity_ids or []), "entity_ids"
+        )
     if "subjects" in fields and body.subjects is not None:
         d.subjects = _subjects(body.subjects)
     if "expected_outcome" in fields:
@@ -811,6 +871,26 @@ async def _outcome_status(db: AsyncSession, d: Decision) -> str | None:
     if d.outcome_id is None:
         return None
     return await db.scalar(select(OutcomeRecord.status).where(OutcomeRecord.id == d.outcome_id))
+
+
+async def _outcome(db: AsyncSession, d: Decision) -> dict[str, Any]:
+    """The outcome record's status, and whether its check is due (a tracking record with a
+    proposed assessment: the Outcomes tab's "Check due")."""
+    row = (
+        None
+        if d.outcome_id is None
+        else (
+            await db.execute(
+                select(OutcomeRecord.status, OutcomeRecord.proposed_assessment).where(
+                    OutcomeRecord.id == d.outcome_id
+                )
+            )
+        ).first()
+    )
+    if row is None:
+        return {"outcome_status": None, "outcome_check_due": False}
+    status, proposed = row
+    return {"outcome_status": status, "outcome_check_due": status == "tracking" and bool(proposed)}
 
 
 async def queue_options_job(db: AsyncSession, principal: Principal, d: Decision) -> LlmJob:

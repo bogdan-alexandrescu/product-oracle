@@ -350,6 +350,86 @@ async def test_edit_keeps_a_proposals_review_date_and_prediction(client, ctx):
     assert len(records) == 1 and records[0].goal_id == goal
 
 
+async def test_inspector_reads_the_outcome_status_as_it_moves(client, ctx):
+    """protects=a decided decision reads back its outcome record's current status (H3), and
+    a status the outcome moves to later is the one read; a decision without a prediction
+    reads none; fails_when=outcome_status is missing, stays at the status it had when
+    decided, or is set without an outcome record; no_claim=H3's own assessment flow."""
+    goal = await make_entity(ctx, "goal", "fewer-spend-incidents")
+    plain = await propose(client, ctx)
+    assert (await decide(client, ctx, plain["number"]))["outcome_status"] is None
+    d = await propose(client, ctx)
+    prediction = {
+        "goal_id": str(goal),
+        "metric": "spend incidents per month",
+        "baseline": "6",
+        "predicted": "2",
+        "threshold": "3",
+        "by": in_days(100),
+    }
+    out = await decide(client, ctx, d["number"], prediction=prediction)
+    assert out["outcome_status"] == "tracking"
+    async with tenant_session(ctx.tenant_id) as s:
+        record = await s.get(OutcomeRecord, uuid.UUID(out["outcome_id"]))
+        record.status = "partially_held"
+        await s.commit()
+    resp = await client.get(f"/v1/decisions/{d['number']}", headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["outcome_status"] == "partially_held"
+
+
+async def test_evidence_linked_items_and_subjects_read_back_by_name(client, ctx):
+    """protects=a proposal made with evidence, linked baseline items and subjects reads
+    them back with what a person reads (the item's type and title, the evidence's excerpt
+    and link, in the order picked), and an edit replaces all three; fails_when=only ids come
+    back, the order changes, an edit keeps the old ones, or an unknown id is stored;
+    no_claim=evidence from another company is covered by test_company_isolation's rule."""
+    risk = await make_entity(ctx, "risk", "partner-api-quota")
+    goal = await make_entity(ctx, "goal", "fewer-spend-incidents")
+    ev = await make_evidence(ctx, risk, excerpt="Requests above 100 a minute receive 429.")
+    d = await propose(
+        client,
+        ctx,
+        evidence_ids=[str(ev)],
+        entity_ids=[str(goal), str(risk)],
+        subjects=[{"kind": "entity", "id": str(risk), "ref": "Partner api quota"}],
+    )
+    assert [e["title"] for e in d["entities"]] == ["Fewer spend incidents", "Partner api quota"]
+    assert [e["type"] for e in d["entities"]] == ["goal", "risk"]
+    assert d["evidence"] == [
+        {
+            "id": str(ev),
+            "entity_id": str(risk),
+            "excerpt": "Requests above 100 a minute receive 429.",
+            "url": "https://docs.example.com/partner-api/limits",
+            "ref": None,
+        }
+    ]
+    assert d["subjects"] == [{"kind": "entity", "id": str(risk), "ref": "Partner api quota"}]
+
+    unknown = await client.patch(
+        f"/v1/decisions/{d['number']}",
+        json={"lock_version": d["lock_version"], "entity_ids": [str(uuid.uuid4())]},
+        headers=ctx.as_("commenter"),
+    )
+    assert unknown.status_code == 422
+    resp = await client.patch(
+        f"/v1/decisions/{d['number']}",
+        json={
+            "lock_version": d["lock_version"],
+            "evidence_ids": [],
+            "entity_ids": [str(risk)],
+            "subjects": [{"kind": "roadmap_item", "id": str(uuid.uuid4()), "ref": "usage-caps"}],
+        },
+        headers=ctx.as_("commenter"),
+    )
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    assert out["evidence"] == [] and out["evidence_ids"] == []
+    assert [e["id"] for e in out["entities"]] == [str(risk)]
+    assert [s["kind"] for s in out["subjects"]] == ["roadmap_item"]
+
+
 async def test_reassign_is_an_owners(client, ctx):
     """protects=only owners reassign the approver, to an active approver or above;
     fails_when=the approver or a commenter reassigns, or a commenter becomes approver;

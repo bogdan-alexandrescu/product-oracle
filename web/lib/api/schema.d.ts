@@ -16848,6 +16848,44 @@ export interface components {
              */
             subjects: components["schemas"]["Subject"][];
         };
+        /**
+         * DecisionEntityRef
+         * @description A linked baseline item, as a person reads it.
+         */
+        DecisionEntityRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * DecisionEvidenceRef
+         * @description Evidence it rests on: the excerpt and link anyone who reads the baseline sees.
+         */
+        DecisionEvidenceRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Ref */
+            ref?: string | null;
+        };
         /** DecisionIn */
         DecisionIn: {
             /**
@@ -16998,6 +17036,23 @@ export interface components {
             } | null;
             /** Outcome Id */
             outcome_id?: string | null;
+            /** Outcome Status */
+            outcome_status?: ("predicted" | "tracking" | "held" | "partially_held" | "not_held" | "inconclusive") | null;
+            /**
+             * Outcome Check Due
+             * @default false
+             */
+            outcome_check_due: boolean;
+            /**
+             * Entities
+             * @default []
+             */
+            entities: components["schemas"]["DecisionEntityRef"][];
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["DecisionEvidenceRef"][];
             /** Supersedes Id */
             supersedes_id?: string | null;
             /** Revisit Id */

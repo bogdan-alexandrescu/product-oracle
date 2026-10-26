@@ -55819,6 +55819,101 @@
         ],
         "title": "DecisionCreate"
       },
+      "DecisionEntityRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "key",
+          "title",
+          "status"
+        ],
+        "title": "DecisionEntityRef",
+        "description": "A linked baseline item, as a person reads it."
+      },
+      "DecisionEvidenceRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "DecisionEvidenceRef",
+        "description": "Evidence it rests on: the excerpt and link anyone who reads the baseline sees."
+      },
       "DecisionIn": {
         "properties": {
           "decision": {
@@ -56212,6 +56307,46 @@
               }
             ],
             "title": "Outcome Id"
+          },
+          "outcome_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "predicted",
+                  "tracking",
+                  "held",
+                  "partially_held",
+                  "not_held",
+                  "inconclusive"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Status"
+          },
+          "outcome_check_due": {
+            "type": "boolean",
+            "title": "Outcome Check Due",
+            "default": false
+          },
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionEntityRef"
+            },
+            "type": "array",
+            "title": "Entities",
+            "default": []
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionEvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "default": []
           },
           "supersedes_id": {
             "anyOf": [
