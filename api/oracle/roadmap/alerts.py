@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.docs import visibility
 from oracle.docs.models import Document
 from oracle.members.leads import date_rights, engineering_leads
 from oracle.roadmap import schedule, staleness, tracker, tracks
@@ -343,6 +344,8 @@ class Lookups:
     titles: dict[tuple[uuid.UUID, str], str]
     names: dict[uuid.UUID, str]
     leads: frozenset[uuid.UUID]
+    # What the reader may not see (visibility.hidden_for_reader); None: everything.
+    hidden: Any = None
 
 
 async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
@@ -375,7 +378,8 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
         u.id: u.email
         for u in (await db.scalars(select(User).where(User.id.in_(kept_by))) if kept_by else [])
     }
-    return Lookups(track_rows, prds, titles, names, await engineering_leads(db))
+    return Lookups(track_rows, prds, titles, names, await engineering_leads(db),
+                   await visibility.hidden_for_reader(db))  # fmt: skip
 
 
 def out(
@@ -390,7 +394,7 @@ def out(
         item_key=a.item_key or None,
         item_title=lk.titles.get((a.track_id, a.item_key)) if a.item_key else None,
         kind=a.kind,  # type: ignore[arg-type]
-        detail=a.detail,
+        detail=staleness.detail_for_reader(a.detail, lk.hidden) if a.kind == "stale" else a.detail,
         data=a.data or {},
         state=a.state,  # type: ignore[arg-type]
         inbox_state=inbox_state,  # type: ignore[arg-type]
