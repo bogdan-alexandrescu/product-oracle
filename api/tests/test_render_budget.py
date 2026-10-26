@@ -876,12 +876,34 @@ async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeyp
 async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, monkeypatch):
     held = Held(monkeypatch)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
+    # The last two exports read their rows slowly, as on a busy machine: counted in
+    # flight (admitted) while still reading, they hold a connection until they queue.
+    real_load, loads = export_router.load_export_version, []
+
+    async def load(db, slug, n):
+        loads.append(1)
+        slow = len(loads) > 4
+        ev = await real_load(db, slug, n)
+        if slow:
+            await asyncio.sleep(0.5)
+        return ev
+
+    monkeypatch.setattr(export_router, "load_export_version", load)
+    # An export reaches the pool (offload.run) only after it ends its transaction.
+    real_run, handed = offload.run, []
+
+    async def run(held_place, fn, /, *args):
+        handed.append(1)
+        return await real_run(held_place, fn, *args)
+
+    monkeypatch.setattr(offload, "run", run)
     reader = await _token(a, "viewer")
     tasks = []
     try:
         tasks += await _fill(client, a, b, c)  # four rendering, two queued
         await until(lambda: held.started == 4)
-        await asyncio.sleep(0.1)
+        await until(lambda: len(handed) == 6)  # the last two wait for a worker
+        assert held.started == 4
         assert get_engine().pool.checkedout() == 0
         other = await client.get("/v1/documents/checkout/versions/1", headers=reader)
         assert other.status_code == 200, other.text

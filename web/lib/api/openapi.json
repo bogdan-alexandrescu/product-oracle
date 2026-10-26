@@ -40021,7 +40021,7 @@
           "metrics"
         ],
         "summary": "Test Metric Query",
-        "description": "Run a PostHog query for the last 4 complete weeks; nothing is stored. The\nprovider's error, when it refuses, is in ``error``.",
+        "description": "Run a PostHog query for the last 4 complete weeks; nothing is stored. 422 when\nthe query is not one read-only SELECT over the allowed tables; a failure is a fixed\nsentence in ``error`` (PostHog's own text is in the server log).",
         "operationId": "test_metric_query",
         "requestBody": {
           "content": {
@@ -40322,7 +40322,7 @@
           "metrics"
         ],
         "summary": "Pull Metric",
-        "description": "Pull now: read the last complete week from PostHog again and replace its value\n(409 unless the metric's source is PostHog; 502 with the provider's message).",
+        "description": "Pull now: read the last complete week from PostHog again and replace its value\n(409 unless the metric's source is PostHog; 502 with a fixed message, PostHog's\nown text in the server log).",
         "operationId": "pull_metric",
         "security": [
           {
@@ -40915,6 +40915,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -40970,6 +40973,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "viewer"
@@ -41032,6 +41038,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41087,6 +41096,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41141,6 +41153,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41206,6 +41221,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41270,6 +41288,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41316,6 +41337,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41327,7 +41351,7 @@
           "market"
         ],
         "summary": "Check Competitor Page",
-        "description": "Check now: read the page at once (409 when its robots.txt disallows it).",
+        "description": "Check now: read the page at once (409 when its robots.txt disallows it; 429, with\nwhen in words and a Retry-After, past once per page per 10 minutes or 20 per company\nan hour).",
         "operationId": "check_competitor_page",
         "security": [
           {
@@ -41371,6 +41395,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41565,6 +41592,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "viewer"
@@ -41743,6 +41773,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41807,6 +41840,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41880,6 +41916,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "security": [
@@ -41942,6 +41981,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41996,6 +42038,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"

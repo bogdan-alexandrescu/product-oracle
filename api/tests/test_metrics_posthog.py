@@ -162,7 +162,8 @@ async def test_pull_failure_and_test_query(client, ctx, clock, fake_posthog):
     fake_posthog.status = 500
     resp = await client.post(f"/v1/metrics/{metric['id']}/pull", headers=ctx.as_("approver"))
     assert resp.status_code == 502
-    assert "Query failed upstream" in resp.text and KEY not in resp.text
+    assert resp.json()["detail"] == posthog.QUERY_FAILED and KEY not in resp.text
+    assert "Query failed upstream" not in resp.text
     fake_posthog.status = 200
     fake_posthog.values = {w: 7 for w in weeks_back(4)}
     before = len(fake_posthog.requests)
