@@ -31,6 +31,9 @@ export interface LlmDb {
   next_draft_changes?: NextDraftChangeRow[];
   /** Job kinds an owner turned off, per document id. */
   disabled: Record<string, Job["kind"][]>;
+  /** Whether each accepted suggestion's Accept closed its item (the API's accept audit,
+   * ``closed_item``): Undo re-opens only an item Accept closed. Absent: it did. */
+  accept_closed?: Record<string, boolean>;
 }
 
 export type LlmContext = {
@@ -43,6 +46,8 @@ export type LlmContext = {
   uuid: () => string;
   now: () => string;
   lockedKeys: (v: Version) => string[];
+  /** Whether a feedback-loop run still going was sent this suggestion (Build next draft, D12). */
+  sentToAgents?: (suggestionId: string) => boolean;
   reply: (feedbackId: string, body: string) => void;
   /** Imports a revised section as the next version and applies the resolutions. */
   importRevision: (
@@ -653,6 +658,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
         updated_at: ctx.now(),
       });
       const final = s.edited_text ?? s.text;
+      db.accept_closed = { ...db.accept_closed, [s.id]: item?.status === "open" };
       if (item && item.status === "open") {
         if (s.kind === "answer" && final) {
           ctx.reply(item.id, final);
@@ -663,6 +669,37 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
           Object.assign(item, { status: "superseded", resolution_note: `Duplicate of feedback item ${s.duplicate_of}`, updated_at: ctx.now() });
         }
       }
+      return json(200, s);
+    }
+    // D14: Undo Accept, as jobs.service.undo_accept: back to open, or refused with the reason.
+    if (p[3] === "undo-accept" && m === "POST") {
+      if (s.status === "applied") return fail(409, `draft ${s.applied_in_version} already applied it; it stays`);
+      if (s.status !== "accepted") return fail(409, `an ${s.status} suggestion has no accept to undo`);
+      if (s.kind === "answer") return fail(409, "the answer is posted on the comment thread: reply there to correct it");
+      if (s.kind === "section_text") {
+        // A section refinement has no discard: it holds the change only while it can still be
+        // applied (on the latest version, and its section's newest refinement).
+        type Out = { applied_version?: number; discarded_at?: string; base_version?: number } | null;
+        const newest = new Set<string>();
+        const jobs = db.jobs
+          .filter((j) => j.document_id === s.document_id && (j.kind === "refinement" || j.kind === "refinement_batch") && ["queued", "running", "succeeded"].includes(j.status))
+          .sort((a, b) => b.created_at.localeCompare(a.created_at));
+        for (const j of jobs) {
+          const out = j.output as Out;
+          const replaced = j.kind === "refinement" && newest.has(j.section_key ?? "");
+          if (j.kind === "refinement") newest.add(j.section_key ?? "");
+          if (out?.applied_version || out?.discarded_at || replaced) continue;
+          if (j.kind === "refinement" && out?.base_version != null && out.base_version !== latest) continue;
+          if (!((j.input as { suggestion_ids?: string[] } | null)?.suggestion_ids ?? []).includes(s.id)) continue;
+          return fail(409, j.kind === "refinement" ? "a refinement of its section uses it: apply it or refine the section again" : "the next draft being built uses it: discard that build first");
+        }
+        if (ctx.sentToAgents?.(s.id)) return fail(409, "the agents' next draft uses it: cancel that run first");
+      } else if (item && (db.accept_closed?.[s.id] ?? true)) {
+        const closed = s.kind === "none" ? "addressed" : "superseded";
+        if (item.status !== closed) return fail(409, `the item is ${item.status} since; open it to change it`);
+        Object.assign(item, { status: "open", resolution_note: null, addressed_in_version: null, updated_at: ctx.now() });
+      }
+      Object.assign(s, { status: "open", decided_by: null, decided_at: null, override_reason: null, edited_text: null, updated_at: ctx.now() });
       return json(200, s);
     }
     if (p[3] === "dismiss" && m === "POST") {
