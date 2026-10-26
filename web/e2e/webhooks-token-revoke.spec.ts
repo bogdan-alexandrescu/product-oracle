@@ -12,8 +12,16 @@ import { login } from "./helpers";
 const scenario = (page: Page, name: string) => page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, name]);
 
 async function openSettings(page: Page, tab: "nav-webhooks" | "nav-api-tokens") {
-  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
-  await page.getByRole("navigation", { name: "Settings" }).getByTestId(tab).click();
+  const settings = page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings");
+  const href = (await settings.getAttribute("href"))!;
+  await settings.click();
+  // Next keeps the page left behind in the DOM, hidden (as fireflies-endpoint.spec.ts): the
+  // Settings strip is read only once the page the link opens shows.
+  await page.waitForURL((u) => (href === "/settings" ? u.pathname.startsWith("/settings/") : u.pathname === href));
+  const link = page.getByRole("navigation", { name: "Settings" }).getByTestId(tab);
+  const target = (await link.getAttribute("href"))!;
+  await link.click();
+  await page.waitForURL((u) => u.pathname === target);
 }
 
 test("webhooks: revoking the API token that made a webhook pauses it, says why, and asks every owner in the Inbox", async ({ page }) => {
