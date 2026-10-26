@@ -11564,6 +11564,254 @@
         "x-min-role": "owner"
       }
     },
+    "/v1/branding": {
+      "get": {
+        "tags": [
+          "branding"
+        ],
+        "summary": "Get Branding",
+        "description": "The company's branding (every member reads it; ``can_edit`` for owners). A run's\nown token is refused: a run's agents never need it.",
+        "operationId": "get_branding",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      },
+      "put": {
+        "tags": [
+          "branding"
+        ],
+        "summary": "Put Branding",
+        "description": "Display name, accent (contrast-checked), public disclaimer and Oracle's mark on\nshared pages (owners).",
+        "operationId": "put_branding",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BrandingIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an owner, or a run"
+          },
+          "422": {
+            "description": "Invalid"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "owner"
+      }
+    },
+    "/v1/branding/logo": {
+      "post": {
+        "tags": [
+          "branding"
+        ],
+        "summary": "Upload Brand Logo",
+        "description": "Store a logo (PNG, JPEG or WebP; re-encoded to PNG) as the light or dark variant.",
+        "operationId": "upload_brand_logo",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "variant",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "light",
+                "dark"
+              ],
+              "type": "string",
+              "default": "light",
+              "title": "Variant"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_brand_logo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an owner, or a run"
+          },
+          "422": {
+            "description": "Not a PNG, JPEG or WebP, over 512 KB or over 2,000 px"
+          }
+        },
+        "x-min-role": "owner"
+      },
+      "delete": {
+        "tags": [
+          "branding"
+        ],
+        "summary": "Delete Brand Logo",
+        "description": "Remove the light or dark logo (owners).",
+        "operationId": "delete_brand_logo",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "variant",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "light",
+                "dark"
+              ],
+              "type": "string",
+              "default": "light",
+              "title": "Variant"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrandingOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an owner, or a run"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
+    "/uploads/brand/{name}": {
+      "get": {
+        "tags": [
+          "branding"
+        ],
+        "summary": "Get Brand Logo",
+        "description": "A stored logo, to members of its company only, as a PNG that runs nothing.",
+        "operationId": "get_brand_logo",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Name"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "image/png": {}
+            }
+          },
+          "404": {
+            "description": "No such logo"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/setup": {
       "get": {
         "tags": [
@@ -49233,6 +49481,20 @@
         "type": "object",
         "title": "Body_oauth_token"
       },
+      "Body_upload_brand_logo": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_brand_logo"
+      },
       "Body_upload_files": {
         "properties": {
           "files": {
@@ -49250,6 +49512,152 @@
           "files"
         ],
         "title": "Body_upload_files"
+      },
+      "BrandLogo": {
+        "properties": {
+          "sha256": {
+            "type": "string",
+            "title": "Sha256"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "width": {
+            "type": "integer",
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "title": "Height"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "sha256",
+          "type",
+          "width",
+          "height",
+          "url"
+        ],
+        "title": "BrandLogo"
+      },
+      "BrandingIn": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "accent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accent"
+          },
+          "public_disclaimer": {
+            "type": "string",
+            "title": "Public Disclaimer"
+          },
+          "oracle_mark": {
+            "type": "boolean",
+            "title": "Oracle Mark",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "public_disclaimer"
+        ],
+        "title": "BrandingIn"
+      },
+      "BrandingOut": {
+        "properties": {
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "logo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BrandLogo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "logo_dark": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BrandLogo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "accent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accent"
+          },
+          "public_disclaimer": {
+            "type": "string",
+            "title": "Public Disclaimer"
+          },
+          "oracle_mark": {
+            "type": "boolean",
+            "title": "Oracle Mark"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "logo",
+          "logo_dark",
+          "accent",
+          "public_disclaimer",
+          "oracle_mark",
+          "revision",
+          "can_edit"
+        ],
+        "title": "BrandingOut"
       },
       "CalibrationFigures": {
         "properties": {

@@ -24,6 +24,9 @@
 <style>
 {{ theme_css }}
 </style>
+<style>
+{{ brand_css }}
+</style>
 </head>
 <body class="{{ body_class }}">
 {% if running_header %}
@@ -35,6 +38,7 @@
 </div>
 {% endif %}
 <header class="doc-header status-{{ status }}{% if running_header %} doc-header--running{% endif %}" role="note" aria-label="Version">
+  {{ brand_header }}
   <div class="header-line">
     {% if header_title and header_title != title -%}
     <span class="banner-doc banner-full">{{ title }}</span><span class="banner-doc banner-short">{{ header_title }}</span>

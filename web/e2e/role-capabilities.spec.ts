@@ -24,9 +24,10 @@ const ALL = [
   "nav-autonomy",
   "nav-trash",
 ];
-// Company, API tokens, Notifications and Trash read owner-only routes; Members reads the people list
-// (A5: everyone sees who is in the company, read-only below owner).
-const EVERYONE = ["nav-members", "nav-connections", "nav-claude-accounts", "nav-sources", "nav-templates", "nav-themes", "nav-autonomy"];
+// API tokens, Notifications and Trash read owner-only routes; Members reads the people list
+// (A5: everyone sees who is in the company, read-only below owner); Company reads the branding
+// (O5 lane 4: everyone reads it, owners change it and the other company settings).
+const EVERYONE = ["nav-members", "nav-company", "nav-connections", "nav-claude-accounts", "nav-sources", "nav-templates", "nav-themes", "nav-autonomy"];
 
 const settingsNav = (page: Page) => page.getByRole("navigation", { name: "Settings" });
 const rail = (page: Page) => page.getByRole("navigation", { name: "Oracle" });
@@ -103,7 +104,7 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
 
 test("a deep link to a hidden Settings tab says it is not available for the role", async ({ page }) => {
   await login(page, "viewer@example.com");
-  for (const path of ["/settings/api-tokens", "/settings/company", "/settings/notifications"]) {
+  for (const path of ["/settings/api-tokens", "/settings/notifications"]) {
     await page.goto(path);
     await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
     await expect(page.getByRole("button", { name: "Invite", exact: true })).toHaveCount(0);

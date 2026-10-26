@@ -19,6 +19,7 @@ from oracle.baseline.goals import GoalAttrs
 from oracle.baseline.router import router as baseline_router
 from oracle.baseline.service import GoalFieldsInvalid
 from oracle.blockers.router import router as blockers_router
+from oracle.branding import router as branding_router
 from oracle.capabilities import stamp_openapi
 from oracle.claude_accounts.router import router as claude_accounts_router
 from oracle.claude_accounts.sweep import get_pool_settings, run_scheduler
@@ -234,6 +235,8 @@ def create_app() -> FastAPI:
     app.include_router(drive_browse_router)
     app.include_router(notion_pages_router)
     app.include_router(settings_router)
+    # O5 lane 4: company branding and its logos (/uploads/brand/...).
+    app.include_router(branding_router)
     # A1: Home's Set up checklist.
     app.include_router(setup_router)
     # H11: how far Oracle goes on its own, per responsibility, and its "Oracle did" rows.

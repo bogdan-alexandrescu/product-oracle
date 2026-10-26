@@ -19,6 +19,7 @@ import { applied, handOver, membersDetailRoute, type MembersContext, type Member
 import type { HandOver } from "@/lib/api/members-types";
 import { accountRoute, liveCredentials, openTokens, passwordOk, revokeMemberTokens, seedAccount, type AccountDb } from "./account";
 import { deckOut, LAYER_FORMATS, PPTX_TYPE, presenterNotes, resolveBrief } from "./brief";
+import { brandHeaderHtml, brandStyleHtml, emptyBranding, routeBranding, type BrandingDb } from "./branding";
 import { capabilitiesOut } from "./capabilities";
 import { POOL_SPENT_SCENARIO, claudeAccountsRoute, poolRefusal } from "./claude-accounts";
 import { connectionsRoute, mockSettingValue, setupFacts } from "./connections";
@@ -255,6 +256,8 @@ export interface Db {
   launches?: LaunchesDb;
   /** H9: win and loss records (./pricing.ts); seeded in the "pricing" scenario only. */
   pricing?: PricingDb;
+  /** O5 lane 4: the company's branding and its logos' bytes (./branding.ts); absent in older saved data. */
+  branding?: BrandingDb;
   /** Alternatives, watched pages, the change log, web findings and positioning (./market.ts, H7). */
   market?: MarketDb;
   /** Per-user preferences (O1f document_view), by member email. */
@@ -2980,7 +2983,8 @@ function banner(doc: DocumentRow, v: VersionRow) {
   return `${doc.title} · version ${v.number} · ${status} · ${(v.approved_at ?? v.created_at).slice(0, 10)}`;
 }
 
-function exportHtml(doc: DocumentRow, v: VersionRow): string {
+/** Every HTML export starts with the company's brand header (O5 lane 4); never "Made with Product Oracle". */
+function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding()): string {
   const sections = v.sections
     .map((s) => {
       const tag = `h${Math.min(s.level, 3)}`;
@@ -3002,7 +3006,7 @@ function exportHtml(doc: DocumentRow, v: VersionRow): string {
           : `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`,
     )
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title></head><body><p class="banner">${escapeHtml(banner(doc, v))} · mock export</p>${sections}<ol class="citations">${notes}</ol></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v))} · mock export</p>${sections}<ol class="citations">${notes}</ol></body></html>`;
 }
 
 /** A tiny single-page PDF (Helvetica, ASCII only) so the download flow can be exercised. */
@@ -3525,7 +3529,7 @@ function reviewV2Context(db: Db, userId: string, role: Role) {
     now,
     hash,
     exportHtml: (doc: { id: string }, v: { id: string }) =>
-      exportHtml(db.documents.find((d) => d.id === doc.id)!, db.versions.find((x) => x.id === v.id)!),
+      exportHtml(db.documents.find((d) => d.id === doc.id)!, db.versions.find((x) => x.id === v.id)!, db.branding),
     editSection: (doc: { id: string }, key: string, heading: string | null, bodyMd: string) => {
       const latest = docVersions(db, db.documents.find((d) => d.id === doc.id)!).pop()!;
       const sections = latest.sections.map((s) =>
@@ -3921,7 +3925,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 
   if (p[0] === "healthz") return json(200, { status: "ok", database: "mock" });
-  if (p[0] !== "v1") return notFound("Route");
+  if (p[0] !== "v1" && p[0] !== "uploads") return notFound("Route");
 
   if (p[1] === "auth" && p[2] === "login" && m === "POST") {
     const { email, password } = await body<Schemas["LoginRequest"]>();
@@ -3972,6 +3976,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   const member = db.members.find((x) => x.email === sessionOf(db));
   if (!member || member.status === "disabled") return json(401, { detail: "Not authenticated" });
   const me = withMockRole(member);
+  // O5 lane 4: the company's branding and its logos (members read, owners change).
+  if (p[0] === "uploads" || p[1] === "branding") {
+    return (await routeBranding((db.branding ??= emptyBranding()), me.role, req, p, q)) ?? notFound("Route");
+  }
   // H8: an "approvers" document (an update) is absent for commenters and viewers, on every
   // documents path (its versions, markdown, exports, deck, feedback, comments, scope, ...).
   if (p[1] === "documents" && p[2]) {
@@ -5076,7 +5084,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (layer === "brief") {
       const brief = { ...v, sections: v.sections.filter((s) => s.layer === "brief") };
       if (format === "pdf") return new Response(exportPdf(doc, brief), { headers: { "content-type": "application/pdf" } });
-      return new Response(exportHtml(doc, brief), { headers: { "content-type": "text/html" } });
+      return new Response(exportHtml(doc, brief, db.branding), { headers: { "content-type": "text/html" } });
     }
     if (format === "md") {
       return new Response(`<!-- ${banner(doc, v)} -->\n${versionMarkdown(doc, v)}`, {
@@ -5084,7 +5092,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       });
     }
     if (format === "pdf") return new Response(exportPdf(doc, v), { headers: { "content-type": "application/pdf" } });
-    return new Response(exportHtml(doc, v), { headers: { "content-type": "text/html" } });
+    return new Response(exportHtml(doc, v, db.branding), { headers: { "content-type": "text/html" } });
   }
   return notFound("Route");
 }
