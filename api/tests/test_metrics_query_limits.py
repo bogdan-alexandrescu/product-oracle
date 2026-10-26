@@ -146,3 +146,103 @@ async def test_a_failed_pull_stores_and_shows_a_fixed_error(
                              headers=ctx.as_("approver"))  # fmt: skip
     assert resp.json()["error"] == posthog.QUERY_FAILED
     assert "secret_billing_ledger" not in json.dumps(resp.json())
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        # (a) a quoted system table
+        "SELECT count() FROM `system.tables`",
+        'SELECT count() FROM "system".tables',
+        "SELECT count() FROM `system`.`tables`",
+        'SELECT count() FROM "system"."tables"',
+        'SELECT count() FROM "raw_sessions"',
+        "SELECT count() FROM events e JOIN `raw_sessions` r ON e.id = r.id",
+        # (b) a quoted table function: the huge scan
+        "SELECT count() FROM `numbers`(1000000000000)",
+        'SELECT count() FROM "numbers"(1000000000000)',
+        "SELECT count() FROM events JOIN `numbers`(10) n ON 1 = 1",
+        # (c) a comma join, outside and inside parentheses
+        "SELECT count() FROM events, raw_sessions",
+        "SELECT count() FROM events AS e, raw_sessions AS r",
+        "SELECT count() FROM events e , system.tables",
+        "SELECT count() FROM events, numbers(10)",
+        "SELECT count() FROM (SELECT 1 AS x FROM events, raw_sessions)",
+        "SELECT count() FROM events e JOIN persons p ON e.person_id = p.id, raw_sessions",
+        "SELECT count() FROM (SELECT x FROM events), raw_sessions",
+        # (d) wrapper-closing or unbalanced parentheses
+        "SELECT 1) UNION ALL SELECT event FROM (SELECT event FROM events",
+        "SELECT 1) AS t, raw_sessions WHERE (1 = 1",
+        "SELECT count() FROM events)",
+        "SELECT count(( FROM events",
+        "SELECT (count() FROM events",
+        # set operators, anywhere
+        "SELECT 1 UNION ALL SELECT event FROM events",
+        "SELECT count() FROM (SELECT 1 UNION ALL SELECT 2)",
+        "SELECT 1 INTERSECT SELECT 1",
+        "SELECT 1 EXCEPT SELECT 2",
+        "SELECT 1 union distinct SELECT 2",
+        # other ways a name or a source hides
+        "SELECT count() FROM system . tables",
+        "SELECT count() FROM events.raw",
+        "SELECT count() FROM (system.tables)",
+        "SELECT count() FROM ((SELECT 1), raw_sessions)",
+        "SELECT count() FROM events WHERE event IN raw_sessions",
+        "SELECT count() FROM events WHERE event IN numbers(10)",
+        "SELECT count() FROM events WHERE event GLOBAL IN system.tables",
+        "SELECT f'{(SELECT 1)}' FROM events",
+        "SELECT count() FROM events WHERE event = 'x",
+        "SELECT count() FROM evénts",
+        "SELECT count() FROM events WHERE x = {secret}",
+    ],
+)
+def test_quoted_names_comma_joins_and_wrapper_escapes_are_refused(query):
+    """protects=#565 review MAJOR 1: a quoted (backtick or double-quoted) table, schema
+    or table function, a comma join (outside or inside parentheses), a parenthesis that
+    closes the row-limit wrapper or leaves it unbalanced, UNION/INTERSECT/EXCEPT, a
+    spaced or parenthesised schema.table, IN over a table, an f-string, an unterminated
+    string, a non-ASCII name and a placeholder other than the period's are refused;
+    fails_when=any of them reaches PostHog (a system or warehouse table read, a huge
+    numbers() scan, or rows past the limit); no_claim=HogQL's own parser."""
+    with pytest.raises(posthog.QueryRefused):
+        posthog.check_query(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT count() FROM events WHERE timestamp >= {period_start} AND timestamp < {period_end}",
+        "SELECT count() FROM events WHERE event IN ('a', 'b') AND properties.$os = 'x'",
+        "SELECT count() FROM events e LEFT JOIN persons AS p ON e.person_id = p.id "
+        "WHERE e.event = 'it''s, `here`' GROUP BY e.event, p.id ORDER BY 1, 2 LIMIT 1",
+        "SELECT count() FROM events WHERE event = 'a \\' FROM system.tables'",
+        "SELECT sum(x) FROM (SELECT count() AS x FROM events GROUP BY event) AS t",
+    ],
+)
+def test_the_plain_forms_still_pass(query):
+    """protects=#565 review MAJOR 1: a comma in a select list, an IN list, GROUP BY or
+    ORDER BY, quotes inside a string, an unquoted period placeholder and an aliased
+    subquery still pass; fails_when=the stricter checker refuses an ordinary metric
+    query; no_claim=HogQL's own parser."""
+    posthog.check_query(query)
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "SELECT 1) UNION ALL SELECT event FROM (SELECT event FROM events",
+        "SELECT count() FROM events, raw_sessions",
+        "SELECT count() FROM `system.tables`",
+    ],
+)
+async def test_a_bypass_is_422_and_never_sent(client, ctx, clock, fake_posthog, query):
+    """protects=#565 review MAJOR 1: the review's bypasses are 422 at Test and create and
+    nothing reaches PostHog; fails_when=an approver's quoted, comma-joined or
+    wrapper-escaping query is sent with the owner's key; no_claim=PostHog's own caps."""
+    assert (await connect(client, ctx)).status_code == 200
+    before = len(fake_posthog.requests)
+    resp = await client.post("/v1/metrics/test", json={"query": query},
+                             headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 422, resp.text
+    assert (await create(client, ctx, source="posthog", query=query)).status_code == 422
+    assert len(fake_posthog.requests) == before

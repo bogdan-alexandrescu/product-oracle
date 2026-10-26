@@ -8,6 +8,7 @@ Each test's card: protects=<the observable>; fails_when=<the wrong result it rej
 no_claim=<what green does not prove>.
 """
 
+import asyncio
 from datetime import timedelta
 
 import pytest
@@ -124,3 +125,45 @@ async def test_a_public_page_url_is_watched_as_given(client, ctx, at, web):
     resp = await watch_page(client, ctx, cid, f" {SITE}/pricing ")
     assert resp.status_code == 201, resp.text
     assert resp.json()["url"] == f"{SITE}/pricing"
+
+
+async def test_watching_a_page_again_does_not_fetch_without_limit(
+    client, ctx, at, web, monkeypatch
+):
+    """protects=#565 review minor: the read a newly watched page gets at once counts
+    against the company's hourly number (3 here), so removing and watching a page again
+    stops fetching it at once past that number; the page is still watched (read at the
+    next scheduled tick); fails_when=delete and re-add gives unlimited fetches;
+    no_claim=the scheduled tick's own pace (test_market_watch)."""
+    monkeypatch.setattr(service, "CHECKS_PER_COMPANY_HOUR", 3)
+    url = f"{SITE}/pricing"
+    web.page(url, html("Team $10"))
+    cid = (await add_competitor(client, ctx)).json()["id"]
+    for i in range(6):
+        at(START + timedelta(minutes=i))
+        resp = await watch_page(client, ctx, cid, url)
+        assert resp.status_code == 201, resp.text
+        if i < 5:
+            gone = await client.delete(f"/v1/competitor-pages/{resp.json()['id']}",
+                                       headers=ctx.as_("approver"))  # fmt: skip
+            assert gone.status_code == 204, gone.text
+    assert web.hits(url) == 3
+    assert resp.json()["last_checked_at"] is None
+    at(START + timedelta(hours=1, minutes=1))
+    assert (await _check(client, ctx, resp.json()["id"])).status_code == 200
+    assert web.hits(url) == 4
+
+
+async def test_parallel_check_nows_on_different_pages_keep_the_company_cap(
+    client, ctx, at, web, monkeypatch
+):
+    """protects=#565 review minor: Check nows on different pages at the same moment are
+    counted one after another (a company-wide lock), so no more than the hourly number
+    (1 here) pass; fails_when=parallel calls each read the count before any is written
+    and all pass; no_claim=several API processes beyond one database."""
+    monkeypatch.setattr(service, "CHECKS_PER_COMPANY_HOUR", 1)
+    ids = await _pages(client, ctx, web, 4)
+    at(START + timedelta(hours=2))
+    got = await asyncio.gather(*(_check(client, ctx, pid) for pid in ids))
+    codes = sorted(r.status_code for r in got)
+    assert codes == [200, 429, 429, 429], [r.text for r in got]
