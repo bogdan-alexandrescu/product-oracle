@@ -4263,6 +4263,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/live/sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Sources
+         * @description Your active connections that Oracle can read live (v1: Fireflies), with their
+         *     tools.
+         */
+        get: operations["live_sources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/live/fireflies/{connection_id}/meetings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Fireflies List Meetings
+         * @description Your Fireflies meetings, newest first, read live. The count is ``total`` with
+         *     limit=1 (null when the source does not offer it).
+         */
+        get: operations["live_fireflies_list_meetings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/live/fireflies/{connection_id}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Fireflies Search
+         * @description Search your Fireflies meetings live (people: names or emails, the archive only).
+         */
+        get: operations["live_fireflies_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/live/fireflies/{connection_id}/meetings/{meeting_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Fireflies Get Meeting
+         * @description One meeting read live: its summary and, with part=all, up to max_lines lines.
+         */
+        get: operations["live_fireflies_get_meeting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/live/fireflies/{connection_id}/meetings/{meeting_id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Fireflies Get Lines
+         * @description A meeting's lines read live: by offset and limit (defaults 0 and 200), or the
+         *     ones starting in start_ms..end_ms.
+         */
+        get: operations["live_fireflies_get_lines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/baseline/graph": {
         parameters: {
             query?: never;
@@ -16091,6 +16194,27 @@ export interface components {
              */
             low_confidence: boolean;
         };
+        /** Cite */
+        Cite: {
+            /** Ref */
+            ref: string;
+            /** Source */
+            source: string;
+            /** Call */
+            call: string;
+            /**
+             * Read At
+             * Format: date-time
+             */
+            read_at: string;
+            /**
+             * Connection Id
+             * Format: uuid
+             */
+            connection_id: string;
+            /** Item Id */
+            item_id?: string | null;
+        };
         /** ClaimIn */
         ClaimIn: {
             /** Value */
@@ -25324,6 +25448,129 @@ export interface components {
             edge_id?: string | null;
             /** Url */
             url: string;
+        };
+        /** LiveLine */
+        LiveLine: {
+            /** Speaker */
+            speaker: string | null;
+            /** Start Ms */
+            start_ms: number | null;
+            /** Text */
+            text: string;
+        };
+        /** LiveLines */
+        LiveLines: {
+            /** Lines */
+            lines: components["schemas"]["LiveLine"][];
+            /** Next Offset */
+            next_offset: number | null;
+            /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            cite: components["schemas"]["Cite"];
+        };
+        /** LiveMatch */
+        LiveMatch: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date: string | null;
+            /** Snippet */
+            snippet: string | null;
+        };
+        /** LiveMeeting */
+        LiveMeeting: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date: string | null;
+            /** Duration S */
+            duration_s: number | null;
+            /** Participants */
+            participants: string[];
+        };
+        /** LiveMeetingDetail */
+        LiveMeetingDetail: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+            /** Date */
+            date: string | null;
+            /** Duration S */
+            duration_s: number | null;
+            /** Participants */
+            participants: string[];
+            /** Summary */
+            summary: string | null;
+            /** Lines */
+            lines: components["schemas"]["LiveLine"][] | null;
+            /** Truncated */
+            truncated: boolean;
+            /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            cite: components["schemas"]["Cite"];
+        };
+        /** LiveMeetingList */
+        LiveMeetingList: {
+            /** Total */
+            total: number | null;
+            /** Meetings */
+            meetings: components["schemas"]["LiveMeeting"][];
+            /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            /**
+             * Limit Capped
+             * @default false
+             */
+            limit_capped: boolean;
+            /** Note */
+            note?: string | null;
+            cite: components["schemas"]["Cite"];
+        };
+        /** LiveSearch */
+        LiveSearch: {
+            /** Total */
+            total: number | null;
+            /** Matches */
+            matches: components["schemas"]["LiveMatch"][];
+            /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            /**
+             * Limit Capped
+             * @default false
+             */
+            limit_capped: boolean;
+            cite: components["schemas"]["Cite"];
+        };
+        /** LiveSourceOut */
+        LiveSourceOut: {
+            /**
+             * Connection Id
+             * Format: uuid
+             */
+            connection_id: string;
+            /** Provider */
+            provider: string;
+            /** Label */
+            label: string;
+            /** Tools */
+            tools: string[];
         };
         /** LlmJobOut */
         LlmJobOut: {
@@ -47629,6 +47876,313 @@ export interface operations {
             };
             /** @description Fireflies did not answer as expected */
             502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    live_sources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveSourceOut"][];
+                };
+            };
+        };
+    };
+    live_fireflies_list_meetings: {
+        parameters: {
+            query?: {
+                /** @description YYYY-MM-DD, whole days in the Company time zone */
+                date_from?: string | null;
+                /** @description YYYY-MM-DD, inclusive */
+                date_to?: string | null;
+                series?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description One of your Fireflies connections */
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveMeetingList"];
+                };
+            };
+            /** @description Not one of your Fireflies connections, or no such meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A filter this source does not offer, or arguments that conflict */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source refused your key: reconnect it in Settings > Connections */
+            424: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source is limiting requests, or this connection's live budget is spent; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source did not answer, or answered in a way Oracle could not read */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Live reads are turned off */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    live_fireflies_search: {
+        parameters: {
+            query: {
+                q: string;
+                people?: string[];
+                /** @description YYYY-MM-DD, whole days in the Company time zone */
+                date_from?: string | null;
+                /** @description YYYY-MM-DD, inclusive */
+                date_to?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                /** @description One of your Fireflies connections */
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveSearch"];
+                };
+            };
+            /** @description Not one of your Fireflies connections, or no such meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A filter this source does not offer, or arguments that conflict */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source refused your key: reconnect it in Settings > Connections */
+            424: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source is limiting requests, or this connection's live budget is spent; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source did not answer, or answered in a way Oracle could not read */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Live reads are turned off */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    live_fireflies_get_meeting: {
+        parameters: {
+            query?: {
+                part?: "summary" | "all";
+                max_lines?: number;
+            };
+            header?: never;
+            path: {
+                /** @description One of your Fireflies connections */
+                connection_id: string;
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveMeetingDetail"];
+                };
+            };
+            /** @description Not one of your Fireflies connections, or no such meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A filter this source does not offer, or arguments that conflict */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source refused your key: reconnect it in Settings > Connections */
+            424: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source is limiting requests, or this connection's live budget is spent; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source did not answer, or answered in a way Oracle could not read */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Live reads are turned off */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    live_fireflies_get_lines: {
+        parameters: {
+            query?: {
+                offset?: number | null;
+                limit?: number | null;
+                start_ms?: number | null;
+                end_ms?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description One of your Fireflies connections */
+                connection_id: string;
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveLines"];
+                };
+            };
+            /** @description Not one of your Fireflies connections, or no such meeting */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description A filter this source does not offer, or arguments that conflict */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source refused your key: reconnect it in Settings > Connections */
+            424: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source is limiting requests, or this connection's live budget is spent; see Retry-After */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source did not answer, or answered in a way Oracle could not read */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Live reads are turned off */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

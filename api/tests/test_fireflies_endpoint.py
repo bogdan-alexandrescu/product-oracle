@@ -5,11 +5,12 @@ only ever sent to the configured host. No network: resolvers and connects are fa
 
 import json
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import httpcore
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from oracle import crypto
 from oracle.auth.service import create_api_token
@@ -24,6 +25,7 @@ from oracle.sources.connectors.fireflies import (
     check_endpoint,
     guarded_client,
 )
+from oracle.sources.models import BrowseCall
 from oracle.tenancy import tenant_session
 from tests.connection_helpers import (
     add_connection,
@@ -364,6 +366,66 @@ async def test_fireflies_ai_keeps_its_budget(client, tenant_id):
             for i in range(calls + 1)
         ]
         assert statuses == [200] * calls + [429]
+    finally:
+        clear_provider_http()
+        fireflies_browse.reset_limits()
+
+
+async def _live_calls(tenant_id, conn_id: uuid.UUID, calls: int, ago: timedelta) -> None:
+    """Live reads (#710) already spent on the connection, as oracle.live counts them."""
+    async with tenant_session(tenant_id) as s:
+        s.add(
+            BrowseCall(connection_id=conn_id, at=datetime.now(UTC) - ago, calls=calls, kind="live")
+        )
+        await s.commit()
+
+
+# protects=#717 review, BGD's decision: on a host other than api.fireflies.ai the picker's
+# 60 a minute and 1,000 a day count picker calls only, so live reads (kind 'live', their
+# own 120 and 3,000) never answer the picker 429; fails_when=live calls use up the
+# picker's budget on an archive host; no_claim=live reads' own limits
+# (tests/test_live_fireflies.py: picker calls never count against them).
+async def test_live_calls_leave_another_hosts_picker_budget(client, tenant_id, browse_fake):
+    owner = await make_person(tenant_id, "owner@example.com", "owner")
+    conn = await _fireflies_connection(tenant_id, owner.id, CUSTOM)
+    await _live_calls(tenant_id, conn, 119, timedelta(seconds=5))
+    await _live_calls(tenant_id, conn, 2000, timedelta(hours=2))
+    url = f"/v1/connections/{conn}/fireflies/meetings"
+    resp = await client.get(url, params={"search": "m0"}, headers=owner.headers)
+    assert resp.status_code == 200, resp.text
+    # The picker's own calls still stop at its limit.
+    calls = fireflies_browse.OTHER_HOST_CALLS_PER_MINUTE
+    statuses = [
+        (await client.get(url, params={"search": f"m{i}"}, headers=owner.headers)).status_code
+        for i in range(1, calls + 1)
+    ]
+    assert statuses == [200] * (calls - 1) + [429]
+
+
+# protects=#717 review, BGD's decision: on api.fireflies.ai the picker and live reads share
+# one quota of 10 a minute and 25 a day (every kind counts); fails_when=live calls stop
+# counting against Fireflies' own quota in the picker; no_claim=the live routes' side
+# (tests/test_live_fireflies.py::test_graphql_budget_shares_the_pickers).
+async def test_live_calls_share_fireflies_own_quota_with_the_picker(client, tenant_id):
+    fake = FakeFireflies(list(SAMPLE))
+    use_provider_http(fake)
+    fireflies_browse.reset_limits()
+    try:
+        owner = await make_person(tenant_id, "owner@example.com", "owner")
+        conn = await _fireflies_connection(tenant_id, owner.id, None)
+        url = f"/v1/connections/{conn}/fireflies/meetings"
+        await _live_calls(tenant_id, conn, fireflies_browse.CALLS_PER_MINUTE - 1, timedelta(0))
+        ok = await client.get(url, params={"search": "a"}, headers=owner.headers)
+        refused = await client.get(url, params={"search": "b"}, headers=owner.headers)
+        assert ok.status_code == 200, ok.text
+        assert refused.status_code == 429
+        async with tenant_session(tenant_id) as s:
+            await s.execute(delete(BrowseCall))
+            await s.commit()
+        await _live_calls(tenant_id, conn, fireflies_browse.CALLS_PER_DAY, timedelta(hours=2))
+        day = await client.get(url, params={"search": "c"}, headers=owner.headers)
+        assert day.status_code == 429
+        assert "25 Fireflies calls a day" in day.json()["detail"]
     finally:
         clear_provider_http()
         fireflies_browse.reset_limits()
