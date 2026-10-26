@@ -17,14 +17,14 @@ test("a stored Claude-pool refusal on a PRD's Reports row reads like the time it
   await expect(reports.getByTestId("job-failed")).toHaveText("Failed Oct 18, 4:12 PM PDT");
   const refusal = reports.getByRole("alert");
   await expect(refusal).toHaveText(
-    "No Claude account can take this call: every Claude account is spent; the earliest window clears Sun Oct 25, 3:00 PM PDT. " +
+    "No Claude account could take this call: every Claude account was spent; the earliest window was due to clear Sun Oct 25, 3:00 PM PDT. " +
       "Every Claude account was out of quota when this ran.",
   );
   await expect(refusal).not.toContainText("2026-10-25T");
 
   // Oracle's work shows the same job the same way.
   const work = page.getByTestId("jobs-panel").filter({ visible: true }).getByTestId("llm-job").filter({ hasText: "Reports" });
-  await expect(work.getByTestId("job-error")).toContainText("clears Sun Oct 25, 3:00 PM PDT.");
+  await expect(work.getByTestId("job-error")).toContainText("could take this call: every Claude account was spent; the earliest window was due to clear Sun Oct 25, 3:00 PM PDT.");
   await expect(work.getByTestId("job-error")).not.toContainText("2026-10-25T");
 
   await reports.getByRole("button", { name: "Write reports" }).click();
