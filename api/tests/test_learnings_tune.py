@@ -20,6 +20,8 @@ from tests.modules.helpers import seeded_ctx
 
 BRAND = "platform.brand-governance"
 TOOLS = "agents.tool-policies"
+# Optional in the SaaS pack and unconditional: nothing brings it in on its own.
+USAGE = "saas.usage-analytics"
 
 
 async def _learn(client, ctx, applies_to, target, direction="recommend_more", weight=1, text=None):
@@ -46,14 +48,14 @@ async def _retire(client, ctx, learning_id):
     assert resp.status_code == 200, resp.text
 
 
-async def _agent_intake(ctx) -> uuid.UUID:
+async def _agent_intake(ctx, category="ai_agent_platform") -> uuid.UUID:
     async with tenant_session(ctx.tenant_id) as s:
         intake = ProductIntake(
             title="Agent tool permissions",
             brief="Let each customer configure which tools their agents may call, with "
             "multi-tenant isolation of tool credentials.",
             source_snapshot_ids=[uuid.uuid4()],
-            analysis={"category": "ai_agent_platform", "scope": ["tool calling permissions"]},
+            analysis={"category": category, "scope": ["tool calling permissions"]},
         )
         s.add(intake)
         await s.commit()
@@ -71,28 +73,51 @@ async def _recommend(client, ctx, intake_id) -> dict:
 
 
 async def test_a_learning_suggests_a_module_and_says_why(client):
-    """protects=a kept recommend_more learning on an optional module makes the
-    recommendation suggest it, decided by the learning, with "Recommended because" and
+    """protects=a kept recommend_more learning on an unconditional optional module makes
+    the recommendation suggest it, decided by the learning, with "Recommended because" and
     the learning's words; fails_when=the module stays optional, or the reason does not
     say why; no_claim=a person's decision (it always wins, test_prior_decisions)."""
     ctx = await seeded_ctx()
-    intake_id = await _agent_intake(ctx)
-    before = (await _recommend(client, ctx, intake_id))[BRAND]
+    intake_id = await _agent_intake(ctx, "saas")
+    before = (await _recommend(client, ctx, intake_id))[USAGE]
     assert before["selection"] == "optional" and not before["included"]
+    assert before["decided_by"] == "none"
 
-    lid = await _learn(client, ctx, "module", BRAND, text="Brand rules caught launch rework twice.")
-    after = (await _recommend(client, ctx, intake_id))[BRAND]
+    lid = await _learn(client, ctx, "module", USAGE, text="Usage signals caught churn twice.")
+    after = (await _recommend(client, ctx, intake_id))[USAGE]
     assert after["selection"] == "suggested" and after["included"]
     assert after["decided_by"] == "learning"
     assert after["reason"].startswith("Recommended because")
-    assert "Brand rules caught launch rework twice." in after["reason"]
+    assert "Usage signals caught churn twice." in after["reason"]
     assert any("Recommended because" in line for line in after["explanation"])
 
     # Retired learnings stop counting.
     await _retire(client, ctx, lid)
-    again = (await _recommend(client, ctx, intake_id))[BRAND]
+    again = (await _recommend(client, ctx, intake_id))[USAGE]
     assert again["selection"] == "optional" and not again["included"]
     assert not any("Recommended" in line for line in again["explanation"])
+
+
+async def test_a_learning_never_lifts_a_module_whose_condition_failed(client):
+    """protects=BGD 2026-10-25 "condition must hold": a recommend_more learning, however
+    heavy, leaves out a conditional module whose condition did not hold for this PRD; it
+    only explains itself; fails_when=the learning suggests the module or replaces the
+    reason the condition gives; no_claim=a condition that held (it suggests the module on
+    its own, test_a_learning_never_overrides_policy_or_a_condition)."""
+    ctx = await seeded_ctx()
+    intake_id = await _agent_intake(ctx)
+    before = (await _recommend(client, ctx, intake_id))[BRAND]
+    assert before["selection"] == "optional" and not before["included"]
+    assert before["decided_by"] == "condition"
+
+    for _ in range(3):
+        await _learn(client, ctx, "module", BRAND, weight=3, text="Brand rules caught rework.")
+    after = (await _recommend(client, ctx, intake_id))[BRAND]
+    assert after["selection"] == "optional" and not after["included"]
+    assert after["decided_by"] == "condition"
+    assert after["reason"] == before["reason"]
+    assert after["reason"].startswith("Not suggested: its condition did not hold")
+    assert any(line.startswith("Recommended because") for line in after["explanation"])
 
 
 async def test_a_learning_never_overrides_policy_or_a_condition(client):
