@@ -161,8 +161,12 @@ from oracle.v2.models import (  # noqa: E402
     TemplateModuleAssignment,
 )
 from oracle.web.models import WebResult, WebSearch  # noqa: E402
+from oracle.webhooks.models import Webhook, WebhookDelivery, WebhookEvent  # noqa: E402
 
 __all__ = [
+    "Webhook",
+    "WebhookDelivery",
+    "WebhookEvent",
     "NextDraftChange",
     "AlignmentReport",
     "Ritual",
