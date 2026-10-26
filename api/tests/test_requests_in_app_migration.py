@@ -72,7 +72,7 @@ def test_chains_after_mains_head_with_a_single_head():
     no_claim=other lanes' later migrations."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0055_webhooks"]
+    assert script.get_heads() == ["0056_webhook_delivery_sent"]
 
 
 def test_upgrade_allows_in_app_and_downgrade_records_them_as_other(scratch_db):

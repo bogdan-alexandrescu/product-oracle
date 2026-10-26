@@ -48,3 +48,9 @@ def headers(hook: Webhook, msg_id: str, body: bytes, now: datetime) -> dict[str,
         "user-agent": USER_AGENT,
         "content-type": "application/json",
     }
+
+
+def shown(sent: dict[str, str]) -> dict[str, str]:
+    """The headers as the log keeps them: each signature cut to ``v1,`` and 8 characters."""
+    sigs = sent.get("webhook-signature", "").split(" ")
+    return {**sent, "webhook-signature": " ".join(s[:11] + "…" for s in sigs if s)}

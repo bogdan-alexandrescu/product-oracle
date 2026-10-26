@@ -58026,6 +58026,31 @@
             ],
             "title": "Body"
           },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "headers": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Headers"
+          },
           "redelivery_of": {
             "anyOf": [
               {
@@ -58058,6 +58083,8 @@
           "error",
           "response_excerpt",
           "body",
+          "host",
+          "headers",
           "redelivery_of",
           "created_at"
         ],

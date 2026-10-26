@@ -17809,6 +17809,12 @@ export interface components {
             body: {
                 [key: string]: unknown;
             } | null;
+            /** Host */
+            host: string | null;
+            /** Headers */
+            headers: {
+                [key: string]: string;
+            } | null;
             /** Redelivery Of */
             redelivery_of: string | null;
             /**

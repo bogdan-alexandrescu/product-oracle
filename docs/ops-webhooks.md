@@ -120,15 +120,17 @@ delivery and no placeholder.
 
 Each delivery keeps the event, attempts, times, status (`pending`, `retrying`, `succeeded`,
 `failed`, `withheld`), HTTP status, an error code (`timeout`, `connect`, `not_public`, `tls`,
-`redirect`, `too_large`, `expired`), the first 2 KB of the response and the body sent. Once
+`redirect`, `too_large`, `expired`), the first 2 KB of the response, the body sent, the host it went to and the headers sent
+(the signature truncated to `v1,` and its first characters). Once
 a day per company the tick deletes deliveries and events older than 30 days.
 
 ## Tests: the loopback switch
 
 `ORACLE_WEBHOOKS_ALLOW_LOOPBACK_FOR_TESTS=1` lets a webhook point at a loopback address
 (`http` or `https`), sent without the guarded transport, for the Playwright fixture's stub
-receiver. The API refuses to start with it together with `ORACLE_COOKIE_SECURE` or
-`ORACLE_IAP_AUDIENCES` (a real deployment). Never set it anywhere real.
+receiver. The API refuses to start with it when `ORACLE_ENV=production`, or together with
+`ORACLE_COOKIE_SECURE` or `ORACLE_IAP_AUDIENCES` (a real deployment). Set
+`ORACLE_ENV=production` on every production deployment; never set the switch anywhere real.
 
 ## Rollback
 

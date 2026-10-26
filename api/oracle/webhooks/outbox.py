@@ -195,6 +195,12 @@ async def post(client: httpx.AsyncClient, url: str, body: bytes, headers: dict) 
 # --- the body -------------------------------------------------------------------------------
 
 
+def _person(user: User) -> dict[str, Any]:
+    """A person by display name; unnamed when the only name there is would be the email."""
+    name = display_name(user.email, user.name)
+    return {"kind": "person"} if "@" in name else {"kind": "person", "name": name}
+
+
 async def _actor(db: AsyncSession, actor: str | None) -> dict[str, Any]:
     """A person by display name (never an id or email); Oracle's work; or the system."""
     kind, _, raw = (actor or "system").partition(":")
@@ -207,13 +213,12 @@ async def _actor(db: AsyncSession, actor: str | None) -> dict[str, Any]:
     if kind == "user":
         user = await db.get(User, who)
         if user is not None:
-            return {"kind": "person", "name": display_name(user.email, user.name)}
+            return _person(user)
     elif kind == "token":
         token = await db.get(ApiToken, who)
         if token is not None:
             user = await db.get(User, token.user_id) if token.user_id else None
-            name = display_name(user.email, user.name) if user is not None else token.name
-            return {"kind": "person", "name": name}
+            return _person(user) if user is not None else {"kind": "person", "name": token.name}
     return {"kind": "system"}
 
 
@@ -364,7 +369,9 @@ async def prepare(
         delivery.status, delivery.next_at, delivery.error = "failed", None, "too_large"
         delivery.last_at = now
         return None
-    return Prepared(delivery, hook, raw, sign.headers(hook, event.public_id, raw, now))
+    sent = sign.headers(hook, event.public_id, raw, now)
+    delivery.host, delivery.headers = hook.host, sign.shown(sent)
+    return Prepared(delivery, hook, raw, sent)
 
 
 def record(delivery: WebhookDelivery, answer: Answer, now: datetime) -> str:
@@ -455,15 +462,23 @@ async def send_now(
     db: AsyncSession, delivery: WebhookDelivery, now: datetime | None = None
 ) -> WebhookDelivery:
     """Send one delivery at once, within the same 10 s cap (Send test event, Redeliver);
-    the caller commits."""
+    the caller commits the outcome. What is ready to send is committed before the call, so
+    no database connection is held while the receiver answers."""
     now = now or datetime.now(UTC)
     hook = await db.get(Webhook, delivery.webhook_id)
     event = await db.get(WebhookEvent, delivery.event_id)
     company = await db.get(Tenant, hook.tenant_id)
     ready = await prepare(db, delivery, hook, event, company, now)
     if ready is not None:
-        async with _client(hook.url) as http:
-            answer = await post(http, hook.url, ready.body, ready.headers)
+        url = hook.url
+        await db.commit()  # the connection goes back to the pool for the call
+        async with _client(url) as http:
+            answer = await post(http, url, ready.body, ready.headers)
+        hook = await db.get(Webhook, hook.id, populate_existing=True)
+        if hook is None:  # deleted during the call, its deliveries with it
+            db.expunge(delivery)
+            record(delivery, answer, now)
+            return delivery
         record(delivery, answer, now)
         await after_answer(db, hook, delivery, now)
     await db.flush()

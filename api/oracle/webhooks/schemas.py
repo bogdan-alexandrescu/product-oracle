@@ -307,6 +307,8 @@ class DeliveryOut(BaseModel):
     error: str | None
     response_excerpt: str | None
     body: dict[str, Any] | None
+    host: str | None
+    headers: dict[str, str] | None
     redelivery_of: uuid.UUID | None
     created_at: datetime
 

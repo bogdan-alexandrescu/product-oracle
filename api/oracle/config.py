@@ -99,6 +99,8 @@ class Settings(BaseSettings):
     web_search_key: SecretStr = SecretStr("")
     web_search_max_per_run: int = 30
     web_fetch_max_per_run: int = 40
+    # The deployment's kind (ORACLE_ENV); "production" refuses the switches for tests below.
+    env: str = "development"
     # I1 webhooks: the Playwright fixture's stub receiver only. On, a webhook may point at
     # a loopback address (http or https), sent without the guarded transport; every other
     # address still goes through it. Refused in a real deployment, as the switch above is.
@@ -113,10 +115,11 @@ class Settings(BaseSettings):
                 "ORACLE_ALLOW_RESERVED_EMAIL_DOMAINS is for tests and the mock only; it "
                 "cannot be set with ORACLE_COOKIE_SECURE or ORACLE_IAP_AUDIENCES"
             )
-        if self.webhooks_allow_loopback_for_tests and (self.cookie_secure or self.iap_audiences):
+        real = self.env == "production" or self.cookie_secure or self.iap_audiences
+        if self.webhooks_allow_loopback_for_tests and real:
             raise ValueError(
                 "ORACLE_WEBHOOKS_ALLOW_LOOPBACK_FOR_TESTS is for tests only; it cannot be set "
-                "with ORACLE_COOKIE_SECURE or ORACLE_IAP_AUDIENCES"
+                "with ORACLE_ENV=production, ORACLE_COOKIE_SECURE or ORACLE_IAP_AUDIENCES"
             )
         return self
 
