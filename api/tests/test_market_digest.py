@@ -278,6 +278,8 @@ async def test_the_import_checks_every_finding(client, ctx, at, web):
     assert "1 refs dropped: a source item the run could not read" in notes
     web_block = next(b for b in occ.pre_read["blocks"] if b["key"] == "competitor_web")
     assert web_block["rows"][0]["text"].endswith("(Not vetted · reviews.example · Oct 18)")
+    # Minor (c) of #541 part 4: the stored markdown is rendered again with the findings.
+    assert web_block["rows"][0]["text"] in occ.pre_read["markdown"]
 
 
 async def _import_notes(db, run_id) -> list[str]:

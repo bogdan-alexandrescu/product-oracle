@@ -124,6 +124,16 @@ async def _goal_taken(db: AsyncSession, goal_id: uuid.UUID | None, metric: Metri
         raise MetricError("Another metric already gives this goal its value", 409)
 
 
+def _query(query: str | None) -> None:
+    """A PostHog metric's query: one read-only SELECT over the allowed tables (422)."""
+    if query is None:
+        return
+    try:
+        posthog.check_query(query)
+    except posthog.QueryRefused as exc:
+        raise MetricError(str(exc)) from None
+
+
 def _definition(metric: Metric) -> dict[str, Any]:
     return {
         "version": metric.definition_version,
@@ -141,6 +151,7 @@ async def create(db: AsyncSession, actor_id: uuid.UUID | None, body: MetricCreat
     data["title"] = data["title"].strip()
     if (body.source == "posthog") != (body.query is not None):
         raise MetricError("A PostHog metric has a query; others have none")
+    _query(body.query)
     await _check(db, data, None)
     await _title_taken(db, data["title"], None)
     await _goal_taken(db, body.goal_id, None)
@@ -167,6 +178,8 @@ async def update(db: AsyncSession, metric: Metric, body: MetricPatch) -> Metric:
     changes = body.model_dump(include=body.model_fields_set - {"lock_version"})
     if "query" in changes and (metric.source == "posthog") != (changes["query"] is not None):
         raise MetricError("Only a PostHog metric has a query")
+    if "query" in changes:
+        _query(changes["query"])
     merged = {
         c: getattr(metric, c)
         for c in ("title", "unit", "kind", "goal_id", "drives_metric_id", "owner_id")
@@ -256,6 +269,7 @@ async def pull_now(db: AsyncSession, metric: Metric) -> None:
 
 
 async def test_query(db: AsyncSession, query: str) -> tuple[list[MetricTestWeek], str | None]:
+    _query(query)
     conn = await pull.connection(db)
     if conn is None:
         raise MetricError(NOT_CONNECTED, 409)
@@ -416,12 +430,16 @@ def ordered(rows: list[Metric]) -> list[Metric]:
     return out
 
 
-async def variance_outs(db: AsyncSession, rows: list[MetricVariance]) -> list[VarianceOut]:
+async def variance_outs(
+    db: AsyncSession, rows: list[MetricVariance], *, as_member: bool = False
+) -> list[VarianceOut]:
+    """``as_member``: Oracle's drafts as a commenter may see them (a pre-read's)."""
     metrics = {
         m.id: m
         for m in await db.scalars(select(Metric).where(Metric.id.in_({r.metric_id for r in rows})))
     }
     who = await names(db, {r.explained_by for r in rows})
+    withheld = await _withheld_drafts(db, rows, as_member=as_member)
     out = []
     for r in rows:
         m = metrics[r.metric_id]
@@ -436,11 +454,53 @@ async def variance_outs(db: AsyncSession, rows: list[MetricVariance]) -> list[Va
             direction=r.direction, status=r.status, explanation=r.explanation,
             explained_by_name=who.get(r.explained_by) if r.status == "explained" else None,
             find_out_by=r.find_out_by, noise_reason=r.noise_reason,
-            oracle_draft=r.oracle_draft, oracle_confidence=r.oracle_confidence,
+            oracle_draft=None if r.id in withheld else r.oracle_draft,
+            oracle_confidence=None if r.id in withheld else r.oracle_confidence,
             possible_causes=[PossibleCause(**c) for c in r.possible_causes or []],
             lock_version=r.lock_version,
         ))  # fmt: skip
     return out
+
+
+async def _withheld_drafts(
+    db: AsyncSession, rows: list[MetricVariance], *, as_member: bool = False
+) -> set[uuid.UUID]:
+    """The variances whose Oracle draft the reader may not see: it cites (a decision, a
+    roadmap item of a document) or names something hidden from them (oracle.docs.
+    visibility), as a draft written before #541 part 4 may (its run read as its
+    creator)."""
+    from oracle.docs import visibility
+    from oracle.roadmap.models import RoadmapItem
+
+    drafted = [r for r in rows if r.oracle_draft]
+    hidden = await visibility.hidden_for_reader(db, as_member=as_member) if drafted else None
+    if hidden is None:
+        return set()
+
+    def ids(r: MetricVariance, kind: str) -> list[uuid.UUID]:
+        out = []
+        for ref in r.oracle_refs or []:
+            try:
+                if ref.get("kind") == kind:
+                    out.append(uuid.UUID(str(ref.get("id"))))
+            except (ValueError, AttributeError):
+                continue
+        return out
+
+    items = {i for r in drafted for i in ids(r, "roadmap_item")}
+    item_docs = dict(
+        (await db.execute(
+            select(RoadmapItem.id, RoadmapItem.roadmap_document_id)
+            .where(RoadmapItem.id.in_(items))
+            .execution_options(oracle_all_documents=True)
+        )).all()
+    ) if items else {}  # fmt: skip
+    return {
+        r.id
+        for r in drafted
+        if hidden.names(r.oracle_draft)
+        or hidden.cites(ids(r, "decision"), [item_docs.get(i) for i in ids(r, "roadmap_item")])
+    }
 
 
 async def list_variances(

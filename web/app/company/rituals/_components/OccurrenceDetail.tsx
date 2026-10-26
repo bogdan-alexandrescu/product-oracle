@@ -244,6 +244,7 @@ const NO_CITATIONS = new Map();
 
 /**
  * Oracle's summary: written, being written, failed or not started, or Summarize with Oracle.
+ * Every kind's summary is Markdown, drawn with MarkdownBody (#556).
  * A competitive digest's is the digest (H7): Markdown the importer cleaned (no raw HTML, links
  * only to Oracle pages and this run's recorded results), written with "Write the digest with
  * Oracle". A metrics review's is Explain with Oracle (H5: its own run drafts each variance's
@@ -260,7 +261,8 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
     : metrics
       ? { title: "Summary", ask: "Explain with Oracle", running: "Writing…", failed: "Summary failed · Explain with Oracle to retry", none: "No summary" }
       : { title: "Summary", ask: "Summarize with Oracle", running: "Writing the summary…", failed: "Summary failed · Summarize with Oracle to retry", none: "No summary" };
-  const body = useMemo(() => (digest && occ.summary ? parseBlocks(occ.summary) : null), [digest, occ.summary]);
+  // #556: every kind's summary is Markdown; it renders as the digest's does (links only where isSafeHref allows).
+  const body = useMemo(() => (occ.summary ? parseBlocks(occ.summary) : null), [occ.summary]);
   const ask = async () => {
     setBusy(true);
     setError(null);
@@ -284,13 +286,9 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
       <h2 className="mb-1 font-display text-[17px] font-bold">{words.title}</h2>
       {occ.summary_state === "ready" && occ.summary ? (
         <>
-          {body ? (
-            <div className="doc-body min-w-0 [overflow-wrap:anywhere]">
-              <MarkdownBody blocks={body} highlights={NO_HIGHLIGHTS} activeId={null} citations={NO_CITATIONS} onHighlightClick={() => {}} />
-            </div>
-          ) : (
-            <p className="text-[15px] whitespace-pre-wrap">{occ.summary}</p>
-          )}
+          <div className="doc-body min-w-0 [overflow-wrap:anywhere]">
+            <MarkdownBody blocks={body ?? []} highlights={NO_HIGHLIGHTS} activeId={null} citations={NO_CITATIONS} onHighlightClick={() => {}} />
+          </div>
           <p className="mt-1 text-[13px] text-text2">Written by Oracle</p>
         </>
       ) : occ.summary_state === "running" ? (
