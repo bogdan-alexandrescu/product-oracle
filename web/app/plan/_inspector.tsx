@@ -1,18 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
 
+import { AskTeammate } from "@/components/AskTeammate";
 import { DateBasisDialog, shortDay, useDateRights } from "@/components/DateBasisDialog";
-import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice, ToGo } from "@/components/ds";
+import { DiscussSubject, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
+import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice, Sheet, ToGo } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
-import { api, unwrap } from "@/lib/api/client";
+import { RequestSpecDialog, SPEC_STATE, specFor, specHref, useSpecs } from "@/components/RequestSpec";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
-import { acceptTrackAlertDate, alertSentence, keepTrackAlert, listTrackAlerts, reopenTrackAlert, type TrackAlertOut } from "@/lib/api/track-alerts";
+import { useMe } from "@/lib/me";
+import { acceptTrackAlertDate, alertDay, alertSentence, keepTrackAlert, listTrackAlerts, reopenTrackAlert, type TrackAlertOut } from "@/lib/api/track-alerts";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { WaiveForm } from "../company/strategy/_components/DriftList";
+import { shortDate } from "../company/strategy/_components/lib";
 import { assess, type GoalView, type Point } from "../home/_goals";
-import { dateBasis, HORIZON_LABEL, roadmapHref, stateChip, whoLabel, type PlanItem } from "./_lib";
+import { dateBasis, HORIZON_LABEL, roadmapHref, stateChip, whoLabel, type PlanDrift, type PlanItem } from "./_lib";
 
 function History({ item }: { item: PlanItem }) {
   const q = useQuery(`plan|history|${item.roadmap.slug}|${item.key}`, () =>
@@ -20,17 +28,59 @@ function History({ item }: { item: PlanItem }) {
   );
   if (q.error) return <span className="text-text2">{q.error}</span>;
   if (!q.data) return <span className="text-text2">…</span>;
-  if (q.data.versions.length === 0) return <span className="text-text2">—</span>;
+  // One line per import (the API groups and limits them; the tracker's own status name is left out).
+  const events = q.data.tracker_events;
+  const older = q.data.tracker_events_older;
+  if (q.data.versions.length === 0 && events.length === 0) return <span className="text-text2">—</span>;
   return (
-    <ol className="flex flex-col gap-1 text-[15px]">
-      {q.data.versions.map((v) => (
-        <li key={v.version} className="tnum">
-          PRD v{v.prd_version ?? "?"} {HORIZON_LABEL[v.horizon]}
-          {v.approved_at ? ` · approved ${formatDay(v.approved_at)}` : ""}
-        </li>
-      ))}
-    </ol>
+    <div className="flex flex-col gap-2">
+      {q.data.versions.length > 0 && (
+        <ol className="flex flex-col gap-1 text-[15px]">
+          {q.data.versions.map((v) => (
+            <li key={v.version} className="tnum">
+              PRD v{v.prd_version ?? "?"} {HORIZON_LABEL[v.horizon]}
+              {v.approved_at ? ` · approved ${formatDay(v.approved_at)}` : ""}
+            </li>
+          ))}
+        </ol>
+      )}
+      {older > 0 && (
+        <p data-testid="plan-tracker-older" className="text-[15px] text-text2">
+          {older} earlier tracker {older === 1 ? "update isn't" : "updates aren't"} shown.
+        </p>
+      )}
+      {events.length > 0 && (
+        <ol aria-label="Tracker history" className="flex flex-col gap-1 text-[15px]">
+          {events.map((e) => (
+            <li key={`${e.record_id}|${e.observed_at}|${e.changes.map((c) => c.field).join()}`} data-testid="plan-tracker-event" className="tnum">
+              {trackerEventLine(e)}
+              <span className="text-text2"> · {formatDay(e.observed_at)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
   );
+}
+
+/** F2 §2: what one import changed on an issue, in plain words ("ENG-405: Open → In progress, date Nov 30 → Dec 9"). */
+function trackerEventLine(e: Schemas["ItemTrackerEvent"]): string {
+  return `${e.external_ref}: ${e.changes.map(changeWords).join(", ")}`;
+}
+
+function changeWords(c: Schemas["TrackerFieldChange"]): string {
+  if (c.field === "target_date") {
+    const from = alertDay(c.before);
+    const to = alertDay(c.after);
+    if (from && to) return `date ${from} → ${to}`;
+    if (to) return `date ${to}`;
+    return from ? `date removed (was ${from})` : "no date";
+  }
+  if (c.field === "state") {
+    const word = (v: string | null) => (v && v in RECORD_STATE ? RECORD_STATE[v as keyof typeof RECORD_STATE] : (v ?? "none"));
+    return `${word(c.before)} → ${word(c.after)}`;
+  }
+  return `estimate ${c.before ?? "none"} → ${c.after ?? "none"}`;
 }
 
 /**
@@ -108,7 +158,11 @@ const RECORD_STATE: Record<PlanItem["engineering"]["records"][number]["state"], 
 };
 
 /** F7 What the actions need: set only for approvers, owners and engineering leads. */
-export type PlanLinks = { onLink: (item: PlanItem) => void; onChanged: () => Promise<void> | void };
+export type PlanLinks = {
+  /** Opens Link issue for the item; `term` pre-fills its search (an alert's issue, F2 Link to item). */
+  onLink: (item: PlanItem, term?: string) => void;
+  onChanged: () => Promise<void> | void;
+};
 
 /** The item's tracker issues, one per line; Link issue and Unlink for those who may (F7). */
 function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
@@ -170,34 +224,67 @@ function Engineering({ item, links }: { item: PlanItem; links?: PlanLinks }) {
  * actions the caller may take now (a viewer gets none, so the card has no buttons). Kept
  * alerts say who kept them and why, with Reopen.
  */
-function AlertCards({ item, onChanged }: { item: PlanItem; onChanged?: () => Promise<void> | void }) {
+function AlertCards({
+  item,
+  onChanged,
+  links,
+  track = false,
+}: {
+  item: PlanItem;
+  onChanged?: () => Promise<void> | void;
+  links?: PlanLinks;
+  /** The track's own alerts (no item: an issue no item names, a newer PRD) instead of the item's. */
+  track?: boolean;
+}) {
   const trackId = item.track_id;
   const q = useQuery(`plan|alerts|${trackId ?? "none"}`, () => (trackId ? listTrackAlerts({ state: "all", track_id: trackId }) : Promise.resolve([])));
-  const shown = (q.data ?? []).filter((a) => a.item_key === item.key && (a.state === "open" || a.state === "kept"));
+  const shown = (q.data ?? []).filter((a) => (track ? !a.item_key : a.item_key === item.key) && (a.state === "open" || a.state === "kept"));
   if (!trackId || shown.length === 0) return null;
+  const cards = shown.map((a) => (
+    <AlertCard
+      key={`${a.id}-${a.state}`}
+      a={a}
+      item={item}
+      links={links}
+      onChanged={async () => {
+        await Promise.all([q.reload(), onChanged?.()]);
+      }}
+    />
+  ));
+  if (!track) return <>{cards}</>;
   return (
-    <>
-      {shown.map((a) => (
-        <AlertCard
-          key={`${a.id}-${a.state}`}
-          a={a}
-          item={item}
-          onChanged={async () => {
-            await Promise.all([q.reload(), onChanged?.()]);
-          }}
-        />
-      ))}
-    </>
+    <InspectorSection label="On this track" testId="plan-track-alerts">
+      <div className="flex flex-col gap-2">{cards}</div>
+    </InspectorSection>
   );
 }
 
-function AlertCard({ a, item, onChanged }: { a: TrackAlertOut; item: PlanItem; onChanged: () => Promise<void> }) {
+/** G1: what Discuss is about: the item (by its PRD version), else the alert's track. */
+function discussionOf(a: TrackAlertOut, item: PlanItem): { subject: DiscussionSubject; key: string; title: string } {
+  const prd = item.prd;
+  if (a.item_key && prd?.id && prd.version != null) {
+    return {
+      subject: { kind: "roadmap_item", subject: { document_id: prd.id, version: prd.version, item_key: item.key }, label: `${prd.title} · ${item.title}` },
+      key: `roadmap_item:${prd.id}:${item.key}`,
+      title: `Discuss ${item.title}`,
+    };
+  }
+  return { subject: { kind: "track", subject: { track_id: a.track_id }, label: a.prd.title }, key: `track:${a.track_id}`, title: `Discuss ${a.prd.title}` };
+}
+
+function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: PlanItem; links?: PlanLinks; onChanged: () => Promise<void> }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [keeping, setKeeping] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [discussing, setDiscussing] = useState(false);
   const [note, setNote] = useState("");
   const fieldId = useId();
+  const blocker = typeof a.data.blocker_id === "string" ? a.data.blocker_id : null;
+  const ref = typeof a.data.tracker_ref === "string" ? a.data.tracker_ref : undefined;
+  const prdId = item.prd?.id;
+  const discussion = discussionOf(a, item);
   async function run(call: () => Promise<unknown>, after?: (out: unknown) => void) {
     setBusy(true);
     setError(null);
@@ -288,6 +375,24 @@ function AlertCard({ a, item, onChanged }: { a: TrackAlertOut; item: PlanItem; o
                 Review
               </Button>
             )}
+            {has("open_blocker") && blocker && (
+              <LinkButton href={`/baseline?tab=blockers&blocker=${encodeURIComponent(blocker)}`}>Open blocker</LinkButton>
+            )}
+            {has("link") && links && item.prd && (
+              <Button disabled={busy} onClick={() => links.onLink(item, ref)}>
+                Link to item
+              </Button>
+            )}
+            {has("ask") && a.item_key && prdId && (
+              <Button disabled={busy} aria-expanded={asking} onClick={() => setAsking((on) => !on)}>
+                Ask
+              </Button>
+            )}
+            {has("discuss") && (
+              <Button disabled={busy} onClick={() => setDiscussing(true)}>
+                Discuss
+              </Button>
+            )}
             {has("keep") && (
               <Button variant="ghost" disabled={busy} onClick={() => setKeeping(true)}>
                 Keep watching
@@ -301,7 +406,149 @@ function AlertCard({ a, item, onChanged }: { a: TrackAlertOut; item: PlanItem; o
           </span>
         )
       )}
+      {asking && a.item_key && prdId && (
+        <AskTeammate
+          subject={{ kind: "roadmap_item", document_id: prdId, item_key: item.key }}
+          context={item.title}
+          person={a.suggested_assignee}
+          onClose={() => setAsking(false)}
+        />
+      )}
       {error && <Notice tone="error">{error}</Notice>}
+      {/* Over the whole page, not inside the inspector's column (the rail would cover it). */}
+      {discussing &&
+        createPortal(
+          <Sheet open title={discussion.title} onClose={() => setDiscussing(false)} testId="plan-discuss-sheet">
+            <div className="px-4 py-3">
+              <DiscussSubject subject={discussion.subject} subjectKey={discussion.key} />
+            </div>
+          </Sheet>,
+          document.body,
+        )}
+    </div>
+  );
+}
+
+/**
+ * H4 §5: the item's drift against the approved product strategy, one card per finding. An open
+ * finding of an approved item is waived here with a reason (owners; approvers for Outside the
+ * strategy); a draft item's is measured on the draft and is waived once the roadmap is approved.
+ */
+function DriftCards({ item, onChanged }: { item: PlanItem; onChanged?: () => Promise<void> | void }) {
+  const drift = item.drift ?? [];
+  if (drift.length === 0) return null;
+  return (
+    <InspectorSection label="Strategy" testId="plan-drift">
+      <div className="flex flex-col gap-2">
+        {drift.map((d) => (
+          <DriftCard key={`${d.kind}-${d.status}`} d={d} onChanged={onChanged} />
+        ))}
+        <p className="text-sm text-text2">
+          Drift is advisory: nothing waits on it.{" "}
+          <Link href="/company/strategy" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+            Open the strategy
+          </Link>
+        </p>
+      </div>
+    </InspectorSection>
+  );
+}
+
+/** H1 entry point: who may record a decision records one about this Plan item. */
+function RecordDecision({ item }: { item: PlanItem }) {
+  const { can } = useMe();
+  if (!can("create_decision")) return null;
+  const subject = encodeURIComponent(`roadmap_item:${item.id}`);
+  return (
+    <InspectorSection label="Decisions" testId="plan-decisions">
+      <p className="flex flex-wrap gap-3 text-[15px]">
+        <Link href={`/company/decisions?subject=${subject}&ref=${encodeURIComponent(item.title)}&propose=1`} className="font-medium text-accent-ink hover:underline">
+          Record a decision
+        </Link>
+        <Link href={`/company/decisions?subject=${subject}&class=all`} className="font-medium text-accent-ink hover:underline">
+          Decisions about this item
+        </Link>
+      </p>
+    </InspectorSection>
+  );
+}
+
+/**
+ * F5 lane 3: an approved item's engineering spec: its state and Open, or Request spec for
+ * those who may (approvers and owners).
+ */
+function SpecLine({ item }: { item: PlanItem }) {
+  const { can } = useMe();
+  const q = useSpecs(item.prd?.slug);
+  const [open, setOpen] = useState(false);
+  if (!item.prd) return null;
+  const spec = q.data ? specFor(q.data, item) : null;
+  const state = spec ? SPEC_STATE[spec.state] : null;
+  return (
+    <InspectorSection label="Engineering spec" testId="plan-spec">
+      {q.error ? (
+        <span className="text-[15px] text-text2">{q.error}</span>
+      ) : !q.data ? (
+        <span className="text-text2">…</span>
+      ) : spec && state ? (
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-[15px]">
+          <Chip kind={state.kind} dot>
+            {state.label}
+          </Chip>
+          <span className="min-w-0 flex-1 break-words">{spec.request.title}</span>
+          <LinkButton href={specHref(spec)}>Open</LinkButton>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2 text-[15px]">
+          <span className="flex-1 text-text2">No engineering spec yet</span>
+          {can("create_spec_request") && <Button onClick={() => setOpen(true)}>Request spec</Button>}
+        </div>
+      )}
+      {open && (
+        <RequestSpecDialog
+          prd={item.prd.slug}
+          items={[{ key: item.key, title: item.title, feature: item.feature, requirements: item.requirements }]}
+          initialKey={item.key}
+          onClose={() => setOpen(false)}
+        />
+      )}
+    </InspectorSection>
+  );
+}
+
+function DriftCard({ d, onChanged }: { d: PlanDrift; onChanged?: () => Promise<void> | void }) {
+  const { can } = useMe();
+  const [waiving, setWaiving] = useState(false);
+  const may = d.status === "open" && d.finding_id != null && can("waive_strategy_finding", d.kind === "outside_strategy");
+  return (
+    <div data-testid="plan-drift-card" data-kind={d.kind} data-state={d.status} className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px]">
+      <span>
+        <Chip kind={d.status === "waived" ? "na" : d.severity === "high" ? "crit" : "warn"} wrap>
+          {d.status === "waived" ? `Waived · ${d.label}` : d.label}
+        </Chip>
+      </span>
+      <span>{d.text}</span>
+      {d.status === "waived" && d.waive_reason && (
+        <span data-testid="plan-drift-waived" className="text-text2">
+          Waived {shortDate(d.waived_at)}: {d.waive_reason}
+        </span>
+      )}
+      {d.status === "open" && d.finding_id == null && <span className="text-sm text-text2">Measured on the draft roadmap. It can be waived once the roadmap is approved.</span>}
+      {may && !waiving && (
+        <span>
+          <Button onClick={() => setWaiving(true)}>Waive…</Button>
+        </span>
+      )}
+      {waiving && d.finding_id && (
+        <WaiveForm
+          finding={{ id: d.finding_id }}
+          onCancel={() => setWaiving(false)}
+          onWaived={async () => {
+            setWaiving(false);
+            await onChanged?.();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -347,7 +594,7 @@ export function PlanInspector({
     >
       <InspectorSection label="Why it needs you" testId="plan-why">
         <div className="flex flex-col gap-2">
-          <AlertCards item={item} onChanged={onChanged} />
+          <AlertCards item={item} onChanged={onChanged} links={links} />
           {item.reasons.map((r, n) => (
             <div key={n} className="rounded-lg border border-line bg-surface2 px-3 py-2 text-[15px]">
               {r.detail}
@@ -363,9 +610,12 @@ export function PlanInspector({
           )}
         </div>
       </InspectorSection>
+      <DriftCards item={item} onChanged={onChanged} />
+      <AlertCards item={item} onChanged={onChanged} links={links} track />
       <InspectorSection label="Engineering" testId="plan-item-engineering">
         <Engineering item={item} links={links} />
       </InspectorSection>
+      {item.origin === "approved" && item.prd?.approved && <SpecLine key={`${item.roadmap.slug}|${item.key}`} item={item} />}
       <DateLine item={item} onChanged={onChanged} />
       <InspectorSection label="History" testId="plan-history">
         <History key={`${item.roadmap.slug}|${item.key}`} item={item} />
@@ -389,6 +639,7 @@ export function PlanInspector({
           </ul>
         )}
       </InspectorSection>
+      <RecordDecision item={item} />
       <InspectorSection>
         <div className="flex flex-wrap gap-2">
           {item.prd?.link && <LinkButton href={item.prd.link}>Open in PRD</LinkButton>}

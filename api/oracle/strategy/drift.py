@@ -31,7 +31,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import changes
+from oracle import changes, company_time
 from oracle.baseline.models import Edge, Entity, EntityRevision, Evidence
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.roadmap.models import ProductTrack, RoadmapItem
@@ -55,7 +55,7 @@ from oracle.tenancy import current_tenant
 
 log = logging.getLogger(__name__)
 
-__all__ = ["StrategyCheck", "check_due", "run_check", "stack", "inbox_row"]
+__all__ = ["StrategyCheck", "check_due", "run_check", "stack", "inbox_row", "item_drift"]
 
 DAILY = timedelta(days=1)
 REVIEW_EVERY = timedelta(days=365)
@@ -64,6 +64,30 @@ HANDLER = "strategy.drift"
 # Entity types whose changes can move a finding.
 WATCHED = {"goal", "feature", CHOICE}
 INBOX_HREF = "/company/strategy"
+
+
+# The two item findings, as the roadmap items review and the Plan name them (H4 §5).
+ITEM_KINDS = ("outside_strategy", "stopped_but_planned")
+ITEM_LABELS = {
+    "outside_strategy": "Outside the strategy",
+    "stopped_but_planned": "Stopped in the strategy",
+}
+
+
+@dataclass(frozen=True)
+class ItemDrift:
+    """One item finding measured now: its kind, severity and sentence, the stop choices
+    (their ids in the strategy) or the goals (keys) it is about."""
+
+    kind: str
+    severity: str
+    text: str
+    choices: tuple[str, ...] = ()
+    goals: tuple[str, ...] = ()
+
+    @property
+    def label(self) -> str:
+        return ITEM_LABELS[self.kind]
 
 
 @dataclass
@@ -119,18 +143,71 @@ class Graph:
     def focus(self) -> list[Entity]:
         return [c for c in self.choices.values() if c.attrs.get("stance") == "focus"]
 
-    def item_goals(self, item: RoadmapItem) -> set[uuid.UUID]:
-        return self.supports.get(item.feature_id, set()) if item.feature_id else set()
+    def goals_of(self, feature_id: uuid.UUID | None) -> set[uuid.UUID]:
+        return self.supports.get(feature_id, set()) if feature_id else set()
 
-    def outside(self, item: RoadmapItem) -> bool:
-        goals = self.item_goals(item)
+    def item_goals(self, item: RoadmapItem) -> set[uuid.UUID]:
+        return self.goals_of(item.feature_id)
+
+    def outside_of(self, feature_id: uuid.UUID | None) -> bool:
+        goals = self.goals_of(feature_id)
         return not goals or not (goals & self.aligned_goals)
 
-    def stopping(self, item: RoadmapItem) -> list[uuid.UUID]:
-        """The stop choices affecting the item's feature, when the item is in Now or Next."""
-        if item.horizon not in PLANNED or item.feature_id is None:
+    def outside(self, item: RoadmapItem) -> bool:
+        return self.outside_of(item.feature_id)
+
+    def stopping_of(self, feature_id: uuid.UUID | None, horizon: Any) -> list[uuid.UUID]:
+        """The stop choices affecting the feature, when its item is in Now or Next."""
+        if horizon not in PLANNED or feature_id is None:
             return []
-        return [c for c, fs in self.stopped.items() if item.feature_id in fs]
+        return [c for c, fs in self.stopped.items() if feature_id in fs]
+
+    def stopping(self, item: RoadmapItem) -> list[uuid.UUID]:
+        return self.stopping_of(item.feature_id, item.horizon)
+
+
+def _and(words: list[str]) -> str:
+    return words[0] if len(words) == 1 else f"{', '.join(words[:-1])} and {words[-1]}"
+
+
+def item_drift(
+    g: Graph, feature_id: uuid.UUID | None, horizon: Any, *, no_goal: bool = True
+) -> list[ItemDrift]:
+    """An item's drift against the approved strategy, as the rules measure it, in words a
+    person reads: stopped first (high), then outside. ``no_goal`` False leaves out an item
+    that serves no goal (the review already says "Serves no goal"). None without a
+    strategy (``no_strategy`` is a Plan banner only)."""
+    if g.strategy is None:
+        return []
+    out: list[ItemDrift] = []
+    stops = sorted((g.choices[c] for c in g.stopping_of(feature_id, horizon)), key=_rank)
+    if stops:
+        prefix = f"{g.strategy.document.slug}-"
+        out.append(
+            ItemDrift(
+                "stopped_but_planned",
+                "high",
+                f"The product strategy stops {_and([c.title for c in stops])}, and this item "
+                f"is in {str(horizon).capitalize()}.",
+                choices=tuple(c.key.removeprefix(prefix) for c in stops),
+            )
+        )
+    goals = sorted((g.goals[x] for x in g.goals_of(feature_id)), key=lambda e: e.key)
+    if g.outside_of(feature_id) and (goals or no_goal):
+        text = (
+            f"{_and([x.title for x in goals])} {'is' if len(goals) == 1 else 'are'} under "
+            "no focus choice of the product strategy."
+            if goals
+            else "It serves no goal, so the product strategy does not cover it."
+        )
+        out.append(
+            ItemDrift("outside_strategy", "warning", text, goals=tuple(x.key for x in goals))
+        )
+    return out
+
+
+def _rank(e: Entity) -> tuple[int, str]:
+    return (e.attrs.get("rank") or 0, e.key)
 
 
 async def _latest_approved(db: AsyncSession, kind: str) -> Approved | None:
@@ -180,6 +257,66 @@ async def _planned_items(db: AsyncSession) -> list[RoadmapItem]:
     )
 
 
+async def load_for_items(db: AsyncSession) -> Graph:
+    """What :func:`item_drift` reads, for items outside the stored check (a roadmap items
+    review, a draft's items on the Plan): the approved strategy, the confirmed goals and its
+    choices, and the edges between them; one read when no strategy is approved."""
+    strategy = await _latest_approved(db, "strategy")
+    if strategy is None:
+        return Graph(None, None, {}, {}, {}, {}, {}, [], {})
+    rows = list(
+        await db.scalars(
+            select(Entity).where(
+                Entity.status == "confirmed",
+                (Entity.type == "goal")
+                | (
+                    (Entity.type == CHOICE)
+                    & (Entity.attrs["document_id"].astext == str(strategy.document.id))
+                ),
+            )
+        )
+    )
+    goals = {e.id: e for e in rows if e.type == "goal"}
+    choices = {e.id: e for e in rows if e.type == CHOICE}
+    return _graph(strategy, None, goals, choices, await _edges(db), [], {})
+
+
+async def _edges(db: AsyncSession) -> list[Edge]:
+    return list(
+        await db.scalars(
+            select(Edge).where(
+                Edge.status == "confirmed",
+                Edge.type.in_(("derived_from", "affects", "supports")),
+            )
+        )
+    )
+
+
+def _graph(
+    strategy: Approved | None,
+    vision: Approved | None,
+    goals: dict[uuid.UUID, Entity],
+    choices: dict[uuid.UUID, Entity],
+    edges: list[Edge],
+    items: list[RoadmapItem],
+    features: dict[uuid.UUID, Entity],
+) -> Graph:
+    derived: dict[uuid.UUID, set[uuid.UUID]] = {g: set() for g in goals}
+    stopped: dict[uuid.UUID, set[uuid.UUID]] = {
+        c: set() for c, e in choices.items() if e.attrs.get("stance") == "stop"
+    }
+    supports: dict[uuid.UUID, set[uuid.UUID]] = {}
+    for e in edges:
+        if e.type == "derived_from" and e.src_id in goals and e.dst_id in choices:
+            if choices[e.dst_id].attrs.get("stance") == "focus":
+                derived[e.src_id].add(e.dst_id)
+        elif e.type == "affects" and e.src_id in stopped:
+            stopped[e.src_id].add(e.dst_id)
+        elif e.type == "supports" and e.dst_id in goals:
+            supports.setdefault(e.src_id, set()).add(e.dst_id)
+    return Graph(strategy, vision, goals, choices, derived, stopped, supports, items, features)
+
+
 async def load(db: AsyncSession) -> Graph:
     strategy = await _latest_approved(db, "strategy")
     vision = await _latest_approved(db, "vision")
@@ -203,37 +340,17 @@ async def load(db: AsyncSession) -> Graph:
                 .order_by(Entity.key)
             )
         }
-    edges = list(
-        await db.scalars(
-            select(Edge).where(
-                Edge.status == "confirmed",
-                Edge.type.in_(("derived_from", "affects", "supports")),
-            )
-        )
-    )
-    derived: dict[uuid.UUID, set[uuid.UUID]] = {g: set() for g in goals}
-    stopped: dict[uuid.UUID, set[uuid.UUID]] = {
-        c: set() for c, e in choices.items() if e.attrs.get("stance") == "stop"
-    }
-    supports: dict[uuid.UUID, set[uuid.UUID]] = {}
-    for e in edges:
-        if e.type == "derived_from" and e.src_id in goals and e.dst_id in choices:
-            if choices[e.dst_id].attrs.get("stance") == "focus":
-                derived[e.src_id].add(e.dst_id)
-        elif e.type == "affects" and e.src_id in stopped:
-            stopped[e.src_id].add(e.dst_id)
-        elif e.type == "supports" and e.dst_id in goals:
-            supports.setdefault(e.src_id, set()).add(e.dst_id)
+    edges = await _edges(db)
     items = await _planned_items(db)
+    g = _graph(strategy, vision, goals, choices, edges, items, {})
     feature_ids = {i.feature_id for i in items if i.feature_id} | {
-        f for fs in stopped.values() for f in fs
+        f for fs in g.stopped.values() for f in fs
     }
-    features = (
-        {e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(feature_ids)))}
-        if feature_ids
-        else {}
-    )
-    return Graph(strategy, vision, goals, choices, derived, stopped, supports, items, features)
+    if feature_ids:
+        g.features = {
+            e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(feature_ids)))
+        }
+    return g
 
 
 async def _revisions(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
@@ -272,7 +389,7 @@ def _review_due(kind: str, approved: Approved | None, today: date) -> list[Found
 
 async def evaluate(db: AsyncSession, g: Graph | None = None) -> list[Found]:
     g = g or await load(db)
-    today = datetime.now(UTC).date()
+    today = await company_time.company_today(db)
     found = _review_due("vision_review_due", g.vision, today)
     if g.strategy is None:
         return [*found, Found("no_strategy", "info", "document", None, "strategy")]

@@ -134,6 +134,7 @@ DECIDED_PER_ITEM = frozenset(
 # review's rows (C7) the feature-set stop's approver role's. A discussion's change (G3) is a
 # writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
+# Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
 # The capabilities answer
 # carries this as ``per_item``, so the web app's can() asks the item too.
 # tests/test_capabilities.py finds every role check made in a handler and fails if one is
@@ -147,12 +148,17 @@ PER_ITEM: dict[str, Role | None] = {
     "add_scope_requirement": "approver",
     "answer_question": "owner",
     "answer_with_discussion_change": "approver",
+    "apply_discussion_change": "approver",
     "approve_feasibility_scope": "owner",
     "approve_version": "owner",
+    "ask_discussion_change": "commenter",
     "ask_next_question_batch": "approver",
     "cancel_again_run": "owner",
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
+    # A Fireflies endpoint is an owner's to set (on connect, or on its own route); below
+    # that, connecting without one (the input decides).
+    "connect_with_token": "owner",
     "create_checkpoint_action": "owner",
     "create_discussion_change": None,
     "create_discussion_message": None,
@@ -160,7 +166,6 @@ PER_ITEM: dict[str, Role | None] = {
     "create_interview_link": "approver",
     "create_request": "owner",
     "create_run": "owner",
-    "create_spec_request": "owner",
     "create_track_roadmap_run": "owner",
     "decide_checkpoint": "owner",
     "decide_decision": None,
@@ -180,11 +185,16 @@ PER_ITEM: dict[str, Role | None] = {
     "estimate_regeneration": "approver",
     # H5: the metric's owner (any role) or an approver; so are its unknown and its values.
     "explain_metric_variance": "approver",
+    # Filing a found item in the app for someone else is an owner's, as create_request.
+    "file_request_candidate": "owner",
     "get_checkpoint_draft": "owner",
     # Company coverage is owners' only (owner 2026-10-24): its handler reads the role.
     "get_company_source_coverage": "owner",
     "get_next_question_batch": "approver",
     "keep_request_no": None,
+    # #618 review: a track alert's audience keeps and reopens it (oracle.roadmap.alerts
+    # in_audience): the track's owner, else every owner, and the leads for slips.
+    "keep_track_alert": None,
     "mark_metric_variance_unknown": "approver",
     "mark_request_reply_sent": "approver",
     "mirror_discussion_to_slack": "approver",
@@ -201,6 +211,8 @@ PER_ITEM: dict[str, Role | None] = {
     "redraft_interview_guide": "approver",
     "regenerate_spec": "owner",
     "remove_evidence": "approver",
+    "reopen_track_alert": None,
+    "research_discussion_message": "approver",
     "resolve_discussion_change": "approver",
     "retry_discussion_reply": "approver",
     "retry_draft_import": "owner",
@@ -212,6 +224,7 @@ PER_ITEM: dict[str, Role | None] = {
     "revoke_interview": "approver",
     "set_blocker_status": "owner",
     "set_checkpoint_note": "owner",
+    "set_connection_endpoint": "owner",
     "set_document_visibility": "owner",
     "skip_request_reply": "approver",
     "stage_checkpoint_action": "owner",
@@ -240,6 +253,8 @@ PER_ITEM: dict[str, Role | None] = {
     "waive_strategy_finding": "owner",
     "withdraw_decision": "owner",
     "withdraw_discussion_change": None,
+    # H11 questions: the intake's author or an approver, as asking them.
+    "withdraw_intake_questions": "approver",
 }
 
 

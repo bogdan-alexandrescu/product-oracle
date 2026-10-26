@@ -10,7 +10,7 @@ from sqlalchemy import func, select, update
 
 from oracle.baseline.models import Edge, Entity, EntityRevision, GoalMeasurement, Proposal
 from oracle.launches.models import Launch
-from oracle.metrics import causes
+from oracle.metrics import causes, posthog
 from oracle.metrics.models import Metric, MetricValue
 from oracle.quality import shipping
 from oracle.tenancy import tenant_session
@@ -128,7 +128,7 @@ async def test_failures_retry_hourly_then_error(client, ctx, clock, fake_posthog
     await _tick(other.tenant_id)
     row = await _metric(ctx.tenant_id, metric["id"])
     assert (row.attempts, row.status) == (1, "active")
-    assert "Query failed upstream" in row.last_error
+    assert row.last_error == posthog.QUERY_FAILED
     assert (await _metric(other.tenant_id, theirs["id"])).last_pulled_at is not None
     assert await _count(other.tenant_id) == 13
     clock.at(start + timedelta(minutes=30))

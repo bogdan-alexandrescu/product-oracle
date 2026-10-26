@@ -7,6 +7,7 @@ Every test states its card: protects (the observable), fails_when (the wrong res
 it rejects), no_claim (what green does not prove)."""
 
 import uuid
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
@@ -475,6 +476,25 @@ async def test_requester_notes_sent_skipped_and_inbox(client, owner, runtime):  
     viewer = await as_user(tenant_id, "viewer")
     resp = await client.patch(patch, json={"body": "x"}, headers=viewer)
     assert resp.status_code == 403
+
+
+async def test_a_note_marked_sent_is_dated_by_the_company_day(client, owner, runtime, monkeypatch):  # noqa: F811
+    """protects=#582 review MAJOR 2: a note marked sent with no day of its own is dated
+    by the Company time zone's day; fails_when=it takes UTC's day, tomorrow after 5 PM
+    Pacific; no_claim=a day the person gives (kept as given)."""
+    tenant_id, auth = owner
+    by_item = await launched_world(client, auth, runtime, tenant_id)
+    url = f"/v1/launches/{by_item['payment-step']['id']}"
+    resp = await client.post(f"{url}/notes", json={"display_name": "Dana"}, headers=auth)
+    assert resp.status_code == 201
+    note = resp.json()
+    # 2026-10-24T02:00Z: Oct 24 in UTC, still Oct 23 in Pacific (the default zone).
+    monkeypatch.setattr(service, "now", lambda: datetime(2026, 10, 24, 2, 0, tzinfo=UTC))
+    resp = await client.patch(
+        f"/v1/requester-notes/{note['id']}", json={"status": "sent", "channel": "email"},
+        headers=auth,
+    )  # fmt: skip
+    assert resp.status_code == 200 and resp.json()["sent_on"] == "2026-10-23"
 
 
 async def test_notify_members_shows_a_shipped_row(client, owner, runtime):  # noqa: F811

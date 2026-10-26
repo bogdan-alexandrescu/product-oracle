@@ -34,8 +34,10 @@ import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
 import { displayZone, formatInZone } from "@/lib/dates";
-import { formatDateTime, formatDay } from "@/lib/format";
+import { failedAt, formatDateTime, formatDay } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
+
+import { NewRunDialog, type RunStart } from "./_new-run-dialog";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -310,7 +312,12 @@ export function RunDetail({ id }: { id: string }) {
       />
       <Split inspector={<RunInspector run={run} />}>
         {error && <ErrorNote>{error}</ErrorNote>}
-        {run.error && <ErrorNote>{run.error}</ErrorNote>}
+        {run.error && (
+          <ErrorNote>
+            {run.status === "failed" && run.finished_at && <span data-testid="failed-at">{failedAt(run.finished_at)}. </span>}
+            {run.error}
+          </ErrorNote>
+        )}
         {run.stuck && (
           <Notice
             testId="run-stuck"
@@ -945,7 +952,12 @@ function SegmentItem({
       </div>
       {details && (
         <div className="space-y-2.5 pr-4 pb-3 pl-[56px] text-[15px] max-[600px]:pr-3 max-[600px]:pl-[44px]">
-          {s.error && <p className="text-crit">{s.error}</p>}
+          {s.error && (
+            <p className="text-crit">
+              {s.status === "failed" && s.finished_at && <span data-testid="failed-at">{failedAt(s.finished_at)}. </span>}
+              {s.error}
+            </p>
+          )}
           {s.status === "running" && <SegmentProgress segment={s} />}
           {s.autonomy_note && (
             // H11: the baseline's level changed this segment's merge.
@@ -997,6 +1009,14 @@ function SegmentItem({
               sentBack={s.sent_back}
               onRetry={s.can_retry_draft_import ? () => onRetryImport(s.seq) : undefined}
               onSendBack={sendBack}
+              retryRefused={s.draft_retry_refused}
+              // A finished run's refused draft (#583 review): a new run drafts it again, and its
+              // import clears the Inbox's No document row.
+              newRun={
+                run.status === "succeeded" && can("create_run", true) && run.document_slug
+                  ? { flow: run.flow, document: run.document_slug, title: "Start a new run" }
+                  : undefined
+              }
             />
           )}
           {(s.artifacts.length > 0 || s.previous_attempt) && (
@@ -1147,8 +1167,14 @@ function DraftImportLine({
   sentBack = false,
   onRetry,
   onSendBack,
+  retryRefused,
+  newRun,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
+  /** A finished run imported a version already: why this draft stays refused (owner, 2026-10-25). */
+  retryRefused?: string | null;
+  /** A finished run's: where Start a new run opens the New run dialog, for those who may start one. */
+  newRun?: RunStart;
   busy: boolean;
   /** The import was refused and Oracle sent the draft back to the writer itself: revising. */
   sentBack?: boolean;
@@ -1157,7 +1183,8 @@ function DraftImportLine({
   /** The import was refused and this member decides its review: Send back to writer. */
   onSendBack?: () => void;
 }) {
-  if (imp.error) return <DraftRejected imp={imp} busy={busy} sentBack={sentBack} onRetry={onRetry} onSendBack={onSendBack} />;
+  if (imp.error)
+    return <DraftRejected imp={imp} busy={busy} sentBack={sentBack} onRetry={onRetry} onSendBack={onSendBack} retryRefused={retryRefused} newRun={newRun} />;
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-text">
       <span>
@@ -1195,14 +1222,19 @@ function DraftRejected({
   sentBack = false,
   onRetry,
   onSendBack,
+  retryRefused,
+  newRun,
 }: {
   imp: NonNullable<SegmentOut["draft_import"]>;
   busy: boolean;
   sentBack?: boolean;
   onRetry?: () => void;
   onSendBack?: () => void;
+  retryRefused?: string | null;
+  newRun?: RunStart;
 }) {
   const [open, setOpen] = useState(false);
+  const [starting, setStarting] = useState(false);
   // Imports refused before the problems were kept carry the error alone.
   const problems = imp.problems ?? [];
   const n = problems.length;
@@ -1246,6 +1278,17 @@ function DraftRejected({
           )}
         </>
       )}
+      {retryRefused && (
+        <p className="text-text2" data-testid="draft-retry-refused">
+          {retryRefused}
+        </p>
+      )}
+      {newRun && (
+        <Button disabled={busy} icon="plus" onClick={() => setStarting(true)}>
+          Start a new run
+        </Button>
+      )}
+      {starting && newRun && <NewRunDialog onClose={() => setStarting(false)} start={newRun} />}
       {(onRetry || onSendBack) && (
         <div className="flex flex-wrap gap-2">
           {onSendBack && (

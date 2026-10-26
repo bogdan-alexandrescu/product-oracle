@@ -16,8 +16,9 @@ from typing import Any
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import changes
+from oracle import changes, company_time
 from oracle.baseline.models import Entity
+from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion
 from oracle.roadmap import items as items_mod
 from oracle.roadmap import staleness, tracker
@@ -56,8 +57,9 @@ HORIZON_ORDER = {"now": 0, "next": 1, "later": 2}
 MONITOR_EVERY_SECONDS = 3600
 
 
-def today() -> date:
-    return datetime.now(UTC).date()
+async def today(db: AsyncSession) -> date:
+    """The company's day now (the Company time zone), which the track's dates read."""
+    return await company_time.company_today(db)
 
 
 # --- documents and versions --------------------------------------------------------------
@@ -128,7 +130,7 @@ async def version_items(db: AsyncSession, version: DocumentVersion | None) -> li
 # --- items -------------------------------------------------------------------------------
 
 
-def _entity_ref(e: Entity) -> EntityRef:
+def entity_ref(e: Entity) -> EntityRef:
     return EntityRef(id=e.id, type=e.type, key=e.key, title=e.title, status=e.status)
 
 
@@ -137,13 +139,13 @@ def blocker_dependency(e: Entity) -> BlockerDependency:
     if not isinstance(spec, dict):
         # A plain constraint, with no blocker strategy: shown, but it blocks nothing.
         return BlockerDependency(
-            **_entity_ref(e).model_dump(), blocker_status="constraint", resolved=True,
+            **entity_ref(e).model_dump(), blocker_status="constraint", resolved=True,
             critical=False,
         )  # fmt: skip
     status = str(spec.get("status") or "open")
     resolved = status in RESOLVED or e.status == "rejected"
     return BlockerDependency(
-        **_entity_ref(e).model_dump(),
+        **entity_ref(e).model_dump(),
         blocker_status=status,
         severity=spec.get("severity"),
         blocker_type=spec.get("type"),
@@ -165,10 +167,13 @@ class ItemContext:
         self.prd_records: dict[tuple[uuid.UUID | None, str], list[TrackerRecord]] = {}
         # Each item's milestone with its date re-checked now (items.live_milestones).
         self.milestones: dict[uuid.UUID, Any] = {}
+        # What the reader may not see (visibility.hidden_for_reader); None: everything.
+        self.hidden: visibility.Hidden | None = None
 
     @classmethod
     async def load(cls, db: AsyncSession, rows: list[RoadmapItem]) -> "ItemContext":
         ctx = cls()
+        ctx.hidden = await visibility.hidden_for_reader(db)
         ids: set[uuid.UUID] = set()
         for i in rows:
             ids.update(i.requirement_ids or [])
@@ -246,7 +251,7 @@ def item_out(item: RoadmapItem, ctx: ItemContext, view: str = "full") -> Roadmap
         horizon=item.horizon,  # type: ignore[arg-type]
         milestone=ctx.milestone_of(item),
         freshness=item.freshness,  # type: ignore[arg-type]
-        stale_reasons=list(item.stale_reasons or []),
+        stale_reasons=staleness.for_reader(item.stale_reasons, ctx.hidden),
         stale_since=item.stale_since,
         caused_by_change_id=item.caused_by_change_id,
         prd=PrdAnchor(
@@ -275,11 +280,9 @@ def item_out(item: RoadmapItem, ctx: ItemContext, view: str = "full") -> Roadmap
     feature = ctx.entities.get(item.feature_id) if item.feature_id else None
     return out.model_copy(
         update={
-            "feature": _entity_ref(feature) if feature else None,
+            "feature": entity_ref(feature) if feature else None,
             "requirements": [
-                _entity_ref(ctx.entities[r])
-                for r in item.requirement_ids or []
-                if r in ctx.entities
+                entity_ref(ctx.entities[r]) for r in item.requirement_ids or [] if r in ctx.entities
             ],
             "blockers": [blocker_dependency(e) for e in ctx.blockers.get(item.id, [])],
             "trace": [TraceLink.model_validate(t) for t in item.trace or []],
@@ -368,7 +371,7 @@ async def alignment(
             by_key.setdefault(r.item_key, []).append(r)
     dated = await _dated_items(db, track_id)
     live = await items_mod.live_milestones(db, rows)
-    now = today()
+    now = await today(db)
     out_items = []
     counts = {"items": len(rows), "aligned": 0, "drift": 0, "untracked": 0, "done": 0}
     for item in rows:
@@ -555,7 +558,7 @@ async def milestone_bases(
     db: AsyncSession, milestones: list[TrackMilestone]
 ) -> list[ScheduleBasis]:
     """The schedule bases :func:`next_milestone` may name: those of the chosen milestone."""
-    chosen = chosen_milestone(milestones, today())
+    chosen = chosen_milestone(milestones, await today(db))
     if chosen is None or not chosen.basis_ids:
         return []
     return list(
@@ -628,7 +631,9 @@ def item_risk(
             if b.critical and item.horizon == "now":
                 risk.off = True
     if item.freshness in ("potentially_stale", "under_review"):
-        why = staleness.stale_why(item.stale_reasons, "its PRD trace changed")
+        why = staleness.stale_why(
+            staleness.for_reader(item.stale_reasons, ctx.hidden), "its PRD trace changed"
+        )
         reasons.append({"kind": "stale", "detail": why})
     when = tracker.milestone_date(item, dated, ctx.milestone_of(item))
     risk.drift = tracker.drift_of(item, records, when, now)
@@ -773,7 +778,7 @@ async def read(db: AsyncSession, track: ProductTrack) -> TrackRead:
         records,
         await milestone_bases(db, milestones),
         source_number,
-        today(),
+        await today(db),
     )
     return TrackRead(
         overview=out, risks=risks, rows=rows, ctx=ctx, milestones=milestones, records=records

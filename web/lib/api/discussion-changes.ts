@@ -65,6 +65,9 @@ export const KIND_LABEL: Record<string, string> = {
   priority_move: "Move a priority",
   priority_pin: "Pin a priority",
   ask_person: "Ask someone",
+  scope_feature: "Include, exclude or defer a feature",
+  scope_requirement: "Add, change or cut a requirement",
+  decision: "Propose a decision",
 };
 export const kindLabel = (kind: string) => KIND_LABEL[kind] ?? kind.replace(/_/g, " ");
 
@@ -79,8 +82,8 @@ export const VERB_ROUTE: Record<ChangeVerb, string> = {
   Ask: "ask",
 };
 
-/** One call on the API's transport; the body is JSON. */
-async function call<T>(method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<T> {
+/** One request on the API's transport; the body is JSON. */
+async function send(method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<{ response: Response; parsed: unknown }> {
   const init: RequestInit = {
     method,
     headers: body === undefined ? { accept: "application/json" } : { accept: "application/json", "content-type": "application/json" },
@@ -95,6 +98,12 @@ async function call<T>(method: "GET" | "POST" | "PATCH", path: string, body?: un
   } catch {
     parsed = undefined;
   }
+  return { response, parsed };
+}
+
+/** One call on the API's transport; fails with the same ApiError as `api`. */
+async function call<T>(method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<T> {
+  const { response, parsed } = await send(method, path, body);
   return unwrap<T>(Promise.resolve(response.ok ? { data: parsed as T, response } : { error: parsed, response }));
 }
 
@@ -117,6 +126,43 @@ export const editChange = (c: ChangeOut, payload: Record<string, unknown>, ratio
 /** suggest, withdraw, dismiss, or the kind's verb route (stage, propose, resolve, answer, …). */
 export const actOnChange = (c: ChangeOut, route: string, extra: Record<string, unknown> = {}) =>
   call<ChangeResult>("POST", `/v1/discussion-changes/${c.id}/${route}`, { ...extra, lock_version: c.lock_version });
+
+/** One of Oracle's objections to an Apply (C9's rules, the reason check). */
+export type PushbackItem = { code: string; message: string; evidence?: unknown[] };
+
+/** Apply's 409 when Oracle pushes back: nothing is stored and the change stays open. */
+export class ApplyPushback extends Error {
+  constructor(
+    readonly pushback: PushbackItem[],
+    readonly previewRank: number | null,
+    readonly heldBelow: string | null,
+    detail: string,
+  ) {
+    super(detail);
+  }
+}
+
+/**
+ * Apply a priority move or pin. Without `confirm`, Oracle may push back (409, an
+ * ApplyPushback with its reasons); sending again with `confirm: true` and a reason keeps it.
+ */
+export async function applyChange(c: ChangeOut, opts: { reason?: string; confirm?: boolean } = {}): Promise<ChangeResult> {
+  const body = { ...(opts.reason ? { reason: opts.reason } : {}), ...(opts.confirm ? { confirm: true } : {}), lock_version: c.lock_version };
+  const { response, parsed } = await send("POST", `/v1/discussion-changes/${c.id}/apply`, body);
+  const out = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+  if (response.status === 409 && out && Array.isArray(out.pushback) && out.pushback.length) {
+    const items = (out.pushback as unknown[])
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === "object")
+      .map((x) => ({ code: String(x.code ?? ""), message: String(x.message ?? ""), ...(Array.isArray(x.evidence) ? { evidence: x.evidence } : {}) }));
+    throw new ApplyPushback(
+      items,
+      typeof out.preview_rank === "number" ? out.preview_rank : null,
+      typeof out.held_below === "string" ? out.held_below : null,
+      typeof out.detail === "string" ? out.detail : "Oracle pushed back on this",
+    );
+  }
+  return unwrap<ChangeResult>(Promise.resolve(response.ok ? { data: parsed as ChangeResult, response } : { error: parsed, response }));
+}
 
 /** Ask Oracle for a summary draft; `replace` when the starter replaces a confirmed one. */
 export const askSummary = (discussionId: string, replace = false) =>

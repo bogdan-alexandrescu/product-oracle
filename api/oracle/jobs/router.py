@@ -210,7 +210,13 @@ async def build_next_draft_with_agents(
     approval over the threshold. 409 when the plan says Oracle builds them."""
     try:
         run_id = await next_draft.start_run(
-            db, principal, doc, body.suggestion_ids, body.feedback_ids, body.depth
+            db,
+            principal,
+            doc,
+            body.suggestion_ids,
+            body.feedback_ids,
+            body.depth,
+            body.next_draft_change_ids,
         )
     except service.JobError as e:
         raise HTTPException(e.status, str(e)) from e
@@ -296,7 +302,7 @@ async def edit_suggestion(
     row = await _call(service.edit_suggestion(db, principal, suggestion_id, body.text))
     await db.commit()
     await db.refresh(row)
-    return SuggestionOut.model_validate(row)
+    return (await service.suggestions_out(db, [row]))[0]
 
 
 @router.post("/suggestions/{suggestion_id}/accept", response_model=SuggestionOut)
@@ -310,7 +316,20 @@ async def accept_suggestion(
     )
     await db.commit()
     await db.refresh(row)
-    return SuggestionOut.model_validate(row)
+    return (await service.suggestions_out(db, [row]))[0]
+
+
+@router.post("/suggestions/{suggestion_id}/undo-accept", response_model=SuggestionOut)
+async def undo_accept_suggestion(
+    suggestion_id: uuid.UUID, principal: ApproverNow, db: TenantDB
+) -> SuggestionOut:
+    """Undo Accept: the suggestion is open again and its item as before Accept. 409 with
+    the reason when it cannot be: an answer already posted, a change a draft applied or a
+    build is using, an item changed since."""
+    row = await _call(service.undo_accept(db, principal, suggestion_id))
+    await db.commit()
+    await db.refresh(row)
+    return (await service.suggestions_out(db, [row]))[0]
 
 
 @router.post("/suggestions/{suggestion_id}/dismiss", response_model=SuggestionOut)
@@ -322,7 +341,7 @@ async def dismiss_suggestion(
     )
     await db.commit()
     await db.refresh(row)
-    return SuggestionOut.model_validate(row)
+    return (await service.suggestions_out(db, [row]))[0]
 
 
 # --- reports --------------------------------------------------------------------------

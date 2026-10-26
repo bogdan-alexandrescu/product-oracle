@@ -20,6 +20,7 @@
  * Synthetic placeholders only.
  */
 import type { Schemas } from "@/lib/api/client";
+import { applyNudge, nudgeReason, type Nudge, type Nudges } from "./learned";
 import { displayName } from "@/lib/names";
 import { baselineReviewStatus } from "./baseline";
 import type { V2Db } from "./v2";
@@ -59,6 +60,8 @@ export interface SubjectLookup {
   document: (id: string) => { slug: string; title: string; latest: number; heading: (key: string) => string | null } | null;
   entity: (id: string) => string | null;
   checkpoint: (id: string) => { run_id: string; kind: string } | null;
+  /** A Plan item's title, by its PRD and key (F2 Ask from the Plan). */
+  roadmapItem?: (documentId: string, key: string) => string | null;
 }
 
 export interface IntakeContext {
@@ -76,7 +79,32 @@ export interface IntakeContext {
   /** The approved (locked) section keys of a document's latest version, by its id or slug; a
    * PRD patch on one of them is refused, as review.service.locked_section_keys does. */
   lockedSections?: (document: string) => string[];
+  /** C1 lane 2, "Requests behind it": why these requests cannot be behind a brief (null when
+   * they can), linking them to the new brief, and releasing them when it is archived. */
+  requests?: {
+    refusal: (ids: string[]) => { status: number; detail: string } | null;
+    link: (intakeId: string, ids: string[]) => void;
+    release: (intakeId: string) => void;
+  };
+  /** H11 Ask people questions: the level Oracle follows now (Recommend without it). */
+  questionsLevel?: () => "observe" | "draft" | "recommend" | "act";
+  /** Kept learnings about question categories: they tune the drafted questions' order. */
+  learned?: () => Nudges;
+  /** C5 late answers: raises a whole-draft feedback item on the document's latest version
+   * (by its id or slug); null when it has none yet. */
+  raiseFeedback?: (
+    document: string,
+    item: { summary: string; author_id: string | null; intake_question_id: string; intake_answer_id: string },
+  ) => { slug: string; version: number } | null;
+  /** Withdraws the late answers' feedback items of these answers, as late_answers.on_sharing
+   * does when their finding goes back to private or counts: deletes the ones nobody acted on,
+   * keeps the others with their quote withheld; returns the answer ids of the kept ones. */
+  withdrawFeedback?: (answerIds: string[]) => string[];
 }
+
+/** H11 questions at Observe: why no batch is proposed or asked (as oracle.intake.autoask). */
+export const QUESTIONS_OBSERVE = "Oracle is set to observe questions: it asks no one. An owner can change this in Settings › Autonomy.";
+const questionsLevel = (ctx: IntakeContext) => ctx.questionsLevel?.() ?? "recommend";
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);
@@ -128,8 +156,18 @@ const forbidden = (min: Role) => fail(403, `Requires the ${min} role`);
 const score = (g: Gap) =>
   IMPORTANCE_WEIGHT[g.importance] * g.impact.reduce((s, a) => s + IMPACT_WEIGHT[a], 0) * (1 - KNOWN[g.knowledge_state]);
 const group = (g: Gap) => (OPEN.has(g.status) ? 0 : g.status === "deferred" ? 1 : 2);
+/** Kept learnings about question categories, read as each request starts (./learned.ts). */
+let learned: Nudges = {};
 function ranked(gaps: Gap[]): Gap[] {
   return [...gaps].sort((a, b) => group(a) - group(b) || score(b) - score(a));
+}
+/** The nudge each gap was last ranked with, by gap id (the API's analysis["learned"]): a gap
+ * whose question was asked keeps its own, so asked questions are never re-ranked. */
+const synced = new Map<string, Nudge | undefined>();
+/** A drafted question's why, and the learning that moved it ("Recommended because ..."). */
+function rationaleOf(g: Gap): string {
+  const n = synced.get(g.id);
+  return `${LABEL[g.category]} gap, ${g.importance}.${n ? ` ${nudgeReason(n)}` : ""}`;
 }
 
 function rankedOut(gaps: Gap[]): Schemas["RankedGap"][] {
@@ -311,12 +349,80 @@ function summary(db: V2Db, intake: Intake, userId: string): Schemas["IntakeSumma
 }
 
 /** The intake's draft run, and the answers given after it (C5). */
-function drafting(db: V2Db, intake: Intake): Pick<Schemas["IntakeSummary"], "draft_run_id" | "answers_since_run"> {
+function drafting(
+  db: V2Db,
+  intake: Intake,
+): Pick<Schemas["IntakeSummary"], "draft_run_id" | "answers_since_run" | "late_answers_as_feedback" | "draft_document" | "draft_version"> {
   const run = db.intake_runs?.[intake.id];
-  if (!run) return { draft_run_id: null, answers_since_run: 0 };
+  if (!run) return { draft_run_id: null, answers_since_run: 0, late_answers_as_feedback: 0, draft_document: null, draft_version: null };
   const mine = new Set(db.questions.filter((q) => q.intake_id === intake.id).map((q) => q.id));
   const since = db.answers.filter((a) => mine.has(a.question_id) && !run.answer_ids.includes(a.id)).length;
-  return { draft_run_id: run.run_id, answers_since_run: intake.status === "converted" ? since : 0 };
+  const raised = Object.values(db.late_answer_feedback ?? {}).filter((r) => r.intake_id === intake.id && !r.withheld);
+  const last = raised.at(-1);
+  return {
+    draft_run_id: run.run_id,
+    answers_since_run: intake.status === "converted" ? since : 0,
+    late_answers_as_feedback: raised.length,
+    draft_document: last?.slug ?? run.document ?? null,
+    draft_version: last?.version ?? null,
+  };
+}
+
+/** The prefix of a late answer's feedback item, as late_answers.LEAD. */
+export const LATE_ANSWER_LEAD = "Answered after drafting started";
+/** A kept item's summary while its finding is not shared in full, as late_answers.WITHHELD. */
+export const LATE_ANSWER_WITHHELD = `${LATE_ANSWER_LEAD} (withheld while its finding is not shared in full)`;
+
+/**
+ * C5 late answers, as late_answers.on_answer: an answer with a body given after the intake's
+ * draft run started becomes one whole-draft feedback item on its PRD, linked to its question.
+ */
+function raiseLateAnswer(db: V2Db, ctx: IntakeContext, question: Question, answer: Schemas["StakeholderAnswerOut"]) {
+  const intake = question.intake_id ? db.intakes.find((i) => i.id === question.intake_id) : undefined;
+  const run = intake ? db.intake_runs?.[intake.id] : undefined;
+  if (!intake || !run || intake.status !== "converted" || run.answer_ids.includes(answer.id)) return;
+  if (answer.kind !== "answer" || !answer.body || !ctx.raiseFeedback) return;
+  const gap = db.gaps.find((g) => g.id === question.gap_id);
+  const before = db.late_answer_feedback?.[answer.id];
+  if ((gap && !quotable(db, gap)) || (before && !before.withheld)) return;
+  const document = intake.document_id ?? run.document;
+  if (!document) return;
+  const at = ctx.raiseFeedback(document, {
+    summary: `${LATE_ANSWER_LEAD}: ${question.prompt} ${answer.body}`.slice(0, 4000),
+    author_id: answer.answered_by ?? null,
+    intake_question_id: question.id,
+    intake_answer_id: answer.id,
+  });
+  // A kept item reads in full again (raiseFeedback restores its summary).
+  if (at) db.late_answer_feedback = { ...db.late_answer_feedback, [answer.id]: { intake_id: intake.id, ...(before ?? at), withheld: false } };
+}
+
+/**
+ * Whether others read the gap's answers in full (S6, as answers.proposal_mode "full"): not a
+ * private gap, and not a finding of the author's that is private or shared at counts only.
+ */
+function quotable(db: V2Db, gap: Gap): boolean {
+  if (privateGap(db, gap)) return false;
+  const finding = Object.values(db.intake_findings ?? {}).flat().find((f) => f.gap_id === gap.id);
+  return !finding || finding.sharing === "summary" || finding.sharing === "full";
+}
+
+/** A finding's level changed: its late answers' feedback items follow it (late_answers.on_sharing). */
+function lateAnswersOnSharing(db: V2Db, ctx: IntakeContext, gapId: string) {
+  const gap = db.gaps.find((g) => g.id === gapId);
+  if (!gap) return;
+  const questions = db.questions.filter((q) => q.gap_id === gap.id);
+  const answers = db.answers.filter((a) => questions.some((q) => q.id === a.question_id));
+  if (!quotable(db, gap)) {
+    const ids = answers.map((a) => a.id).filter((id) => db.late_answer_feedback?.[id]);
+    const kept = ctx.withdrawFeedback?.(ids) ?? [];
+    for (const id of ids) {
+      if (kept.includes(id)) db.late_answer_feedback![id] = { ...db.late_answer_feedback![id], withheld: true };
+      else delete db.late_answer_feedback![id];
+    }
+    return;
+  }
+  for (const a of answers) raiseLateAnswer(db, ctx, questions.find((q) => q.id === a.question_id)!, a);
 }
 
 /** The draft gate (C5): the critical blockers neither answered nor decided. */
@@ -364,18 +470,22 @@ function addIntake(db: V2Db, authorId: string, title: string, brief: string, sou
 
 /** Keep one question per open gap, drafted in rank order. */
 function syncQuestions(db: V2Db, intake: Intake, at = now()) {
-  ranked(db.gaps.filter((g) => g.intake_id === intake.id)).forEach((g, i) => {
+  const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
+  const asked = (g: Gap) => db.questions.some((q) => q.gap_id === g.id && q.status !== "draft" && q.status !== "withdrawn");
+  for (const g of gaps) if (!asked(g)) synced.set(g.id, learned[g.category]);
+  const tuned = (g: Gap) => applyNudge(score(g), synced.get(g.id));
+  [...gaps].sort((a, b) => group(a) - group(b) || tuned(b) - tuned(a)).forEach((g, i) => {
     const mine = db.questions.filter((q) => q.gap_id === g.id && q.status !== "withdrawn");
     if (!OPEN.has(g.status)) {
       mine.filter((q) => q.status === "draft").forEach((q) => (q.status = "withdrawn"));
       return;
     }
-    mine.filter((q) => q.status === "draft").forEach((q) => (q.priority = (i + 1) * 10));
+    mine.filter((q) => q.status === "draft").forEach((q) => Object.assign(q, { priority: (i + 1) * 10, rationale: rationaleOf(g) }));
     if (mine.length || g.status !== "unknown") return;
     const prompt = CATEGORIES.find((c) => c[0] === g.category)?.[4] ?? g.statement;
     db.questions.push({
       id: uuid(), gap_id: g.id, intake_id: intake.id, document_id: intake.document_id, category: g.category,
-      prompt, rationale: `${LABEL[g.category]} gap, ${g.importance}.`, priority: (i + 1) * 10, batch: null,
+      prompt, rationale: rationaleOf(g), priority: (i + 1) * 10, batch: null,
       asked_to: g.owner_id, asked_by: null, module_key: g.related_modules[0] ?? null, section_key: g.section_keys[0] ?? null,
       status: "draft", created_at: at, updated_at: at,
     });
@@ -404,9 +514,11 @@ function askBatch(db: V2Db, ctx: IntakeContext, intake: Intake, size: number, as
   for (const q of questions) if (q.status === "draft" && assign[q.id]) q.asked_to = assign[q.id];
   const drafts = chooseDrafts(questions, size);
   const n = Math.max(0, ...questions.map((q) => q.batch ?? 0)) + 1;
+  // At Draft (H11 questions) the person the preview named, never the sender (as the API).
+  const asker = questionsLevel(ctx) !== "draft";
   for (const q of drafts) {
     const g = db.gaps.find((x) => x.id === q.gap_id);
-    Object.assign(q, { status: "asked", batch: n, asked_by: ctx.userId, asked_to: personFor(db, ctx, intake, q), updated_at: now() });
+    Object.assign(q, { status: "asked", batch: n, asked_by: ctx.userId, asked_to: personFor(db, ctx, intake, q, asker), updated_at: now() });
     if (g && g.status === "unknown") g.status = "asked";
   }
   return drafts;
@@ -419,13 +531,13 @@ function chooseDrafts(questions: Question[], size: number): Question[] {
 
 /** Who a question is asked of: its own person, else its gap's owner, else the intake's author,
  * else the asker, else the first approver; a private finding's question, the author. */
-function personFor(db: V2Db, ctx: IntakeContext, intake: Intake, q: Question): string | null {
+function personFor(db: V2Db, ctx: IntakeContext, intake: Intake, q: Question, asker = true): string | null {
   const g = db.gaps.find((x) => x.id === q.gap_id);
   if (privateGap(db, g)) return intake.author_id ?? null;
   // Without a member list, the mock cannot tell who can answer: anyone named may be asked.
   const able = (id: string | null | undefined): id is string => !!id && (!ctx.people || canAnswer(ctx, id));
   const approver = (ctx.people ?? []).find((x) => x.status !== "disabled" && atLeast(x.role, "approver"))?.id;
-  return [q.asked_to, g?.owner_id, intake.author_id, ctx.userId].find(able) ?? approver ?? intake.author_id ?? null;
+  return [q.asked_to, g?.owner_id, intake.author_id, asker ? ctx.userId : null].find(able) ?? approver ?? intake.author_id ?? null;
 }
 
 /** A batch's cards (GET .../question-batch, .../next-batch). */
@@ -483,6 +595,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
   const m = req.method;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
   const findIntake = (id: string) => db.intakes.find((i) => i.id === id);
+  learned = ctx.learned?.() ?? {};
 
   if (p[1] === "intakes" && p.length === 2 && m === "POST") {
     if (!atLeast(ctx.role, "commenter")) return forbidden("commenter");
@@ -490,10 +603,21 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     if (!input?.title || !input.brief || input.brief.trim().length < 20 || input.brief.length > 4000) return fail(422, "a brief needs at least a sentence");
     const fields = briefFields(ctx, input);
     if (typeof fields === "string") return fail(422, fields);
+    const raw = input.request_ids ?? [];
+    // IntakeCreate.request_ids has max_length=50: FastAPI's own validation error.
+    if (raw.length > 50) {
+      const msg = `List should have at most 50 items after validation, not ${raw.length}`;
+      return json(422, { detail: [{ type: "too_long", loc: ["body", "request_ids"], msg, input: raw }] });
+    }
+    const requestIds = [...new Set(raw)];
+    const refused = requestIds.length ? ctx.requests?.refusal(requestIds) : null;
+    if (refused) return fail(refused.status, refused.detail);
     const intake = addIntake(db, ctx.userId, input.title, input.brief, input.source_ids ?? []);
     Object.assign(intake, fields);
+    if (requestIds.length) ctx.requests?.link(intake.id, requestIds);
     applyBriefFields(db, ctx, intake);
-    askBatch(db, ctx, intake, input.batch_size ?? 5);
+    // At Observe and Draft a new brief asks no one; a person sends (H11 questions).
+    if (questionsLevel(ctx) === "recommend" || questionsLevel(ctx) === "act") askBatch(db, ctx, intake, input.batch_size ?? 5);
     return json(201, summary(db, intake, ctx.userId));
   }
 
@@ -518,6 +642,8 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (patch.status && patch.status !== intake.status) {
         intake.status = patch.status;
         retireQuestions(db, intake);
+        // An archived brief that made no PRD releases the requests behind it.
+        if (intake.status === "archived") ctx.requests?.release(intake.id);
       }
       intake.lock_version += 1;
       intake.updated_at = now();
@@ -538,9 +664,13 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       const size = Number(q.get("size") ?? 5);
       if (!(size >= 1 && size <= 10)) return fail(422, "size is 1 to 10");
       const questions = db.questions.filter((x) => x.intake_id === intake.id);
-      // Copies: the stored question keeps its person until the batch is asked.
-      const shown = chooseDrafts(questions, size).map((x) => ({ ...x, asked_to: personFor(db, ctx, intake, x) }));
-      return json(200, { questions: cards(db, shown), remaining: questions.filter((x) => x.status === "draft").length } satisfies Schemas["NextBatch"]);
+      const remaining = questions.filter((x) => x.status === "draft").length;
+      const level = questionsLevel(ctx);
+      if (level === "observe") return json(200, { questions: [], remaining, held: QUESTIONS_OBSERVE } satisfies Schemas["NextBatch"]);
+      // Copies: the stored question keeps its person until the batch is asked. At Draft each
+      // keeps its own named person, never the reader.
+      const shown = chooseDrafts(questions, size).map((x) => ({ ...x, asked_to: personFor(db, ctx, intake, x, level !== "draft") }));
+      return json(200, { questions: cards(db, shown), remaining, held: null } satisfies Schemas["NextBatch"]);
     }
     if (leaf === "composition-inputs" && m === "GET") {
       const gaps = db.gaps.filter((g) => g.intake_id === intake.id);
@@ -566,7 +696,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (!changes) return null;
       const missing = changes.find((c) => !all.some((f) => f.id === c.finding_id));
       if (missing) return fail(404, `Finding ${missing.finding_id} not found`);
-      for (const c of changes) all.find((f) => f.id === c.finding_id)!.sharing = c.sharing;
+      for (const c of changes) {
+        const finding = all.find((f) => f.id === c.finding_id)!;
+        const before = finding.sharing;
+        finding.sharing = c.sharing;
+        if (finding.gap_id && before !== c.sharing) lateAnswersOnSharing(db, ctx, finding.gap_id);
+      }
       const set = new Set(changes.map((c) => c.finding_id));
       const out = findingsFor(db, intake, ctx.userId).filter((f) => set.has(f.id));
       return json(200, m === "PATCH" ? out[0] : out);
@@ -584,6 +719,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     }
     if (leaf === "question-batches" && m === "POST") {
       if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver asks the next batch");
+      if (questionsLevel(ctx) === "observe") return fail(409, QUESTIONS_OBSERVE);
       const input = await body<Schemas["QuestionBatchAsk"] | null>();
       const assign = input?.assign ?? {};
       for (const [qid, person] of Object.entries(assign)) {
@@ -595,6 +731,15 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       const asked = askBatch(db, ctx, intake, Number(input?.size ?? q.get("size") ?? 5), assign);
       if (!asked.length) return fail(409, "No questions left to ask");
       return json(200, batchView(db, intake, asked[0].batch ?? null));
+    }
+    if (leaf === "questions" && p[4] === "withdraw" && m === "POST") {
+      // The Undo of a batch Oracle asked on its own: still-waiting questions are withdrawn.
+      if (intake.author_id !== ctx.userId && !atLeast(ctx.role, "approver")) return fail(403, "Only the intake's author or an approver withdraws these questions");
+      const ids = new Set((await body<Schemas["QuestionsWithdraw"]>())?.question_ids ?? []);
+      if (!ids.size) return fail(422, "Name at least one question");
+      const done = db.questions.filter((x) => x.intake_id === intake.id && ids.has(x.id) && (x.status === "asked" || x.status === "delegated"));
+      for (const x of done) Object.assign(x, { status: "withdrawn", updated_at: now() });
+      return json(200, { question_ids: done.map((x) => x.id) } satisfies Schemas["QuestionsWithdrawn"]);
     }
     if (leaf === "runs" && m === "POST") {
       if (!atLeast(ctx.role, "approver")) return forbidden("approver");
@@ -634,7 +779,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       if (resp.ok) {
         // The brief stays open until its run starts (startedIntakeRun converts it, C4).
         const run = (await resp.clone().json()) as { id: string };
-        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: [] } };
+        db.intake_runs = { ...db.intake_runs, [intake.id]: { run_id: run.id, answer_ids: [], document: document ?? undefined } };
       }
       return resp;
     }
@@ -829,6 +974,7 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
       knowledge_state: input.kind === "answer" ? input.knowledge_state ?? "user_decision" : "unknown", created_at: now(),
     };
     db.answers.push(answer);
+    raiseLateAnswer(db, ctx, question, answer);
     const effects: Record<Schemas["AnswerIn"]["kind"], [Question["status"], Gap["status"] | null]> = {
       answer: ["answered", "answered"], dont_know: ["answered", "unknown"], defer: ["deferred", "deferred"],
       delegate: ["delegated", null], research: ["researching", "under_investigation"],
@@ -891,6 +1037,9 @@ function subjectColumns(db: V2Db, ctx: IntakeContext, subject: Schemas["Question
   if (subject.kind === "checkpoint_item") {
     return ctx.subjects?.checkpoint(subject.checkpoint_id) ? { checkpoint_id: subject.checkpoint_id, item_ref: subject.item_ref } : null;
   }
+  if (subject.kind === "roadmap_item") {
+    return ctx.subjects?.roadmapItem?.(subject.document_id, subject.item_key) != null ? { document_id: subject.document_id, item_ref: subject.item_key } : null;
+  }
   return ctx.subjects?.entity(subject.entity_id) != null ? { entity_id: subject.entity_id } : null;
 }
 
@@ -901,6 +1050,10 @@ function subjectOf(db: V2Db, ctx: IntakeContext, q: Question): Schemas["InboxSub
   }
   if (q.entity_id) return { kind: "entity", title: `Baseline · ${ctx.subjects?.entity(q.entity_id) ?? "an entity"}`, href: `/baseline?entity=${q.entity_id}` };
   const doc = q.document_id ? ctx.subjects?.document(q.document_id) : null;
+  if (q.item_ref && doc) {
+    const title = ctx.subjects?.roadmapItem?.(q.document_id!, q.item_ref) ?? q.item_ref;
+    return { kind: "roadmap_item", title: `${doc.title} · ${title}`, href: `/plan?prd=${q.document_id}&item=${encodeURIComponent(q.item_ref)}` };
+  }
   const intake = q.intake_id ? db.intakes.find((i) => i.id === q.intake_id) : undefined;
   if (intake) return { kind: "intake", title: `Before drafting · ${intake.title}`, href: `/intakes/${intake.id}` };
   if (!doc) return { kind: "document_section", title: "A document", href: null };

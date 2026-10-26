@@ -12,22 +12,28 @@ a run whose review was approved before that finished without a document, and an 
 retries its import after the run finished.
 """
 
+import asyncio
+import re
 import uuid
 from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from oracle import db
+from oracle.config import get_settings
 from oracle.docs import service as docs_service
 from oracle.docs.models import Citation, Document, DocumentVersion
 from oracle.docs.parser import DraftError
 from oracle.docs.schemas import ImportProblem
 from oracle.models import AuditEvent
 from oracle.runs import flows
+from oracle.runs import service as run_service
 from oracle.runs.models import Checkpoint, Run
 from oracle.swarm import FakeRuntime, Outcome, set_runtime
-from oracle.tenancy import tenant_session
-from tests.fixtures import draft, seed_auth
+from oracle.tenancy import TenantSession, tenant_session
+from tests.fixtures import draft, import_draft, seed_auth, seed_oracle_refs
 from tests.test_runs import BAD_PRD, as_user, decide, get, pending, started, tick
 
 # Only the PRD review stops: the draft segment (5) is the one that waits.
@@ -52,7 +58,9 @@ def runtime():
 
 @pytest.fixture
 async def owner():
-    return await seed_auth()
+    tenant_id, auth = await seed_auth()
+    await seed_oracle_refs(tenant_id)
+    return tenant_id, auth
 
 
 def _older_oracle(monkeypatch) -> None:
@@ -69,13 +77,20 @@ def _retry_url(run, seq: int = 5) -> str:
 
 
 async def _rejected(
-    client, auth, runtime, monkeypatch, prd: str | None = ORACLE_PRD, document="example-prd"
+    client,
+    auth,
+    runtime,
+    monkeypatch,
+    prd: str | None = ORACLE_PRD,
+    document="example-prd",
+    by=None,
 ):
-    """A baseline_to_prd run waiting at its PRD review with its draft refused."""
+    """A baseline_to_prd run waiting at its PRD review with its draft refused; ``by``
+    starts it (the owner ``auth`` by default)."""
     _older_oracle(monkeypatch)
     files = {} if prd is None else {"prd.md": prd}
     runtime.script["prd_draft"] = [Outcome(artifacts=files)]
-    run = await started(client, auth, document=document, checkpoints=OFF)
+    run = await started(client, by or auth, document=document, checkpoints=OFF)
     for _ in range(4):
         await tick(client, auth)
     monkeypatch.undo()
@@ -295,6 +310,61 @@ async def test_after_the_run_finished_an_owner_retries(client, owner, runtime, m
     assert len(await _retried(tenant_id)) == 1
 
 
+async def test_refused_when_the_slug_now_names_another_document(
+    client, owner, runtime, monkeypatch
+):
+    """The run was to create example-prd; once it finished without it, someone else
+    created a document of that slug. The retry must not add the run's draft to it."""
+    tenant_id, auth = owner
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    await _approved_while_refused(tenant_id, run["id"])
+    other = draft("prd_v1.md").replace("document: checkout-redesign", "document: example-prd")
+    created = await import_draft(client, auth, other, doc="example-prd")
+    assert created.status_code == 201, created.text
+
+    resp = await client.post(_retry_url(run), headers=auth)
+    assert resp.status_code == 409, resp.text
+    assert "example-prd now names another document" in resp.json()["detail"]
+    async with tenant_session(tenant_id) as s:
+        assert await s.scalar(select(DocumentVersion.number)) == 1
+        stored = await s.get(Run, uuid.UUID(run["id"]))
+        assert stored.document_id is None
+    assert await _retried(tenant_id) == []
+
+
+async def test_a_burst_of_retries_imports_a_few_at_a_time(client, owner, runtime, monkeypatch):
+    """Each retry imports in a session of its own (two connections, no lock held): a burst
+    is bounded (DRAFT_RETRY_SLOTS at a time per process), so it cannot take every
+    connection of the pool."""
+    tenant_id, auth = owner
+    runs = []
+    for slug in ("prd-a", "prd-b", "prd-c"):
+        prd = ORACLE_PRD.replace("document: example-prd", f"document: {slug}")
+        runs.append(await _rejected(client, auth, runtime, monkeypatch, prd=prd, document=slug))
+    real = docs_service.import_draft
+    active = peak = 0
+
+    async def slow(*args, **kwargs):
+        nonlocal active, peak
+        active += 1
+        peak = max(peak, active)
+        try:
+            await asyncio.sleep(0.3)
+            return await real(*args, **kwargs)
+        finally:
+            active -= 1
+
+    monkeypatch.setattr(docs_service, "import_draft", slow)
+    answers = await asyncio.gather(*(client.post(_retry_url(r), headers=auth) for r in runs))
+    assert [a.status_code for a in answers] == [200, 200, 200], [a.text for a in answers]
+    assert peak <= 2 == run_service.DRAFT_RETRY_SLOTS
+    assert sorted(a.json()["segments"][4]["draft_import"]["slug"] for a in answers) == [
+        "prd-a",
+        "prd-b",
+        "prd-c",
+    ]
+
+
 async def test_refused_on_a_cancelled_or_failed_run(client, owner, runtime, monkeypatch):
     tenant_id, auth = owner
     cancelled = await _rejected(client, auth, runtime, monkeypatch)
@@ -335,3 +405,352 @@ async def test_the_checkpoint_approver_role_retries(client, owner, runtime, monk
     resp = await client.post(_retry_url(run), headers=approver)
     assert resp.status_code == 200, resp.text
     assert resp.json()["segments"][4]["draft_import"]["version"] == 1
+
+
+async def test_a_retry_imports_with_the_run_row_unlocked(client, owner, runtime, monkeypatch):
+    """#589 review, MAJOR 1: the import's own session is never opened while the retry
+    holds the run's row lock. Two other requests wait on that row (a tick, a cancel) and
+    hold the rest of a small pool: the retry still completes."""
+    tenant_id, auth = owner
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    rid = uuid.UUID(run["id"])
+
+    async def lock_the_run() -> None:
+        async with tenant_session(tenant_id) as s:
+            await s.execute(select(Run.id).where(Run.id == rid).with_for_update())
+            await asyncio.sleep(0.2)
+            await s.commit()
+
+    real = docs_service.import_draft
+    waiters: list[asyncio.Task] = []
+
+    async def crowded(*args, **kwargs):
+        waiters.extend(asyncio.create_task(lock_the_run()) for _ in range(2))
+        await asyncio.sleep(0.5)  # they take the pool's other connections, then the lock
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(docs_service, "import_draft", crowded)
+    with pytest.MonkeyPatch.context() as pool:
+        engine = create_async_engine(
+            get_settings().database_url, pool_size=3, max_overflow=0, pool_timeout=3
+        )
+        pool.setattr(db, "_engine", engine)
+        pool.setattr(
+            db,
+            "_sessionmaker",
+            async_sessionmaker(engine, expire_on_commit=False, sync_session_class=TenantSession),
+        )
+        try:
+            resp = await client.post(_retry_url(run), headers=auth)
+            await asyncio.gather(*waiters)
+        finally:
+            await engine.dispose()
+    assert resp.status_code == 200, resp.text
+    imp = resp.json()["segments"][4]["draft_import"]
+    assert imp["error"] is None and (imp["slug"], imp["version"]) == ("example-prd", 1)
+    assert len(waiters) == 2
+
+
+async def test_a_retry_never_imports_into_a_document_created_meanwhile(
+    client, owner, runtime, monkeypatch
+):
+    """#589 review, MAJOR 2: a member creates a document of the run's slug after the
+    retry's check and before its import. The import refuses; the member's document keeps
+    its one version."""
+    tenant_id, auth = owner
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    await _approved_while_refused(tenant_id, run["id"])
+    other = draft("prd_v1.md").replace("document: checkout-redesign", "document: example-prd")
+    real = docs_service.import_draft
+
+    async def raced(*args, **kwargs):
+        if kwargs.get("run_id") is not None:  # the retry's import, not the member's
+            created = await import_draft(client, auth, other, doc="example-prd")
+            assert created.status_code == 201, created.text
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(docs_service, "import_draft", raced)
+    resp = await client.post(_retry_url(run), headers=auth)
+    monkeypatch.undo()
+    assert resp.status_code == 200, resp.text
+    imp = resp.json()["segments"][4]["draft_import"]
+    assert imp["version"] is None
+    assert "example-prd now names another document" in imp["error"]
+    async with tenant_session(tenant_id) as s:
+        assert list(await s.scalars(select(DocumentVersion.number))) == [1]
+        stored = await s.get(Run, uuid.UUID(run["id"]))
+        assert stored.document_id is None
+
+
+async def test_a_segment_end_import_never_adds_to_another_document(
+    client, owner, runtime, monkeypatch
+):
+    """#589 review (minor): the run was to create example-prd; a member created it while
+    the run drafted. The segment-end import refuses instead of adding the run's draft."""
+    tenant_id, auth = owner
+    runtime.script["prd_draft"] = [Outcome(artifacts={"prd.md": ORACLE_PRD})]
+    run = await started(client, auth, document="example-prd", checkpoints=OFF)
+    other = draft("prd_v1.md").replace("document: checkout-redesign", "document: example-prd")
+    created = await import_draft(client, auth, other, doc="example-prd")
+    assert created.status_code == 201, created.text
+    for _ in range(4):
+        await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    imp = run["segments"][4]["draft_import"]
+    assert imp["version"] is None
+    assert "example-prd now names another document" in imp["error"]
+    assert run["document_id"] is None
+    async with tenant_session(tenant_id) as s:
+        assert list(await s.scalars(select(DocumentVersion.number))) == [1]
+
+
+# --- owner decisions, 2026-10-25 -----------------------------------------------------------
+
+
+async def _inbox(client, headers) -> dict:
+    resp = await client.get("/v1/inbox", headers=headers)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def test_a_run_that_finished_with_no_document_gets_an_inbox_row(
+    client, owner, runtime, monkeypatch
+):
+    tenant_id, auth = owner
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    # Still waiting at its review: the review's checkpoint is the Inbox's item, not this.
+    assert all(r["id"] != run["id"] for r in (await _inbox(client, auth))["no_documents"])
+    await _approved_while_refused(tenant_id, run["id"])
+
+    inbox = await _inbox(client, auth)
+    (row,) = [r for r in inbox["no_documents"] if r["id"] == run["id"]]
+    # A plain reason and the action to take.
+    text = row["no_document"]
+    assert text.startswith("example-prd finished without a document:")
+    assert "Oracle refused its draft" in text and "Retry import" in text
+    assert inbox["total"] >= 1
+    # Owners only: they alone retry a finished run's import.
+    approver = await as_user(tenant_id, "approver")
+    assert (await _inbox(client, approver))["no_documents"] == []
+
+    resp = await client.post(_retry_url(run), headers=auth)
+    assert resp.status_code == 200, resp.text
+    assert all(r["id"] != run["id"] for r in (await _inbox(client, auth))["no_documents"])
+
+
+async def test_draft_rejected_clears_once_the_run_succeeded_past_the_refusal(
+    client, owner, runtime, monkeypatch
+):
+    tenant_id, auth = owner
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    assert (await get(client, auth, run["id"]))["draft_rejected"]
+    await _approved_while_refused(tenant_id, run["id"])
+    seen = await get(client, auth, run["id"])
+    assert seen["status"] == "succeeded" and seen["draft_rejected"] is None
+    listed = (await client.get("/v1/runs", headers=auth)).json()
+    rows = listed if isinstance(listed, list) else listed["runs"]
+    (row,) = [r for r in rows if r["id"] == run["id"]]
+    assert row["draft_rejected"] is None
+    # The segment still shows what was refused, with Retry import.
+    assert seen["segments"][4]["draft_import"]["error"]
+
+
+async def test_a_retried_import_reads_imported_again_by_the_retrier(
+    client, owner, runtime, monkeypatch
+):
+    """The version stays authored by the run's creator; its history says who imported it
+    again and when, in the Company time zone, as the audit records it."""
+    from oracle.company_time import stamp
+    from oracle.members.names import display_name
+
+    tenant_id, auth = owner
+    from oracle.tenant_settings import TenantSetting
+
+    async with tenant_session(tenant_id) as s:
+        s.add(TenantSetting(key="company_timezone", value="Europe/Berlin"))
+        await s.commit()
+    approver = await as_user(tenant_id, "approver", "alex.creator@example.com")
+    run = await _rejected(client, auth, runtime, monkeypatch, by=approver)
+    await _approved_while_refused(tenant_id, run["id"])
+    retrier = await as_user(tenant_id, "owner", "robin.retrier@example.com")
+    resp = await client.post(_retry_url(run), headers=retrier)
+    assert resp.status_code == 200, resp.text
+
+    (event,) = await _retried(tenant_id)
+    versions = (await client.get("/v1/documents/example-prd/versions", headers=auth)).json()
+    (v1,) = versions
+    async with tenant_session(tenant_id) as s:
+        from oracle.auth.models import User
+
+        creator = await s.scalar(select(User).where(User.email == "alex.creator@example.com"))
+    assert v1["imported_by"] == str(creator.id)
+    assert v1["imported_again"] == (
+        f"imported again by {display_name('robin.retrier@example.com')} "
+        f"on {stamp(event.created_at, 'Europe/Berlin')}"
+    )
+    assert "CET" in v1["imported_again"] or "CEST" in v1["imported_again"]
+
+
+async def test_another_segments_import_keeps_the_retry_refused_in_plain_words(
+    client, owner, runtime, monkeypatch
+):
+    tenant_id, auth = owner
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    await _approved_while_refused(tenant_id, run["id"])
+    # Another segment's retry imported a version of the run's document.
+    async with tenant_session(tenant_id) as s:
+        from oracle.runs.models import RunSegment
+
+        other = await s.scalar(
+            select(RunSegment).where(RunSegment.run_id == uuid.UUID(run["id"]), RunSegment.seq == 3)
+        )
+        other.artifacts = {
+            **(other.artifacts or {}),
+            "import": {"slug": "example-prd", "version": 1, "error": None},
+        }
+        await s.commit()
+
+    seen = await get(client, auth, run["id"])
+    seg = seen["segments"][4]
+    assert seg["can_retry_draft_import"] is False
+    why = seg["draft_retry_refused"]
+    assert "already imported example-prd v1" in why and "Start a new run" in why
+    resp = await client.post(_retry_url(run), headers=auth)
+    assert resp.status_code == 409
+    detail = resp.json()["detail"]
+    assert "nothing to retry" in detail and "Start a new run" in detail
+    # The segment that imported reads no refusal.
+    assert seen["segments"][2]["draft_retry_refused"] is None
+
+
+# --- #583 review: the No document row clears itself, and old runs do not flood the Inbox --
+
+
+async def _finished_without_document(client, auth, tenant_id, runtime, monkeypatch, at=None):
+    """A run approved past its refused draft, finished ``at`` (now by default)."""
+    run = await _rejected(client, auth, runtime, monkeypatch)
+    await _approved_while_refused(tenant_id, run["id"])
+    if at is not None:
+        async with tenant_session(tenant_id) as s:
+            (await s.get(Run, uuid.UUID(run["id"]))).finished_at = at
+            await s.commit()
+    return run
+
+
+def _rows(inbox: dict, run) -> list[dict]:
+    return [r for r in inbox["no_documents"] if r["id"] == run["id"]]
+
+
+async def test_the_no_document_row_clears_when_a_later_run_imports_the_document(
+    client, owner, runtime, monkeypatch
+):
+    tenant_id, auth = owner
+    base = (await _inbox(client, auth))["total"]
+    run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
+    inbox = await _inbox(client, auth)
+    assert len(_rows(inbox, run)) == 1 and inbox["total"] == base + 1
+
+    # The owner follows the advice: a new run of the same document imports v1.
+    runtime.script["prd_draft"] = [Outcome(artifacts={"prd.md": ORACLE_PRD})]
+    later = await started(client, auth, document="example-prd", checkpoints=OFF)
+    for _ in range(4):
+        await tick(client, auth)
+    later = await get(client, auth, later["id"])
+    assert later["segments"][4]["draft_import"]["version"] == 1
+
+    inbox = await _inbox(client, auth)
+    assert _rows(inbox, run) == []
+    # The later run waits at its own review: that is the one item left.
+    assert inbox["total"] == base + 1
+    assert [c["run_id"] for c in inbox["checkpoints"]] == [later["id"]]
+
+
+async def test_the_no_document_row_clears_on_a_successful_retry(
+    client, owner, runtime, monkeypatch
+):
+    tenant_id, auth = owner
+    base = (await _inbox(client, auth))["total"]
+    run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
+    inbox = await _inbox(client, auth)
+    assert len(_rows(inbox, run)) == 1
+    assert inbox["total"] == base + len(inbox["no_documents"]) == base + 1
+
+    resp = await client.post(_retry_url(run), headers=auth)
+    assert resp.status_code == 200, resp.text
+    inbox = await _inbox(client, auth)
+    assert inbox["no_documents"] == [] and inbox["total"] == base
+
+
+async def test_a_run_that_finished_before_the_row_shipped_gets_none(
+    client, owner, runtime, monkeypatch
+):
+    from oracle.runs.service import NO_DOCUMENT_SINCE
+
+    tenant_id, auth = owner
+    base = (await _inbox(client, auth))["total"]
+    old = await _finished_without_document(
+        client, auth, tenant_id, runtime, monkeypatch, at=datetime(2026, 10, 1, tzinfo=UTC)
+    )
+    assert datetime(2026, 10, 1, tzinfo=UTC) < NO_DOCUMENT_SINCE
+    inbox = await _inbox(client, auth)
+    assert _rows(inbox, old) == [] and inbox["total"] == base
+    # Its run page still offers Retry import: only the Inbox leaves it out.
+    assert (await get(client, auth, old["id"]))["segments"][4]["can_retry_draft_import"] is True
+
+
+async def test_a_retry_by_oracle_or_the_system_reads_so(client, owner, runtime, monkeypatch):
+    """Not "a former member": Oracle's or the system's retry names them."""
+    tenant_id, auth = owner
+    run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
+    resp = await client.post(_retry_url(run), headers=auth)
+    assert resp.status_code == 200, resp.text
+    for actor, who in (("oracle", "Oracle"), ("system", "the system")):
+        async with tenant_session(tenant_id) as s:
+            (event,) = await s.scalars(
+                select(AuditEvent).where(AuditEvent.action == "run.draft_import_retried")
+            )
+            event.actor = actor
+            await s.commit()
+        (v1,) = (await client.get("/v1/documents/example-prd/versions", headers=auth)).json()
+        assert v1["imported_again"].startswith(f"imported again by {who} on ")
+
+
+async def test_the_no_document_rows_never_read_the_drafts(client, owner, runtime, monkeypatch):
+    """protects=the Inbox's No document rows read only the refused import and the kept
+    files' names; fails_when=its reads select a run segment's whole artifacts (the drafts'
+    text) again; no_claim=the Inbox's other rows (Sent back by Oracle reads active runs'
+    segments) or the run page, which reads the drafts it shows."""
+    from sqlalchemy import event
+
+    from oracle.db import get_engine
+    from oracle.runs import service as runs_service
+
+    tenant_id, auth = owner
+    run = await _finished_without_document(client, auth, tenant_id, runtime, monkeypatch)
+    statements: list[str] = []
+    reading = False
+    no_documents = runs_service._no_documents
+
+    async def watched(db):
+        nonlocal reading
+        reading = True
+        try:
+            return await no_documents(db)
+        finally:
+            reading = False
+
+    def seen(conn, cursor, statement, *args):
+        if reading:
+            statements.append(statement)
+
+    monkeypatch.setattr(runs_service, "_no_documents", watched)
+    engine = get_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", seen)
+    try:
+        inbox = await _inbox(client, auth)
+    finally:
+        event.remove(engine, "before_cursor_execute", seen)
+    assert len(_rows(inbox, run)) == 1 and statements
+    # A whole artifacts column, not one of its keys (artifacts['import'], artifacts -> 'import').
+    whole = re.compile(r"run_segments\.artifacts(?!\s*(->|#>|\[))")
+    assert not [s for s in statements if whole.search(s)]

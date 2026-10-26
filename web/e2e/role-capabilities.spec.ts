@@ -71,6 +71,11 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
     await expect(page.getByRole("heading", { level: 1, name: "Claude accounts" })).toBeVisible();
     await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
     await expect(page.getByRole("button", { name: "+ Add account" })).toHaveCount(0);
+    // BGD 2026-10-25: the pool reads without who holds each account (owners alone see it).
+    await expect(page.getByTestId("account-row-personal")).toBeVisible();
+    await page.getByTestId("account-row-personal").getByRole("button").click();
+    await expect(page.getByTestId("account-detail").getByTestId("fact-claude-account")).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText("ada@example.com");
 
     // Autonomy: the levels read as text; no picker, no owner-only note.
     await settingsNav(page).getByTestId("nav-autonomy").click();

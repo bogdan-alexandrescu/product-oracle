@@ -7,7 +7,7 @@ import { Button } from "@/components/ds";
 import { FeedbackStatusChip, JobStatusChip, TabBar } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type FeedbackStatus } from "@/lib/api/client";
-import { formatDate, formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
+import { formatDate, formatDateTime, jobFailure } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
@@ -83,7 +83,7 @@ export function ReportsPanel({
         ) : (
           <span className="text-sm font-semibold text-text2">No reports yet.</span>
         )}
-        {job && job.status !== "succeeded" && <JobStatusChip status={job.status} />}
+        {job && job.status !== "succeeded" && <JobStatusChip status={job.status} at={job.finished_at} />}
         <span className="ml-auto flex gap-1.5">
           {canAct && (
             <Button disabled={busy} onClick={generate}>
@@ -104,8 +104,7 @@ export function ReportsPanel({
       </div>
       {job?.status === "failed" && (
         <p className="rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit" role="alert">
-          {job.error}
-          {job.error_reason && NO_ACCOUNT_REASON[job.error_reason] && <> {NO_ACCOUNT_REASON[job.error_reason]}</>}
+          {jobFailure(job, "Oracle could not write the reports.")}
         </p>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}

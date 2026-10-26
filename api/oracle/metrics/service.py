@@ -124,6 +124,16 @@ async def _goal_taken(db: AsyncSession, goal_id: uuid.UUID | None, metric: Metri
         raise MetricError("Another metric already gives this goal its value", 409)
 
 
+def _query(query: str | None) -> None:
+    """A PostHog metric's query: one read-only SELECT over the allowed tables (422)."""
+    if query is None:
+        return
+    try:
+        posthog.check_query(query)
+    except posthog.QueryRefused as exc:
+        raise MetricError(str(exc)) from None
+
+
 def _definition(metric: Metric) -> dict[str, Any]:
     return {
         "version": metric.definition_version,
@@ -141,6 +151,7 @@ async def create(db: AsyncSession, actor_id: uuid.UUID | None, body: MetricCreat
     data["title"] = data["title"].strip()
     if (body.source == "posthog") != (body.query is not None):
         raise MetricError("A PostHog metric has a query; others have none")
+    _query(body.query)
     await _check(db, data, None)
     await _title_taken(db, data["title"], None)
     await _goal_taken(db, body.goal_id, None)
@@ -167,6 +178,8 @@ async def update(db: AsyncSession, metric: Metric, body: MetricPatch) -> Metric:
     changes = body.model_dump(include=body.model_fields_set - {"lock_version"})
     if "query" in changes and (metric.source == "posthog") != (changes["query"] is not None):
         raise MetricError("Only a PostHog metric has a query")
+    if "query" in changes:
+        _query(changes["query"])
     merged = {
         c: getattr(metric, c)
         for c in ("title", "unit", "kind", "goal_id", "drives_metric_id", "owner_id")
@@ -256,6 +269,7 @@ async def pull_now(db: AsyncSession, metric: Metric) -> None:
 
 
 async def test_query(db: AsyncSession, query: str) -> tuple[list[MetricTestWeek], str | None]:
+    _query(query)
     conn = await pull.connection(db)
     if conn is None:
         raise MetricError(NOT_CONNECTED, 409)

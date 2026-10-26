@@ -1,6 +1,16 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices, type ReporterDescription } from "@playwright/test";
 
 const PORT = Number(process.env.E2E_PORT ?? 3100);
+
+// E2E_WORKERS takes a count or a percentage of cores ("50%"); E2E_RETRIES a count.
+const envWorkers = process.env.E2E_WORKERS;
+const WORKERS = envWorkers ? (envWorkers.endsWith("%") ? envWorkers : Number(envWorkers)) : process.env.CI ? 2 : undefined;
+const RETRIES = process.env.E2E_RETRIES ? Number(process.env.E2E_RETRIES) : process.env.CI ? 1 : 0;
+
+// A --reporter on the command line replaces this list. E2E_BLOB=1 adds a blob report
+// (blob-report/) for sharded runs whose blobs are merged with `playwright merge-reports`.
+const CI_REPORTERS: ReporterDescription[] = [["list"], ["html", { open: "never" }]];
+if (process.env.E2E_BLOB === "1") CI_REPORTERS.push(["blob"]);
 
 /**
  * Runs against a production build in mock mode (NEXT_PUBLIC_API_MOCKS=1), built into
@@ -12,10 +22,10 @@ export default defineConfig({
   // e2e/real runs against the real stack: playwright.real.config.ts (`make e2e`).
   testIgnore: "real/**",
   fullyParallel: true,
-  workers: process.env.CI ? 2 : undefined,
+  workers: WORKERS,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
+  retries: RETRIES,
+  reporter: process.env.CI ? CI_REPORTERS : "list",
   use: {
     baseURL: `http://localhost:${PORT}`,
     viewport: { width: 1366, height: 820 },

@@ -14,9 +14,19 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from oracle.auth.deps import Principal, TenantDB, same_origin
 from oracle.authz import require_role
 from oracle.baseline.goal_interview import GoalMeasurePushback
-from oracle.discussions import agent_view, changes, inbox, kinds, replies, service, summary
+from oracle.discussions import (
+    agent_view,
+    changes,
+    inbox,
+    kinds,
+    replies,
+    research,
+    service,
+    summary,
+)
 from oracle.discussions.schemas import (
     ChangeActIn,
+    ChangeApplyIn,
     ChangeDismissIn,
     ChangeEdit,
     ChangeIn,
@@ -44,10 +54,12 @@ from oracle.discussions.schemas import (
     DiscussionSlackOut,
     DiscussionStarted,
     Origin,
+    ResearchIn,
     RunDiscussionsOut,
     Status,
     SummaryAsk,
 )
+from oracle.priorities.schemas import PushbackOut
 from oracle.slack import bridge
 
 router = APIRouter(
@@ -126,6 +138,7 @@ async def list_discussions(
 @router.get(
     "/runs/{run_id}/discussions",
     response_model=RunDiscussionsOut,
+    dependencies=[Depends(research.run_reader)],
     responses={404: {"description": "No such run (a run's token reads its own run only)"}},
 )
 async def list_run_discussions(
@@ -276,6 +289,32 @@ async def create_discussion_message(
         await db.refresh(reply)
     [out, *rest] = await service.messages_out(db, [message, *([reply] if reply else [])], principal)
     return DiscussionMessagePosted(message=out, reply=rest[0] if rest else None)
+
+
+@router.post(
+    "/discussions/{discussion_id}/research",
+    response_model=DiscussionMessageOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(same_origin)],
+    responses={
+        403: {"description": "Approvers and owners start research; or private"},
+        404: GONE,
+        409: {"description": "Closed, or Oracle is already researching this message"},
+        422: {"description": "Only a person's message can be researched"},
+    },
+)
+async def research_discussion_message(
+    discussion_id: uuid.UUID, body: ResearchIn, principal: Viewer, db: TenantDB
+) -> DiscussionMessageOut:
+    """Research this (G2 §4): an approver or owner who can write in an open discussion
+    starts one ``discussion_research`` run on a person's message (its cost is
+    ``me.research_usd`` on the discussion). The run reads the discussion's context as
+    Oracle's replies do, and its answer comes back into the thread as Oracle's message,
+    citing its sources. Answers the line that says so (``research``: the run and its
+    state); 409 while that message's research runs."""
+    line = await _call(research.start(db, principal, discussion_id, body.message_id))
+    [out] = await service.messages_out(db, [line], principal)
+    return out
 
 
 @router.get(
@@ -608,6 +647,50 @@ async def answer_with_discussion_change(
     """``answer`` (the person asked, or approvers and up): posts it as the question's
     answer."""
     _c, result = await _call(changes.answer(db, principal, change_id, body.lock_version))
+    return await _result(db, principal, change_id, result)
+
+
+@router.post("/discussion-changes/{change_id}/ask", response_model=ChangeResult,
+             responses=ACTS)  # fmt: skip
+async def ask_discussion_change(
+    change_id: uuid.UUID, body: ChangeActIn, principal: Viewer, db: TenantDB
+) -> ChangeResult:
+    """``ask_person`` (commenters and up): asks that person the question through C2 (on a
+    checkpoint item whose stop is waiting, as the item's question action). ``result``:
+    ``{question_id}``."""
+    _c, result = await _call(changes.ask(db, principal, change_id, body.lock_version))
+    return await _result(db, principal, change_id, result)
+
+
+@router.post(
+    "/discussion-changes/{change_id}/apply",
+    response_model=ChangeResult,
+    responses={
+        **ACTS,
+        409: {
+            "model": PushbackOut,
+            "description": "Oracle disagrees (C9): nothing stored; send again with confirm "
+            "to keep it. Also a stale lock_version, or already handled",
+        },
+    },
+)
+async def apply_discussion_change(
+    change_id: uuid.UUID, body: ChangeApplyIn, principal: Viewer, db: TenantDB
+) -> ChangeResult | JSONResponse:
+    """``priority_move``, ``priority_pin`` (approvers and up): C9's move or pin with its
+    reason. Oracle checks it first as on the Priorities screen; when it pushes back the
+    answer is 409 with its messages and nothing is stored; ``confirm: true`` keeps it.
+    ``result``: ``{override_id}``."""
+    from oracle.priorities.service import Pushback
+
+    try:
+        _c, result = await _call(
+            changes.apply(db, principal, change_id, body.lock_version, body.reason, body.confirm)
+        )
+    except Pushback as e:
+        return JSONResponse(
+            PushbackOut.model_validate(e.body).model_dump(mode="json"), status.HTTP_409_CONFLICT
+        )
     return await _result(db, principal, change_id, result)
 
 

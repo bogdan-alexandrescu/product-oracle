@@ -80,6 +80,10 @@ class IntakeCreate(BaseModel):
     theme: str | None = Field(default=None, min_length=1, max_length=100)
     # The O1d answers that suggested the template (as POST /v1/drafts/recommend).
     prd_answers: PrdAnswers | None = None
+    # C1 Requests lane 2, "Requests behind it": qualified requests only (else 422), none
+    # already behind a brief or linked to a PRD (else 409); the intake links them, and the
+    # PRD its run makes links them too.
+    request_ids: list[uuid.UUID] = Field(default=[], max_length=50)
 
     @field_validator("brief")
     @classmethod
@@ -89,7 +93,7 @@ class IntakeCreate(BaseModel):
             raise ValueError("a brief needs at least a sentence")
         return value
 
-    @field_validator("goal_ids")
+    @field_validator("goal_ids", "request_ids")
     @classmethod
     def _unique_goals(cls, value: list[uuid.UUID]) -> list[uuid.UUID]:
         return list(dict.fromkeys(value))
@@ -468,6 +472,11 @@ class IntakeSummary(BaseModel):
     # Answers given after that run started (it reads the ones before, C5); 0 unless
     # the intake is converted. The next draft takes them as feedback.
     answers_since_run: int = 0
+    # Of those, the ones that became feedback items on the PRD (C5 late answers), and
+    # the PRD's slug and latest version, whose Feedback lists them.
+    late_answers_as_feedback: int = 0
+    draft_document: str | None = None
+    draft_version: int | None = None
 
 
 class QuestionCard(BaseModel):
@@ -493,6 +502,20 @@ class NextBatch(BaseModel):
     questions: list[QuestionCard]
     # Questions not asked yet, these included.
     remaining: int
+    # Why nothing is proposed, in plain words (H11 ``questions`` at Observe); else None.
+    held: str | None = None
+
+
+class QuestionsWithdraw(BaseModel):
+    """Withdraw these questions of an intake that are still waiting (the Undo of a
+    batch Oracle asked on its own)."""
+
+    question_ids: list[uuid.UUID] = Field(min_length=1, max_length=50)
+
+
+class QuestionsWithdrawn(BaseModel):
+    # The questions withdrawn now; ones already answered or settled are left out.
+    question_ids: list[uuid.UUID]
 
 
 class DraftGateClosedOut(BaseModel):
@@ -533,7 +556,7 @@ class EvidenceSearch(BaseModel):
 
 # --- questions to people (C2) ------------------------------------------------------------
 
-SubjectKind = Literal["intake", "document_section", "checkpoint_item", "entity"]
+SubjectKind = Literal["intake", "document_section", "checkpoint_item", "entity", "roadmap_item"]
 
 
 class IntakeSubject(BaseModel):
@@ -559,8 +582,20 @@ class EntitySubject(BaseModel):
     entity_id: uuid.UUID
 
 
+class RoadmapItemSubject(BaseModel):
+    """A Plan item: its PRD and its item key (F2 Ask, from the Plan)."""
+
+    kind: Literal["roadmap_item"]
+    document_id: uuid.UUID
+    item_key: str = Field(min_length=1, max_length=200)
+
+
 QuestionSubject = Annotated[
-    IntakeSubject | DocumentSectionSubject | CheckpointItemSubject | EntitySubject,
+    IntakeSubject
+    | DocumentSectionSubject
+    | CheckpointItemSubject
+    | EntitySubject
+    | RoadmapItemSubject,
     Field(discriminator="kind"),
 ]
 

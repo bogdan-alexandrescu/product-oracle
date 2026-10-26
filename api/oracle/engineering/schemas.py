@@ -97,6 +97,8 @@ class CodeMapOut(BaseModel):
     run_status: str | None = None
     # Why it failed: the check's problems, or how its run ended.
     error: str | None = None
+    # When it failed: its run's end (None while it has not failed, or its run is gone).
+    failed_at: datetime | None = None
     # A merge on the repo came after it: a refresh is due.
     stale_at: datetime | None = None
     # The viewer owns the source: they share it, make it private and map it again.

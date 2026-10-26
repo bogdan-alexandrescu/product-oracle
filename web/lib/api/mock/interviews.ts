@@ -36,6 +36,8 @@ import type {
 } from "@/lib/api/interviews";
 
 import { mockUuid } from "./ids";
+import { SPENT } from "./llm-jobs";
+import { jobOut } from "./refusal";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 /** H9: the one interview preset (the API's `preset` column). */
@@ -64,6 +66,8 @@ interface Row extends Omit<InterviewOut, "can_manage" | "created_by_name"> {
 
 export interface InterviewsDb {
   interviews: Row[];
+  /** #604 re-review, the "stored-refusals" scenario: the Claude pool refuses every guide job. */
+  refuse?: boolean;
 }
 
 export interface InterviewsContext {
@@ -146,10 +150,13 @@ export function seedInterviews(input: { ownerId: string }): InterviewsDb {
 }
 
 /** The guide job finishes on its own; an open link past its date expires. */
-function settle(r: Row) {
+function settle(r: Row, refuse = false) {
   if (r.guide_job && (r.guide_job.status === "queued" || r.guide_job.status === "running") && r.guide_ready_at) {
-    if (Date.now() >= Date.parse(r.guide_ready_at)) {
-      r.guide_job = { ...r.guide_job, status: "succeeded" };
+    if (Date.now() >= Date.parse(r.guide_ready_at) && refuse) {
+      r.guide_job = { ...r.guide_job, status: "failed", error: SPENT, finished_at: r.guide_ready_at };
+      r.guide_ready_at = null;
+    } else if (Date.now() >= Date.parse(r.guide_ready_at)) {
+      r.guide_job = { ...r.guide_job, status: "succeeded", finished_at: r.guide_ready_at };
       r.intro = INTRO;
       r.guide = guideItems();
       r.guide_ready_at = null;
@@ -223,7 +230,7 @@ function finish(r: Row, ctx: InterviewsContext) {
   r.finished_at = now();
   if (r.messages.some((m) => m.kind === "answer")) {
     r.snapshot = writeSnapshot(r);
-    r.snapshot_job = { id: mockUuid(), status: "succeeded", error: null };
+    r.snapshot_job = { id: mockUuid(), status: "succeeded", error: null, finished_at: now() };
     const requester = r.interviewee_company ? `${r.interviewee_name} (${r.interviewee_company})` : (r.interviewee_name ?? "A customer");
     r.request_ids = (r.snapshot.needs ?? []).map((n) =>
       ctx.fileRequest({ title: n.title, body: n.quote, requester_name: requester, interview_id: r.id, intake_id: r.intake_id, theme_id: r.theme_id }),
@@ -312,7 +319,9 @@ function outOf(r: Row, ctx: InterviewsContext): WithPreset<InterviewOut> {
   const { token: _t, opener: _o, position: _p, followed_up: _f, customer_messages: _c, guide_ready_at: _g, interviewee_user_id: _u, ...rest } = r;
   void [_t, _o, _p, _f, _c, _g, _u];
   const email = ctx.memberEmail(r.created_by);
-  return { ...rest, preset: r.preset ?? null, created_by_name: email ? displayName(email) : null, can_manage: canManageRow(r, ctx) };
+  // As the API's InterviewOut: a job's stored error read through the refusal rewrite (#604 re-review).
+  const job = (j: JobState | null) => (j ? jobOut({ finished_at: null, ...j }) : null);
+  return { ...rest, guide_job: job(rest.guide_job), snapshot_job: job(rest.snapshot_job), preset: r.preset ?? null, created_by_name: email ? displayName(email) : null, can_manage: canManageRow(r, ctx) };
 }
 
 /** The members' routes (/v1/interviews...); null when the path is not one of them. */
@@ -327,7 +336,7 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
     interviewee_company: r.interviewee_company, created_by: r.created_by, created_by_name: out(r).created_by_name,
     created_at: r.created_at, finished_at: r.finished_at, request_count: r.request_ids.length,
   });
-  db.interviews.forEach(settle);
+  db.interviews.forEach((r) => settle(r, db.refuse));
 
   if (p.length === 2 && m === "GET") {
     const rows = db.interviews

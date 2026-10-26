@@ -22,8 +22,8 @@ from oracle.baseline import conflicts as baseline_conflicts
 from oracle.baseline import scoring
 from oracle.baseline import trace as baseline_trace
 from oracle.baseline.models import Conflict, Entity
+from oracle.intake import autoask, drafting, engine, sharing
 from oracle.intake import categories as cats
-from oracle.intake import drafting, engine, sharing
 from oracle.intake import evidence as ev
 from oracle.intake.answers import next_actions
 from oracle.intake.models import IntakeProposal
@@ -494,12 +494,14 @@ class View:
         self.raw = {g.id: g for g in raw}
         self.views = sharing.gap_views(raw, self.reg, self.v)
         self.gaps = [self.views[g.id] for g in raw if g.id in self.views]
-        # Anyone but the author reads each question's place among what everyone sees.
-        priorities = None if self.v.is_author else engine.priorities(self.intake, raw)
+        # Anyone but the author reads each question's place among what everyone sees,
+        # ranked with the learnings of the last sync, as the stored order is.
+        learned = engine.synced_learned(self.intake)
+        priorities = None if self.v.is_author else engine.priorities(self.intake, raw, learned)
         self.questions = [
             q
             for q in (
-                sharing.question_view(q, self.raw, self.views, priorities)
+                sharing.question_view(q, self.raw, self.views, priorities, learned)
                 for q in await engine.intake_questions(db, self.intake.id)
             )
             if q is not None
@@ -671,7 +673,18 @@ async def _drafting(db: AsyncSession, intake: ProductIntake, view: "View") -> di
             )
         )
         since = sum(str(a) not in kept for a in ids)
-    return {"draft_run_id": run.id, "answers_since_run": since}
+    from oracle.docs.models import Document
+    from oracle.intake import late_answers
+
+    document_id = intake.document_id or run.document_id
+    document = await db.get(Document, document_id) if document_id else None
+    return {
+        "draft_run_id": run.id,
+        "answers_since_run": since,
+        "late_answers_as_feedback": await late_answers.counted(db, intake),
+        "draft_document": document.slug if document else None,
+        "draft_version": await late_answers.latest(db, document.id) if document else None,
+    }
 
 
 async def _cards(
@@ -736,8 +749,19 @@ async def next_batch(
 ) -> NextBatch:
     """The next batch as ``principal`` would ask it (C5): the questions
     :func:`engine.choose_batch` picks, in order, each with the person it would be asked of
-    (:func:`engine.default_person`). Nothing is asked or changed."""
+    (:func:`engine.default_person`). Nothing is asked or changed.
+
+    H11 ``questions``: at Observe nothing is proposed and ``held`` says why; at Draft
+    each question keeps its own named person, never the reader (``autoask``)."""
     view = await View(intake, principal).load(db)
+    held = await autoask.held(db)
+    if held:
+        return NextBatch(
+            questions=[],
+            remaining=sum(q.status == "draft" for q in view.questions),
+            held=held,
+        )
+    asker = principal.id if await autoask.proposes_asker(db) else None
     raw = await engine.intake_questions(db, intake.id)
     skip = await hidden_gap_ids(db, intake, principal)
     batch = engine.choose_batch(raw, view.raw, view.reg, size, skip)
@@ -747,7 +771,7 @@ async def next_batch(
     for q in batch.questions:
         gap = view.raw.get(q.gap_id) if q.gap_id else None
         hidden = gap is not None and sharing.gap_changes(gap, view.reg, sharing.EVERYONE) is None
-        person = await engine.default_person(db, intake, q, gap, principal.id, hidden, able)
+        person = await engine.default_person(db, intake, q, gap, asker, hidden, able)
         # A copy: the stored row keeps its person until the batch is asked.
         out = StakeholderQuestionOut.model_validate(shown[q.id])
         chosen.append(out.model_copy(update={"asked_to": person}))

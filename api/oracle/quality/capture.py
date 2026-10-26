@@ -24,7 +24,7 @@ from typing import Any
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, company_time
 from oracle.baseline import figures
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import DocumentVersion
@@ -169,7 +169,7 @@ async def predictions_for_roadmap(
     and has none yet (for this item row, or this item key on its track)."""
     if version.approved_at is None:
         return []
-    windows = horizon_windows(await company_horizons(db), date.today())
+    windows = horizon_windows(await company_horizons(db), await company_time.company_today(db))
     items = list(
         await db.scalars(
             select(RoadmapItem)

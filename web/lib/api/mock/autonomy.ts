@@ -158,7 +158,7 @@ const REGISTRY: RegistryRow[] = [
       "type": "object"
     },
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "D12",
     "wired_by_name": "D12 One Build next draft",
     "limits_default": {
@@ -200,7 +200,7 @@ const REGISTRY: RegistryRow[] = [
       "type": "object"
     },
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "C1",
     "wired_by_name": "C1 Requests API and screen",
     "limits_default": {
@@ -242,7 +242,7 @@ const REGISTRY: RegistryRow[] = [
       "type": "object"
     },
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "C2",
     "wired_by_name": "C2 Questions to people",
     "limits_default": {
@@ -269,7 +269,7 @@ const REGISTRY: RegistryRow[] = [
     "ceiling_reason": "the company's goals are set by people",
     "limits_schema": null,
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "B6",
     "wired_by_name": "B6 Goals interview",
     "limits_default": null
@@ -318,7 +318,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "within_goal"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "C9",
     "wired_by_name": "C9 Priorities move and pin",
     "limits_default": {
@@ -331,7 +331,7 @@ const REGISTRY: RegistryRow[] = [
     "title": "Watch the roadmap",
     "group": "planning",
     "group_title": "Planning",
-    "default": "observe",
+    "default": "recommend",
     "ceiling": "recommend",
     "allowed": [
       "observe",
@@ -346,7 +346,7 @@ const REGISTRY: RegistryRow[] = [
     "ceiling_reason": "date commitments",
     "limits_schema": null,
     "fixed_limits": [],
-    "wired": false,
+    "wired": true,
     "wired_by": "F2",
     "wired_by_name": "F2 Track health, drift and date slips",
     "limits_default": null
@@ -407,7 +407,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "reversible_only"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "H1",
     "wired_by_name": "H1 Decision log",
     "limits_default": {
@@ -498,7 +498,7 @@ const REGISTRY: RegistryRow[] = [
     "fixed_limits": [
       "only_parsed_actuals"
     ],
-    "wired": false,
+    "wired": true,
     "wired_by": "H3",
     "wired_by_name": "H3 Predicted versus actual",
     "limits_default": {
@@ -668,10 +668,16 @@ export function levelFor(db: AutonomyDb, key: string): Level {
   return levelOf(r, db.stored[key]);
 }
 
+/** Levels not built yet though the others are (the API's Responsibility.unwired_levels): Triage
+ * requests at Draft (the summary for each request's owner) still takes effect when C1 ships. */
+const UNWIRED_LEVELS: Record<string, Level[]> = { requests: ["draft"] };
+
 function itemOut(r: RegistryRow, s: Stored | undefined): Item {
   const { limits_default, ...rest } = r;
   const limits = limits_default ? { ...limits_default, ...Object.fromEntries(Object.entries(s?.limits ?? {}).filter(([k]) => !r.fixed_limits.includes(k))) } : null;
-  return { ...rest, level: levelOf(r, s), limits, limits_summary: limits ? SUMMARIES[r.key](limits) : null };
+  const level = levelOf(r, s);
+  const wired = r.wired && !(UNWIRED_LEVELS[r.key] ?? []).includes(level);
+  return { ...rest, level, wired, limits, limits_summary: limits ? SUMMARIES[r.key](limits) : null };
 }
 
 type Prop = { title?: string; type?: string; minimum?: number; maximum?: number; minItems?: number; items?: { enum?: string[] } };
@@ -711,6 +717,38 @@ function actionOut(a: OracleActionRow, me: string): Schemas["InboxOracleAction"]
   void undone_by;
   const done = opened_by.includes(me) || !!a.undone_at;
   return { ...rest, state: done ? "done" : "open", counts: !done };
+}
+
+/** A responsibility's limits as Oracle follows them now (defaults with what an owner stored), or null. */
+export function limitsFor(db: AutonomyDb, key: string): Limits | null {
+  const r = REGISTRY.find((x) => x.key === key);
+  if (!r) throw new Error(`no responsibility ${key}`);
+  return itemOut(r, db.stored[key]).limits as Limits | null;
+}
+
+/** What Oracle did on its own (the API's autonomy.acted): an "Oracle did" row for each person told. */
+export function oracleDid(
+  db: AutonomyDb,
+  key: string,
+  a: { summary: string; subject: Record<string, unknown>; undo: OracleActionRow["undo"]; notify: string[] },
+): OracleActionRow {
+  const r = REGISTRY.find((x) => x.key === key);
+  if (!r) throw new Error(`no responsibility ${key}`);
+  const row: OracleActionRow = {
+    id: crypto.randomUUID(),
+    responsibility: key,
+    responsibility_title: r.title,
+    summary: a.summary,
+    subject: a.subject,
+    undo: a.undo,
+    created_at: now(),
+    undone_at: null,
+    notify_ids: [...new Set(a.notify)],
+    opened_by: [],
+    undone_by: null,
+  };
+  db.actions.push(row);
+  return row;
 }
 
 /** The "Oracle did" rows of `me`, newest first. */
@@ -774,7 +812,34 @@ export function seedRitualDid(ownerId: string, id: string, ritual: { id: string;
   };
 }
 
-export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], me: { id: string; role: Role }): Promise<Response | null> {
+/** The "oracle-did-request" scenario: at Act within limits, Oracle merged a request into the
+ * one it repeats and told the triage run's starter (as the API's requests.triage does), with
+ * Undo reopening it. */
+export function seedRequestDid(
+  ownerId: string,
+  id: string,
+  request: { id: string; title: string; lock_version: number },
+  into: { title: string },
+): OracleActionRow {
+  return {
+    id,
+    responsibility: "requests",
+    responsibility_title: "Triage requests",
+    summary: `Merged “${request.title}” into “${into.title}” (95% sure)`,
+    subject: { kind: "request", key: request.id, href: `/requests?request=${request.id}` },
+    undo: { method: "POST", path: `/v1/requests/${request.id}/reopen`, body: { lock_version: request.lock_version } },
+    created_at: new Date(Date.now() - 15 * 60_000).toISOString(),
+    undone_at: null,
+    notify_ids: [ownerId],
+    opened_by: [],
+    undone_by: null,
+  };
+}
+
+/** Calls an action's stored undo route as the signed-in person; null where the mock has no such route. */
+export type Replay = (undo: NonNullable<OracleActionRow["undo"]>) => Promise<Response | null>;
+
+export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], me: { id: string; role: Role }, replay?: Replay): Promise<Response | null> {
   const m = req.method;
   if (p[1] === "autonomy") {
     if (p.length === 2 && m === "GET") {
@@ -812,7 +877,9 @@ export async function routeAutonomy(db: AutonomyDb, req: Request, p: string[], m
     if (p[3] === "undo") {
       if (!a.undo) return json(409, { detail: "This action has no undo" });
       if (a.undone_at) return json(409, { detail: "Already undone" });
-      // The API calls the stored route as the person; the mock records the undo.
+      // The API calls the stored route as the person; so does the mock where it has the route.
+      const res = replay ? await replay(a.undo) : null;
+      if (res && !res.ok) return res;
       a.undone_at = now();
       a.undone_by = me.id;
       if (!a.opened_by.includes(me.id)) a.opened_by.push(me.id);

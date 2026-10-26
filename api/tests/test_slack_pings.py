@@ -22,8 +22,12 @@ from oracle.integrations import slack_api
 from oracle.slack import outbox, pings
 from oracle.slack.models import SlackOutbox
 from oracle.tenancy import tenant_session
+from tests.decision_helpers import proposal
 from tests.fixtures import draft, import_draft
+from tests.test_autonomy_wired import actions_of, recommended, set_level
 from tests.test_discussions import company, uid
+from tests.test_mcp import mcp_client, run_token, text_of
+from tests.test_runs import runtime  # noqa: F401 - fixture
 from tests.test_slack_bridge import FakeSlack, install
 from tests.test_slack_bridge import slack as bridge_slack  # noqa: F401
 
@@ -239,6 +243,67 @@ async def test_a_decision_requested_pings_its_approver(client, slack):
     (post,) = posts(slack)
     assert post["channel"] == "U0APPROVER"
     assert "Your decision is requested: Caps per plan tier" in post["text"]
+
+
+# protects=#628 on main: a run's proposal Oracle decides within limits (H11 ``decisions``
+# at Act) is not requested of its approver, who gets the "Oracle did" row instead, while
+# one Oracle leaves (below Act, or out of limits) and a person's proposal at Act still ping
+# the approver; fails_when="Your decision is requested" goes for a call already decided,
+# Oracle stops deciding a run's proposal, or a proposal waiting for the approver goes
+# unpinged; no_claim=the Inbox screen.
+@pytest.mark.parametrize(
+    "level, by_run, options, decided",
+    [
+        ("act", True, "recommended", True),
+        ("recommend", True, "recommended", False),
+        ("act", True, "none-recommended", False),
+        ("act", False, "recommended", False),
+    ],
+    ids=["oracle-decides", "below-act", "out-of-limits", "a-person-proposes"],
+)
+async def test_a_decision_oracle_decides_does_not_ping_as_requested(
+    client,
+    slack,
+    runtime,
+    level,
+    by_run,
+    options,
+    decided,  # noqa: F811
+):
+    from tests.decision_helpers import two_options
+
+    ctx, _ = await company(client)
+    await install(client, ctx)
+    await set_level(ctx.tenant_id, "decisions", level)
+    body = proposal(
+        ctx,
+        title="Caps per plan tier",
+        options=recommended() if options == "recommended" else two_options(),
+    )
+    if by_run:
+        token = await run_token(ctx.tenant_id, ["write:proposals"], ctx.users["owner"].id)
+        async with mcp_client(token) as c:
+            created = await c.call_tool("create_decision", {"body": body})
+            assert not created.is_error, text_of(created)
+            got = created.structured_content
+        assert got["origin"] == "oracle"
+    else:
+        resp = await client.post("/v1/decisions", json=body, headers=ctx.as_("commenter"))
+        assert resp.status_code == 201, resp.text
+        got = resp.json()
+    shown = await client.get(f"/v1/decisions/{got['number']}", headers=ctx.as_("approver"))
+    assert (shown.json()["status"] == "decided") is decided
+    did = await actions_of(ctx.tenant_id, "decisions")
+    assert [a.notify_ids for a in did] == ([[ctx.users["approver"].id]] if decided else [])
+    requested = [p for p in await pings_of(ctx) if p.payload["event"] == "review_requested"]
+    if decided:
+        assert requested == []
+    else:
+        (item,) = requested
+        assert item.recipient_id == ctx.users["approver"].id
+        await outbox.tick(ctx.tenant_id)
+        (post,) = posts(slack)
+        assert "Your decision is requested: Caps per plan tier" in post["text"]
 
 
 # protects=a member's own notifications go only when opted in; fails_when=a comment pings

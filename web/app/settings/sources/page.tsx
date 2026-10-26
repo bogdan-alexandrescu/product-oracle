@@ -534,6 +534,11 @@ function SourceRow({
               No connector
             </Chip>
           )}
+          {source.kind === "fireflies" && connection?.endpoint_url && (
+            <span className="min-w-0 max-w-full truncate text-sm text-text2" title={connection.endpoint_url}>
+              Reads <span className="font-mono">{connection.endpoint_url}</span>
+            </span>
+          )}
         </span>
         <span className="flex flex-none items-center gap-1">
           {source.kind === "upload" ? (

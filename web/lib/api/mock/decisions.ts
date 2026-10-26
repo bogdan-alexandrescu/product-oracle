@@ -23,7 +23,7 @@ type RunLike = {
 };
 
 /** A stored decision: the API's record without what is derived on the way out. */
-type Row = Omit<DecisionOut, "state" | "ref" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign">;
+type Row = Omit<DecisionOut, "state" | "ref" | "outcome_status" | "outcome_check_due" | "entities" | "evidence" | "approver_email" | "decided_by_email" | "withdrawn_by_email" | "reviews" | "revisit_id" | "superseded_by_id" | "can_edit" | "can_decide" | "can_withdraw" | "can_review" | "can_reassign">;
 type ReviewRow = Schemas["DecisionReviewOut"] & { decision_id: string };
 
 export interface DecisionsDb {
@@ -46,6 +46,26 @@ export interface DecisionsContext {
   visible?: (d: { origin: string; run_id?: string | null }) => boolean;
   uuid: () => string;
   now: () => string;
+  /** A baseline item, for entity_ids (absent: unknown, or hidden from the reader). */
+  entity?: (id: string) => Schemas["DecisionEntityRef"] | null;
+  /** A baseline evidence row, for evidence_ids (absent: unknown, or on an item hidden from the reader). */
+  evidence?: (id: string) => Schemas["DecisionEvidenceRef"] | null;
+  /** H3: an outcome record's status now. */
+  outcomeStatus?: (id: string) => Schemas["DecisionOut"]["outcome_status"];
+  /** H3: a tracking outcome record with a proposed assessment (the Outcomes tab's "Check due"). */
+  outcomeCheckDue?: (id: string) => boolean;
+  /** H3: deciding with a prediction creates its outcome record (tracking); returns its id. */
+  addOutcome?: (d: { title: string; goal_id: string; prediction: Record<string, unknown>; evidence_ids: string[]; owner_id: string }) => string;
+  /**
+   * H11 Decide reversible calls, read per request: its level and limits, who set it, and the
+   * "Oracle did" row Oracle leaves when it decides (the API's decide_within_limits).
+   */
+  autonomy?: {
+    level: () => "observe" | "draft" | "recommend" | "act";
+    limits: () => { origins?: string[]; max_cost_usd?: number } | null;
+    setBy: () => string;
+    acted: (a: { summary: string; subject: Record<string, unknown>; undo: { method: string; path: string; body: unknown }; notify: string[] }) => void;
+  };
 }
 
 const REVIEW_DAYS = 90;
@@ -384,6 +404,13 @@ function outOf(ctx: DecisionsContext, db: DecisionsDb, d: Row): DecisionOut {
     ...d,
     ...summaryOf(ctx, d),
     decided_by_email: emailOf(ctx, d.decided_by),
+    outcome_status: d.outcome_id ? (ctx.outcomeStatus?.(d.outcome_id) ?? null) : null,
+    outcome_check_due: d.outcome_id ? (ctx.outcomeCheckDue?.(d.outcome_id) ?? false) : false,
+    // As the API's _linked: what the reader resolves, ids too; the rest stays on the record.
+    entity_ids: d.entity_ids.filter((id) => ctx.entity?.(id)),
+    evidence_ids: d.evidence_ids.filter((id) => ctx.evidence?.(id)),
+    entities: d.entity_ids.flatMap((id) => ctx.entity?.(id) ?? []),
+    evidence: d.evidence_ids.flatMap((id) => ctx.evidence?.(id) ?? []),
     withdrawn_by_email: emailOf(ctx, d.withdrawn_by),
     revisit_id: revisit && d.status === "decided" ? revisit.id : null,
     superseded_by_id: revisit && d.status === "superseded" ? revisit.id : null,
@@ -436,6 +463,27 @@ function checkReviewAt(value: string): string | null {
   if (value < day()) return "The review date cannot be in the past";
   if (value > day(MAX_REVIEW_DAYS)) return `The review date is at most ${MAX_REVIEW_DAYS} days out`;
   return null;
+}
+
+/** As the API's _check_ids: every id names a row (422 otherwise); duplicates dropped. */
+function unknownIds(ctx: DecisionsContext, b: { evidence_ids?: string[] | null; entity_ids?: string[] | null }): string | null {
+  const ev = (b.evidence_ids ?? []).filter((id) => !ctx.evidence?.(id));
+  if (ev.length) return `unknown evidence_ids: ${ev.join(", ")}`;
+  const en = (b.entity_ids ?? []).filter((id) => !ctx.entity?.(id));
+  if (en.length) return `unknown entity_ids: ${en.join(", ")}`;
+  return null;
+}
+const unique = (ids: string[] | null | undefined) => [...new Set(ids ?? [])];
+
+/**
+ * As the API's _keep_unseen: an edit's list is what was sent, then the stored ids the editor
+ * does not resolve (gone since, or hidden from them); a sent id already stored is not checked.
+ */
+function keepUnseen(sent: string[], stored: string[], known: (id: string) => boolean, what: string): string[] | string {
+  const ids = unique(sent);
+  const missing = ids.filter((id) => !known(id) && !stored.includes(id));
+  if (missing.length) return `unknown ${what}: ${missing.join(", ")}`;
+  return [...ids, ...stored.filter((id) => !known(id) && !ids.includes(id))];
 }
 
 function activeApprover(ctx: DecisionsContext, id: string): Member | undefined {
@@ -535,6 +583,8 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     if (options.length > 6) return fail(422, "options: List should have at most 6 items");
     if (new Set(options.map((o) => o.key)).size !== options.length) return fail(422, "option keys must be unique");
     if (!activeApprover(ctx, b.approver_id)) return fail(422, "The approver must be an active member with the approver role or above");
+    const unknown = unknownIds(ctx, b);
+    if (unknown) return fail(422, unknown);
     const row = blank(ctx, db, {
       title: b.title.trim(),
       question: b.question?.trim() || null,
@@ -544,8 +594,8 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       reversibility: b.reversibility ?? "reversible",
       contributor_ids: b.contributor_ids ?? [],
       informed_ids: b.informed_ids ?? [],
-      evidence_ids: b.evidence_ids ?? [],
-      entity_ids: b.entity_ids ?? [],
+      evidence_ids: unique(b.evidence_ids),
+      entity_ids: unique(b.entity_ids),
       subjects: b.subjects ?? [],
       origin: "manual",
       driver: `user:${me.id}`,
@@ -582,9 +632,15 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       const bad = checkReviewAt(b.review_at);
       if (bad) return fail(422, bad);
     }
+    const evidenceIds = b.evidence_ids ? keepUnseen(b.evidence_ids, d.evidence_ids, (id) => !!ctx.evidence?.(id), "evidence_ids") : null;
+    if (typeof evidenceIds === "string") return fail(422, evidenceIds);
+    const entityIds = b.entity_ids ? keepUnseen(b.entity_ids, d.entity_ids, (id) => !!ctx.entity?.(id), "entity_ids") : null;
+    if (typeof entityIds === "string") return fail(422, entityIds);
     for (const k of ["title", "question", "context", "options", "reversibility", "contributor_ids", "informed_ids", "subjects"] as const) {
       if (b[k] !== undefined && b[k] !== null) Object.assign(d, { [k]: b[k] });
     }
+    if (evidenceIds) d.evidence_ids = evidenceIds;
+    if (entityIds) d.entity_ids = entityIds;
     // Clearable: null empties them. The prediction waits for the decision to make its outcome record.
     if (b.expected_outcome !== undefined) d.expected_outcome = b.expected_outcome?.trim() || null;
     if (b.review_at !== undefined) d.review_at = b.review_at ?? null;
@@ -611,6 +667,8 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     const review = b.review_at ?? kept ?? day(REVIEW_DAYS);
     const bad = checkReviewAt(review);
     if (bad) return fail(422, bad);
+    const prediction = b.prediction ?? d.prediction ?? null;
+    const goal = prediction ? String(prediction.goal_id ?? "") : "";
     Object.assign(d, {
       status: "decided",
       chosen_option: b.option_key,
@@ -618,8 +676,17 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       expected_outcome: b.expected_outcome.trim(),
       reversibility,
       review_at: review,
-      prediction: b.prediction ?? d.prediction ?? null,
-      outcome_id: (b.prediction ?? d.prediction) ? ctx.uuid() : null,
+      prediction,
+      // As the API's _set_prediction: the outcome record (H3) is made on decide, tracking.
+      outcome_id: prediction
+        ? (ctx.addOutcome?.({
+            title: d.title,
+            goal_id: goal,
+            prediction: Object.fromEntries(Object.entries(prediction).filter(([k]) => k !== "goal_id")),
+            evidence_ids: d.evidence_ids,
+            owner_id: d.approver_id,
+          }) ?? ctx.uuid())
+        : null,
       decided_by: me.id,
       decided_actor: "user",
       decided_at: ctx.now(),
@@ -732,7 +799,11 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       mk("smallest-step", option("smallest-step", "Take the smallest reversible step", { summary: "Ship the narrow version first and measure", pros: ["Cheap to undo"], cons: ["Slower to the full outcome"], cost_if_wrong: "A few weeks", recommended: true })),
       mk("full-scope", option("full-scope", "Commit to the full scope", { summary: "Build everything in one release", pros: ["One launch"], cons: ["Hard to undo"], cost_if_wrong: "A quarter of work" })),
     ].filter((o): o is Option => !!o);
-    d.options = [...d.options.map((o) => ({ ...o, recommended: false })), ...added].slice(0, 6);
+    // H11 Decide reversible calls at Observe or Draft: options with evidence, no default.
+    const level = ctx.autonomy?.level() ?? "recommend";
+    const offered = level === "observe" || level === "draft" ? added.map((o) => ({ ...o, recommended: false })) : added;
+    d.options = [...d.options.map((o) => ({ ...o, recommended: false })), ...offered].slice(0, 6);
+    const decided = decideWithinLimits(ctx, d);
     touch();
     const job: Schemas["LlmJobOut"] = {
       id: ctx.uuid(),
@@ -742,7 +813,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
       decision_id: d.id,
       status: "succeeded",
       input: { decision: d.number },
-      output: { options: added.map((o) => o.key), recommended: added.find((o) => o.recommended)?.key ?? null },
+      output: { options: offered.map((o) => o.key), recommended: offered.find((o) => o.recommended)?.key ?? null, decided_by_oracle: decided },
       attempts: 1,
       created_at: at,
       started_at: at,
@@ -751,6 +822,50 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     return json(201, job);
   }
   return fail(404, "Route not found");
+}
+
+/** The highest dollar amount an option's cost of being wrong states, 0 with none (as the API's stated_cost). */
+function statedCost(o: Option): number {
+  const amounts = [...(o.cost_if_wrong ?? "").matchAll(/(?:\$|\bUSD\s?)\s?(\d[\d,]*(?:\.\d+)?)/gi)].map((m) => Number(m[1].replace(/,/g, "")));
+  return Math.max(0, ...amounts);
+}
+
+/**
+ * H11 at "Act within limits" (the API's decide_within_limits): Oracle decides a reversible
+ * proposal of a listed origin on the option it recommends, within the cost limit, unless it
+ * revisits a decision or is about an approvers-only document; the approver's "Oracle did" row
+ * has an Undo that hands it back (a revisit).
+ */
+function decideWithinLimits(ctx: DecisionsContext, d: Row): boolean {
+  const a = ctx.autonomy;
+  if (!a || a.level() !== "act") return false;
+  if (d.status !== "proposed" || d.origin === "checkpoint" || d.reversibility !== "reversible" || d.supersedes_id) return false;
+  if (d.subjects.some((s) => (s.kind === "document" || s.kind === "document_version") && ctx.hiddenDocument(String(s.id)))) return false;
+  const limits = a.limits();
+  const pick = d.options.find((o) => o.recommended);
+  if (!limits || !pick || d.options.length < 2) return false;
+  if (!(limits.origins ?? []).includes(d.origin)) return false;
+  if (statedCost(pick) > (limits.max_cost_usd ?? 0)) return false;
+  const why = (pick.summary || pick.label || "").trim();
+  const kept = d.review_at && d.review_at >= day() ? d.review_at : null;
+  Object.assign(d, {
+    status: "decided",
+    chosen_option: pick.key,
+    rationale: `Decided by Oracle within limits set by ${a.setBy()}. It recommended ${pick.label || pick.key}${why ? `: ${why}` : "."}`,
+    expected_outcome: d.expected_outcome || why || pick.label || pick.key,
+    review_at: kept ?? day(REVIEW_DAYS),
+    decided_by: null,
+    decided_actor: "oracle",
+    decided_at: ctx.now(),
+    entity_id: ctx.uuid(),
+  });
+  a.acted({
+    summary: `Decided ${ref(d.number)}: ${pick.label || pick.key}`,
+    subject: { kind: "decision", key: d.id, href: `/company/decisions?d=${d.number}` },
+    undo: { method: "POST", path: `/v1/decisions/${d.id}/reviews`, body: { verdict: "revisit", note: "Handed Oracle's decision back from the Inbox" } },
+    notify: [d.approver_id],
+  });
+  return true;
 }
 
 /** The decision rows of my Inbox, as GET /v1/inbox serves them (checkpoint records add none). */

@@ -8,7 +8,7 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { interviewsCall, LIMITS, type InterviewCreate, type InterviewLink, type InterviewOut, type InterviewPatch } from "@/lib/api/interviews";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { formatDateTime } from "@/lib/format";
+import { failedAt, formatDateTime } from "@/lib/format";
 
 type About = "intake" | "theme" | "topic";
 type Step = "subject" | "guide" | "link";
@@ -299,7 +299,9 @@ function GuideStep({ initial, onCancel, onLinked }: { initial: Created; onCancel
     return (
       <div className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4">
         {job === "failed" || job === "cancelled" ? (
-          <Notice tone="error" action={<Button onClick={redraft}>Draft again</Button>}>
+          <Notice tone="error" testId="guide-failed" action={<Button onClick={redraft}>Draft again</Button>}>
+            {/* When it failed, so a stored refusal reads as then (#604 re-review). */}
+            {job === "failed" && iv.guide_job?.finished_at && <span data-testid="failed-at">{failedAt(iv.guide_job.finished_at)}. </span>}
             Oracle could not draft the questions{iv.guide_job?.error ? `: ${iv.guide_job.error}` : "."}
           </Notice>
         ) : (

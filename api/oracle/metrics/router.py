@@ -106,8 +106,9 @@ async def create_metric(body: MetricCreate, principal: Approver, db: TenantDB) -
 
 @router.post("/metrics/test", response_model=MetricTestOut, responses=_ERRORS)
 async def test_metric_query(body: QueryIn, principal: Approver, db: TenantDB) -> MetricTestOut:
-    """Run a PostHog query for the last 4 complete weeks; nothing is stored. The
-    provider's error, when it refuses, is in ``error``."""
+    """Run a PostHog query for the last 4 complete weeks; nothing is stored. 422 when
+    the query is not one read-only SELECT over the allowed tables; a failure is a fixed
+    sentence in ``error`` (PostHog's own text is in the server log)."""
     try:
         values, error = await service.test_query(db, body.query)
     except service.MetricError as exc:
@@ -176,7 +177,8 @@ async def restore_metric(metric_id: uuid.UUID, principal: Approver, db: TenantDB
 )
 async def pull_metric(metric_id: uuid.UUID, principal: Approver, db: TenantDB) -> MetricOut:
     """Pull now: read the last complete week from PostHog again and replace its value
-    (409 unless the metric's source is PostHog; 502 with the provider's message)."""
+    (409 unless the metric's source is PostHog; 502 with a fixed message, PostHog's
+    own text in the server log)."""
     await recheck_caller(db, principal, "approver")
     metric = await _one(db, metric_id)
     try:

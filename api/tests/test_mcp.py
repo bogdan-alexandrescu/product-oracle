@@ -663,3 +663,21 @@ async def test_run_token_cannot_propose_for_another_run(tenant_id):
     assert r.is_error and "a run can only propose for itself" in text_of(r)
     async with tenant_session(tenant_id) as s:
         assert (await s.scalars(select(Proposal))).all() == []
+
+
+@pytest.mark.parametrize("role", ["viewer", "approver", "owner"])
+async def test_the_claude_account_pool_names_its_holders_to_owners_alone(tenant_id, role):
+    """BGD 2026-10-25: MCP reads the pool as REST does, emails and organisations only for
+    owners."""
+    from tests.claude_account_helpers import add_account, edit_row
+
+    a = await add_account(tenant_id, "personal")
+    await edit_row(
+        tenant_id, a.account_id, claude_email="ada@example.com",
+        claude_organization="Example Studio",
+    )  # fmt: skip
+    async with mcp_client(await api_token(tenant_id, role)) as c:
+        listed = await c.call_tool("list_claude_accounts", {})
+    assert not listed.is_error, text_of(listed)
+    shown = "ada@example.com" in text_of(listed) or "Example Studio" in text_of(listed)
+    assert shown == (role == "owner")

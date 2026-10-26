@@ -39,18 +39,21 @@ function conflictOf(error: unknown): Linked | null {
  */
 export function LinkIssueDialog({
   item,
+  term: initialTerm = "",
   items,
   onClose,
   onLinked,
 }: {
   item: PlanItem;
+  /** The search to start with: an issue Oracle found on the track (F2 Link to item). */
+  term?: string;
   /** The Plan's items, to name the item an issue is linked to now. */
   items: PlanItem[];
   onClose: () => void;
   onLinked: () => void;
 }) {
   const id = useId();
-  const [term, setTerm] = useState("");
+  const [term, setTerm] = useState(initialTerm);
   const [picked, setPicked] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

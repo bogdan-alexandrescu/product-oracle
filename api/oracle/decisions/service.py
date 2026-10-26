@@ -2,14 +2,18 @@
 them, the Inbox rows they raise, and the baseline ``decision`` entity a decided judgement
 call keeps in step.
 
-A decision has one approver, and only that person decides it: Oracle never decides on
-its own (H11 Autonomy is not built). A hard-to-reverse decision also needs its approver
+A decision has one approver, and only that person decides it, except where H11 Autonomy
+sets Decide reversible calls to "Act within limits": then Oracle decides a reversible
+proposal of a listed origin on the option it recommends, within the cost limit
+(:func:`decide_within_limits`), and tells the approver, whose Undo in the Inbox hands it
+back as a revisit. A hard-to-reverse decision also needs its approver
 to hold the company setting ``decision_irreversible_role`` (default ``owner``). Checkpoint
 records (:mod:`oracle.decisions.capture`) record a run's decision and are never edited.
 
 The caller commits.
 """
 
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
@@ -29,6 +33,8 @@ from oracle.decisions.models import CAPTURED_ORIGINS, Decision, DecisionReview
 from oracle.decisions.schemas import (
     DecideIn,
     DecisionCreate,
+    DecisionEntityRef,
+    DecisionEvidenceRef,
     DecisionOut,
     DecisionPatch,
     DecisionReviewOut,
@@ -209,12 +215,12 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         driver=d.driver,
         contributor_ids=list(d.contributor_ids or []),
         informed_ids=list(d.informed_ids or []),
-        evidence_ids=list(d.evidence_ids or []),
-        entity_ids=list(d.entity_ids or []),
         subjects=list(d.subjects or []),
         expected_outcome=d.expected_outcome,
         prediction=d.prediction,
         outcome_id=d.outcome_id,
+        **await _outcome(db, d),
+        **await _linked(db, d),
         supersedes_id=d.supersedes_id,
         revisit_id=revisit.id if revisit and d.status == "decided" else None,
         superseded_by_id=revisit.id if revisit and d.status == "superseded" else None,
@@ -235,6 +241,42 @@ async def out(db: AsyncSession, principal: Principal | None, d: Decision) -> Dec
         ],
         **can,
     )
+
+
+async def _linked(db: AsyncSession, d: Decision) -> dict[str, Any]:
+    """entity_ids and evidence_ids as the reader reads them, in the order picked. A row gone
+    since, or one the reader's session hides (a hidden decision's baseline entity and its
+    evidence, oracle.docs.visibility), is left out, its id too; it stays on the decision
+    (:func:`_keep_unseen`)."""
+    entities: list[DecisionEntityRef] = []
+    evidence: list[DecisionEvidenceRef] = []
+    if d.entity_ids:
+        found = {
+            e.id: e for e in await db.scalars(select(Entity).where(Entity.id.in_(d.entity_ids)))
+        }
+        entities = [
+            DecisionEntityRef(id=e.id, type=e.type, key=e.key, title=e.title, status=e.status)
+            for e in (found.get(i) for i in d.entity_ids)
+            if e is not None
+        ]
+    if d.evidence_ids:
+        rows = {
+            e.id: e
+            for e in await db.scalars(select(Evidence).where(Evidence.id.in_(d.evidence_ids)))
+        }
+        evidence = [
+            DecisionEvidenceRef(
+                id=e.id, entity_id=e.entity_id, excerpt=e.excerpt, url=e.url, ref=e.ref
+            )
+            for e in (rows.get(i) for i in d.evidence_ids)
+            if e is not None
+        ]
+    return {
+        "entities": entities,
+        "evidence": evidence,
+        "entity_ids": [e.id for e in entities],
+        "evidence_ids": [e.id for e in evidence],
+    }
 
 
 async def _withdrawn(db: AsyncSession, d: Decision) -> dict[str, Any]:
@@ -401,6 +443,24 @@ async def _check_ids(db: AsyncSession, model: Any, ids: list[uuid.UUID], what: s
     return ids
 
 
+async def _keep_unseen(
+    db: AsyncSession, model: Any, ids: list[uuid.UUID], stored: list[uuid.UUID], what: str
+) -> list:
+    """An edit's new list: ``ids`` as sent, then the stored ids the editor's session does not
+    resolve (a row gone since, or one hidden from them), which the editor neither read nor
+    could remove; an id sent that is already stored is not checked again."""
+    ids = list(dict.fromkeys(ids))
+    found = (
+        set(await db.scalars(select(model.id).where(model.id.in_([*ids, *stored]))))
+        if ids or stored
+        else set()
+    )
+    missing = [str(i) for i in ids if i not in found and i not in stored]
+    if missing:
+        raise DecisionError(422, f"unknown {what}: {', '.join(missing)}")
+    return ids + [i for i in stored if i not in found and i not in ids]
+
+
 def _options(options: list[Any]) -> list[dict[str, Any]]:
     return [o.model_dump(mode="json") for o in options]
 
@@ -486,7 +546,10 @@ async def create(
         d.id,
         {"number": d.number, "approver_id": str(d.approver_id), "origin": d.origin},
     )
-    await _ping_approver(db, principal, d)
+    # A run's proposal comes with Oracle's recommendation (H11 ``decisions`` at Act); one
+    # Oracle decides is not requested of the approver, who gets its "Oracle did" row.
+    if not (by_oracle and supersedes is None and await decide_within_limits(db, d)):
+        await _ping_approver(db, principal, d)
     return d
 
 
@@ -555,9 +618,13 @@ async def update(
     if "informed_ids" in fields and body.informed_ids is not None:
         d.informed_ids = await _check_members(db, body.informed_ids, "informed_ids")
     if "evidence_ids" in fields and body.evidence_ids is not None:
-        d.evidence_ids = await _check_ids(db, Evidence, body.evidence_ids, "evidence_ids")
+        d.evidence_ids = await _keep_unseen(
+            db, Evidence, body.evidence_ids, list(d.evidence_ids or []), "evidence_ids"
+        )
     if "entity_ids" in fields and body.entity_ids is not None:
-        d.entity_ids = await _check_ids(db, Entity, body.entity_ids, "entity_ids")
+        d.entity_ids = await _keep_unseen(
+            db, Entity, body.entity_ids, list(d.entity_ids or []), "entity_ids"
+        )
     if "subjects" in fields and body.subjects is not None:
         d.subjects = _subjects(body.subjects)
     if "expected_outcome" in fields:
@@ -695,6 +762,136 @@ async def decide(db: AsyncSession, principal: Principal, d: Decision, body: Deci
     return d
 
 
+# Oracle's own decision (H11 ``decisions`` at Act) is handed back from the Inbox with this
+# note: a revisit, a new proposal for the approver with no recommendation.
+UNDO_NOTE = "Handed Oracle's decision back from the Inbox"
+_USD = re.compile(r"(?:\$|\bUSD\s?)\s?(\d[\d,]*(?:\.\d+)?)", re.IGNORECASE)
+
+
+def stated_cost(option: dict[str, Any]) -> float:
+    """The highest dollar amount an option's cost of being wrong states ("about $120");
+    0 when it names none (the cost is in time or words, not money)."""
+    amounts = [float(m.replace(",", "")) for m in _USD.findall(option.get("cost_if_wrong") or "")]
+    return max(amounts, default=0.0)
+
+
+async def _limits_set_by(db: AsyncSession) -> str:
+    """Who set Decide reversible calls to Act: the latest change's owner, by email."""
+    actor = await db.scalar(
+        select(AuditEvent.actor)
+        .where(
+            AuditEvent.action == "autonomy.changed",
+            AuditEvent.data["key"].astext == "decisions",
+        )
+        .order_by(AuditEvent.created_at.desc())
+        .limit(1)
+    )
+    _, _, raw = (actor or "").partition(":")
+    try:
+        user = await db.get(User, uuid.UUID(raw)) if raw else None
+    except ValueError:
+        user = None
+    return user.email if user is not None else "an owner"
+
+
+async def _about_approvers_only(db: AsyncSession, d: Decision) -> bool:
+    """Whether a subject of ``d`` is an approvers-only document (or one of its versions)."""
+    from oracle.docs.models import DocumentVersion
+    from oracle.docs.visibility import hidden_document_ids
+
+    ids: set[uuid.UUID] = set()
+    for s in d.subjects or []:
+        try:
+            key = uuid.UUID(str(s.get("id")))
+        except ValueError:
+            continue
+        if s.get("kind") == "document":
+            ids.add(key)
+        elif s.get("kind") == "document_version":
+            doc = await db.scalar(
+                select(DocumentVersion.document_id)
+                .where(DocumentVersion.id == key)
+                .execution_options(oracle_all_documents=True)
+            )
+            if doc is not None:
+                ids.add(doc)
+    return bool(ids and await hidden_document_ids(db, ids, as_member=True))
+
+
+async def decide_within_limits(db: AsyncSession, d: Decision) -> bool:
+    """H11 ``decisions`` at "Act within limits": Oracle decides a proposal on the option it
+    recommends when the decision is reversible (fixed), of a listed origin, and the
+    option's stated cost is within the limit, and it neither revisits a decision nor is
+    about an approvers-only document; then the approver gets an "Oracle did" row
+    whose Undo hands it back (a revisit, :func:`review`). Anything else waits for the
+    approver. Flushes; the caller commits. Returns whether Oracle decided."""
+    from oracle import autonomy
+
+    if d.status != "proposed" or d.origin == "checkpoint" or d.reversibility != "reversible":
+        return False
+    # A revisit (an Undo, or a person's) is the approver's; so is a call about an
+    # approvers-only document: pricing stays with people.
+    if d.supersedes_id is not None or await _about_approvers_only(db, d):
+        return False
+    if not await autonomy.allows(db, "decisions", "act"):
+        return False
+    limits = await autonomy.limits(db, "decisions")
+    options = list(d.options or [])
+    pick = next((o for o in options if o.get("recommended")), None)
+    if limits is None or pick is None or len(options) < 2:
+        return False
+    if d.origin not in getattr(limits, "origins", ()):
+        return False
+    if stated_cost(pick) > getattr(limits, "max_cost_usd", 0):
+        return False
+    approver = await db.get(User, d.approver_id)
+    if approver is None or approver.disabled_at is not None:
+        return False
+    day = await company_today(db)
+    kept = d.review_at if d.review_at and d.review_at >= day else None
+    why = (pick.get("summary") or pick.get("label") or "").strip()
+    d.chosen_option = pick["key"]
+    d.rationale = (
+        f"Decided by Oracle within limits set by {await _limits_set_by(db)}. "
+        f"It recommended {pick.get('label') or pick['key']}" + (f": {why}" if why else ".")
+    )
+    d.expected_outcome = d.expected_outcome or why or str(pick.get("label") or pick["key"])
+    d.review_at = kept or day + timedelta(days=REVIEW_DAYS)
+    d.status = "decided"
+    d.decided_by = None
+    d.decided_actor = "oracle"
+    d.decided_at = _now()
+    await flush_or_conflict(db)
+    await sync_entity(db, None, d)
+    await audit.record(
+        db,
+        audit.ORACLE,
+        "decision.decided",
+        "decision",
+        d.id,
+        {
+            "number": d.number,
+            "chosen_option": d.chosen_option,
+            "reversibility": d.reversibility,
+            "review_at": d.review_at.isoformat(),
+            "by": "oracle",
+        },
+    )
+    await autonomy.acted(
+        db,
+        "decisions",
+        summary=f"Decided {ref(d.number)}: {pick.get('label') or pick['key']}",
+        subject={"kind": "decision", "key": str(d.id), "href": f"/company/decisions?d={d.number}"},
+        undo={
+            "method": "POST",
+            "path": f"/v1/decisions/{d.id}/reviews",
+            "body": {"verdict": "revisit", "note": UNDO_NOTE},
+        },
+        notify=[d.approver_id],
+    )
+    return True
+
+
 async def reassign(
     db: AsyncSession, principal: Principal, d: Decision, body: ReassignIn
 ) -> Decision:
@@ -811,6 +1008,26 @@ async def _outcome_status(db: AsyncSession, d: Decision) -> str | None:
     if d.outcome_id is None:
         return None
     return await db.scalar(select(OutcomeRecord.status).where(OutcomeRecord.id == d.outcome_id))
+
+
+async def _outcome(db: AsyncSession, d: Decision) -> dict[str, Any]:
+    """The outcome record's status, and whether its check is due (a tracking record with a
+    proposed assessment: the Outcomes tab's "Check due")."""
+    row = (
+        None
+        if d.outcome_id is None
+        else (
+            await db.execute(
+                select(OutcomeRecord.status, OutcomeRecord.proposed_assessment).where(
+                    OutcomeRecord.id == d.outcome_id
+                )
+            )
+        ).first()
+    )
+    if row is None:
+        return {"outcome_status": None, "outcome_check_due": False}
+    status, proposed = row
+    return {"outcome_status": status, "outcome_check_due": status == "tracking" and bool(proposed)}
 
 
 async def queue_options_job(db: AsyncSession, principal: Principal, d: Decision) -> LlmJob:

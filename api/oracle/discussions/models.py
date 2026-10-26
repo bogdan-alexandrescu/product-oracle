@@ -75,6 +75,8 @@ CHANGE_KINDS = (
     "scope_requirement",
     "priority_move",
     "priority_pin",
+    # H1 Decision log's entry point: a discussion proposes a decision.
+    "decision",
 )
 CHANGE_STATUSES = ("proposed", "suggested", "staged", "done", "dismissed", "superseded")
 PROPOSED_BY_KINDS = ("oracle", "person")
@@ -188,6 +190,11 @@ class DiscussionMessage(TenantScoped, Base):
             "created_at",
             postgresql_where=text("status IN ('pending', 'streaming')"),
         ),
+        Index(
+            "ix_discussion_messages_run_id",
+            "run_id",
+            postgresql_where=text("run_id IS NOT NULL"),
+        ),
     )
 
     discussion_id: Mapped[uuid.UUID] = mapped_column(
@@ -235,6 +242,11 @@ class DiscussionMessage(TenantScoped, Base):
     # the ts of the post that mirrored this message.
     slack_ts: Mapped[str | None] = mapped_column(Text)
     slack_user_id: Mapped[str | None] = mapped_column(Text)
+    # G2 §4 Research this: the discussion_research run this line started, or whose answer
+    # this is (oracle.discussions.research).
+    run_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("runs.id", ondelete="SET NULL")
+    )
 
 
 class DiscussionChange(TenantScoped, Base):

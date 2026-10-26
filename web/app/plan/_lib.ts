@@ -3,6 +3,7 @@ import type { Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
 
 export type PlanItem = Schemas["PlanItem"];
+export type PlanDrift = Schemas["PlanDrift"];
 export type PlanPrd = Schemas["PlanPrd"];
 export type Horizon = PlanItem["horizon"];
 type Basis = Schemas["ScheduleBasisOut"];
@@ -87,3 +88,10 @@ export function prdLabel(i: PlanItem): string {
 }
 
 export const roadmapHref = (i: PlanItem) => `/documents/${i.roadmap.slug}/v/${i.roadmap.version}#${i.roadmap.anchor}`;
+
+/** H4 §5: the row's strategy marker, the most severe open finding (none once all are waived). */
+export function driftMarker(i: PlanItem): { kind: ChipKind; label: string } | null {
+  const open = (i.drift ?? []).filter((d) => d.status === "open");
+  const top = open.find((d) => d.severity === "high") ?? open[0];
+  return top ? { kind: top.severity === "high" ? "crit" : "warn", label: top.label } : null;
+}

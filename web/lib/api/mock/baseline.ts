@@ -50,6 +50,8 @@ export type BaselineCaller = {
   isMember?: (userId: string) => boolean;
   /** One of the caller's own source items (./sources.ts), to cite as evidence; null when it is not theirs. */
   sourceItem?: (itemId: string) => CitedItem | null;
+  /** A hidden decision's baseline entity (docs/visibility): absent from the caller's entity list and reads. */
+  hidden?: (entityId: string) => boolean;
 };
 
 /** What citing a source item copies from it. */
@@ -829,6 +831,12 @@ function createEntity(s: BaselineState, input: Schemas["EntityCreate"], userId: 
   return e;
 }
 
+/** A decided decision's locked baseline entity d-<n> (the API's decision sync); returns its id. */
+export function addDecisionEntity(s: BaselineState, d: { number: number; title: string; rationale?: string | null }, userId: string): string {
+  const e = createEntity(s, { type: "decision", key: `d-${d.number}`, title: d.title, body: d.rationale ?? null, status: "confirmed" } as Schemas["EntityCreate"], userId);
+  return e.id;
+}
+
 /** A person's new link, as service.create_edge: both ends exist, a supports link carries its contribution 0-3. */
 function createEdge(s: BaselineState, input: Schemas["EdgeCreate"], userId: string): EdgeRow {
   if (!s.entities.some((e) => e.id === input.src_id) || !s.entities.some((e) => e.id === input.dst_id)) {
@@ -1047,7 +1055,8 @@ export async function routeBaseline(
     updateEntity(s, goal, { attrs }, { origin: "user", userId: caller.userId, reason });
   };
   const edgeOut = (e: EdgeRow) => withCount(s, e, "edge_id") as Schemas["EdgeOut"];
-  const findEntity = (id: string) => s.entities.find((e) => e.id === id);
+  const shown = (e: EntityRow) => !caller.hidden?.(e.id);
+  const findEntity = (id: string) => s.entities.find((e) => e.id === id && shown(e));
   /** ProposalOut: the run that made it, its sentence (kept from the decision once decided) and who made it. */
   const proposalOut = (p: ProposalRow): Schemas["ProposalOut"] => {
     const run = p.run_id ? (caller.runOf?.(p.run_id) ?? null) : null;
@@ -1097,7 +1106,7 @@ export async function routeBaseline(
       const status = q.get("status");
       return json(
         200,
-        s.entities.filter((e) => (!type || e.type === type) && (!status || e.status === status)).map(entityOut),
+        s.entities.filter((e) => shown(e) && (!type || e.type === type) && (!status || e.status === status)).map(entityOut),
       );
     }
 

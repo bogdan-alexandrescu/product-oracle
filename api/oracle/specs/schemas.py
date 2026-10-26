@@ -27,6 +27,11 @@ Part = Literal[
     "proposed",
 ]
 ApproachStatus = Literal["proposed", "approved"]
+# F5 lane 3: a spec's state as the Plan and the PRD overview show it. requested: its run has
+# not started; drafting: the run is under way; in_review: a version waits for an engineering
+# approver; approved: the approach is approved; stale: the latest version may be stale;
+# failed: the run ended without writing a version.
+SpecState = Literal["requested", "drafting", "in_review", "approved", "stale", "failed"]
 DesignReviewKind = Literal["comment", "approved", "changes_requested", "rejected"]
 
 
@@ -46,8 +51,13 @@ class SpecRequestCreate(BaseModel):
     design: bool = True
     screens: int = Field(default=3, ge=2, le=4)
     # Who may approve the proposed engineering approach (approvers or owners). Empty: any
-    # approver; an owner always may.
-    engineering_approver_ids: list[uuid.UUID] = Field(default_factory=list, max_length=20)
+    # approver; an owner always may. Omitted: the engineering leads who are approvers or
+    # owners (A3; F5 lane 3), else any approver.
+    engineering_approver_ids: list[uuid.UUID] | None = Field(default=None, max_length=20)
+    # F5 lane 3: the feature's approved tech brief (an artifact version from the Engineering
+    # check, F5-1). Its approach, the lead's verdict, the answers and the size are given to
+    # the agents as decided at the engineering review.
+    tech_brief_version_id: uuid.UUID | None = None
     title: str | None = Field(default=None, min_length=1, max_length=200)
     # The spec document's slug; "<prd>-<feature or requirement>-spec" when omitted.
     document: str | None = Field(default=None, min_length=1, max_length=200)
@@ -150,6 +160,10 @@ class SpecSummary(BaseModel):
     latest_version: int | None = None
     approach_status: ApproachStatus | None = None
     freshness: str | None = None
+    state: SpecState = "requested"
+    # The baseline feature the spec is for, and the tech brief it was given (F5 lane 3).
+    feature_id: uuid.UUID | None = None
+    tech_brief_version_id: uuid.UUID | None = None
 
 
 class SpecOut(SpecSummary):

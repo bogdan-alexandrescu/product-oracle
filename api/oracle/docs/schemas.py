@@ -35,9 +35,22 @@ def citation_contract() -> str:
         "null when there is no score, with confidence_note saying why) and low_confidence "
         "(true when the confidence is under the company's low threshold). Every [c:id] chip "
         "in the body must match a citation's id. Oracle refuses a draft with any other "
-        f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, or a chip that "
-        "matches no id."
+        f"source, a confidence outside {CONFIDENCE_MIN} to {CONFIDENCE_MAX}, a ref with "
+        "a scheme other than http, https or urn (for oracle, one that names no baseline "
+        "item of the company), or a chip that matches no id."
     )
+
+
+# Where a text built at import (a flow's task, an MCP tool's description) states the
+# citation contract: filled in when the text is read (:func:`with_citation_contract`).
+CITATION_CONTRACT_MARK = "{citation_contract}"
+
+
+def with_citation_contract(text: str) -> str:
+    """``text`` with the citation contract where it has :data:`CITATION_CONTRACT_MARK`."""
+    if CITATION_CONTRACT_MARK not in text:
+        return text
+    return text.replace(CITATION_CONTRACT_MARK, citation_contract())
 
 
 Verdict = Literal["approved", "changes_requested", "rejected"]
@@ -149,6 +162,10 @@ class VersionSummary(ORM):
     # Who imported it, as people read it (#256): the member's display name, "Oracle" for
     # a run's draft, or the API token's name. None when the importer is gone.
     imported_by_name: str | None = None
+    # A run's refused draft an owner imported again (owner, 2026-10-25): "imported again by
+    # <retrier> on 2026-10-25 14:59 PDT", in the Company time zone, as the audit records it.
+    # The version stays the run creator's (``imported_by``).
+    imported_again: str | None = None
     approved_at: datetime | None = None
     # Where the brief layer came from; "none": no brief, the version opens on the full
     # document.
@@ -319,3 +336,17 @@ class VisibilityIn(BaseModel):
 
     visibility: DocumentVisibility
     reason: str = Field(min_length=1, max_length=2000)
+
+
+class DraftNewItems(BaseModel):
+    """S4: "N new items since draft k, refresh?". What changed in the draft's author's own
+    sources since the sources the draft was written from (its run's pin, or the moment it
+    was imported when no run made it). Sources are private (S5): anyone but the author gets
+    ``visible: false`` with neither ``as_of`` nor ``count``."""
+
+    version: int
+    # When the sources were read for this draft.
+    as_of: datetime | None = None
+    # Items new, changed or deleted since then.
+    count: int | None = None
+    visible: bool = False

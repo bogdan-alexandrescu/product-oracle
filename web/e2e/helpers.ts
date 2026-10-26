@@ -1,7 +1,7 @@
 import { expect, type Locator, type Page } from "@playwright/test";
 
 import { MOCK_LOGIN } from "../lib/api/mock/fixtures";
-import { CONSOLE_HELD_RUN, ROADMAP_FILE_PROBLEM_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2 } from "../lib/api/mock/runs";
+import { CONSOLE_HELD_RUN, ROADMAP_DRIFT_RUN, ROADMAP_FILE_PROBLEM_RUN, ROADMAP_REVIEW_RUN, ROADMAP_REVIEW_RUN_ATTEMPT2 } from "../lib/api/mock/runs";
 
 export const ADMIN = MOCK_LOGIN;
 
@@ -275,6 +275,11 @@ async function seedRun(page: Page, seed: RunSeed): Promise<string> {
       return seed.run.id;
     });
   }, seed);
+}
+
+/** Seeds the mock with the roadmap review run measured against an approved strategy (ROADMAP_DRIFT_RUN, H4 §5). */
+export async function seedRoadmapDrift(page: Page): Promise<string> {
+  return seedRun(page, ROADMAP_DRIFT_RUN);
 }
 
 /** Seeds the mock with the roadmap review run whose file cannot be read as items (ROADMAP_FILE_PROBLEM_RUN, D1). */

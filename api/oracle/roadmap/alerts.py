@@ -28,11 +28,14 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, autonomy
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.docs import visibility
 from oracle.docs.models import Document
 from oracle.members.leads import date_rights, engineering_leads
+from oracle.members.names import display_name
+from oracle.members.schemas import PersonOut
 from oracle.roadmap import schedule, staleness, tracker, tracks
 from oracle.roadmap.models import (
     ProductTrack,
@@ -57,6 +60,8 @@ if TYPE_CHECKING:
 # Kinds that also reach the engineering leads (A3), and the kinds a re-plan answers.
 LEAD_KINDS = ("date_slip", "overdue")
 REPLAN_KINDS = ("date_slip", "overdue", "cancelled", "ahead", "prd_moved")
+# Ask the engineering lead (C2 Questions to named people); Discuss fits every kind (G1).
+ASK_KINDS = ("date_slip", "overdue", "ahead")
 # Kept and resolved alerts stay in the Inbox's Done tab this long.
 DONE_DAYS = 30
 INBOX_CHILDREN = 3
@@ -127,7 +132,7 @@ async def situations(db: AsyncSession, track: ProductTrack, found: "TrackRead") 
     if track.status != "active":
         return []
     out: list[Situation] = []
-    ctx, now = found.ctx, today()
+    ctx, now = found.ctx, await today(db)
     dated = dated_items(found.milestones)
     slips: list[tuple[RoadmapItem, TrackerRecord, date]] = []
     for item in found.rows:
@@ -311,16 +316,25 @@ def may_accept(principal: "Principal", leads: frozenset[uuid.UUID]) -> bool:
 
 
 def actions(
-    a: TrackAlert, track: ProductTrack, principal: "Principal", leads: frozenset[uuid.UUID]
+    a: TrackAlert,
+    track: ProductTrack,
+    principal: "Principal",
+    leads: frozenset[uuid.UUID],
+    level: str = "recommend",
 ) -> list[str]:
+    """What the caller may do now. ``level``: H11 ``roadmap_watch``. Oracle's one-step
+    fixes follow it: Re-plan (a draft roadmap run for the track's owner) from Draft, Accept
+    new date (the date change with the tracker's evidence) at Recommend; at Observe an
+    alert only flags."""
     if principal.read_only:
         return ["open_blocker"] if a.kind == "blocked" and a.state != "resolved" else []
     out: list[str] = []
     live = a.state != "resolved"
     approver = has_role(principal.role, "approver") and principal.run_id is None
-    if a.kind == "date_slip" and a.state == "open" and may_accept(principal, leads):
+    proposes, drafts = level == "recommend", level in ("draft", "recommend")
+    if proposes and a.kind == "date_slip" and a.state == "open" and may_accept(principal, leads):
         out.append("accept_date")
-    if live and approver and a.kind in REPLAN_KINDS:
+    if drafts and live and approver and a.kind in REPLAN_KINDS:
         out.append("replan")
     if live and approver and a.kind == "stale":
         out += ["review", "reconcile"]
@@ -328,6 +342,11 @@ def actions(
         out.append("open_blocker")
     if live and a.kind == "unplanned" and date_rights(principal, leads) is not None:
         out.append("link")
+    person = principal.run_id is None and principal.run_token_id is None
+    if live and person and has_role(principal.role, "commenter"):
+        if a.kind in ASK_KINDS:
+            out.append("ask")
+        out.append("discuss")
     if in_audience(principal, track, a.kind, leads):
         if a.state == "open":
             out.append("keep")
@@ -343,6 +362,12 @@ class Lookups:
     titles: dict[tuple[uuid.UUID, str], str]
     names: dict[uuid.UUID, str]
     leads: frozenset[uuid.UUID]
+    # Ask's pre-fill: the one active engineering lead, when there is exactly one.
+    lead: PersonOut | None = None
+    # What the reader may not see (visibility.hidden_for_reader); None: everything.
+    hidden: Any = None
+    # H11 ``roadmap_watch``, read per request.
+    level: str = "recommend"
 
 
 async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
@@ -375,7 +400,16 @@ async def lookups(db: AsyncSession, alerts: list[TrackAlert]) -> Lookups:
         u.id: u.email
         for u in (await db.scalars(select(User).where(User.id.in_(kept_by))) if kept_by else [])
     }
-    return Lookups(track_rows, prds, titles, names, await engineering_leads(db))
+    leads = await engineering_leads(db)
+    lead = None
+    if len(leads) == 1 and (user := await db.get(User, next(iter(leads)))) is not None:
+        lead = PersonOut(
+            user_id=user.id, name=display_name(user.email, user.name), email=user.email,
+            role=user.role, can_write=has_role(user.role, "commenter"),  # type: ignore[arg-type]
+        )  # fmt: skip
+    level = await autonomy.level(db, "roadmap_watch")
+    return Lookups(track_rows, prds, titles, names, leads, lead,
+                   await visibility.hidden_for_reader(db), level)  # fmt: skip
 
 
 def out(
@@ -383,6 +417,8 @@ def out(
 ) -> TrackAlertOut:
     track = lk.tracks[a.track_id]
     prd = lk.prds.get(track.prd_document_id)
+    may = actions(a, track, principal, lk.leads, lk.level)
+    ask_lead = "ask" in may and lk.lead is not None and lk.lead.user_id != principal.user_id
     return TrackAlertOut(
         id=a.id,
         track_id=a.track_id,
@@ -390,7 +426,7 @@ def out(
         item_key=a.item_key or None,
         item_title=lk.titles.get((a.track_id, a.item_key)) if a.item_key else None,
         kind=a.kind,  # type: ignore[arg-type]
-        detail=a.detail,
+        detail=staleness.detail_for_reader(a.detail, lk.hidden) if a.kind == "stale" else a.detail,
         data=a.data or {},
         state=a.state,  # type: ignore[arg-type]
         inbox_state=inbox_state,  # type: ignore[arg-type]
@@ -400,7 +436,8 @@ def out(
         kept_at=a.kept_at,
         note=a.note,
         resolved_at=a.resolved_at,
-        actions=actions(a, track, principal, lk.leads),  # type: ignore[arg-type]
+        actions=may,  # type: ignore[arg-type]
+        suggested_assignee=lk.lead if ask_lead else None,
     )
 
 

@@ -1605,6 +1605,67 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/documents/{doc}/versions/{n}/new-items": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get Draft New Items",
+        "description": "S4: how many items of the draft's author's own sources are new, changed or deleted\nsince the sources the draft was written from (\"N new items since draft k, refresh?\").\nOnly the author sees the number (``oracle.docs.fresh``).",
+        "operationId": "get_draft_new_items",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          },
+          {
+            "name": "n",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DraftNewItems"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/documents/{doc}/versions/{n}/markdown": {
       "get": {
         "tags": [
@@ -3320,6 +3381,72 @@
         "x-per-item": null
       }
     },
+    "/v1/discussions/{discussion_id}/research": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Research Discussion Message",
+        "description": "Research this (G2 \u00a74): an approver or owner who can write in an open discussion\nstarts one ``discussion_research`` run on a person's message (its cost is\n``me.research_usd`` on the discussion). The run reads the discussion's context as\nOracle's replies do, and its answer comes back into the thread as Oracle's message,\nciting its sources. Answers the line that says so (``research``: the run and its\nstate); 409 while that message's research runs.",
+        "operationId": "research_discussion_message",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discussion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Discussion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResearchIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscussionMessageOut"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Approvers and owners start research; or private"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Closed, or Oracle is already researching this message"
+          },
+          "422": {
+            "description": "Only a person's message can be researched"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
     "/v1/discussions/{discussion_id}/messages/{reply_id}/stream": {
       "get": {
         "tags": [
@@ -4607,6 +4734,145 @@
           },
           "409": {
             "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/discussion-changes/{change_id}/ask": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Ask Discussion Change",
+        "description": "``ask_person`` (commenters and up): asks that person the question through C2 (on a\ncheckpoint item whose stop is waiting, as the item's question action). ``result``:\n``{question_id}``.",
+        "operationId": "ask_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeActIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Stale lock_version, or already handled"
+          },
+          "422": {
+            "description": "The kind, rule 4 (share the finding first), or a reason is missing"
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "commenter"
+      }
+    },
+    "/v1/discussion-changes/{change_id}/apply": {
+      "post": {
+        "tags": [
+          "discussions"
+        ],
+        "summary": "Apply Discussion Change",
+        "description": "``priority_move``, ``priority_pin`` (approvers and up): C9's move or pin with its\nreason. Oracle checks it first as on the Priorities screen; when it pushes back the\nanswer is 409 with its messages and nothing is stored; ``confirm: true`` keeps it.\n``result``: ``{override_id}``.",
+        "operationId": "apply_discussion_change",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "change_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Change Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeApplyIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChangeResult"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this caller's to do (viewers read; approvers stage)"
+          },
+          "404": {
+            "description": "No such discussion (or not one the caller may know of)"
+          },
+          "409": {
+            "description": "Oracle disagrees (C9): nothing stored; send again with confirm to keep it. Also a stale lock_version, or already handled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PushbackOut"
+                }
+              }
+            }
           },
           "422": {
             "description": "The kind, rule 4 (share the finding first), or a reason is missing"
@@ -7937,6 +8203,59 @@
         "x-min-role": "approver"
       }
     },
+    "/v1/suggestions/{suggestion_id}/undo-accept": {
+      "post": {
+        "tags": [
+          "llm-jobs"
+        ],
+        "summary": "Undo Accept Suggestion",
+        "description": "Undo Accept: the suggestion is open again and its item as before Accept. 409 with\nthe reason when it cannot be: an answer already posted, a change a draft applied or a\nbuild is using, an item changed since.",
+        "operationId": "undo_accept_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "approver"
+      }
+    },
     "/v1/suggestions/{suggestion_id}/dismiss": {
       "post": {
         "tags": [
@@ -10298,7 +10617,71 @@
             "description": "A token Oracle will not use (a Slack bot token)"
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/connections/{connection_id}/endpoint": {
+      "put": {
+        "tags": [
+          "connections"
+        ],
+        "summary": "Set Connection Endpoint",
+        "description": "Change a Fireflies connection's GraphQL endpoint (null: back to the default).\nOracle owners only; the API key is entered again and checked at the new endpoint\n(a stored key is never sent to another endpoint). Recorded in the audit log.",
+        "operationId": "set_connection_endpoint",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "connection_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Connection Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndpointIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Fireflies rejected the key, or it belongs to another account"
+          },
+          "403": {
+            "description": "Only an Oracle owner sets an endpoint"
+          },
+          "422": {
+            "description": "An endpoint Oracle does not call, or not a Fireflies connection"
+          }
+        },
+        "x-min-role": "owner",
+        "x-per-item": "owner"
       }
     },
     "/v1/connections/{provider}/authorize": {
@@ -11421,7 +11804,7 @@
           "claude-accounts"
         ],
         "summary": "List Claude Accounts",
-        "description": "Every account in the company's pool, with the sweep's liveness and the fallback.",
+        "description": "Every account in the company's pool, with the sweep's liveness and the fallback.\nBelow owner, without who holds each account (its Claude email and organisation).",
         "operationId": "list_claude_accounts",
         "responses": {
           "200": {
@@ -15469,7 +15852,7 @@
           "baseline"
         ],
         "summary": "Accept Proposal",
-        "description": "Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those\nfields as they are and applies the rest (#268).",
+        "description": "Apply the change as your own edit; the item is then\nlocked against Oracle's changes until a person unlocks it.\nskip_fields keeps those fields as they are and applies the rest (#268).",
         "operationId": "accept_proposal",
         "security": [
           {
@@ -16013,6 +16396,9 @@
           "404": {
             "description": "Entity not found"
           },
+          "409": {
+            "description": "Shape goals is at Observe: Oracle opens no interview"
+          },
           "422": {
             "description": "Only goals can be interviewed | This goal is already measurable"
           }
@@ -16048,6 +16434,9 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Shape goals is at Observe: Oracle opens no interview"
           },
           "422": {
             "description": "Validation Error",
@@ -26040,7 +26429,7 @@
           "intake"
         ],
         "summary": "Get Next Question Batch",
-        "description": "The next batch as it would be asked, without asking it (C5; the author or an\napprover, as asking it): the same questions in the same order as\n``POST .../question-batches`` with the same ``size`` asks next, each with the person\nit would be asked of (the gap's owner, else the author), and how many are not asked\nyet. ``assign`` on the ask changes only who is asked.",
+        "description": "The next batch as it would be asked, without asking it (C5; the author or an\napprover, as asking it): the same questions in the same order as\n``POST .../question-batches`` with the same ``size`` asks next, each with the person\nit would be asked of (the gap's owner, else the author), and how many are not asked\nyet. ``assign`` on the ask changes only who is asked. At H11 ``questions`` Observe\nnothing is proposed and ``held`` says why; at Draft each question keeps its own\nnamed person.",
         "operationId": "get_next_question_batch",
         "security": [
           {
@@ -26106,7 +26495,7 @@
           "intake"
         ],
         "summary": "Ask Next Question Batch",
-        "description": "Ask the next short batch: the highest-ranked questions not asked yet (the author\nor an approver). Each is asked of the person ``assign`` names for it, else its gap's\nowner, else the intake's author (C2); a person who cannot answer is 422 and a\nprivate finding's question asked of anyone but the author 409, and then nothing is\nasked. ``size``: in the body or, as before, the query.",
+        "description": "Ask the next short batch: the highest-ranked questions not asked yet (the author\nor an approver). Each is asked of the person ``assign`` names for it, else its gap's\nowner, else the intake's author (C2); a person who cannot answer is 422 and a\nprivate finding's question asked of anyone but the author 409, and then nothing is\nasked; 409 too while Ask people questions is at Observe (H11, Oracle asks no one).\n``size``: in the body or, as before, the query.",
         "operationId": "ask_next_question_batch",
         "security": [
           {
@@ -26164,6 +26553,70 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/QuestionBatch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/intakes/{intake_id}/questions/withdraw": {
+      "post": {
+        "tags": [
+          "intake"
+        ],
+        "summary": "Withdraw Intake Questions",
+        "description": "Withdraw these questions of the intake that are still waiting on an answer (the\nauthor or an approver): the Undo of a batch Oracle asked on its own (H11\n``questions``). Answered or otherwise settled ones stay as they are.",
+        "operationId": "withdraw_intake_questions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "intake_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Intake Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuestionsWithdraw"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuestionsWithdrawn"
                 }
               }
             }
@@ -30942,8 +31395,7 @@
             }
           }
         },
-        "x-min-role": "approver",
-        "x-per-item": "owner"
+        "x-min-role": "approver"
       },
       "get": {
         "tags": [
@@ -34053,7 +34505,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/track-alerts/{alert_id}/reopen": {
@@ -34106,7 +34559,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/track-alerts/{alert_id}/accept-date": {
@@ -35150,6 +35604,25 @@
               "title": "Replies To Send"
             },
             "description": "Only declined requests with replies still to send (H10)"
+          },
+          {
+            "name": "intake_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the requests behind this brief (C1)",
+              "title": "Intake Id"
+            },
+            "description": "Only the requests behind this brief (C1)"
           },
           {
             "name": "limit",
@@ -36826,7 +37299,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/request-candidates/{candidate_id}/dismiss": {
@@ -38285,7 +38759,7 @@
           "plan"
         ],
         "summary": "Get Plan Item History",
-        "description": "A roadmap item across its roadmap's versions, in version order: its horizon in\neach version that has it, the PRD version it came from, and when that roadmap\nversion was approved. ``tracker_events`` stays empty until F2 Track health.",
+        "description": "A roadmap item across its roadmap's versions, in version order: its horizon in\neach version that has it, the PRD version it came from, and when that roadmap\nversion was approved; ``tracker_events``: what each import changed on the item's\ntracker issues (F2 Track health), oldest first.",
         "operationId": "get_plan_item_history",
         "security": [
           {
@@ -39937,7 +40411,7 @@
           "metrics"
         ],
         "summary": "Test Metric Query",
-        "description": "Run a PostHog query for the last 4 complete weeks; nothing is stored. The\nprovider's error, when it refuses, is in ``error``.",
+        "description": "Run a PostHog query for the last 4 complete weeks; nothing is stored. 422 when\nthe query is not one read-only SELECT over the allowed tables; a failure is a fixed\nsentence in ``error`` (PostHog's own text is in the server log).",
         "operationId": "test_metric_query",
         "requestBody": {
           "content": {
@@ -40238,7 +40712,7 @@
           "metrics"
         ],
         "summary": "Pull Metric",
-        "description": "Pull now: read the last complete week from PostHog again and replace its value\n(409 unless the metric's source is PostHog; 502 with the provider's message).",
+        "description": "Pull now: read the last complete week from PostHog again and replace its value\n(409 unless the metric's source is PostHog; 502 with a fixed message, PostHog's\nown text in the server log).",
         "operationId": "pull_metric",
         "security": [
           {
@@ -40831,6 +41305,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -40886,6 +41363,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "viewer"
@@ -40948,6 +41428,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41003,6 +41486,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41057,6 +41543,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41122,6 +41611,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41186,6 +41678,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41232,6 +41727,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41243,7 +41741,7 @@
           "market"
         ],
         "summary": "Check Competitor Page",
-        "description": "Check now: read the page at once (409 when its robots.txt disallows it).",
+        "description": "Check now: read the page at once (409 when its robots.txt disallows it; 429, with\nwhen in words and a Retry-After, past once per page per 10 minutes or 20 per company\nan hour).",
         "operationId": "check_competitor_page",
         "security": [
           {
@@ -41287,6 +41785,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41481,6 +41982,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "viewer"
@@ -41659,6 +42163,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41723,6 +42230,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41796,6 +42306,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "security": [
@@ -41858,6 +42371,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41912,6 +42428,9 @@
           },
           "422": {
             "description": "Invalid URL, over the limits, a duplicate, or a field too long"
+          },
+          "429": {
+            "description": "Check now was used too often; the message says when it works again"
           }
         },
         "x-min-role": "approver"
@@ -41947,7 +42466,7 @@
             }
           },
           "403": {
-            "description": "Web search is for Oracle's monthly digest, or the URL is not from this run"
+            "description": "Web search is for Oracle's own research runs, or the URL is not from this run"
           },
           "409": {
             "description": "robots.txt asks bots not to read the page"
@@ -42011,7 +42530,7 @@
             }
           },
           "403": {
-            "description": "Web search is for Oracle's monthly digest, or the URL is not from this run"
+            "description": "Web search is for Oracle's own research runs, or the URL is not from this run"
           },
           "409": {
             "description": "robots.txt asks bots not to read the page"
@@ -47865,6 +48384,22 @@
             },
             "type": "array",
             "title": "Documents"
+          },
+          "can_set_status": {
+            "type": "boolean",
+            "title": "Can Set Status",
+            "default": true
+          },
+          "set_status_why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Set Status Why Not"
           }
         },
         "type": "object",
@@ -49316,6 +49851,36 @@
         ],
         "title": "ChangeAction",
         "description": "The kind's action as the caller may take it (G3 3.2); ``why_not`` in 3.2's copy."
+      },
+      "ChangeApplyIn": {
+        "properties": {
+          "lock_version": {
+            "type": "integer",
+            "title": "Lock Version"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "confirm": {
+            "type": "boolean",
+            "title": "Confirm",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_version"
+        ],
+        "title": "ChangeApplyIn"
       },
       "ChangeCan": {
         "properties": {
@@ -51832,6 +52397,18 @@
             ],
             "title": "Error"
           },
+          "failed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed At"
+          },
           "stale_at": {
             "anyOf": [
               {
@@ -52012,6 +52589,18 @@
               }
             ],
             "title": "Error"
+          },
+          "failed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed At"
           },
           "stale_at": {
             "anyOf": [
@@ -53201,6 +53790,7 @@
               "policy",
               "template",
               "condition",
+              "learning",
               "dependency",
               "user",
               "conflict",
@@ -54372,6 +54962,17 @@
               }
             ],
             "title": "Reconnect Reason"
+          },
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
           }
         },
         "type": "object",
@@ -54488,6 +55089,17 @@
               }
             ],
             "title": "Reconnect Reason"
+          },
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
           }
         },
         "type": "object",
@@ -55820,6 +56432,101 @@
         ],
         "title": "DecisionCreate"
       },
+      "DecisionEntityRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "key",
+          "title",
+          "status"
+        ],
+        "title": "DecisionEntityRef",
+        "description": "A linked baseline item, as a person reads it."
+      },
+      "DecisionEvidenceRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "entity_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entity Id"
+          },
+          "excerpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Excerpt"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "DecisionEvidenceRef",
+        "description": "Evidence it rests on: the excerpt and link anyone who reads the baseline sees."
+      },
       "DecisionIn": {
         "properties": {
           "decision": {
@@ -56213,6 +56920,46 @@
               }
             ],
             "title": "Outcome Id"
+          },
+          "outcome_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "predicted",
+                  "tracking",
+                  "held",
+                  "partially_held",
+                  "not_held",
+                  "inconclusive"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome Status"
+          },
+          "outcome_check_due": {
+            "type": "boolean",
+            "title": "Outcome Check Due",
+            "default": false
+          },
+          "entities": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionEntityRef"
+            },
+            "type": "array",
+            "title": "Entities",
+            "default": []
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionEvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "default": []
           },
           "supersedes_id": {
             "anyOf": [
@@ -57885,6 +58632,22 @@
                 "type": "null"
               }
             ]
+          },
+          "can_research": {
+            "type": "boolean",
+            "title": "Can Research",
+            "default": false
+          },
+          "research_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Research Usd"
           }
         },
         "type": "object",
@@ -58116,6 +58879,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ReplyUsage"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "research": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MessageResearch"
               },
               {
                 "type": "null"
@@ -59990,6 +60763,17 @@
             "title": "Problems",
             "default": []
           },
+          "problems_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Problems Total"
+          },
           "summary": {
             "anyOf": [
               {
@@ -60038,6 +60822,48 @@
           "job_id"
         ],
         "title": "DraftJobOut"
+      },
+      "DraftNewItems": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "visible": {
+            "type": "boolean",
+            "title": "Visible",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "DraftNewItems",
+        "description": "S4: \"N new items since draft k, refresh?\". What changed in the draft's author's own\nsources since the sources the draft was written from (its run's pin, or the moment it\nwas imported when no run made it). Sources are private (S5): anyone but the author gets\n``visible: false`` with neither ``as_of`` nor ``count``."
       },
       "DraftNoteIn": {
         "properties": {
@@ -60996,6 +61822,33 @@
           "applied"
         ],
         "title": "EdgeWriteOut"
+      },
+      "EndpointIn": {
+        "properties": {
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
+          },
+          "token": {
+            "type": "string",
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "EndpointIn"
       },
       "EntityCreate": {
         "properties": {
@@ -64014,6 +64867,42 @@
             "type": "boolean",
             "title": "Staged For Agents",
             "default": false
+          },
+          "intake_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Id"
+          },
+          "intake_question_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Question Id"
+          },
+          "intake_answer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Intake Answer Id"
           }
         },
         "type": "object",
@@ -64771,7 +65660,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Key"
           },
@@ -67867,7 +68757,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Flow"
           },
@@ -69128,6 +70019,14 @@
             "title": "Imports",
             "default": []
           },
+          "no_documents": {
+            "items": {
+              "$ref": "#/components/schemas/RunSummary"
+            },
+            "type": "array",
+            "title": "No Documents",
+            "default": []
+          },
           "feedback": {
             "items": {
               "$ref": "#/components/schemas/InboxDocument"
@@ -69992,7 +70891,8 @@
               "intake",
               "document_section",
               "checkpoint_item",
-              "entity"
+              "entity",
+              "roadmap_item"
             ],
             "title": "Kind"
           },
@@ -70298,6 +71198,7 @@
               "policy",
               "template",
               "condition",
+              "learning",
               "dependency",
               "user",
               "conflict",
@@ -70819,6 +71720,16 @@
                 "type": "null"
               }
             ]
+          },
+          "request_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Request Ids",
+            "default": []
           }
         },
         "type": "object",
@@ -71474,6 +72385,33 @@
             "type": "integer",
             "title": "Answers Since Run",
             "default": 0
+          },
+          "late_answers_as_feedback": {
+            "type": "integer",
+            "title": "Late Answers As Feedback",
+            "default": 0
+          },
+          "draft_document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Document"
+          },
+          "draft_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Version"
           }
         },
         "type": "object",
@@ -71652,6 +72590,18 @@
               }
             ],
             "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
           }
         },
         "type": "object",
@@ -72913,12 +73863,16 @@
           },
           "tracker_events": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/ItemTrackerEvent"
             },
             "type": "array",
             "title": "Tracker Events",
             "default": []
+          },
+          "tracker_events_older": {
+            "type": "integer",
+            "title": "Tracker Events Older",
+            "default": 0
           }
         },
         "type": "object",
@@ -73275,6 +74229,45 @@
           "items"
         ],
         "title": "ItemStalenessOut"
+      },
+      "ItemTrackerEvent": {
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Record Id"
+          },
+          "tracker": {
+            "type": "string",
+            "title": "Tracker"
+          },
+          "external_ref": {
+            "type": "string",
+            "title": "External Ref"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Observed At"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/TrackerFieldChange"
+            },
+            "type": "array",
+            "title": "Changes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "record_id",
+          "tracker",
+          "external_ref",
+          "observed_at",
+          "changes"
+        ],
+        "title": "ItemTrackerEvent",
+        "description": "One import's changes to one of the item's tracker issues (F2 \u00a72), in field order.\nThe tracker's own status name is left out: the state says it in Oracle's words."
       },
       "ItemVersion": {
         "properties": {
@@ -76679,6 +77672,41 @@
         ],
         "title": "MemoDecision"
       },
+      "MessageResearch": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "running",
+              "done",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "MessageResearch"
+      },
       "MetricCreate": {
         "properties": {
           "title": {
@@ -78650,6 +79678,17 @@
           "remaining": {
             "type": "integer",
             "title": "Remaining"
+          },
+          "held": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held"
           }
         },
         "type": "object",
@@ -79200,6 +80239,66 @@
           "status"
         ],
         "title": "NextDraftResolution"
+      },
+      "NextDraftRun": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "flow": {
+            "type": "string",
+            "title": "Flow"
+          },
+          "flow_title": {
+            "type": "string",
+            "title": "Flow Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StagedChange"
+            },
+            "type": "array",
+            "title": "Items",
+            "default": []
+          },
+          "agent_items": {
+            "items": {
+              "$ref": "#/components/schemas/AgentItem"
+            },
+            "type": "array",
+            "title": "Agent Items",
+            "default": []
+          },
+          "next_draft_changes": {
+            "items": {
+              "$ref": "#/components/schemas/StagedDiscussionChange"
+            },
+            "type": "array",
+            "title": "Next Draft Changes",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "flow",
+          "flow_title",
+          "status",
+          "created_at"
+        ],
+        "title": "NextDraftRun",
+        "description": "#574 review: the agents' run under way on a document (Build next draft sent it the\nitems below): what it was sent is not staged for another build until it ends, and no\nother build of the document starts meanwhile."
       },
       "NextDraftRunIn": {
         "properties": {
@@ -81540,6 +82639,87 @@
         ],
         "title": "PlanDocument"
       },
+      "PlanDrift": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "outside_strategy",
+              "stopped_but_planned"
+            ],
+            "title": "Kind"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "high"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "waived"
+            ],
+            "title": "Status"
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "waive_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waive Reason"
+          },
+          "waived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waived At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "severity",
+          "label",
+          "text",
+          "status"
+        ],
+        "title": "PlanDrift",
+        "description": "The item's drift against the approved product strategy (H4 \u00a75), for owners and\napprovers. An approved item's is its stored finding (``finding_id``: waived there,\nPOST /v1/strategy/findings/{id}/waive); a draft item's is measured as the Plan is\nread and has none."
+      },
       "PlanEngineering": {
         "properties": {
           "records": {
@@ -81702,6 +82882,24 @@
             "type": "array",
             "title": "Goal Ids"
           },
+          "feature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirements": {
+            "items": {
+              "$ref": "#/components/schemas/EntityRef"
+            },
+            "type": "array",
+            "title": "Requirements",
+            "default": []
+          },
           "state": {
             "type": "string",
             "enum": [
@@ -81720,6 +82918,14 @@
             },
             "type": "array",
             "title": "Reasons"
+          },
+          "drift": {
+            "items": {
+              "$ref": "#/components/schemas/PlanDrift"
+            },
+            "type": "array",
+            "title": "Drift",
+            "default": []
           },
           "engineering": {
             "$ref": "#/components/schemas/PlanEngineering"
@@ -84484,12 +85690,19 @@
       "ProposedAssessment": {
         "properties": {
           "verdict": {
-            "type": "string",
-            "enum": [
-              "held",
-              "partially_held",
-              "not_held",
-              "inconclusive"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "held",
+                  "partially_held",
+                  "not_held",
+                  "inconclusive"
+                ]
+              },
+              {
+                "type": "null"
+              }
             ],
             "title": "Verdict"
           },
@@ -84560,7 +85773,7 @@
           "verdict"
         ],
         "title": "ProposedAssessment",
-        "description": "Oracle's reading on the due date; a person confirms, edits or marks it inconclusive."
+        "description": "Oracle's reading on the due date; a person confirms, edits or marks it inconclusive.\n``verdict`` is None at H11 ``outcomes`` Observe or Draft: the actual only."
       },
       "ProtectedResourceMetadata": {
         "properties": {
@@ -85698,6 +86911,9 @@
               },
               {
                 "$ref": "#/components/schemas/EntitySubject"
+              },
+              {
+                "$ref": "#/components/schemas/RoadmapItemSubject"
               }
             ],
             "title": "Subject",
@@ -85707,7 +86923,8 @@
                 "checkpoint_item": "#/components/schemas/CheckpointItemSubject",
                 "document_section": "#/components/schemas/DocumentSectionSubject",
                 "entity": "#/components/schemas/EntitySubject",
-                "intake": "#/components/schemas/IntakeSubject"
+                "intake": "#/components/schemas/IntakeSubject",
+                "roadmap_item": "#/components/schemas/RoadmapItemSubject"
               }
             }
           }
@@ -85787,6 +87004,43 @@
           "importance"
         ],
         "title": "QuestionRef"
+      },
+      "QuestionsWithdraw": {
+        "properties": {
+          "question_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Question Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_ids"
+        ],
+        "title": "QuestionsWithdraw",
+        "description": "Withdraw these questions of an intake that are still waiting (the Undo of a\nbatch Oracle asked on its own)."
+      },
+      "QuestionsWithdrawn": {
+        "properties": {
+          "question_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Question Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question_ids"
+        ],
+        "title": "QuestionsWithdrawn"
       },
       "RankedFeature": {
         "properties": {
@@ -88823,6 +90077,16 @@
             ],
             "title": "Intake Id"
           },
+          "intake": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestIntakeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "interview_id": {
             "anyOf": [
               {
@@ -89116,6 +90380,26 @@
         ],
         "title": "RequestDocumentRef"
       },
+      "RequestIntakeRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RequestIntakeRef",
+        "description": "The brief a request is behind (C1 lane 2, Start a PRD): its people read it there."
+      },
       "RequestList": {
         "properties": {
           "items": {
@@ -89330,6 +90614,16 @@
               }
             ],
             "title": "Intake Id"
+          },
+          "intake": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RequestIntakeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "interview_id": {
             "anyOf": [
@@ -90342,6 +91636,21 @@
           "edges"
         ],
         "title": "RescoreResult"
+      },
+      "ResearchIn": {
+        "properties": {
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Message Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message_id"
+        ],
+        "title": "ResearchIn",
+        "description": "Research this: the person's message to research."
       },
       "Resolution": {
         "properties": {
@@ -92925,6 +94234,34 @@
         ],
         "title": "RoadmapItemOut"
       },
+      "RoadmapItemSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "roadmap_item",
+            "title": "Kind"
+          },
+          "document_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Document Id"
+          },
+          "item_key": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Item Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "document_id",
+          "item_key"
+        ],
+        "title": "RoadmapItemSubject",
+        "description": "A Plan item: its PRD and its item key (F2 Ask, from the Plan)."
+      },
       "RoadmapItemsOut": {
         "properties": {
           "roadmap": {
@@ -93154,7 +94491,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Flow"
           },
@@ -93624,7 +94962,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Flow"
           },
@@ -93884,6 +95223,17 @@
               }
             ],
             "title": "Import Failed"
+          },
+          "no_document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Document"
           },
           "can_retry_import": {
             "type": "boolean",
@@ -94441,7 +95791,8 @@
               "ritual_summary",
               "metrics_variance",
               "pricing_memo",
-              "competitive_digest"
+              "competitive_digest",
+              "discussion_research"
             ],
             "title": "Flow"
           },
@@ -94701,6 +96052,17 @@
               }
             ],
             "title": "Import Failed"
+          },
+          "no_document": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Document"
           },
           "can_retry_import": {
             "type": "boolean",
@@ -98736,6 +100098,17 @@
             "title": "Can Retry Draft Import",
             "default": false
           },
+          "draft_retry_refused": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Retry Refused"
+          },
           "items_check": {
             "anyOf": [
               {
@@ -100607,6 +101980,43 @@
             ],
             "title": "Freshness"
           },
+          "state": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "drafting",
+              "in_review",
+              "approved",
+              "stale",
+              "failed"
+            ],
+            "title": "State",
+            "default": "requested"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "tech_brief_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tech Brief Version Id"
+          },
           "requirements": {
             "items": {
               "$ref": "#/components/schemas/RequirementOut"
@@ -100838,13 +102248,32 @@
             "default": 3
           },
           "engineering_approver_ids": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "maxItems": 20,
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Engineering Approver Ids"
+          },
+          "tech_brief_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tech Brief Version Id"
           },
           "title": {
             "anyOf": [
@@ -101054,6 +102483,43 @@
               }
             ],
             "title": "Freshness"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "requested",
+              "drafting",
+              "in_review",
+              "approved",
+              "stale",
+              "failed"
+            ],
+            "title": "State",
+            "default": "requested"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "tech_brief_version_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tech Brief Version Id"
           }
         },
         "type": "object",
@@ -101603,6 +103069,27 @@
             "type": "array",
             "title": "Next Draft Changes",
             "default": []
+          },
+          "agents_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NextDraftRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "worth_a_draft": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worth A Draft"
           }
         },
         "type": "object",
@@ -106200,6 +107687,18 @@
               }
             ],
             "title": "Label"
+          },
+          "endpoint_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2048
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Endpoint Url"
           }
         },
         "type": "object",
@@ -107681,12 +109180,24 @@
                 "reconcile",
                 "open_blocker",
                 "link",
+                "ask",
+                "discuss",
                 "keep",
                 "reopen"
               ]
             },
             "type": "array",
             "title": "Actions"
+          },
+          "suggested_assignee": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -107708,7 +109219,7 @@
           "actions"
         ],
         "title": "TrackAlertOut",
-        "description": "One situation on one track. ``actions``: only what the caller may do now.\n``inbox_state``: in the Inbox only (new, open, done; C1e)."
+        "description": "One situation on one track. ``actions``: only what the caller may do now.\n``inbox_state``: in the Inbox only (new, open, done; C1e). ``suggested_assignee``: whom\nAsk pre-fills (F2 \u00a73, \"a question to the engineering lead\"; decided 2026-10-25): the\ncompany's engineering lead when exactly one active member carries the flag and the\ncaller, not that lead, may Ask; else none. The server decides, so the flag itself never\nreaches a picker (``GET /v1/people`` does not show it)."
       },
       "TrackAlertPrd": {
         "properties": {
@@ -108199,6 +109710,49 @@
         ],
         "title": "TrackerConnectorOut",
         "description": "The two-way tracker connector's gate (E1, \u00a711.1): off unless verified."
+      },
+      "TrackerFieldChange": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "enum": [
+              "state",
+              "target_date",
+              "estimate"
+            ],
+            "title": "Field"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "title": "TrackerFieldChange",
+        "description": "One field an import changed: before and after, as the tracker history keeps them."
       },
       "TrackerImportOut": {
         "properties": {
@@ -110344,6 +111898,17 @@
             ],
             "title": "Imported By Name"
           },
+          "imported_again": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported Again"
+          },
           "approved_at": {
             "anyOf": [
               {
@@ -110674,6 +112239,17 @@
               }
             ],
             "title": "Imported By Name"
+          },
+          "imported_again": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported Again"
           },
           "approved_at": {
             "anyOf": [

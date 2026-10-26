@@ -12,7 +12,8 @@ rules are checked here:
 - only the author sets what others see of a finding (``set_sharing``), audited;
 - archiving an intake retires its open questions (they leave the Inbox and stay on the
   brief as history); restoring it asks them again, a delegated one of its delegate
-  (``retire_questions``, #307).
+  (``retire_questions``, #307); it also releases the requests behind it that no PRD
+  links (``requests_service.release_brief``), and restoring it does not take them back.
 """
 
 import re
@@ -28,11 +29,12 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.docs import service as docs_service
+from oracle.intake import autoask, engine, sharing
 from oracle.intake import categories as cats
-from oracle.intake import engine, sharing
 from oracle.intake import evidence as ev
 from oracle.intake.schemas import AnswerIn, IntakeCreate, IntakePatch, IntakeRunIn
 from oracle.jobs.models import LlmJob
+from oracle.requests import service as requests_service
 from oracle.runs import service as runs_service
 from oracle.runs.schemas import RunCreate, RunPatch
 from oracle.sources.models import Snapshot, Source
@@ -201,6 +203,10 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
     )
     db.add(intake)
     await db.flush()
+    try:
+        linked = await requests_service.put_behind_brief(db, principal, intake.id, body.request_ids)
+    except requests_service.RequestError as e:
+        raise IntakeError(e.status, str(e)) from e
     await engine.analyze(db, intake)
     # Before the first batch: the brief's goals and out-of-scope lines answer their
     # questions, so neither is asked.
@@ -215,9 +221,12 @@ async def create(db: AsyncSession, principal: Principal, body: IntakeCreate) -> 
             "snapshot_id": str(snapshot.id),
             "source_ids": [str(i) for i in source_ids],
             "document_id": str(document_id) if document_id else None,
+            "request_ids": [str(i) for i in linked],
         },
     )
-    await ask(db, principal, intake, body.batch_size)
+    # H11 ``questions``: at Observe and Draft a new brief asks no one; a person sends.
+    if await autoask.asks_first_batch(db):
+        await ask(db, principal, intake, body.batch_size)
     if body.ai_extraction:
         await queue_extraction(db, principal, intake)
     return intake
@@ -338,7 +347,9 @@ async def ask(
         skip = {g.id for g in gaps if sharing.gap_view(g, reg, v) is None}
     if assign:
         await _check_assign(db, intake, gaps, skip, assign)
-    asked = await engine.ask_batch(db, intake, principal.id, size, skip, assign)
+    # H11 ``questions`` at Draft: the person the preview named, never the sender.
+    answers = await autoask.proposes_asker(db)
+    asked = await engine.ask_batch(db, intake, principal.id, size, skip, assign, answers)
     if asked:
         await audit.record(
             db,
@@ -406,6 +417,9 @@ async def patch(
         changes["status"] = [intake.status, body.status]
         intake.status = body.status
         await retire_questions(db, intake)
+        if intake.status == "archived":
+            # A converted brief cannot be archived, so this one made no PRD.
+            await requests_service.release_brief(db, principal, intake.id)
     reanswer = await _patch_brief_fields(db, intake, body, changes)
     await flush_or_conflict(db)
     if reanswer:
@@ -534,7 +548,39 @@ async def ask_next(
     """Ask the next batch: the author or an approver."""
     if not sharing.is_author(principal, intake) and not has_role(principal.role, "approver"):  # type: ignore[arg-type]
         raise IntakeError(403, "Only the intake's author or an approver asks the next batch")
+    held = await autoask.held(db)
+    if held:
+        raise IntakeError(409, held)
     return await ask(db, principal, intake, size, assign)
+
+
+async def withdraw_asked(
+    db: AsyncSession, principal: Principal, intake: ProductIntake, question_ids: list[uuid.UUID]
+) -> list[StakeholderQuestion]:
+    """Withdraw these questions of the intake that are still waiting on an answer (the
+    Undo of a batch Oracle asked on its own, H11 ``questions``): the author or an
+    approver. Answered or settled ones stay as they are."""
+    if not sharing.is_author(principal, intake) and not has_role(principal.role, "approver"):  # type: ignore[arg-type]
+        raise IntakeError(403, "Only the intake's author or an approver withdraws these questions")
+    wanted = set(question_ids)
+    done = [
+        q
+        for q in await engine.intake_questions(db, intake.id)
+        if q.id in wanted and q.status in autoask.WAITING
+    ]
+    for q in done:
+        q.status = "withdrawn"
+    await db.flush()
+    if done:
+        await audit.record(
+            db,
+            principal,
+            "intake.questions_withdrawn",
+            "intake",
+            intake.id,
+            {"question_ids": [str(q.id) for q in done]},
+        )
+    return done
 
 
 # --- sharing (S6) ------------------------------------------------------------------------
@@ -598,6 +644,10 @@ async def set_sharing(
         from oracle.intake import answers
 
         await answers.propose_shared(db, principal, intake, [g for g in gaps if str(g.id) in moved])
+        # And a late answer's feedback item quotes it only while others read it in full.
+        from oracle.intake import late_answers
+
+        await late_answers.on_sharing(db, intake, [g for g in gaps if str(g.id) in moved])
     await flush_or_conflict(db)
     return done
 

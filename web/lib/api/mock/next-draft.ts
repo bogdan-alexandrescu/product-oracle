@@ -20,6 +20,7 @@ import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
 import type { LlmContext } from "./llm-jobs";
+import { jobOut } from "./refusal";
 
 type Job = Schemas["LlmJobOut"];
 type Suggestion = Schemas["SuggestionOut"];
@@ -53,6 +54,18 @@ type BatchOutput = {
 };
 
 export const KIND = "refinement_batch" as const;
+/** H11 `next_drafts` at Observe: the plan's refusal, and the 409 of Build and the agents' run. */
+export const OBSERVING =
+  "Oracle is set to observe next drafts: it counts staged changes and builds nothing. An owner can change this in Settings › Autonomy.";
+
+const observing = (ctx: LlmContext) => ctx.nextDrafts?.().level === "observe";
+
+/** H11 Recommend: the sentence saying the staged changes are worth a draft (the API's _worth_a_draft). */
+function worthADraft(ctx: LlmContext, waiting: number, next: number, job: Job | null): string | null {
+  const nd = ctx.nextDrafts?.();
+  if (!nd || nd.level !== "recommend" || job || waiting < nd.min_staged) return null;
+  return `${waiting} changes wait: worth building draft ${next}.`;
+}
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -214,7 +227,8 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
       section_key: key,
       section_heading: section?.heading ?? older?.heading ?? key,
       feedback_summary: f?.summary ?? "",
-      text: s.edited_text ?? s.text ?? "",
+      // #636 re-review: none of a withheld item's text (the next draft still takes it).
+      text: f?.withheld_at ? "" : (s.edited_text ?? s.text ?? ""),
       accepted_by: s.decided_by ?? null,
       accepted_by_name: memberName(ctx, s.decided_by),
       accepted_at: s.decided_at ?? null,
@@ -250,18 +264,43 @@ export function stagedChanges(ctx: LlmContext, doc: Doc, includeGone: boolean): 
     });
   }
   const job = currentJob(ctx, doc.id);
-  const sections = new Set([...items, ...changes].filter((i) => !i.section_gone).map((i) => i.section_key));
+  // #574 review: what the agents' run under way was sent is in that run, not staged.
+  const run = ctx.agentsRun?.(doc.id) ?? null;
+  const sent = new Set(run?.sent ?? []);
+  const agents = agentItems(ctx, doc.id);
+  const free = <T,>(xs: T[], id: (x: T) => string) => xs.filter((x) => !sent.has(id(x)));
+  const held = <T,>(xs: T[], id: (x: T) => string) => xs.filter((x) => sent.has(id(x)));
+  const agentsRun: Schemas["NextDraftRun"] | null = run
+    ? {
+        id: run.id,
+        flow: run.flow,
+        flow_title: run.flow_title,
+        status: run.status,
+        created_at: run.created_at,
+        items: held(items, (i) => i.suggestion_id),
+        agent_items: held(agents, (a) => a.feedback_id),
+        next_draft_changes: held(changes, (c) => c.id),
+      }
+    : null;
+  const freeItems = free(items, (i) => i.suggestion_id);
+  const freeChanges = free(changes, (c) => c.id);
+  const sections = new Set([...freeItems, ...freeChanges].filter((i) => !i.section_gone).map((i) => i.section_key));
+  // H11 Recommend: what still waits to be drafted (not what a run under way was sent).
+  const waiting = [...freeItems, ...freeChanges].filter((i) => !i.section_gone).length + free(agents, (x) => x.feedback_id).length;
+  const next = (latest?.number ?? 0) + 1;
   return {
     document_id: doc.id,
     slug: doc.slug,
     latest_version: latest?.number ?? null,
-    next_version: (latest?.number ?? 0) + 1,
-    items,
+    next_version: next,
+    items: freeItems,
     gone_count: gone,
     estimate_usd: sections.size ? Math.round(sections.size * 0.0312 * 10000) / 10000 : null,
-    draft_job: job,
-    agent_items: agentItems(ctx, doc.id),
-    next_draft_changes: changes,
+    draft_job: job && jobOut(shownJob(ctx, job)),
+    agent_items: free(agents, (a) => a.feedback_id),
+    next_draft_changes: freeChanges,
+    agents_run: agentsRun,
+    worth_a_draft: worthADraft(ctx, waiting, next, job),
   };
 }
 
@@ -294,9 +333,16 @@ export function runEstimate(ctx: LlmContext, depth: string): number {
   return ctx.runEstimateUsd?.() ?? RUN_BASE_USD * (DEPTH[depth] ?? 1);
 }
 
+/** #574 review: the agents' run under way on a document (as the API's agents_run), with the ids it was sent. */
+export type AgentsRun = Omit<Schemas["NextDraftRun"], "items" | "agent_items" | "next_draft_changes"> & { sent: string[] };
+
+/** The API's refusal while the agents' run is under way: a second build would make what it was sent again. */
+const runRefusal = (run: AgentsRun) =>
+  `the agents' run ${run.id} is writing this document's next draft; build again once it ends: ${globalThis.location?.origin ?? ""}/runs/${run.id}`;
+
 export type StartRun = (
   doc: Doc,
-  input: { feedback_ids: string[]; suggestion_ids: string[]; depth: string; estimate_usd: number },
+  input: { feedback_ids: string[]; suggestion_ids: string[]; next_draft_change_ids: string[]; depth: string; estimate_usd: number },
 ) => Promise<Response>;
 
 /** POST /v1/feedback/{id}/stage-for-agents (and DELETE): D12 staging for the agents; null for other paths. */
@@ -314,7 +360,62 @@ export async function stageRoute(ctx: LlmContext, req: Request, p: string[], liv
   if (!on) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
   f.updated_at = ctx.now();
   const latest = latestOf(ctx, f.document_id)?.number ?? null;
-  return json(200, { ...f, suggestion: s, ...stateOf(f, s, latest) });
+  return json(200, { ...f, resolution_note: shownNote(f, ctx.db), suggestion: shownSuggestion(f, s), ...stateOf(f, s, latest) });
+}
+
+/** A withheld item's suggestion: what its pushback says instead of its reason (jobs.service.WITHHELD_REASON). */
+export const WITHHELD_REASON = "Withheld while its finding is not shared in full";
+
+/** A suggestion as every output serves it (jobs.service.suggestion_out, #636 re-review): on a
+ * withheld item (a late answer whose finding is not shared in full) its text, edited text and
+ * rationale are left out, and its pushback keeps its sources but not its reason. */
+export function shownSuggestion<S extends Suggestion | null>(f: Pick<Feedback, "withheld_at"> | undefined, s: S): S {
+  if (!s || !f?.withheld_at) return s;
+  return { ...s, text: null, edited_text: null, rationale: null, pushback: s.pushback ? { ...s.pushback, reason: WITHHELD_REASON } : null };
+}
+
+type Lines = Record<string, unknown>[];
+const listOf = (x: unknown): Lines => (Array.isArray(x) ? x.filter((y): y is Record<string, unknown> => !!y && typeof y === "object") : []);
+
+/** The resolutions a refinement (top level) or a next draft (per section) wrote (jobs.service._resolutions_of). */
+function resolutionsOf(out: Record<string, unknown>): Lines {
+  return [...listOf(out.resolutions), ...listOf(out.sections).flatMap((s) => listOf(s.resolutions))];
+}
+
+/** A report's narrative while a line it was written from is withheld (jobs.service.withheld_narrative). */
+export const withheldNarrative = (n: number) =>
+  `${n} feedback item(s) were raised on earlier versions; the rest of this summary is withheld while one of them is not shared in full.`;
+
+/** A job as readers get it (jobs.service.withheld_output, #645 re-review): a withheld item's report
+ * line reads its withheld summary without note or explanation, the report's narrative is withheld
+ * with it, and the resolution notes a refinement or next draft wrote from it read WITHHELD_REASON. */
+export function shownJob<J extends Job | null | undefined>(ctx: LlmContext, job: J): J {
+  if (!job?.output) return job;
+  const withheld = new Map(ctx.feedback.filter((f) => f.withheld_at).map((f) => [f.id, f]));
+  if (!withheld.size) return job;
+  const out = structuredClone(job.output) as Record<string, unknown>;
+  const resolution = out.resolution as { summary?: string; items?: unknown } | undefined;
+  const lines = listOf(resolution?.items);
+  const hit = lines.filter((l) => withheld.has(String(l.feedback_id)));
+  for (const l of hit) Object.assign(l, { summary: withheld.get(String(l.feedback_id))!.summary, resolution_note: null, explanation: "" });
+  if (resolution && hit.length) resolution.summary = withheldNarrative(lines.length);
+  for (const r of resolutionsOf(out)) if (withheld.has(String(r.feedback_id)) && r.note) r.note = WITHHELD_REASON;
+  return { ...job, output: out } as J;
+}
+
+/** The item's resolution note as outputs serve it (jobs.service.shown_note, oracle_notes): on a
+ * withheld item a note Oracle wrote from it (from any of its suggestions, or a refinement's or next
+ * draft's resolution note) is withheld with it; a person's note is shown as written. */
+export function shownNote(f: Feedback, db: LlmContext["db"] | undefined): string | null {
+  const note = f.resolution_note ?? null;
+  if (!f.withheld_at || note == null || !db) return note;
+  const fromSuggestions = db.suggestions
+    .filter((s) => s.feedback_item_id === f.id)
+    .flatMap((s) => [s.edited_text ?? s.text ? `Answered: ${s.edited_text ?? s.text}` : null, s.rationale, s.pushback?.reason]);
+  const fromDrafts = db.jobs
+    .filter((j) => j.document_id === f.document_id && (j.kind === "refinement" || j.kind === KIND) && j.status === "succeeded" && j.output)
+    .flatMap((j) => resolutionsOf(j.output!).filter((r) => r.feedback_id === f.id).map((r) => r.note));
+  return [...fromSuggestions, ...fromDrafts].includes(note) ? WITHHELD_REASON : note;
 }
 
 function strip(body: string) {
@@ -374,13 +475,15 @@ export function runBatch(ctx: LlmContext, job: Job, v: Version): BatchOutput {
   };
 }
 
-function preview(ctx: LlmContext, job: Job): Schemas["NextDraftPreview"] {
+function preview(ctx: LlmContext, stored: Job): Schemas["NextDraftPreview"] {
+  // #645 re-review: a withheld item's resolution notes are withheld (the build keeps them).
+  const job = shownJob(ctx, stored);
   const out = (job.output ?? null) as BatchOutput | null;
   const base = (job.input.version as number | undefined) ?? null;
   const latest = latestOf(ctx, job.document_id ?? "")?.number ?? null;
   const done = job.status === "succeeded" && out;
   return {
-    job,
+    job: jobOut(job),
     base_version: base,
     next_version: base ? base + 1 : null,
     latest_version: latest,
@@ -451,8 +554,12 @@ export async function nextDraftRoute(
     const latest = latestOf(ctx, doc.id);
     const locked = new Set(latest ? ctx.lockedKeys(latest) : []);
     const hit = [...c.texts, ...c.rows].filter((t) => locked.has(t.section_key));
-    const refused =
-      engine === "agents"
+    const run = ctx.agentsRun?.(doc.id) ?? null;
+    const refused = observing(ctx)
+      ? OBSERVING
+      : run
+        ? runRefusal(run)
+      : engine === "agents"
         ? null
         : !enabled(doc)
           ? "Refinement is turned off for this document"
@@ -473,24 +580,34 @@ export async function nextDraftRoute(
   }
 
   if (p[4] === "run" && m === "POST") {
+    if (observing(ctx)) return fail(409, OBSERVING);
     const input = (await body<Schemas["NextDraftRunIn"]>()) ?? {};
+    const run = ctx.agentsRun?.(doc.id) ?? null;
+    if (run) return fail(409, runRefusal(run));
     const c = chosen(ctx, doc, input);
     if (c instanceof Response) return c;
     if (chooseEngine(c.texts, c.agents).engine === "oracle") return fail(409, "these changes need no agents; build them with Oracle");
+    const pending = currentJob(ctx, doc.id);
+    if (pending) return fail(409, `Oracle's build of the next draft is pending (job ${pending.id}); apply or discard it first`);
     if (!hooks.startRun) return fail(503, "runs are not available");
     const depth = input.depth ?? "standard";
     return hooks.startRun(doc, {
       feedback_ids: c.agents.map((a) => a.feedback_id),
       suggestion_ids: c.texts.map((t) => t.suggestion_id),
+      // G4: the discussions' section changes go with them, for the agents to make.
+      next_draft_change_ids: c.rows.map((r) => r.id),
       depth,
       estimate_usd: runEstimate(ctx, depth),
     });
   }
 
   if (!p[4] && m === "POST") {
+    if (observing(ctx)) return fail(409, OBSERVING);
     const latest = latestOf(ctx, doc.id);
     if (!latest) return fail(409, `'${doc.slug}' has no version yet`);
     if (!enabled(doc)) return fail(409, turnedOff("refinement"));
+    const run = ctx.agentsRun?.(doc.id) ?? null;
+    if (run) return fail(409, runRefusal(run));
     const pending = currentJob(ctx, doc.id);
     if (pending && ["queued", "running"].includes(pending.status)) {
       return fail(409, "the next draft is already being built; wait for it or discard it");
@@ -541,7 +658,7 @@ export async function nextDraftRoute(
     if (job.status === "cancelled" || out?.discarded_at) return fail(409, "this next draft was already discarded");
     if (["queued", "running"].includes(job.status)) Object.assign(job, { status: "cancelled", finished_at: ctx.now() });
     else job.output = { ...(out ?? {}), discarded_at: ctx.now() };
-    return json(200, job);
+    return json(200, jobOut(job));
   }
 
   if (p[5] === "apply" && m === "POST") {
@@ -614,7 +731,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
     const latest = latestOf(ctx, doc.id)?.number ?? null;
     const { state: base, staged_for_version, staged_for_agents } = stateOf(f, s, latest);
     const state: InboxItem["state"] = base === "open" && (!seen || f.created_at > seen) ? "new" : base;
-    const acting = s?.status === "open" ? s : null;
+    const acting = shownSuggestion(f, s?.status === "open" ? s : null);
     counts[state] += 1;
     items.push({
       id: f.id,
@@ -629,7 +746,7 @@ export function inboxStates(ctx: LlmContext, seen: string | null) {
       title: doc.title,
       latest_version: latest,
       state,
-      resolution_note: f.resolution_note ?? null,
+      resolution_note: shownNote(f, ctx.db),
       addressed_in_version: f.addressed_in_version ?? null,
       staged_for_version,
       staged_for_agents,

@@ -96,7 +96,7 @@ export function fromRun(s: BaselineState, runId: string, actions: Schemas["Revie
     }
     if (e.status !== "rejected") {
       if (open.length && e.locked) {
-        reasons.push(reason(e, "changes_your_edit", "confirm", "Changes a locked item", "The run proposes a change to an item a person edited: accept or reject it."));
+        reasons.push(reason(e, "changes_your_edit", "confirm", "Changes a locked item", "The run proposes a change to an item a person edited. Accepting applies it, and the item stays locked against Oracle's changes until a person unlocks it; or reject it."));
       }
       if (s.conflicts.some((c) => c.entity_id === e.id && c.status === "open" && c.material)) {
         reasons.push(reason(e, "material_conflict", "confirm", "Sources disagree", "Sources disagree on a field that changes a decision: pick a side."));

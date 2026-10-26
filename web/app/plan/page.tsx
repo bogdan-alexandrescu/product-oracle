@@ -102,13 +102,15 @@ export default function PlanPage() {
   const { goals, history } = useGoals("plan");
   const tags = useMemo(() => new Map((goals ?? []).map((g) => [g.id, g])), [goals]);
   const [by, setBy] = useState<GroupBy>("horizon");
-  // F2: /plan?item=<key> (an Inbox track alert's Open) selects that item.
+  // F2: /plan?item=<key> (an Inbox track alert's Open) selects that item; &prd=<id> (a question
+  // about it) picks it among the PRDs that share the key.
   // Read on each render: a client navigation updates the URL after the first one.
   const wanted = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("item"), () => null);
+  const wantedPrd = useSyncExternalStore(noSubscribe, () => new URLSearchParams(window.location.search).get("prd"), () => null);
   const [picked, setPicked] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const [opened, setOpened] = useState<Schemas["ChangeSetOut"] | null>(null);
-  const [linking, setLinking] = useState<PlanItem | null>(null);
+  const [linking, setLinking] = useState<{ item: PlanItem; term?: string } | null>(null);
   const tracks = useTracks();
   // The tracks sit above the Roadmap: drawn before they answer, its rows would move down
   // under the pointer when they arrive.
@@ -118,7 +120,7 @@ export default function PlanPage() {
   const data = q.data;
   const prdOrder = useMemo(() => (data?.prds ?? []).map((p) => p.document.slug), [data]);
   const ordered = data ? grouped(data.items, by, tags, prdOrder).rows : [];
-  const item = ordered.find((i) => i.id === picked) ?? (picked == null ? ordered.find((i) => i.key === wanted) : undefined) ?? ordered[0] ?? null;
+  const item = ordered.find((i) => i.id === picked) ?? (picked == null ? ordered.find((i) => i.key === wanted && (!wantedPrd || i.prd?.id === wantedPrd)) : undefined) ?? ordered[0] ?? null;
   const onSelect = useCallback((id: string) => {
     setPicked(id);
     setMilestone(null);
@@ -132,9 +134,9 @@ export default function PlanPage() {
   const roadmaps = approvedRoadmaps(data?.items);
   const reload = q.reload;
   const onLink = useCallback(
-    (i: PlanItem) => {
+    (i: PlanItem, term?: string) => {
       setSheet(false);
-      setLinking(i);
+      setLinking({ item: i, term });
     },
     [],
   );
@@ -281,7 +283,7 @@ export default function PlanPage() {
           {inspector}
         </Sheet>
       )}
-      {linking && <LinkIssueDialog item={linking} items={data?.items ?? []} onClose={() => setLinking(null)} onLinked={reload} />}
+      {linking && <LinkIssueDialog item={linking.item} term={linking.term} items={data?.items ?? []} onClose={() => setLinking(null)} onLinked={reload} />}
     </div>
   );
 }

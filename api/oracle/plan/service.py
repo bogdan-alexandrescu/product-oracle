@@ -18,22 +18,26 @@ and records, and the goals each item's feature supports.
 
 import uuid
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import Principal
+from oracle.authz import has_role
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
 from oracle.plan.schemas import (
     ItemChange,
     ItemHistoryOut,
+    ItemTrackerEvent,
     ItemVersion,
     PlanCounts,
     PlanDocument,
+    PlanDrift,
     PlanEngineering,
     PlanItem,
     PlanItemPrd,
@@ -46,6 +50,7 @@ from oracle.plan.schemas import (
     PlanScope,
     PlanTrack,
     PlanWho,
+    TrackerFieldChange,
 )
 from oracle.roadmap import diff, schedule, tracker, views
 from oracle.roadmap.models import (
@@ -53,10 +58,13 @@ from oracle.roadmap.models import (
     RoadmapItem,
     ScheduleBasis,
     TrackerRecord,
+    TrackerRecordEvent,
     TrackMilestone,
 )
 from oracle.runs import flows
 from oracle.runs.models import Checkpoint, Run, RunSegment
+from oracle.strategy import drift
+from oracle.strategy.models import StrategyFinding
 
 # Runs still going: under way, or waiting on a person (as Home's In flight).
 UNFINISHED = ("running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun")
@@ -76,6 +84,10 @@ CHECKPOINT_LABEL = {
 # Checkpoints that are a review (journey step 8); the others stop a draft run (step 7).
 REVIEWS = ("prd_review", "roadmap_review")
 SEGMENT_TITLES = {s.name: s.title for f in flows.FLOWS.values() for s in f.segments}
+# The item history lists the newest imports of its tracker issues, this many (#577 review).
+TRACKER_HISTORY_LIMIT = 20
+# The fields the history names, in this order; the tracker's own status name is not one.
+SHOWN_FIELDS = ("state", "target_date", "estimate")
 HEALTH_WORD = {"on_track": "On track", "at_risk": "At risk", "off_track": "Off track"}
 
 
@@ -402,7 +414,7 @@ def _engineering(
 
 async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all") -> PlanOut:
     """The Plan as ``principal`` sees it (F1 §11)."""
-    now = views.today()
+    now = await views.today(db)
     viewer_role, viewer_id = principal.role, principal.user_id
     # The company's engineering lead (A3 Engineering lead role); none can be named yet,
     # so engineering decisions fall to the approvers.
@@ -525,6 +537,7 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
                 return src.document_id
         return None
 
+    drift_of = await _drift(db, viewer_role)
     items: list[PlanItem] = []
     drafts_of_prd: dict[uuid.UUID, list[PlanItem]] = defaultdict(list)
     order = sorted(roadmaps, key=lambda d: d.updated_at, reverse=True)
@@ -559,6 +572,7 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
                 row, rv, roadmap, origin, change, read, ctx, goals, risks, tracks_by_id,
                 milestones, withdrawn, fallback_prd, viewer_role, lead_id, now,
             )  # fmt: skip
+            item.drift = drift_of(row, origin)
             items.append(item)
             if origin == "draft" and (row.prd_document_id or fallback_prd):
                 drafts_of_prd[row.prd_document_id or fallback_prd].append(item)
@@ -661,6 +675,57 @@ async def build(db: AsyncSession, principal: Principal, scope: PlanScope = "all"
     )
 
 
+async def _drift(
+    db: AsyncSession, viewer_role: str
+) -> Callable[[RoadmapItem, str], list[PlanDrift]]:
+    """Each item's drift (H4 §5), for owners and approvers (who sees it): an approved
+    item's stored findings, open or waived; a draft item's measured now (E1 "draft")."""
+    if not has_role(viewer_role, "approver"):
+        return lambda row, origin: []
+    graph = await drift.load_for_items(db)
+    stored: dict[uuid.UUID, list[StrategyFinding]] = defaultdict(list)
+    for f in await db.scalars(
+        select(StrategyFinding).where(
+            StrategyFinding.subject_kind == "roadmap_item",
+            StrategyFinding.kind.in_(drift.ITEM_KINDS),
+            StrategyFinding.status.in_(("open", "waived")),
+        )
+    ):
+        stored[f.subject_id].append(f)  # type: ignore[index]
+
+    def of(row: RoadmapItem, origin: str) -> list[PlanDrift]:
+        live = {d.kind: d for d in drift.item_drift(graph, row.feature_id, row.horizon)}
+        if origin == "draft":
+            return [
+                PlanDrift(kind=d.kind, severity=d.severity, label=d.label, text=d.text,
+                          status="open")  # type: ignore[arg-type]
+                for d in live.values()
+            ]  # fmt: skip
+        out = [
+            PlanDrift(
+                kind=f.kind,  # type: ignore[arg-type]
+                severity=f.severity,  # type: ignore[arg-type]
+                label=drift.ITEM_LABELS[f.kind],
+                text=live[f.kind].text if f.kind in live else STALE_DRIFT[f.kind],
+                status=f.status,  # type: ignore[arg-type]
+                finding_id=f.id,
+                waive_reason=f.waive_reason,
+                waived_at=f.waived_at,
+            )
+            for f in stored.get(row.id, [])
+        ]
+        return sorted(out, key=lambda d: (d.severity != "high", d.kind))
+
+    return of
+
+
+# A stored finding's words when the strategy moved since the last check measured it.
+STALE_DRIFT = {
+    "outside_strategy": "Outside the product strategy at the last check.",
+    "stopped_but_planned": "On the product strategy's stop list at the last check.",
+}
+
+
 def _item(
     row: RoadmapItem,
     rv: Any,
@@ -721,6 +786,14 @@ def _item(
         ),
         track_id=row.track_id,
         goal_ids=goals.get(row.feature_id, []) if row.feature_id else [],
+        feature=views.entity_ref(ctx.entities[row.feature_id])
+        if row.feature_id in ctx.entities
+        else None,
+        requirements=[
+            views.entity_ref(ctx.entities[r])
+            for r in row.requirement_ids or []
+            if r in ctx.entities
+        ],
         state=item_state(origin, risk, records, row.horizon),  # type: ignore[arg-type]
         reasons=[PlanReason(**r) for r in risk.reasons],
         engineering=engineering,
@@ -739,6 +812,8 @@ async def item_history(db: AsyncSession, roadmap: Document, key: str) -> ItemHis
                 DocumentVersion.approved_at,
                 RoadmapItem.horizon,
                 RoadmapItem.prd_version_id,
+                RoadmapItem.track_id,
+                RoadmapItem.prd_document_id,
             )
             .join(RoadmapItem, RoadmapItem.roadmap_version_id == DocumentVersion.id)
             .where(DocumentVersion.document_id == roadmap.id, RoadmapItem.item_key == key)
@@ -757,6 +832,7 @@ async def item_history(db: AsyncSession, roadmap: Document, key: str) -> ItemHis
                 )
             ).all()
         )
+    events, older = await _tracker_events(db, rows, key)
     return ItemHistoryOut(
         roadmap=roadmap.slug,
         item=key,
@@ -769,4 +845,64 @@ async def item_history(db: AsyncSession, roadmap: Document, key: str) -> ItemHis
             )
             for r in rows
         ],
+        tracker_events=events,
+        tracker_events_older=older,
     )
+
+
+async def _tracker_events(
+    db: AsyncSession, rows: list[Any], key: str
+) -> tuple[list[ItemTrackerEvent], int]:
+    """The tracker history of the item's issues (F2 §2): one entry per import of an issue
+    (its events share the record, the observed time and the transaction's ``created_at``),
+    naming every field it changed; the newest TRACKER_HISTORY_LIMIT, oldest first, and how
+    many older ones are left out. The records are those matched to the key on the item's
+    track, or by its PRD (F7), as the Plan matches them. A change of the tracker's own status
+    name alone is no entry: the state says it in Oracle's words."""
+    tracks = {r.track_id for r in rows if r.track_id}
+    prds = {r.prd_document_id for r in rows if r.prd_document_id}
+    if not tracks and not prds:
+        return [], 0
+    matched = []
+    if tracks:
+        matched.append(TrackerRecord.track_id.in_(tracks))
+    if prds:
+        matched.append(TrackerRecord.prd_document_id.in_(prds))
+    E = TrackerRecordEvent  # noqa: N806
+    shown_fields = E.field.in_(SHOWN_FIELDS)
+    imports = (
+        await db.execute(
+            select(E.record_id, E.observed_at, E.created_at, func.count().over().label("total"))
+            .join(TrackerRecord, TrackerRecord.id == E.record_id)
+            .where(TrackerRecord.item_key == key, or_(*matched), shown_fields)
+            .group_by(E.record_id, E.observed_at, E.created_at)
+            .order_by(E.observed_at.desc(), E.created_at.desc(), E.record_id)
+            .limit(TRACKER_HISTORY_LIMIT)
+        )
+    ).all()
+    if not imports:
+        return [], 0
+    found = await db.execute(
+        select(E, TrackerRecord.tracker, TrackerRecord.external_ref)
+        .join(TrackerRecord, TrackerRecord.id == E.record_id)
+        .where(
+            tuple_(E.record_id, E.observed_at, E.created_at).in_(
+                [(i.record_id, i.observed_at, i.created_at) for i in imports]
+            ),
+            shown_fields,
+        )
+    )
+    groups: dict[tuple, ItemTrackerEvent] = {}
+    for e, tracker_name, ref in found.all():
+        group = groups.setdefault(
+            (e.record_id, e.observed_at, e.created_at),
+            ItemTrackerEvent(
+                record_id=e.record_id, tracker=tracker_name, external_ref=ref,
+                observed_at=e.observed_at, changes=[],
+            ),
+        )  # fmt: skip
+        group.changes.append(TrackerFieldChange(field=e.field, before=e.before, after=e.after))  # type: ignore[arg-type]
+    for g in groups.values():
+        g.changes.sort(key=lambda c: SHOWN_FIELDS.index(c.field))
+    ordered = [groups[(i.record_id, i.observed_at, i.created_at)] for i in reversed(imports)]
+    return ordered, imports[0].total - len(imports)

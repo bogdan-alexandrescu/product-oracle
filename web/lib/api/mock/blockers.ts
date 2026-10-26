@@ -235,6 +235,8 @@ function strategy(ctx: BlockersContext, db: BlockersDb, b: BlockerRow): Schemas[
     events: ctx.v2.blocker_events.filter((e) => e.blocker_id === b.id).sort((x, y) => x.created_at.localeCompare(y.created_at)),
     risk_acceptance: b.status === "accepted_risk" ? (db.acceptances.filter((a) => a.entity_id === b.id).at(-1) ?? null) : null,
     documents: docs.map((d) => ({ id: d.id, slug: d.slug, title: d.title })),
+    can_set_status: statusRefusal(ctx, b) === null,
+    set_status_why_not: statusRefusal(ctx, b),
   };
 }
 
@@ -288,6 +290,30 @@ function resolveFloor(ctx: BlockersContext, b: BlockerRow): Snapshot | undefined
     if (data.change === "reclassified" && data.by_decider === true && data.gate) floor = data.gate;
   }
   return floor;
+}
+
+/** Why this person may not change the blocker's status, or null (the API's blockers.service.status_refusal). */
+function statusRefusal(ctx: BlockersContext, b: BlockerRow): string | null {
+  if (b.status !== "resolved" || !weakens(resolveFloor(ctx, b), snapshot(b)) || RANK[ctx.role] >= RANK.owner) return null;
+  return "This blocker gated publishing when it was resolved and was lowered or narrowed since. Only an owner can reopen it.";
+}
+
+/**
+ * Mock scenario: the address-lookup blocker was resolved while it gated publishing, and a
+ * baseline import with no owner on it dropped its document since. Reopening it takes an owner.
+ */
+export const BLOCKER_NARROWED_SCENARIO = "blocker-narrowed";
+
+export function narrowResolvedBlocker(db: BlockersDb, v2: V2Db) {
+  const b = db.blockers.find((x) => x.id === V2_IDS.blocker);
+  if (!b) return;
+  const resolved = { ...snapshot(b), status: "resolved" as const };
+  const at = (min: number) => new Date(Date.parse(AT) + min * 60_000).toISOString();
+  const resolve = { id: crypto.randomUUID(), blocker_id: b.id, option_id: null, experiment_id: null, kind: "status_changed" as const, from_status: b.status, to_status: "resolved" as const, reason: "The provider raised our tier", actor: "user:approver", data: { gate: resolved }, created_at: at(1) };
+  b.status = "resolved";
+  b.document_ids = [];
+  const narrowed = { id: crypto.randomUUID(), blocker_id: b.id, option_id: null, experiment_id: null, kind: "status_changed" as const, from_status: null, to_status: null, reason: "Baseline import", actor: "user:approver", data: { change: "reclassified", before: resolved, by_decider: false, gate: snapshot(b) }, created_at: at(2) };
+  for (const e of [resolve, narrowed]) v2.blocker_events.push({ ...e, summary: describeEvent(e) });
 }
 
 function event(ctx: BlockersContext, b: BlockerRow, kind: ResolutionEvent["kind"], to: BlockerRow["status"] | null, extra: Partial<ResolutionEvent> = {}) {
@@ -470,9 +496,8 @@ export async function routeBlockers(ctx: BlockersContext, db: BlockersDb, req: R
     if (p[3] === "status" && m === "POST") {
       const input = await body<Schemas["BlockerStatusIn"]>();
       if (input.status === "resolved" && !input.reason) return json(422, { detail: "Say why the blocker is resolved" });
-      if (input.status !== b.status && b.status === "resolved" && weakens(resolveFloor(ctx, b), snapshot(b)) && !can("owner")) {
-        return json(403, { detail: "This blocker gated publishing when it was resolved and was lowered or narrowed since. Only an owner can reopen it." });
-      }
+      const refusal = input.status !== b.status ? statusRefusal(ctx, b) : null;
+      if (refusal) return json(403, { detail: refusal });
       if (input.status !== b.status) {
         const reopened = input.status === "open" && !["open", "mitigating"].includes(b.status);
         event(ctx, b, reopened ? "reopened" : "status_changed", input.status, { reason: input.reason ?? null, data: { gate: { ...snapshot(b), status: input.status } } });

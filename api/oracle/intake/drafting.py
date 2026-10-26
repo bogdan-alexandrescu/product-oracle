@@ -115,6 +115,11 @@ async def _convert(
         changes["document_id"] = [None, str(run.document_id)]
     intake.status = "converted"
     await db.flush()
+    if intake.document_id is not None:
+        # C1: the requests behind the brief link its PRD.
+        from oracle.requests import service as requests_service
+
+        await requests_service.link_intake_document(db, intake.id, intake.document_id)
     await audit.record(db, principal, "intake.converted", "intake", intake.id, changes)
 
 

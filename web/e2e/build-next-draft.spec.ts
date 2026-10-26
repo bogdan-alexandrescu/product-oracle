@@ -107,6 +107,8 @@ test("the New run dialog no longer offers the feedback loop and points at where 
     "New PRD · PRDs",
     "Build next draft · open a PRD or roadmap and use Build next draft",
     "PRD to roadmap · Plan › Roadmap documents",
+    // F5 lane 3: an engineering spec is requested from the Plan or a PRD's overview.
+    "Request spec · Plan, an approved item, or a PRD's overview",
     "Vision or strategy · Company › Strategy, New vision or Draft next version",
     "Build the baseline · Baseline",
     // H9: a pricing memo is drafted from Company › Market › Pricing (D12).

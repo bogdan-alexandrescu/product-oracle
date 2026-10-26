@@ -80,6 +80,9 @@ async def list_requests(
     replies_to_send: Annotated[
         bool, Query(description="Only declined requests with replies still to send (H10)")
     ] = False,
+    intake_id: Annotated[
+        uuid.UUID | None, Query(description="Only the requests behind this brief (C1)")
+    ] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> RequestList:
@@ -101,6 +104,7 @@ async def list_requests(
         channel=channel,
         q=q,
         replies_to_send=replies_to_send,
+        intake_id=intake_id,
         limit=limit,
         offset=offset,
     )

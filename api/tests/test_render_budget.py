@@ -16,6 +16,7 @@ most two date jobs at once."""
 
 import asyncio
 import contextlib
+import gc
 import hashlib
 import threading
 import time
@@ -59,7 +60,14 @@ SLUG = "big-roadmap"
 @contextlib.asynccontextmanager
 async def heartbeat():
     """The most CPU time the event loop's thread spent without running this task, in seconds
-    (``[0]``)."""
+    (``[0]``).
+
+    What the worker already holds is collected and frozen first: a full garbage collection
+    that lands on the loop's thread would otherwise scan every object earlier tests left
+    (about 0.9 s in CI), which is not work kept off the loop. Collecting what the window
+    makes still counts."""
+    gc.collect()
+    gc.freeze()
     longest = [0.0]
     stop = asyncio.Event()
 
@@ -77,6 +85,7 @@ async def heartbeat():
     finally:
         stop.set()
         await task
+        gc.unfreeze()
 
 
 def off_the_loop(threads: list[str]) -> None:
@@ -145,6 +154,23 @@ async def until_ready(client, url: str, auth: dict):
         await asyncio.sleep(0.2)
         resp = await client.get(url, headers=auth)
     return resp
+
+
+async def test_the_heartbeat_does_not_count_collecting_what_earlier_tests_left():
+    """A full garbage collection on the loop's thread scans every object the worker holds,
+    most of them left by the tests it ran before (in CI about 0.9 s, #635's red ``api``
+    job). That is not work kept off the loop; only collecting what the window made is."""
+    left = [[] for _ in range(2_000_000)]
+    start = time.thread_time()
+    gc.collect()
+    full = time.thread_time() - start
+
+    async with heartbeat() as stall:
+        await asyncio.sleep(0.02)
+        gc.collect()
+        await asyncio.sleep(0.05)
+    assert len(left) == 2_000_000
+    assert stall[0] < full / 4, f"the heartbeat counted {stall[0]:.3f} s of a {full:.3f} s scan"
 
 
 # --------------------------------------------------------------------------- roadmap reads
@@ -314,9 +340,9 @@ async def test_an_import_keeps_its_dates_for_the_version(client, monkeypatch):
 async def test_template_dates_are_found_once_per_template_body(monkeypatch):
     body = "---\ntitle: T\n---\n\n# Plan {#plan}\n\nKickoff 2026-11-30.\n"
     calls = count_calls(monkeypatch, doc_dates, "template_dates")
-    first = await doc_dates.template_dates_async(body)
+    first = await doc_dates.template_dates_async(body, date(2026, 10, 20))
     assert first == {("plan", "2026-11-30")}
-    assert await doc_dates.template_dates_async(body) == first
+    assert await doc_dates.template_dates_async(body, date(2026, 10, 20)) == first
     assert calls[0] == 1
 
 
@@ -873,15 +899,33 @@ async def test_the_render_cap_counts_from_when_the_render_starts(client, monkeyp
 
 
 @pytest.mark.timing
-async def test_exports_waiting_for_the_pool_hold_no_database_connection(client, monkeypatch):
+@pytest.mark.parametrize("load_seconds", [0, 0.3])
+async def test_exports_waiting_for_the_pool_hold_no_database_connection(
+    client, monkeypatch, load_seconds
+):
+    """``load_seconds``: the queued exports' load takes that long (a busy runner's
+    database): the connection is checked once both wait for the pool, not after a guess."""
     held = Held(monkeypatch)
+    real_load = export_router._load
+    loads = []
+
+    async def slow_load(*args):
+        loads.append(args)
+        queued = len(loads) > 4  # the two behind the four rendering
+        loaded = await real_load(*args)  # its connection held until the route commits
+        if queued:
+            await asyncio.sleep(load_seconds)
+        return loaded
+
+    monkeypatch.setattr(export_router, "_load", slow_load)
     a, b, c = [await _company(client, n) for n in ("A Co", "B Co", "C Co")]
     reader = await _token(a, "viewer")
     tasks = []
     try:
         tasks += await _fill(client, a, b, c)  # four rendering, two queued
         await until(lambda: held.started == 4)
-        await asyncio.sleep(0.1)
+        # Both queued exports wait for a worker (in the pool's queue), not still loading.
+        await until(lambda: offload.POOL._work_queue.qsize() == 2)
         assert get_engine().pool.checkedout() == 0
         other = await client.get("/v1/documents/checkout/versions/1", headers=reader)
         assert other.status_code == 200, other.text

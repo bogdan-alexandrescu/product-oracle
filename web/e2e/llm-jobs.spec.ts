@@ -27,7 +27,7 @@ test("Oracle's work: status, account and cost behind Details, and a clear no-acc
 
   const reports = kind("Reports");
   await expect(reports).toHaveAttribute("data-status", "failed");
-  await expect(reports.getByTestId("job-error")).toContainText("No Claude account can take this call");
+  await expect(reports.getByTestId("job-error")).toContainText("No Claude account could take this call");
   await expect(reports.getByTestId("job-error")).toContainText("Every Claude account is paused");
 
   await reports.getByRole("button", { name: "Retry" }).click();
@@ -91,6 +91,11 @@ test("take Oracle's advice: the suggestion is dismissed and the feedback decline
 
 test("an accepted suggestion goes into the next draft: one build, diff preview, apply, next version with resolutions", async ({ page }) => {
   await login(page);
+  // The seeded agents' run on this PRD is paused over its estimate, and while it is under way
+  // no other build of the document starts (#574 review): the owner cancels it first.
+  await page.goto("/inbox");
+  await page.getByTestId("inbox-overruns").getByRole("button", { name: "Cancel run" }).click();
+  await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
   await page.goto("/documents/team-workspaces/v/2");
   await openTab(page, "Feedback");
   await feedbackItem(page, "how many teams asked").getByRole("button", { name: "Accept", exact: true }).click();

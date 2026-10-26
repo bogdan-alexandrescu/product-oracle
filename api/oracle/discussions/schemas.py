@@ -131,6 +131,10 @@ class DiscussionMe(DiscussionMeSummary):
     can_manage: bool
     # The author of the subject's intake only; the key is absent for anyone else.
     private_findings: PrivateFindings | None = Field(default=None, exclude_if=lambda v: v is None)
+    # G2 §4 Research this: an approver or owner who can write in it, while it is open; the
+    # run's estimated cost, shown before it starts (for them only).
+    can_research: bool = False
+    research_usd: float | None = None
 
 
 class DiscussionSummary(BaseModel):
@@ -231,6 +235,21 @@ class DiscussionMessageOut(BaseModel):
     pushback: dict[str, Any] | None = None
     # Owners only (P3d: no screen shows cost).
     usage: "ReplyUsage | None" = None
+    # G2 §4: the research run this line started, or whose answer this is.
+    research: "MessageResearch | None" = None
+
+
+class MessageResearch(BaseModel):
+    run_id: uuid.UUID
+    status: Literal["running", "done", "failed"]
+    # Why it failed, in words, when the run could not start (a budget, one build at a time).
+    error: str | None = None
+
+
+class ResearchIn(BaseModel):
+    """Research this: the person's message to research."""
+
+    message_id: uuid.UUID
 
 
 class ReplyUsage(BaseModel):
@@ -346,6 +365,13 @@ class ChangeProposeIn(ChangeActIn):
     # The person's Edit, proposed instead of the change's payload (B6's Edit then Propose);
     # saved only when it is used, so a refused edit changes nothing.
     payload: dict[str, Any] | None = None
+
+
+class ChangeApplyIn(ChangeActIn):
+    # C9: the reason the move or pin is logged with (the change's own when absent).
+    reason: str | None = Field(default=None, max_length=500)
+    # C9: keep it after Oracle's pushback (no second check), as on the Priorities screen.
+    confirm: bool = False
 
 
 class ChangeDismissIn(ChangeActIn):

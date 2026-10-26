@@ -8,7 +8,7 @@ helpers; machine fields (ISO timestamps, ids) stay UTC.
 """
 
 import logging
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +46,28 @@ def _local(moment: datetime | str, zone: str) -> datetime:
 def day(moment: datetime | str, zone: str = DEFAULT_ZONE) -> date:
     """The company's day at ``moment``."""
     return _local(moment, zone).date()
+
+
+def now() -> datetime:
+    """The moment now, in UTC (tests move it)."""
+    return datetime.now(UTC)
+
+
+def today(zone: str = DEFAULT_ZONE) -> date:
+    """The company's day now in ``zone``: day logic ("due today", "review is due") reads
+    this, never the server's day (a day ahead of Pacific from 5 PM)."""
+    return day(now(), zone)
+
+
+async def company_today(db: AsyncSession) -> date:
+    """The company's day now, in the Company time zone."""
+    return today(await company_time_zone(db))
+
+
+def day_start(on: date, zone: str = DEFAULT_ZONE) -> datetime:
+    """The moment the company's day ``on`` starts in ``zone``, in UTC."""
+    local = datetime.combine(on, time.min, tzinfo=_local(now(), zone).tzinfo)
+    return local.astimezone(UTC)
 
 
 def day_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:

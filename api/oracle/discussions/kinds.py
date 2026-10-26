@@ -6,7 +6,10 @@ the lowest role that acts on it (``suggest``: commenters suggest it for an appro
 stage, c6), where it lands, and ``available``, false until the pick that applies it has
 landed. Oracle is only ever offered the kinds available for the subject (G3). In G1 the
 changes are listed read-only; ``goal_measure`` is available since B6 Goals interview
-(oracle.baseline.goal_interview proposes it).
+(oracle.baseline.goal_interview proposes it). Since C2 Questions, C6 and C7 Scope and C8 and
+C9 Priorities landed, every kind is: Ask through C2, scope changes staged at the feature-set
+stop, moves and pins applied through C9. ``decision`` is H1 Decision log's entry point: a
+discussion proposes a decision.
 """
 
 import uuid
@@ -79,8 +82,8 @@ class Answer(_Payload):
 class AskPerson(_Payload):
     asked_to: uuid.UUID
     prompt: str = Text
-    rationale: str = Text
-    category: str = Field(min_length=1, max_length=100)
+    rationale: str | None = Field(default=None, max_length=500)
+    category: str = Field(default="general", min_length=1, max_length=100)
 
 
 class BasisRecord(_Payload):
@@ -140,6 +143,8 @@ class ScopeFeature(_Payload):
 class ScopeRequirement(_Payload):
     op: Literal["add", "enhance", "cut"]
     requirement_id: uuid.UUID | None = None
+    # The feature a new requirement belongs to (``add``); the subject's item when absent.
+    feature_id: uuid.UUID | None = None
     text: str | None = Field(default=None, max_length=2000)
     goal_id: uuid.UUID | None = None
 
@@ -154,6 +159,23 @@ class PriorityPin(_Payload):
     feature_id: uuid.UUID
     position: int = Field(ge=1)
     reason: str = Text
+
+
+class DecisionOptionIn(_Payload):
+    key: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,79}$")
+    label: str = Field(min_length=1, max_length=200)
+    summary: str | None = Field(default=None, max_length=1000)
+
+
+class DecisionProposal(_Payload):
+    """H1 Decision log's entry point: what a discussion proposes to decide. ``approver_id``:
+    who decides it (the person proposing, when an approver, if none is named)."""
+
+    title: str = Field(min_length=1, max_length=200)
+    question: str | None = Field(default=None, max_length=1000)
+    options: list[DecisionOptionIn] = Field(default_factory=list, max_length=6)
+    approver_id: uuid.UUID | None = None
+    reversibility: Literal["reversible", "irreversible"] = "reversible"
 
 
 def _not_yet(_db: Any) -> bool:
@@ -186,6 +208,9 @@ class Kind:
 ITEM_SUBJECTS = ("checkpoint_item", "roadmap_item")
 SCOPE_SUBJECTS = ("intake", "document", "checkpoint_item", "entity")
 PRIORITY_SUBJECTS = ("priorities", "checkpoint_item")
+# The subjects C2 asks a question about (oracle.intake.schemas.QuestionSubject); a gap's is
+# its intake.
+ASK_SUBJECTS = ("section", "checkpoint_item", "entity", "intake", "gap")
 SHARED_DRAFT = "the checkpoint's shared draft"
 
 
@@ -200,8 +225,13 @@ def _dependency(p: dict[str, Any]) -> str:
 
 
 def _requirement(p: dict[str, Any]) -> str:
-    what = p.get("text") or p.get("requirement_id") or ""
+    what = p.get("text") or p.get("title") or p.get("requirement_id") or ""
     return f"{p['op'].capitalize()} requirement: {what}"
+
+
+def _named(p: dict[str, Any], key: str, title: str = "title") -> Any:
+    """A feature's or person's name from the target (``title``), else its id."""
+    return p.get(title) or p[key]
 
 
 def _measure(p: dict[str, Any]) -> str:
@@ -238,8 +268,10 @@ _KINDS = [
          available=_landed),
     Kind("answer", Answer, SUBJECT_KINDS, "Use as answer", "approver", "the question's answer",
          lambda p: f"Answer: {p['body']}", available=_landed),
-    Kind("ask_person", AskPerson, SUBJECT_KINDS, "Ask", "commenter",
-         "a question asked of that person", lambda p: f"Ask {p['asked_to']}: {p['prompt']}"),
+    Kind("ask_person", AskPerson, ASK_SUBJECTS, "Ask", "commenter",
+         "a question asked of that person",
+         lambda p: f"Ask {_named(p, 'asked_to', 'asked_name')}: {p['prompt']}",
+         available=_landed),
     Kind("basis_record", BasisRecord, ("roadmap_item", "checkpoint_item", "track"), "Record",
          "approver", "a schedule basis",
          lambda p: f"Record a date basis: {p['reference']} supports {p['supports_date']}",
@@ -265,17 +297,22 @@ _KINDS = [
          lambda p: f"Merge {p['item_key']} with {_list(p['with'])}", available=_landed),
     Kind("scope_feature", ScopeFeature, SCOPE_SUBJECTS, "Stage", "approver",
          "the feature set at its checkpoint",
-         lambda p: f"{p['decision'].capitalize()} {p['feature_id']}: {p['reason']}",
-         suggest=True),
+         lambda p: f"{p['decision'].capitalize()} {_named(p, 'feature_id')}: {p['reason']}",
+         suggest=True, available=_landed),
     Kind("scope_requirement", ScopeRequirement, SCOPE_SUBJECTS, "Stage", "approver",
-         "the feature set at its checkpoint", _requirement, suggest=True),
+         "the feature set at its checkpoint", _requirement, suggest=True, available=_landed),
     Kind("priority_move", PriorityMove, PRIORITY_SUBJECTS, "Apply", "approver",
          "the priority order",
-         lambda p: f"Move {p['feature_id']} above {p['above_feature_id']}: {p['reason']}",
-         suggest=True),
+         lambda p: (f"Move {_named(p, 'feature_id')} above "
+                    f"{_named(p, 'above_feature_id', 'above_title')}: {p['reason']}"),
+         suggest=True, available=_landed),
     Kind("priority_pin", PriorityPin, PRIORITY_SUBJECTS, "Apply", "approver",
          "the priority order",
-         lambda p: f"Pin {p['feature_id']} at #{p['position']}: {p['reason']}", suggest=True),
+         lambda p: f"Pin {_named(p, 'feature_id')} at #{p['position']}: {p['reason']}",
+         suggest=True, available=_landed),
+    Kind("decision", DecisionProposal, SUBJECT_KINDS, "Propose", "commenter",
+         "a proposed decision in the decision log", lambda p: f"Decide: {p['title']}",
+         available=_landed),
 ]  # fmt: skip
 REGISTRY: dict[str, Kind] = {k.name: k for k in _KINDS}
 assert tuple(REGISTRY) == CHANGE_KINDS
@@ -290,8 +327,9 @@ def validate_payload(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
 def label(kind: str, payload: dict[str, Any], target: dict[str, Any] | None = None) -> str:
     """The plain sentence a change reads as ("Move R-1 to Next"); a ``title`` in its
     target names what it changes ("Make Cut early churn measurable: ...")."""
-    if target and target.get("title") and "title" not in payload:
-        payload = {**payload, "title": target["title"]}
+    if target:
+        names = {k: target[k] for k in ("title", "above_title", "asked_name") if target.get(k)}
+        payload = {**names, **payload}
     return REGISTRY[kind].label(payload)
 
 

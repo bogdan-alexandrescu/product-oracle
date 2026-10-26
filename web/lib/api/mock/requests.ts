@@ -30,6 +30,8 @@
 import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 import { mockUuid } from "./ids";
+import { SPENT } from "./llm-jobs";
+import { readableRefusal } from "./refusal";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type RequestOut = Schemas["RequestOut"];
@@ -58,13 +60,17 @@ interface TriageRun {
   created_by: string;
   started_at: string;
   finished_at: string | null;
+  /** How it failed, as runs.service stores it ("{segment}: {error}"); absent when it succeeded. */
+  error?: string;
+  /** It failed with no error stored (the "triage-failed-quietly" scenario, #644 re-review). */
+  failed?: boolean;
 }
 
 /** A request as stored: the API's row, before themes, PRDs and mentions are joined. */
 // H10 Reasoned no: what a no adds to a request (decision, basis, asked again, replies);
 // optional on stored rows, defaulted by out(). Lane 2 fills them in the requests-why-not scenario.
 type H10Fields = "asked_again" | "replies" | "decision_number" | "decision_title" | "decision_status" | "basis" | "no_reply_reason";
-interface Row extends Omit<RequestOut, "theme" | "document" | "mentions" | "source" | H10Fields> {
+interface Row extends Omit<RequestOut, "theme" | "document" | "intake" | "mentions" | "source" | H10Fields> {
   theme_id: string | null;
   document_id: string | null;
   source: RequestOut["source"];
@@ -140,6 +146,11 @@ export interface RequestsContext {
   decisions?: RequestDecisions;
   /** The Company time zone. */
   zone?: () => string;
+  /** C1 lane 2: a brief's title by its id; null when it is gone. */
+  intakeTitle?: (id: string) => string | null;
+  /** H11 requests: Oracle's suggestions show (and are accepted) at Recommend and above only;
+   * shown when not given. */
+  suggestionsShown?: () => boolean;
 }
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
@@ -205,6 +216,10 @@ const NEEDS_GOAL = "Link a confirmed goal first, or disqualify it as 'No goal'";
 const TRIAGE_MS = 3_000;
 const EXCERPT_MAX = 400;
 const SKIPPED_SCENARIO = "triage-skipped";
+/** server.STORED_REFUSALS_SCENARIO (#633 re-review): the Claude pool refuses the triage run. */
+const REFUSED_SCENARIO = "stored-refusals";
+/** The triage run fails with no error stored (#644 re-review): the line says only when. */
+export const TRIAGE_FAILED_QUIETLY_SCENARIO = "triage-failed-quietly";
 const SKIPPED =
   "Oracle's daily triage did not run on 2026-10-22: it runs as the approver who turned it on or else an owner, and none of them is an active member";
 
@@ -442,7 +457,9 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       loop_closed_on: shown.loop_closed_on ?? null,
       theme: theme ? { id: theme.id, title: theme.title } : null,
       document: doc ? { id: doc.id, slug: doc.slug, title: doc.title } : null,
+      intake: r.intake_id && ctx.intakeTitle?.(r.intake_id) ? { id: r.intake_id, title: ctx.intakeTitle(r.intake_id)! } : null,
       mentions: 1 + descendants(r.id).length,
+      suggestion: ctx.suggestionsShown?.() === false ? null : shown.suggestion,
     };
   };
   const themeOut = (t: Theme): ThemeOut => ({
@@ -580,6 +597,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       if (theme) tests.theme = (r) => (theme === "none" ? r.theme_id === null : r.theme_id === theme);
       if (goal) tests.goal = (r) => r.goal_ids.includes(goal);
       if (channel) tests.channel = (r) => r.channel === channel;
+      const intakeId = q.get("intake_id");
+      if (intakeId) tests.intake = (r) => r.intake_id === intakeId;
       if (text) tests.q = (r) => r.title.toLowerCase().includes(text) || (r.body ?? "").toLowerCase().includes(text);
       if (q.get("replies_to_send") === "true") tests.replies = (r) => r.state === "disqualified" && rootReplies(r).some((x) => x.status === "drafted");
       const where = (...but: string[]) =>
@@ -648,7 +667,13 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
   // --- triage (Classify now and the header's status line) --------------------------------
   if (p[1] === "requests" && p[2] === "triage" && p.length === 3) {
     const run = db.triage ?? null;
-    if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS) {
+    if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS && localStorage.getItem("po-mock-scenario") === REFUSED_SCENARIO) {
+      run.finished_at = now();
+      run.error = `triage: ${SPENT}`;
+    } else if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS && localStorage.getItem("po-mock-scenario") === TRIAGE_FAILED_QUIETLY_SCENARIO) {
+      run.finished_at = now();
+      run.failed = true;
+    } else if (run && !run.finished_at && Date.now() - Date.parse(run.started_at) >= TRIAGE_MS) {
       // The run ends: a suggestion for every New request with none (data only; nothing decided).
       const goal = [...confirmed][0];
       for (const r of db.requests.filter((x) => x.state === "new" && !x.suggestion)) {
@@ -669,10 +694,12 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       const status: Schemas["TriageStatus"] = run
         ? {
             ...daily,
-            run_id: run.id, status: run.finished_at ? "succeeded" : "running", active: !run.finished_at,
+            run_id: run.id, status: !run.finished_at ? "running" : run.error || run.failed ? "failed" : "succeeded", active: !run.finished_at,
             automatic: false, started_at: run.started_at, finished_at: run.finished_at,
             suggestions: db.requests.filter((r) => r.suggestion?.run_id === run.id).length,
-            found: db.candidates.filter((c) => c.run_id === run.id && c.owner_user_id === ctx.userId).length, error: null,
+            found: db.candidates.filter((c) => c.run_id === run.id && c.owner_user_id === ctx.userId).length,
+            // As the API: the stored error read through the refusal rewrite, in the past (#633 re-review).
+            error: readableRefusal(run.error, true),
           }
         : {
             ...daily,
@@ -734,7 +761,12 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
       if ("goal_ids" in patch) row.goal_ids = [...new Set(patch.goal_ids ?? [])];
       if ("theme_id" in patch) row.theme_id = patch.theme_id ?? null;
       if ("feature_id" in patch) row.feature_id = patch.feature_id ?? null;
-      if ("document_id" in patch) row.document_id = patch.document_id ?? null;
+      if ("document_id" in patch) {
+        const had = row.document_id;
+        row.document_id = patch.document_id ?? null;
+        // C1: unlinking its PRD takes the request off its brief too (the API's _apply_patch).
+        if (had && !row.document_id) row.intake_id = null;
+      }
       if (fields.length) bump(row);
       return json(200, out(row));
     }
@@ -842,6 +874,8 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
           ctx.decisions!.reverse(row.decision_id!, `Request reopened${why ? `: ${why}` : ""}`);
           for (const x of rootReplies(row).filter((y) => y.status === "drafted")) Object.assign(x, { status: "withdrawn", job_at: null, lock_version: x.lock_version + 1 });
         }
+        // Its own drafted reply goes too (Asked again, when it was merged into a no), as the API.
+        for (const x of replies.filter((y) => y.request_id === row.id && y.status === "drafted")) Object.assign(x, { status: "withdrawn", job_at: null, lock_version: x.lock_version + 1 });
         Object.assign(row, { state: "new", merged_into_id: null, disqualify_reason: null, decision_note: null, decided_by: null, decided_at: null, basis_in: null, asked_again_since: null, loop_closed_on: null });
       } else if (verb === "suggestion/decline") {
         if (row.state !== "new") return fail(409, "Only a New request takes Oracle's suggestions");
@@ -853,7 +887,7 @@ export async function routeRequests(db: RequestsDb, ctx: RequestsContext, req: R
         if (parts.length === 0) return fail(422, "parts: at least one");
         if (row.state !== "new") return fail(409, "Only a New request takes Oracle's suggestions");
         const s = row.suggestion;
-        if (!s || s.declined_at) return fail(422, "Oracle has no suggestion for this request");
+        if (!s || s.declined_at || ctx.suggestionsShown?.() === false) return fail(422, "Oracle has no suggestion for this request");
         // Every check first, as the API: a refused part changes nothing.
         if (parts.includes("theme") && !(s.theme_id ? liveTheme(s.theme_id) : s.theme_title?.trim())) return fail(422, "Oracle suggested no theme");
         if (parts.includes("goals") && (!s.goal_ids?.length || badGoals(s.goal_ids).length)) return fail(422, "Oracle suggested no confirmed goal");
@@ -1059,4 +1093,50 @@ export function requestInboxRows(db: RequestsDb | undefined, ctx: Pick<RequestsC
     rows.push({ request_id: x.request_id, title: asked?.title ?? x.asked ?? "", reason: "answer", body: x.body, reply_id: x.id, at: x.notified_at, counts: false });
   }
   return rows;
+}
+
+// --- Start a PRD (C1 lane 2, api/oracle/requests/service.py) ---------------------------------
+
+/** Why the brief cannot take these requests, or null when it can: only qualified ones (422),
+ * none already behind a brief or linked to a PRD (409, naming it), as put_behind_brief. */
+export function behindBriefRefusal(
+  db: RequestsDb,
+  ids: string[],
+  titles: { intake: (id: string) => string | null; document: (id: string) => string | null },
+): { status: number; detail: string } | null {
+  const rows = ids.map((id) => db.requests.find((r) => r.id === id));
+  if (!rows.every((r) => r?.state === "qualified")) return { status: 422, detail: "Only qualified requests can be behind a PRD" };
+  for (const r of rows as Row[]) {
+    if (r.intake_id) return { status: 409, detail: `"${r.title}" is already behind the brief "${titles.intake(r.intake_id) ?? "another brief"}"` };
+    if (r.document_id) return { status: 409, detail: `"${r.title}" is already linked to the PRD "${titles.document(r.document_id) ?? "another PRD"}"` };
+  }
+  return null;
+}
+
+/** The brief's "Requests behind it": each one gets the intake. */
+export function putBehindBrief(db: RequestsDb, intakeId: string, ids: string[]) {
+  for (const r of db.requests.filter((x) => ids.includes(x.id))) {
+    r.intake_id = intakeId;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+  }
+}
+
+/** Archiving a brief that made no PRD releases the requests behind it; one a PRD links keeps
+ * both links (the API's release_brief, decided "Release on archive" 2026-10-25). */
+export function releaseBrief(db: RequestsDb, intakeId: string) {
+  for (const r of db.requests.filter((x) => x.intake_id === intakeId && !x.document_id)) {
+    r.intake_id = null;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+  }
+}
+
+/** The PRD made for a brief links the requests behind it; one already linked keeps its PRD. */
+export function linkIntakeDocument(db: RequestsDb, intakeId: string, documentId: string) {
+  for (const r of db.requests.filter((x) => x.intake_id === intakeId && !x.document_id)) {
+    r.document_id = documentId;
+    r.lock_version += 1;
+    r.updated_at = new Date().toISOString();
+  }
 }

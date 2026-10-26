@@ -126,8 +126,24 @@ class Page:
 # --- URLs -----------------------------------------------------------------------------------
 
 
-def _check_url(url: str) -> tuple[str, str]:
-    """(normalized url, host) for an https URL on the default port; LinkError otherwise."""
+# Host names that only ever mean a local or internal machine.
+_LOCAL_SUFFIXES = (".localhost", ".local", ".internal", ".home.arpa", ".lan", ".intranet")
+
+
+def _private_host(host: str) -> bool:
+    """An IP literal that is not public, or a name that only means a local machine."""
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return host == "localhost" or "." not in host or host.endswith(_LOCAL_SUFFIXES)
+    return not public_address(host)
+
+
+def check_url(url: str) -> tuple[str, str]:
+    """(normalized url, host) for an https URL on the default port, with no user name, to
+    a host that is not a private IP literal or a local name; LinkError otherwise. The one
+    URL check for every page Oracle fetches (evidence links, watched pages); a public
+    name resolving to a private address is refused at connect (:func:`guarded_transport`)."""
     url = (url or "").strip()
     try:
         parts = urlsplit(url)
@@ -143,13 +159,19 @@ def _check_url(url: str) -> tuple[str, str]:
         raise LinkError("invalid_url", "Links with a user name or password cannot be added.")
     if port not in (None, 443):
         raise LinkError("invalid_url", "Only links on the standard https port can be added.")
+    if _private_host(host):
+        raise LinkError(
+            "blocked_address",
+            "This link points to a private, local or internal network address, "
+            "which Product Oracle does not fetch.",
+        )
     netloc = host if ":" not in host else f"[{host}]"
     return urlunsplit(("https", netloc, parts.path or "/", parts.query, "")), host
 
 
 def classify(url: str) -> Target:
     """The kind of a link and what to fetch for it."""
-    url, host = _check_url(url)
+    url, host = check_url(url)
     path = urlsplit(url).path
     if host == GOOGLE_DOCS_HOST:
         if m := _GDOC_PUB_RE.match(path):
@@ -610,7 +632,7 @@ class LinkFetcher:
         self, client: httpx.AsyncClient, url: str, kind: str
     ) -> tuple[httpx.Response, bytes, str]:
         for _ in range(MAX_REDIRECTS + 1):
-            url, host = _check_url(url)
+            url, host = check_url(url)
             if _sign_in(url):
                 raise LinkError("not_public", NOT_PUBLIC)
             await public_addresses(host, 443, self._resolve)

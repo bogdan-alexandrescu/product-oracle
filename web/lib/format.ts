@@ -23,11 +23,22 @@ export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   oracle: "Oracle baseline",
 };
 
+/** An absolute http(s) URL with a host: the only ref a citation opens as a link. */
+const HTTP_URL = /^https?:\/\/[^\s/\\?#]+/i;
+
+/** Whether a ref (a citation's, a piece of evidence's) may go in an href. */
+export const isHttpUrl = (ref: string): boolean => HTTP_URL.test(ref);
+
 /**
  * Where a citation opens, or null when its ref is not a link: an "oracle" citation names a
- * baseline item in free text ("baseline decision <key> ..."), shown as text.
+ * baseline item in free text ("baseline decision <key> ..."), shown as text, and any ref
+ * that is not an http(s) URL (javascript:, data:, ...) is never put in an href.
  */
-export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null => (c.source === "oracle" ? null : c.ref);
+export const citationHref = (c: Pick<CitationOut, "source" | "ref">): string | null =>
+  c.source !== "oracle" && HTTP_URL.test(c.ref) ? c.ref : null;
+
+/** Whether `url` is an http(s) address (as a browser reads it: spaces and controls dropped). */
+export const isWebLink = (url: string | null | undefined): url is string => !!url && /^https?:/i.test(url.replace(/[\u0000-\u0020]/g, ""));
 
 /**
  * What a citation's writer said of it: its confidence as "0.75", else (no score) its note,
@@ -103,10 +114,22 @@ export const CLASSIFICATION_LABEL: Record<Suggestion["classification"], string> 
 export const NO_ACCOUNT_REASON: Record<string, string> = {
   no_accounts_registered: "No Claude account is set up. An owner adds one on Settings > Claude accounts.",
   pool_paused: "Every Claude account is paused. An owner resumes one on Settings > Claude accounts.",
-  no_account_available: "Every Claude account is out of quota until its window resets.",
+  // Past tense: a failed job's refusal is about when it ran, not now (#556).
+  no_account_available: "Every Claude account was out of quota when this ran.",
   no_recent_reading: "No Claude account has a recent usage reading; the next usage check will tell.",
   unusable: "No Claude account's credential could be read. An owner signs in again.",
 };
+
+/** When something failed, so its stored error reads as then, not now (#561 review). */
+export const failedAt = (at: string) => `Failed ${formatDateTime(at)}`;
+
+/** A failed job's stored error and its pool reason as sentences apart (#556). */
+export function jobFailure(job: Pick<LlmJob, "error" | "error_reason">, fallback = "The job failed."): string {
+  const error = (job.error ?? fallback).trim();
+  const reason = job.error_reason ? NO_ACCOUNT_REASON[job.error_reason] : undefined;
+  if (!reason) return error;
+  return `${/[.!?]$/.test(error) ? error : `${error}.`} ${reason}`;
+}
 
 export function formatUsd(value: number | null | undefined): string {
   if (value == null) return "—";

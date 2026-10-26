@@ -64,7 +64,7 @@ DEFAULTS = {
     "questions": "recommend",
     "goals": "recommend",
     "priorities": "recommend",
-    "roadmap_watch": "observe",
+    "roadmap_watch": "recommend",
     "decisions": "recommend",
     "rituals": "draft",
     "outcomes": "recommend",
@@ -245,7 +245,7 @@ async def test_get_returns_every_default_and_a_viewer_can_read_it(client, tenant
     assert by["priorities"]["fixed_limits"] == ["within_goal"]
     assert by["priorities"]["limits_summary"] == "within one goal, up to 3 places"
     assert "max_rank_move" in by["priorities"]["limits_schema"]["properties"]
-    assert by["priorities"]["wired"] is False and by["priorities"]["wired_by"] == "C9"
+    assert by["priorities"]["wired"] is True and by["priorities"]["wired_by"] == "C9"
     assert by["priorities"]["wired_by_name"] == "C9 Priorities move and pin"
     assert by["baseline"]["wired"] is True and by["feedback_triage"]["wired"] is True
     assert by["vision"]["limits"] is None and by["vision"]["limits_schema"] is None
@@ -496,3 +496,27 @@ async def test_a_refused_undo_is_not_recorded(client, tenant_id, owner):
     assert r.status_code == 403
     async with tenant_session(tenant_id) as s:
         assert (await s.get(OracleAction, action_id)).undone_by is None
+
+
+def test_next_drafts_requests_questions_and_goals_are_wired():
+    """protects=Settings › Autonomy no longer says these four take effect when their pick
+    ships, as Oracle follows their levels now; fails_when=any of them reads wired=False;
+    no_claim=what each level does (tests/test_next_drafts_autonomy.py,
+    test_requests_autonomy.py, test_questions_autonomy.py, test_goals_autonomy.py)."""
+    for key in ("next_drafts", "requests", "questions", "goals"):
+        assert autonomy.REGISTRY[key].wired is True, key
+
+
+async def test_requests_at_draft_still_says_it_takes_effect_later(client, owner):
+    """protects=#586 review MAJOR 1: Triage requests at Draft promises a summary of each
+    request for its owner to edit, which is not built, so at Draft the row reads
+    wired=False ("Takes effect when C1 ships") while Observe, Recommend and Act read
+    wired=True; fails_when=Draft reads as in effect though it does what Observe does;
+    no_claim=the chip itself (autonomy-requests.spec.ts)."""
+    for level, wired in (("draft", False), ("observe", True), ("recommend", True)):
+        r = await put(client, owner, "requests", level=level, reason="Trying levels")
+        assert r.status_code == 200, r.text
+        assert r.json()["wired"] is wired, level
+        got = (await client.get("/v1/autonomy", headers=owner.headers)).json()
+        (row,) = [i for i in got["items"] if i["key"] == "requests"]
+        assert row["wired"] is wired, level

@@ -73,6 +73,7 @@ from oracle.baseline.schemas import (
     YamlImportError,
     YamlImportResult,
 )
+from oracle.discussions import research as discussion_research
 from oracle.http import read_capped_body
 from oracle.runs import actions, review_file
 from oracle.runs.models import Checkpoint, Run
@@ -407,7 +408,11 @@ async def merge_entity(
     return (await _entities_out(db, [into], principal))[0]
 
 
-@router.get("/from-run/{run_id}", response_model=FromRunOut)
+@router.get(
+    "/from-run/{run_id}",
+    response_model=FromRunOut,
+    dependencies=[Depends(discussion_research.run_reader)],
+)
 async def get_baseline_from_run(run_id: uuid.UUID, principal: Reader, db: TenantDB) -> FromRunOut:
     """What a run wrote to the baseline, for a person to review (B2): every item it
     created, changed or proposed a change to, with the reasons each needs a person and the
@@ -852,8 +857,9 @@ async def accept_proposal(
     db: TenantDB,
     body: ProposalAccept | None = None,
 ) -> ProposalOut:
-    """Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those
-    fields as they are and applies the rest (#268)."""
+    """Apply the change as your own edit; the item is then
+    locked against Oracle's changes until a person unlocks it.
+    skip_fields keeps those fields as they are and applies the rest (#268)."""
     return await _decide(db, principal, proposal_id, True, body)
 
 

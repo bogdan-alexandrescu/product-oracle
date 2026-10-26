@@ -9,7 +9,13 @@ import { ApiError, MOCK_MODE } from "./client";
 import { mockFetch } from "./mock/server";
 
 export type InterviewStatus = "draft" | "invited" | "in_progress" | "finished" | "expired" | "revoked";
-export type JobState = { id: string; status: "queued" | "running" | "succeeded" | "failed" | "cancelled"; error: string | null };
+export type JobState = {
+  id: string;
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  error: string | null;
+  /** When it failed, so a stored error reads as then (#604 re-review). */
+  finished_at?: string | null;
+};
 export type GuideItem = { id: string; prompt: string; purpose: string | null };
 export type InterviewMessage = {
   id: string;

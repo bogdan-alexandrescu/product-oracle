@@ -204,7 +204,7 @@ test("a section's Record a decision opens Propose decision about that section", 
   await sectionAction(goalTrace, "1. Goal trace", "Record a decision about 1. Goal trace");
   await expect(page).toHaveURL(/\/company\/decisions\?subject=section/);
   const dialog = page.getByRole("dialog", { name: "Propose decision" });
-  await expect(dialog).toContainText("About: Section 1. Goal trace");
+  await expect(dialog.getByRole("group", { name: "About" })).toContainText("Section 1. Goal trace");
   await dialog.getByLabel("Decision", { exact: true }).fill("Trace the retention goal to repeat orders");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Repeat orders in 30 days");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Monthly active buyers");

@@ -40,6 +40,8 @@ from oracle.baseline.models import Edge, Entity
 from oracle.intake import categories as cats
 from oracle.intake import evidence as ev
 from oracle.intake import extract, sharing
+from oracle.quality import learned as lrn
+from oracle.quality.learned import Nudge
 from oracle.v2.models import KnowledgeGap, ProductIntake, StakeholderQuestion
 
 OPEN = sharing.OPEN_STATUSES
@@ -302,9 +304,27 @@ def rules_gap(gaps: list[KnowledgeGap], category: str) -> KnowledgeGap | None:
     return next((g for g in gaps if g.category == category and g.rule_key == category), None)
 
 
-def score_of(gap: KnowledgeGap) -> float:
+# The nudges each gap is ranked with, by gap id (oracle.quality.learned).
+Learned = dict[uuid.UUID, Nudge]
+
+
+async def learned(db: AsyncSession) -> dict[str, Nudge]:
+    """Kept learnings about question categories, by category: they tune the questions'
+    order (capped) and say so in the rationale (oracle.quality.learned). Retired ones
+    never count."""
+    return await lrn.nudges(db, "question_category")
+
+
+def synced_learned(intake: ProductIntake) -> Learned:
+    """The nudges the intake's last question sync ranked with (the same for every
+    reader): learnings added or retired since move no question until the next sync."""
+    return lrn.stored(intake.analysis)
+
+
+def score_of(gap: KnowledgeGap, learned: Learned | None = None) -> float:
     conf = float(gap.confidence) if gap.confidence is not None else None
-    return cats.rank_score(gap.importance, list(gap.impact), gap.knowledge_state, conf)
+    score = cats.rank_score(gap.importance, list(gap.impact), gap.knowledge_state, conf)
+    return lrn.apply(score, (learned or {}).get(gap.id))
 
 
 def group_of(gap: KnowledgeGap) -> int:
@@ -313,11 +333,17 @@ def group_of(gap: KnowledgeGap) -> int:
     return 1 if gap.status in ("deferred", PENDING) else 2
 
 
-def ranked(gaps: list[KnowledgeGap]) -> list[KnowledgeGap]:
-    """Open gaps first, by expected effect; then deferred; then decided."""
+def ranked(gaps: list[KnowledgeGap], learned: Learned | None = None) -> list[KnowledgeGap]:
+    """Open gaps first, by expected effect (tuned by ``learned``); then deferred; then
+    decided."""
     return sorted(
         gaps,
-        key=lambda g: (group_of(g), -score_of(g), cats.ORDER.get(g.category, 99), g.created_at),
+        key=lambda g: (
+            group_of(g),
+            -score_of(g, learned),
+            cats.ORDER.get(g.category, 99),
+            g.created_at,
+        ),
     )
 
 
@@ -518,7 +544,9 @@ async def analyze(db: AsyncSession, intake: ProductIntake) -> None:
 
     analysis = {
         **{
-            k: v for k, v in previous.items() if k in ("source_ids", "extraction", "model_category")
+            k: v
+            for k, v in previous.items()
+            if k in ("source_ids", "extraction", "model_category", "learned")
         },
         "findings": reg,
         "items": brief_items + model_items,
@@ -702,14 +730,18 @@ def question_prompt(gap: KnowledgeGap) -> str:
     return sharing.question_prompt(gap)
 
 
-def priorities(intake: ProductIntake, gaps: list[KnowledgeGap]) -> dict[uuid.UUID, int]:
+def priorities(
+    intake: ProductIntake, gaps: list[KnowledgeGap], learned: Learned | None = None
+) -> dict[uuid.UUID, int]:
     """Each gap's question priority, from what everyone may see (S6).
 
     A gap's evidence, confidence and inferred state from the author's private sources
     (nor any importance they once gave it) do not move it: the gaps everyone sees are
     ranked as everyone sees them (10, 20, ...). A gap hidden from everyone else sits
     between them (an odd priority, seen by its author only), where its own facts rank
-    it. The reads show anyone but the author these priorities, whatever is stored."""
+    it. The reads show anyone but the author these priorities, whatever is stored.
+    ``learned``: the nudges each gap ranks with (:func:`synced_learned`), the same for
+    everyone."""
     reg = sharing.registry(intake)
     public: dict[uuid.UUID, tuple] = {}
     for gap in gaps:
@@ -724,10 +756,11 @@ def priorities(intake: ProductIntake, gaps: list[KnowledgeGap]) -> dict[uuid.UUI
             state,
             float(conf) if conf is not None else None,
         )
+        score = lrn.apply(score, (learned or {}).get(gap.id))
         public[gap.id] = (group_of(gap), -score, cats.ORDER.get(gap.category, 99), gap.created_at)
     out = {gid: n * 10 for n, gid in enumerate(sorted(public, key=lambda g: public[g]), start=1)}
     seen = 0
-    for gap in ranked(gaps):
+    for gap in ranked(gaps, learned):
         if gap.id in public:
             seen = max(seen, out[gap.id])
         else:
@@ -739,16 +772,31 @@ async def sync_questions(
     db: AsyncSession, intake: ProductIntake, gaps: list[KnowledgeGap] | None = None
 ) -> None:
     """One question per open gap: draft new ones, re-prioritise drafts, withdraw drafts
-    of gaps that were settled. Asked or answered questions are never touched."""
+    of gaps that were settled. Asked or answered questions are never touched: a gap
+    whose question was asked keeps the nudge it was last ranked with, the others take
+    the learnings in force now, and the intake keeps them for every reader."""
     gaps = gaps if gaps is not None else await intake_gaps(db, intake.id)
     questions = await intake_questions(db, intake.id)
     by_gap: dict[uuid.UUID, list[StakeholderQuestion]] = {}
     for q in questions:
         if q.gap_id is not None:
             by_gap.setdefault(q.gap_id, []).append(q)
-    priority = priorities(intake, gaps)
+    now = await learned(db)
+    before = synced_learned(intake)
+    asked = {
+        gid for gid, qs in by_gap.items() if any(q.status not in ("draft", "withdrawn") for q in qs)
+    }
+    tuned: Learned = {}
+    for gap in gaps:
+        nudge = before.get(gap.id) if gap.id in asked else now.get(gap.category)
+        if nudge is not None:
+            tuned[gap.id] = nudge
+    keep = {str(gid): n.as_json() for gid, n in tuned.items()}
+    if (intake.analysis or {}).get("learned", {}) != keep:
+        intake.analysis = {**(intake.analysis or {}), "learned": keep}
+    priority = priorities(intake, gaps, tuned)
     reg = sharing.registry(intake)
-    for gap in ranked(gaps):
+    for gap in ranked(gaps, tuned):
         mine = by_gap.get(gap.id, [])
         live = [q for q in mine if q.status != "withdrawn"]
         if gap.status not in OPEN:
@@ -762,6 +810,8 @@ async def sync_questions(
         rationale = cats.rank_reason(
             cat, shown.importance, list(shown.impact), shown.knowledge_state
         )
+        if (nudge := tuned.get(gap.id)) is not None:
+            rationale = f"{rationale} {nudge.reason()}"
         drafts = [q for q in live if q.status == "draft"]
         for q in drafts:
             if q.priority != priority[gap.id]:
@@ -883,6 +933,7 @@ async def ask_batch(
     size: int,
     skip: set[uuid.UUID] | frozenset[uuid.UUID] = frozenset(),
     assign: dict[uuid.UUID, uuid.UUID] | None = None,
+    asker_answers: bool = True,
 ) -> list[StakeholderQuestion]:
     """Ask the next short batch, as :func:`choose_batch` chooses it: at most ``size``
     questions everyone sees, and the author's hidden ones ranked among them.
@@ -892,7 +943,9 @@ async def ask_batch(
     person ``assign`` names (checked by the caller) or the draft's own, else the gap's
     owner, else the intake's author, else the person asking the batch (the author or an
     approver, :func:`oracle.intake.service.ask_next`), else the longest-standing active
-    approver; someone disabled or now a viewer is passed over."""
+    approver; someone disabled or now a viewer is passed over. ``asker_answers`` False
+    (H11 ``questions`` at Draft): the person asking is never the fallback, as the
+    preview shows it (oracle.intake.summary.next_batch)."""
     questions = await intake_questions(db, intake.id)
     by_id = {g.id: g for g in await intake_gaps(db, intake.id)}
     reg = sharing.registry(intake)
@@ -902,10 +955,11 @@ async def ask_batch(
             q.asked_to = assign[q.id]
     batch = choose_batch(questions, by_id, reg, size, skip)
     able: dict[uuid.UUID, bool] = {}
+    fallback = asked_by if asker_answers else None
     for q in batch.questions:
         gap = by_id.get(q.gap_id) if q.gap_id else None
         hidden = gap is not None and sharing.gap_changes(gap, reg, sharing.EVERYONE) is None
-        q.asked_to = await default_person(db, intake, q, gap, asked_by, hidden, able)
+        q.asked_to = await default_person(db, intake, q, gap, fallback, hidden, able)
         q.status = "asked"
         q.batch = batch.number
         q.asked_by = asked_by

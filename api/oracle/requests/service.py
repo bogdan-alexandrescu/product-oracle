@@ -4,8 +4,9 @@ suggestions, and the themes that group them.
 Rules (issue #150, behaviour rules 1-10): commenters add; approvers and owners decide.
 Qualifying needs a confirmed goal (decision F3b). A merge points at the root of the
 target's chain and never forms a cycle; mentions count every request merged in, through
-chains. Oracle's triage writes ``suggestion`` only (oracle.requests.triage):
-nothing changes until an approver accepts a part. A request filed from the filer's own
+chains. Oracle's triage writes ``suggestion`` (oracle.requests.triage): nothing changes
+until an approver accepts a part, except at H11 requests "Act within limits", where Oracle
+merges a sure duplicate or links sure goals itself. A request filed from the filer's own
 source item carries a copy of its title, link, kind and a 400-character excerpt
 (decided 2026-10-21, C1 "Found items"), audited as shared in full.
 """
@@ -14,9 +15,9 @@ import uuid
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import ColumnElement, func, select, text
+from sqlalchemy import ColumnElement, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -44,6 +45,7 @@ from oracle.requests.schemas import (
     RequestDetail,
     RequestDocumentProgress,
     RequestDocumentRef,
+    RequestIntakeRef,
     RequestList,
     RequestOut,
     RequestPatch,
@@ -58,6 +60,10 @@ from oracle.requests.schemas import (
 )
 from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.v2.concurrency import expect_version, flush_or_conflict
+from oracle.v2.models import ProductIntake
+
+if TYPE_CHECKING:
+    from oracle.runs.models import Run
 
 NEEDS_GOAL = "Link a confirmed goal first, or disqualify it as 'No goal'"
 INTERVIEW_ONLY = "Interview requests come from interviews"
@@ -272,18 +278,13 @@ def _suggestion(raw: dict[str, Any]) -> Suggestion | None:
         return None
 
 
-def _without_decline(s: Suggestion | None, show: bool) -> Suggestion | None:
-    if s is None or show or s.decline is None:
-        return s
-    return s.model_copy(update={"decline": None})
-
-
 async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOut]:
     """The rows as the API shows them, with themes, PRDs, sources and mentions."""
     if not rows:
         return []
     theme_ids = {r.theme_id for r in rows if r.theme_id}
     doc_ids = {r.document_id for r in rows if r.document_id}
+    intake_ids = {r.intake_id for r in rows if r.intake_id}
     item_ids = {r.source_item_id for r in rows if r.source_item_id}
     themes = {}
     if theme_ids:
@@ -292,6 +293,19 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
     docs = (
         {d.id: d for d in await db.scalars(select(Document).where(Document.id.in_(doc_ids)))}
         if doc_ids
+        else {}
+    )
+    intakes = (
+        dict(
+            (
+                await db.execute(
+                    select(ProductIntake.id, ProductIntake.title).where(
+                        ProductIntake.id.in_(intake_ids)
+                    )
+                )
+            ).all()
+        )
+        if intake_ids
         else {}
     )
     gone = (
@@ -311,8 +325,9 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
     counts = await replies.reply_counts(db, [r.id for r in rows])
     merged_at = await _merged_at(db, [d for r in declined for d in descendants(r, children)])
     basis_titles = await _basis_titles(db, rows)
-    # H11 requests: Oracle's decline suggestions show at Recommend and above.
-    show_decline = await autonomy.allows(db, "requests", "recommend")
+    # H11 requests: Oracle's suggestions (and their decline) show at Recommend and above;
+    # at Observe and Draft triage still records them, unseen, so nothing re-runs for them.
+    show_suggestion = await autonomy.allows(db, "requests", "recommend")
     # A triage run's suggestion naming a decision or document the reader may not see (one
     # written before #541 part 4, when the run read as its creator) is not shown to them.
     hidden = await visibility.hidden_for_reader(db)
@@ -371,12 +386,15 @@ async def to_out(db: AsyncSession, rows: list[ProductRequest]) -> list[RequestOu
                 if doc
                 else None,
                 intake_id=r.intake_id,
+                intake=RequestIntakeRef(id=r.intake_id, title=intakes[r.intake_id])
+                if r.intake_id in intakes
+                else None,
                 interview_id=r.interview_id,
                 source=source,
                 mentions=1 + len(descendants(r.id, children)),
                 suggestion=None
-                if hidden is not None and hidden.names_in(r.suggestion)
-                else _without_decline(_suggestion(r.suggestion), show_decline),
+                if not show_suggestion or (hidden is not None and hidden.names_in(r.suggestion))
+                else _suggestion(r.suggestion),
                 filed_by=r.filed_by,
                 decided_by=r.decided_by,
                 decided_at=r.decided_at,
@@ -491,10 +509,14 @@ async def list_requests(
     channel: str | None = None,
     q: str | None = None,
     replies_to_send: bool = False,
+    intake_id: uuid.UUID | None = None,
     limit: int = 50,
     offset: int = 0,
 ) -> RequestList:
     filters: dict[str, ColumnElement[bool]] = {}
+    if intake_id:
+        # C1 lane 2: the requests behind a brief.
+        filters["intake"] = ProductRequest.intake_id == intake_id
     if replies_to_send:
         # H10: declined requests with replies still Drafted.
         filters["replies"] = (ProductRequest.state == "disqualified") & ProductRequest.id.in_(
@@ -667,11 +689,17 @@ async def _apply_patch(
         if "feature_id" in fields:
             row.feature_id = await _feature(db, body.feature_id) if body.feature_id else None
         if "document_id" in fields:
+            had = row.document_id
             row.document_id = await _document(db, body.document_id) if body.document_id else None
+            if had is not None and row.document_id is None:
+                # C1: unlinking its PRD takes the request off its brief too, so the brief's
+                # run cannot link the PRD back, and another brief may take it.
+                row.intake_id = None
 
 
-def _decided(row: ProductRequest, principal: Principal) -> None:
-    row.decided_by = principal.id
+def _decided(row: ProductRequest, principal: Principal | None) -> None:
+    """Who decided: the person, or None when Oracle did (H11 requests at Act)."""
+    row.decided_by = principal.id if principal is not None else None
     row.decided_at = _now()
 
 
@@ -698,9 +726,10 @@ async def qualify(
 
 
 async def _merge_into(
-    db: AsyncSession, principal: Principal, row: ProductRequest, into_id: uuid.UUID
+    db: AsyncSession, principal: Principal | None, row: ProductRequest, into_id: uuid.UUID
 ) -> uuid.UUID:
-    """Merges ``row`` into the root of ``into_id``'s chain; returns that root."""
+    """Merges ``row`` into the root of ``into_id``'s chain; returns that root. ``principal``
+    None: Oracle merges it (oracle.requests.triage, H11 requests at Act)."""
     if row.state not in ("new", "qualified"):
         raise _conflict("Only a New or Qualified request can be merged")
     # One merge at a time per company: two crossing merges cannot form a loop.
@@ -738,7 +767,7 @@ async def merge(
 
 
 async def _asked_again(
-    db: AsyncSession, principal: Principal, row: ProductRequest, root_id: uuid.UUID
+    db: AsyncSession, principal: Principal | None, row: ProductRequest, root_id: uuid.UUID
 ) -> dict[str, Any]:
     """H10 Asked again: a request merged into one said no to gets the same reasoned reply,
     under the same decision. The root stays disqualified; its ``asked_again`` counts it."""
@@ -844,10 +873,12 @@ async def _reopen(db: AsyncSession, row: ProductRequest) -> None:
     row.decided_at = None
     row.asked_again_since = None
     row.loop_closed_on = None
-    # Drafted replies go: nobody is told a no that no longer stands.
+    # Drafted replies go: nobody is told a no that no longer stands, its own (H10 Asked
+    # again, when it was merged into a no) included (#586 review).
     for reply in await db.scalars(
         select(RequestReply).where(
-            RequestReply.root_request_id == row.id, RequestReply.status == "drafted"
+            or_(RequestReply.root_request_id == row.id, RequestReply.request_id == row.id),
+            RequestReply.status == "drafted",
         )
     ):
         reply.status = "withdrawn"
@@ -895,7 +926,7 @@ async def accept_suggestion(
     if row.state != "new":
         raise _conflict("Only a New request takes Oracle's suggestions")
     s = _suggestion(row.suggestion)
-    if s is None or s.declined_at:
+    if s is None or s.declined_at or not await autonomy.allows(db, "requests", "recommend"):
         raise _invalid("Oracle has no suggestion for this request")
     parts = set(body.parts)
     with db.no_autoflush:
@@ -1399,3 +1430,116 @@ def _problem_confirmed(theme: RequestTheme, principal: Principal) -> None:
     theme.problem_suggestion = {}
     theme.problem_confirmed_by = principal.id
     theme.problem_confirmed_at = _now()
+
+
+# --- Start a PRD (C1 lane 2) -----------------------------------------------------------
+
+
+NOT_QUALIFIED = "Only qualified requests can be behind a PRD"
+
+
+async def put_behind_brief(
+    db: AsyncSession, principal: Principal, intake_id: uuid.UUID, request_ids: list[uuid.UUID]
+) -> list[uuid.UUID]:
+    """The brief's "Requests behind it": each one, qualified (else 422) and not already
+    behind a brief or linked to a PRD (else 409), gets the intake. Returns the ids linked."""
+    if not request_ids:
+        return []
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.id.in_(request_ids))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    if len(rows) != len(set(request_ids)) or any(r.state != "qualified" for r in rows):
+        raise RequestError(422, NOT_QUALIFIED)
+    await _not_taken(db, rows)
+    for row in rows:
+        row.intake_id = intake_id
+        row.updated_at = _now()
+    await db.flush()
+    for row in rows:
+        await audit.record(
+            db, principal, "request.updated", "request", row.id, {"intake_id": str(intake_id)}
+        )
+    return [r.id for r in rows]
+
+
+async def _not_taken(db: AsyncSession, rows: list[ProductRequest]) -> None:
+    """Rules 2 and 7: a request already behind a brief, or linked to a PRD, stays there; a
+    new brief cannot take it over (409, naming the brief or the PRD)."""
+    for row in rows:
+        if row.intake_id is not None:
+            title = await db.scalar(
+                select(ProductIntake.title).where(ProductIntake.id == row.intake_id)
+            )
+            raise _conflict(
+                f'"{row.title}" is already behind the brief "{title or "another brief"}"'
+            )
+        if row.document_id is not None:
+            title = await db.scalar(select(Document.title).where(Document.id == row.document_id))
+            raise _conflict(
+                f'"{row.title}" is already linked to the PRD "{title or "another PRD"}"'
+            )
+
+
+async def release_brief(db: AsyncSession, principal: Principal, intake_id: uuid.UUID) -> int:
+    """Archiving a brief that made no PRD releases the requests behind it (#599 re-review,
+    decided "Release on archive" 2026-10-25): their brief link is cleared, so another brief
+    may take them. A request whose brief made a PRD keeps both links. Returns how many."""
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.intake_id == intake_id, ProductRequest.document_id.is_(None))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in rows:
+        row.intake_id = None
+        row.updated_at = _now()
+    await db.flush()
+    for row in rows:
+        await audit.record(
+            db,
+            principal,
+            "request.updated",
+            "request",
+            row.id,
+            {"intake_id": None, "released_from": str(intake_id)},
+        )
+    return len(rows)
+
+
+async def link_intake_document(
+    db: AsyncSession, intake_id: uuid.UUID, document_id: uuid.UUID
+) -> int:
+    """The PRD made for a brief links the requests behind it (rule 7: one PRD each, so a
+    request already linked to a PRD keeps it). Returns how many it linked."""
+    rows = list(
+        await db.scalars(
+            select(ProductRequest)
+            .where(ProductRequest.intake_id == intake_id, ProductRequest.document_id.is_(None))
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    )
+    for row in rows:
+        row.document_id = document_id
+        row.updated_at = _now()
+    await db.flush()
+    return len(rows)
+
+
+async def link_run_document(db: AsyncSession, run: "Run") -> int:
+    """:func:`link_intake_document` for a run started from a brief, once it has its PRD."""
+    raw = (run.knobs or {}).get("intake_id")
+    if not raw or run.document_id is None:
+        return 0
+    try:
+        intake_id = uuid.UUID(str(raw))
+    except ValueError:
+        return 0
+    return await link_intake_document(db, intake_id, run.document_id)

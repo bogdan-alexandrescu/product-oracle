@@ -141,6 +141,24 @@ test("commenter: Propose, then waiting for an approver, and the Proposals tab sa
   await expect(row).toContainText("From discussion Make “Cut early churn” measurable");
 });
 
+// protects=#674 on main: the card's Accept now keeps train Q's gate (shown on accept_proposal,
+// after the generic change actions of #573) and #674's words on what Accept does (the item is
+// then locked against Oracle's changes until a person unlocks it); fails_when=an approver's
+// Accept now is missing or loses the lock tooltip; no_claim=a commenter (the commenter test), the API's
+// accept route (api/tests/test_accept_locks_wording.py).
+test("approver: Accept now, shown on accept_proposal, says accepting locks the goal", async ({ page }) => {
+  await openBaseline(page, APPROVER);
+  await makeChurnMeasurable(page);
+  const card = cards(page).first();
+  await card.getByRole("button", { name: "Propose", exact: true }).click();
+  await expect(card.getByTestId("version-proposed")).toContainText("Proposed");
+  const accept = card.getByRole("button", { name: "Accept now" });
+  await expect(accept).toBeEnabled();
+  await expect(accept).toHaveAttribute("title", /locked against Oracle's changes until a person unlocks it/);
+  await accept.click();
+  await expect(card.getByTestId("version-proposed")).toContainText("Accepted");
+});
+
 // protects=decision C1b: a target already met by the start value gets Oracle's pushback once,
 // and proposing it again goes through; fails_when=no pushback, a second one, or the keep is
 // refused; no_claim=the evidence threshold half of the rule (pytest).

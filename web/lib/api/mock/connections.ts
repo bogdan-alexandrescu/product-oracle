@@ -11,6 +11,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 
+import { FIREFLIES_CONNECTION_ID } from "./fireflies";
 import { MOCK_NOTION_CONNECTION_ID, notionPages } from "./notion";
 
 type ConnectionRow = Schemas["ConnectionOut"];
@@ -106,7 +107,7 @@ export function mockSettingValue(key: string): unknown {
   return key in db.settings ? db.settings[key] : SETTING_DEFAULTS[key];
 }
 
-function companyZone(): string {
+export function companyZone(): string {
   const zone = String(mockSettingValue("company_timezone") ?? "America/Los_Angeles");
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: zone });
@@ -198,6 +199,65 @@ export const MOCK_SHARED_DRIVES = [
   { id: "0ADrivePartnerAcmeExample", name: "Partner: Acme" },
 ];
 
+/** As oracle.sources.connectors.fireflies.DEFAULT_ENDPOINT. */
+export const FIREFLIES_DEFAULT_ENDPOINT = "https://api.fireflies.ai/graphql";
+const PRIVATE_ENDPOINT = "The endpoint points to a private, local or internal network address, which Product Oracle does not call.";
+const OWNER_ONLY = "Only an Oracle owner can set or change a Fireflies endpoint";
+const ANOTHER_ACCOUNT = "That key belongs to another Fireflies account than this connection's; connect it as a new connection";
+const ODD_IPV4 = "The endpoint writes an IP address in an octal, hex or shortened form; write it as four decimal numbers, or use the host name.";
+
+function privateIp(host: string): boolean {
+  let h = host.replace(/^\[|\]$/g, "").toLowerCase();
+  const mapped = /^::ffff:(.+)$/.exec(h);
+  if (mapped) h = mapped[1];
+  if (/^::ffff:[0-9a-f]{1,4}:[0-9a-f]{1,4}$/.test(host.replace(/^\[|\]$/g, "").toLowerCase())) return true;
+  const v4 = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 0 || a === 10 || a === 127 || (a === 100 && b >= 64 && b < 128) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b < 32) || (a === 192 && b === 168) || a >= 224 || (a === 198 && (b === 18 || b === 19));
+  }
+  if (h.includes(":")) return h === "::1" || h === "::" || /^f[cd]/.test(h) || /^fe[89ab]/.test(h) || /^ff/.test(h);
+  return !h.includes(".");
+}
+
+/**
+ * As oracle.sources.connectors.fireflies.check_endpoint: the normalized endpoint, null for
+ * the default, or the API's refusal in words. (Where a name resolves is checked by the
+ * API's guarded transport; the mock resolves nothing.)
+ */
+export function checkEndpoint(raw: string | null | undefined): { url: string | null } | { error: string } {
+  const text = (raw ?? "").trim();
+  if (!text) return { url: null };
+  if (!/^https:\/\//i.test(text)) return { error: "The endpoint must be an https:// URL." };
+  let u: URL;
+  try {
+    u = new URL(text);
+  } catch {
+    return { error: "The endpoint is not a valid URL." };
+  }
+  if (u.username || u.password || /^https:\/\/[^/]*@/i.test(text)) return { error: "The endpoint cannot contain a user name or password." };
+  const port = /^https:\/\/(?:\[[^\]]*\]|[^/:?#]*):(\d*)/i.exec(text)?.[1];
+  if (port !== undefined && port !== "443") return { error: "The endpoint must use the standard https port (443)." };
+  if (u.search || u.hash || /[?#]/.test(text)) return { error: "The endpoint cannot have a query or a fragment." };
+  // As the API: a host whose last label is a number reads as an IPv4 address (0177.0.0.1,
+  // 0x7f000001, 127.1); unless written as four decimal numbers it is refused. (The browser
+  // has already read it as the address it means, or refused it as not a valid URL.)
+  const host = (/^https:\/\/([^/?#]*)/i.exec(text)?.[1] ?? "").replace(/:\d*$/, "").replace(/\.$/, "").toLowerCase();
+  const plainV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+  if (!host.startsWith("[") && /^(0x[0-9a-f]*|\d+)$/.test(host.split(".").pop() ?? "") && !plainV4.test(host)) {
+    return { error: privateIp(u.hostname) ? PRIVATE_ENDPOINT : ODD_IPV4 };
+  }
+  if (privateIp(u.hostname)) return { error: PRIVATE_ENDPOINT };
+  const url = `https://${u.hostname.toLowerCase()}${u.pathname || "/"}`;
+  return { url: url === FIREFLIES_DEFAULT_ENDPOINT ? null : url };
+}
+
+/** The endpoint a mock connection reads (the Sources page shows it); null when unknown. */
+export function mockConnectionEndpoint(id: string): string | null {
+  const row = load().connections.find((c) => c.id === id);
+  return row ? (row.endpoint_url ?? FIREFLIES_DEFAULT_ENDPOINT) : null;
+}
+
 function load(): ConnDb {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -251,7 +311,8 @@ function upsert(
   let row = db.connections.find((c) => c.provider === provider && c.account_id === who.account_id);
   if (!row) {
     row = {
-      id: crypto.randomUUID(),
+      // The mock's one Fireflies account is the one the Sources page's Fireflies source reads.
+      id: provider === "fireflies" && !db.connections.some((c) => c.id === FIREFLIES_CONNECTION_ID) ? FIREFLIES_CONNECTION_ID : crypto.randomUUID(),
       provider,
       auth_mode,
       account_id: who.account_id,
@@ -279,7 +340,11 @@ function upsert(
 }
 
 function out(_db: ConnDb, c: ConnectionRow): ConnectionRow {
-  return { ...c, reconnect_reason: reconnectReason(c.provider, c.scopes) };
+  return {
+    ...c,
+    reconnect_reason: reconnectReason(c.provider, c.scopes),
+    endpoint_url: c.provider === "fireflies" ? (c.endpoint_url ?? FIREFLIES_DEFAULT_ENDPOINT) : null,
+  };
 }
 
 function settingOut(db: ConnDb, key: string): Schemas["SettingOut"] {
@@ -309,15 +374,15 @@ export function setupFacts(): { connections: number; domains: string[]; horizons
 }
 
 /** Handles /v1/connections… and /v1/settings…; null for other routes. */
-export async function connectionsRoute(req: Request, p: string[]): Promise<Response | null> {
+export async function connectionsRoute(req: Request, p: string[], role: string = "owner"): Promise<Response | null> {
   if (p[1] !== "connections" && p[1] !== "settings") return null;
   const db = load();
-  const res = await handle(db, req, p);
+  const res = await handle(db, req, p, role);
   save(db);
   return res;
 }
 
-async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> {
+async function handle(db: ConnDb, req: Request, p: string[], role: string): Promise<Response> {
   const m = req.method;
   const body = async <T,>() => JSON.parse((await req.text()) || "null") as T;
 
@@ -375,10 +440,25 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
     const provider = PROVIDERS.find((x) => x.key === p[2]);
 
     if (provider && p[3] === "token" && m === "POST") {
-      const { token, label } = await body<Schemas["TokenIn"]>();
+      const { token, label, endpoint_url } = await body<Schemas["TokenIn"]>();
+      // As the API: owners only, Fireflies only, the endpoint rule, then the key.
+      let endpoint: string | null = null;
+      if (endpoint_url) {
+        if (role !== "owner") return json(403, { detail: OWNER_ONLY });
+        if (provider.key !== "fireflies") return json(422, { detail: "Only a Fireflies connection takes an endpoint" });
+        const checked = checkEndpoint(endpoint_url);
+        if ("error" in checked) return json(422, { detail: checked.error });
+        endpoint = checked.url;
+      }
       const who = identity(provider.key, token.trim());
       if (typeof who === "string") return json(400, { detail: who });
-      return json(200, out(db, upsert(db, provider.key, "token", who, label)));
+      const existing = db.connections.find((c) => c.provider === provider.key && c.account_id === who.account_id);
+      if (provider.key === "fireflies" && existing && (existing.endpoint_url ?? null) !== endpoint && role !== "owner") {
+        return json(403, { detail: "This Fireflies account is connected through an endpoint an owner set; only an Oracle owner can change it" });
+      }
+      const row = upsert(db, provider.key, "token", who, label);
+      if (provider.key === "fireflies") row.endpoint_url = endpoint;
+      return json(200, out(db, row));
     }
     if (provider && p[3] === "authorize" && m === "GET") {
       if (!provider.oauth_configured) {
@@ -403,6 +483,22 @@ async function handle(db: ConnDb, req: Request, p: string[]): Promise<Response> 
       if (row.provider !== "google") return json(404, { detail: "Not your Google connection" });
       if (reconnectReason(row.provider, row.scopes)) return json(409, { detail: "Reconnect Google to list shared drives" });
       return json(200, { drives: MOCK_SHARED_DRIVES });
+    }
+    if (p[3] === "endpoint" && m === "PUT") {
+      if (role !== "owner") return json(403, { detail: "Requires the owner role" });
+      const sent = (await body<Partial<Schemas["EndpointIn"]> | null>()) ?? {};
+      const { endpoint_url, token } = sent;
+      // FastAPI's own validation answer, as the API gives it (EndpointIn.token: required, 1+).
+      if (token === undefined || token === null) return json(422, { detail: [{ type: "missing", loc: ["body", "token"], msg: "Field required", input: sent }] });
+      if (token === "") return json(422, { detail: [{ type: "string_too_short", loc: ["body", "token"], msg: "String should have at least 1 character", input: token, ctx: { min_length: 1 } }] });
+      if (row.provider !== "fireflies") return json(422, { detail: "Only a Fireflies connection takes an endpoint" });
+      const checked = checkEndpoint(endpoint_url);
+      if ("error" in checked) return json(422, { detail: checked.error });
+      const who = identity(row.provider, token.trim());
+      if (typeof who === "string") return json(400, { detail: who });
+      if (who.account_id !== row.account_id) return json(400, { detail: ANOTHER_ACCOUNT });
+      Object.assign(row, { endpoint_url: checked.url, status: "active", last_error: null, updated_at: now() });
+      return json(200, out(db, row));
     }
     if (!p[3] && m === "DELETE") {
       db.connections = db.connections.filter((c) => c.id !== row.id);

@@ -8,10 +8,11 @@ import type { Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
 
 import { AGENT_RUN, baselineReviewStatus } from "./baseline";
-import { companyDayInWords, companyDayIso } from "./connections";
+import { companyDayInWords, companyDayIso, companyStamp } from "./connections";
 import { ranking } from "./lane-f";
 import type { RowTally } from "./from-run";
 import { fileItems } from "./checkpoint-review";
+import { readableRefusal } from "./refusal";
 import { mockNowMs } from "./clock";
 import { applySuggestion, latestScope, prepareScope, recheck as recheckScope, routeScopes, SCOPE_EDIT_FIELDS, scopeEdits, type StoredScope } from "./scope";
 
@@ -40,6 +41,7 @@ type DraftActionRow = Omit<Schemas["ReviewAction"], "created_by" | "updated_by" 
   /** G4: staged from a discussion (row actions have none), and whether it was private then. */
   origin?: "row" | "discussion";
   discussion_id?: string | null;
+  discussion_change_id?: string | null;
   from_private?: boolean;
   /** C2: a question action's question, asked through the questions store (the member's Inbox). */
   question_id?: string | null;
@@ -141,6 +143,16 @@ export interface RunsContext {
    * second finishes the segment.
    */
   slowAgents?: boolean;
+  /**
+   * H11 Order priorities, as oracle.autonomy for the runs: its level, its limits, and the
+   * "Oracle did" row Oracle leaves when it saves a run's order itself (_tell_order_saved).
+   * Absent: Oracle never saves an order at a stop that is on.
+   */
+  autonomy?: {
+    level: () => "observe" | "draft" | "recommend" | "act";
+    limits: () => { max_rank_move?: number } | null;
+    acted: (a: { summary: string; subject: Record<string, unknown>; undo: null; notify: string[] }) => void;
+  };
   feedback: FeedbackRow[];
   documents: DocumentRow[];
   /** #260: the confirmed goals a Baseline to PRD run may name. */
@@ -156,6 +168,8 @@ export interface RunsContext {
   lockedSections?: (documentId: string, version: number) => string[];
   /** Section keys of a version (a roadmap's items check their PRD sections). */
   sectionKeys: (versionId: string) => string[];
+  /** As the API's _no_documents (#583 review): the document (id, else slug) has a version made after `at`. */
+  versionAfter?: (documentId: string | null, slug: string | null, at: string) => boolean;
   /** The approved version of a document a run reads (the one named, else the latest approved), or why not. */
   sourceVersion: (documentId: string, number: number | null) => VersionSource | string;
   /** E1 part B: the PRD version's draft items a Build roadmap run may reuse, or null. */
@@ -163,7 +177,9 @@ export interface RunsContext {
   /** Imports a run's draft as the document's next version. */
   importDraft: (
     slug: string,
-    run: Pick<RunOut, "document_kind" | "source" | "template" | "theme">,
+    run: Pick<RunOut, "id" | "document_kind" | "source" | "template" | "theme">,
+    /** A person's Retry import: the version's `imported_again`. */
+    again?: string,
   ) => Omit<NonNullable<SegmentOut["draft_import"]>, "warnings" | "problems">;
   /** The run's open baseline proposals (RunOut.open_proposals). */
   openProposals?: (runId: string) => number;
@@ -277,6 +293,23 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
       ],
     },
     {
+      // F5 lane 3: requested from an approved item in the Plan's inspector or from a PRD's
+      // overview (POST /v1/spec-requests), never from the New run dialog.
+      key: "prd_to_spec",
+      title: "Engineering spec from an approved PRD",
+      description: "A technical brief or full engineering spec for a feature's requirements, with SVG user flows and low-fidelity wireframes of 2-4 key screens, each linked to its PRD sections and requirement ids.",
+      requires_document: false,
+      target_kind: "spec",
+      source_kind: "prd",
+      entry: "POST /v1/spec-requests",
+      in_new_run_dialog: false,
+      starts_from: { label: "Request spec · Plan, an approved item, or a PRD's overview", href: "/plan" },
+      writes_document: true,
+      segments: [
+        { name: "spec_draft", title: "Spec, flows and wireframes", roles: ["architect", "designer", "critic"], scopes: [...READ, "read:documents"], outputs: ["spec.md", "design.json"], checkpoint: "eng_review", approver_role: "approver", decider: "role" },
+      ],
+    },
+    {
       key: "strategy_draft",
       title: "Vision or strategy draft",
       description: "Oracle drafts the product vision or the product strategy from the confirmed goals, approved documents, decisions and outcomes; an owner reviews it.",
@@ -361,7 +394,7 @@ const PRD_DEFAULT_TEMPLATE = "oracle-default";
 const FACTOR = 1.5;
 const FINAL = ["succeeded", "failed", "cancelled"];
 // B1: a Build the baseline run in these states is under way; another is refused.
-const BUILD_UNDER_WAY: RunOut["status"][] = ["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
+export const BUILD_UNDER_WAY: RunOut["status"][] = ["awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun"];
 
 /** As the API: one baseline build at a time (409 naming the one under way). */
 function buildUnderWay(ctx: RunsContext, flowKey: string): Response | null {
@@ -424,7 +457,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     finished_at: r.finished_at,
     waiting_on: r.waiting_on,
     review_link: r.review_link ?? null,
-    error: r.error,
+    error: readableRefusal(r.error, r.status === "failed"),
     stuck: r.stuck,
     can_retry: r.can_retry,
     can_stop_cancelling: r.can_stop_cancelling,
@@ -555,6 +588,9 @@ function sentBack(r: RunOut, s: SegmentOut): boolean {
  * being revised (`revising`, the runs list's "Revising"), or one that is not ("Draft rejected").
  */
 function refused(r: RunOut, revising: boolean): string | null {
+  // A run that succeeded past the refusal reads neither (owner, 2026-10-25): if it finished
+  // with no document, its owners' Inbox says so (noDocument).
+  if (r.status === "succeeded") return null;
   const imp = r.segments.find((s) => s.draft_import?.error && sentBack(r, s) === revising)?.draft_import;
   return imp ? (imp.summary ?? imp.error ?? null) : null;
 }
@@ -615,6 +651,25 @@ function blockingOf(cp: CheckpointOut, live?: GateReason[]): { reasons: GateReas
     .filter((p) => !fileLevel(p))
     .map((p): GateReason => ({ item: p.feature!, item_title: null, code: p.code, severity: "blocking", label: p.message }));
   return { reasons, files: problems.filter(fileLevel).length };
+}
+
+/**
+ * As the API (gate.OWNER_WAIVES, H4 §5): the reasons of the roadmap items review only an owner
+ * waives. A waiver names them, never covers them by naming none, and is its own action (field
+ * "owner"), so an approver's waiver on the same item neither replaces it nor is replaced by it.
+ */
+const OWNER_WAIVES = ["stopped_but_planned"];
+
+/** As the API: an action answers a reason it names, every reason of its item when it names none, but a waiver naming none never an owner's. */
+const answersCode = (a: { kind: string; answers?: string[] | null }, code: string) =>
+  a.kind !== "question" && (a.answers?.length ? a.answers.includes(code) : a.kind !== "waive" || !OWNER_WAIVES.includes(code));
+
+/** As the API: waiving another reason of the item adds it to the staged waiver before (naming none covers them all). */
+function mergedAnswers(a: { kind: string; answers?: string[] | null }, existing?: { state: string; answers?: string[] | null }): string[] {
+  const named = a.answers ?? [];
+  if (a.kind !== "waive" || existing?.state !== "staged") return named;
+  const before = existing.answers ?? [];
+  return before.length && named.length ? [...before, ...named.filter((c) => !before.includes(c))] : [];
 }
 
 /**
@@ -798,6 +853,39 @@ function isFix(a: DraftActionRow, f: ItemReason["fixes"][number]): boolean {
   );
 }
 
+/** As the API's _run_version: a version this run imported (any segment or review), as "slug vN". */
+function runVersion(r: RunOut): string | null {
+  const imports = [...r.segments.map((s) => s.draft_import), ...r.checkpoints.map((c) => (c.payload as { import?: SegmentOut["draft_import"] }).import)];
+  const imp = imports.find((i) => i && i.version != null && !i.error);
+  return imp ? `${imp.slug} v${imp.version}` : null;
+}
+
+/** As the API's one_version (owner, 2026-10-25): why a finished run's refused draft stays refused. */
+function oneVersion(version: string): string {
+  return `this run already imported ${version}, and a finished run imports one version only, so this draft is not imported. Start a new run to draft it again.`;
+}
+
+/** As the API's NO_DOCUMENT_SINCE (#583 review): runs that finished before the No document row shipped get none. */
+export const NO_DOCUMENT_SINCE = "2026-10-25T00:00:00Z";
+
+/**
+ * As the API (owner, 2026-10-25): a run that finished with no document, why and what to do; else null.
+ * The row clears itself (#583 review) once the run imported a version (Retry import), or once its
+ * document has a version made after the run finished (a later run imported it).
+ */
+function noDocument(ctx: RunsContext, r: RunOut): string | null {
+  const s = r.segments.find((x) => x.draft_import?.error);
+  if (r.status !== "succeeded" || !s || runVersion(r)) return null;
+  if (!r.finished_at || Date.parse(r.finished_at) < Date.parse(NO_DOCUMENT_SINCE)) return null;
+  if (ctx.versionAfter?.(r.document_id ?? null, r.document_slug ?? null, r.finished_at)) return null;
+  const imp = s.draft_import!;
+  const action = s.can_retry_draft_import
+    ? "Open the run and use Retry import once the problems are fixed, or start a new run."
+    : "Start a new run to draft it again.";
+  const what = r.document_slug ?? `The ${r.flow_title} run`;
+  return `${what} finished without a document: Oracle refused its draft (${imp.summary ?? imp.error}) and the run was approved past it. ${action}`;
+}
+
 /** The decided review of a finished run's segment whose draft was refused (owners retry it). */
 function finishedReview(r: RunOut, s: SegmentOut): CheckpointOut | undefined {
   if (r.status !== "succeeded" || r.segments.some((x) => x.draft_import && !x.draft_import.error)) return undefined;
@@ -856,6 +944,11 @@ function refresh(r: RunOut) {
   const file = r.document_kind === "roadmap" ? "roadmap.md" : "prd.md";
   for (const s of r.segments) {
     s.can_retry_draft_import = !!s.draft_import?.error && s.artifacts.includes(file) && !!(reviewOf(r, s) ?? finishedReview(r, s));
+  }
+  const version = r.status === "succeeded" ? runVersion(r) : null;
+  for (const s of r.segments) {
+    const why = version && s.draft_import?.error ? oneVersion(version) : null;
+    s.draft_retry_refused = why && why[0].toUpperCase() + why.slice(1);
   }
 }
 
@@ -1165,6 +1258,54 @@ function decideOrder(ctx: Pick<RunsContext, "db" | "now" | "documents">, r: RunO
   if (decision === "approved") snap.document = orderDocument(ctx, r) ?? snap.document;
 }
 
+/** The priority stop's note when Oracle saved the order itself (H11 ``priorities`` at Act). */
+const ORDER_SAVED_BY_ORACLE = "Oracle saved this order: Order priorities is set to Act within limits.";
+
+const goalsOf = (row: SnapshotRow["ranking"][number]) => new Set((row.explanation?.goals ?? []).map((g) => String(g.goal)));
+
+/**
+ * As oracle.priorities.run_order.outside_limits: why an order is outside the limits, or null.
+ * Compared with the live ranking of the same features, a feature moves more than
+ * `most` places, or passes one that shares no goal with it. Features the live ranking does
+ * not hold are not moves.
+ */
+function outsideLimits(rows: SnapshotRow["ranking"], most: number): string | null {
+  const ranked = rows.filter((r) => r.live_rank != null).sort((a, b) => a.rank - b.rank);
+  for (const [i, r] of ranked.entries()) {
+    const moved = Math.abs(i + 1 - r.live_rank!);
+    if (moved > most) return `${r.key} moves ${moved === 1 ? "1 place" : `${moved} places`}, more than ${most}`;
+  }
+  for (const [i, a] of ranked.entries()) {
+    for (const b of ranked.slice(i + 1)) {
+      const ga = goalsOf(a);
+      if (a.live_rank! > b.live_rank! && ![...goalsOf(b)].some((g) => ga.has(g))) return `${a.key} passes ${b.key}, which serves another goal`;
+    }
+  }
+  return null;
+}
+
+/** As the API's _oracle_saves_order: ``priorities`` at Act, nothing blocking, every move within one goal and the limit. */
+function oracleSavesOrder(ctx: RunsContext, check: PriorityCheck, snap: SnapshotRow): boolean {
+  const a = ctx.autonomy;
+  if (!a || a.level() !== "act") return false;
+  if (check.problems.some((p) => p.blocking ?? true)) return false;
+  const limits = a.limits();
+  if (!limits) return false;
+  return outsideLimits(snap.ranking, Number(limits.max_rank_move ?? 0)) === null;
+}
+
+/** As the API's _tell_order_saved: the run's starter gets an "Oracle did" row, with no Undo. */
+function tellOrderSaved(ctx: RunsContext, r: RunOut) {
+  const doc = r.document_id ? ctx.documents.find((d) => d.id === r.document_id) : undefined;
+  const name = doc?.title ?? r.document_slug ?? "this run";
+  ctx.autonomy?.acted({
+    summary: `Saved the priority order of ${name}, within one goal and your limit`,
+    subject: { kind: "run", key: r.id, href: `/runs/${r.id}` },
+    undo: null,
+    notify: r.created_by ? [r.created_by] : [],
+  });
+}
+
 function fileContent(name: string, segment: string, attempt: number, document?: string | null): string {
   if (name === "tech_briefs.yaml") return briefsYaml(LOCAL_BRIEFS, attempt);
   if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
@@ -1225,8 +1366,11 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     next(ctx, r, s);
     return;
   }
-  const on = r.knobs.checkpoints[def.checkpoint] ?? true;
-  if (!on && s.feature_set_check) decideScope(ctx, r, "approved", null);
+  const stopOn = r.knobs.checkpoints[def.checkpoint] ?? true;
+  // H11 ``priorities`` at Act: Oracle saves an order inside the limits itself.
+  const oracleOrders = stopOn && !!snapshot && oracleSavesOrder(ctx, s.priority_check!, snapshot);
+  const on = stopOn && !oracleOrders;
+  if (!stopOn && s.feature_set_check) decideScope(ctx, r, "approved", null);
   const cp: CheckpointOut = {
     id: ctx.uuid(),
     run_id: r.id,
@@ -1237,7 +1381,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
     segment_seq: s.seq,
     decided_by: null,
     decided_at: on ? null : ctx.now(),
-    note: on ? null : "Turned off when the run started.",
+    note: on ? null : oracleOrders ? ORDER_SAVED_BY_ORACLE : "Turned off when the run started.",
     payload,
     created_at: ctx.now(),
     can_decide: on,
@@ -1256,6 +1400,7 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
       return finish(ctx, r, "failed");
     }
     decideOrder(ctx, r, cp, "approved", null);
+    if (oracleOrders) tellOrderSaved(ctx, r);
   }
   if (on) r.status = "awaiting_checkpoint";
   else next(ctx, r, s);
@@ -1478,6 +1623,13 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
   });
   // Runs whose output Oracle stopped trying to import (owners: Retry).
   const imports = ctx.db.runs.filter((r) => r.can_retry_import && !FINAL.includes(r.status)).map(summary);
+  // Owners only: runs that finished with no document (owner, 2026-10-25).
+  const finished = ctx.userRole === "owner" || ctx.userRole == null ? ctx.db.runs.filter((r) => r.status === "succeeded") : [];
+  for (const r of finished) refresh(r);
+  const no_documents = finished.flatMap((r) => {
+    const why = noDocument(ctx, r);
+    return why ? [{ ...summary(r), no_document: why }] : [];
+  });
   // Runs that wait on their owner (stuck: Retry, Stop cancelling, Retry lookup, Cancel again,
   // Dismiss), and work given up on that is still looked for (shown only, not in the total).
   const lookups = ctx.db.runs.filter((r) => r.stuck).map(summary);
@@ -1512,6 +1664,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     searches,
     revising,
     imports,
+    no_documents,
     feedback,
     revoke_failures: [],
     access_failures: [],
@@ -1520,7 +1673,7 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     report_failures: [],
     oracle_actions: [],
     // Every new or open item (C1e, 2026-10-20): the server adds the feedback items' New + Open (./next-draft.ts).
-    total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length,
+    total: checkpoints.length + approvals.length + overruns.length + lookups.length + imports.length + no_documents.length,
     // Feedback states (C1e) are added by the server, which holds the suggestions (./next-draft.ts).
     items: [],
     counts: { new: 0, open: 0, staged: 0, declined: 0, done: 0 },
@@ -1695,7 +1848,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       ...(c.kind === "baseline_confirm" && c.status === "approved" && ctx.vagueGoals ? { vague_goals: ctx.vagueGoals() } : {}),
       lead_stop: !!ctx.leadStop?.(c, r.flow),
     }));
-    return json(status, { ...r, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
+    // As the API (#556, #561 review): stored errors read in words, a failed one in the past.
+    const segments = r.segments.map((s) => (s.error ? { ...s, error: readableRefusal(s.error, s.status === "failed") } : s));
+    return json(status, { ...r, error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
 
   if (p.length === 3 && m === "GET") return done();
@@ -1988,10 +2143,13 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     refresh(r);
     const review = reviewOf(r, s) ?? finishedReview(r, s);
     if (!s.can_retry_draft_import || !review || !r.document_slug) {
-      return fail(409, `nothing to retry: no refused draft of ${s.name} waits at its review`);
+      const version = r.status === "succeeded" ? runVersion(r) : null;
+      return fail(409, `nothing to retry: ${version ? oneVersion(version) : `no refused draft of ${s.name} waits at its review`}`);
     }
-    // Imported as at segment end; the review stays open for a person.
-    const imp = ctx.importDraft(r.document_slug, r);
+    // Imported as at segment end; the review stays open for a person. The version stays the
+    // run creator's; its history says who imported it again, and when (owner, 2026-10-25).
+    const again = `imported again by ${displayName(ctx.userName ?? "admin@example.com")} on ${companyStamp(ctx.now())}`;
+    const imp = ctx.importDraft(r.document_slug, r, again);
     s.draft_import = { ...imp, created: true, warnings: [], error: null, problems: [], summary: null };
     r.document_id = imp.document_id ?? null;
     review.payload = { ...review.payload, import: s.draft_import };
@@ -2201,6 +2359,20 @@ export function seedRuns(ctx: Omit<RunsContext, "db">): RunsDb {
 
   for (const r of db.runs) refresh(r);
   return db;
+}
+
+/**
+ * #561 review, the "stored-refusals" scenario: a feedback loop on checkout-redesign that failed
+ * on Oct 18, its segment and the run on a refusal stored before #403's wording.
+ */
+export function seedStoredRefusalRun(db: RunsDb, ctx: Omit<RunsContext, "db">, error: string): RunOut {
+  const run = seedRun(ctx, db, "feedback_loop", "checkout-redesign", { checkpoints: { prd_review: false } }, "2026-10-18T23:00:00Z");
+  const at = "2026-10-18T23:12:00Z";
+  run.segments[0].attempts.push({ attempt: 1, workflow_id: null, submitted_at: "2026-10-18T23:00:00Z", cost_usd: 0, note: null, state: "failed" });
+  Object.assign(run.segments[0], { status: "failed", started_at: "2026-10-18T23:00:00Z", finished_at: at, error });
+  Object.assign(run, { status: "failed", started_at: "2026-10-18T23:00:00Z", finished_at: at, error });
+  refresh(run);
+  return run;
 }
 
 /** The run the "feature-set" scenario seeds (C6). */
@@ -2460,6 +2632,43 @@ export function seedRunReviewRun(db: RunsDb, ctx: Omit<RunsContext, "db">): RunO
   refresh(r);
   db.runs.push(r);
   return r;
+}
+
+/** The runs the "no-document" scenario seeds (#583 review): a new one and one from before the row shipped. */
+export const NO_DOCUMENT_RUN = "7a11c0de-0000-4000-8000-0000000000e1";
+export const OLD_NO_DOCUMENT_RUN = "7a11c0de-0000-4000-8000-0000000000e2";
+
+/**
+ * The "no-document" scenario (#583 review): two Baseline to PRD runs approved past a refused PRD
+ * draft, so they finished with no document: guest-checkout's just now, and old-checkout's on
+ * Oct 1, before the No document row shipped (NO_DOCUMENT_SINCE), which gets no Inbox row.
+ */
+export function seedNoDocumentRuns(db: RunsDb, ctx: Omit<RunsContext, "db">) {
+  const off = { baseline_confirm: false, feature_set: false, priority_order: false, eng_review: false };
+  const error = "prd.md was rejected: [invalid_citation] citation #1 (o-g1) is invalid: source";
+  const summary = "Oracle refused prd.md: 1 citation uses source 'o', which isn't accepted.";
+  const make = (id: string, document: string, at: string) => {
+    const r = seedRun(ctx, db, "baseline_to_prd", document, { checkpoints: off }, at);
+    r.id = id;
+    for (const s of r.segments) {
+      s.attempts.push({ attempt: 1, workflow_id: `mock-wf-nodoc-${s.seq}`, submitted_at: at, cost_usd: 1, note: null, state: "succeeded" });
+      Object.assign(s, { status: "succeeded", cost_usd: 1, started_at: at, finished_at: at });
+      if (s.name !== "prd_draft") continue;
+      s.artifacts = ["prd.md"];
+      s.draft_import = { document_id: null, slug: null, kind: null, version: null, created: null, warnings: [], error, problems: [], summary, source: null, prd_links: null };
+      db.artifacts[`${id}|${s.seq}|prd.md`] = fileContent("prd.md", s.name, 1, document);
+      r.checkpoints.push({
+        id: ctx.uuid(), run_id: id, kind: "prd_review", status: "approved", approver_role: "approver", segment_seq: s.seq,
+        decided_by: null, decided_at: at, note: null, created_at: at, can_decide: false, lead_stop: false, cannot_approve: null,
+        payload: { segment_seq: s.seq, segment: s.name, attempt: 1, artifacts: ["prd.md"], import: { error, problems: [], summary } },
+        approve_label: "Approve", needs_agents: [],
+      });
+    }
+    Object.assign(r, { status: "succeeded", document_id: null, started_at: at, finished_at: at, waiting_on: null });
+    refresh(r);
+  };
+  make(OLD_NO_DOCUMENT_RUN, "old-checkout", "2026-10-01T09:00:00Z");
+  make(NO_DOCUMENT_RUN, "guest-checkout", new Date().toISOString());
 }
 
 /** B2: the run's Confirm the baseline stop as GET /v1/baseline/from-run reads it, or null. */
@@ -3025,6 +3234,61 @@ export const ROADMAP_REVIEW_HELD_RUN: typeof ROADMAP_REVIEW_RUN = {
 };
 
 
+/** The roadmap review run measured against an approved product strategy (seedRoadmapDrift in e2e/helpers.ts, H4 §5). */
+export const ROADMAP_DRIFT_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d8";
+
+/**
+ * H4 §5: the roadmap review run's twin with drift reasons, as the API's reasons word them:
+ * Single sign-on (Next) is on the strategy's stop list and its goal under no focus choice,
+ * Mobile push serves a goal under no focus choice. Advisory: both are to confirm, acted on or waived with a reason.
+ */
+function roadmapDriftRun(): RunOut {
+  const run = JSON.parse(JSON.stringify(roadmapReviewRun()).replaceAll("0000000d2", "0000000d8")) as RunOut;
+  run.id = ROADMAP_DRIFT_RUN_ID;
+  run.document_slug = "usage-alerts-roadmap-5";
+  const [items] = run.segments;
+  const reasons = [...(items.items_check?.reasons ?? [])];
+  const waive = (item: string): ReasonFix => fix("Waive…", "waive", item);
+  const drift = (item: string, item_title: string, code: string, label: string, text: string, fixes: ReasonFix[], data: Record<string, unknown>): ItemReason =>
+    ({ item, item_title, code, severity: "confirm", label, text, data, fixes });
+  const after = (key: string, extra: ItemReason) => {
+    let at = reasons.findLastIndex((x) => x.item === key);
+    if (at < 0) at = reasons.length - 1;
+    reasons.splice(at + 1, 0, extra);
+  };
+  after(
+    "mobile-push",
+    drift("mobile-push", "Mobile push", "outside_strategy", "Outside the strategy", "Retention is under no focus choice of the product strategy.",
+      [drop("mobile-push"), waive("mobile-push")], { severity: "warning", choices: [], goals: ["retention"] }),
+  );
+  after(
+    "sso-login",
+    drift("sso-login", "Single sign-on", "stopped_but_planned", "Stopped in the strategy", "The product strategy stops Enterprise SSO, and this item is in Next.",
+      [moveTo("sso-login", "later"), drop("sso-login"), waive("sso-login")], { severity: "high", choices: ["enterprise-sso"], goals: [] }),
+  );
+  // Review #581: an item both stopped and outside the strategy (the API's payment step).
+  after(
+    "sso-login",
+    drift("sso-login", "Single sign-on", "outside_strategy", "Outside the strategy", "Enterprise readiness is under no focus choice of the product strategy.",
+      [drop("sso-login"), waive("sso-login")], { severity: "warning", choices: [], goals: ["enterprise-readiness"] }),
+  );
+  items.items_check = withReasons(
+    { items: items.items_check!.items, by_horizon: items.items_check!.by_horizon, problems: items.items_check!.problems },
+    reasons,
+    items.items_check!.base,
+  );
+  const [cp] = run.checkpoints;
+  cp.run_id = run.id;
+  cp.payload = { ...cp.payload, items_check: items.items_check };
+  refresh(run);
+  return run;
+}
+
+export const ROADMAP_DRIFT_RUN: { run: RunOut; artifacts: Record<string, string> } = {
+  run: roadmapDriftRun(),
+  artifacts: { [`${ROADMAP_DRIFT_RUN_ID}|1|roadmap_items.yaml`]: REVIEW_ITEMS },
+};
+
 /** The roadmap review run whose file cannot be read as items (seedRoadmapFileProblem in e2e/helpers.ts, D1). */
 export const ROADMAP_FILE_PROBLEM_RUN_ID = "7a11c0de-0000-4000-8000-0000000000d7";
 
@@ -3154,6 +3418,100 @@ function atLeast(role: Schemas["Me"]["role"] | null | undefined, min: string): b
   return role == null || RANK[role] >= (RANK[min as Schemas["Me"]["role"]] ?? 0);
 }
 
+/** As oracle.runs.actions.QUESTION_STOPS (discussions.changes): the stops Ask asks at. */
+const QUESTION_STOPS = ["roadmap_items", "feature_set", "eng_review"];
+
+/**
+ * G4, as oracle.runs.actions.put_action with a source: a discussion change's D8 action at a
+ * waiting stop, shown on the review screen as from the discussion. `mode`: "stage" needs the
+ * stop's approver role, "suggest" only suggests, "auto" stages when the caller may (Ask).
+ * A question asks through C2 (`ctx.ask`). Never applied at once (C7 applies only an
+ * approver's own row edit).
+ */
+export function putDiscussionAction(
+  ctx: RunsContext,
+  at: { run_id: string; checkpoint_id: string },
+  a: Schemas["ActionIn"],
+  source: { discussion_id: string; change_id: string; from_private: boolean },
+  mode: "stage" | "suggest" | "auto",
+): { id: string; question_id: string | null } | Response {
+  const r = ctx.db.runs.find((x) => x.id === at.run_id);
+  const cp = r?.checkpoints.find((c) => c.id === at.checkpoint_id);
+  if (!r || !cp) return fail(404, `checkpoint ${at.checkpoint_id} not found`);
+  if (cp.status !== "pending") return fail(409, "this checkpoint is decided");
+  const me = ctx.member ?? null;
+  const role = me?.role ?? ctx.userRole ?? null;
+  const may = mayStage(ctx, r, cp, role);
+  if (mode === "stage" && !may) return fail(403, `Requires the ${cp.approver_role} role`);
+  const stages = may && mode !== "suggest";
+  const draft = draftOf(ctx, cp.id);
+  const who = me?.id ?? ctx.userId;
+  const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
+  const row: DraftActionRow = {
+    id: existing?.id ?? ctx.uuid(),
+    item_key: a.item_key,
+    kind: a.kind,
+    field: a.field ?? null,
+    value: a.value ?? null,
+    answers: a.answers ?? [],
+    note: a.note ?? null,
+    state: stages ? "staged" : "suggested",
+    created_by: who,
+    updated_by: who,
+    updated_at: ctx.now(),
+    origin: "discussion",
+    discussion_id: source.discussion_id,
+    discussion_change_id: source.change_id,
+    from_private: source.from_private,
+    question_id: null,
+  };
+  if (a.kind === "question" && ctx.ask) {
+    if (existing?.question_id) ctx.withdraw?.(existing.question_id);
+    const v = (a.value ?? {}) as { asked_to?: string; text?: string };
+    row.question_id = ctx.ask({ asked_to: v.asked_to ?? "", prompt: v.text ?? "", checkpoint_id: cp.id, item_ref: a.item_key });
+  }
+  draft.actions = existing ? draft.actions.map((x) => (x === existing ? row : x)) : [...draft.actions, row];
+  bump(draft, displayName(me?.email ?? ctx.userName ?? "admin@example.com"));
+  return { id: row.id, question_id: row.question_id ?? null };
+}
+
+/** Whether Ask on this stop is its D8 question action (a waiting stop that takes questions). */
+export function asksAtStop(ctx: Pick<RunsContext, "db">, at: { run_id: string; checkpoint_id: string }): boolean {
+  const cp = ctx.db.runs.find((x) => x.id === at.run_id)?.checkpoints.find((c) => c.id === at.checkpoint_id);
+  return !!cp && cp.status === "pending" && QUESTION_STOPS.includes(cp.kind);
+}
+
+/**
+ * As oracle.staging.service._scope_action: the waiting feature-set stop whose proposed scope
+ * holds `named` (a feature's or requirement's row id or baseline entity id), the
+ * discussion's own run first, then the newest; with nothing named, the subject's item at
+ * that stop. Its row key; null when no such stop waits. The mock's rows link no entity
+ * (`entity_id` null), so `keysOf` stands in: the row keys a baseline entity's id reads as
+ * (the API links a row to the entity of its key).
+ */
+export function scopeStop(
+  ctx: Pick<RunsContext, "db">,
+  named: string | null,
+  own: { run_id: string | null; checkpoint_id?: string | null; item_key?: string | null },
+  keysOf: (entityId: string) => string[] = () => [],
+): { run_id: string; checkpoint_id: string; item_key: string } | null {
+  const keys = named === null ? [] : keysOf(named);
+  const names = (row: { id: string; key: string; entity_id?: string | null }) => row.id === named || row.entity_id === named || keys.includes(row.key);
+  const runs = [...ctx.db.runs].sort((x, y) => Number(y.id === own.run_id) - Number(x.id === own.run_id));
+  for (const r of runs) {
+    const cp = r.checkpoints.find((c) => c.kind === "feature_set" && c.status === "pending");
+    const scope = (ctx.db.scopes?.[r.id] ?? []).filter((x) => x.status === "proposed").pop();
+    if (!cp || !scope) continue;
+    if (named === null && cp.id !== own.checkpoint_id) continue;
+    for (const f of scope.features) {
+      if (named === null ? f.key === own.item_key : names(f)) return { run_id: r.id, checkpoint_id: cp.id, item_key: f.key };
+      const req = named === null ? undefined : f.requirements.find(names);
+      if (req) return { run_id: r.id, checkpoint_id: cp.id, item_key: req.key };
+    }
+  }
+  return null;
+}
+
 function draftOf(ctx: RunsContext, cpId: string): DraftRow {
   ctx.db.drafts ??= {};
   return (ctx.db.drafts[cpId] ??= { revision: 0, note: null, actions: [], log: [] });
@@ -3230,13 +3588,19 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       if (cp.kind === "priority_order") return fail(422, "a priority order checkpoint takes no item actions");
       if ((a.answers ?? []).some((code) => !waivable(cp.kind, code))) return fail(422, cp.kind === "feature_set" ? UNKNOWN_NOT_WAIVED : DATE_NOT_WAIVED);
       if (!stages) return fail(403, `Only the ${cp.approver_role} role or above waives a problem`);
+      // H4 §5, as the API: only an owner waives a planned item the product strategy stops.
+      if (cp.kind === "roadmap_items" && (a.answers ?? []).includes("stopped_but_planned") && !atLeast(role, "owner")) {
+        return fail(403, "Only an owner waives an item the product strategy stops");
+      }
       // B2: Leave proposed is for a goal from this run nobody decided, with a reason.
       if (cp.kind === "baseline_confirm") {
         if (!liveOf(ctx, cp, draft.actions)?.some((x) => x.item === a.item_key)) return fail(422, "only an undecided goal from this run is waived (Leave proposed)");
         if (!(a.value as { reason?: string } | null)?.reason?.trim()) return fail(422, "a waiver needs a reason");
       }
     }
-    const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (a.field ?? ""));
+    // As the API: an owner's waiver of Stopped in the strategy is its own action.
+    const field = a.kind === "waive" && cp.kind === "roadmap_items" ? ((a.answers ?? []).some((c) => OWNER_WAIVES.includes(c)) ? "owner" : null) : (a.field ?? null);
+    const existing = draft.actions.find((x) => x.item_key === a.item_key && x.kind === a.kind && (x.field ?? "") === (field ?? ""));
     if (existing && !stages && existing.created_by !== who) return fail(403, "Only its author or an approver can change this action");
     if (cp.kind === "feature_set" && stages && (a.kind === "edit" || a.kind === "add")) {
       // C7, as the API: an approver's own edit or add changes the row at once (nothing staged).
@@ -3250,9 +3614,9 @@ async function routeDraft(ctx: RunsContext, r: RunOut, cp: CheckpointOut, req: R
       id: existing?.id ?? ctx.uuid(),
       item_key: a.item_key,
       kind: a.kind,
-      field: a.field ?? null,
+      field,
       value: a.value ?? null,
-      answers: a.answers ?? [],
+      answers: mergedAnswers(a, existing),
       note: a.note ?? null,
       state: stages ? "staged" : "suggested",
       created_by: who,
@@ -3340,7 +3704,7 @@ function reviewOut(ctx: RunsContext, r: RunOut, cp: CheckpointOut, draft: DraftR
     const mine = draft.actions.filter((a) => a.item_key === key);
     const theirs = reasons.filter((x) => x.item === key);
     const answered = (x: (typeof reasons)[number]) =>
-      mine.some((a) => a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(x.code)));
+      mine.some((a) => a.state === "staged" && answersCode(a, x.code));
     const open = theirs.filter((x) => !answered(x));
     const asked = mine.map(questionOf).filter((q): q is Schemas["ReviewQuestion"] => q?.status === "open");
     for (const q of asked) {
@@ -3438,7 +3802,7 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
       const edits = mine.filter((a) => a.kind === "edit");
       for (const a of mine) {
         if (a.kind === "waive") {
-          const codes = a.answers?.length ? a.answers : reasons.filter((x) => x.item === key).map((x) => x.code);
+          const codes = a.answers?.length ? a.answers : reasons.filter((x) => x.item === key && !OWNER_WAIVES.includes(x.code)).map((x) => x.code);
           for (const code of codes.length ? codes : [null]) waived.push({ id: key, code, reason: (a.value as { reason?: string } | null)?.reason ?? null });
           continue;
         }
@@ -3464,8 +3828,7 @@ function buildReview(ctx: RunsContext, r: RunOut, cp: CheckpointOut, staged: Dra
       }
     }
   }
-  const answers = (a: DraftActionRow, code: string) => a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(code));
-  const open = reasons.filter((x) => !staged.some((a) => a.item_key === x.item && answers(a, x.code)));
+  const open = reasons.filter((x) => !staged.some((a) => a.item_key === x.item && answersCode(a, x.code)));
   const entered = new Set([...entries, ...waived].map((e) => e.id));
   return {
     version: 1,
@@ -3568,7 +3931,7 @@ function inboxSummary(ctx: RunsContext, r: RunOut, cp: CheckpointOut): Schemas["
     return { ...t, ...none, wait: review.wait, console_held: cp.console?.needs === "confirm" && t.blocking > 0 };
   }
   const answers = (a: Schemas["ReviewAction"], x: ItemReason) =>
-    a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers?.length || a.answers.includes(x.code));
+    a.state === "staged" && answersCode(a, x.code);
   const first = (xs: ItemReason[]) => [...xs].sort((a, b) => SEVERITY[a.severity] - SEVERITY[b.severity])[0];
   const rows: { order: [number, number]; child: Schemas["InboxChild"] }[] = [];
   for (const it of review.items) {

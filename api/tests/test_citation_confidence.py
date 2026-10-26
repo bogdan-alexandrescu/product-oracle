@@ -12,7 +12,7 @@ from oracle.docs.models import Citation
 from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
-from tests.fixtures import draft, import_draft, seed_auth
+from tests.fixtures import draft, import_draft, seed_auth, seed_oracle_refs
 from tests.sources_helpers import make_user
 
 DOC = "/v1/documents/confidence-prd"
@@ -47,6 +47,7 @@ def _with_items(**items: str) -> str:
 
 async def test_import_stores_and_reads_back_the_confidence_fields(client):
     tenant_id, auth = await seed_auth()
+    await seed_oracle_refs(tenant_id)
     item = await _item(tenant_id)
     resp = await import_draft(client, auth, _with_items(c1=str(item)), doc="confidence-prd")
     assert resp.status_code == 201, resp.text
@@ -80,6 +81,7 @@ async def test_import_stores_and_reads_back_the_confidence_fields(client):
 async def test_round_trip_through_the_markdown_export(client):
     # The stored markdown carries the fields; re-importing it is the same version.
     tenant_id, auth = await seed_auth()
+    await seed_oracle_refs(tenant_id)
     text = _with_items(c1=str(await _item(tenant_id)))
     created = (await import_draft(client, auth, text, doc="confidence-prd")).json()
     md = (await client.get(f"{DOC}/versions/1/markdown", headers=auth)).text
@@ -91,6 +93,7 @@ async def test_round_trip_through_the_markdown_export(client):
 
 async def test_an_unknown_or_other_company_item_is_a_warning_not_a_refusal(client):
     tenant_id, auth = await seed_auth()
+    await seed_oracle_refs(tenant_id)
     other = await _item(await make_tenant("Other Co"))
     unknown = uuid.uuid4()
     resp = await import_draft(

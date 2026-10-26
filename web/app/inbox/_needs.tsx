@@ -1386,6 +1386,22 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         ),
   }));
 
+  // Owners only (owner, 2026-10-25): runs that finished with no document, why and what to do.
+  const noDocuments: Need[] = (inbox.no_documents ?? []).map((r) => ({
+    key: `no-document-${r.id}`,
+    icon: "alert",
+    kind: "No document",
+    item: (
+      <span className="truncate" title={r.no_document ?? undefined} data-testid="inbox-no-document">
+        {r.no_document}
+      </span>
+    ),
+    context: runContext(r),
+    run: shortId(r.id),
+    at: r.finished_at ?? r.started_at ?? r.created_at,
+    action: openRun(r),
+  }));
+
   // Decided, not delivered to the run yet (owner, 2026-10-20): shown only, nothing to decide
   // (Oracle sends it again on every tick), not counted. The run, the review and SwarmCloud's
   // last answer; Open goes to the run.
@@ -1454,7 +1470,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     action: openRun(r),
   }));
 
-  return { checkpoints, deliveries, approvals, overruns, lookups, imports, searches, revising };
+  return { checkpoints, deliveries, approvals, overruns, lookups, imports, noDocuments, searches, revising };
 }
 
 /**
@@ -1807,6 +1823,8 @@ export function allNeeds(
     ...stated(n.overruns, "overruns"),
     ...stated(n.lookups, "lookups"),
     ...stated(n.imports, "imports"),
+    // A run that finished with no document: the same group, its draft not imported.
+    ...stated(n.noDocuments, "imports"),
     ...stated(revokeNeeds(inbox.revoke_failures ?? [], busy, act), "revoke-failures"),
     ...stated(accessNeeds(inbox.access_failures ?? [], busy, act), "access-failures"),
     ...stated(reportFailureNeeds(inbox.report_failures ?? [], busy, act), "report-failures"),

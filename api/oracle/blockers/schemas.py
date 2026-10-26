@@ -284,6 +284,10 @@ class BlockerStrategy(BaseModel):
     events: list[BlockerResolutionEventOut]
     risk_acceptance: AssumptionDecisionOut | None = None
     documents: list[BlockerDocumentRef]
+    # Whether POST .../status would let this caller change the status (B4: reopening a
+    # resolved blocker lowered or narrowed since takes the B4 role), and why not.
+    can_set_status: bool = True
+    set_status_why_not: str | None = None
 
 
 class DocumentBlockerStrategy(BaseModel):

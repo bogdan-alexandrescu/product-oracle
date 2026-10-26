@@ -6,12 +6,13 @@
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
+import { citationHref } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { mockUuid, seeded } from "./ids";
-import { addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
-import { documentGate, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
+import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
 import { applied, handOver, membersDetailRoute, type MembersContext, type MembersDb } from "./members";
@@ -28,11 +29,16 @@ import { goalCheck } from "./goals";
 import {
   discussionInboxRows,
   emptyDiscussions,
+  RESEARCH_REFUSED,
+  RESEARCH_REFUSED_SCENARIO,
+  RESEARCH_UNSAFE_LINK,
+  RESEARCH_UNSAFE_LINK_SCENARIO,
   routeDiscussions,
   seedDiscussionInbox,
   seedDiscussionReplies,
   seedDiscussions,
   seedDiscussionRecord,
+  seedDiscussionChangeKinds,
   seedRunDiscussions,
   type DiscussionRow,
   type DiscussionsContext,
@@ -40,12 +46,13 @@ import {
   type DocumentSection,
   type SubjectInfo,
 } from "./discussions";
-import { routeEngineering, type CodeMapRow } from "./engineering";
+import { routeEngineering, techBriefOf, type CodeMapRow } from "./engineering";
 import { DOCUMENTS, FLEET_DOC, FLEET_SUGGESTIONS, MOCK_ACCESS_REQUESTS, MOCK_INVITES, MOCK_LOGIN, MOCK_MEMBERS, REMOVED_MEMBER, roadmapFromPrd, UPDATE_DOCUMENTS, UPDATE_SEED_CITATIONS, type DocumentSeed, type VersionSeed } from "./fixtures";
 import { laneF, nothingWritten, NOTHING_WRITTEN, type LaneFState } from "./lane-f";
-import { llmJobsRoute, onFeedback, seedLlm, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
+import { llmJobsRoute, onFeedback, seedLlm, seedStoredRefusals, SPENT, tick, withSuggestion, type LlmContext, type LlmDb } from "./llm-jobs";
 import { inboxStates, isStaged } from "./next-draft";
-import { draftRefusal, emptyAutonomy, inboxActions, levelFor, routeAutonomy, seedLaunchDid, seedOracleDid, seedRitualDid, type AutonomyDb } from "./autonomy";
+import { draftRefusal, emptyAutonomy, inboxActions, levelFor, limitsFor, oracleDid, routeAutonomy, seedLaunchDid, seedOracleDid, seedRequestDid, seedRitualDid, type AutonomyDb } from "./autonomy";
+import { nudges } from "./learned";
 import { routeModules, seedModules, type ModulesDb } from "./modules";
 import { baselineReviewOf, fromRun, seedFromRun } from "./from-run";
 import {
@@ -59,50 +66,71 @@ import {
   seedFinishedBaselineBuild,
   reviewedVersion,
   ROADMAP_REVIEW_HELD_RUN,
+  asksAtStop,
+  putDiscussionAction,
   routeRuns,
+  scopeStop,
   seedEngCheckRun,
   seedBaselineReviewRun,
   seedEngReviewRun,
   seedFeatureSetRun,
   seedPriorityRuns,
   seedRunReviewRun,
+  seedNoDocumentRuns,
   seedRuns,
   seedScopeReviewRuns,
+  seedStoredRefusalRun,
   sendBackEntries,
+  BUILD_UNDER_WAY,
   type RunsContext,
   type RunsDb,
 } from "./runs";
 import { personRequirements, scopeJobRoute, type StoredScope } from "./scope";
 import { routeFirefliesBrowse } from "./fireflies";
 import { sourceBrowseRoute } from "./source-browse";
-import { routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
-import { routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
+import { DRAFT_NEW_ITEMS_SCENARIO, itemsChangedSince, routeSources, sourceCount, sourceItem, SOURCES_STORAGE_KEY } from "./sources";
+import { BEFORE_DRAFTING, LATE_ANSWER_WITHHELD, routeIntake, seedBeforeDrafting, seedBriefGoalRejected, startedIntakeRun, type SubjectLookup } from "./intake";
 import { ensureReports, inboxReports, reportsRoute, type ReportsDb } from "./reports";
 import { discussionSlackRoute, failSlackMirror, holdSlackMirror, injectSlackReply, seedSlackBridge, SLACK_SCENARIO, slackRoute } from "./slack";
 import { addDigest, addMetricsReview, ritualInbox, routeRituals, seedRituals, type RitualsContext, type RitualsDb } from "./rituals";
 import { emptyMetrics, metricInbox, openVariances, reviewBlocks, routeMetrics, seedMetrics, type MetricsContext, type MetricsDb } from "./metrics";
 import { digestBlocks, emptyMarket, routeMarket, seedMarket, type MarketDb } from "./market";
-import { addInterviewRequest, requestInboxRows, routeRequests, seedRequests, seedWhyNot, WHY_NOT_SCENARIO, type RequestsContext, type RequestsDb } from "./requests";
+import {
+  addInterviewRequest,
+  behindBriefRefusal,
+  linkIntakeDocument,
+  putBehindBrief,
+  releaseBrief,
+  requestInboxRows,
+  routeRequests,
+  seedRequests,
+  seedWhyNot,
+  WHY_NOT_SCENARIO,
+  type RequestsContext,
+  type RequestsDb,
+} from "./requests";
 import { MOCK_COMPANY, routeInterviews, routePublicInterviews, routeTeamInterviews, seedInterviews, type InterviewsContext, type InterviewsDb } from "./interviews";
 import { launchInboxRows, routeLaunches, seedLaunches, type LaunchesContext, type LaunchesDb } from "./launches";
 import {
   calibration,
   outcomeInboxRows,
+  outcomesPass,
   publishRefusal,
   routeQuality,
   seedLearnings,
   seedOracleRecorded,
   seedOutcomes,
   seedQuality,
+  addDecisionOutcome,
   type QualityContext,
   type QualityDb,
 } from "./quality";
 import { routeReviewV2, sectionRevision, seedReviewV2, type ReviewV2Db } from "./review-v2";
 import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsContext, type PlanEditsDb } from "./plan-edits";
-import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
-import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
+import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, seedStoredRefusalDraft, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
+import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, planItemTitle, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, planEntityTitle, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
-import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
+import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import {
   DRAFT_OPTIONS,
@@ -139,6 +167,8 @@ type FeedbackRow = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_versio
   /** D12: staged for the agents (when, by whom); open items only count. */
   staged_for_agents_at?: string | null;
   staged_for_agents_by?: string | null;
+  /** #636 re-review: a kept late-answer item withholding its quote (feedback_items.withheld_at). */
+  withheld_at?: string | null;
 };
 type MemberRow = Schemas["MemberOut"];
 type InviteRow = Schemas["InviteOut"];
@@ -433,10 +463,16 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * with three rows that need a person, attempt 2, and a held console approval);
  * "before-drafting" as the default company plus a brief by the signed-in owner with two batches
  * of Oracle's questions (C5, ./intake.ts seedBeforeDrafting);
+ * "late-answers" as "before-drafting" with that brief drafting into Checkout redesign: an answer
+ * given now becomes a feedback item on the PRD (C5 late answers); its success-metric gap is a
+ * finding shared in full;
  * "brief-goal-rejected" as the default company plus a brief by the approver serving Raise
  * activation and Cut early churn, a goal rejected since (#260, ./intake.ts seedBriefGoalRejected);
  * "run-discussions" as "feature-set" plus an open discussion and a private one (the approver's,
  * with the owner) on that run's waiting checkpoint (G5, ./discussions.ts seedRunDiscussions);
+ * "discussion-change-kinds" as "feature-set" plus the approver's open discussion on that run's
+ * saved-carts item, with Oracle's priority move, ask and decision (G3, ./discussions.ts
+ * seedDiscussionChangeKinds);
  * "discussions" as the default company plus one private discussion the commenter started
  * with the approver on team-workspaces v2's Problem, 3 messages from the 2 of them (G1,
  * ./discussions.ts);
@@ -450,6 +486,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * (AC1: it changes nothing, the name included).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+/** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
+export const STORED_REFUSALS_SCENARIO = "stored-refusals";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
 export const MOCK_FAIL_KEY = "po-mock-fail";
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
@@ -666,6 +704,39 @@ function seedBeforeDraftingScenario(): Db {
   return db;
 }
 
+/**
+ * C5 late answers: the "before-drafting" brief, drafting since 22 Oct into the Checkout
+ * redesign PRD; the answers given by then are the draft run's, the questions still asked
+ * (Pain evidence of the approver, Success metric and Goal alignment of the owner) are not.
+ */
+function seedLateAnswersScenario(): Db {
+  const db = seedBeforeDraftingScenario();
+  const v2 = ensureV2(db);
+  const intake = v2.intakes.find((i) => i.id === BEFORE_DRAFTING.intakeId)!;
+  const prd = db.documents.find((d) => d.slug === "checkout-redesign")!;
+  Object.assign(intake, { status: "converted", document_id: prd.id });
+  const mine = new Set(v2.questions.filter((x) => x.intake_id === intake.id).map((x) => x.id));
+  v2.intake_runs = {
+    ...v2.intake_runs,
+    [intake.id]: { run_id: "c5000000-0000-4000-8000-0000000000d1", answer_ids: v2.answers.filter((a) => mine.has(a.question_id)).map((a) => a.id), document: prd.slug },
+  };
+  // The owner's success-metric gap is also a finding from their own sources, shared in full:
+  // an answer to it is quoted in feedback only while it stays shared from summary up (S6).
+  const metric = v2.gaps.find((g) => g.intake_id === intake.id && g.category === "success_metric")!;
+  v2.intake_findings = {
+    ...v2.intake_findings,
+    [intake.id]: [
+      ...(v2.intake_findings?.[intake.id] ?? []),
+      {
+        id: "c5000000-0000-4000-8000-0000000000f1", kind: "gap", origin: "rules", category: "success_metric", sharing: "full",
+        summary: "A gap about success metric", summary_confirmed: false, draft_summary: "The checkout timing export sits in a private dashboard.",
+        gap_id: metric.id, source_item_ids: ["c5000000-0000-4000-8000-0000000000f2"], unshared_item_ids: [],
+      },
+    ],
+  };
+  return db;
+}
+
 /** The default company plus a brief whose second goal was rejected since (#260). */
 function seedBriefGoalRejectedScenario(): Db {
   const db = seed();
@@ -745,6 +816,13 @@ function seedStrategyScenario(vision = true): Db {
     }
   }
   db.strategy = seedStrategy(uuid, db.baseline.entities, { vision });
+  return db;
+}
+
+/** The strategy scenario plus drift findings on the Plan's own items (H4 §5 on Plan). */
+function seedStrategyPlanScenario(): Db {
+  const db = seedStrategyScenario(true);
+  seedPlanDrift(db.strategy!, uuid, db.baseline.entities);
   return db;
 }
 
@@ -929,6 +1007,13 @@ function seedRoadmapItemsConsoleHeld(): Db {
   const held = structuredClone(ROADMAP_REVIEW_HELD_RUN);
   db.runs!.runs.push(held.run);
   Object.assign(db.runs!.artifacts, held.artifacts);
+  return db;
+}
+
+/** #583 review "no-document" scenario: the default seed plus two runs that finished with no document (./runs.ts). */
+function seedNoDocument(): Db {
+  const db = seed();
+  seeded("no-document", () => seedNoDocumentRuns(db.runs!, runsContext(db)));
   return db;
 }
 
@@ -1444,6 +1529,8 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
     uuid,
     now,
     lockedKeys: (v) => lockedKeys(db, v as VersionRow),
+    sentToAgents: (sid) =>
+      (db.runs?.runs ?? []).some((r) => !["succeeded", "failed", "cancelled"].includes(r.status) && !!(r as SentRun).sent?.suggestion_ids.includes(sid)),
     reply: (feedbackId, body) => {
       const parent = db.comments.find((c) => c.id === db.feedback.find((f) => f.id === feedbackId)?.comment_id);
       if (!parent) return;
@@ -1461,6 +1548,20 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       return priv && !inIt ? { id: null, title: null, private: true } : { id: d.id, title: d.title, private: priv };
     },
     runEstimateUsd: () => db.next_draft_run_usd ?? null,
+    // #574 review: the agents' feedback-loop run under way on the document, as the API's agents_run.
+    agentsRun: (docId) => {
+      const run = ((db.runs?.runs ?? []) as SentRun[])
+        .filter((r) => r.flow === "feedback_loop" && r.document_id === docId && BUILD_UNDER_WAY.includes(r.status))
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+      if (!run) return null;
+      const sent = run.sent ? [...run.sent.feedback_ids, ...run.sent.suggestion_ids, ...(run.sent.next_draft_change_ids ?? [])] : [];
+      return { id: run.id, flow: run.flow, flow_title: run.flow_title, status: run.status, created_at: run.created_at, sent };
+    },
+    nextDrafts: () => {
+      const a = (db.autonomy ??= emptyAutonomy());
+      const min = Number(a.stored.next_drafts?.limits?.min_staged);
+      return { level: levelFor(a, "next_drafts"), min_staged: Number.isFinite(min) && min >= 3 ? min : 5 };
+    },
     // D12: Build next draft with the agents: a feedback-loop run, estimated and started.
     startRun: async (doc, input) => {
       db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
@@ -1482,7 +1583,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
       const run = db.runs.runs.find((r) => r.id === id)! as SentRun;
       run.estimate_usd = input.estimate_usd;
       run.segments[0].estimate_usd = input.estimate_usd;
-      run.sent = { feedback_ids: input.feedback_ids, suggestion_ids: input.suggestion_ids };
+      run.sent = { feedback_ids: input.feedback_ids, suggestion_ids: input.suggestion_ids, next_draft_change_ids: input.next_draft_change_ids };
       const started = (await call(`/v1/runs/${id}/start`))!;
       return new Response(started.body, { status: started.ok ? 201 : started.status, headers: started.headers });
     },
@@ -1490,7 +1591,7 @@ function llmContext(db: Db, userId: string, role: Role): LlmContext {
 }
 
 /** D12: a feedback-loop run started from Build next draft, with the items it was sent. */
-type SentRun = Schemas["RunOut"] & { sent?: { feedback_ids: string[]; suggestion_ids: string[] } };
+type SentRun = Schemas["RunOut"] & { sent?: { feedback_ids: string[]; suggestion_ids: string[]; next_draft_change_ids?: string[] } };
 
 /**
  * C1e: the Inbox's feedback by state for approvers (new since my last visit, open, staged,
@@ -1523,6 +1624,13 @@ function withInboxStates(
   };
 }
 
+/** H11 Check outcomes: the ticker's pass at the company's level, before outcomes are read. */
+function passOutcomes(db: Db) {
+  const autonomy = (db.autonomy ??= emptyAutonomy());
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  outcomesPass(db.quality, levelFor(autonomy, "outcomes"), owners, (a) => void oracleDid(autonomy, "outcomes", a));
+}
+
 /** What the decision log mock reads: the signed-in member, the members, the runs' stops. */
 function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
   return {
@@ -1546,6 +1654,30 @@ function decisionsContext(db: Db, me: MemberRow): DecisionsContext {
     },
     uuid,
     now,
+    // A hidden decision's baseline entity, and its evidence, are unknown to a reader who may not see it.
+    entity: (id) => {
+      const e = db.baseline.entities.find((x) => x.id === id);
+      return e && !hiddenDecisionEntities(db, me).has(e.id) ? { id: e.id, type: e.type, key: e.key, title: e.title, status: e.status } : null;
+    },
+    evidence: (id) => {
+      const e = db.baseline.evidence.find((x) => x.id === id);
+      return e && !(e.entity_id && hiddenDecisionEntities(db, me).has(e.entity_id))
+        ? { id: e.id, entity_id: e.entity_id ?? null, excerpt: e.excerpt ?? null, url: e.url ?? null, ref: e.ref ?? null }
+        : null;
+    },
+    outcomeStatus: (id) => db.quality?.outcomes.find((o) => o.id === id)?.status ?? null,
+    outcomeCheckDue: (id) => {
+      const o = db.quality?.outcomes.find((x) => x.id === id);
+      return o?.status === "tracking" && !!o.proposed_assessment;
+    },
+    addOutcome: (d) => addDecisionOutcome((db.quality ??= seedQuality()), d, me.id),
+    autonomy: {
+      level: () => levelFor((db.autonomy ??= emptyAutonomy()), "decisions"),
+      limits: () => limitsFor((db.autonomy ??= emptyAutonomy()), "decisions"),
+      // Who set Decide reversible calls (the mock keeps only the latest change's owner).
+      setBy: () => db.members.find((m) => m.id === db.autonomy?.updated_by)?.email ?? "an owner",
+      acted: (a) => void oracleDid((db.autonomy ??= emptyAutonomy()), "decisions", a),
+    },
   };
 }
 
@@ -1714,6 +1846,19 @@ function seedPricingDecisions(db: Db, ctx: DecisionsContext, log: DecisionsDb) {
     owner.id,
   );
   decidePricing(ctx, log, row.number, "keep", "Small teams churn on budget, not on price.", "Starter churn stays under 3% a month.", "2026-10-09T17:00:00Z");
+  // Its baseline decision entity, hidden with it from commenters and viewers (docs/visibility).
+  const decided = log.decisions.find((d) => d.id === row.id);
+  if (decided) decided.entity_id = addDecisionEntity(db.baseline, decided, owner.id);
+}
+
+/**
+ * The baseline entities of the decisions hidden from `me` (docs/visibility._hidden_entities).
+ * The log is read as it is, not seeded: a decision entity only exists once it is.
+ */
+function hiddenDecisionEntities(db: Db, me: MemberRow): Set<string> {
+  if (atLeast(me.role, "approver") || !db.decisions) return new Set();
+  const visible = decisionsContext(db, me).visible;
+  return new Set(db.decisions.decisions.flatMap((d) => (d.entity_id && visible && !visible(d) ? [d.entity_id] : [])));
 }
 
 /** What the rituals mock reads: the signed-in member and the members. */
@@ -1855,7 +2000,7 @@ function importSections(
 function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   const session = sessionOf(db);
   const member = db.members.find((m) => m.email === session) ?? db.members.find((m) => m.id === db.user_id);
-  return {
+  const ctx: Omit<RunsContext, "db"> & { db?: RunsDb } = {
     db: db.runs,
     userId: db.user_id,
     userName: session ?? db.members.find((m) => m.id === db.user_id)?.email ?? null,
@@ -1904,6 +2049,12 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     },
     undelivered: localStorage.getItem(MOCK_SCENARIO_KEY) === "undelivered",
     slowAgents: localStorage.getItem(MOCK_SCENARIO_KEY) === "slow-agents",
+    // H11 Order priorities: Oracle saves a run's order within the limits at Act.
+    autonomy: {
+      level: () => levelFor((db.autonomy ??= emptyAutonomy()), "priorities"),
+      limits: () => limitsFor((db.autonomy ??= emptyAutonomy()), "priorities"),
+      acted: (a) => void oracleDid((db.autonomy ??= emptyAutonomy()), "priorities", a),
+    },
     feedback: db.feedback,
     documents: db.documents,
     confirmedGoals: () =>
@@ -1931,6 +2082,10 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       return vs.length ? vs[vs.length - 1].number : null;
     },
     sectionKeys: (versionId) => db.versions.find((v) => v.id === versionId)?.sections.map((s) => s.section_key) ?? [],
+    versionAfter: (documentId, slug, at) => {
+      const doc = db.documents.find((d) => d.id === documentId || (slug != null && d.slug === slug));
+      return !!doc && db.versions.some((v) => v.document_id === doc.id && Date.parse(v.created_at) > Date.parse(at));
+    },
     draftItemsToReuse: (documentId, version) => reusableDraftItems(draftDb(db), documentId, version),
     // The approved version a roadmap is built from: the one named, else the latest approved.
     sourceVersion: (documentId, number) => {
@@ -1950,7 +2105,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     // A run's draft becomes the next version: a copy of the latest one (or of the first
     // fixture for a new document); a roadmap draft is built from its PRD version. So the
     // review screens have something to show.
-    importDraft: (slug, run) => {
+    importDraft: (slug, run, again) => {
       const prd = run.source ? db.versions.find((v) => v.id === run.source!.version_id) : undefined;
       const fromPrd =
         prd &&
@@ -2013,6 +2168,7 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
           : { ...seed, number, created_at: now() };
       const v = buildVersion(doc, base);
       v.source = run.source ?? null;
+      v.imported_again = again ?? null;
       db.versions.push(v);
       queueDraft(db, doc.id, v);
       // D12: what Build next draft sent the agents: the text changes are applied in this
@@ -2024,6 +2180,14 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
       }
       for (const f of db.feedback) {
         if (sent?.feedback_ids.includes(f.id)) Object.assign(f, { staged_for_agents_at: null, staged_for_agents_by: null });
+      }
+      // G4: the discussions' section changes it was sent are applied in this version too.
+      for (const r of db.llm?.next_draft_changes ?? []) {
+        if (!sent?.next_draft_change_ids?.includes(r.id) || r.status !== "staged" || r.document_id !== doc.id) continue;
+        Object.assign(r, { status: "applied", applied_in_version: v.number });
+        // As the API's import: the discussion change it came from is done.
+        const change = db.discussions?.changes?.find((c) => c.result_ref?.kind === "next_draft_change" && c.result_ref.id === r.id);
+        if (change?.status === "staged") Object.assign(change, { status: "done", decision_note: `Applied in draft ${v.number}` });
       }
       touch(db, doc.id);
       return {
@@ -2038,6 +2202,16 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
     uuid,
     now,
   };
+  // C1 lane 2: the PRD a brief's run imports links the requests behind the brief (the API's
+  // runs._link_requests, at segment end and on retry-draft-import).
+  const importDraft = ctx.importDraft;
+  ctx.importDraft = (slug, run, again) => {
+    const imp = importDraft(slug, run, again);
+    const [intakeId] = Object.entries(db.v2?.intake_runs ?? {}).find(([, r]) => r.run_id === run.id) ?? [];
+    if (intakeId && imp.document_id && db.requests) linkIntakeDocument(db.requests, intakeId, imp.document_id);
+    return imp;
+  };
+  return ctx;
 }
 
 function load(): Db {
@@ -2056,7 +2230,7 @@ function load(): Db {
         ? seedSuggestions
         : scenario === "big-prd"
           ? seedBigPrd
-          : scenario === "feature-set" || scenario === "run-discussions"
+          : scenario === "feature-set" || scenario === "run-discussions" || scenario === "discussion-change-kinds"
             ? seedFeatureSet
           : scenario === "baseline-review" || scenario === "baseline-review-console"
             ? () => seedBaselineReview(scenario === "baseline-review-console")
@@ -2070,8 +2244,10 @@ function load(): Db {
             ? seedEngCheckNoLead
           : scenario === "roadmap-items-console-held"
             ? seedRoadmapItemsConsoleHeld
-          : scenario === "run-review"
+          : scenario === "run-review" || scenario === DRAFT_NEW_ITEMS_SCENARIO
             ? seedRunReview
+          : scenario === "no-document"
+            ? seedNoDocument
           : scenario === "run-review-decider"
             ? seedRunReviewDecider
           : scenario === "priority-order"
@@ -2080,6 +2256,8 @@ function load(): Db {
             ? () => seedNextDraft(scenario === "next-draft-costly")
           : scenario === "before-drafting"
             ? seedBeforeDraftingScenario
+          : scenario === "late-answers"
+            ? seedLateAnswersScenario
           : scenario === "brief-goal-rejected"
             ? seedBriefGoalRejectedScenario
           : scenario === "questions"
@@ -2090,6 +2268,8 @@ function load(): Db {
                 ? seedManyPeople
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
+                  : scenario === "strategy-plan"
+                    ? seedStrategyPlanScenario
                   : scenario === "strategy-none"
                     ? seedNoStrategyScenario
                     : seed,
@@ -2133,7 +2313,7 @@ function load(): Db {
   db.discussions =
     scenario === "discussions"
       ? seedDiscussionInboxScenario(db, seedDiscussionsScenario(db))
-      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO
+      : scenario === "discussion-replies" || scenario === POOL_SPENT_SCENARIO || scenario === STORED_REFUSALS_SCENARIO || scenario === RESEARCH_REFUSED_SCENARIO || scenario === RESEARCH_UNSAFE_LINK_SCENARIO
         ? seedDiscussionsScenario(db, seedDiscussionReplies)
         : scenario === SLACK_SCENARIO
           ? seedDiscussionsScenario(db, seedSlackBridge)
@@ -2141,7 +2321,9 @@ function load(): Db {
             ? seedRunDiscussionsScenario(db)
             : scenario === "discussion-record"
               ? seedDiscussionRecordScenario(db)
-              : emptyDiscussions();
+              : scenario === "discussion-change-kinds"
+                ? seedDiscussionChangeKindsScenario(db)
+                : emptyDiscussions();
   if (scenario === "oracle-did") db.autonomy.actions.push(seedOracleDid(db.user_id, uuid()));
   // #524: what Oracle did at Act within limits on a launch (H6) and a ritual (H2), each row
   // linking to its subject.
@@ -2154,7 +2336,16 @@ function load(): Db {
     const occurrence = db.rituals.occurrences.find((o) => o.ritual_id === refresh.id)!;
     db.autonomy.actions.push(seedLaunchDid(db.user_id, uuid(), launched), seedRitualDid(db.user_id, uuid(), refresh, occurrence.id));
   }
+  // #150: what Oracle did at Act within limits on a request (H11 requests): it merged a
+  // request into the one it repeats; the row links to it on Requests.
+  if (scenario === "oracle-did-request") {
+    const requests = ensureRequests(db);
+    const merged = requests.requests.find((r) => r.state === "merged" && r.merged_into_id);
+    const into = merged && requests.requests.find((r) => r.id === merged.merged_into_id);
+    if (merged && into) db.autonomy.actions.push(seedRequestDid(db.user_id, uuid(), merged, into));
+  }
   if (scenario === "proposal-noise") addNoisyProposals(db.baseline, uuid);
+  if (scenario === BLOCKER_NARROWED_SCENARIO) narrowResolvedBlocker(ensureBlockers(db), ensureV2(db));
   // #347 "held-section-gone": a second held rewrite, of a section the latest version no longer has.
   if (scenario === "held-section-gone") {
     const prd = db.documents.find((d) => d.kind === "prd");
@@ -2177,6 +2368,13 @@ function load(): Db {
   if (scenario === "goal-words") addGoalWords(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   if (scenario === APPROVED_PLAN_SCENARIO) addApprovedPlan(db);
+  // #561 review: a run, its segment, roadmap items and a next-draft build that failed on Oct 18 on a stored refusal; refinements refused now.
+  if (scenario === STORED_REFUSALS_SCENARIO) {
+    seedStoredRefusalRun(db.runs!, runsContext(db), SPENT);
+    seedStoredRefusals(llmContext(db, db.user_id, "owner"));
+    // #644 re-review: the "discussion-replies" seed's failed reply stored the refusal on Oct 18.
+    for (const m of db.discussions.messages) if (m.status === "failed") m.error = SPENT;
+  }
   if (scenario === VERSION_WARNINGS_SCENARIO) {
     const prd = db.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -2253,6 +2451,22 @@ function seedDiscussionRecordScenario(db: Db): DiscussionsDb {
   return seedDiscussionRecord({ members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now }, prd, 2);
 }
 
+/** G3 "discussion-change-kinds": Oracle's priority move, ask and decision on the feature-set stop's saved-carts item. */
+function seedDiscussionChangeKindsScenario(db: Db): DiscussionsDb {
+  const run = db.runs!.runs.find((r) => r.id === FEATURE_SET_RUN)!;
+  const cp = run.checkpoints.find((c) => c.status === "pending")!;
+  const label = `${run.flow_title} · ${CHECKPOINT_NAMES[cp.kind] ?? cp.kind}`;
+  const feature = (key: string) => {
+    const e = db.baseline.entities.find((x) => x.type === "feature" && x.key === key)!;
+    return { id: e.id, title: e.title };
+  };
+  return seedDiscussionChangeKinds(
+    { members: db.members, resolve: () => ({ status: 500, detail: "unused" }), uuid, now },
+    { id: run.id, label, checkpoint_id: cp.id, checkpoint_kind: cp.kind },
+    { moved: feature("f.saved-carts"), above: feature("f.guided-setup") },
+  );
+}
+
 /** The roadmap routes' context (CR-11, F3 Date bases) for the signed-in member. */
 function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): RoadmapContext {
   return {
@@ -2260,11 +2474,13 @@ function roadmapContext(db: Db, me: { id: string; role: Role; email: string }): 
     role: me.role,
     engineeringLead: engineeringLeads(db).includes(me.id),
     leadNamed: engineeringLeads(db).length > 0,
+    onlyLead: onlyLead(db),
     userName: me.email,
     documents: db.documents,
     versions: db.versions,
     approverId: db.members.find((x) => x.email === "approver@example.com")?.id,
     drafts: () => draftDb(db).rows,
+    roadmapWatch: () => levelFor((db.autonomy ??= emptyAutonomy()), "roadmap_watch"),
   };
 }
 
@@ -2348,7 +2564,15 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
     return r ? { id: r.id, flow: r.flow, flow_title: r.flow_title, status: r.status, created_at: r.created_at } : null;
   };
   const memberEmail = (userId: string) => db.members.find((m) => m.id === userId)?.email ?? null;
-  return routeBaseline(db.baseline, { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id) }, req, p.slice(2), q);
+  const member = db.members.find((m) => m.id === me.id);
+  const hidden = member ? hiddenDecisionEntities(db, member) : new Set<string>();
+  return routeBaseline(
+    db.baseline,
+    { userId: me.id, role: me.role, runOf, memberEmail, sourceItem, isMember: (id) => activeMember(db, id), hidden: (id) => hidden.has(id) },
+    req,
+    p.slice(2),
+    q,
+  );
 }
 
 function save(db: Db) {
@@ -2413,6 +2637,7 @@ function summary(v: VersionRow): Schemas["VersionSummary"] {
     notes: v.notes,
     imported_by: v.imported_by,
     imported_by_name: v.imported_by_name,
+    imported_again: v.imported_again ?? null,
     approved_at: v.approved_at,
     brief_source: v.brief_source ?? "none",
     source: v.source ?? null,
@@ -2524,6 +2749,7 @@ function draftDb(db: Db): DraftRoadmapDb {
   return (db.draft_roadmaps ??= seeded("draft-roadmaps", () => {
     const drafts = seedDraftRoadmaps(draftCtx(db));
     if (localStorage.getItem(MOCK_SCENARIO_KEY) === APPROVED_PLAN_SCENARIO) seedApprovedPlanDraft(draftCtx(db), drafts);
+    if (localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO) seedStoredRefusalDraft(draftCtx(db), drafts, SPENT);
     return drafts;
   }));
 }
@@ -2670,6 +2896,7 @@ function goalContext(db: Db, me: { id: string; role: Role }): GoalInterviewConte
     isMember: (id) => activeMember(db, id),
     uuid,
     now,
+    goalsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "goals"),
   };
 }
 
@@ -2720,11 +2947,14 @@ function exportHtml(doc: DocumentRow, v: VersionRow): string {
     })
     .join("\n");
   const notes = v.citations
-    // As the API's export: an "oracle" citation's ref names a baseline item, not a link.
+    // As the API's export: an "oracle" citation's ref names a baseline item, not a link, and
+    // only an http(s) ref is one (citationHref).
     .map((c) =>
       c.source === "oracle"
         ? `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`
-        : `<li><a href="${escapeHtml(c.ref)}">${escapeHtml(c.title ?? c.ref)}</a> (${c.source})</li>`,
+        : citationHref(c)
+          ? `<li><a href="${escapeHtml(c.ref)}">${escapeHtml(c.title ?? c.ref)}</a> (${c.source})</li>`
+          : `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`,
     )
     .join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title></head><body><p class="banner">${escapeHtml(banner(doc, v))} · mock export</p>${sections}<ol class="citations">${notes}</ol></body></html>`;
@@ -2789,6 +3019,13 @@ function meOut(db: Db, m: MemberRow): Schemas["Me"] {
 }
 
 /** A3, as oracle.members.leads: the active members carrying the engineering lead flag. */
+/** F2 Ask's pre-fill (oracle.roadmap.alerts.lookups): the one active engineering lead, as the people directory shows them. */
+function onlyLead(db: Db): Schemas["PersonOut"] | null {
+  const leads = engineeringLeads(db);
+  const m = leads.length === 1 ? db.members.find((x) => x.id === leads[0]) : undefined;
+  return m ? { user_id: m.id, name: displayName(m.email, m.name), email: m.email, role: m.role, can_write: atLeast(m.role, "commenter") } : null;
+}
+
 function engineeringLeads(db: Db): string[] {
   return db.members.filter((x) => x.engineering_lead && x.status !== "disabled").map((x) => x.id);
 }
@@ -3355,6 +3592,8 @@ function requestsContext(db: Db, userId: string, role: Role): RequestsContext {
     edges: () => db.baseline.edges,
     decisions: decisionsCtx ? requestDecisions(decisionsCtx, () => ensureDecisions(db, decisionsCtx)) : undefined,
     zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+    intakeTitle: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+    suggestionsShown: () => ["recommend", "act"].includes(levelFor((db.autonomy ??= emptyAutonomy()), "requests")),
     goals: () => db.baseline.entities.filter((e) => e.type === "goal"),
     features: () => db.baseline.entities.filter((e) => e.type === "feature" && e.status !== "rejected"),
     people: () => db.members,
@@ -3411,7 +3650,11 @@ function ensureRequests(db: Db): RequestsDb {
 
 /** The interviews, seeded on first use with the fixture's invited interview (`i-mock-token`). */
 function ensureInterviews(db: Db): InterviewsDb {
-  db.interviews ??= seeded("interviews", () => seedInterviews({ ownerId: db.user_id }));
+  db.interviews ??= seeded("interviews", () => ({
+    ...seedInterviews({ ownerId: db.user_id }),
+    // #604 re-review: the "stored-refusals" scenario's pool refuses every guide job.
+    ...(localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO && { refuse: true }),
+  }));
   return db.interviews;
 }
 
@@ -3694,6 +3937,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       uuid,
       now,
       refusal: () => poolRefusal(localStorage.getItem(MOCK_SCENARIO_KEY)),
+      researchRefusal: () => (localStorage.getItem(MOCK_SCENARIO_KEY) === RESEARCH_REFUSED_SCENARIO ? RESEARCH_REFUSED : null),
+      researchLink: () => (localStorage.getItem(MOCK_SCENARIO_KEY) === RESEARCH_UNSAFE_LINK_SCENARIO ? RESEARCH_UNSAFE_LINK : null),
       // A streaming reply writes after its response: in turn with every other request.
       persist: (change) => {
         const next = queue.then(() => {
@@ -3710,6 +3955,33 @@ async function route(db: Db, req: Request): Promise<Response> {
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
       slack: (d, r) => discussionSlackRoute(d, { me, integration: ensureReports(db, db.user_id).integration }, r),
       documentText: (d) => discussionDocument(db, d),
+      // G4: an approver's Stage of a section change writes its next_draft_changes row, as the API's.
+      stageNextDraft: (d, c, reason) => {
+        const llm = (db.llm ??= { jobs: [], suggestions: [], disabled: {} });
+        const rows = (llm.next_draft_changes ??= []);
+        const p = (c.edited_payload ?? c.payload) as { section_key?: string; instruction?: string; text?: string };
+        const version = typeof d.subject.version === "number" ? d.subject.version : null;
+        const latest = db.versions.filter((v) => v.document_id === d.document_id).reduce((n, v) => Math.max(n, v.number), 0);
+        const id = uuid();
+        rows.push({
+          id,
+          document_id: d.document_id!,
+          section_key: String(p.section_key ?? ""),
+          raised_on_version: version ?? (latest || 1),
+          instruction: String(p.instruction ?? "").slice(0, 1000),
+          text: p.text ?? null,
+          reason: reason?.trim().slice(0, 1000) || null,
+          status: "staged",
+          applied_in_version: null,
+          from_private: d.visibility === "private",
+          lock_version: 1,
+          discussion_id: d.id,
+          staged_by: me.id,
+          suggested_by: c.suggested_by ?? null,
+          created_at: now(),
+        });
+        return id;
+      },
       // G3 Record: F3's date rights and its schedule-basis route, as the API's record() uses them.
       dateRights: () => {
         const leads = engineeringLeads(db);
@@ -3727,6 +3999,32 @@ async function route(db: Db, req: Request): Promise<Response> {
         db.roadmap ??= seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
         const post = new Request("http://mock/v1/schedule-bases", { method: "POST", body: JSON.stringify(b) });
         return (await routeRoadmap(ctx, db.roadmap, post, ["v1", "schedule-bases"], new URLSearchParams()))!;
+      },
+      // G3: the features and requirements a change names, the question Ask asks, and the decision Propose proposes.
+      entityTitle: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? null,
+      askQuestion: (x) => {
+        const at = now();
+        const qid = uuid();
+        ensureV2(db).questions.push({
+          id: qid, gap_id: null, intake_id: null, document_id: x.discussion.document_id, checkpoint_id: null, item_ref: null, entity_id: null,
+          module_key: null, category: x.category as V2Db["questions"][number]["category"], prompt: x.prompt, rationale: x.rationale, priority: 100,
+          batch: null, asked_to: x.asked_to, asked_by: me.id, section_key: null,
+          status: "asked", created_at: at, updated_at: at, discussion_id: x.discussion.id, discussion_title: x.discussion.title,
+        });
+        return qid;
+      },
+      // G4: a change's D8 action at a waiting stop, as the API's put_action with the discussion as its source.
+      stopAction: (at, action, source, mode) => putDiscussionAction({ ...runsContext(db), db: db.runs! }, at, action, source, mode),
+      asksAtStop: (at) => asksAtStop({ db: db.runs! }, at),
+      scopeStop: (named, own) =>
+        scopeStop({ db: db.runs! }, named, own, (id) => {
+          const key = db.baseline.entities.find((e) => e.id === id)?.key;
+          return key ? [key, key.replace(/^[a-z]+\./, "")] : [];
+        }),
+      proposeDecision: async (b) => {
+        const ctx = decisionsContext(db, me);
+        const post = new Request("http://mock/v1/decisions", { method: "POST", body: JSON.stringify(b) });
+        return (await routeDecisions(ctx, ensureDecisions(db, ctx), post, ["v1", "decisions"], new URLSearchParams()))!;
       },
     };
     const res = await routeDiscussions(discussionsCtx, req, p, q);
@@ -3754,6 +4052,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     me: { id: me.id, email: me.email, canWrite: atLeast(me.role, "commenter") },
     now,
     uuid,
+    refuse: localStorage.getItem(MOCK_SCENARIO_KEY) === STORED_REFUSALS_SCENARIO,
   });
   if (briefs) return briefs;
   // #481: the staleness actions on a spec's version are the specs mock's (./specs.ts).
@@ -3814,13 +4113,18 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (fireflies) return fireflies;
   // How far Oracle goes on its own (H11): everyone reads, owners change; its Inbox rows.
   db.autonomy ??= emptyAutonomy();
-  const autonomy = await routeAutonomy(db.autonomy, req, p, me);
+  // Undo calls the stored route as the person, where the mock has it (decisions' reviews).
+  const autonomy = await routeAutonomy(db.autonomy, req, p, me, async (u) =>
+    String(u.path).startsWith("/v1/decisions/")
+      ? route(db, new Request(new URL(String(u.path), req.url), { method: String(u.method), headers: { "Content-Type": "application/json" }, body: JSON.stringify(u.body ?? null) }))
+      : null,
+  );
   if (autonomy) return autonomy;
   // Company settings are the owner's, as in the API (tenant_settings_api.py).
   if (p[1] === "settings" && !atLeast(me.role, "owner")) return forbidden("owner");
   const browse = sourceBrowseRoute(req, p, q);
   if (browse) return browse;
-  const connections = await connectionsRoute(req, p);
+  const connections = await connectionsRoute(req, p, me.role);
   if (connections) return connections;
   // The Claude account pool checks roles itself: every member reads, owners change.
   const pool = await claudeAccountsRoute(req, p, q, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
@@ -3874,12 +4178,37 @@ async function route(db: Db, req: Request): Promise<Response> {
     },
     blockerGate: (documentId) => documentGate(ensureBlockers(db), documentId),
   };
+  passOutcomes(db);
   const quality = await routeQuality(qualityCtx, req, p, q);
   if (quality) return quality;
   // Specs, flows and wireframes (./specs.ts) check roles themselves.
   if (p[1] === "spec-requests" || p[1] === "design-artifacts") {
     db.specs ??= seedSpecs();
-    const specs = await routeSpecs({ db: db.specs, userId: me.id, role: me.role, uuid, now }, req, p, q);
+    const specs = await routeSpecs(
+      {
+        db: db.specs,
+        userId: me.id,
+        role: me.role,
+        uuid,
+        now,
+        // F5 lane 3: a request names its PRD, feature and brief, defaults its approvers to
+        // the engineering leads who may approve, and drafts its prd_to_spec run.
+        documents: db.documents,
+        versions: db.versions,
+        entityTitle: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? planEntityTitle(id),
+        leadApprovers: () => engineeringLeads(db).filter((id) => atLeast(db.members.find((x) => x.id === id)!.role, "approver")),
+        techBrief: techBriefOf,
+        draftRun: async (input) => {
+          db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+          const run = new Request(new URL("/v1/runs", req.url), { method: "POST", body: JSON.stringify(input) });
+          const out = (await routeRuns({ ...runsContext(db), db: db.runs }, run, ["v1", "runs"])) ?? notFound("Route");
+          return out.status === 201 ? ((await out.json()) as { id: string }).id : out;
+        },
+      },
+      req,
+      p,
+      q,
+    );
     if (specs) return specs;
   }
   // Modules and compositions check roles themselves (viewers may ask for a recommendation).
@@ -3898,6 +4227,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       },
       approvedVersion: (documentId, n) =>
         db.versions.find((v) => v.document_id === documentId && v.number === n && v.approved_at)?.id ?? null,
+      learned: () => nudges(db.quality?.learnings, "module"),
     },
     req,
     p,
@@ -3956,6 +4286,11 @@ async function route(db: Db, req: Request): Promise<Response> {
         };
       },
       entity: (id) => db.baseline.entities.find((e) => e.id === id)?.title ?? null,
+      roadmapItem: (id, key) => {
+        // A PRD the caller cannot see has no items for them (as oracle.intake.questions).
+        const doc = db.documents.find((d) => d.id === id);
+        return doc && canSee(me.role, doc.visibility) ? planItemTitle(doc.slug, key) : null;
+      },
       checkpoint: (id) => {
         for (const run of db.runs?.runs ?? []) {
           const cp = run.checkpoints.find((c) => c.id === id);
@@ -3980,7 +4315,66 @@ async function route(db: Db, req: Request): Promise<Response> {
         return r?.verdict === "approved" && !r.lapsed_at;
       });
     };
-    const intake = await routeIntake(v2db, { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections }, req, p, q);
+    // C1 lane 2: the brief's "Requests behind it".
+    const requests = {
+      refusal: (ids: string[]) =>
+        behindBriefRefusal(ensureRequests(db), ids, {
+          intake: (id) => ensureV2(db).intakes.find((i) => i.id === id)?.title ?? null,
+          document: (id) => db.documents.find((d) => d.id === id)?.title ?? null,
+        }),
+      link: (intakeId: string, ids: string[]) => putBehindBrief(ensureRequests(db), intakeId, ids),
+      release: (intakeId: string) => releaseBrief(ensureRequests(db), intakeId),
+    };
+    // C5 late answers: a whole-draft item on the PRD's latest version, as late_answers._raise.
+    const raiseFeedback = (ref: string, input: { summary: string; author_id: string | null; intake_question_id: string; intake_answer_id: string }) => {
+      const doc = db.documents.find((d) => d.id === ref || d.slug === ref);
+      const latest = doc ? docVersions(db, doc).pop() : undefined;
+      if (!doc || !latest) return null;
+      const at = now();
+      // An item kept with its quote withheld reads in full again.
+      const kept = db.feedback.find((f) => f.intake_answer_id === input.intake_answer_id);
+      if (kept) {
+        Object.assign(kept, { summary: input.summary, withheld_at: null, updated_at: at });
+        touch(db, kept.document_id);
+        return { slug: doc.slug, version: kept.raised_on_version };
+      }
+      db.feedback.push({
+        id: uuid(), document_id: doc.id, raised_on_version: latest.number, kind: "general", comment_id: null, section_review_id: null,
+        section_key: null, summary: input.summary, author_id: input.author_id, anchor: null, verdict: null, status: "open",
+        addressed_in_version: null, resolution_note: null, severity: null, created_at: at, updated_at: at,
+        intake_id: v2db.questions.find((x) => x.id === input.intake_question_id)?.intake_id ?? null,
+        intake_question_id: input.intake_question_id, intake_answer_id: input.intake_answer_id,
+      });
+      touch(db, doc.id);
+      onFeedback(llm, doc.id, latest.number);
+      return { slug: doc.slug, version: latest.number };
+    };
+    // As late_answers.on_sharing: an item nobody acted on goes, with its suggestions (the
+    // API's cascade); one someone triaged, staged or decided a suggestion on stays, its quote withheld.
+    const withdrawFeedback = (answerIds: string[]) => {
+      const kept: string[] = [];
+      for (let i = db.feedback.length - 1; i >= 0; i--) {
+        const f = db.feedback[i];
+        if (!f.intake_answer_id || !answerIds.includes(f.intake_answer_id)) continue;
+        const decided = db.llm?.suggestions.some((x) => x.feedback_item_id === f.id && x.status !== "open" && x.status !== "superseded");
+        if (f.status !== "open" || f.resolution_note || f.staged_for_agents_at || decided) {
+          if (!f.withheld_at) Object.assign(f, { summary: LATE_ANSWER_WITHHELD, withheld_at: now(), updated_at: now() });
+          kept.push(f.intake_answer_id);
+        } else {
+          db.feedback.splice(i, 1);
+          if (db.llm) db.llm.suggestions = db.llm.suggestions.filter((x) => x.feedback_item_id !== f.id);
+        }
+        touch(db, f.document_id);
+      }
+      return kept;
+    };
+    const intake = await routeIntake(
+      v2db,
+      { userId: me.id, role: me.role, createRun, updateRun, people: db.members, subjects, confirmedGoals, lockedSections, requests, questionsLevel: () => levelFor((db.autonomy ??= emptyAutonomy()), "questions"), learned: () => nudges(db.quality?.learnings, "question_category"), raiseFeedback, withdrawFeedback },
+      req,
+      p,
+      q,
+    );
     if (intake) return intake;
   }
   // Customer interviews (C3) check roles themselves: commenters create, the creator or an approver manages.
@@ -4076,7 +4470,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (roadmapRes) return roadmapRes;
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
-  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits }, db.roadmap, req, p, q);
+  const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
+  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits, drift }, db.roadmap, req, p, q);
   if (planRes) return planRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
     if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });
@@ -4130,7 +4525,13 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "internal" && p[2] === "tick" && m === "POST") tickDraftRoadmaps(draftCtx(db), draftDb(db));
   const runs = await routeRuns({ ...runsContext(db), db: db.runs }, req, p);
   // C4: an intake's draft run that starts converts its brief (the API's drafting.on_start).
-  if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) startedIntakeRun(ensureV2(db), p[2]);
+  if (runs?.ok && req.method === "POST" && p[1] === "runs" && p[3] === "start" && p.length === 4) {
+    startedIntakeRun(ensureV2(db), p[2]);
+    // C1 lane 2: a brief's run on a PRD links the requests behind the brief.
+    const [intakeId] = Object.entries(ensureV2(db).intake_runs ?? {}).find(([, r]) => r.run_id === p[2]) ?? [];
+    const documentId = db.runs?.runs.find((r) => r.id === p[2])?.document_id;
+    if (intakeId && documentId) linkIntakeDocument(ensureRequests(db), intakeId, documentId);
+  }
   if (runs && p[1] === "inbox") {
     tick(llm);
     const withStates = withInboxStates(db, llm, me, await runs.json(), q.get("mark_seen") === "true");
@@ -4149,6 +4550,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     inbox.total += ritualCounted;
     inbox.needs_me = (inbox.needs_me ?? 0) + ritualCounted;
     // Outcome rows (H3): Add predictions and Outcome check due count; Oracle recorded is shown.
+    passOutcomes(db);
     const outcomeRows = outcomeInboxRows(db.quality, me.id, "Checkout roadmap");
     inbox.outcomes = outcomeRows;
     inbox.total += outcomeRows.filter((r) => r.counts).length;
@@ -4348,6 +4750,15 @@ async function route(db: Db, req: Request): Promise<Response> {
     // D10: the last section approved approves the run review of this version.
     followRunReview(db, doc, v, false, me.id);
     return json(200, { ...r, layer: sectionLayer(db, v.id, r.section_key) });
+  }
+  if (sub === "new-items" && m === "GET") {
+    // S4: the draft's author (the person its run acted for, else its importer) sees what
+    // changed in their own sources since the draft's run pinned them (oracle.docs.fresh).
+    const found = runReviewOf(db, doc.id, v.number);
+    const author = found ? found.run.created_by : v.imported_by;
+    if (!author || author !== me.id) return json(200, { version: v.number, as_of: null, count: null, visible: false });
+    const as_of = found?.run.snapshot_as_of ?? v.created_at;
+    return json(200, { version: v.number, as_of, count: itemsChangedSince(as_of, db.members.find((x) => x.id === author)?.email ?? "", me.email), visible: true });
   }
   if (sub === "run-review" && m === "GET") {
     const found = runReviewOf(db, doc.id, v.number);

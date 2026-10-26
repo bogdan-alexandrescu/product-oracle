@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from oracle.roadmap.schemas import Horizon, TrackerRecordRef, TrackHealth, TrackStatus
+from oracle.roadmap.schemas import EntityRef, Horizon, TrackerRecordRef, TrackHealth, TrackStatus
 
 PlanScope = Literal["all", "approved"]
 Stage = Literal[
@@ -141,6 +141,22 @@ class PlanReason(BaseModel):
     detail: str
 
 
+class PlanDrift(BaseModel):
+    """The item's drift against the approved product strategy (H4 §5), for owners and
+    approvers. An approved item's is its stored finding (``finding_id``: waived there,
+    POST /v1/strategy/findings/{id}/waive); a draft item's is measured as the Plan is
+    read and has none."""
+
+    kind: Literal["outside_strategy", "stopped_but_planned"]
+    severity: Literal["warning", "high"]
+    label: str
+    text: str
+    status: Literal["open", "waived"]
+    finding_id: uuid.UUID | None = None
+    waive_reason: str | None = None
+    waived_at: datetime | None = None
+
+
 class PlanItem(BaseModel):
     id: uuid.UUID
     key: str
@@ -154,8 +170,13 @@ class PlanItem(BaseModel):
     roadmap: PlanItemRoadmap
     track_id: uuid.UUID | None
     goal_ids: list[uuid.UUID]
+    # The item's trace (F5 lane 3: Request spec pre-ticks its requirements): its baseline
+    # feature and requirements.
+    feature: EntityRef | None = None
+    requirements: list[EntityRef] = []
     state: ItemState
     reasons: list[PlanReason]
+    drift: list[PlanDrift] = []
     engineering: PlanEngineering
     next: PlanNext
 
@@ -175,9 +196,31 @@ class ItemVersion(BaseModel):
     approved_at: datetime | None
 
 
+class TrackerFieldChange(BaseModel):
+    """One field an import changed: before and after, as the tracker history keeps them."""
+
+    field: Literal["state", "target_date", "estimate"]
+    before: str | None
+    after: str | None
+
+
+class ItemTrackerEvent(BaseModel):
+    """One import's changes to one of the item's tracker issues (F2 §2), in field order.
+    The tracker's own status name is left out: the state says it in Oracle's words."""
+
+    record_id: uuid.UUID
+    tracker: str
+    external_ref: str
+    observed_at: datetime
+    changes: list[TrackerFieldChange]
+
+
 class ItemHistoryOut(BaseModel):
     roadmap: str
     item: str
     versions: list[ItemVersion]
-    # Tracker events for the item (F2 Track health stores them); empty until then.
-    tracker_events: list[dict] = []
+    # The tracker history of the item's issues, one entry per import, oldest first: the
+    # newest TRACKER_HISTORY_LIMIT imports (F2 Track health).
+    tracker_events: list[ItemTrackerEvent] = []
+    # How many older imports tracker_events leaves out.
+    tracker_events_older: int = 0

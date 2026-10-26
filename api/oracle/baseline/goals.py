@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.baseline import figures
 
 CURRENCIES = ("USD", "EUR", "GBP")
@@ -97,8 +98,9 @@ def now() -> datetime:
 
 
 def today() -> date:
-    """UTC's day (:func:`company_today` is the company's own day)."""
-    return now().date()
+    """Pacific's day (the default Company time zone), for checks without a database;
+    :func:`company_today` is the company's own day."""
+    return company_time.day(now(), company_time.DEFAULT_ZONE)
 
 
 async def company_today(db: AsyncSession) -> date:

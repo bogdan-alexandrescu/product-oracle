@@ -276,11 +276,17 @@ async def needs_decision(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]
     from oracle.decisions.models import Decision
 
     rows = []
-    for c in await db.scalars(
-        select(Checkpoint).where(Checkpoint.status == "pending").order_by(Checkpoint.created_at)
+    # A stop carries its run's document: a reader who may not see it (an approvers-only
+    # pricing memo) does not see the stop either (for_reader, #541).
+    for c, document_id in await db.execute(
+        select(Checkpoint, Run.document_id)
+        .join(Run, Run.id == Checkpoint.run_id)
+        .where(Checkpoint.status == "pending")
+        .order_by(Checkpoint.created_at)
     ):
         what = c.kind.replace("_", " ")
         rows.append({"kind": "checkpoint", "id": str(c.id), "title": what,
+                     "run_id": str(c.run_id), "document_id": _str(document_id),
                      "href": f"/runs/{c.run_id}", "text": f"Run stop: {what}"})  # fmt: skip
     for d in await db.scalars(
         select(Decision)
@@ -294,6 +300,7 @@ async def needs_decision(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]
         select(Run).where(Run.status == "awaiting_approval").order_by(Run.created_at)
     ):
         rows.append({"kind": "cost_approval", "id": str(r.id), "title": r.flow,
+                     "run_id": str(r.id), "document_id": _str(r.document_id),
                      "href": f"/runs/{r.id}", "text": f"Cost approval: {r.flow} run"})  # fmt: skip
     return rows
 
@@ -705,6 +712,41 @@ async def build(db: AsyncSession, keys: tuple[str, ...], ctx: BlockCtx) -> list[
 # --- what a reader sees ---------------------------------------------------------------------
 
 
+def _str(value: uuid.UUID | None) -> str | None:
+    return str(value) if value else None
+
+
+_RUN_ROWS = ("checkpoint", "cost_approval")
+
+
+def _run_of(row: dict[str, Any]) -> uuid.UUID | None:
+    """A run row's run (``run_id``; a row stored before it carried one, from its link)."""
+    raw = row.get("run_id") or str(row.get("href") or "").removeprefix("/runs/")
+    try:
+        return uuid.UUID(str(raw)) if raw else None
+    except ValueError:
+        return None
+
+
+async def _run_documents(db: AsyncSession, rows: list[dict[str, Any]]) -> None:
+    """A run row stored before it carried its run's document gets it, read now."""
+    old = {r_id: r for r in rows if r.get("kind") in _RUN_ROWS and "document_id" not in r
+           and (r_id := _run_of(r))}  # fmt: skip
+    if not old:
+        return
+    found = dict(
+        (
+            await db.execute(
+                select(Run.id, Run.document_id)
+                .where(Run.id.in_(old))
+                .execution_options(oracle_all_documents=True)
+            )
+        ).all()
+    )
+    for r_id, r in old.items():
+        r["document_id"] = _str(found.get(r_id))
+
+
 def _ref(row: dict[str, Any], key: str) -> uuid.UUID | None:
     raw = row.get(key)
     if raw is None and key == "decision_id" and row.get("kind") == "decision":
@@ -723,7 +765,10 @@ async def for_reader(
     oracle.docs.visibility; None when every row stays. A pre-read is built with Oracle's
     view (the ticker, an owner's Prepare) and stored once, so this runs on every read.
     Anything counted over rows is counted by the reader over what is left."""
-    rows = [r for b in built for r in b.get("rows") or []]
+    built = [{**b, "rows": [dict(r) for r in b.get("rows") or []]} for b in built]
+    rows = [r for b in built for r in b["rows"]]
+    if as_member or visibility.restricted(visibility.principal_of(db)):
+        await _run_documents(db, rows)
     decisions = await visibility.hidden_decision_ids(
         db, (_ref(r, "decision_id") for r in rows), as_member=as_member
     )

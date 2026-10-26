@@ -8,6 +8,7 @@
 import type { Schemas } from "@/lib/api/client";
 import type { DraftRoadmapCheck, DraftRoadmapOut, DraftRoadmapStatus, DraftRoadmapSummary } from "@/lib/api/draft-roadmap";
 
+import { readableRefusal } from "./refusal";
 import { finishDraftItemsRun, startDraftItemsRun, type RunsDb } from "./runs";
 
 type Item = Schemas["RoadmapItemOut"];
@@ -222,6 +223,14 @@ export function seedApprovedPlanDraft(ctx: DraftRoadmapContext, db: DraftRoadmap
   });
 }
 
+/** #561 review, the "stored-refusals" scenario: checkout-redesign v2's items failed on Oct 18 on a refusal stored before #403's wording. */
+export function seedStoredRefusalDraft(ctx: DraftRoadmapContext, db: DraftRoadmapDb, error: string) {
+  const doc = ctx.documents.find((d) => d.slug === "checkout-redesign");
+  const r = doc && rowOf(db, doc.id, 2);
+  if (!r) return;
+  Object.assign(r, { status: "failed", requested_at: "2026-10-18T23:12:00Z", ready_at: null, error, check: null, items: [] });
+}
+
 /** Canned items for a derivation that finishes: the seed's for checkout-redesign v1/v2, else one per subsection. */
 function cannedItems(ctx: DraftRoadmapContext, doc: Doc, v: Version): { items: Item[]; problems: DraftRoadmapCheck["problems"] } {
   if (doc.slug === SEED_PRD && (v.number === 1 || v.number === 2)) {
@@ -315,6 +324,8 @@ export function tickDraftRoadmaps(ctx: DraftRoadmapContext, db: DraftRoadmapDb) 
     const { items, problems } = cannedItems(ctx, doc, v);
     finishDraftItemsRun(ctx.runs(), r.run_id, { uuid: ctx.uuid, now: ctx.now() });
     Object.assign(r, { status: items.length ? "ready" : "failed", items, check: checkOf(items, problems), ready_at: ctx.now(), error: items.length ? null : "the items file lists no items" });
+    // As the API's requested_at (the row's updated_at): a failure moves it to when it failed.
+    if (!items.length) r.requested_at = ctx.now();
   }
   const docs = new Set(db.rows.filter((r) => r.status === "queued").map((r) => r.document_id));
   for (const docId of docs) {
@@ -325,7 +336,7 @@ export function tickDraftRoadmaps(ctx: DraftRoadmapContext, db: DraftRoadmapDb) 
     if (!doc || !v) continue;
     const who = r.requested_by ? ctx.members.find((m) => m.id === r.requested_by) : null;
     if (r.requested_by && who && (who.status === "disabled" || RANK[who.role] < RANK.approver)) {
-      Object.assign(r, { status: "failed", error: CANNOT_START });
+      Object.assign(r, { status: "failed", error: CANNOT_START, requested_at: ctx.now() });
       continue;
     }
     const run = startDraftItemsRun(ctx.runs(), {
@@ -351,7 +362,7 @@ function out(ctx: DraftRoadmapContext, db: DraftRoadmapDb, doc: Doc, v: Version,
     run_id: r?.run_id ?? null,
     requested_at: r?.requested_at ?? null,
     ready_at: r?.ready_at ?? null,
-    error: r?.error ?? null,
+    error: readableRefusal(r?.error ?? null, r?.status === "failed"),
     check: r?.check ?? null,
     previous: prev ? { version: prev.version, status: prev.status, items: prev.items.length } : null,
     auto: !db.off.includes(doc.id),

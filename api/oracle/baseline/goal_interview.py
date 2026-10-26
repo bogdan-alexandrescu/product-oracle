@@ -29,7 +29,7 @@ from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, autonomy
 from oracle.auth.deps import Principal, TenantDB
 from oracle.auth.models import User
 from oracle.authz import require_role
@@ -58,9 +58,29 @@ Approver = Annotated[Principal, Depends(require_role("approver"))]
 
 ONLY_GOALS = "Only goals can be interviewed"
 MEASURABLE = "This goal is already measurable"
+# H11: at Observe (Shape goals) Oracle flags vague goals and opens no interview.
+OBSERVING = (
+    "Oracle is set to observe goals: it flags gaps and drafts nothing. An owner can "
+    "change this in Settings › Autonomy."
+)
 # The goals an interview is offered on (B6 3.1 (2)).
 OFFERED = ("confirmed", "proposed")
 MAX_VERSIONS = 3
+# The versions Oracle keeps per reply at each Shape goals level (H11): none at Observe, one
+# for a named person to edit and own at Draft, up to three with a default at Recommend.
+VERSIONS_AT = {"observe": 0, "draft": 1, "recommend": MAX_VERSIONS}
+
+
+def offer_line(level: str) -> str:
+    """The goal prompt's count of versions to offer at a Shape goals level."""
+    most = VERSIONS_AT.get(level, MAX_VERSIONS)
+    if most == 0:
+        return "Offer no measurable version."
+    if most == 1:
+        return "Offer one measurable version, for a named person to edit and own."
+    return f"Offer up to {most} measurable versions."
+
+
 MARK, END = "<<<CHANGES>>>", "<<<END>>>"
 
 
@@ -186,6 +206,8 @@ async def interview(
         raise HTTPException(422, ONLY_GOALS)
     if (await _check(db, e))["measurable"]:
         raise HTTPException(422, MEASURABLE)
+    if await autonomy.level(db, "goals") == "observe":
+        raise HTTPException(409, OBSERVING)
     found = await open_interview(db, principal, e.id)
     if found is not None:
         return found, False
@@ -257,14 +279,15 @@ async def store_versions(
     reply_id: uuid.UUID,
     found: list[Any],
     entries: dict[int, dict[str, Any]],
+    most: int = MAX_VERSIONS,
 ) -> list[DiscussionChange]:
-    """Up to 3 of Oracle's versions as ``goal_measure`` changes; one that fails the
-    kind's model or B5's checks is skipped and logged."""
+    """Up to ``most`` (3) of Oracle's versions as ``goal_measure`` changes; one that fails
+    the kind's model or B5's checks is skipped and logged."""
     kept: list[DiscussionChange] = []
     at = datetime.now(UTC)
     for item in found:
-        if len(kept) == MAX_VERSIONS:
-            log.info("goal interview %s: versions past the third were dropped", d.id)
+        if len(kept) == most:
+            log.info("goal interview %s: versions past the %s kept were dropped", d.id, most)
             break
         if not (
             isinstance(item, dict)
@@ -310,7 +333,9 @@ async def keep_versions(
     found: list[Any],
     entries: dict[int, dict[str, Any]],
 ) -> None:
-    """After Oracle's completed reply in a goal discussion: its versions (G2's hook)."""
+    """After Oracle's completed reply in a goal discussion: its versions (G2's hook), as
+    many as Shape goals' level allows when the reply completes (none at Observe, one at
+    Draft)."""
     if not found:
         return
     async with tenant_session(tenant_id) as db:
@@ -319,7 +344,11 @@ async def keep_versions(
         goal = await goal_of(db, d) if d is not None else None
         if d is None or goal is None:
             return
-        await store_versions(db, d, goal, reply_id, found, entries)
+        most = VERSIONS_AT.get(await autonomy.level(db, "goals"), MAX_VERSIONS)
+        if most == 0:
+            log.info("goal interview %s: Shape goals is at Observe, no version kept", d.id)
+            return
+        await store_versions(db, d, goal, reply_id, found, entries, most)
         await db.commit()
 
 
@@ -471,6 +500,7 @@ def _created(d: Discussion, created: bool) -> JSONResponse:
     responses={
         200: {"model": GoalInterviewOut, "description": "An open interview on this goal exists"},
         404: {"description": "Entity not found"},
+        409: {"description": "Shape goals is at Observe: Oracle opens no interview"},
         422: {"description": "Only goals can be interviewed | This goal is already measurable"},
     },
 )
@@ -486,7 +516,11 @@ async def start_goal_interview(
     return _created(d, created)
 
 
-@router.post("/goals/interview", response_model=InterviewsOut)
+@router.post(
+    "/goals/interview",
+    response_model=InterviewsOut,
+    responses={409: {"description": "Shape goals is at Observe: Oracle opens no interview"}},
+)
 async def start_goal_interviews(
     body: InterviewsIn, principal: Commenter, db: TenantDB
 ) -> InterviewsOut:

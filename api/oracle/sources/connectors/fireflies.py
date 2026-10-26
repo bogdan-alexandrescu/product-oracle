@@ -1,6 +1,7 @@
 """Fireflies: one user's meeting transcripts.
 
-credential ``{"api_key"}``; config, as the browse screen saves it (S5, owner 2026-10-19)::
+credential ``{"api_key", "endpoint"?}`` (``endpoint``: an owner-set GraphQL endpoint, else
+Fireflies' own); config, as the browse screen saves it (S5, owner 2026-10-19)::
 
     {"mode": "all" | "selected", "date_from"?: ISO date, "date_to"?: ISO date,
      "timezone"?: IANA zone, "series": [series keys], "meetings": [transcript ids],
@@ -59,19 +60,29 @@ writes are conditional), so a cursor of another selection never reaches ``sync``
 """
 
 import hashlib
+import ipaddress
 import json
 import logging
 import math
 import re
+import socket
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta, tzinfo
 from email.utils import parsedate_to_datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
+from oracle.baseline.public_links import (
+    LinkError,
+    check_url,
+    guarded_transport,
+    public_address,
+    system_resolve,
+)
 from oracle.sources.base import (
     ConnectorAuthError,
     ConnectorConfigError,
@@ -92,6 +103,11 @@ from oracle.sources.base import (
 log = logging.getLogger(__name__)
 
 API_URL = "https://api.fireflies.ai/graphql"
+# A connection reads Fireflies' own API unless an owner set another GraphQL endpoint on
+# it (BGD, "Build now, owner-set, guarded"); either way every request goes through the
+# guarded transport of oracle.baseline.public_links.
+DEFAULT_ENDPOINT = API_URL
+MAX_REDIRECTS = 5
 OAUTH = None
 PAGE_SIZE = 50  # the most Fireflies returns per transcripts query
 # Fireflies can finish a transcript days after the meeting: each sync reads back this far.
@@ -576,14 +592,165 @@ class FirefliesForbidden(ConnectorForbidden):
     plan or team permission), which does not mean the key itself was revoked."""
 
 
+class EndpointRefused(ConnectorConfigError):
+    """An endpoint URL (or a redirect from it) Oracle does not call. The message is meant
+    for people and never holds the key."""
+
+
+_PRIVATE = (
+    "The endpoint points to a private, local or internal network address, which "
+    "Product Oracle does not call."
+)
+# A last label that is a number (decimal, octal or hex): resolvers read such a host as an
+# IPv4 address (0177.0.0.1, 0x7f000001, 127.1), whatever its form.
+_NUMERIC_LABEL = re.compile(r"(0x[0-9a-f]*|[0-9]+)", re.IGNORECASE)
+
+
+def _odd_ipv4(host: str) -> EndpointRefused:
+    """The refusal for a host written as an IPv4 address in a form other than four decimal
+    numbers: private when it reads as a private address, else refused all the same."""
+    try:
+        address = socket.inet_ntoa(socket.inet_aton(host))
+    except OSError:
+        return EndpointRefused("The endpoint is not a valid URL.")
+    if not public_address(address):
+        return EndpointRefused(_PRIVATE)
+    return EndpointRefused(
+        "The endpoint writes an IP address in an octal, hex or shortened form; write it as "
+        "four decimal numbers, or use the host name."
+    )
+
+
+def check_endpoint(url: str | None) -> str | None:
+    """The normalized endpoint, None for the default (or none); EndpointRefused unless it
+    is https on the default port, without user info, query or fragment, on a host that is
+    not a private, loopback, link-local, shared or reserved address. Where a host name
+    resolves to is checked by the guarded transport on every connect."""
+    if url is None or not url.strip():
+        return None
+    url = url.strip()
+    try:
+        parts = urlsplit(url)
+        parts.port  # noqa: B018 - raises on a port that is not a number
+    except ValueError as exc:
+        raise EndpointRefused("The endpoint is not a valid URL.") from exc
+    if parts.scheme.lower() != "https":
+        raise EndpointRefused("The endpoint must be an https:// URL.")
+    if parts.username is not None or parts.password is not None:
+        raise EndpointRefused("The endpoint cannot contain a user name or password.")
+    if parts.port not in (None, 443):
+        raise EndpointRefused("The endpoint must use the standard https port (443).")
+    if parts.query or parts.fragment or url.endswith(("?", "#")):
+        raise EndpointRefused("The endpoint cannot have a query or a fragment.")
+    try:
+        normalized, host = check_url(url)
+    except LinkError as exc:
+        if exc.code != "blocked_address":
+            raise EndpointRefused("The endpoint is not a valid URL.") from exc
+        # check_url refuses a private or local host itself: say which, as below.
+        host = (parts.hostname or "").rstrip(".").lower()
+        try:
+            ipaddress.ip_address(host)
+        except ValueError:
+            if _NUMERIC_LABEL.fullmatch(host.rsplit(".", 1)[-1]):
+                raise _odd_ipv4(host) from None
+        raise EndpointRefused(_PRIVATE) from None
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        if _NUMERIC_LABEL.fullmatch(host.rsplit(".", 1)[-1]):
+            raise _odd_ipv4(host) from None
+        if "." not in host:
+            raise EndpointRefused(_PRIVATE) from None
+    else:
+        if not public_address(host):
+            raise EndpointRefused(_PRIVATE)
+    try:
+        httpx.URL(normalized)
+    except httpx.InvalidURL:
+        raise EndpointRefused("The endpoint is not a valid URL.") from None
+    return None if normalized == DEFAULT_ENDPOINT else normalized
+
+
+def endpoint_of(credential: dict[str, Any] | None) -> str:
+    return (credential or {}).get("endpoint") or DEFAULT_ENDPOINT
+
+
+def fireflies_host(endpoint: str | None) -> bool:
+    """Whether the endpoint is Fireflies' own (fireflies.ai or a subdomain)."""
+    host = (urlsplit(endpoint or DEFAULT_ENDPOINT).hostname or "").lower()
+    return host == "fireflies.ai" or host.endswith(".fireflies.ai")
+
+
+def address_refused(exc: BaseException) -> bool:
+    """Whether a request failed because the guarded transport refused the address."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, LinkError) and current.code == "blocked_address":
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def guarded_client(resolve=None) -> httpx.AsyncClient:
+    """The client for Fireflies calls: the guarded transport (public addresses only, the
+    checked address is the one connected to), no environment proxy, no redirects followed
+    by httpx (:func:`post` follows same-host ones by hand)."""
+    return httpx.AsyncClient(
+        timeout=60,
+        transport=guarded_transport(resolve or system_resolve),
+        follow_redirects=False,
+        trust_env=False,
+    )
+
+
+def _origin(url: httpx.URL) -> tuple[str, str, int | None]:
+    return (url.scheme, url.host.lower(), url.port)
+
+
+async def post(
+    client: httpx.AsyncClient, endpoint: str, api_key: str, payload: dict[str, Any]
+) -> httpx.Response:
+    """POST to the endpoint with the key. A redirect is followed only to the same scheme,
+    host and port (at most MAX_REDIRECTS): that host was checked already, and the guarded
+    transport checks the address of every connect. One to another host is refused before
+    anything is sent there, so the key only reaches the configured host."""
+    headers = {"Authorization": f"Bearer {api_key}"}
+    try:
+        url = httpx.URL(endpoint)
+    except httpx.InvalidURL:
+        raise EndpointRefused("The endpoint is not a valid URL.") from None
+    home = _origin(url)
+    for _ in range(MAX_REDIRECTS + 1):
+        response = await client.post(url, json=payload, headers=headers, follow_redirects=False)
+        if not response.is_redirect:
+            return response
+        location = response.headers.get("Location")
+        await response.aclose()
+        try:
+            target = url.join(location) if location else None
+        except httpx.InvalidURL:
+            target = None
+        if target is None or _origin(target) != home:
+            raise EndpointRefused(
+                "The Fireflies endpoint redirected to another address, which Product "
+                "Oracle does not follow (the API key is sent only to the configured host)."
+            )
+        url = target
+    raise EndpointRefused("The Fireflies endpoint redirects too many times.")
+
+
 class _Fireflies:
-    def __init__(self, client: httpx.AsyncClient, api_key: str):
+    def __init__(self, client: httpx.AsyncClient, api_key: str, endpoint: str = DEFAULT_ENDPOINT):
         self.client = client
-        self.headers = {"Authorization": f"Bearer {api_key}"}
+        self.api_key = api_key
+        self.endpoint = endpoint
 
     async def query(self, query: str, **variables: Any) -> dict[str, Any]:
-        response = await self.client.post(
-            API_URL, json={"query": query, "variables": variables}, headers=self.headers
+        response = await post(
+            self.client, self.endpoint, self.api_key, {"query": query, "variables": variables}
         )
         retry_after = _retry_after(response.headers.get("Retry-After"))
         if response.status_code == 429:
@@ -718,11 +885,12 @@ class FirefliesConnector:
     @asynccontextmanager
     async def _session(self, credential: dict[str, Any] | None):
         api_key = _api_key(credential)
+        endpoint = endpoint_of(credential)
         if self._client is not None:
-            yield _Fireflies(self._client, api_key)
+            yield _Fireflies(self._client, api_key, endpoint)
             return
-        async with httpx.AsyncClient(timeout=60) as client:
-            yield _Fireflies(client, api_key)
+        async with guarded_client() as client:
+            yield _Fireflies(client, api_key, endpoint)
 
     def check_config(self, config: dict[str, Any]) -> None:
         """The rules a saved config must still meet (the caps, the dates)."""

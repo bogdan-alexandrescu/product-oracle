@@ -532,6 +532,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents/{doc}/versions/{n}/new-items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Draft New Items
+         * @description S4: how many items of the draft's author's own sources are new, changed or deleted
+         *     since the sources the draft was written from ("N new items since draft k, refresh?").
+         *     Only the author sees the number (``oracle.docs.fresh``).
+         */
+        get: operations["get_draft_new_items"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/documents/{doc}/versions/{n}/markdown": {
         parameters: {
             query?: never;
@@ -953,6 +975,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/discussions/{discussion_id}/research": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Research Discussion Message
+         * @description Research this (G2 §4): an approver or owner who can write in an open discussion
+         *     starts one ``discussion_research`` run on a person's message (its cost is
+         *     ``me.research_usd`` on the discussion). The run reads the discussion's context as
+         *     Oracle's replies do, and its answer comes back into the thread as Oracle's message,
+         *     citing its sources. Answers the line that says so (``research``: the run and its
+         *     state); 409 while that message's research runs.
+         */
+        post: operations["research_discussion_message"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/discussions/{discussion_id}/messages/{reply_id}/stream": {
         parameters: {
             query?: never;
@@ -1319,6 +1366,51 @@ export interface paths {
          *     answer.
          */
         post: operations["answer_with_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask Discussion Change
+         * @description ``ask_person`` (commenters and up): asks that person the question through C2 (on a
+         *     checkpoint item whose stop is waiting, as the item's question action). ``result``:
+         *     ``{question_id}``.
+         */
+        post: operations["ask_discussion_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/discussion-changes/{change_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Discussion Change
+         * @description ``priority_move``, ``priority_pin`` (approvers and up): C9's move or pin with its
+         *     reason. Oracle checks it first as on the Priorities screen; when it pushes back the
+         *     answer is 409 with its messages and nothing is stored; ``confirm: true`` keeps it.
+         *     ``result``: ``{override_id}``.
+         */
+        post: operations["apply_discussion_change"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2279,6 +2371,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/suggestions/{suggestion_id}/undo-accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Accept Suggestion
+         * @description Undo Accept: the suggestion is open again and its item as before Accept. 409 with
+         *     the reason when it cannot be: an answer already posted, a change a draft applied or a
+         *     build is using, an item changed since.
+         */
+        post: operations["undo_accept_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/suggestions/{suggestion_id}/dismiss": {
         parameters: {
             query?: never;
@@ -3127,6 +3241,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/connections/{connection_id}/endpoint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Connection Endpoint
+         * @description Change a Fireflies connection's GraphQL endpoint (null: back to the default).
+         *     Oracle owners only; the API key is entered again and checked at the new endpoint
+         *     (a stored key is never sent to another endpoint). Recorded in the audit log.
+         */
+        put: operations["set_connection_endpoint"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/connections/{provider}/authorize": {
         parameters: {
             query?: never;
@@ -3473,6 +3609,7 @@ export interface paths {
         /**
          * List Claude Accounts
          * @description Every account in the company's pool, with the sweep's liveness and the fallback.
+         *     Below owner, without who holds each account (its Claude email and organisation).
          */
         get: operations["list_claude_accounts"];
         put?: never;
@@ -4583,8 +4720,9 @@ export interface paths {
         put?: never;
         /**
          * Accept Proposal
-         * @description Apply the change as your own edit (it locks the item). ``skip_fields`` keeps those
-         *     fields as they are and applies the rest (#268).
+         * @description Apply the change as your own edit; the item is then
+         *     locked against Oracle's changes until a person unlocks it.
+         *     skip_fields keeps those fields as they are and applies the rest (#268).
          */
         post: operations["accept_proposal"];
         delete?: never;
@@ -7407,7 +7545,9 @@ export interface paths {
          *     approver, as asking it): the same questions in the same order as
          *     ``POST .../question-batches`` with the same ``size`` asks next, each with the person
          *     it would be asked of (the gap's owner, else the author), and how many are not asked
-         *     yet. ``assign`` on the ask changes only who is asked.
+         *     yet. ``assign`` on the ask changes only who is asked. At H11 ``questions`` Observe
+         *     nothing is proposed and ``held`` says why; at Draft each question keeps its own
+         *     named person.
          */
         get: operations["get_next_question_batch"];
         put?: never;
@@ -7433,9 +7573,32 @@ export interface paths {
          *     or an approver). Each is asked of the person ``assign`` names for it, else its gap's
          *     owner, else the intake's author (C2); a person who cannot answer is 422 and a
          *     private finding's question asked of anyone but the author 409, and then nothing is
-         *     asked. ``size``: in the body or, as before, the query.
+         *     asked; 409 too while Ask people questions is at Observe (H11, Oracle asks no one).
+         *     ``size``: in the body or, as before, the query.
          */
         post: operations["ask_next_question_batch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/intakes/{intake_id}/questions/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Intake Questions
+         * @description Withdraw these questions of the intake that are still waiting on an answer (the
+         *     author or an approver): the Undo of a batch Oracle asked on its own (H11
+         *     ``questions``). Answered or otherwise settled ones stay as they are.
+         */
+        post: operations["withdraw_intake_questions"];
         delete?: never;
         options?: never;
         head?: never;
@@ -11038,7 +11201,8 @@ export interface paths {
          * Get Plan Item History
          * @description A roadmap item across its roadmap's versions, in version order: its horizon in
          *     each version that has it, the PRD version it came from, and when that roadmap
-         *     version was approved. ``tracker_events`` stays empty until F2 Track health.
+         *     version was approved; ``tracker_events``: what each import changed on the item's
+         *     tracker issues (F2 Track health), oldest first.
          */
         get: operations["get_plan_item_history"];
         put?: never;
@@ -11497,8 +11661,9 @@ export interface paths {
         put?: never;
         /**
          * Test Metric Query
-         * @description Run a PostHog query for the last 4 complete weeks; nothing is stored. The
-         *     provider's error, when it refuses, is in ``error``.
+         * @description Run a PostHog query for the last 4 complete weeks; nothing is stored. 422 when
+         *     the query is not one read-only SELECT over the allowed tables; a failure is a fixed
+         *     sentence in ``error`` (PostHog's own text is in the server log).
          */
         post: operations["test_metric_query"];
         delete?: never;
@@ -11584,7 +11749,8 @@ export interface paths {
         /**
          * Pull Metric
          * @description Pull now: read the last complete week from PostHog again and replace its value
-         *     (409 unless the metric's source is PostHog; 502 with the provider's message).
+         *     (409 unless the metric's source is PostHog; 502 with a fixed message, PostHog's
+         *     own text in the server log).
          */
         post: operations["pull_metric"];
         delete?: never;
@@ -11833,7 +11999,9 @@ export interface paths {
         put?: never;
         /**
          * Check Competitor Page
-         * @description Check now: read the page at once (409 when its robots.txt disallows it).
+         * @description Check now: read the page at once (409 when its robots.txt disallows it; 429, with
+         *     when in words and a Retry-After, past once per page per 10 minutes or 20 per company
+         *     an hour).
          */
         post: operations["check_competitor_page"];
         delete?: never;
@@ -13991,6 +14159,13 @@ export interface components {
             risk_acceptance?: components["schemas"]["AssumptionDecisionOut"] | null;
             /** Documents */
             documents: components["schemas"]["BlockerDocumentRef"][];
+            /**
+             * Can Set Status
+             * @default true
+             */
+            can_set_status: boolean;
+            /** Set Status Why Not */
+            set_status_why_not?: string | null;
         };
         /**
          * BlockerSummary
@@ -14479,6 +14654,18 @@ export interface components {
             allowed: boolean;
             /** Why Not */
             why_not?: string | null;
+        };
+        /** ChangeApplyIn */
+        ChangeApplyIn: {
+            /** Lock Version */
+            lock_version: number;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Confirm
+             * @default false
+             */
+            confirm: boolean;
         };
         /**
          * ChangeCan
@@ -15407,6 +15594,8 @@ export interface components {
             run_status?: string | null;
             /** Error */
             error?: string | null;
+            /** Failed At */
+            failed_at?: string | null;
             /** Stale At */
             stale_at?: string | null;
             /** Mine */
@@ -15470,6 +15659,8 @@ export interface components {
             run_status?: string | null;
             /** Error */
             error?: string | null;
+            /** Failed At */
+            failed_at?: string | null;
             /** Stale At */
             stale_at?: string | null;
             /** Mine */
@@ -15889,7 +16080,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            decided_by: "policy" | "template" | "condition" | "learning" | "dependency" | "user" | "conflict" | "none";
             /**
              * Policy Source
              * @default catalog
@@ -16369,6 +16560,8 @@ export interface components {
             status: string;
             /** Reconnect Reason */
             reconnect_reason?: string | null;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
         };
         /** ConnectionOut */
         ConnectionOut: {
@@ -16413,6 +16606,8 @@ export interface components {
             updated_at: string;
             /** Reconnect Reason */
             reconnect_reason?: string | null;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
         };
         /** ConsentDecisionIn */
         ConsentDecisionIn: {
@@ -16848,6 +17043,44 @@ export interface components {
              */
             subjects: components["schemas"]["Subject"][];
         };
+        /**
+         * DecisionEntityRef
+         * @description A linked baseline item, as a person reads it.
+         */
+        DecisionEntityRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Type */
+            type: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * DecisionEvidenceRef
+         * @description Evidence it rests on: the excerpt and link anyone who reads the baseline sees.
+         */
+        DecisionEvidenceRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Entity Id */
+            entity_id?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /** Url */
+            url?: string | null;
+            /** Ref */
+            ref?: string | null;
+        };
         /** DecisionIn */
         DecisionIn: {
             /**
@@ -16998,6 +17231,23 @@ export interface components {
             } | null;
             /** Outcome Id */
             outcome_id?: string | null;
+            /** Outcome Status */
+            outcome_status?: ("predicted" | "tracking" | "held" | "partially_held" | "not_held" | "inconclusive") | null;
+            /**
+             * Outcome Check Due
+             * @default false
+             */
+            outcome_check_due: boolean;
+            /**
+             * Entities
+             * @default []
+             */
+            entities: components["schemas"]["DecisionEntityRef"][];
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["DecisionEvidenceRef"][];
             /** Supersedes Id */
             supersedes_id?: string | null;
             /** Revisit Id */
@@ -17600,6 +17850,13 @@ export interface components {
             /** Can Manage */
             can_manage: boolean;
             private_findings?: components["schemas"]["PrivateFindings"] | null;
+            /**
+             * Can Research
+             * @default false
+             */
+            can_research: boolean;
+            /** Research Usd */
+            research_usd?: number | null;
         };
         /** DiscussionMeSummary */
         DiscussionMeSummary: {
@@ -17687,6 +17944,7 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             usage?: components["schemas"]["ReplyUsage"] | null;
+            research?: components["schemas"]["MessageResearch"] | null;
         };
         /** DiscussionMessagePage */
         DiscussionMessagePage: {
@@ -18344,6 +18602,8 @@ export interface components {
              * @default []
              */
             problems: components["schemas"]["ImportProblem"][];
+            /** Problems Total */
+            problems_total?: number | null;
             /** Summary */
             summary?: string | null;
             source?: components["schemas"]["VersionSource"] | null;
@@ -18356,6 +18616,26 @@ export interface components {
              * Format: uuid
              */
             job_id: string;
+        };
+        /**
+         * DraftNewItems
+         * @description S4: "N new items since draft k, refresh?". What changed in the draft's author's own
+         *     sources since the sources the draft was written from (its run's pin, or the moment it
+         *     was imported when no run made it). Sources are private (S5): anyone but the author gets
+         *     ``visible: false`` with neither ``as_of`` nor ``count``.
+         */
+        DraftNewItems: {
+            /** Version */
+            version: number;
+            /** As Of */
+            as_of?: string | null;
+            /** Count */
+            count?: number | null;
+            /**
+             * Visible
+             * @default false
+             */
+            visible: boolean;
         };
         /** DraftNoteIn */
         DraftNoteIn: {
@@ -18715,6 +18995,13 @@ export interface components {
             applied: boolean;
             edge?: components["schemas"]["EdgeOut"] | null;
             proposal?: components["schemas"]["ProposalOut"] | null;
+        };
+        /** EndpointIn */
+        EndpointIn: {
+            /** Endpoint Url */
+            endpoint_url?: string | null;
+            /** Token */
+            token: string;
         };
         /** EntityCreate */
         EntityCreate: {
@@ -19758,6 +20045,12 @@ export interface components {
              * @default false
              */
             staged_for_agents: boolean;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Intake Question Id */
+            intake_question_id?: string | null;
+            /** Intake Answer Id */
+            intake_answer_id?: string | null;
         };
         /**
          * FeedbackPackage
@@ -20029,7 +20322,7 @@ export interface components {
              * Key
              * @enum {string}
              */
-            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            key: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Title */
             title: string;
             /** Description */
@@ -21242,7 +21535,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Flow Title */
             flow_title: string;
             /** Document Slug */
@@ -21750,6 +22043,11 @@ export interface components {
              * @default []
              */
             imports: components["schemas"]["RunSummary"][];
+            /**
+             * No Documents
+             * @default []
+             */
+            no_documents: components["schemas"]["RunSummary"][];
             /** Feedback */
             feedback: components["schemas"]["InboxDocument"][];
             /**
@@ -22149,7 +22447,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "intake" | "document_section" | "checkpoint_item" | "entity";
+            kind: "intake" | "document_section" | "checkpoint_item" | "entity" | "roadmap_item";
             /** Title */
             title: string;
             /** Href */
@@ -22309,7 +22607,7 @@ export interface components {
              * @default none
              * @enum {string}
              */
-            decided_by: "policy" | "template" | "condition" | "dependency" | "user" | "conflict" | "none";
+            decided_by: "policy" | "template" | "condition" | "learning" | "dependency" | "user" | "conflict" | "none";
             /**
              * Policy Source
              * @default catalog
@@ -22537,6 +22835,11 @@ export interface components {
             /** Theme */
             theme?: string | null;
             prd_answers?: components["schemas"]["PrdAnswers"] | null;
+            /**
+             * Request Ids
+             * @default []
+             */
+            request_ids: string[];
         };
         /** IntakeOut */
         IntakeOut: {
@@ -22760,6 +23063,15 @@ export interface components {
              * @default 0
              */
             answers_since_run: number;
+            /**
+             * Late Answers As Feedback
+             * @default 0
+             */
+            late_answers_as_feedback: number;
+            /** Draft Document */
+            draft_document?: string | null;
+            /** Draft Version */
+            draft_version?: number | null;
         };
         /** InterviewCreate */
         InterviewCreate: {
@@ -22814,6 +23126,8 @@ export interface components {
             status: string;
             /** Error */
             error?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
         };
         /**
          * InterviewLinkOut
@@ -23224,9 +23538,12 @@ export interface components {
              * Tracker Events
              * @default []
              */
-            tracker_events: {
-                [key: string]: unknown;
-            }[];
+            tracker_events: components["schemas"]["ItemTrackerEvent"][];
+            /**
+             * Tracker Events Older
+             * @default 0
+             */
+            tracker_events_older: number;
         };
         /** ItemIn */
         ItemIn: {
@@ -23343,6 +23660,29 @@ export interface components {
             }[];
             /** Items */
             items: components["schemas"]["RoadmapItemOut"][];
+        };
+        /**
+         * ItemTrackerEvent
+         * @description One import's changes to one of the item's tracker issues (F2 §2), in field order.
+         *     The tracker's own status name is left out: the state says it in Oracle's words.
+         */
+        ItemTrackerEvent: {
+            /**
+             * Record Id
+             * Format: uuid
+             */
+            record_id: string;
+            /** Tracker */
+            tracker: string;
+            /** External Ref */
+            external_ref: string;
+            /**
+             * Observed At
+             * Format: date-time
+             */
+            observed_at: string;
+            /** Changes */
+            changes: components["schemas"]["TrackerFieldChange"][];
         };
         /** ItemVersion */
         ItemVersion: {
@@ -24570,6 +24910,21 @@ export interface components {
             /** Chosen Label */
             chosen_label?: string | null;
         };
+        /** MessageResearch */
+        MessageResearch: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "running" | "done" | "failed";
+            /** Error */
+            error?: string | null;
+        };
         /** MetricCreate */
         MetricCreate: {
             /** Title */
@@ -25292,6 +25647,8 @@ export interface components {
             questions: components["schemas"]["QuestionCard"][];
             /** Remaining */
             remaining: number;
+            /** Held */
+            held?: string | null;
         };
         /** NextDraftApply */
         NextDraftApply: {
@@ -25529,6 +25886,45 @@ export interface components {
             status: "addressed" | "declined";
             /** Note */
             note?: string | null;
+        };
+        /**
+         * NextDraftRun
+         * @description #574 review: the agents' run under way on a document (Build next draft sent it the
+         *     items below): what it was sent is not staged for another build until it ends, and no
+         *     other build of the document starts meanwhile.
+         */
+        NextDraftRun: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Flow */
+            flow: string;
+            /** Flow Title */
+            flow_title: string;
+            /** Status */
+            status: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["StagedChange"][];
+            /**
+             * Agent Items
+             * @default []
+             */
+            agent_items: components["schemas"]["AgentItem"][];
+            /**
+             * Next Draft Changes
+             * @default []
+             */
+            next_draft_changes: components["schemas"]["StagedDiscussionChange"][];
         };
         /** NextDraftRunIn */
         NextDraftRunIn: {
@@ -26375,6 +26771,40 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * PlanDrift
+         * @description The item's drift against the approved product strategy (H4 §5), for owners and
+         *     approvers. An approved item's is its stored finding (``finding_id``: waived there,
+         *     POST /v1/strategy/findings/{id}/waive); a draft item's is measured as the Plan is
+         *     read and has none.
+         */
+        PlanDrift: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "outside_strategy" | "stopped_but_planned";
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "warning" | "high";
+            /** Label */
+            label: string;
+            /** Text */
+            text: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "waived";
+            /** Finding Id */
+            finding_id?: string | null;
+            /** Waive Reason */
+            waive_reason?: string | null;
+            /** Waived At */
+            waived_at?: string | null;
+        };
         /** PlanEngineering */
         PlanEngineering: {
             /** Records */
@@ -26425,6 +26855,12 @@ export interface components {
             track_id: string | null;
             /** Goal Ids */
             goal_ids: string[];
+            feature?: components["schemas"]["EntityRef"] | null;
+            /**
+             * Requirements
+             * @default []
+             */
+            requirements: components["schemas"]["EntityRef"][];
             /**
              * State
              * @enum {string}
@@ -26432,6 +26868,11 @@ export interface components {
             state: "proposed" | "done" | "slipped" | "at_risk" | "on_track" | "planned";
             /** Reasons */
             reasons: components["schemas"]["PlanReason"][];
+            /**
+             * Drift
+             * @default []
+             */
+            drift: components["schemas"]["PlanDrift"][];
             engineering: components["schemas"]["PlanEngineering"];
             next: components["schemas"]["PlanNext"];
         };
@@ -27400,13 +27841,11 @@ export interface components {
         /**
          * ProposedAssessment
          * @description Oracle's reading on the due date; a person confirms, edits or marks it inconclusive.
+         *     ``verdict`` is None at H11 ``outcomes`` Observe or Draft: the actual only.
          */
         ProposedAssessment: {
-            /**
-             * Verdict
-             * @enum {string}
-             */
-            verdict: "held" | "partially_held" | "not_held" | "inconclusive";
+            /** Verdict */
+            verdict: ("held" | "partially_held" | "not_held" | "inconclusive") | null;
             /** Observed */
             observed?: string | null;
             /** Actual Value */
@@ -27868,7 +28307,7 @@ export interface components {
             /** Rationale */
             rationale?: string | null;
             /** Subject */
-            subject: components["schemas"]["IntakeSubject"] | components["schemas"]["DocumentSectionSubject"] | components["schemas"]["CheckpointItemSubject"] | components["schemas"]["EntitySubject"];
+            subject: components["schemas"]["IntakeSubject"] | components["schemas"]["DocumentSectionSubject"] | components["schemas"]["CheckpointItemSubject"] | components["schemas"]["EntitySubject"] | components["schemas"]["RoadmapItemSubject"];
         };
         /**
          * QuestionPatch
@@ -27895,6 +28334,20 @@ export interface components {
              * @default []
              */
             fills: string[];
+        };
+        /**
+         * QuestionsWithdraw
+         * @description Withdraw these questions of an intake that are still waiting (the Undo of a
+         *     batch Oracle asked on its own).
+         */
+        QuestionsWithdraw: {
+            /** Question Ids */
+            question_ids: string[];
+        };
+        /** QuestionsWithdrawn */
+        QuestionsWithdrawn: {
+            /** Question Ids */
+            question_ids: string[];
         };
         /** RankedFeature */
         RankedFeature: {
@@ -28908,6 +29361,7 @@ export interface components {
             document: components["schemas"]["RequestDocumentProgress"] | null;
             /** Intake Id */
             intake_id: string | null;
+            intake?: components["schemas"]["RequestIntakeRef"] | null;
             /** Interview Id */
             interview_id: string | null;
             source: components["schemas"]["SourceCopy"] | null;
@@ -29003,6 +29457,19 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * RequestIntakeRef
+         * @description The brief a request is behind (C1 lane 2, Start a PRD): its people read it there.
+         */
+        RequestIntakeRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
         /** RequestList */
         RequestList: {
             /** Items */
@@ -29066,6 +29533,7 @@ export interface components {
             document: components["schemas"]["RequestDocumentRef"] | null;
             /** Intake Id */
             intake_id: string | null;
+            intake?: components["schemas"]["RequestIntakeRef"] | null;
             /** Interview Id */
             interview_id: string | null;
             source: components["schemas"]["SourceCopy"] | null;
@@ -29345,6 +29813,17 @@ export interface components {
             entities: number;
             /** Edges */
             edges: number;
+        };
+        /**
+         * ResearchIn
+         * @description Research this: the person's message to research.
+         */
+        ResearchIn: {
+            /**
+             * Message Id
+             * Format: uuid
+             */
+            message_id: string;
         };
         /**
          * Resolution
@@ -30307,6 +30786,24 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /**
+         * RoadmapItemSubject
+         * @description A Plan item: its PRD and its item key (F2 Ask, from the Plan).
+         */
+        RoadmapItemSubject: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "roadmap_item";
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /** Item Key */
+            item_key: string;
+        };
         /** RoadmapItemsOut */
         RoadmapItemsOut: {
             roadmap: components["schemas"]["DocumentRef"];
@@ -30393,7 +30890,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Document */
             document?: string | null;
             /** Source */
@@ -30558,7 +31055,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Flow Title */
             flow_title: string;
             /**
@@ -30629,6 +31126,8 @@ export interface components {
             searching?: string | null;
             /** Import Failed */
             import_failed?: string | null;
+            /** No Document */
+            no_document?: string | null;
             /**
              * Can Retry Import
              * @default false
@@ -30820,7 +31319,7 @@ export interface components {
              * Flow
              * @enum {string}
              */
-            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest";
+            flow: "baseline_to_prd" | "feedback_loop" | "prd_to_roadmap" | "prd_to_spec" | "request_triage" | "strategy_draft" | "launch_kit" | "baseline" | "code_map" | "update_draft" | "prd_draft_items" | "ritual_summary" | "metrics_variance" | "pricing_memo" | "competitive_digest" | "discussion_research";
             /** Flow Title */
             flow_title: string;
             /**
@@ -30891,6 +31390,8 @@ export interface components {
             searching?: string | null;
             /** Import Failed */
             import_failed?: string | null;
+            /** No Document */
+            no_document?: string | null;
             /**
              * Can Retry Import
              * @default false
@@ -32384,6 +32885,8 @@ export interface components {
              * @default false
              */
             can_retry_draft_import: boolean;
+            /** Draft Retry Refused */
+            draft_retry_refused?: string | null;
             items_check?: components["schemas"]["ItemsCheck"] | null;
             previous_attempt?: components["schemas"]["PreviousAttempt"] | null;
             feature_set_check?: components["schemas"]["FeatureSetCheck"] | null;
@@ -33017,6 +33520,16 @@ export interface components {
             approach_status?: ("proposed" | "approved") | null;
             /** Freshness */
             freshness?: string | null;
+            /**
+             * State
+             * @default requested
+             * @enum {string}
+             */
+            state: "requested" | "drafting" | "in_review" | "approved" | "stale" | "failed";
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Tech Brief Version Id */
+            tech_brief_version_id?: string | null;
             /** Requirements */
             requirements: components["schemas"]["RequirementOut"][];
             /** Section Keys */
@@ -33104,7 +33617,9 @@ export interface components {
              */
             screens: number;
             /** Engineering Approver Ids */
-            engineering_approver_ids?: string[];
+            engineering_approver_ids?: string[] | null;
+            /** Tech Brief Version Id */
+            tech_brief_version_id?: string | null;
             /** Title */
             title?: string | null;
             /** Document */
@@ -33171,6 +33686,16 @@ export interface components {
             approach_status?: ("proposed" | "approved") | null;
             /** Freshness */
             freshness?: string | null;
+            /**
+             * State
+             * @default requested
+             * @enum {string}
+             */
+            state: "requested" | "drafting" | "in_review" | "approved" | "stale" | "failed";
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Tech Brief Version Id */
+            tech_brief_version_id?: string | null;
         };
         /** SpecVersionOut */
         SpecVersionOut: {
@@ -33384,6 +33909,9 @@ export interface components {
              * @default []
              */
             next_draft_changes: components["schemas"]["StagedDiscussionChange"][];
+            agents_run?: components["schemas"]["NextDraftRun"] | null;
+            /** Worth A Draft */
+            worth_a_draft?: string | null;
         };
         /**
          * StagedDiscussionChange
@@ -34973,6 +35501,8 @@ export interface components {
             token: string;
             /** Label */
             label?: string | null;
+            /** Endpoint Url */
+            endpoint_url?: string | null;
         };
         /** TokenOut */
         TokenOut: {
@@ -35464,7 +35994,11 @@ export interface components {
         /**
          * TrackAlertOut
          * @description One situation on one track. ``actions``: only what the caller may do now.
-         *     ``inbox_state``: in the Inbox only (new, open, done; C1e).
+         *     ``inbox_state``: in the Inbox only (new, open, done; C1e). ``suggested_assignee``: whom
+         *     Ask pre-fills (F2 §3, "a question to the engineering lead"; decided 2026-10-25): the
+         *     company's engineering lead when exactly one active member carries the flag and the
+         *     caller, not that lead, may Ask; else none. The server decides, so the flag itself never
+         *     reaches a picker (``GET /v1/people`` does not show it).
          */
         TrackAlertOut: {
             /**
@@ -35516,7 +36050,8 @@ export interface components {
             /** Resolved At */
             resolved_at: string | null;
             /** Actions */
-            actions: ("accept_date" | "replan" | "review" | "reconcile" | "open_blocker" | "link" | "keep" | "reopen")[];
+            actions: ("accept_date" | "replan" | "review" | "reconcile" | "open_blocker" | "link" | "ask" | "discuss" | "keep" | "reopen")[];
+            suggested_assignee?: components["schemas"]["PersonOut"] | null;
         };
         /** TrackAlertPrd */
         TrackAlertPrd: {
@@ -35677,6 +36212,21 @@ export interface components {
             read_only_alignment: boolean;
             /** Reason */
             reason: string;
+        };
+        /**
+         * TrackerFieldChange
+         * @description One field an import changed: before and after, as the tracker history keeps them.
+         */
+        TrackerFieldChange: {
+            /**
+             * Field
+             * @enum {string}
+             */
+            field: "state" | "target_date" | "estimate";
+            /** Before */
+            before: string | null;
+            /** After */
+            after: string | null;
         };
         /** TrackerImportOut */
         TrackerImportOut: {
@@ -36413,6 +36963,8 @@ export interface components {
             imported_by?: string | null;
             /** Imported By Name */
             imported_by_name?: string | null;
+            /** Imported Again */
+            imported_again?: string | null;
             /** Approved At */
             approved_at?: string | null;
             /**
@@ -36542,6 +37094,8 @@ export interface components {
             imported_by?: string | null;
             /** Imported By Name */
             imported_by_name?: string | null;
+            /** Imported Again */
+            imported_again?: string | null;
             /** Approved At */
             approved_at?: string | null;
             /**
@@ -38010,6 +38564,38 @@ export interface operations {
             };
         };
     };
+    get_draft_new_items: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+                n: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftNewItems"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_version_markdown: {
         parameters: {
             query?: never;
@@ -38938,6 +39524,60 @@ export interface operations {
             };
             /** @description Oracle has answered a lot here; the message is still stored */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    research_discussion_message: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                discussion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResearchIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscussionMessageOut"];
+                };
+            };
+            /** @description Approvers and owners start research; or private */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Closed, or Oracle is already researching this message */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only a person's message can be researched */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -39894,6 +40534,116 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ask_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeActIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The kind, rule 4 (share the finding first), or a reason is missing */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    apply_discussion_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeApplyIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChangeResult"];
+                };
+            };
+            /** @description Not this caller's to do (viewers read; approvers stage) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No such discussion (or not one the caller may know of) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Oracle disagrees (C9): nothing stored; send again with confirm to keep it. Also a stale lock_version, or already handled */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PushbackOut"];
+                };
             };
             /** @description The kind, rule 4 (share the finding first), or a reason is missing */
             422: {
@@ -41770,6 +42520,37 @@ export interface operations {
             };
         };
     };
+    undo_accept_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     dismiss_suggestion: {
         parameters: {
             query?: never;
@@ -43328,6 +44109,53 @@ export interface operations {
                 content?: never;
             };
             /** @description A token Oracle will not use (a Slack bot token) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_connection_endpoint: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                connection_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndpointIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConnectionOut"];
+                };
+            };
+            /** @description Fireflies rejected the key, or it belongs to another account */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Only an Oracle owner sets an endpoint */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description An endpoint Oracle does not call, or not a Fireflies connection */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -46619,6 +47447,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Shape goals is at Observe: Oracle opens no interview */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Only goals can be interviewed | This goal is already measurable */
             422: {
                 headers: {
@@ -46649,6 +47484,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InterviewsOut"];
                 };
+            };
+            /** @description Shape goals is at Observe: Oracle opens no interview */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -51987,6 +52829,41 @@ export interface operations {
             };
         };
     };
+    withdraw_intake_questions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                intake_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuestionsWithdraw"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuestionsWithdrawn"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_intake_composition_inputs: {
         parameters: {
             query?: never;
@@ -56705,6 +57582,8 @@ export interface operations {
                 q?: string | null;
                 /** @description Only declined requests with replies still to send (H10) */
                 replies_to_send?: boolean;
+                /** @description Only the requests behind this brief (C1) */
+                intake_id?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -60078,6 +60957,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     get_competitor: {
@@ -60123,6 +61009,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60182,6 +61075,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     archive_competitor: {
@@ -60232,6 +61132,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     restore_competitor: {
@@ -60277,6 +61184,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60336,6 +61250,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     delete_competitor_page: {
@@ -60379,6 +61300,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60438,6 +61366,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     check_competitor_page: {
@@ -60483,6 +61418,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60568,6 +61510,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60661,6 +61610,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     dismiss_web_finding: {
@@ -60710,6 +61666,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60787,6 +61750,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     accept_positioning_suggestion: {
@@ -60832,6 +61802,13 @@ export interface operations {
             };
             /** @description Invalid URL, over the limits, a duplicate, or a field too long */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -60887,6 +61864,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Check now was used too often; the message says when it works again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     search_web: {
@@ -60911,7 +61895,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebSearchOut"];
                 };
             };
-            /** @description Web search is for Oracle's monthly digest, or the URL is not from this run */
+            /** @description Web search is for Oracle's own research runs, or the URL is not from this run */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -60972,7 +61956,7 @@ export interface operations {
                     "application/json": components["schemas"]["WebPageOut"];
                 };
             };
-            /** @description Web search is for Oracle's monthly digest, or the URL is not from this run */
+            /** @description Web search is for Oracle's own research runs, or the URL is not from this run */
             403: {
                 headers: {
                     [name: string]: unknown;

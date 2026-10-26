@@ -91,6 +91,8 @@ class InterviewJobState(BaseModel):
     id: uuid.UUID
     status: str
     error: str | None = None
+    # When it failed, so a stored error reads as then, not now (#604 re-review).
+    finished_at: datetime | None = None
 
 
 class InterviewMessageOut(BaseModel):
