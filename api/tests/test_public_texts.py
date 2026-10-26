@@ -1241,3 +1241,20 @@ def test_the_strict_skeleton_stops_changing_within_its_rounds():
         for _ in range(rounds - 1):
             text = leak_check._strict_round(text)
         assert leak_check._strict_round(text) == text, ascii(char)
+
+
+def test_every_letter_with_several_readings_has_a_stand_in():
+    """protects=#699 re-review: the mixed form writes a stand-in for every character, as a
+    text reads it, that has more than one reading, so no such letter falls back to one
+    reading; fails_when= a capital I (or any other) has no stand-in."""
+    missing = []
+    for cp in range(0x20, 0x110000):
+        if 0xD800 <= cp < 0xE000:
+            continue
+        read = leak_check._read(chr(cp))
+        for char in read:
+            forms = leak_check._char_forms(char, cached=False)
+            words = [f for f in forms if leak_check._TOKEN.search(f)]
+            if len(forms) > 1 and words and forms not in leak_check._STAND_INS:
+                missing.append(char)
+    assert missing == [], ascii("".join(missing[:20]))

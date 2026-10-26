@@ -22,8 +22,12 @@ mark on or inside a name ("Northwi\u0307nd", "N\u00f6rthwind", U+0130) and mixed
 look-alikes are found. They also match on the strict skeleton (:func:`strict_skeleton`:
 every character mapped before case is folded, so a capital I, Greek Iota or Cyrillic I
 stands in for a small l as Unicode says, then mapped and folded again until nothing
-changes, so a stored "M" and a written "m" meet); a name is found when either form
-matches. A public text holding an invisible character is refused when saved
+changes, so a stored "M" and a written "m" meet). A name is found when the text matches
+it on any of its forms, letter by letter: each letter of a name is read on its skeleton,
+its strict skeleton as stored and its strict skeleton after case folding (a stored capital
+I is "i" or "l"), and the text is read on each of those forms and on its mixed form, where
+a written letter with several readings stands for all of them (:func:`_mixed`).
+A public text holding an invisible character is refused when saved
 (:func:`format_characters`), so what an approver reads is what was checked; only the
 joiners, selectors and tags of an ordinary emoji sequence (a ZWJ emoji, a keycap, the
 England, Scotland or Wales flag) are kept. Any other tag run is refused, and the check
