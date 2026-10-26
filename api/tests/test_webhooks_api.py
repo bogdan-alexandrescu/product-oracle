@@ -117,6 +117,40 @@ async def test_create_refuses_bad_urls_unknown_types_and_more_than_ten(client, o
     assert (await create(client, owner.headers, name="Eleventh")).status_code == 422
 
 
+async def test_two_creates_at_the_same_moment_cannot_pass_ten(client, tenant_id, owner):
+    """protects=spec API (at most ten per company; #625 review minor): a create holds the
+    company's count until it commits; fails_when=a second create, racing at nine, counts
+    nine and passes too."""
+    import asyncio
+
+    from oracle.auth.deps import Principal
+    from oracle.webhooks import service
+    from oracle.webhooks.schemas import WebhookIn
+
+    for i in range(9):
+        await created(client, owner.headers, name=f"Hook {i}")
+    who = Principal(tenant_id=tenant_id, kind="user", role="owner", user_id=owner.user.id)
+
+    async def second() -> str:
+        async with tenant_session(tenant_id) as s:
+            try:
+                await service.create(s, who, WebhookIn(**{**BODY, "name": "Also tenth"}))
+            except service.WebhookError as e:
+                return e.code
+            await s.commit()
+            return "created"
+
+    async with tenant_session(tenant_id) as s:
+        await service.create(s, who, WebhookIn(**{**BODY, "name": "Tenth"}))
+        racing = asyncio.create_task(second())
+        await asyncio.sleep(1)
+        assert not racing.done(), "the second create did not wait for the first"
+        await s.commit()
+    assert await asyncio.wait_for(racing, 10) == "invalid"
+    async with tenant_session(tenant_id) as s:
+        assert len(list(await s.scalars(select(Webhook.id)))) == 10
+
+
 async def test_only_an_owner_turns_on_approvers_content_and_with_a_reason(
     client, tenant_id, owner, approver
 ):
