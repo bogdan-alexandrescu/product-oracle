@@ -1040,3 +1040,82 @@ def test_long_texts_are_not_kept_in_the_skeleton_cache():
         before = fn.cache.cache_info().currsize
         assert fn(long) == fn(long)
         assert fn.cache.cache_info().currsize == before
+
+
+# --- #697 re-review: the strict skeleton is taken to a fixed point ---------------------
+
+
+@pytest.mark.parametrize(
+    ("ctx_over", "text", "code"),
+    [
+        ({"people": [PERSON, "Mallory"]}, "Built with maIIory", "person_name"),
+        ({"alternatives": [RIVAL, "Gold Mine"]}, "Faster than goId mine", "alternative_name"),
+        ({"slugs": [SLUG, "Milestone-plan"]}, "See miIestone-plan", "internal_code"),
+    ],
+)
+def test_a_name_in_another_case_with_a_capital_i_for_a_small_l_is_found(ctx_over, text, code):
+    """protects=#697 re-review: the strict skeleton maps, casefolds and maps again until
+    nothing changes, so a stored "M" and a written "m" both reach "rn" while a capital I
+    still reads as "l"; fails_when="maIIory", "goId mine" or "miIestone-plan" passes."""
+    findings = leak_check.check(text, _ctx(**ctx_over))
+    assert code in [f.code for f in leak_check.blocking(findings)], findings
+
+
+def test_the_strict_skeleton_is_a_fixed_point():
+    """protects=#697 re-review: case folding and look-alike mapping meet in any order (the
+    strict skeleton of a strict skeleton is itself, and of the upper- or lower-cased text
+    the same); fails_when="Mallory" and "maIIory" differ."""
+    for text in ("Mallory", "maIIory", "MALLORY", "Gold Mine", "goId mine", "100% RivaICo"):
+        strict = leak_check.strict_skeleton(text)
+        assert leak_check.strict_skeleton(strict) == strict, text
+    assert leak_check.strict_skeleton("Mallory") == leak_check.strict_skeleton("maIIory")
+    assert leak_check.strict_skeleton("MALLORY") == leak_check.strict_skeleton("mallory")
+
+
+def _recase(rng, text: str) -> str:
+    """``text`` as it is, lower case, upper case, title case or each letter's case drawn."""
+    return rng.choice(
+        [
+            text,
+            text.lower(),
+            text.upper(),
+            text.title(),
+            "".join(c.upper() if rng.random() < 0.5 else c.lower() for c in text),
+        ]
+    )
+
+
+def test_seeded_names_in_any_case_with_look_alikes_are_still_found():
+    """protects=#697 re-review (property): the stored name and the written text each take
+    a random case, then the written text's letters are swapped for confusables.txt
+    look-alikes of either case and given random marks; every variant is still found;
+    fails_when="Mallory" stored and "maIIory" written passes."""
+    import random
+
+    rng = random.Random(697)
+    alikes = _look_alikes()
+    seeded = [
+        ("Quillfeather", "person_name", "people"),
+        ("Mallory", "person_name", "people"),
+        ("Northwind", "customer_name", "customers"),
+        ("Gold Mine", "alternative_name", "alternatives"),
+        ("Lumen Quarry", "person_name", "people"),
+    ]
+    missed = []
+    for name, code, field_name in seeded:
+        for _ in range(100):
+            stored = _recase(rng, name)
+            ctx = _ctx(**{field_name: [*getattr(_ctx(), field_name), stored]})
+            chars = []
+            for ch in _recase(rng, name):
+                pool = alikes.get(ch, []) + alikes.get(ch.lower(), []) + alikes.get(ch.upper(), [])
+                if pool and rng.random() < 0.4:
+                    ch = rng.choice(pool)
+                chars.append(ch)
+                if ch != " " and rng.random() < 0.3:
+                    chars.append(rng.choice(MARKS))
+            variant = "".join(chars)
+            found = leak_check.check(f"Built for {variant} soon", ctx)
+            if code not in [f.code for f in leak_check.blocking(found)]:
+                missed.append((stored, variant))
+    assert missed == [], [ascii(m) for m in missed[:10]]
