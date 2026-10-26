@@ -8,7 +8,12 @@ from oracle.docs.schemas import WordOp
 from oracle.jobs.prompting import MAX_BODY_CHARS
 
 JobKind = Literal[
-    "review_comments", "reporting", "refinement", "quality_review", "refinement_batch"
+    "review_comments",
+    "reporting",
+    "refinement",
+    "quality_review",
+    "refinement_batch",
+    "public_text",
 ]
 # Every kind a job row may have: the document kinds and the intake's (oracle.intake.job).
 AnyJobKind = Literal[
@@ -17,6 +22,7 @@ AnyJobKind = Literal[
     "refinement",
     "quality_review",
     "refinement_batch",
+    "public_text",
     "intake_analysis",
     "decision_options",
     "scope_enhance",
@@ -90,6 +96,8 @@ class JobSettings(BaseModel):
     refinement: bool = True
     # Only ever queued by a person (POST .../quality-review), never on its own.
     quality_review: bool = True
+    # O5: Draft public texts on a roadmap (oracle.roadmap.public), only ever by a person.
+    public_text: bool = True
 
 
 class RefineIn(BaseModel):

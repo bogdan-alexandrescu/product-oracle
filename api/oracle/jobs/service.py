@@ -45,6 +45,7 @@ SWITCH_LABELS = {
     "refinement": "Rewrite sections and build drafts",
     "quality_review": "Quality review",
     "decision_options": "Decision options",
+    "public_text": "Draft public texts",
 }
 #: Kinds that share another kind's per-document switch: the next-draft batch is
 #: refinement, so turning refinement off turns it off too.

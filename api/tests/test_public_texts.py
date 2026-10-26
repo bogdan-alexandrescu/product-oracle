@@ -44,6 +44,7 @@ PLAN = "Scale Plus Annual"
 RIVAL, RIVAL_ALIAS = "Acme Rival", "RivalCo"
 HIDDEN_DOC = "Project Bluebird acquisition"
 DECISION = "Sunset the legacy importer"
+INTERNAL_TITLE = "Example Labs internal plan marker-53"
 NOTE = "vendor contract renewal blocks the importer rollout until the audit clears"
 MARKERS = [
     PERSON,
@@ -58,7 +59,7 @@ MARKERS = [
     "Dana Markerson",
     "revenue-marker-91",
     "ENG-412",
-    "Example Labs roadmap",  # the internal document title
+    INTERNAL_TITLE,
     SLUG,
     "Every column parses",  # an internal outcome
     "Serves no confirmed goal",
@@ -124,6 +125,8 @@ async def seed(ctx, *, publish: bool = True) -> None:
         )
         item = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "bulk-import"))
         item.note = NOTE
+        roadmap = await s.scalar(select(Document).where(Document.slug == SLUG))
+        roadmap.title = INTERNAL_TITLE
         await s.commit()
 
 

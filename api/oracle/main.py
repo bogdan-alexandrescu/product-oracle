@@ -66,6 +66,7 @@ from oracle.requests.router import router as requests_router
 from oracle.review.router import router as review_router
 from oracle.review.v2_router import router as review_v2_router
 from oracle.rituals.router import router as rituals_router
+from oracle.roadmap.public_router import router as roadmap_public_router
 from oracle.roadmap.router import router as roadmap_router
 from oracle.runs.router import router as runs_router
 from oracle.runs.scope_router import router as scope_router
@@ -257,6 +258,8 @@ def create_app() -> FastAPI:
     # CR-09: engineering specs, user flows and wireframes from an approved PRD.
     app.include_router(specs_router)
     app.include_router(roadmap_router)
+    # O5: a roadmap's Public version (public texts, preview, public check).
+    app.include_router(roadmap_public_router)
     # F6: the weekly alignment report and the company's Slack install it posts through.
     app.include_router(reports_router)
     app.include_router(company_integrations_router)

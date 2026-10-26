@@ -56,6 +56,13 @@ class Document(Trashable, TenantScoped, Base):
         CheckConstraint(_in("kind", DOCUMENT_KINDS), name="kind"),
         CheckConstraint(_in("visibility", DOCUMENT_VISIBILITIES), name="visibility"),
         CheckConstraint(_in("audience", DOCUMENT_AUDIENCES), name="audience"),
+        CheckConstraint(
+            "public_title IS NULL OR char_length(public_title) BETWEEN 1 AND 120",
+            name="public_title",
+        ),
+        CheckConstraint(
+            "public_intro IS NULL OR char_length(public_intro) <= 600", name="public_intro"
+        ),
         trashed_index("documents"),
         # The few documents that are not company-wide (oracle.docs.visibility).
         Index(
@@ -80,6 +87,10 @@ class Document(Trashable, TenantScoped, Base):
     # O5: a roadmap's default audience, the picker's variant (oracle.roadmap.variants).
     # None reads as "team"; it only preselects, every reader may switch.
     audience: Mapped[str | None] = mapped_column(Text)
+    # O5: the Public page's own title and intro (oracle.roadmap.public); the internal
+    # title is never shown there.
+    public_title: Mapped[str | None] = mapped_column(Text)
+    public_intro: Mapped[str | None] = mapped_column(Text)
     # Built-in model jobs (oracle.jobs) an owner turned off for this document; all on
     # by default.
     disabled_llm_jobs: Mapped[list[str]] = mapped_column(
