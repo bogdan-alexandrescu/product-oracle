@@ -50,6 +50,7 @@ from oracle.jobs.worker import (
     run_worker,
 )
 from oracle.launches.router import router as launches_router
+from oracle.live.router import router as live_router
 from oracle.market.router import router as market_router
 from oracle.mcp.oauth.routes import router as oauth_router
 from oracle.mcp.server import mount_mcp
@@ -248,6 +249,7 @@ def create_app() -> FastAPI:
     app.include_router(claude_accounts_router)
     app.include_router(sources_router)
     app.include_router(fireflies_browse_router)
+    app.include_router(live_router)
     app.include_router(baseline_router)
     app.include_router(goal_interview_router)
     app.include_router(priorities_router)

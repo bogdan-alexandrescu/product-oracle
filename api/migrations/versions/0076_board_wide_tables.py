@@ -8,8 +8,8 @@ an owner edited is left alone (its CSS is theirs).
 Live-safe: one UPDATE of unedited rows. The downgrade restores the old CSS on rows still
 holding the new one.
 
-Revision ID: 0074_board_wide_tables
-Revises: 0073_share_links
+Revision ID: 0076_board_wide_tables
+Revises: 0075_live_tokens
 """
 
 from collections.abc import Sequence
@@ -17,8 +17,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0074_board_wide_tables"
-down_revision: str | None = "0073_share_links"
+revision: str = "0076_board_wide_tables"
+down_revision: str | None = "0075_live_tokens"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

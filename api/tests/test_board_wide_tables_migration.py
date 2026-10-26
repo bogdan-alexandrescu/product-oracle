@@ -1,7 +1,7 @@
-"""Migration 0074_board_wide_tables: a company's unedited roadmap-board theme takes the
+"""Migration 0076_board_wide_tables: a company's unedited roadmap-board theme takes the
 full-width goal table rule; an edited copy is left alone.
 
-Card: protects=the revision chains on 0073_share_links as the single head, swaps the CSS
+Card: protects=the revision chains on 0075_live_tokens as the single head, swaps the CSS
 of built-in roadmap-board rows still exactly as seeded (and back on downgrade), and leaves
 an owner's edited copy and other themes untouched; fails_when=an unedited copy keeps the
 old CSS, an edited copy or another theme is overwritten, or the downgrade does not restore
@@ -17,8 +17,8 @@ from oracle.templates.builtins import BUILTIN_DIR
 from tests.conftest import API_DIR
 from tests.test_migrations import _cfg, _run, scratch_db  # noqa: F401
 
-REVISION = "0074_board_wide_tables"
-PREVIOUS = "0073_share_links"
+REVISION = "0076_board_wide_tables"
+PREVIOUS = "0075_live_tokens"
 
 
 def _migration():
