@@ -49,8 +49,9 @@ from tests.test_roadmap_reasons import SECOND, roadmap_items_check
 # train L; the owners' No document rows theirs in #583, the searching runs folded into the
 # stuck runs' read for it), about 170 when each item's trace is read on its own; plus the
 # approved product strategy once for every checkpoint's drift reasons (H4 §5); Simple's
-# proposals and decisions on them one (#723 S3a).
-MAX_INBOX_READS = 72
+# proposals and decisions on them one (#723 S3a); the versions from Simple drafts waiting
+# for a required reviewer one (#723 S3b).
+MAX_INBOX_READS = 73
 # The timing of that call: a warm-up, then enough samples that the p95 is not one outlier.
 WARM_UP = 3
 SAMPLES = 40

@@ -586,7 +586,7 @@ async def _live_changes(db: AsyncSession, d: SimpleDraft) -> list[SimpleChange]:
     rows = list(
         await db.scalars(
             select(SimpleChange)
-            .where(SimpleChange.draft_ids.any(d.id), SimpleChange.status.in_(COUNTED))
+            .where(SimpleChange.draft_ids.contains([d.id]), SimpleChange.status.in_(COUNTED))
             .order_by(SimpleChange.at, SimpleChange.id)
         )
     )
@@ -905,7 +905,7 @@ async def inbox_rows(db: AsyncSession, principal: Any, seen: Any) -> list[InboxS
     ds = list(
         await db.scalars(
             select(SimpleDraft)
-            .where(SimpleDraft.status == "submitted", SimpleDraft.waiting_on.any(me))
+            .where(SimpleDraft.status == "submitted", SimpleDraft.waiting_on.contains([me]))
             .order_by(SimpleDraft.submitted_at)
         )
     )
