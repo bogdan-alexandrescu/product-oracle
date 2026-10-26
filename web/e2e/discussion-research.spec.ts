@@ -92,8 +92,10 @@ test("a web page Oracle's research cites shows as a link to it", async ({ page }
   await expect(answer).toBeVisible({ timeout: 15_000 });
   const chip = answer.getByTestId("cite-c-2");
   await expect(chip).toContainText("Web");
-  await chip.click();
-  await expect(page.getByRole("link", { name: "Open source ↗" })).toHaveAttribute("href", WEB_URL);
+  await chip.hover();
+  const card = page.getByRole("tooltip");
+  await expect(card).toContainText("Caps at Example");
+  await expect(card.getByRole("link", { name: /Open source/ })).toHaveAttribute("href", WEB_URL);
 });
 
 // protects=MAJOR 2 (#584 review): a research run the runs refuse to start shows the failure
