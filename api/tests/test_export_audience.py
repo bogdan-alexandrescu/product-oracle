@@ -8,11 +8,13 @@ a template's ``audiences`` front matter. Invented data only ("Example Labs").
 
 import hashlib
 import re
+import uuid
 from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
 
+from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentPublication
 from oracle.roadmap import variants
@@ -60,6 +62,9 @@ SECTIONS = [
     ("sources", 2, "Sources and data points", "Interview notes, October."),
 ]
 
+# The items whose feature serves a confirmed goal; the others serve none.
+SERVED = ("csv-parser", "bulk-import")
+
 ITEMS = [
     # key, horizon, title, outcome, extra
     (
@@ -86,9 +91,20 @@ ITEMS = [
 ]
 
 
-async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = False) -> None:
-    """A roadmap version with structured items, a track and two tracker issues."""
+async def seed_roadmap(
+    ctx,
+    *,
+    audience: str | None = None,
+    publish: bool = False,
+    sections: list = SECTIONS,
+    template: str = "now-next-later",
+    items: list = ITEMS,
+    served: tuple[str, ...] = SERVED,
+) -> None:
+    """A roadmap version with structured items, a track and two tracker issues. The
+    items in ``served`` have a baseline feature that supports a confirmed goal (G1)."""
     await seed_company(ctx.tenant_id)
+    features = await seed_goal_links(ctx, served)
     async with tenant_session(ctx.tenant_id) as s:
         prd = Document(slug="example-labs-prd", title="Example Labs PRD", kind="prd")
         doc = Document(
@@ -96,13 +112,13 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
             title="Example Labs roadmap",
             kind="roadmap",
             status="approved",
-            template="now-next-later",
+            template=template,
             template_version="1",
             audience=audience,
         )
         s.add_all([prd, doc])
         await s.flush()
-        markdown = "\n\n".join(f"{'#' * lv} {h} {{#{k}}}\n\n{b}" for k, lv, h, b in SECTIONS)
+        markdown = "\n\n".join(f"{'#' * lv} {h} {{#{k}}}\n\n{b}" for k, lv, h, b in sections)
         version = DocumentVersion(
             document_id=doc.id,
             number=1,
@@ -116,7 +132,7 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
         )
         s.add(version)
         await s.flush()
-        for i, (key, level, heading, body) in enumerate(SECTIONS):
+        for i, (key, level, heading, body) in enumerate(sections):
             brief = key in {"summary", "goals", "brief-items", "not-doing", "top-risks"}
             s.add(
                 Section(
@@ -135,7 +151,7 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
         track = ProductTrack(prd_document_id=prd.id, roadmap_document_id=doc.id, title="Import")
         s.add(track)
         await s.flush()
-        for position, (key, horizon, title, outcome, extra) in enumerate(ITEMS):
+        for position, (key, horizon, title, outcome, extra) in enumerate(items):
             s.add(
                 RoadmapItem(
                     roadmap_document_id=doc.id,
@@ -146,6 +162,8 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
                     title=title,
                     outcome=outcome,
                     horizon=horizon,
+                    # One item is traced to its feature; the others match by key.
+                    feature_id=features.get(key) if key == "bulk-import" else None,
                     **extra,
                 )
             )
@@ -189,6 +207,27 @@ async def seed_roadmap(ctx, *, audience: str | None = None, publish: bool = Fals
                 )
             )
             await s.commit()
+
+
+async def seed_goal_links(ctx, served: tuple[str, ...]) -> dict[str, uuid.UUID]:
+    """A confirmed goal (G1) and, per key in ``served``, a feature whose key is the item
+    key with a confirmed ``supports`` edge to it: the item's feature-to-goal link."""
+    async with tenant_session(ctx.tenant_id) as s:
+        goal = Entity(type="goal", key="g1", title="Activation", status="confirmed", origin="user")
+        s.add(goal)
+        await s.flush()
+        out = {}
+        for key in served:
+            feature = Entity(type="feature", key=key, title=key, status="confirmed", origin="user")
+            s.add(feature)
+            await s.flush()
+            s.add(
+                Edge(src_id=feature.id, dst_id=goal.id, type="supports", status="confirmed",
+                     origin="user", attrs={"contribution": 2})
+            )  # fmt: skip
+            out[key] = feature.id
+        await s.commit()
+    return out
 
 
 def _text(html: str) -> str:
@@ -509,3 +548,200 @@ async def test_start_draft_stores_the_audience_and_old_roadmaps_read_as_team(cli
         headers=ctx.as_("owner"),
     )
     assert prd.status_code == 422
+
+
+# --- #620 review: the Goal column, the why text, the goal link, every template ------
+
+
+@pytest.mark.parametrize("audience", ["board", "team", "engineering"])
+async def test_every_audience_keeps_the_goal_column_and_the_cards_why_text(client, ctx, audience):
+    """protects=the spec's table: Board, Team and Engineering all show each item's goal;
+    the rebuilt brief table keeps the template's Goal column and each rebuilt card keeps
+    its written goal-and-evidence text; fails_when=the Goal column or a card's "why" is
+    dropped; no_claim=grouping by goal (an open owner question)."""
+    await seed_roadmap(ctx)
+    resp = await client.get(EXPORT, params={"audience": audience}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    html, text = resp.text, _text(resp.text)
+    assert re.search(r"<th[^>]*>\s*Goal\s*</th>", html), html
+    assert re.search(r"<td[^>]*>\s*G1\s*</td>", html), html
+    # The written card of CSV parser: its why (goal and evidence) is kept.
+    assert "Parse every column. Serves G1." in text
+
+
+async def test_serving_no_goal_comes_from_the_items_goal_link_not_the_cards_words(client, ctx):
+    """protects=major 3: an item serves no confirmed goal when its feature has no
+    confirmed supports edge to a confirmed goal, whatever its card says;
+    fails_when=Board shows an unlinked item whose card does not use the phrase, or hides
+    a linked item whose card does; no_claim=goal grouping."""
+    sections = [*SECTIONS]
+    at = sections.index(("next", 2, "Next", ""))
+    sections.insert(at, ("now-audit-log", 3, "Audit log", "Record every change."))
+    items = [*ITEMS, ("audit-log", "now", "Audit log", "Every change is recorded", {})]
+    await seed_roadmap(ctx, sections=sections, items=items, served=(*SERVED, "confetti"))
+    resp = await client.get(EXPORT, params={"audience": "board"}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    text = _text(resp.text)
+    assert "Audit log" not in text and "Stickers" not in text
+    assert "Confetti" in text  # its feature serves G1, whatever its card says
+    assert "2 items serve no confirmed goal and are left out" in text
+    team = _text(
+        (await client.get(EXPORT, params={"audience": "team"}, headers=ctx.as_("viewer"))).text
+    )
+    assert "Audit log" in team and "Record every change." in team
+
+
+ESTIMATE_MARK = "est-marker-8"
+OWNER_LINE = "Owner: Dana Markerson."
+WHY = "Why: new accounts need data on day one (G1, 12 interviews)."
+
+# Each template's own sections (api/oracle/templates/builtin/roadmap/*.md) with the
+# items written where that template keeps them: owners, tracker keys, estimates and a
+# goal-less item (Confetti) in the cards, as a writer fills them in.
+TEMPLATE_SECTIONS = {
+    "release-plan": (
+        "Release",
+        "release",
+        [
+            ("roadmap", 1, "Example Labs release plan", "As of October."),
+            ("summary", 2, "Summary", "We grow activation this year."),
+            ("goals", 2, "Goals served", "- G1 Activation: 40% to 55% by Q4"),
+            (
+                "brief-items",
+                2,
+                "Items by release",
+                "| Release | Item | Goal | Outcome |\n|---|---|---|---|\n"
+                "| [2.4](#release-2-4) | [Bulk import](#release-2-4) | G1 | day one |\n"
+                "| | [CSV parser](#release-2-4) | G1 | parses |\n"
+                "| [2.5](#release-2-5) | [Confetti](#release-2-5) | none | delight |",
+            ),
+            ("full", 1, "Full version", ""),
+            ("releases", 2, "Releases", "One subsection per release."),
+            (
+                "release-2-4",
+                3,
+                "2.4 (Nov 3)",
+                "Status: in progress. Goals served: G1.\n\n"
+                f"- Bulk import (must). {OWNER_LINE} Tracker: ENG-412. "
+                f"Estimate: {ESTIMATE_MARK} points. {WHY}\n"
+                "- CSV parser (must). Tracker: ENG-413. Why: every column parses (G1).",
+            ),
+            ("release-2-5", 3, "2.5 (Dec 1)", f"- Confetti (could). {OWNER_LINE} Why: delight."),
+            ("drift", 2, "Drift", "Nothing moved."),
+            ("sources", 2, "Sources and data points", "Interview notes, October."),
+        ],
+    ),
+    "quarterly-timeline": (
+        "Quarter",
+        "timeline",
+        [
+            ("roadmap", 1, "Example Labs quarterly roadmap", "As of October."),
+            ("summary", 2, "Summary", "We grow activation this year."),
+            ("goals", 2, "Goals served", "- G1 Activation: 40% to 55% by Q4"),
+            (
+                "brief-items",
+                2,
+                "Items by quarter",
+                "| Quarter | Item | Goal | Outcome |\n|---|---|---|---|\n"
+                "| [Q4](#timeline) | [Bulk import](#lane-import) | G1 | day one |\n"
+                "| | [CSV parser](#lane-import) | G1 | parses |\n"
+                "| [Q1](#timeline) | [Confetti](#lane-growth) | none | delight |",
+            ),
+            ("full", 1, "Full version", ""),
+            ("timeline", 2, "Timeline", "One subsection per swimlane."),
+            (
+                "lane-import",
+                3,
+                "Import",
+                f"- Bulk import: Nov 1 to Dec 15 (estimate). {OWNER_LINE} "
+                f"Effort: {ESTIMATE_MARK}. Tracker: ENG-412. {WHY}\n"
+                "- CSV parser: Oct 20 to Nov 1. Why: every column parses (G1).",
+            ),
+            ("lane-growth", 3, "Growth", f"- Confetti: Q1. {OWNER_LINE} Why: delight."),
+            (
+                "milestones",
+                2,
+                "Key milestones",
+                "| Milestone | Date | Kind | Owner |\n|---|---|---|---|\n"
+                "| Import beta | Nov 20 | estimate | Dana Markerson |",
+            ),
+            ("sources", 2, "Sources and data points", "Interview notes, October."),
+        ],
+    ),
+    "cycle-bets": (
+        "Cycle",
+        "current",
+        [
+            ("roadmap", 1, "Example Labs cycle bets", "As of October."),
+            ("summary", 2, "Summary", "We grow activation this year."),
+            ("goals", 2, "Goals served", "- G1 Activation: 40% to 55% by Q4"),
+            (
+                "brief-items",
+                2,
+                "Bets by cycle",
+                "| Cycle | Bet | Goal | Outcome |\n|---|---|---|---|\n"
+                "| [This cycle](#current) | [Bulk import](#bet-bulk-import) | G1 | day one |\n"
+                "| | [CSV parser](#bet-csv-parser) | G1 | parses |\n"
+                "| [Next betting table](#candidates) | [Confetti](#pitch-confetti) | none | "
+                "delight |",
+            ),
+            ("full", 1, "Full version", ""),
+            ("current", 2, "This cycle", "Bets placed at the last table."),
+            (
+                "bet-bulk-import",
+                3,
+                "Bulk import",
+                f"Appetite: big batch. {OWNER_LINE} Tracker: ENG-412. "
+                f"Estimate: {ESTIMATE_MARK}. {WHY}",
+            ),
+            ("bet-csv-parser", 3, "CSV parser", "Appetite: small batch. Why: parses (G1)."),
+            ("candidates", 2, "Next betting table", "Shaped pitches."),
+            ("pitch-confetti", 3, "Confetti", f"Why now: delight. {OWNER_LINE}"),
+            ("ideas", 2, "Raw ideas", "- Stickers: fans wear the logo."),
+            ("sources", 2, "Sources and data points", "Interview notes, October."),
+        ],
+    ),
+}
+
+
+@pytest.mark.parametrize("template", list(TEMPLATE_SECTIONS))
+async def test_board_hides_internal_item_detail_in_every_template(client, ctx, template):
+    """protects=major 1 (acceptance 1): in the release-plan, quarterly-timeline and
+    cycle-bets templates Board shows no owner, tracker key, estimate or goal-less item,
+    keeps each item's goal and why, and the brief table keeps the template's own
+    Release/Quarter/Cycle and Goal columns and links only to sections that exist;
+    fails_when=any of those leak, a column is replaced by Horizon or a link points at a
+    missing #now-<key>; no_claim=grouping by goal (open owner question)."""
+    column, container, sections = TEMPLATE_SECTIONS[template]
+    await seed_roadmap(ctx, sections=sections, template=template)
+    resp = await client.get(EXPORT, params={"audience": "board"}, headers=ctx.as_("viewer"))
+    assert resp.status_code == 200, resp.text
+    html, text = resp.text, _text(resp.text)
+    assert "Markerson" not in html
+    assert "ENG-412" not in html and "ENG-413" not in html
+    assert ESTIMATE_MARK not in html
+    assert "Confetti" not in text and "Stickers" not in text
+    assert "items serve no confirmed goal and are left out" in text
+    assert "Bulk import" in text and "12 interviews" in text
+    assert re.search(rf"<th[^>]*>\s*{column}\s*</th>", html), html
+    assert re.search(r"<th[^>]*>\s*Goal\s*</th>", html)
+    assert not re.search(r"<th[^>]*>\s*Horizon\s*</th>", html)
+    assert re.search(r"<td[^>]*>\s*G1\s*</td>", html)
+    # Every in-document link lands on a section of the rendering.
+    ids = set(re.findall(r'id="([^"]+)"', html))
+    for anchor in re.findall(r'href="#([^"]+)"', html):
+        assert anchor in ids or anchor.startswith(("src-", "fn-", "ref-")), anchor
+    assert "data-section-ref" not in html
+    assert f'id="{container}"' in html
+    # Team keeps the goal-less item, flagged, and its tracker keys stay hidden.
+    team = await client.get(EXPORT, params={"audience": "team"}, headers=ctx.as_("viewer"))
+    team_text = _text(team.text)
+    assert "Confetti" in team_text and "ENG-412" not in team.text
+    assert "12 interviews" in team_text
+    # Engineering shows the tracker key and the estimate.
+    eng = _text(
+        (
+            await client.get(EXPORT, params={"audience": "engineering"}, headers=ctx.as_("viewer"))
+        ).text
+    )
+    assert "ENG-412" in eng and ESTIMATE_MARK in eng
