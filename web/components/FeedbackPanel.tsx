@@ -17,6 +17,20 @@ import { sectionHref } from "@/lib/section-link";
 import { useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
+/** C5: an item made from an answer given after drafting started links back to its question on the brief. */
+export function FromQuestionLink({ item }: { item: FeedbackItem }) {
+  if (!item.intake_id || !item.intake_question_id) return null;
+  return (
+    <Link
+      href={`/intakes/${item.intake_id}#q-${item.intake_question_id}`}
+      data-testid="feedback-from-question"
+      className="mt-1 inline-block text-sm font-semibold text-accent-ink underline"
+    >
+      Open the question on the brief
+    </Link>
+  );
+}
+
 /** Where a row's section link goes: the section in this version, else the version it was raised on. */
 export type GoTo = {
   /** Section keys of the version on screen. */
@@ -275,6 +289,7 @@ function Row({
       )}
       {form}
       <p className="mt-1.5 text-[15px] leading-[22px] text-text">{item.summary}</p>
+      <FromQuestionLink item={item} />
       <AgentStagedNote item={item} />
       {item.anchor && <Quote>{item.anchor.exact}</Quote>}
       {item.resolution_note && (

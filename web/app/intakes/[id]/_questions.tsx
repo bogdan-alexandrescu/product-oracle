@@ -205,7 +205,7 @@ function QuestionBubble({
   }
 
   return (
-    <li className="flex min-w-0 flex-col gap-2" data-testid="question">
+    <li id={`q-${q.id}`} className="flex min-w-0 scroll-mt-16 flex-col gap-2" data-testid="question">
       <div className="flex min-w-0 gap-2.5">
         <span aria-hidden className="grid size-8 flex-none place-items-center rounded-full bg-hero text-hero-text">
           <Mark size={16} />
@@ -457,6 +457,13 @@ export function QuestionsTab({
       live = false;
     };
   }, [member, s.intake.id]);
+  // C5: a feedback item made from a late answer links back to its question (#q-<id>);
+  // the thread loads after the page, so it scrolls there once the question is drawn.
+  const drawn = batches.length > 0;
+  useEffect(() => {
+    if (!drawn || !window.location.hash.startsWith("#q-")) return;
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: "start" });
+  }, [drawn]);
   function toggle(on: boolean) {
     setFollowUp(on);
     localStorage.setItem(FOLLOW_UP_KEY, on ? "on" : "off");

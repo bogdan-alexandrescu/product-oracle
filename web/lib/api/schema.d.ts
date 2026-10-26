@@ -2278,6 +2278,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/suggestions/{suggestion_id}/undo-accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Accept Suggestion
+         * @description Undo Accept: the suggestion is open again and its item as before Accept. 409 with
+         *     the reason when it cannot be: an answer already posted, a change a draft applied or a
+         *     build is using, an item changed since.
+         */
+        post: operations["undo_accept_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/suggestions/{suggestion_id}/dismiss": {
         parameters: {
             query?: never;
@@ -19790,6 +19812,12 @@ export interface components {
              * @default false
              */
             staged_for_agents: boolean;
+            /** Intake Id */
+            intake_id?: string | null;
+            /** Intake Question Id */
+            intake_question_id?: string | null;
+            /** Intake Answer Id */
+            intake_answer_id?: string | null;
         };
         /**
          * FeedbackPackage
@@ -22799,6 +22827,15 @@ export interface components {
              * @default 0
              */
             answers_since_run: number;
+            /**
+             * Late Answers As Feedback
+             * @default 0
+             */
+            late_answers_as_feedback: number;
+            /** Draft Document */
+            draft_document?: string | null;
+            /** Draft Version */
+            draft_version?: number | null;
         };
         /** InterviewCreate */
         InterviewCreate: {
@@ -41715,6 +41752,37 @@ export interface operations {
                 "application/json": components["schemas"]["SuggestionAccept"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_accept_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

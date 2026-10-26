@@ -9,7 +9,18 @@ import { wordDiff } from "@/lib/diff";
 import { turnedOff } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 
-import { KIND as BATCH, nextDraftRoute, runBatch, stageRoute, stateOf, type NextDraftChangeRow, type StartRun } from "./next-draft";
+import {
+  KIND as BATCH,
+  nextDraftRoute,
+  runBatch,
+  shownJob,
+  shownNote,
+  shownSuggestion,
+  stageRoute,
+  stateOf,
+  type NextDraftChangeRow,
+  type StartRun,
+} from "./next-draft";
 
 type Job = Schemas["LlmJobOut"];
 type Suggestion = Schemas["SuggestionOut"];
@@ -18,6 +29,8 @@ type Feedback = Omit<Schemas["FeedbackItemOut"], "state" | "staged_for_version" 
   /** D12: staged for the agents (when, by whom); open items only count. */
   staged_for_agents_at?: string | null;
   staged_for_agents_by?: string | null;
+  /** #636 re-review: a kept late-answer item withholding its quote (feedback_items.withheld_at). */
+  withheld_at?: string | null;
 };
 type Role = Schemas["Me"]["role"];
 type Section = { section_key: string; level: number; heading: string; body_md: string; body_text: string };
@@ -31,6 +44,9 @@ export interface LlmDb {
   next_draft_changes?: NextDraftChangeRow[];
   /** Job kinds an owner turned off, per document id. */
   disabled: Record<string, Job["kind"][]>;
+  /** Whether each accepted suggestion's Accept closed its item (the API's accept audit,
+   * ``closed_item``): Undo re-opens only an item Accept closed. Absent: it did. */
+  accept_closed?: Record<string, boolean>;
 }
 
 export type LlmContext = {
@@ -43,6 +59,8 @@ export type LlmContext = {
   uuid: () => string;
   now: () => string;
   lockedKeys: (v: Version) => string[];
+  /** Whether a feedback-loop run still going was sent this suggestion (Build next draft, D12). */
+  sentToAgents?: (suggestionId: string) => boolean;
   reply: (feedbackId: string, body: string) => void;
   /** Imports a revised section as the next version and applies the resolutions. */
   importRevision: (
@@ -143,7 +161,7 @@ const live = (db: LlmDb, feedbackId: string) =>
 /** The feedback item with Oracle's suggestion and its C1e state, as GET /feedback returns it. */
 export function withSuggestion(db: LlmDb | undefined, f: Feedback, latest: number | null = null): Schemas["FeedbackItemOut"] {
   const suggestion = db ? live(db, f.id) : null;
-  return { ...f, suggestion, ...stateOf(f, suggestion, latest) };
+  return { ...f, resolution_note: shownNote(f, db), suggestion: shownSuggestion(f, suggestion), ...stateOf(f, suggestion, latest) };
 }
 
 function versionsOf(ctx: LlmContext, doc: Doc) {
@@ -581,18 +599,18 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
   if (jobRoute) {
     const job = db.jobs.find((j) => j.id === p[2]);
     if (!job) return fail(404, "Job not found");
-    if (!p[3] && m === "GET") return json(200, job);
+    if (!p[3] && m === "GET") return json(200, shownJob(ctx, job));
     if (p[3] === "cancel" && m === "POST") {
       if (!["queued", "running"].includes(job.status)) return fail(409, `a ${job.status} job cannot be cancelled`);
       Object.assign(job, { status: "cancelled", finished_at: ctx.now() });
-      return json(200, job);
+      return json(200, shownJob(ctx, job));
     }
     if (p[3] === "retry" && m === "POST") {
       if (!["failed", "cancelled"].includes(job.status)) return fail(409, `a ${job.status} job cannot be retried`);
       const doc = ctx.documents.find((d) => d.id === job.document_id);
       if (doc && !enabled(doc, job.kind)) return fail(409, turnedOff(switchOf(job.kind)));
       Object.assign(job, { status: "queued", attempts: 0, error: null, error_reason: null, next_reset_at: null, started_at: null, finished_at: null });
-      return json(200, job);
+      return json(200, shownJob(ctx, job));
     }
     if (p[3] === "preview" && m === "GET") {
       if (job.kind !== "refinement" || job.status !== "succeeded") return fail(409, "only a finished refinement has a preview");
@@ -607,6 +625,16 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       const vs = versionsOf(ctx, doc);
       const base = vs.find((x) => x.number === o.base_version)!;
       if (vs.at(-1)!.number !== base.number) return fail(409, "a newer version exists; refine the section again");
+      // As the API: a newer refinement of the section (no key reads as "", as Undo) replaced it.
+      const newer = db.jobs.some(
+        (j) =>
+          j.document_id === job.document_id &&
+          j.kind === "refinement" &&
+          (j.section_key ?? "") === (job.section_key ?? "") &&
+          ["queued", "running", "succeeded"].includes(j.status) &&
+          (j.created_at > job.created_at || (j.created_at === job.created_at && j.id > job.id)),
+      );
+      if (newer) return fail(409, "a newer refinement of this section replaced it; apply that one");
       const edit = await body<Schemas["RefinementApply"]>();
       const heading = edit?.heading ?? (o.heading as string);
       const text = (edit?.body_md ?? (o.body_md as string)).replace(/[ \t]*\[c:[^\]]*\]/g, "");
@@ -632,7 +660,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     if (m === "PATCH") {
       if (s.status !== "open") return fail(409, `an ${s.status} suggestion cannot be edited`);
       Object.assign(s, { edited_text: (await body<Schemas["SuggestionPatch"]>()).text, updated_at: ctx.now() });
-      return json(200, s);
+      return json(200, shownSuggestion(item, s));
     }
     if (p[3] === "accept" && m === "POST") {
       if (s.status !== "open") return fail(409, `an ${s.status} suggestion cannot be accepted`);
@@ -653,6 +681,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
         updated_at: ctx.now(),
       });
       const final = s.edited_text ?? s.text;
+      db.accept_closed = { ...db.accept_closed, [s.id]: item?.status === "open" };
       if (item && item.status === "open") {
         if (s.kind === "answer" && final) {
           ctx.reply(item.id, final);
@@ -663,7 +692,38 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
           Object.assign(item, { status: "superseded", resolution_note: `Duplicate of feedback item ${s.duplicate_of}`, updated_at: ctx.now() });
         }
       }
-      return json(200, s);
+      return json(200, shownSuggestion(item, s));
+    }
+    // D14: Undo Accept, as jobs.service.undo_accept: back to open, or refused with the reason.
+    if (p[3] === "undo-accept" && m === "POST") {
+      if (s.status === "applied") return fail(409, `draft ${s.applied_in_version} already applied it; it stays`);
+      if (s.status !== "accepted") return fail(409, `an ${s.status} suggestion has no accept to undo`);
+      if (s.kind === "answer") return fail(409, "the answer is posted on the comment thread: reply there to correct it");
+      if (s.kind === "section_text") {
+        // A section refinement has no discard: it holds the change only while it can still be
+        // applied (on the latest version, and its section's newest refinement).
+        type Out = { applied_version?: number; discarded_at?: string; base_version?: number } | null;
+        const newest = new Set<string>();
+        const jobs = db.jobs
+          .filter((j) => j.document_id === s.document_id && (j.kind === "refinement" || j.kind === "refinement_batch") && ["queued", "running", "succeeded"].includes(j.status))
+          .sort((a, b) => b.created_at.localeCompare(a.created_at));
+        for (const j of jobs) {
+          const out = j.output as Out;
+          const replaced = j.kind === "refinement" && newest.has(j.section_key ?? "");
+          if (j.kind === "refinement") newest.add(j.section_key ?? "");
+          if (out?.applied_version || out?.discarded_at || replaced) continue;
+          if (j.kind === "refinement" && out?.base_version != null && out.base_version !== latest) continue;
+          if (!((j.input as { suggestion_ids?: string[] } | null)?.suggestion_ids ?? []).includes(s.id)) continue;
+          return fail(409, j.kind === "refinement" ? "a refinement of its section uses it: apply it or refine the section again" : "the next draft being built uses it: discard that build first");
+        }
+        if (ctx.sentToAgents?.(s.id)) return fail(409, "the agents' next draft uses it: cancel that run first");
+      } else if (item && (db.accept_closed?.[s.id] ?? true)) {
+        const closed = s.kind === "none" ? "addressed" : "superseded";
+        if (item.status !== closed) return fail(409, `the item is ${item.status} since; open it to change it`);
+        Object.assign(item, { status: "open", resolution_note: null, addressed_in_version: null, updated_at: ctx.now() });
+      }
+      Object.assign(s, { status: "open", decided_by: null, decided_at: null, override_reason: null, edited_text: null, updated_at: ctx.now() });
+      return json(200, shownSuggestion(item, s));
     }
     if (p[3] === "dismiss" && m === "POST") {
       if (!["open", "accepted"].includes(s.status)) return fail(409, `an ${s.status} suggestion cannot be dismissed`);
@@ -677,7 +737,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
           updated_at: ctx.now(),
         });
       }
-      return json(200, s);
+      return json(200, shownSuggestion(item, s));
     }
     return fail(404, "Route not found");
   }
@@ -705,7 +765,10 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     }
     return json(
       200,
-      db.jobs.filter((j) => j.document_id === doc.id).sort((a, b) => b.created_at.localeCompare(a.created_at)),
+      db.jobs
+        .filter((j) => j.document_id === doc.id)
+        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .map((j) => shownJob(ctx, j)),
     );
   }
   if (p[3] === "suggestions") {
@@ -713,14 +776,17 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
     const key = q.get("section_key");
     return json(
       200,
-      db.suggestions.filter((s) => s.document_id === doc.id && (!status || s.status === status) && (!key || s.section_key === key)),
+      db.suggestions
+        .filter((s) => s.document_id === doc.id && (!status || s.status === status) && (!key || s.section_key === key))
+        .map((s) => shownSuggestion(ctx.feedback.find((f) => f.id === s.feedback_item_id), s)),
     );
   }
   const v = vs.find((x) => x.number === Number(p[4]));
   if (!v) return fail(404, "Version not found");
   if (p[5] === "reports") {
     const jobs = db.jobs.filter((j) => j.document_id === doc.id && j.kind === "reporting" && j.version_number === v.number).sort((a, b) => b.created_at.localeCompare(a.created_at));
-    const done = jobs.find((j) => j.status === "succeeded" && j.output);
+    // As the API: a withheld item's lines are withheld in the reports, their export and latest_job.
+    const done = shownJob(ctx, jobs.find((j) => j.status === "succeeded" && j.output));
     if (p[6] === "export") {
       const md = reportsMarkdown(doc, v.number, done?.output ?? null);
       return new Response(md, { headers: { "content-type": q.get("format") === "html" ? "text/html" : "text/markdown" } });
@@ -732,7 +798,7 @@ export async function llmJobsRoute(ctx: LlmContext, req: Request, p: string[], q
       generated_at: done?.finished_at ?? null,
       resolution: done?.output?.resolution ?? null,
       changes: done?.output?.changes ?? null,
-      latest_job: jobs[0] ?? null,
+      latest_job: shownJob(ctx, jobs[0]) ?? null,
     });
   }
   // .../sections/{key}/refine

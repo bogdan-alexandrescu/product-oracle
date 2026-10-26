@@ -132,6 +132,11 @@ class FeedbackItemOut(ORM):
     staged_for_version: int | None = None
     # D12: an approver staged it for the agents (Staged while it is open).
     staged_for_agents: bool = False
+    # C5: made from an intake answer given after drafting started; its question (on the
+    # intake page) and answer. Null on every other item.
+    intake_id: uuid.UUID | None = None
+    intake_question_id: uuid.UUID | None = None
+    intake_answer_id: uuid.UUID | None = None
 
 
 class FeedbackPatch(BaseModel):

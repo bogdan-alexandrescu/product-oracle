@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, wording
 from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
-from oracle.jobs.schemas import SuggestionOut
 from oracle.review import publish_gate
 from oracle.review.models import FEEDBACK_STATUSES, Comment, FeedbackItem, SectionReview
 from oracle.review.schemas import (
@@ -202,10 +201,21 @@ async def feedback_out(
             select(SectionReview.id, SectionReview.verdict).where(SectionReview.id.in_(review_ids))
         )
         verdicts = {k: v for k, v in rows}
-    from oracle.jobs.service import latest_suggestions
+    from oracle.jobs.service import latest_suggestions, oracle_notes, shown_note, suggestion_out
 
     suggestions = await latest_suggestions(session, [i.id for i in items])
+    notes = await oracle_notes(session, items)
     latest = await latest_numbers(session, {i.document_id for i in items})
+    intakes: dict[uuid.UUID, uuid.UUID | None] = {}
+    if question_ids := {i.intake_question_id for i in items if i.intake_question_id}:
+        from oracle.v2.models import StakeholderQuestion
+
+        rows = await session.execute(
+            select(StakeholderQuestion.id, StakeholderQuestion.intake_id).where(
+                StakeholderQuestion.id.in_(question_ids)
+            )
+        )
+        intakes = {k: v for k, v in rows}
     out = []
     for item in items:
         anchor = anchors.get(item.comment_id) if item.comment_id else None
@@ -226,16 +236,21 @@ async def feedback_out(
                 verdict=verdicts.get(item.section_review_id) if item.section_review_id else None,
                 status=item.status,
                 addressed_in_version=item.addressed_in_version,
-                resolution_note=item.resolution_note,
+                resolution_note=shown_note(item, notes),
                 severity=item.severity,
                 created_at=item.created_at,
                 updated_at=item.updated_at,
-                suggestion=SuggestionOut.model_validate(suggestion) if suggestion else None,
+                suggestion=suggestion_out(suggestion, item.withheld_at is not None)
+                if suggestion
+                else None,
                 state=state,
                 staged_for_version=(latest.get(item.document_id) or 0) + 1
                 if state == "staged"
                 else None,
                 staged_for_agents=staged_for_agents(item),
+                intake_id=intakes.get(item.intake_question_id) if item.intake_question_id else None,
+                intake_question_id=item.intake_question_id,
+                intake_answer_id=item.intake_answer_id,
             )
         )
     return out

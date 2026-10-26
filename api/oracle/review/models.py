@@ -113,6 +113,17 @@ class FeedbackItem(TenantScoped, Base):
     staged_for_agents_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Who staged it: a user id or an API token id (no FK, as author_id).
     staged_for_agents_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # C5 late answers (0055): made from an intake answer given after drafting started,
+    # linked back to its question; one item per answer.
+    intake_question_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("stakeholder_questions.id", ondelete="SET NULL")
+    )
+    intake_answer_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("stakeholder_answers.id", ondelete="SET NULL"), unique=True
+    )
+    # #636 re-review (0056): a kept late-answer item withholds its quote while its finding
+    # is not shared in full; its suggestions' text, edited text and rationale are left out.
+    withheld_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
