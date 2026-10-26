@@ -1429,11 +1429,23 @@ function seedAlerts(db: RoadmapDb, trackId: string, many = false) {
   db.recordEvents = [{ record_id: SLIP_RECORD_ID, observed_at: "2026-10-20T15:00:00Z", field: "target_date", before: "2026-11-30", after: "2026-12-09" }];
 }
 
+/**
+ * The alert's audience, as the API's alerts.in_audience: the track's owner, else every owner;
+ * date slips and overdue items also the engineering leads. They alone keep and reopen it.
+ */
+function inAudience(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert): boolean {
+  const t = db.tracks.find((x) => x.id === a.track_id);
+  if (t?.owner_id ? t.owner_id === ctx.userId : ctx.role === "owner") return true;
+  return (a.kind === "date_slip" || a.kind === "overdue") && !!ctx.engineeringLead;
+}
+
 /** What the caller may do on the alert now: approvers and owners act; viewers and commenters only read. */
-function alertActions(ctx: RoadmapContext, a: StoredAlert): TrackAlertAction[] {
-  if (RANK[ctx.role] < RANK.approver) return [];
-  if (a.state === "kept") return ["reopen"];
+function alertActions(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert): TrackAlertAction[] {
+  const audience = inAudience(ctx, db, a);
+  if (a.state === "kept") return audience ? ["reopen"] : [];
   if (a.state !== "open") return [];
+  // A track's owner keeps its alerts whatever their role; the other actions need an approver.
+  if (RANK[ctx.role] < RANK.approver) return audience ? ["keep"] : [];
   const first: Record<StoredAlert["kind"], TrackAlertAction[]> = {
     date_slip: ["accept_date", "replan"],
     overdue: ["replan"],
@@ -1444,7 +1456,7 @@ function alertActions(ctx: RoadmapContext, a: StoredAlert): TrackAlertAction[] {
     stale: ["review"],
     prd_moved: ["replan"],
   };
-  return [...first[a.kind], "keep"];
+  return audience ? [...first[a.kind], "keep"] : first[a.kind];
 }
 
 function alertOut(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert, seen?: string | null): TrackAlertOut {
@@ -1452,7 +1464,7 @@ function alertOut(ctx: RoadmapContext, db: RoadmapDb, a: StoredAlert, seen?: str
   const prd = t && ctx.documents.find((d) => d.id === t.prd_id);
   const inbox: TrackAlertOut["inbox_state"] =
     seen === undefined ? null : a.state !== "open" ? "done" : seen === null || a.opened_at > seen ? "new" : "open";
-  return { ...a, prd: { slug: prd?.slug ?? "", title: prd?.title ?? "" }, actions: alertActions(ctx, a), inbox_state: inbox };
+  return { ...a, prd: { slug: prd?.slug ?? "", title: prd?.title ?? "" }, actions: alertActions(ctx, db, a), inbox_state: inbox };
 }
 
 function trackAlerts(
@@ -1482,7 +1494,7 @@ function trackAlerts(
   if (!a) return notFound("Track alert");
   const verb = p[3];
   if (verb === "keep") {
-    if (RANK[ctx.role] < RANK.approver) return json(403, { detail: "Requires the approver role" });
+    if (!inAudience(ctx, db, a)) return json(403, { detail: "Only the people this alert goes to keep or reopen it" });
     if (a.state !== "open") return json(409, { detail: "Only an open alert can be kept" });
     return body<{ note?: string | null } | null>().then((b) => {
       const note = b?.note?.trim() || null;
@@ -1492,7 +1504,7 @@ function trackAlerts(
     });
   }
   if (verb === "reopen") {
-    if (RANK[ctx.role] < RANK.approver) return json(403, { detail: "Requires the approver role" });
+    if (!inAudience(ctx, db, a)) return json(403, { detail: "Only the people this alert goes to keep or reopen it" });
     if (a.state !== "kept") return json(409, { detail: "Only a kept alert can be reopened" });
     Object.assign(a, { state: "open", kept_by: null, kept_by_name: null, kept_at: null, note: null });
     return json(200, alertOut(ctx, db, a));

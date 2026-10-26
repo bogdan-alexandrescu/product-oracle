@@ -185,6 +185,9 @@ PER_ITEM: dict[str, Role | None] = {
     "get_company_source_coverage": "owner",
     "get_next_question_batch": "approver",
     "keep_request_no": None,
+    # #618 review: a track alert's audience keeps and reopens it (oracle.roadmap.alerts
+    # in_audience): the track's owner, else every owner, and the leads for slips.
+    "keep_track_alert": None,
     "mark_metric_variance_unknown": "approver",
     "mark_request_reply_sent": "approver",
     "mirror_discussion_to_slack": "approver",
@@ -201,6 +204,7 @@ PER_ITEM: dict[str, Role | None] = {
     "redraft_interview_guide": "approver",
     "regenerate_spec": "owner",
     "remove_evidence": "approver",
+    "reopen_track_alert": None,
     "resolve_discussion_change": "approver",
     "retry_discussion_reply": "approver",
     "retry_draft_import": "owner",

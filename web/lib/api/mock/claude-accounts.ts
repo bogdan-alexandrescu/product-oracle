@@ -3,8 +3,9 @@
  *
  * Seeded with one account of each kind the screen must draw differently: a live reading
  * with a job on it (personal), an old reading (work, marked ~), one never measured (spare,
- * em dashes) and one whose sign-in expired (old-laptop). Reads are open to every role;
- * changes need the owner role, as in the API. Sign-in: the code "bad-code" is refused,
+ * em dashes) and one whose sign-in expired (old-laptop). Reads are open to every role,
+ * without who holds an account (its Claude email and organisation) below owner (BGD
+ * 2026-10-25); changes need the owner role, as in the API. Sign-in: the code "bad-code" is refused,
  * anything else is accepted, as the Claude account <label>@example.com of "Example Studio"
  * (#405). A pasted login must carry a refresh token, and reports no Claude account.
  *
@@ -337,7 +338,7 @@ async function handle(db: PoolDb, req: Request, p: string[], q: URLSearchParams,
 
   if (!p[2] && m === "GET") {
     const page: Schemas["AccountsPage"] = {
-      accounts: db.accounts.map(out),
+      accounts: db.accounts.map(out).map((a) => (role === "owner" ? a : { ...a, claude_email: null, claude_organization: null })),
       unreadable_documents: [],
       unreadable_document_count: 0,
       refresh_sweep: db.sweep,
