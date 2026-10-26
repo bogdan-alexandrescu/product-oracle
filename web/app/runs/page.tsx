@@ -153,9 +153,10 @@ export default function RunsPage() {
         }
       />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {/* wide: under 1320 px the inspector goes below, so the table keeps its button column
-          beside the docked Ask panel (its narrow columns go first, by the table's width). */}
-      <Split wide inspector={selected && <RunInspector run={selected} />}>
+      {/* byRoom: the inspector goes below when the Split is too narrow for it and the table,
+          as with the Ask panel docked, so the table keeps its button column (its narrow columns
+          go first, by the table's width); with the panel closed it sits beside over 1100 px. */}
+      <Split byRoom inspector={selected && <RunInspector run={selected} />}>
         <Panel
           title="Runs"
           count={q.data ? runs.length : undefined}

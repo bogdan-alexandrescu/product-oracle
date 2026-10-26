@@ -65,18 +65,34 @@ export function PageHeader({
 /**
  * Master and detail: the table left, the inspector right (below on a phone). `wide`: the
  * inspector goes below the table under about 1320 px rather than 1100 px, for a table that
- * needs the room beside the 44 px Ask strip (Plan's Item column at 1280 px).
+ * needs the room beside the 44 px Ask strip (Plan's Item column at 1280 px). `byRoom`: the
+ * inspector sits beside the table only while the Split itself is 920 px wide or more (a
+ * container query), which is where it went beside before on a window over 1100 px with the
+ * Ask panel closed; with the 400 px panel docked it goes below until the table has its room.
  */
-export function Split({ children, inspector, wide = false }: { children: ReactNode; inspector?: ReactNode; wide?: boolean }) {
+export function Split({
+  children,
+  inspector,
+  wide = false,
+  byRoom = false,
+}: {
+  children: ReactNode;
+  inspector?: ReactNode;
+  wide?: boolean;
+  byRoom?: boolean;
+}) {
   if (!inspector) return <div className="flex min-w-0 flex-col gap-4">{children}</div>;
-  return (
-    <div
-      className={`grid grid-cols-[minmax(0,1fr)_380px] items-start gap-4 max-[1100px]:grid-cols-1 max-[600px]:gap-3 ${wide ? "max-[1320px]:grid-cols-1" : ""}`}
-    >
+  const cols = byRoom
+    ? "grid-cols-1 @min-[920px]:grid-cols-[minmax(0,1fr)_380px]"
+    : `grid-cols-[minmax(0,1fr)_380px] max-[1100px]:grid-cols-1 ${wide ? "max-[1320px]:grid-cols-1" : ""}`;
+  const sticky = byRoom ? "xl:@min-[920px]:sticky xl:@min-[920px]:top-4" : wide ? "min-[1321px]:sticky min-[1321px]:top-4" : "xl:sticky xl:top-4";
+  const grid = (
+    <div className={`grid items-start gap-4 max-[600px]:gap-3 ${cols}`}>
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">{children}</div>
-      <div className={`min-w-0 ${wide ? "min-[1321px]:sticky min-[1321px]:top-4" : "xl:sticky xl:top-4"}`}>{inspector}</div>
+      <div className={`min-w-0 ${sticky}`}>{inspector}</div>
     </div>
   );
+  return byRoom ? <div className="@container min-w-0">{grid}</div> : grid;
 }
 
 /** A white panel with a hairline border; `title` adds B1's 48 px panel head. */
