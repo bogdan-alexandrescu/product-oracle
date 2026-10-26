@@ -57,14 +57,23 @@ export function describe(a: Action, item: Item | undefined, title: (key: string)
   return doneText(a, title);
 }
 
-export const openReasons = (it: Item, actions: Action[] = it.actions): Reason[] =>
-  it.reasons.filter(
-    (r) => !actions.some((a) => a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers.length || a.answers.includes(r.code))),
-  );
+/**
+ * As the API: a staged action answers a reason it names and every reason of its item when it
+ * names none, but a waiver naming none never one only an owner waives (H4 §5). Questions answer nothing.
+ */
+export const answersReason = (a: Action, r: Reason) =>
+  a.state === "staged" && a.kind !== "question" && (a.answers.length ? a.answers.includes(r.code) : a.kind !== "waive" || r.code !== "stopped_but_planned");
+
+export const openReasons = (it: Item, actions: Action[] = it.actions): Reason[] => it.reasons.filter((r) => !actions.some((a) => answersReason(a, r)));
 
 /** The reasons that may be waived (D3): blocking, never a date. */
 export const DATE_CODES = ["unverified_date", "date_without_basis", "date_refused"];
-export const waivable = (r: Reason) => r.severity === "blocking" && !DATE_CODES.includes(r.code) && !r.code.startsWith("date_");
+/** H4 §5 drift reasons (advisory, to confirm): acted on or waived with a reason, never a plain Accept. */
+export const DRIFT_CODES = ["outside_strategy", "stopped_but_planned"];
+export const waivable = (r: Reason) =>
+  DRIFT_CODES.includes(r.code) || (r.severity === "blocking" && !DATE_CODES.includes(r.code) && !r.code.startsWith("date_"));
+/** A planned item the strategy stops is an owner's to waive (as the API); pass can("waive_strategy_finding"). */
+export const mayWaive = (r: Reason, owner: boolean) => waivable(r) && (r.code !== "stopped_but_planned" || owner);
 
 /** The fixes a row offers first: a blocking reason's first two, else Accept and the first other fix. */
 export function rowFixes(open: Reason[]): { reason: Reason; fix: Fix }[] {
@@ -72,6 +81,7 @@ export function rowFixes(open: Reason[]): { reason: Reason; fix: Fix }[] {
   if (blocking) return blocking.fixes.filter((f) => f.action.kind !== "waive").slice(0, 2).map((fix) => ({ reason: blocking, fix }));
   const r = open[0];
   if (!r) return [];
+  if (DRIFT_CODES.includes(r.code)) return r.fixes.filter((f) => f.action.kind !== "waive").slice(0, 2).map((fix) => ({ reason: r, fix }));
   const accept = r.fixes.find((f) => f.action.kind === "accept") ?? { label: "Accept", action: { kind: "accept" as const, item: r.item, field: null, value: null } };
   const other = r.fixes.find((f) => f.action.kind !== "accept" && f.action.kind !== "waive");
   return [{ reason: r, fix: { ...accept, label: "Accept" } }, ...(other ? [{ reason: r, fix: other }] : [])];

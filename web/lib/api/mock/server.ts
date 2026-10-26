@@ -102,7 +102,7 @@ import { emptyPlanEdits, routeChangeSets, supersededRefusal, type PlanEditsConte
 import { draftRoadmapSummary, queueDraftRoadmap, reusableDraftItems, routeDraftRoadmap, seedApprovedPlanDraft, seedDraftRoadmaps, tickDraftRoadmaps, type DraftRoadmapContext, type DraftRoadmapDb } from "./draft-roadmap";
 import { ALERTS_ROADMAP_SLUG, APPROVED_PLAN_SCENARIO, DATE_BASES_SCENARIO, DIFF_SCENARIO, VERSION_WARNINGS_SCENARIO, dateMarks, versionWarnings, inboxTracks, routePlan, routeRoadmap, seedRoadmap, seededPlanItems, trackRunBody, type RoadmapContext, type RoadmapDb } from "./roadmap";
 import { routeSpecs, seedSpecs, specStalenessAction, specStates, staleSpecRefusal, type SpecsDb } from "./specs";
-import { inboxStrategy, routeStrategy, seedNoStrategy, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
+import { inboxStrategy, planDrift, routeStrategy, seedNoStrategy, seedPlanDrift, seedStrategy, STRATEGY_DOCUMENTS, type StrategyDb } from "./strategy";
 import { routeTrace } from "./trace";
 import {
   DRAFT_OPTIONS,
@@ -745,6 +745,13 @@ function seedStrategyScenario(vision = true): Db {
     }
   }
   db.strategy = seedStrategy(uuid, db.baseline.entities, { vision });
+  return db;
+}
+
+/** The strategy scenario plus drift findings on the Plan's own items (H4 §5 on Plan). */
+function seedStrategyPlanScenario(): Db {
+  const db = seedStrategyScenario(true);
+  seedPlanDrift(db.strategy!, uuid, db.baseline.entities);
   return db;
 }
 
@@ -2090,6 +2097,8 @@ function load(): Db {
                 ? seedManyPeople
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
+                  : scenario === "strategy-plan"
+                    ? seedStrategyPlanScenario
                   : scenario === "strategy-none"
                     ? seedNoStrategyScenario
                     : seed,
@@ -4076,7 +4085,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (roadmapRes) return roadmapRes;
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
-  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits }, db.roadmap, req, p, q);
+  const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
+  const planRes = routePlan({ ...roadmapCtx, goals, edits: db.plan_edits, drift }, db.roadmap, req, p, q);
   if (planRes) return planRes;
   if (p[1] === "tracks" && p[3] === "roadmap-run" && m === "POST") {
     if (!atLeast(me.role, "approver")) return json(403, { detail: "Requires the approver role" });

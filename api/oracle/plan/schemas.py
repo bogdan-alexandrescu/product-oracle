@@ -141,6 +141,22 @@ class PlanReason(BaseModel):
     detail: str
 
 
+class PlanDrift(BaseModel):
+    """The item's drift against the approved product strategy (H4 §5), for owners and
+    approvers. An approved item's is its stored finding (``finding_id``: waived there,
+    POST /v1/strategy/findings/{id}/waive); a draft item's is measured as the Plan is
+    read and has none."""
+
+    kind: Literal["outside_strategy", "stopped_but_planned"]
+    severity: Literal["warning", "high"]
+    label: str
+    text: str
+    status: Literal["open", "waived"]
+    finding_id: uuid.UUID | None = None
+    waive_reason: str | None = None
+    waived_at: datetime | None = None
+
+
 class PlanItem(BaseModel):
     id: uuid.UUID
     key: str
@@ -156,6 +172,7 @@ class PlanItem(BaseModel):
     goal_ids: list[uuid.UUID]
     state: ItemState
     reasons: list[PlanReason]
+    drift: list[PlanDrift] = []
     engineering: PlanEngineering
     next: PlanNext
 

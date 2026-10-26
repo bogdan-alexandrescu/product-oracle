@@ -81540,6 +81540,87 @@
         ],
         "title": "PlanDocument"
       },
+      "PlanDrift": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "outside_strategy",
+              "stopped_but_planned"
+            ],
+            "title": "Kind"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "warning",
+              "high"
+            ],
+            "title": "Severity"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "waived"
+            ],
+            "title": "Status"
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id"
+          },
+          "waive_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waive Reason"
+          },
+          "waived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waived At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "severity",
+          "label",
+          "text",
+          "status"
+        ],
+        "title": "PlanDrift",
+        "description": "The item's drift against the approved product strategy (H4 \u00a75), for owners and\napprovers. An approved item's is its stored finding (``finding_id``: waived there,\nPOST /v1/strategy/findings/{id}/waive); a draft item's is measured as the Plan is\nread and has none."
+      },
       "PlanEngineering": {
         "properties": {
           "records": {
@@ -81720,6 +81801,14 @@
             },
             "type": "array",
             "title": "Reasons"
+          },
+          "drift": {
+            "items": {
+              "$ref": "#/components/schemas/PlanDrift"
+            },
+            "type": "array",
+            "title": "Drift",
+            "default": []
           },
           "engineering": {
             "$ref": "#/components/schemas/PlanEngineering"

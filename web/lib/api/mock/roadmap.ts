@@ -964,6 +964,8 @@ export interface PlanContext extends RoadmapContext {
   goals: { id: string; key: string }[];
   /** #346: the versions change sets proposed (./plan-edits.ts); an approved one is the live plan. */
   edits?: PlanEditsDb;
+  /** H4 §5: each item's strategy drift (./strategy.ts planDrift). */
+  drift?: (key: string, origin: PlanItem["origin"]) => Schemas["PlanDrift"][];
 }
 
 /** One item of the mock plan: an approved row, its draft twin (when the roadmap draft changes it), or a new draft row. */
@@ -1187,6 +1189,7 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       goal_ids: goalIds(s.goals),
       state: origin === "draft" ? "proposed" : (s.state ?? "planned"),
       reasons: origin === "draft" ? [] : (s.reasons ?? []),
+      drift: ctx.drift?.(s.key, origin) ?? [],
       engineering: { records, date: s.date ?? null, ...dateStatus(db, prd.id, s), slip_days: s.slipDays ?? null, tracked: records.length > 0 },
       next,
     };

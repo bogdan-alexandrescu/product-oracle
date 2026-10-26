@@ -34,6 +34,8 @@ from oracle.roadmap import diff as item_diff
 from oracle.roadmap.models import RoadmapItem
 from oracle.runs import batch, roadmap
 from oracle.runs.models import Run
+from oracle.strategy import drift as strategy_drift
+from oracle.strategy.drift import ItemDrift
 
 # A rank this good or better placed in Later is flagged (rank_vs_horizon).
 TOP_RANKS = 3
@@ -105,6 +107,8 @@ class ReasonContext:
     prd_titles: dict[str, str] = field(default_factory=dict)
     prd_title: str | None = None
     prd_version: int | None = None
+    # item id -> its drift against the approved product strategy (H4 §5), measured now.
+    drift: dict[str, list[ItemDrift]] = field(default_factory=dict)
     # False: only the blocking reasons (the context could not be loaded).
     advisory: bool = True
 
@@ -293,6 +297,19 @@ CATALOGUE: dict[str, Entry] = {
         "{feature} supports no confirmed goal. / Oracle could not trace it to a baseline "
         "feature, so no goal is known.",
         "Accept; Drop",
+    ),
+    # H4 §5 drift: acted on (moved, dropped) or waived with a reason, never a plain Accept.
+    "stopped_but_planned": Entry(
+        CONFIRM,
+        "Stopped in the strategy",
+        "The product strategy stops {choices}, and this item is in {horizon}.",
+        "Move to Later; Drop; Waive… (owners)",
+    ),
+    "outside_strategy": Entry(
+        CONFIRM,
+        "Outside the strategy",
+        "{goals} is under no focus choice of the product strategy.",
+        "Drop; Waive…",
     ),
     "horizon_changed": Entry(
         CONFIRM, "Moved from {old} ({base})", "It was in {old} in {base}.", "Accept; Keep in {old}"
@@ -522,6 +539,16 @@ def _advisory(
                 [accept(key), drop(key)],
                 {"feature": feature.key},
             )
+    for found in ctx.drift.get(key, []):
+        fixes = later_fixes() if found.kind == "stopped_but_planned" else []
+        r(
+            found.kind,
+            found.label,
+            found.text,
+            [*fixes, drop(key), _fix("Waive…", "waive", key)],
+            {"severity": found.severity, "choices": list(found.choices),
+             "goals": list(found.goals)},
+        )  # fmt: skip
     if ctx.base is not None and moved is not None:
         base = ctx.base["label"]
         if moved.status == "added":
@@ -1063,6 +1090,16 @@ async def reason_context(
     entities = await _entities(db, list(feature_ids | blocker_ids))
     features: dict[str, TracedFeature | None] = {}
     blockers: dict[str, list[LinkedBlocker]] = {}
+    graph = await batch.once(("strategy_graph",), lambda: strategy_drift.load_for_items(db))
+    horizons = {}
+    for i in items:
+        horizons.setdefault(i["id"], i.get("horizon"))
+    drift = {
+        key: found
+        for key, t in traced.items()
+        if (found := strategy_drift.item_drift(graph, t["feature_id"], horizons.get(key),
+                                               no_goal=False))
+    }  # fmt: skip
     for key, t in traced.items():
         fid = t["feature_id"]
         if fid is None:
@@ -1102,4 +1139,5 @@ async def reason_context(
         prd_titles=prd_titles,
         prd_title=prd_title,
         prd_version=prd_version,
+        drift=drift,
     )

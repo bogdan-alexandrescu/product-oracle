@@ -17,6 +17,7 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import {
   AGENT_KINDS,
+  answersReason,
   day,
   describe,
   doneText,
@@ -26,9 +27,9 @@ import {
   openReasons,
   plural,
   resolutionText,
+  mayWaive,
   rowFixes,
   show,
-  waivable,
   type Action,
   type Fix,
   type Item,
@@ -657,7 +658,8 @@ function RowMenu({
       document.removeEventListener("keydown", esc);
     };
   }, [menuOpen, setMenu]);
-  const waive = open.find((r) => waivable(r));
+  const { can } = useMe();
+  const waive = open.find((r) => mayWaive(r, can("waive_strategy_finding")));
   const answers = open.map((r) => r.code);
   const entries: { label: string; run: () => void }[] = [
     ...HORIZONS.filter((h) => h !== it.horizon).map((h) => ({
@@ -785,6 +787,7 @@ function ReviewInspector({
   meId: string | null;
 }) {
   const [editing, setEditing] = useState(false);
+  const { can } = useMe();
   const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? key;
   const open = openReasons(item);
   const edit = mode !== "viewer" && item.position != null;
@@ -802,7 +805,7 @@ function ReviewInspector({
           <ul className="flex flex-col gap-2">
             {item.reasons.map((r) => {
               const isOpen = open.includes(r);
-              const by = item.actions.find((a) => a.state === "staged" && a.kind !== "question" && (a.kind === "waive" || !a.answers.length || a.answers.includes(r.code)));
+              const by = item.actions.find((a) => answersReason(a, r));
               return (
                 <li key={r.code} className="rounded-button border border-line p-2.5" data-testid="reason-card">
                   <Chip kind={!isOpen ? "na" : r.severity === "blocking" ? "crit" : "warn"} wrap>
@@ -826,7 +829,7 @@ function ReviewInspector({
                           .map((f, i) => (
                             <FixButton key={f.label} fix={f} reason={r} mode={mode} ops={ops} primary={i === 0} />
                           ))}
-                        {mode === "approver" && waivable(r) && (
+                        {mode === "approver" && mayWaive(r, can("waive_strategy_finding")) && (
                           <Button className="h-8 px-2.5 text-sm" onClick={() => setForm({ key: item.key, kind: "waive", code: r.code, where: "inspector" })}>
                             Waive…
                           </Button>
