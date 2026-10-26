@@ -71,6 +71,7 @@ CHECKPOINT_KINDS = (
     "priority_order",
     "prd_review",
     "eng_review",
+    "eng_dates",
     "roadmap_items",
     "roadmap_review",
     "request_triage",

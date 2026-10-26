@@ -51955,6 +51955,7 @@
               "priority_order",
               "prd_review",
               "eng_review",
+              "eng_dates",
               "roadmap_items",
               "roadmap_review",
               "request_triage",
@@ -52172,6 +52173,7 @@
               "priority_order",
               "prd_review",
               "eng_review",
+              "eng_dates",
               "roadmap_items",
               "roadmap_review",
               "request_triage",
@@ -66590,6 +66592,7 @@
                   "priority_order",
                   "prd_review",
                   "eng_review",
+                  "eng_dates",
                   "roadmap_items",
                   "roadmap_review",
                   "request_triage",
@@ -66846,6 +66849,7 @@
               "priority_order",
               "prd_review",
               "eng_review",
+              "eng_dates",
               "roadmap_items",
               "roadmap_review",
               "request_triage",
@@ -69339,6 +69343,7 @@
               "priority_order",
               "prd_review",
               "eng_review",
+              "eng_dates",
               "roadmap_items",
               "roadmap_review",
               "request_triage",
@@ -95483,6 +95488,7 @@
               "priority_order",
               "prd_review",
               "eng_review",
+              "eng_dates",
               "roadmap_items",
               "roadmap_review",
               "request_triage",
@@ -95990,6 +95996,7 @@
                   "priority_order",
                   "prd_review",
                   "eng_review",
+                  "eng_dates",
                   "roadmap_items",
                   "roadmap_review",
                   "request_triage",
@@ -96125,6 +96132,7 @@
                   "priority_order",
                   "prd_review",
                   "eng_review",
+                  "eng_dates",
                   "roadmap_items",
                   "roadmap_review",
                   "request_triage",
@@ -96163,6 +96171,16 @@
           },
           "knobs": {
             "$ref": "#/components/schemas/KnobsOut"
+          },
+          "waiting_for": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WaitingFor"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "snapshot_id": {
             "anyOf": [
@@ -96442,6 +96460,7 @@
               "priority_order",
               "prd_review",
               "eng_review",
+              "eng_dates",
               "roadmap_items",
               "roadmap_review",
               "request_triage",
@@ -96819,6 +96838,7 @@
                   "priority_order",
                   "prd_review",
                   "eng_review",
+                  "eng_dates",
                   "roadmap_items",
                   "roadmap_review",
                   "request_triage",
@@ -96954,6 +96974,7 @@
                   "priority_order",
                   "prd_review",
                   "eng_review",
+                  "eng_dates",
                   "roadmap_items",
                   "roadmap_review",
                   "request_triage",
@@ -100862,6 +100883,7 @@
                   "priority_order",
                   "prd_review",
                   "eng_review",
+                  "eng_dates",
                   "roadmap_items",
                   "roadmap_review",
                   "request_triage",
@@ -113324,6 +113346,26 @@
         ],
         "title": "WaitInfo",
         "description": "The SwarmCloud wait of the checkpoint: ``open`` (``ends_at``, ``seconds_left``),\n``ended`` (deciding continues the run as a new workflow) or ``none`` (one workflow per\nsegment: the checkpoint waits in the Inbox with no end)."
+      },
+      "WaitingFor": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "draft_items",
+            "title": "Kind"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "version"
+        ],
+        "title": "WaitingFor",
+        "description": "F4 lane B: what the run waits for between two segments, outside any checkpoint (the\napproved PRD version's draft roadmap items, before the Engineering dates)."
       },
       "WaitingOn": {
         "properties": {

@@ -21,6 +21,9 @@ from tests.review_v2_helpers import DOC, edit, person, setup, states
 from tests.test_review_v2_security_3 import disable, member_token
 
 WAIT = 5  # seconds: long enough for any route here, short enough to fail fast
+# A baseline segment's spend past the overrun ceiling of the default Baseline to PRD run:
+# 1.5x its estimate of $36.50 (six segments with the Engineering dates, on by default).
+OVERSPEND = Decimal(60)
 
 
 @pytest.fixture(autouse=True)
@@ -420,7 +423,7 @@ async def _prepare(client, ctx, runtime, route: str) -> tuple[dict, str]:
     if route == "resume":
         # Paused on overrun with its segment finished and its checkpoint off: resuming
         # submits the next segment.
-        runtime.script["baseline"] = [Outcome(cost_usd=Decimal(50), polls=1)]
+        runtime.script["baseline"] = [Outcome(cost_usd=OVERSPEND, polls=1)]
         run = await _started(client, ctx, checkpoints={"baseline_confirm": False})
         await _tick(client, ctx)
         await _tick(client, ctx)

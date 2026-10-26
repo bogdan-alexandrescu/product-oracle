@@ -15617,7 +15617,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -15700,7 +15700,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -20834,7 +20834,7 @@ export interface components {
             /** Outputs */
             outputs: string[];
             /** Checkpoint */
-            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /**
              * Approver Role
              * @enum {string}
@@ -20932,7 +20932,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -21942,7 +21942,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -31439,7 +31439,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /** Segment Seq */
             segment_seq?: number | null;
             /** Segment Title */
@@ -31591,7 +31591,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Review Link */
             review_link?: string | null;
             /** Error */
@@ -31637,11 +31637,12 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
             knobs: components["schemas"]["KnobsOut"];
+            waiting_for?: components["schemas"]["WaitingFor"] | null;
             /** Snapshot Id */
             snapshot_id?: string | null;
             /** Snapshot As Of */
@@ -31737,7 +31738,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
+            kind: "baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review";
             /**
              * Status
              * @enum {string}
@@ -31855,7 +31856,7 @@ export interface components {
             /** Finished At */
             finished_at?: string | null;
             /** Waiting On */
-            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
+            waiting_on?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Review Link */
             review_link?: string | null;
             /** Error */
@@ -31901,7 +31902,7 @@ export interface components {
             /** Draft Rejected */
             draft_rejected?: string | null;
             /** Delivering */
-            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
+            delivering?: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Sent Back */
             sent_back?: string | null;
             progress?: components["schemas"]["RunProgress"] | null;
@@ -33359,7 +33360,7 @@ export interface components {
             /** Scopes */
             scopes: string[];
             /** Checkpoint */
-            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
+            checkpoint: ("baseline_confirm" | "feature_set" | "priority_order" | "prd_review" | "eng_review" | "eng_dates" | "roadmap_items" | "roadmap_review" | "request_triage" | "strategy_review" | "launch_review" | "update_review" | "pricing_review") | null;
             /** Checkpoint On */
             checkpoint_on: boolean;
             /** Estimate Usd */
@@ -37681,6 +37682,20 @@ export interface components {
             ends_at?: string | null;
             /** Seconds Left */
             seconds_left?: number | null;
+        };
+        /**
+         * WaitingFor
+         * @description F4 lane B: what the run waits for between two segments, outside any checkpoint (the
+         *     approved PRD version's draft roadmap items, before the Engineering dates).
+         */
+        WaitingFor: {
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "draft_items";
+            /** Version */
+            version: number;
         };
         /** WaitingOn */
         WaitingOn: {

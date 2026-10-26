@@ -50,6 +50,7 @@ CheckpointKind = Literal[
     "priority_order",
     "prd_review",
     "eng_review",
+    "eng_dates",
     "roadmap_items",
     "roadmap_review",
     "request_triage",
@@ -998,8 +999,17 @@ class RunNoteRefs(BaseModel):
     refs: dict[str, str | list[str]]
 
 
+class WaitingFor(BaseModel):
+    """F4 lane B: what the run waits for between two segments, outside any checkpoint (the
+    approved PRD version's draft roadmap items, before the Engineering dates)."""
+
+    kind: Literal["draft_items"]
+    version: int
+
+
 class RunOut(RunSummary):
     knobs: KnobsOut
+    waiting_for: WaitingFor | None = None
     snapshot_id: uuid.UUID | None = None
     snapshot_as_of: datetime | None = None
     approved_by: uuid.UUID | None = None
