@@ -40,6 +40,7 @@ API_HOST = "api.fireflies.ai"
 GRAPHQL_PAGE = 50
 DEFAULT_RETRY_SECONDS = 60
 COUNT_NOT_OFFERED = "The count of meetings is not offered by this Fireflies plan."
+COUNT_UNREAD = "The count of meetings could not be read just now."
 
 LIST_QUERY = """
 query LiveTranscripts(
@@ -261,7 +262,7 @@ class _Stream(httpx2.AsyncByteStream):
 
 class _Bridge(httpx2.AsyncBaseTransport):
     """The ``mcp`` client's transport (httpx2) over the API's Fireflies client (httpx,
-    the guarded transport). Remembers the first refusing HTTP status it saw."""
+    the guarded transport). Remembers the first refusing HTTP status a POST got."""
 
     def __init__(self, client: httpx.AsyncClient):
         self.client = client
@@ -273,7 +274,9 @@ class _Bridge(httpx2.AsyncBaseTransport):
             request.method, str(request.url), headers=list(request.headers.raw), content=body
         )
         response = await self.client.send(sent, stream=True, follow_redirects=False)
-        if self.refused is None:
+        # Only the session's POSTs (initialize, the tool call) can explain a failed call:
+        # the optional GET stream and the closing DELETE never decide it.
+        if self.refused is None and request.method == "POST":
             self.refused = _from_status(response.status_code, response.headers.get("Retry-After"))
         # aiter_bytes decodes: the decoded body goes on without its encoding headers.
         headers = [
@@ -326,6 +329,7 @@ class ArchiveBackend:
         http = httpx2.AsyncClient(
             transport=bridge, headers={"Authorization": f"Bearer {self.api_key}"}
         )
+        result = None
         try:
             with anyio.fail_after(TIMEOUT_SECONDS):
                 async with (
@@ -335,9 +339,13 @@ class ArchiveBackend:
                 ):
                     await session.initialize()
                     result = await session.call_tool(name, arguments)
-        except TimeoutError:
-            raise SourceDown(TIMEOUT_REASON) from None
         except Exception as e:  # noqa: BLE001 - worded below, never re-raised as is
+            if result is not None:
+                # The tool answered: closing the session decides nothing.
+                log.info("closing a live archive session failed: %s", type(e).__name__)
+                return _structured(result)
+            if isinstance(e, TimeoutError):
+                raise SourceDown(TIMEOUT_REASON) from None
             if bridge.refused is not None:
                 raise bridge.refused from None
             if isinstance(e, LiveError):
@@ -347,8 +355,6 @@ class ArchiveBackend:
             # The type only: a message could carry what the source sent.
             log.info("a live archive call failed: %s", type(e).__name__)
             raise SourceDown("the connection failed") from None
-        if bridge.refused is not None:
-            raise bridge.refused
         return _structured(result)
 
     async def list_meetings(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -514,14 +520,19 @@ class GraphQLBackend:
             raise Malformed("no list")
         return page
 
-    async def _count(self) -> int | None:
+    async def _count(self) -> tuple[int | None, str | None]:
+        """The count and, without one, why: the plan does not offer it, or it could not
+        be read (rate limited, down, timed out). The list itself was read either way."""
         try:
             data = await self._query(COUNT_QUERY, {})
         except (_GraphQLError, SourceRefused, Malformed):
-            # The plan does not offer the field: no count (the list itself was read).
-            return None
+            return None, COUNT_NOT_OFFERED
+        except LiveError as e:
+            log.info("a live count failed: %s", type(e).__name__)
+            return None, COUNT_UNREAD
         user = data.get("user")
-        return _total(user.get("num_transcripts")) if isinstance(user, dict) else None
+        total = _total(user.get("num_transcripts")) if isinstance(user, dict) else None
+        return total, COUNT_NOT_OFFERED if total is None else None
 
     async def list_meetings(self, args: dict[str, Any]) -> dict[str, Any]:
         limit = min(args["limit"], GRAPHQL_PAGE)
@@ -531,8 +542,7 @@ class GraphQLBackend:
         )
         total, note = None, None
         if self._counted(args):
-            total = await self._count()
-            note = COUNT_NOT_OFFERED if total is None else None
+            total, note = await self._count()
         return {
             "total": total,
             "meetings": meetings,
