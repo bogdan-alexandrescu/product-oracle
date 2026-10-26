@@ -12429,7 +12429,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RefreshOut"
+                  "$ref": "#/components/schemas/oracle__claude_accounts__router__RefreshOut"
                 }
               }
             }
@@ -39870,6 +39870,412 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/roadmap": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Roadmap",
+        "description": "Every roadmap's items the caller may read on one timeline, grouped by goal, track or\nPRD: each with its resolved dates (source, estimated), open date suggestion,\nmilestone, waterfall phases, dependencies both ways and constraint flags; plus the\ntracks' milestones, the horizon windows and the company's today. Filters: ``prd``\n(slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).",
+        "operationId": "get_simple_roadmap",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "goal",
+                "track",
+                "prd"
+              ],
+              "type": "string",
+              "default": "goal",
+              "title": "Group"
+            }
+          },
+          {
+            "name": "prd",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prd"
+            }
+          },
+          {
+            "name": "goal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Goal"
+            }
+          },
+          {
+            "name": "track",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Track"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleRoadmapOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/roadmap/date-suggestions": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Date Suggestions",
+        "description": "Oracle's date suggestions for the items the caller may read, newest first.",
+        "operationId": "list_date_suggestions",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "open",
+                "accepted",
+                "edited",
+                "dismissed"
+              ],
+              "type": "string",
+              "default": "open",
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DateSuggestionOut"
+                  },
+                  "title": "Response List Date Suggestions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/roadmap/date-suggestions/refresh": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Refresh Date Suggestions",
+        "description": "Regenerate the suggestions now (the minute tick does it once a day).",
+        "operationId": "refresh_date_suggestions",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/oracle__simple__schemas__RefreshOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "approver"
+      }
+    },
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/accept": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Accept Date Suggestion",
+        "description": "Accept: the item takes the suggested dates (``date_source`` accepted).",
+        "operationId": "accept_date_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateSuggestionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/edit": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Edit Date Suggestion",
+        "description": "Edit: the item takes these dates instead (``date_source`` accepted).",
+        "operationId": "edit_date_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DateSuggestionEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateSuggestionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Dismiss Date Suggestion",
+        "description": "Dismiss: the item stays undated.",
+        "operationId": "dismiss_date_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DateSuggestionOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/strategy/stack": {
       "get": {
         "tags": [
@@ -57088,6 +57494,119 @@
           "lead_named"
         ],
         "title": "DateRightsOut"
+      },
+      "DateSuggestionEdit": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_date",
+          "end_date"
+        ],
+        "title": "DateSuggestionEdit"
+      },
+      "DateSuggestionOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "item_key": {
+            "type": "string",
+            "title": "Item Key"
+          },
+          "item_title": {
+            "type": "string",
+            "title": "Item Title"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "basis": {
+            "type": "string",
+            "title": "Basis"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted",
+              "edited",
+              "dismissed"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "item_id",
+          "item_key",
+          "item_title",
+          "start_date",
+          "end_date",
+          "basis",
+          "status",
+          "created_at"
+        ],
+        "title": "DateSuggestionOut"
       },
       "DealOutcomeIn": {
         "properties": {
@@ -90186,22 +90705,6 @@
         "title": "RefinementPreview",
         "description": "What accepting a refinement would change: a word diff of the section."
       },
-      "RefreshOut": {
-        "properties": {
-          "refresh": {
-            "$ref": "#/components/schemas/RefreshResult"
-          },
-          "account": {
-            "$ref": "#/components/schemas/AccountOut"
-          }
-        },
-        "type": "object",
-        "required": [
-          "refresh",
-          "account"
-        ],
-        "title": "RefreshOut"
-      },
       "RefreshResult": {
         "properties": {
           "account_id": {
@@ -102550,6 +103053,620 @@
         ],
         "title": "SignedOutEverywhere",
         "description": "Every session signed before ``sessions_valid_after`` is refused, this one too;\nevery personal API token, every MCP client (refresh tokens included) and the run\ntokens of the runs you started that are still going are revoked (AC1)."
+      },
+      "SimpleDate": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "typed",
+              "accepted",
+              "engineering",
+              "tracker",
+              "estimated"
+            ],
+            "title": "Source"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "source",
+          "estimated"
+        ],
+        "title": "SimpleDate"
+      },
+      "SimpleDocRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "title"
+        ],
+        "title": "SimpleDocRef"
+      },
+      "SimpleFlag": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "dependency_order",
+              "blocker_date",
+              "outside_milestone",
+              "cut_with_dependents",
+              "draft_without_owner"
+            ],
+            "title": "Kind"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "fixes": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "shift_dependents",
+                "move_dependency",
+                "accept_risk"
+              ]
+            },
+            "type": "array",
+            "title": "Fixes"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "red",
+              "amber"
+            ],
+            "title": "State"
+          },
+          "subject": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject"
+          },
+          "risk_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "reason",
+          "fixes",
+          "state"
+        ],
+        "title": "SimpleFlag"
+      },
+      "SimpleGoalRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "SimpleGoalRef"
+      },
+      "SimpleGroup": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Item Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "item_ids"
+        ],
+        "title": "SimpleGroup"
+      },
+      "SimpleItemMilestone": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "item",
+              "track"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "SimpleItemMilestone"
+      },
+      "SimpleMilestone": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "track_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Track Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "done",
+              "dropped"
+            ],
+            "title": "Status"
+          },
+          "item_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Item Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "track_id",
+          "name",
+          "horizon",
+          "status",
+          "item_ids"
+        ],
+        "title": "SimpleMilestone"
+      },
+      "SimplePhase": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "enum": [
+              "discover",
+              "build",
+              "beta",
+              "launch"
+            ],
+            "title": "Key"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "start",
+          "end",
+          "estimated"
+        ],
+        "title": "SimplePhase"
+      },
+      "SimpleRoadmapItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "prd": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleGoalRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "track": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleTrackRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "in_progress",
+              "done",
+              "cut",
+              "draft"
+            ],
+            "title": "Status"
+          },
+          "draft": {
+            "type": "boolean",
+            "title": "Draft",
+            "default": false
+          },
+          "start": {
+            "$ref": "#/components/schemas/SimpleDate"
+          },
+          "end": {
+            "$ref": "#/components/schemas/SimpleDate"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "typed",
+              "accepted",
+              "engineering",
+              "tracker",
+              "estimated"
+            ],
+            "title": "Source"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateSuggestionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleItemMilestone"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "phases": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePhase"
+            },
+            "type": "array",
+            "title": "Phases"
+          },
+          "depends_on": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Depends On"
+          },
+          "needed_by": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Needed By"
+          },
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFlag"
+            },
+            "type": "array",
+            "title": "Flags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title",
+          "horizon",
+          "roadmap",
+          "status",
+          "start",
+          "end",
+          "source",
+          "estimated",
+          "phases",
+          "depends_on",
+          "needed_by",
+          "flags"
+        ],
+        "title": "SimpleRoadmapItem"
+      },
+      "SimpleRoadmapOut": {
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          },
+          "group": {
+            "type": "string",
+            "enum": [
+              "goal",
+              "track",
+              "prd"
+            ],
+            "title": "Group"
+          },
+          "windows": {
+            "$ref": "#/components/schemas/SimpleWindows"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleGroup"
+            },
+            "type": "array",
+            "title": "Groups"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleRoadmapItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMilestone"
+            },
+            "type": "array",
+            "title": "Milestones"
+          }
+        },
+        "type": "object",
+        "required": [
+          "today",
+          "group",
+          "windows",
+          "groups",
+          "items",
+          "milestones"
+        ],
+        "title": "SimpleRoadmapOut"
+      },
+      "SimpleTrackRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleTrackRef"
+      },
+      "SimpleWindow": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "SimpleWindow"
+      },
+      "SimpleWindows": {
+        "properties": {
+          "now": {
+            "$ref": "#/components/schemas/SimpleWindow"
+          },
+          "next": {
+            "$ref": "#/components/schemas/SimpleWindow"
+          },
+          "later": {
+            "$ref": "#/components/schemas/SimpleWindow"
+          }
+        },
+        "type": "object",
+        "required": [
+          "now",
+          "next",
+          "later"
+        ],
+        "title": "SimpleWindows"
       },
       "SkipIn": {
         "properties": {
@@ -115287,6 +116404,22 @@
         ],
         "title": "AuthorizeOut"
       },
+      "oracle__claude_accounts__router__RefreshOut": {
+        "properties": {
+          "refresh": {
+            "$ref": "#/components/schemas/RefreshResult"
+          },
+          "account": {
+            "$ref": "#/components/schemas/AccountOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh",
+          "account"
+        ],
+        "title": "RefreshOut"
+      },
       "oracle__connections__router__AuthorizeOut": {
         "properties": {
           "url": {
@@ -115563,6 +116696,20 @@
           "into_id"
         ],
         "title": "MergeIn"
+      },
+      "oracle__simple__schemas__RefreshOut": {
+        "properties": {
+          "open": {
+            "type": "integer",
+            "title": "Open",
+            "description": "Open suggestions after the refresh"
+          }
+        },
+        "type": "object",
+        "required": [
+          "open"
+        ],
+        "title": "RefreshOut"
       },
       "oracle__specs__schemas__RegenerateIn": {
         "properties": {

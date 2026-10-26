@@ -150,6 +150,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
+import { routeSimpleRoadmap, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -236,6 +237,8 @@ export interface Db {
   draft_roadmaps?: DraftRoadmapDb;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** Simple S2 (#723): the company-wide roadmap's items and date suggestions (./simple-roadmap.ts). */
+  simple_roadmap?: SimpleDb;
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
   plan_edits?: PlanEditsDb;
   /** Specs, flows and wireframes (./specs.ts); absent in data saved before CR-09. */
@@ -4660,6 +4663,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (editsRes) return editsRes;
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
+  // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
+  db.simple_roadmap ??= seedSimpleRoadmap();
+  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role }, req, p, q);
+  if (simpleRes) return simpleRes;
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
   const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);

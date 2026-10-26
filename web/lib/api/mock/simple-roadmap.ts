@@ -1,0 +1,324 @@
+/**
+ * Simple S2 (#723): the company-wide roadmap (GET /v1/simple/roadmap) and Oracle's date
+ * suggestions (/v1/simple/roadmap/date-suggestions), as api/oracle/simple serves them.
+ *
+ * Invented data: two company-wide roadmaps and one for owners and approvers only, with
+ * typed, accepted, engineering, tracker and estimated dates, dependencies, a milestone, a
+ * cut item and a draft without an owner. The rules are the API's (oracle.simple.dates and
+ * constraints), simplified: the company's day is the mock clock's UTC day and the planning
+ * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
+ */
+import type { Schemas } from "@/lib/api/client";
+import { mockNowMs } from "./clock";
+import { seeded, stableUuid } from "./ids";
+
+type Item = Schemas["SimpleRoadmapItem"];
+type Suggestion = Schemas["DateSuggestionOut"];
+type Dated = Schemas["SimpleDate"];
+type Flag = Schemas["SimpleFlag"];
+type Horizon = Item["horizon"];
+type Role = Schemas["Me"]["role"];
+
+interface SeedItem {
+  key: string;
+  title: string;
+  horizon: Horizon;
+  roadmap: string;
+  goal?: string;
+  track?: string;
+  confidence?: "low" | "medium" | "high";
+  /** Days from the window's start; with `source`. */
+  start?: number;
+  end?: number;
+  source?: Exclude<Dated["source"], "estimated">;
+  depends?: string[];
+  status?: Item["status"];
+  draft?: boolean;
+  milestone?: { name: string; day: number };
+  risks?: { flag: Flag["kind"]; note: string }[];
+}
+
+interface SimpleDb {
+  items: SeedItem[];
+  ids: Record<string, string>;
+  /** The items' own dates once a suggestion was accepted or edited (ISO days). */
+  own: Record<string, { start: string; end: string }>;
+  suggestions: Suggestion[];
+}
+
+const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string }> = {
+  "alerts-roadmap": { title: "Alerts roadmap", visibility: "company", prd: "Usage alerts" },
+  "onboarding-roadmap": { title: "Onboarding roadmap", visibility: "company", prd: "Guided setup" },
+  "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes" },
+};
+const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation" };
+const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track" };
+
+const SEED: SeedItem[] = [
+  { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress" },
+  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 } },
+  { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"] },
+  { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
+  { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
+  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed" },
+  { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", depends: ["setup-checklist"], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
+  { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut" },
+  { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
+  { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
+  { key: "price-tiers", title: "New plan tiers", horizon: "next", roadmap: "pricing-roadmap", confidence: "medium" },
+];
+
+const DAY = 86_400_000;
+const iso = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
+const ms = (day: string): number => Date.parse(`${day}T00:00:00Z`);
+const addDays = (day: string, n: number): string => iso(ms(day) + n * DAY);
+const span = (a: string, b: string): number => Math.round((ms(b) - ms(a)) / DAY) + 1;
+const word = (day: string): string => new Date(ms(day)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+
+function addMonths(day: string, months: number): string {
+  const d = new Date(ms(day));
+  const y = d.getUTCFullYear() + Math.floor((d.getUTCMonth() + months) / 12);
+  const m = (d.getUTCMonth() + months) % 12;
+  const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return iso(Date.UTC(y, m, Math.min(d.getUTCDate(), last)));
+}
+
+/** tenant_settings_api.horizon_windows with the default horizons, on the mock's day. */
+export function simpleWindows(today: string): Record<Horizon, [string, string]> {
+  const d = new Date(ms(today));
+  const q = iso(Date.UTC(d.getUTCFullYear(), 3 * Math.floor(d.getUTCMonth() / 3), 1));
+  const medium = addMonths(q, 3);
+  const mediumEnd = addMonths(medium, 6);
+  return { now: [q, addDays(medium, -1)], next: [medium, addDays(mediumEnd, -1)], later: [addMonths(today, 12), addMonths(today, 24)] };
+}
+
+export function seedSimpleRoadmap(): SimpleDb {
+  return seeded("simple-roadmap", () => ({
+    items: SEED.map((s) => ({ ...s })),
+    ids: Object.fromEntries(SEED.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])),
+    own: {},
+    suggestions: [],
+  }));
+}
+
+function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated; end: Dated } {
+  const own = db.own[s.key];
+  if (own) return { start: { date: own.start, source: "accepted", estimated: false }, end: { date: own.end, source: "accepted", estimated: false } };
+  const end: Dated = s.end !== undefined && s.source ? { date: addDays(w[0], s.end), source: s.source, estimated: false } : { date: w[1], source: "estimated", estimated: true };
+  let start: Dated = { date: w[0], source: "estimated", estimated: true };
+  if (s.start !== undefined && s.source) start = { date: addDays(w[0], s.start), source: s.source, estimated: false };
+  else if (end.date < w[0]) start = { date: addDays(end.date, -41), source: "estimated", estimated: true };
+  return { start, end };
+}
+
+const PHASES = [["discover", 0.15], ["build", 0.55], ["beta", 0.2], ["launch", 0.1]] as const;
+
+function phases(start: string, end: string): Schemas["SimplePhase"][] {
+  const total = span(start, end);
+  let cursor = start;
+  let share = 0;
+  return PHASES.map(([key, part], i) => {
+    share += part;
+    let day = i === PHASES.length - 1 ? end : addDays(start, Math.round(total * share) - 1);
+    if (day < cursor) day = cursor;
+    const out = { key, start: cursor, end: day, estimated: true };
+    cursor = addDays(day, 1);
+    return out;
+  });
+}
+
+const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…`);
+
+function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
+  const out: Flag[] = [];
+  const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
+    const risk = s.risks?.find((x) => x.flag === kind);
+    out.push({ kind, reason, fixes, state: risk ? "amber" : "red", subject, risk_note: risk?.note ?? null });
+  };
+  for (const key of s.depends ?? []) {
+    const dep = all.get(key);
+    if (!dep || dep.s.status === "cut" || (dep.r.end.estimated && r.start.estimated)) continue;
+    if (dep.r.end.date >= r.start.date)
+      flag("dependency_order", `Starts ${word(r.start.date)}, but '${short(dep.s.title)}' it depends on ends ${word(dep.r.end.date)}`, ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
+  }
+  if (s.milestone) {
+    const day = addDays(w[0], s.milestone.day);
+    if (r.end.date > day) flag("outside_milestone", `Ends ${word(r.end.date)}, after its milestone '${s.milestone.name}' (${word(day)})`, ["accept_risk"], s.milestone.name);
+  }
+  if (s.status === "cut") {
+    const live = [...all.values()].filter((x) => x.s.status !== "cut" && x.s.depends?.includes(s.key));
+    if (live.length) {
+      const more = live.length > 1 ? ` and ${live.length - 1} other${live.length > 2 ? "s" : ""}` : "";
+      flag("cut_with_dependents", `Cut, but '${short(live[0].s.title)}'${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["accept_risk"]);
+    }
+  }
+  if (s.draft && !s.track) flag("draft_without_owner", "Draft with no owner to confirm it", []);
+  return out;
+}
+
+/** The mock's roadmaps name no decider and no track owner: owners decide (service.can_decide). */
+const canDecide = (role: Role): boolean => role === "owner";
+
+function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
+  const restricted = role === "commenter" || role === "viewer";
+  return db.items.filter((s) => !restricted || ROADMAPS[s.roadmap].visibility === "company");
+}
+
+/** oracle.simple.suggestions.regenerate: one open suggestion per undated item. */
+function regenerate(db: SimpleDb, today: string): number {
+  const w = simpleWindows(today);
+  const resolved = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  const durations = new Map<string, number[]>();
+  for (const { s, r } of resolved.values()) {
+    if (r.start.estimated || r.end.estimated) continue;
+    const k = s.confidence ?? "";
+    durations.set(k, [...(durations.get(k) ?? []), span(r.start.date, r.end.date)]);
+  }
+  let open = 0;
+  for (const { s, r } of resolved.values()) {
+    const id = db.ids[s.key];
+    const current = db.suggestions.find((x) => x.item_id === id && x.status === "open");
+    const undated = r.start.estimated && r.end.estimated && s.status !== "cut" && s.status !== "done";
+    if (!undated || db.suggestions.some((x) => x.item_id === id && x.status === "dismissed")) {
+      if (current) db.suggestions = db.suggestions.filter((x) => x !== current);
+      continue;
+    }
+    const window = w[s.horizon];
+    let start = window[0];
+    let why = `starts with the ${s.horizon[0].toUpperCase()}${s.horizon.slice(1)} window`;
+    const deps = (s.depends ?? []).map((k) => resolved.get(k)).filter((x) => x !== undefined);
+    const latest = deps.sort((a, b) => (a.r.end.date < b.r.end.date ? 1 : -1))[0];
+    if (latest && addDays(latest.r.end.date, 1) > start) {
+      start = addDays(latest.r.end.date, 1);
+      why = `starts the day after '${latest.s.title}' ends`;
+    }
+    const same = [...(durations.get(s.confidence ?? "") ?? [])].sort((a, b) => a - b);
+    const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 42;
+    const conf = s.confidence ? `${s.confidence}-confidence` : "unrated";
+    const how = same.length ? `${mid} days, the median of ${same.length} dated ${conf} items` : `${mid} days, the default with no dated ${conf} items`;
+    let end = addDays(start, mid - 1);
+    let tail = "";
+    if (start <= window[1] && window[1] < end) {
+      end = window[1];
+      tail = `, cut at the window's end (${word(window[1])})`;
+    }
+    const basis = `It ${why} (${word(start)}) and runs ${how}${tail}.`;
+    open += 1;
+    if (current) Object.assign(current, { start_date: start, end_date: end, basis });
+    else
+      db.suggestions.push({
+        id: stableUuid(`simple-suggestion/${s.key}/${start}/${end}`),
+        item_id: id, item_key: s.key, item_title: s.title, start_date: start, end_date: end, basis,
+        status: "open", created_at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, can_decide: false,
+      });
+  }
+  return open;
+}
+
+function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams): Schemas["SimpleRoadmapOut"] | null {
+  const today = iso(mockNowMs());
+  const w = simpleWindows(today);
+  const group = (q.get("group") ?? "goal") as Schemas["SimpleRoadmapOut"]["group"];
+  if (!["goal", "track", "prd"].includes(group)) return null;
+  const seeds = visibleItems(db, role);
+  const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  const items: Item[] = seeds.map((s) => {
+    const r = all.get(s.key)!.r;
+    const rm = ROADMAPS[s.roadmap];
+    const suggestion = db.suggestions.find((x) => x.item_id === db.ids[s.key] && x.status === "open");
+    return {
+      id: db.ids[s.key], key: s.key, title: s.title, outcome: null, horizon: s.horizon,
+      roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
+      prd: { id: stableUuid(`simple-prd/${s.roadmap}`), slug: rm.prd.toLowerCase().replace(/ /g, "-"), title: rm.prd },
+      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] } : null,
+      track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
+      confidence: s.confidence ?? null,
+      status: s.draft ? "draft" : (s.status ?? "planned"),
+      draft: !!s.draft,
+      start: r.start, end: r.end,
+      source: r.end.estimated ? r.start.source : r.end.source,
+      estimated: r.start.estimated && r.end.estimated,
+      suggestion: suggestion ? { ...suggestion, can_decide: canDecide(role) } : null,
+      milestone: s.milestone ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item" } : null,
+      phases: phases(r.start.date, r.end.date),
+      depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
+      needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
+      flags: flagsOf(s, r, all, w[s.horizon]),
+    };
+  });
+  const prd = q.get("prd");
+  const goal = q.get("goal");
+  const track = q.get("track");
+  const from = q.get("from");
+  const to = q.get("to");
+  const shown = items.filter(
+    (i) =>
+      (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
+      (!goal || i.goal?.key === goal || i.goal?.id === goal) &&
+      (!track || i.track?.id === track) &&
+      (!from || i.end.date >= from) &&
+      (!to || i.start.date <= to),
+  );
+  const groups = new Map<string, { title: string; sort: string; item_ids: string[] }>();
+  for (const i of shown) {
+    const ref = group === "goal" ? i.goal : group === "track" ? i.track : i.prd;
+    const none = { goal: "No goal", track: "No track", prd: "No PRD" }[group];
+    const key = ref?.id ?? "none";
+    const g = groups.get(key) ?? { title: ref?.title ?? none, sort: ref ? `0${"key" in ref ? ref.key : ref.title}` : "1", item_ids: [] };
+    g.item_ids.push(i.id);
+    groups.set(key, g);
+  }
+  return {
+    today, group,
+    windows: { now: { start: w.now[0], end: w.now[1] }, next: { start: w.next[0], end: w.next[1] }, later: { start: w.later[0], end: w.later[1] } },
+    groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
+    items: shown,
+    milestones: [
+      { id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now", status: "planned", item_ids: [db.ids["alert-digest"]] },
+    ],
+  };
+}
+
+function json(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+}
+
+/** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */
+export async function routeSimpleRoadmap(db: SimpleDb, me: { id: string; role: Role }, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
+  if (p[1] !== "simple" || p[2] !== "roadmap") return null;
+  const m = req.method;
+  const today = iso(mockNowMs());
+  if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, today);
+  if (!p[3] && m === "GET") {
+    const out = roadmapOut(db, me.role, q);
+    return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
+  }
+  if (p[3] !== "date-suggestions") return null;
+  if (!p[4] && m === "GET") {
+    const status = q.get("status") ?? "open";
+    const keys = new Set(visibleItems(db, me.role).map((s) => db.ids[s.key]));
+    return json(200, db.suggestions.filter((s) => s.status === status && keys.has(s.item_id)).map((s) => ({ ...s, can_decide: canDecide(me.role) })));
+  }
+  if (p[4] === "refresh" && m === "POST") {
+    if (me.role !== "owner" && me.role !== "approver") return json(403, { detail: "Requires the approver role" });
+    return json(200, { open: regenerate(db, today) });
+  }
+  const action = p[5];
+  if (m !== "POST" || !p[4] || !["accept", "edit", "dismiss"].includes(action ?? "")) return null;
+  const s = db.suggestions.find((x) => x.id === p[4]);
+  const item = s && visibleItems(db, me.role).find((x) => db.ids[x.key] === s.item_id);
+  if (!s || !item) return json(404, { detail: "No such date suggestion" });
+  if (!canDecide(me.role)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides date suggestions" });
+  if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
+  if (action === "edit") {
+    const body = (await req.json()) as { start_date?: string; end_date?: string };
+    if (!body.start_date || !body.end_date || body.end_date < body.start_date) return json(422, { detail: "end_date must not be before start_date" });
+    db.own[item.key] = { start: body.start_date, end: body.end_date };
+  } else if (action === "accept") {
+    db.own[item.key] = { start: s.start_date, end: s.end_date };
+  }
+  Object.assign(s, { status: { accept: "accepted", edit: "edited", dismiss: "dismissed" }[action!], decided_by: me.id, decided_at: new Date(mockNowMs()).toISOString() });
+  return json(200, { ...s, can_decide: true });
+}
+
+export type { SimpleDb };

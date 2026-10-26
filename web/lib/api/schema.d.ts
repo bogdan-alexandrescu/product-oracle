@@ -11519,6 +11519,130 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Roadmap
+         * @description Every roadmap's items the caller may read on one timeline, grouped by goal, track or
+         *     PRD: each with its resolved dates (source, estimated), open date suggestion,
+         *     milestone, waterfall phases, dependencies both ways and constraint flags; plus the
+         *     tracks' milestones, the horizon windows and the company's today. Filters: ``prd``
+         *     (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).
+         */
+        get: operations["get_simple_roadmap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Date Suggestions
+         * @description Oracle's date suggestions for the items the caller may read, newest first.
+         */
+        get: operations["list_date_suggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Date Suggestions
+         * @description Regenerate the suggestions now (the minute tick does it once a day).
+         */
+        post: operations["refresh_date_suggestions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Date Suggestion
+         * @description Accept: the item takes the suggested dates (``date_source`` accepted).
+         */
+        post: operations["accept_date_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit Date Suggestion
+         * @description Edit: the item takes these dates instead (``date_source`` accepted).
+         */
+        post: operations["edit_date_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Date Suggestion
+         * @description Dismiss: the item stays undated.
+         */
+        post: operations["dismiss_date_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/strategy/stack": {
         parameters: {
             query?: never;
@@ -17520,6 +17644,67 @@ export interface components {
             rights: ("verify" | "propose") | null;
             /** Lead Named */
             lead_named: boolean;
+        };
+        /** DateSuggestionEdit */
+        DateSuggestionEdit: {
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+        };
+        /** DateSuggestionOut */
+        DateSuggestionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Item Key */
+            item_key: string;
+            /** Item Title */
+            item_title: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Basis */
+            basis: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "accepted" | "edited" | "dismissed";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
         };
         /**
          * DealOutcomeIn
@@ -29595,11 +29780,6 @@ export interface components {
             /** Words */
             words: components["schemas"]["WordOp"][];
         };
-        /** RefreshOut */
-        RefreshOut: {
-            refresh: components["schemas"]["RefreshResult"];
-            account: components["schemas"]["AccountOut"];
-        };
         /** RefreshResult */
         RefreshResult: {
             /** Account Id */
@@ -33932,6 +34112,239 @@ export interface components {
              * @default 0
              */
             runs_tokens_revoked: number;
+        };
+        /** SimpleDate */
+        SimpleDate: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "typed" | "accepted" | "engineering" | "tracker" | "estimated";
+            /** Estimated */
+            estimated: boolean;
+        };
+        /** SimpleDocRef */
+        SimpleDocRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleFlag */
+        SimpleFlag: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dependency_order" | "blocker_date" | "outside_milestone" | "cut_with_dependents" | "draft_without_owner";
+            /** Reason */
+            reason: string;
+            /** Fixes */
+            fixes: ("shift_dependents" | "move_dependency" | "accept_risk")[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "red" | "amber";
+            /** Subject */
+            subject?: string | null;
+            /** Risk Note */
+            risk_note?: string | null;
+        };
+        /** SimpleGoalRef */
+        SimpleGoalRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleGroup */
+        SimpleGroup: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Item Ids */
+            item_ids: string[];
+        };
+        /** SimpleItemMilestone */
+        SimpleItemMilestone: {
+            /** Name */
+            name?: string | null;
+            /** Date */
+            date?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "item" | "track";
+        };
+        /** SimpleMilestone */
+        SimpleMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "planned" | "done" | "dropped";
+            /** Item Ids */
+            item_ids: string[];
+        };
+        /** SimplePhase */
+        SimplePhase: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "discover" | "build" | "beta" | "launch";
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Estimated */
+            estimated: boolean;
+        };
+        /** SimpleRoadmapItem */
+        SimpleRoadmapItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome?: string | null;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            roadmap: components["schemas"]["SimpleDocRef"];
+            prd?: components["schemas"]["SimpleDocRef"] | null;
+            goal?: components["schemas"]["SimpleGoalRef"] | null;
+            track?: components["schemas"]["SimpleTrackRef"] | null;
+            /** Confidence */
+            confidence?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "planned" | "in_progress" | "done" | "cut" | "draft";
+            /**
+             * Draft
+             * @default false
+             */
+            draft: boolean;
+            start: components["schemas"]["SimpleDate"];
+            end: components["schemas"]["SimpleDate"];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "typed" | "accepted" | "engineering" | "tracker" | "estimated";
+            /** Estimated */
+            estimated: boolean;
+            suggestion?: components["schemas"]["DateSuggestionOut"] | null;
+            milestone?: components["schemas"]["SimpleItemMilestone"] | null;
+            /** Phases */
+            phases: components["schemas"]["SimplePhase"][];
+            /** Depends On */
+            depends_on: string[];
+            /** Needed By */
+            needed_by: string[];
+            /** Flags */
+            flags: components["schemas"]["SimpleFlag"][];
+        };
+        /** SimpleRoadmapOut */
+        SimpleRoadmapOut: {
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "goal" | "track" | "prd";
+            windows: components["schemas"]["SimpleWindows"];
+            /** Groups */
+            groups: components["schemas"]["SimpleGroup"][];
+            /** Items */
+            items: components["schemas"]["SimpleRoadmapItem"][];
+            /** Milestones */
+            milestones: components["schemas"]["SimpleMilestone"][];
+        };
+        /** SimpleTrackRef */
+        SimpleTrackRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleWindow */
+        SimpleWindow: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+        };
+        /** SimpleWindows */
+        SimpleWindows: {
+            now: components["schemas"]["SimpleWindow"];
+            next: components["schemas"]["SimpleWindow"];
+            later: components["schemas"]["SimpleWindow"];
         };
         /** SkipIn */
         SkipIn: {
@@ -38423,6 +38836,11 @@ export interface components {
             /** Expires In Seconds */
             expires_in_seconds: number;
         };
+        /** RefreshOut */
+        oracle__claude_accounts__router__RefreshOut: {
+            refresh: components["schemas"]["RefreshResult"];
+            account: components["schemas"]["AccountOut"];
+        };
         /** AuthorizeOut */
         oracle__connections__router__AuthorizeOut: {
             /** Url */
@@ -38494,6 +38912,14 @@ export interface components {
              * Format: uuid
              */
             into_id: string;
+        };
+        /** RefreshOut */
+        oracle__simple__schemas__RefreshOut: {
+            /**
+             * Open
+             * @description Open suggestions after the refresh
+             */
+            open: number;
         };
         /** RegenerateIn */
         oracle__specs__schemas__RegenerateIn: {
@@ -46776,7 +47202,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RefreshOut"];
+                    "application/json": components["schemas"]["oracle__claude_accounts__router__RefreshOut"];
                 };
             };
             /** @description Validation Error */
@@ -61594,6 +62020,190 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ItemHistoryOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_roadmap: {
+        parameters: {
+            query?: {
+                group?: "goal" | "track" | "prd";
+                prd?: string | null;
+                goal?: string | null;
+                track?: string | null;
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleRoadmapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_date_suggestions: {
+        parameters: {
+            query?: {
+                status?: "open" | "accepted" | "edited" | "dismissed";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateSuggestionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_date_suggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["oracle__simple__schemas__RefreshOut"];
+                };
+            };
+        };
+    };
+    accept_date_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateSuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_date_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DateSuggestionEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateSuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_date_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateSuggestionOut"];
                 };
             };
             /** @description Validation Error */
