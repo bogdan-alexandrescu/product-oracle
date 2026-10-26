@@ -15994,6 +15994,11 @@ export interface components {
              * @default approver
              */
             required_review_role: string;
+            /**
+             * Can Change
+             * @default false
+             */
+            can_change: boolean;
         };
         /**
          * CompositionInputs
@@ -22420,6 +22425,11 @@ export interface components {
              */
             required_review_role: string;
             /**
+             * Can Change
+             * @default false
+             */
+            can_change: boolean;
+            /**
              * Sections Present
              * @default []
              */
@@ -22465,6 +22475,8 @@ export interface components {
             /** Revisions */
             revisions: components["schemas"]["RevisionSummary"][];
             sections: components["schemas"]["DocumentSectionsOut"];
+            /** Policy Changed At */
+            policy_changed_at?: string | null;
             /**
              * Problems
              * @default []
