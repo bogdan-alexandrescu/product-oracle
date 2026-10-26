@@ -55,6 +55,8 @@ import {
   FEATURE_SET_RUN,
   fromRunCheckpoint,
   lastBaselineBuild,
+  lastBaselineRun,
+  seedFinishedBaselineBuild,
   reviewedVersion,
   ROADMAP_REVIEW_HELD_RUN,
   routeRuns,
@@ -170,6 +172,8 @@ export interface Db {
   lane_f?: LaneFState;
   /** Runs, checkpoints and their artifacts (./runs.ts); absent in data saved before runs existed. */
   runs?: RunsDb;
+  /** The Baseline rebuild's Build the baseline estimate in the "rebuild-costly" ($14) and "rebuild-over-approval" ($70) scenarios. */
+  baseline_build_usd?: number;
   /** D12: the agents' run estimate in the "next-draft-costly" scenario. */
   next_draft_run_usd?: number;
   /** Built-in model jobs and suggestions (./llm-jobs.ts); absent in older saved data. */
@@ -1714,6 +1718,33 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     decisions: () => db.decisions?.decisions ?? [],
     openVariances: (id) => openVariances(ensureMetrics(db, me), id),
     marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
+    baselineStarts: () => levelFor((db.autonomy ??= emptyAutonomy()), "baseline") !== "observe",
+    rebuildUsd: () => db.baseline_build_usd ?? 7,
+    // As rebuild.after_ready: B1's create, estimate and start through the runs mock's own routes.
+    startBaselineBuild: async () => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const call = async (path: string[], body?: unknown): Promise<{ ok: true; id?: string } | { ok: false; error: string }> => {
+        const req = new Request(new URL(`/${path.join("/")}`, "http://mock.local"), { method: "POST", body: body === undefined ? undefined : JSON.stringify(body), headers: { "Content-Type": "application/json" } });
+        const res = (await routeRuns({ ...runsContext(db), db: db.runs! }, req, path))!;
+        const out = (await res.json()) as { id?: string; detail?: string };
+        return res.ok ? { ok: true, id: out.id } : { ok: false, error: String(out.detail ?? "Oracle could not start the build") };
+      };
+      const created = await call(["v1", "runs"], { flow: "baseline", knobs: { depth: "standard", checkpoints: { baseline_confirm: true } } });
+      if (!created.ok) return { error: created.error };
+      const id = created.id!;
+      for (const step of ["estimate", "start"]) {
+        const done = await call(["v1", "runs", id, step]);
+        if (!done.ok) return { error: done.error };
+        // The "rebuild-costly" and "rebuild-over-approval" scenarios price the build otherwise.
+        const run = db.runs!.runs.find((r) => r.id === id);
+        if (step === "estimate" && run && db.baseline_build_usd != null) Object.assign(run, { estimate_usd: db.baseline_build_usd, needs_approval: db.baseline_build_usd > 50 });
+      }
+      return { id };
+    },
+    runStatus: (id) => db.runs?.runs.find((r) => r.id === id)?.status ?? null,
+    lastBaselineRun: () => lastBaselineRun(db.runs),
+    oracleDid: (row) =>
+      (db.autonomy ??= emptyAutonomy()).actions.push({ ...row, id: uuid(), created_at: new Date().toISOString(), undone_at: null, opened_by: [], undone_by: null }),
   };
 }
 
@@ -2082,6 +2113,13 @@ function load(): Db {
     if (goal) db.quality = { outcomes, learnings: seedLearnings(db.user_id) };
   }
   db.autonomy = emptyAutonomy();
+  // The Baseline rebuild (rebuild.py): Build the baseline priced $14 (above the old $10 ritual
+  // limit) or $70 (over P3's $50), with one build finished on 20 October.
+  if (scenario === "rebuild-costly" || scenario === "rebuild-over-approval") {
+    db.baseline_build_usd = scenario === "rebuild-costly" ? 14 : 70;
+    db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+    seedFinishedBaselineBuild(runsContext(db), db.runs, "2026-10-20T16:00:00Z");
+  }
   // Discussions (G1): one private discussion in the "discussions" scenario; none otherwise,
   // so other specs' counts stay as they were.
   db.discussions =

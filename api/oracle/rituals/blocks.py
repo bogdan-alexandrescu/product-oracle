@@ -25,6 +25,7 @@ from oracle.docs.models import Document, DocumentVersion
 from oracle.market import blocks as market_blocks
 from oracle.priorities.models import PrioritySnapshot
 from oracle.quality.models import OutcomeRecord
+from oracle.rituals import rebuild
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackerRecord, TrackMilestone
 from oracle.runs.models import Checkpoint, Run
 from oracle.v2.models import BlockerResolutionEvent
@@ -653,6 +654,8 @@ async def variances(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
 
 # H7 Competitive digest's four blocks (oracle.market.blocks).
 TITLES.update(market_blocks.TITLES)
+# The Baseline rebuild's one block (oracle.rituals.rebuild).
+TITLES.update(rebuild.TITLES)
 
 Builder = Callable[[AsyncSession, BlockCtx], Awaitable[list[dict[str, Any]]]]
 BUILDERS: dict[str, Builder] = {
@@ -681,6 +684,7 @@ BUILDERS: dict[str, Builder] = {
     "metrics_table": metrics_table,
     "variances": variances,
     **market_blocks.BUILDERS,
+    rebuild.BLOCK: rebuild.block,
 }
 
 
