@@ -16,10 +16,13 @@ Made-up people only. Each test's card: protects=<the observable>; fails_when=<th
 result it rejects>; no_claim=<what green does not prove>.
 """
 
+from datetime import UTC, datetime
+
 from sqlalchemy import select
 
+from oracle.auth.models import User
 from oracle.autonomy_models import OracleAction
-from oracle.intake import autoask
+from oracle.intake import autoask, engine
 from oracle.tenancy import tenant_session
 from tests.intake_helpers import company, create_intake
 
@@ -218,3 +221,31 @@ async def test_below_act_the_tick_asks_nothing(client):
         assert await tick(ctx) == 0
     assert await questions(client, ctx, iid, "asked") == []
     assert await actions(ctx) == []
+
+
+async def test_draft_asks_the_person_the_preview_named(client):
+    """protects=#586 review minor: at Draft, when the brief's author can no longer answer
+    (disabled), the next batch names the person Oracle falls back to, and asking it asks
+    exactly that person, not the reader who sends it; fails_when=the preview names one
+    person and the batch is asked of another (the sender); no_claim=Recommend, where the
+    sender is proposed and asked as before (test_recommend_is_unchanged)."""
+    ctx = await company()
+    await set_level(client, ctx, "draft")
+    out = await create_intake(client, ctx)
+    iid = out["intake"]["id"]
+    async with tenant_session(ctx.tenant_id) as db:
+        author = await db.get(User, ctx.users["commenter"].id)
+        author.disabled_at = datetime.now(UTC)
+        await db.commit()
+        fallback = await engine.an_approver(db)
+    # The sender is the one of owner and approver Oracle does not fall back to.
+    sender = "owner" if fallback == ctx.users["approver"].id else "approver"
+    nb = await next_batch(client, ctx, iid, who=sender)
+    named = {c["question"]["id"]: c["question"]["asked_to"] for c in nb["questions"]}
+    assert set(named.values()) == {str(fallback)}
+    resp = await client.post(
+        f"/v1/intakes/{iid}/question-batches", json={"size": 5}, headers=ctx.as_(sender)
+    )
+    assert resp.status_code == 200, resp.text
+    asked = {q["id"]: q["asked_to"] for q in await questions(client, ctx, iid, "asked")}
+    assert asked == named
