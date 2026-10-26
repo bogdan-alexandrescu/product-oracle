@@ -9942,7 +9942,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
     # 404s (Stop cancelling), answer posts past them (Cancel), and searched workflows past
     # them (shown), by those who manage the run.
     live = Run.knobs["workflow"]["state"].astext == "live"
-    stuck_runs = [
+    managed = [
         r
         for r in await db.scalars(
             select(Run)
@@ -9955,16 +9955,11 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
             )
             .order_by(Run.created_at)
         )
-        if _manages(principal, r) and _stuck(r)
-    ]
-    # Submissions given up on, still looked for (shown, nothing to do).
-    searching_runs = [
-        r
-        for r in await db.scalars(
-            select(Run).where(Run.knobs.has_key("searches")).order_by(Run.created_at)
-        )
         if _manages(principal, r)
     ]
+    stuck_runs = [r for r in managed if _stuck(r)]
+    # Submissions given up on, still looked for (shown, nothing to do): from the same read.
+    searching_runs = [r for r in managed if "searches" in (r.knobs or {})]
     stuck_refs = await _refs(db, [*stuck_runs, *searching_runs])
     lookups = [_summary(r, stuck_refs, None) for r in stuck_runs]
     searches = [_summary(r, stuck_refs, None) for r in searching_runs]
