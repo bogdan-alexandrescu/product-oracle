@@ -403,7 +403,10 @@ async def _pause(db: AsyncSession, hook: Webhook, reason: str, note: dict) -> No
 
 async def failing_since(db: AsyncSession, hook_id: uuid.UUID) -> tuple[datetime | None, int]:
     """Since when every delivery of the webhook failed (its first unsuccessful delivery
-    after its last success), and how many there were; ``(None, 0)`` when not failing."""
+    after its last success), and how many there were; ``(None, 0)`` when not failing.
+    A resume starts the count again: only deliveries tried after it count, and the
+    failing runs from the resume at the earliest."""
+    resumed_at = await db.scalar(select(Webhook.resumed_at).where(Webhook.id == hook_id))
     last_ok = await db.scalar(
         select(func.max(WebhookDelivery.last_at)).where(
             WebhookDelivery.webhook_id == hook_id, WebhookDelivery.status == "succeeded"
@@ -416,7 +419,11 @@ async def failing_since(db: AsyncSession, hook_id: uuid.UUID) -> tuple[datetime 
     )
     if last_ok is not None:
         stmt = stmt.where(WebhookDelivery.created_at > last_ok)
+    if resumed_at is not None:
+        stmt = stmt.where(WebhookDelivery.last_at > resumed_at)
     since, count = (await db.execute(stmt)).one()
+    if since is not None and resumed_at is not None:
+        since = max(since, resumed_at)
     return since, int(count or 0)
 
 
@@ -447,6 +454,7 @@ async def after_answer(
         "webhook_paused",
         f"Webhook {hook.name} paused: failing for 3 days",
         hook,
+        reason="failing",
     )
     return True
 

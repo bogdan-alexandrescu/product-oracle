@@ -463,6 +463,8 @@ async def test_72_hours_of_failures_pause_the_webhook_and_tell_creator_and_owner
         )
     assert {r.user_id for r in rows} == {owner.user.id, approver.user.id}
     assert {r.title for r in rows} == {"Webhook Team bot paused: failing for 3 days"}
+    # The row names the reason, so the Inbox offers Resume on it (#642 review).
+    assert {r.data["reason"] for r in rows} == {"failing"}
     listed = (await client.get(f"/v1/webhooks/{hid}", headers=approver.headers)).json()
     assert listed["failing_since"] is not None
     # Resume: the newest delivery is within 24 hours and is sent.
