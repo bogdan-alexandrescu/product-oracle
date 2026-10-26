@@ -77,6 +77,12 @@ EVERY_MEMBER = frozenset(
         "list_strategy_findings",
         "list_templates",
         "list_themes",
+        # #710: live reads of the caller's own connections only.
+        "live_fireflies_get_lines",
+        "live_fireflies_get_meeting",
+        "live_fireflies_list_meetings",
+        "live_fireflies_search",
+        "live_sources",
         "me",
         "oauth_callback",
         "oauth_slack_notifications_callback",
