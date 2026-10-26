@@ -383,8 +383,8 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         return await check_pricing_owner(session, value)
     if key == "branding":
         raise InvalidSetting(
-            "branding changes on Settings › Company › Branding (PUT /v1/branding and its logo "
-            "routes; a null value here resets every default)"
+            "branding changes on Settings › Company › Branding, where the logo is uploaded "
+            "too (a null value here resets every default)"
         )
     if key == "autonomy":
         raise InvalidSetting(
