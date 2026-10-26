@@ -55,7 +55,7 @@ def scratch_db():
 
 def test_the_chain_ends_here_after_0014_intake():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0056_slack_pings"]
+    assert script.get_heads() == ["0057_source_sync"]
     assert script.get_revision("0016_source_needs_attention").down_revision == "0014_intake"
     assert script.get_revision("0016_browse_calls").down_revision == "0016_source_needs_attention"
     assert script.get_revision("0017_item_provenance").down_revision == "0016_browse_calls"
