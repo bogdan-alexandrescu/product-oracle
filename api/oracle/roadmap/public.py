@@ -10,7 +10,10 @@ than an announced quarter, or item without an approved text.
 
 An item is shown when its public text is approved, was written for the item as it is now
 (``source_hash``), has no blocking leak finding (re-checked at every render, since the
-company's records move), and the item serves a confirmed goal.
+company's records move), and no warning the approver has not ticked, and the item serves a
+confirmed goal. The page's public title and intro are re-checked at every render the same way
+and left out once they leak; nobody ticks them, so the four kinds an item text's approver
+ticks (:data:`PAGE_BLOCKING`) block them.
 
 A **public check** records a person's look at the exact page of one publication. It holds
 while the page's content hash matches; any change lapses it ("Changed since checked").
@@ -52,6 +55,9 @@ STAGE_LABELS = {
 COLUMN_ORDER = ("shipped", "in_progress", "planned", "exploring")
 HORIZON_STAGE = {"now": "in_progress", "next": "planned", "later": "exploring"}
 TITLE_MAX, DESCRIPTION_MAX = 80, 280
+# Warnings on an item's text (its approver ticks them) that block the page's own title and
+# intro, which nobody ticks (owner decision, 2026-10-26).
+PAGE_BLOCKING = ("internal_document", "decision", "pricing", "internal_note")
 # The headers of every Public page response (spec-O5 §3, "What the page sends").
 PAGE_HEADERS = {
     "Content-Security-Policy": (
@@ -118,7 +124,7 @@ class Review:
 
     def not_ready(self) -> list[dict[str, Any]]:
         """What stops a public check: every item that serves a goal and is not excluded
-        needs an approved, current text without a blocking finding."""
+        needs an approved, current text without a blocking finding or an unticked warning."""
         left: list[dict[str, Any]] = []
         for r in self.rows:
             if r.shown or r.left_out_reason in ("excluded", "no_goal"):
@@ -164,8 +170,19 @@ def text_findings(
     return sorted(merged.values(), key=lambda f: order.index(f.code))
 
 
+def page_check(text: str | None, ctx: leak_check.LeakContext) -> list[leak_check.Finding]:
+    """Leak findings of the page's own title or intro: the kinds an item text's approver
+    ticks are blocking here, since nobody ticks a title or intro (owner decision,
+    2026-10-26)."""
+    found = [
+        leak_check.Finding(f.code, "blocking", f.words) if f.code in PAGE_BLOCKING else f
+        for f in leak_check.check(text or "", ctx)
+    ]
+    return sorted(found, key=lambda f: f.severity != "blocking")
+
+
 def page_text_findings(ctx: leak_check.LeakContext, title: str | None, intro: str | None):
-    return leak_check.check(title or "", ctx) + leak_check.check(intro or "", ctx)
+    return page_check(title, ctx) + page_check(intro, ctx)
 
 
 def check_state(check: RoadmapPublicCheck | None, content_hash: str | None = None) -> str:
@@ -279,7 +296,13 @@ async def review(db: AsyncSession, document: Document, version: DocumentVersion)
                 internal_title=item.title,
             )
         serves = item.item_key not in no_goal
-        shown = serves and state == "approved" and not leak_check.blocking(findings)
+        # A warning found since the text was approved (a decision named later) is not
+        # ticked: the text is left out until a person checks it again.
+        ticked = set(text.checked_warnings or []) if text else set()
+        unticked = set(leak_check.warnings(findings)) - ticked
+        shown = (
+            serves and state == "approved" and not leak_check.blocking(findings) and not unticked
+        )
         reason = None
         if not serves:
             reason = "no_goal"
@@ -295,16 +318,22 @@ async def review(db: AsyncSession, document: Document, version: DocumentVersion)
                 PublicCard(text.title, text.description, text.stage, text.announced_quarter, url)
             )
     company = await company_name(db)
+    # The page's own title and intro are re-checked like the items' texts: one that now
+    # names something internal is left out (the default title shows), which changes the
+    # content hash, so a public check no longer holds.
+    title_findings = page_check(document.public_title, ctx)
+    intro_findings = page_check(document.public_intro, ctx)
+    title = None if leak_check.blocking(title_findings) else document.public_title
+    intro = None if leak_check.blocking(intro_findings) else document.public_intro
     page = PublicPage(
         company=company,
-        title=document.public_title or f"{company} roadmap",
-        intro=document.public_intro or None,
+        title=title or f"{company} roadmap",
+        intro=intro or None,
         disclaimer=DEFAULT_DISCLAIMER,
         columns=tuple((s, tuple(cards[s])) for s in COLUMN_ORDER),
         oracle_mark=True,
     )
-    page_findings = page_text_findings(ctx, document.public_title, document.public_intro)
-    return Review(document, version, rows, page, page_findings,
+    return Review(document, version, rows, page, title_findings + intro_findings,
                   await _removed(db, items, sections))  # fmt: skip
 
 
@@ -389,13 +418,16 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
             continue
         key = str(entry.get("item_key") or "")
         item = needed.get(key)
-        title = " ".join(str(entry.get("title") or "").split())[:TITLE_MAX].strip()
+        # A model's draft is saved without invisible format characters (a person's text
+        # holding one is refused).
+        title = " ".join(leak_check.strip_format(str(entry.get("title") or "")).split())
+        title = title[:TITLE_MAX].strip()
         if item is None or key in have or key in drafted or not title:
             continue
         stage = entry.get("stage")
         if stage not in PUBLIC_STAGES:
             stage = HORIZON_STAGE.get(item.horizon, "exploring")
-        description = " ".join(str(entry.get("description") or "").split())
+        description = " ".join(leak_check.strip_format(str(entry.get("description") or "")).split())
         s.add(
             RoadmapPublicText(
                 id=uuid.uuid4(),

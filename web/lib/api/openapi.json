@@ -35249,7 +35249,7 @@
           "roadmaps"
         ],
         "summary": "Put Public Text",
-        "description": "Edit, approve or exclude one item's public text. Approving is refused (422\n``leak_blocking``) while the text has a blocking leak finding, and (422\n``warnings_unchecked``) until every warning is ticked in ``checked_warnings``.",
+        "description": "Edit, approve or exclude one item's public text. Approving is refused (422\n``leak_blocking``) while the text has a blocking leak finding, and (422\n``warnings_unchecked``) until every warning is ticked in ``checked_warnings``. A text\nholding an invisible format character is refused in any state (422\n``format_characters``).",
         "operationId": "put_public_text",
         "security": [
           {
@@ -35337,7 +35337,7 @@
           "roadmaps"
         ],
         "summary": "Put Public Page",
-        "description": "The Public page's own title and intro (the internal title is never shown). A\nblocking leak finding is 422 ``leak_blocking``; a change lapses the public check.",
+        "description": "The Public page's own title and intro (the internal title is never shown). A\nblocking leak finding in a text this save changes is 422 ``leak_blocking`` (an\napprovers-only document, a decision, a plan or price and an internal note's words\nblock here, though an item text's approver ticks them), an invisible format\ncharacter 422 ``format_characters``; a change lapses the public check. Both are\nre-checked at every render and left out of the page once they leak, so an unchanged\none that now leaks is reported, not refused.",
         "operationId": "put_public_page",
         "security": [
           {

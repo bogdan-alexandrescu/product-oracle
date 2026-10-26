@@ -145,6 +145,23 @@ class PublicPageOut(BaseModel):
     findings: list[LeakFindingOut] = []
 
 
+def _refuse_format_characters(*texts: str | None) -> None:
+    """422 ``format_characters`` when a public text holds an invisible character (a
+    zero-width space, soft hyphen, combining grapheme joiner, variation selector or Hangul
+    filler; an ordinary emoji sequence's joiners are fine): it could hide a name from the
+    leak check and from the person approving it."""
+    found = list(dict.fromkeys(c for t in texts for c in leak_check.format_characters(t or "")))
+    if found:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+            {
+                "code": "format_characters",
+                "message": "Remove the invisible characters from this text: " + ", ".join(found),
+                "characters": found,
+            },
+        )
+
+
 def _findings(found: list[leak_check.Finding]) -> list[LeakFindingOut]:
     return [LeakFindingOut(code=f.code, severity=f.severity, words=f.words) for f in found]  # type: ignore[arg-type]
 
@@ -262,7 +279,9 @@ async def put_public_text(
 ) -> PublicTextOut:
     """Edit, approve or exclude one item's public text. Approving is refused (422
     ``leak_blocking``) while the text has a blocking leak finding, and (422
-    ``warnings_unchecked``) until every warning is ticked in ``checked_warnings``."""
+    ``warnings_unchecked``) until every warning is ticked in ``checked_warnings``. A text
+    holding an invisible format character is refused in any state (422
+    ``format_characters``)."""
     document = await _roadmap(db, doc)
     v = await _version(db, document, version)
     item = await db.scalar(
@@ -274,6 +293,7 @@ async def put_public_text(
         raise HTTPException(
             status.HTTP_404_NOT_FOUND, f"item '{item_key}' is not in version {v.number}"
         )
+    _refuse_format_characters(body.title, body.description, body.changelog_url)
     ctx = await leak_check.load_context(db)
     found = public.text_findings(
         ctx,
@@ -352,13 +372,27 @@ async def put_public_page(
     doc: str, body: PublicPageIn, principal: Approver, db: TenantDB
 ) -> PublicPageOut:
     """The Public page's own title and intro (the internal title is never shown). A
-    blocking leak finding is 422 ``leak_blocking``; a change lapses the public check."""
+    blocking leak finding in a text this save changes is 422 ``leak_blocking`` (an
+    approvers-only document, a decision, a plan or price and an internal note's words
+    block here, though an item text's approver ticks them), an invisible format
+    character 422 ``format_characters``; a change lapses the public check. Both are
+    re-checked at every render and left out of the page once they leak, so an unchanged
+    one that now leaks is reported, not refused."""
     document = await _roadmap(db, doc)
     sent = body.model_fields_set
     title = body.public_title if "public_title" in sent else document.public_title
     intro = body.public_intro if "public_intro" in sent else document.public_intro
-    found = public.page_text_findings(await leak_check.load_context(db), title, intro)
-    blocking = leak_check.blocking(found)
+    changed = [
+        new
+        for new, old in ((title, document.public_title), (intro, document.public_intro))
+        if (new or None) != old
+    ]
+    _refuse_format_characters(*changed)
+    leak_ctx = await leak_check.load_context(db)
+    found = public.page_text_findings(leak_ctx, title, intro)
+    blocking = [
+        f for text in changed for f in leak_check.blocking(public.page_check(text, leak_ctx))
+    ]
     if blocking:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_CONTENT,

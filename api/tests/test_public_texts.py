@@ -9,6 +9,7 @@ public check. Invented data only ("Example Labs", "Northwind Traders").
 import dataclasses
 import hashlib
 import re
+import unicodedata
 from datetime import date
 
 import pytest
@@ -23,7 +24,7 @@ from oracle.market.models import Competitor
 from oracle.models import AuditEvent
 from oracle.pricing.models import DealOutcome
 from oracle.roadmap import leak_check, public
-from oracle.roadmap.models import RoadmapItem, RoadmapPublicText
+from oracle.roadmap.models import RoadmapItem, RoadmapPublicCheck, RoadmapPublicText
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
 from tests.claude_account_helpers import add_account, window
@@ -154,6 +155,13 @@ async def approve_both(client, ctx) -> None:
 
 # --- the leak check (unit) -------------------------------------------------------------
 
+# Owner decision (2026-10-26): these four are warnings the approver ticks, not blocking.
+TICKED_KINDS = ("internal_document", "decision", "pricing", "internal_note")
+
+
+def _severity(code: str) -> str:
+    return "warning" if code in TICKED_KINDS else "blocking"
+
 
 def _ctx(**over) -> leak_check.LeakContext:
     base = dict(
@@ -200,7 +208,7 @@ def test_each_blocking_finding(text, code, word):
     findings = leak_check.check(text, _ctx())
     match = [f for f in findings if f.code == code]
     assert match, findings
-    assert match[0].severity == "blocking"
+    assert match[0].severity == ("warning" if code in TICKED_KINDS else "blocking")
     if word is not None:
         assert any(word.lower() in w.lower() for w in match[0].words)
 
@@ -303,10 +311,6 @@ async def test_the_review_list_counts_shown_and_left_out(client, ctx):
         ({"description": f"Owned by {PERSON}."}, "person_name"),
         ({"description": f"Better than {RIVAL_ALIAS}."}, "alternative_name"),
         ({"description": "Closes ENG-412."}, "internal_code"),
-        ({"description": f"From {HIDDEN_DOC}."}, "internal_document"),
-        ({"description": f"We decided to {DECISION.lower()}."}, "decision"),
-        ({"description": f"Part of {PLAN}."}, "pricing"),
-        ({"description": f"Waits: {NOTE}."}, "internal_note"),
         ({"changelog_url": "https://localhost:3000/changelog"}, "internal_host"),
     ],
 )
@@ -324,6 +328,66 @@ async def test_a_text_with_a_blocking_finding_cannot_be_approved(client, ctx, ov
     resp = await put_text(client, ctx, "bulk-import", state="draft", **over)
     assert resp.status_code == 200, resp.text
     assert code in {f["code"] for f in resp.json()["findings"]}
+
+
+@pytest.mark.parametrize(
+    ("over", "code"),
+    [
+        ({"description": f"From {HIDDEN_DOC}."}, "internal_document"),
+        ({"description": f"We decided to {DECISION.lower()}."}, "decision"),
+        ({"description": f"Part of {PLAN}."}, "pricing"),
+        ({"description": f"Waits: {NOTE}."}, "internal_note"),
+    ],
+)
+async def test_the_four_ticked_kinds_are_approved_once_ticked(client, ctx, over, code):
+    """protects=owner decision (2026-10-26): an approvers-only document's name, a decision's
+    title, a win/loss plan or price and five words of an internal note are warnings the
+    approver ticks ("I checked this"), not blocking; fails_when=approving is 422
+    leak_blocking, or passes without the tick; no_claim=people's names (still blocking)."""
+    await seed(ctx)
+    resp = await put_text(client, ctx, "bulk-import", **over)
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "warnings_unchecked"
+    assert detail["warnings"] == [code]
+    resp = await put_text(client, ctx, "bulk-import", checked_warnings=[code], **over)
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["state"] == "approved" and body["checked_warnings"] == [code]
+    assert [(f["code"], f["severity"]) for f in body["findings"]] == [(code, "warning")]
+
+
+async def test_a_warning_found_after_approving_leaves_the_text_out(client, ctx):
+    """protects=owner decision (2026-10-26): the four kinds no longer block, so a decision
+    recorded after a text was approved, whose title the text holds, leaves the text out
+    of the render until a person ticks it; fails_when=the unticked text is still shown."""
+    await seed(ctx)
+    await approve_both(client, ctx)
+    assert "Import your accounts in one go" in _text(
+        (await client.get(PREVIEW, headers=ctx.as_("approver"))).text
+    )
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Decision(number=8, title="Import your accounts", approver_id=ctx.users["owner"].id,
+                       driver="oracle", origin="manual"))  # fmt: skip
+        await s.commit()
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "Import your accounts in one go" not in text
+    resp = await put_text(client, ctx, "bulk-import", checked_warnings=["decision"])
+    assert resp.status_code == 200, resp.text
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "Import your accounts in one go" in text
+
+
+def test_the_four_ticked_kinds_are_warnings_and_names_still_block():
+    """protects=owner decision (2026-10-26): exactly the four kinds moved to the warnings;
+    people's names and the spec's other findings still block; fails_when=a kind is in the
+    wrong list."""
+    assert set(TICKED_KINDS) <= set(leak_check.WARNINGS)
+    assert not set(TICKED_KINDS) & set(leak_check.BLOCKING)
+    assert set(leak_check.BLOCKING) == {
+        "person_name", "email_or_phone", "customer_name", "alternative_name",
+        "internal_code", "internal_host",
+    }  # fmt: skip
 
 
 async def test_a_warning_needs_a_tick(client, ctx):
@@ -531,7 +595,8 @@ async def test_oracle_drafts_texts_and_never_approves_or_dates(client, ctx, fake
                 {
                     "item_key": i["item_key"],
                     "title": "Import in one go " + "x" * 100,
-                    "description": "Bring every account over.",
+                    # An invisible mark the job strips (#660 re-review).
+                    "description": "Bring every acc\u034fount over.",
                     "stage": "in_progress",
                     "announced_quarter": "2026-Q4",
                 }
@@ -552,6 +617,7 @@ async def test_oracle_drafts_texts_and_never_approves_or_dates(client, ctx, fake
     assert rows["bulk-import"].state == "draft" and rows["bulk-import"].drafted_by == "oracle"
     assert len(rows["bulk-import"].title) <= 80
     assert rows["bulk-import"].announced_quarter is None
+    assert rows["bulk-import"].description == "Bring every account over."
     assert rows["csv-parser"].title == "A person's own words"
 
 
@@ -576,3 +642,777 @@ async def test_a_prd_has_no_public_texts(client, ctx):
 def test_source_hash_is_title_and_outcome():
     assert public.source_hash("A", "B") == hashlib.sha256(b"A\nB").hexdigest()
     assert public.source_hash("A", None) == public.source_hash("A", "")
+
+
+# --- #640 review: look-alike and invisible characters, and the page's own texts ----------
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("Built with Pri\u200bya Quill\u200bfeather", "person_name"),  # zero-width spaces
+        # Fullwidth, with no plain-ASCII part left to match.
+        (
+            "Built with \uff31\uff55\uff49\uff4c\uff4c\uff46\uff45\uff41\uff54\uff48\uff45\uff52",
+            "person_name",
+        ),
+        ("As North\u00adwind Traders asked", "customer_name"),  # soft hyphen
+        ("As N\u03bfrthwind Traders asked", "customer_name"),  # Greek omicron
+        ("As N\u043erthwind Tr\u0430ders asked", "customer_name"),  # Cyrillic o and a
+        ("See \u13e2roject Bluebird acquisition", "internal_document"),  # Cherokee P
+        ("Faster than \u0251cme Rival", "alternative_name"),  # Latin alpha
+        ("Faster than A\u13dfme Rival", "alternative_name"),  # Cherokee C (#660 re-review)
+        ("Faster than Rival\u2060Co", "alternative_name"),  # word joiner
+        ("Closes ENG\u2011412", "internal_code"),  # non-breaking hyphen
+        ("Closes ENG\u2212412", "internal_code"),  # minus sign
+        ("Write to priya\uff20example.com", "email_or_phone"),  # fullwidth at
+    ],
+)
+def test_look_alike_and_invisible_characters_are_still_found(text, code):
+    """protects=#640 review: the leak check normalises (NFKC, casefold, format characters
+    stripped, look-alike letters and dashes mapped) before matching; fails_when=a name
+    spelled with invisible or look-alike characters passes; no_claim=every confusable."""
+    findings = leak_check.check(text, _ctx())
+    assert (code, _severity(code)) in [(f.code, f.severity) for f in findings], findings
+
+
+def test_a_customer_is_found_by_its_distinctive_part():
+    """protects=#640 review: a customer label matches by its distinctive parts, like a
+    person's surname; fails_when="Northwind" passes; no_claim=generic company words."""
+    found = leak_check.check("Built for Northwind first", _ctx())
+    assert [f.code for f in found] == ["customer_name"]
+    assert found[0].words == ["Northwind"]
+    # A generic company word ("Traders", "Inc") is not a name on its own.
+    assert leak_check.check("A tool for traders", _ctx()) == []
+    assert leak_check.check("For every software team", _ctx(customers=["Acme Software Inc"])) == []
+
+
+def test_format_characters_are_told():
+    assert leak_check.format_characters("Plain text, with a dash - and \u00e9migr\u00e9") == []
+    assert leak_check.format_characters("Ja\u200bne\u00ad") == ["U+200B", "U+00AD"]
+
+
+async def test_a_text_holding_format_characters_is_not_saved(client, ctx):
+    """protects=#640 review: a public text, title or intro holding invisible format
+    characters is refused (422 format_characters) whatever its state; fails_when=it is
+    saved; no_claim=look-alike letters (the check normalises them)."""
+    await seed(ctx)
+    for over in ({"title": "Import\u200b fast"}, {"description": "Day\u00adone", "state": "draft"}):
+        resp = await put_text(client, ctx, "bulk-import", **over)
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"]["code"] == "format_characters"
+    resp = await client.put(PAGE, json={"public_intro": "Our\u2060plans"},
+                            headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 422 and resp.json()["detail"]["code"] == "format_characters"
+
+
+async def test_a_page_title_and_intro_that_now_leak_are_dropped(client, ctx):
+    """protects=#640 review: the public title and intro are re-checked at every render
+    like item texts; once one names a new member it is left out of the page and the
+    check no longer holds; fails_when=the name stays on the preview or the check stays
+    checked; no_claim=the shared page (lane 3)."""
+    await seed(ctx)
+    await approve_both(client, ctx)
+    resp = await client.put(
+        PAGE,
+        json={"public_title": "What Lumen is building", "public_intro": "Made with Quarry."},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200, resp.text
+    assert (await client.post(CHECK, headers=ctx.as_("approver"))).status_code == 201
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "What Lumen is building" in text and "Made with Quarry." in text
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(User(email="lq@example.com", password_hash="x", role="viewer", name="Lumen Quarry"))
+        await s.commit()
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "Lumen" not in text and "Quarry" not in text
+    assert "Example Labs roadmap" in text
+    body = (await client.get(TEXTS, headers=ctx.as_("approver"))).json()
+    assert body["check"]["state"] != "checked"
+    assert {f["code"] for f in body["page_findings"]} == {"person_name"}
+    assert {"item_key": None, "reason": "page_findings"} in body["not_ready"]
+
+
+# --- #708 re-review: the page's own title and intro keep the four kinds blocking --------
+
+
+@pytest.mark.parametrize(
+    ("field", "words", "code"),
+    [
+        ("public_intro", f"From {HIDDEN_DOC}.", "internal_document"),
+        ("public_intro", f"We decided to {DECISION.lower()}.", "decision"),
+        ("public_title", f"Part of {PLAN}", "pricing"),
+        ("public_intro", f"Waits: {NOTE}.", "internal_note"),
+    ],
+)
+async def test_the_page_title_and_intro_refuse_the_four_ticked_kinds(
+    client, ctx, field, words, code
+):
+    """protects=#708 re-review (major), owner decision 1 (2026-10-26): an approvers-only
+    document, a decision, a plan or price and an internal note's words still block the
+    Public page's own title and intro, which nobody ticks; fails_when=the save is 200
+    and the page shows them."""
+    await seed(ctx)
+    resp = await client.put(PAGE, json={field: words}, headers=ctx.as_("approver"))
+    assert resp.status_code == 422, resp.text
+    detail = resp.json()["detail"]
+    assert detail["code"] == "leak_blocking"
+    assert [(f["code"], f["severity"]) for f in detail["findings"]] == [(code, "blocking")]
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert words not in text
+
+
+async def test_a_page_title_and_intro_that_later_hold_the_four_kinds_are_dropped(client, ctx):
+    """protects=#708 re-review (major), owner decision 1 (2026-10-26): a decision recorded,
+    or a plan quoted, after the page's intro or title was saved leaves it out at render,
+    is listed by not_ready and lapses the check, though item texts only warn for those
+    kinds; fails_when=the intro or title stays on the page with nothing ticked."""
+    await seed(ctx)
+    await approve_both(client, ctx)
+    resp = await client.put(
+        PAGE,
+        json={"public_title": "Plans for Harbor Tier", "public_intro": "We simplify setup."},
+        headers=ctx.as_("approver"),
+    )
+    assert resp.status_code == 200, resp.text
+    assert (await client.post(CHECK, headers=ctx.as_("approver"))).status_code == 201
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "Plans for Harbor Tier" in text and "We simplify setup." in text
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Decision(number=8, title="Simplify setup", approver_id=ctx.users["owner"].id,
+                       driver="oracle", origin="manual"))  # fmt: skip
+        s.add(DealOutcome(result="won", account="Willowbrook Example Co", plan="Harbor Tier",
+                          decided_on=date(2026, 9, 2), reason="price",
+                          recorded_by=ctx.users["owner"].id))  # fmt: skip
+        await s.commit()
+    text = _text((await client.get(PREVIEW, headers=ctx.as_("approver"))).text)
+    assert "We simplify setup." not in text and "Harbor Tier" not in text
+    assert "Example Labs roadmap" in text
+    # The items' texts are untouched: the four kinds only warn there.
+    assert "Import your accounts in one go" in text
+    body = (await client.get(TEXTS, headers=ctx.as_("approver"))).json()
+    assert body["check"]["state"] != "checked"
+    assert {(f["code"], f["severity"]) for f in body["page_findings"]} == {
+        ("decision", "blocking"), ("pricing", "blocking")
+    }  # fmt: skip
+    assert {"item_key": None, "reason": "page_findings"} in body["not_ready"]
+    resp = await client.post(CHECK, headers=ctx.as_("approver"))
+    assert resp.status_code == 409, resp.text
+    assert {"item_key": None, "reason": "page_findings"} in resp.json()["detail"]["left"]
+
+
+# --- #660 re-review: every Default_Ignorable_Code_Point, and emoji sequences -----------
+
+# Invisible characters outside category Cf: marks (U+034F, variation selectors, U+17B4)
+# and Hangul fillers (letters).
+HIDDEN = ["\u034f", "\ufe0f", "\U000e0100", "\u17b4", "\u3164", "\u115f", "\u1160", "\uffa0"]
+# Ordinary emoji: a ZWJ sequence with a skin tone, a tag-sequence flag (Scotland), an
+# emoji with its presentation selector and a keycap.
+EMOJI = (
+    "Built by \U0001f469\U0001f3fd\u200d\U0001f4bb in "
+    "\U0001f3f4\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f "
+    "with \u2764\ufe0f\u200d\U0001f525 and 1\ufe0f\u20e3"
+)
+
+
+@pytest.mark.parametrize("hidden", HIDDEN, ids=lambda c: f"U+{ord(c):04X}")
+def test_every_invisible_character_is_stripped_told_and_found(hidden):
+    """protects=#660 re-review: every Default_Ignorable_Code_Point, not only category Cf,
+    is stripped before matching, told by format_characters and stripped from a draft;
+    fails_when="Nort\\u034fhwind" passes the check or is kept; no_claim=other look-alikes."""
+    found = leak_check.check(f"As Nort{hidden}hwind Traders asked", _ctx())
+    assert "customer_name" in [f.code for f in leak_check.blocking(found)], found
+    found = leak_check.check(f"Built with Quill{hidden}feather", _ctx())
+    assert "person_name" in [f.code for f in leak_check.blocking(found)], found
+    assert leak_check.format_characters(f"Nort{hidden}hwind") == [f"U+{ord(hidden):04X}"]
+    assert leak_check.strip_format(f"Nort{hidden}hwind") == "Northwind"
+
+
+@pytest.mark.parametrize("hidden", HIDDEN, ids=lambda c: f"U+{ord(c):04X}")
+async def test_a_text_holding_any_invisible_character_is_not_saved(client, ctx, hidden):
+    """protects=#660 re-review: saving refuses every invisible character (422
+    format_characters) in a text and in the page's intro; fails_when=it is saved."""
+    await seed(ctx)
+    resp = await put_text(client, ctx, "bulk-import", title=f"Import{hidden} fast")
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["detail"]["characters"] == [f"U+{ord(hidden):04X}"]
+    resp = await client.put(PAGE, json={"public_intro": f"Our{hidden}plans"},
+                            headers=ctx.as_("approver"))  # fmt: skip
+    assert resp.status_code == 422 and resp.json()["detail"]["code"] == "format_characters"
+
+
+def test_emoji_sequences_are_kept_and_the_names_around_them_checked():
+    """protects=#660 re-review minor: a ZWJ, a variation selector or a flag's tags inside
+    an ordinary emoji sequence is not refused or stripped, while a name beside the emoji,
+    joined inside a word, or spelled in a flag's tags is still caught; fails_when=a ZWJ emoji or
+    the Scotland flag is refused, or a name hides in them."""
+    assert leak_check.format_characters(EMOJI) == []
+    assert leak_check.strip_format(EMOJI) == EMOJI
+    assert leak_check.check(EMOJI, _ctx()) == []
+    found = leak_check.check("\U0001f469\u200d\U0001f4bbNorthwind", _ctx())
+    assert [f.code for f in found] == ["customer_name"]
+    # Joiners and selectors between letters are not part of an emoji.
+    assert leak_check.format_characters("Nort\u200dhwind") == ["U+200D"]
+    assert leak_check.format_characters("Nort\ufe0fhwind") == ["U+FE0F"]
+    assert leak_check.format_characters("\u200d\U0001f4bb") == ["U+200D"]
+    # Tag letters spelling a name are no flag: refused, and the check reads them.
+    tags = "".join(chr(0xE0000 + ord(c)) for c in "quillfeather")
+    hidden = f"Built with \U0001f3f4{tags}\U000e007f"
+    assert leak_check.format_characters(hidden)
+    assert "person_name" in [f.code for f in leak_check.check(hidden, _ctx())]
+
+
+async def test_a_text_with_emoji_is_saved(client, ctx):
+    """protects=#660 re-review minor: a public text holding ordinary emoji is saved;
+    fails_when=it is refused as format_characters."""
+    await seed(ctx)
+    title = "Import fast \U0001f469\u200d\U0001f4bb"
+    resp = await put_text(client, ctx, "bulk-import", title=title, description=EMOJI)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["description"] == EMOJI
+
+
+# --- #677 re-review: only real flags, blanks as spaces, and the trash filter -----------
+
+
+def _flag(tags: str) -> str:
+    """A black flag carrying ``tags`` as tag characters, then the cancel tag."""
+    return "\U0001f3f4" + "".join(chr(0xE0000 + ord(c)) for c in tags) + "\U000e007f"
+
+
+SPLIT_NAME = f"Visit {_flag('nort')}{_flag('hwin')}d soon"
+SPLIT_PHONE = f"Call {_flag('555012')}{_flag('3456')} today"
+
+
+def test_only_the_three_subdivision_flags_pass():
+    """protects=#677 re-review major: England, Scotland and Wales are the only tag
+    sequences kept; any other tag run is refused, and the check reads tag letters as the
+    text a decoder sees, so a name or a phone number split across two flags is found;
+    fails_when="🏴[nort]🏴[hwin]d" or "🏴[555012]🏴[3456]" is kept or passes the check;
+    no_claim=two-letter (regional indicator) flags, which carry no tags."""
+    for tags in ("gbeng", "gbsct", "gbwls"):
+        text = f"Made in {_flag(tags)} with care"
+        assert leak_check.format_characters(text) == [], tags
+        assert leak_check.strip_format(text) == text
+        assert leak_check.check(text, _ctx()) == []
+    for tags in ("usca", "gbabc", "nort", "555012"):
+        assert leak_check.format_characters(f"Made in {_flag(tags)}"), tags
+    assert leak_check.format_characters(SPLIT_NAME)
+    assert leak_check.strip_format(SPLIT_NAME) == "Visit \U0001f3f4\U0001f3f4d soon"
+    found = leak_check.check(SPLIT_NAME, _ctx())
+    assert "customer_name" in [f.code for f in leak_check.blocking(found)], found
+    assert leak_check.format_characters(SPLIT_PHONE)
+    found = leak_check.check(SPLIT_PHONE, _ctx())
+    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
+    # A name right beside a real flag is still read on its own.
+    found = leak_check.check(f"Built for Northwind{_flag('gbsct')}", _ctx())
+    assert [f.code for f in found] == ["customer_name"]
+
+
+async def test_a_text_hiding_a_name_or_number_in_flags_is_not_saved(client, ctx):
+    """protects=#677 re-review major: saving refuses a tag run that is not one of the
+    three flags (422 format_characters); fails_when=the split name or number is saved."""
+    await seed(ctx)
+    for text in (SPLIT_NAME, SPLIT_PHONE):
+        resp = await put_text(client, ctx, "bulk-import", description=text, state="draft")
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["detail"]["code"] == "format_characters"
+    resp = await put_text(client, ctx, "bulk-import", description=f"Made in {_flag('gbwls')}")
+    assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.parametrize("blank", ["⠀", "\U0001d159", "　"], ids=lambda c: f"U+{ord(c):04X}")
+def test_blank_characters_read_as_spaces(blank):
+    """protects=#677 re-review minor: a character that renders blank but is not
+    Default_Ignorable (braille blank, the null notehead, the ideographic space) reads as a
+    space, so a phone number or a full name spaced with it is found; fails_when="555⠀012⠀3456"
+    passes; no_claim=a word split by a visible gap (the approver sees the gap)."""
+    found = leak_check.check(f"Call 555{blank}012{blank}3456", _ctx())
+    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
+    found = leak_check.check(f"Built with Priya{blank}Quillfeather", _ctx())
+    assert PERSON in found[0].words, found
+
+
+async def test_a_trashed_roadmap_hides_its_public_texts_and_checks(client, ctx):
+    """protects=#677 re-review (CI): roadmap_public_texts and roadmap_public_checks hang off
+    their roadmap, so the trash filter leaves them out while it is in Trash and restore
+    brings them back; fails_when=a trashed roadmap's public text or check is read."""
+    await seed(ctx)
+    await approve_both(client, ctx)
+    assert (await client.post(CHECK, headers=ctx.as_("approver"))).status_code == 201
+
+    async def counts() -> tuple[int, int]:
+        async with tenant_session(ctx.tenant_id) as s:
+            texts = len((await s.scalars(select(RoadmapPublicText))).all())
+            checks = len((await s.scalars(select(RoadmapPublicCheck))).all())
+        return texts, checks
+
+    assert await counts() == (2, 1)
+    resp = await client.request(
+        "DELETE",
+        f"/v1/documents/{SLUG}",
+        params={"confirm_published": "true"},
+        headers=ctx.as_("owner"),
+    )
+    assert resp.status_code == 200, resp.text
+    assert await counts() == (0, 0)
+    resp = await client.post(f"/v1/documents/{SLUG}/restore", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    assert await counts() == (2, 1)
+
+
+# --- #691 re-review: names match on their confusable skeleton --------------------------
+
+
+def test_the_confusables_table_is_vendored_for_pythons_unicode_version():
+    """protects=#691 re-review: names match through Unicode's own confusables.txt, pinned
+    in the repository with its licence, for the Unicode version Python's unicodedata
+    reports; fails_when=the file or its licence is missing, or it is another version."""
+    path = leak_check.CONFUSABLES_FILE
+    assert path.is_file(), path
+    licence = path.parent / "LICENSE.txt"
+    assert "UNICODE LICENSE V3" in licence.read_text(encoding="utf-8")
+    head = path.read_text(encoding="utf-8")[:1000]
+    assert f"# Version: {unicodedata.unidata_version}\n" in head
+    assert len(leak_check.SKELETON_MAP) > 6000
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("As Northwi\u0307nd asked", "customer_name"),  # combining dot above on the i
+        ("As NORTHW\u0130ND asked", "customer_name"),  # U+0130, i + dot when lowercased
+        ("As Northw\u1ecbnd asked", "customer_name"),  # dot below
+        ("As N\u00f6rthwind asked", "customer_name"),  # diaeresis
+        ("As Nor\u1e6fhwind asked", "customer_name"),  # macron below
+        ("As No\u0308rthwind asked", "customer_name"),  # decomposed diaeresis
+        ("Built with Quill\u0336feather", "person_name"),  # a mark inside the name
+        ("Built with Quill\u20ddfeather", "person_name"),  # an enclosing mark (Me)
+        ("Built with Quill\u0903feather", "person_name"),  # a spacing mark (Mc)
+        ("Built with Q\u057dill\u0192eather", "person_name"),  # Armenian u, f with hook
+        ("Built with Quillf\u0435\u0430th\u0435r", "person_name"),  # Cyrillic e and a
+        ("As N\u03bf\u0433thwind asked", "customer_name"),  # Greek omicron, Cyrillic ghe
+        ("Faster than Riv\u03b1l\u0421o", "alternative_name"),  # Greek alpha, Cyrillic Es
+        ("See Pr\u00f2ject Bl\u00fceb\u00efrd acquisition", "internal_document"),
+        ("Because we s\u00fcnset the l\u00e9gacy importer", "decision"),
+    ],
+)
+def test_combining_marks_and_look_alikes_never_split_or_hide_a_name(text, code):
+    """protects=#691 re-review: a name is matched on its confusable skeleton (NFD, every
+    combining mark and Default_Ignorable dropped, casefolded, mapped through
+    confusables.txt), so a mark on or inside a name, U+0130 and mixed-script look-alikes
+    are found; fails_when="Northwi\u0307nd" or "N\u00f6rthwind" passes."""
+    findings = leak_check.check(text, _ctx())
+    assert (code, _severity(code)) in [(f.code, f.severity) for f in findings], findings
+
+
+def test_ordinary_accented_words_still_pass():
+    """protects=#691 re-review: dropping marks only matters where a name is; ordinary
+    words with accents have no finding; fails_when=caf\u00e9 or r\u00e9sum\u00e9 is
+    flagged."""
+    for text in (
+        "A caf\u00e9 for your r\u00e9sum\u00e9, not a na\u00efve one",
+        "Cafe\u0301, re\u0301sume\u0301 and nai\u0308ve, decomposed",
+        "Fa\u00e7ade, d\u00e9j\u00e0 vu, pi\u00f1ata and \u00fcber-fast import",
+        "\u0130stanbul, Malm\u00f6 and Z\u00fcrich teams",
+    ):
+        assert leak_check.check(text, _ctx()) == [], text
+
+
+def _look_alikes() -> dict[str, list[str]]:
+    """Each ASCII letter's look-alikes from the vendored confusables.txt (by the letter its
+    prototype is), read here on its own so the test does not share the code's parser."""
+    out: dict[str, list[str]] = {}
+    for line in leak_check.CONFUSABLES_FILE.read_text(encoding="utf-8").splitlines():
+        fields = [f.strip() for f in line.split("#", 1)[0].split(";")]
+        if len(fields) < 3 or " " in fields[0] or " " in fields[1]:
+            continue
+        source, target = chr(int(fields[0], 16)), chr(int(fields[1], 16))
+        if target.isascii() and target.isalpha() and source != target:
+            # Capitals stand in for small letters too (Greek Iota, Cyrillic I for "l"):
+            # names match on the strict skeleton as well.
+            if source.isalpha() and unicodedata.normalize("NFKC", source) == source:
+                out.setdefault(target, []).append(source)
+    return out
+
+
+MARKS = [
+    chr(c)
+    for c in range(0x300, 0x2000)
+    if unicodedata.category(chr(c)) in ("Mn", "Mc", "Me") and unicodedata.combining(chr(c))
+][:200] + ["\u20dd", "\u20e3", "\u0903", "\u0489"]
+
+
+def test_seeded_names_with_random_marks_and_look_alikes_are_still_found():
+    """protects=#691 re-review (property): every seeded name, with random combining marks
+    inserted and random letters swapped for confusables.txt look-alikes, is still found;
+    fails_when=any one variant passes the check."""
+    import random
+
+    rng = random.Random(691)
+    alikes = _look_alikes()
+    seeded = [
+        ("Quillfeather", "person_name"),
+        ("Northwind", "customer_name"),
+        ("RivalCo", "alternative_name"),
+        ("Lumen Quarry", "person_name"),
+    ]
+    ctx = _ctx(people=[PERSON, "Lumen Quarry"])
+    missed = []
+    for name, code in seeded:
+        for _ in range(100):
+            chars = []
+            for ch in name:
+                pool = alikes.get(ch, []) + (alikes.get(ch.lower(), []) if ch.isupper() else [])
+                if pool and rng.random() < 0.4:
+                    ch = rng.choice(pool)
+                chars.append(ch)
+                if ch != " " and rng.random() < 0.4:
+                    chars.append(rng.choice(MARKS))
+            variant = "".join(chars)
+            text = f"Built for {variant} soon"
+            found = leak_check.check(text, ctx)
+            if code not in [f.code for f in found]:
+                missed.append(variant)
+    assert missed == [], [ascii(m) for m in missed[:10]]
+
+
+def test_a_phone_number_in_keycap_emoji_is_found():
+    """protects=#691 re-review (minor): a phone number written as keycap emoji reads as
+    its digits; fails_when="5\ufe0f\u20e3..." passes."""
+    keycaps = "".join(f"{d}\ufe0f\u20e3" for d in "4155550134")
+    assert leak_check.format_characters(keycaps) == []
+    found = leak_check.check(f"Call {keycaps} today", _ctx())
+    assert "email_or_phone" in [f.code for f in leak_check.blocking(found)], found
+
+
+async def test_an_unchanged_page_title_is_not_refused_when_the_intro_changes(client, ctx):
+    """protects=#691 re-review (minor): put_public_page refuses only the texts a save
+    changes; an unchanged title that now names a new member is still left out at render
+    (and reported), but does not block editing the intro; fails_when=the intro edit is
+    422 for the old title."""
+    await seed(ctx)
+    resp = await client.put(
+        PAGE, json={"public_title": "What Lumen is building"}, headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(User(email="lq@example.com", password_hash="x", role="viewer", name="Lumen Quarry"))
+        await s.commit()
+    resp = await client.put(
+        PAGE, json={"public_intro": "Plans for the year."}, headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 200, resp.text
+    assert {f["code"] for f in resp.json()["findings"]} == {"person_name"}
+    resp = await client.put(
+        PAGE, json={"public_title": "What Lumen ships"}, headers=ctx.as_("approver")
+    )
+    assert resp.status_code == 422 and resp.json()["detail"]["code"] == "leak_blocking"
+
+
+# --- #695 re-review: names match on the strict Unicode skeleton too --------------------
+
+
+@pytest.mark.parametrize(
+    ("text", "code"),
+    [
+        ("Built with AIice", "person_name"),
+        ("Faster than RivaICo", "alternative_name"),
+        ("Built with QuiIIfeather", "person_name"),
+        ("Built for Gold PIan users", "pricing"),
+        ("Built with AΙice", "person_name"),  # Greek capital Iota
+        ("Faster than RivaΙCo", "alternative_name"),
+        ("Built with QuiΙΙfeather", "person_name"),
+        ("Built for Gold PΙan users", "pricing"),
+        ("Built with AІice", "person_name"),  # Cyrillic capital Byelorussian-Ukrainian I
+        ("Faster than RivaІCo", "alternative_name"),
+        ("Built with QuiІІfeather", "person_name"),
+        ("Built for Gold PІan users", "pricing"),
+    ],
+)
+def test_a_capital_i_in_place_of_a_small_l_is_found(text, code):
+    """protects=#695 re-review: a name is found on the strict UTS #39 skeleton as well as
+    the case-folded one (capital I, Greek Iota and Cyrillic I map to "l" before case is
+    folded), so "RivaICo" read in a sans-serif font as "RivalCo" is found;
+    fails_when="RivaICo" or "Gold PIan" passes the check."""
+    ctx = _ctx(people=[PERSON, "Alice"], pricing=[PLAN, "Gold Plan"])
+    findings = leak_check.check(text, ctx)
+    assert code in [f.code for f in findings], findings
+
+
+def test_ordinary_words_with_a_capital_i_still_pass():
+    """protects=#695 re-review: matching on the strict skeleton too raises no finding on
+    ordinary words, accented or holding a capital I; fails_when="In", "Inbox", "API" or
+    "Istanbul" is flagged."""
+    ctx = _ctx(people=[PERSON, "Alice"], pricing=[PLAN, "Gold Plan"])
+    for text in (
+        "A cafe for your resume, not a naive one",
+        "In Istanbul, the Inbox and the API import every account",
+        "IMPORT IN ONE GO: INBOX, API AND ISTANBUL",
+        "I plan to ship it; Ian and Ida said so",
+    ):
+        assert leak_check.check(text, ctx) == [], text
+
+
+def test_the_ogham_space_mark_is_refused_and_does_not_split_a_name():
+    """protects=#695 re-review (minor): U+1680, drawn as a line or a blank, is refused when
+    saved like an invisible character and never splits a name; fails_when=
+    "Quill\\u1680feather" passes the check or is not told."""
+    assert leak_check.format_characters("Quill feather") == ["U+1680"]
+    found = leak_check.check("Built with Quill feather", _ctx())
+    assert "person_name" in [f.code for f in leak_check.blocking(found)], found
+
+
+def test_long_texts_are_not_kept_in_the_skeleton_cache():
+    """protects=#695 re-review (minor): only short strings (names) are cached, so the cache
+    cannot hold thousands of 2,000-character texts; fails_when=a long text is cached."""
+    long = "word " * 400
+    for fn in (leak_check.skeleton, leak_check.strict_skeleton):
+        before = fn.cache.cache_info().currsize
+        assert fn(long) == fn(long)
+        assert fn.cache.cache_info().currsize == before
+
+
+# --- #697 re-review: the strict skeleton is taken to a fixed point ---------------------
+
+
+@pytest.mark.parametrize(
+    ("ctx_over", "text", "code"),
+    [
+        ({"people": [PERSON, "Mallory"]}, "Built with maIIory", "person_name"),
+        ({"alternatives": [RIVAL, "Gold Mine"]}, "Faster than goId mine", "alternative_name"),
+        ({"slugs": [SLUG, "Milestone-plan"]}, "See miIestone-plan", "internal_code"),
+    ],
+)
+def test_a_name_in_another_case_with_a_capital_i_for_a_small_l_is_found(ctx_over, text, code):
+    """protects=#697 re-review: the strict skeleton maps, casefolds and maps again until
+    nothing changes, so a stored "M" and a written "m" both reach "rn" while a capital I
+    still reads as "l"; fails_when="maIIory", "goId mine" or "miIestone-plan" passes."""
+    findings = leak_check.check(text, _ctx(**ctx_over))
+    assert code in [f.code for f in findings], findings
+
+
+def test_the_strict_skeleton_is_a_fixed_point():
+    """protects=#697 re-review: case folding and look-alike mapping meet in any order (the
+    strict skeleton of a strict skeleton is itself, and of the upper- or lower-cased text
+    the same); fails_when="Mallory" and "maIIory" differ."""
+    for text in ("Mallory", "maIIory", "MALLORY", "Gold Mine", "goId mine", "100% RivaICo"):
+        strict = leak_check.strict_skeleton(text)
+        assert leak_check.strict_skeleton(strict) == strict, text
+    assert leak_check.strict_skeleton("Mallory") == leak_check.strict_skeleton("maIIory")
+    assert leak_check.strict_skeleton("MALLORY") == leak_check.strict_skeleton("mallory")
+
+
+def _recase(rng, text: str) -> str:
+    """``text`` as it is, in lower, upper, title or swapped case. Not each letter's case
+    drawn: "QuIlΙfeather" holds a real capital I for i and a stand-in for l, which no
+    reader tells apart."""
+    return rng.choice([text, text.lower(), text.upper(), text.title(), text.swapcase()])
+
+
+def test_seeded_names_in_any_case_with_look_alikes_are_still_found():
+    """protects=#697 re-review (property): the stored name and the written text each take
+    a random case, then the written text's letters are swapped for confusables.txt
+    look-alikes of either case and given random marks; every variant is still found;
+    fails_when="Mallory" stored and "maIIory" written, or "GOLD MINE" stored and
+    "GoІd Mine" written, passes."""
+    import random
+
+    rng = random.Random(697)
+    alikes = _look_alikes()
+    seeded = [
+        ("Quillfeather", "person_name", "people"),
+        ("Mallory", "person_name", "people"),
+        ("Northwind", "customer_name", "customers"),
+        ("Gold Mine", "alternative_name", "alternatives"),
+        ("Lumen Quarry", "person_name", "people"),
+    ]
+    missed = []
+    for name, code, field_name in seeded:
+        for _ in range(100):
+            stored = _recase(rng, name)
+            ctx = _ctx(**{field_name: [*getattr(_ctx(), field_name), stored]})
+            chars = []
+            written = _recase(rng, name)
+            for ch in written:
+                pool = alikes.get(ch, []) + alikes.get(ch.upper(), [])
+                if ch.isupper():
+                    pool += alikes.get(ch.lower(), [])
+                # Next to a real capital I, or in capitals, a stand-in for l reads as I
+                # ("QUILⲒFEATHER" is "QUILIFEATHER"; "qUIΙL..." no reader tells apart).
+                if ch in "lL" and ("I" in written or written.isupper()):
+                    pool = []
+                if pool and rng.random() < 0.4:
+                    ch = rng.choice(pool)
+                chars.append(ch)
+                if ch != " " and rng.random() < 0.3:
+                    chars.append(rng.choice(MARKS))
+            variant = "".join(chars)
+            found = leak_check.check(f"Built for {variant} soon", ctx)
+            if code not in [f.code for f in found]:
+                missed.append((stored, variant))
+    assert missed == [], [ascii(m) for m in missed[:10]]
+
+
+# --- #699 re-review: a name matches on any of its forms --------------------------------
+
+
+@pytest.mark.parametrize(
+    ("ctx_over", "text", "code"),
+    [
+        ({"people": [PERSON, "Ivy Labs"]}, "Built with lvy Labs", "person_name"),
+        ({"people": [PERSON, "Ingrid"]}, "Thanks lngrid", "person_name"),
+        ({"people": [PERSON, "Ingrid"]}, "Thanks ǀngrid", "person_name"),
+        ({"alternatives": [RIVAL, "Ivy Labs"]}, "Faster than lvy Labs", "alternative_name"),
+        ({"slugs": [SLUG, "Inbox-plan"]}, "see lnbox-plan", "internal_code"),
+        (
+            {"notes": [NOTE, "Ingrid wants it before the Istanbul launch"]},
+            "lngrid wants it before the lstanbul launch",
+            "internal_note",
+        ),
+        # A stored capital I read as "i" in one place and "l" in another, and a written
+        # capital I standing for an "i" and an "l" in the same name.
+        ({"people": [PERSON, "INGRID"]}, "Thanks lngrid", "person_name"),
+        ({"people": [PERSON, "Lilian"]}, "Thanks LIIian", "person_name"),
+    ],
+)
+def test_a_small_l_in_place_of_a_stored_capital_i_is_found(ctx_over, text, code):
+    """protects=#699 re-review: a stored name is found when the written text matches it on
+    any of its forms (the folded skeleton, the strict skeleton as stored, the strict
+    skeleton after case folding), letter by letter; fails_when="lvy Labs", "lngrid" or
+    "lnbox-plan" passes the check."""
+    findings = leak_check.check(text, _ctx(**ctx_over))
+    assert code in [f.code for f in findings], findings
+
+
+def _glyph_partners() -> dict[str, list[str]]:
+    """ASCII letters drawn like another ASCII letter of the other case (capital I and small
+    l), both ways, read from the vendored confusables.txt."""
+    out: dict[str, list[str]] = {}
+    for target, sources in _look_alikes().items():
+        for source in sources:
+            if source.isascii():
+                out.setdefault(target, []).append(source)
+                out.setdefault(source, []).append(target)
+    return out
+
+
+def test_seeded_names_written_in_the_other_case_s_look_alikes_are_still_found():
+    """protects=#699 re-review (property): each letter of the stored name (in a random case)
+    is written in either case, or as a look-alike of either case, or as the ASCII letter of
+    the other case it is drawn like (a stored capital I as a small l, a stored small l as a
+    capital I), with random marks; every variant is still found; fails_when="Ingrid"
+    stored and "lngrid" written passes."""
+    import random
+
+    rng = random.Random(699)
+    alikes = _look_alikes()
+    partners = _glyph_partners()
+    seeded = [
+        ("Ingrid", "person_name", "people"),
+        ("Ivy Labs", "alternative_name", "alternatives"),
+        ("Lilian Quill", "person_name", "people"),
+        ("Mallory", "person_name", "people"),
+        ("Gold Mine", "alternative_name", "alternatives"),
+        ("Northwind", "customer_name", "customers"),
+    ]
+    missed = []
+    for name, code, field_name in seeded:
+        for _ in range(150):
+            stored = _recase(rng, name)
+            ctx = _ctx(**{field_name: [*getattr(_ctx(), field_name), stored]})
+            chars = []
+            for ch in stored:
+                cases = {ch, ch.lower(), ch.upper()}
+                # Only the stored letter's own partner: a small i is not drawn like an l.
+                pool = sorted(cases | set(partners.get(ch, [])))
+                pool += [a for c in pool for a in alikes.get(c, [])]
+                ch = rng.choice(pool) if rng.random() < 0.6 else ch
+                chars.append(ch)
+                if ch != " " and rng.random() < 0.2:
+                    chars.append(rng.choice(MARKS))
+            variant = "".join(chars)
+            found = leak_check.check(f"Built for {variant} soon", ctx)
+            if code not in [f.code for f in found]:
+                missed.append((stored, variant))
+    assert missed == [], [ascii(m) for m in missed[:10]]
+
+
+def test_ordinary_words_still_pass_against_names_with_a_capital_i():
+    """protects=#699 re-review: matching letter by letter on every form raises no finding
+    on ordinary words; fails_when="Ian", "Inbox", "Istanbul" or "API" is flagged against
+    a stored "Lan Co", "Ivy Labs", "Ingrid" or "Inbox-plan"."""
+    ctx = _ctx(
+        people=[PERSON, "Ingrid", "Alice"],
+        customers=[ACCOUNT, "Lan Co"],
+        alternatives=[RIVAL, "Ivy Labs"],
+        slugs=[SLUG, "Inbox-plan"],
+        pricing=[PLAN, "Gold Plan"],
+    )
+    for text in (
+        "A cafe for your resume, not a naive one",
+        "In Istanbul, the Inbox and the API import every account",
+        "IMPORT IN ONE GO: INBOX, API AND ISTANBUL",
+        "I plan to ship it; Ian and Ida said so",
+        "Ian wrote the inbox plan with ivy and labs",
+    ):
+        assert leak_check.check(text, ctx) == [], text
+
+
+def test_the_strict_skeleton_stops_changing_within_its_rounds():
+    """protects=#699 re-review (minor): every character's strict skeleton is a fixed point
+    in fewer rounds than _STRICT_ROUNDS, so the limit is never what stops the loop;
+    fails_when= a character still changes in the last round."""
+    rounds = leak_check._STRICT_ROUNDS
+    for cp in range(0x20, 0x30000):
+        char = chr(cp)
+        if 0xD800 <= cp < 0xE000:
+            continue
+        text = char
+        for _ in range(rounds - 1):
+            text = leak_check._strict_round(text)
+        assert leak_check._strict_round(text) == text, ascii(char)
+
+
+def test_every_letter_with_several_readings_has_a_stand_in():
+    """protects=#699 re-review: the mixed form writes a stand-in for every character, as a
+    text reads it, that has more than one reading, so no such letter falls back to one
+    reading; fails_when= a capital I (or any other) has no stand-in."""
+    missing = []
+    for cp in range(0x20, 0x110000):
+        if 0xD800 <= cp < 0xE000:
+            continue
+        read = leak_check._read(chr(cp))
+        for char in read:
+            forms = leak_check._char_forms(char, cached=False)
+            words = [f for f in forms if leak_check._TOKEN.search(f)]
+            if len(forms) > 1 and words and forms not in leak_check._STAND_INS:
+                missing.append(char)
+    assert missing == [], ascii("".join(missing[:20]))
+
+
+@pytest.mark.timing
+def test_the_note_check_keeps_up_with_many_notes():
+    """protects=#703 re-review (major): a company's notes from every roadmap version (300
+    notes of 40 words) are checked in well under a second, each time; fails_when=the
+    note runs are rebuilt on every check once there are more than 256 notes (about 10 s
+    each)."""
+    import random
+    import time
+
+    rng = random.Random(703)
+
+    def word() -> str:
+        return "".join(rng.choice("abcdefghijklmnoprstuvwyIM") for _ in range(rng.randint(3, 9)))
+
+    notes = [" ".join(word() for _ in range(40)) for _ in range(300)]
+    copied = " ".join(notes[-1].split()[10:15])
+    text = " ".join(word() for _ in range(120)) + f". It waits on {copied} for now."
+    ctx = _ctx(notes=notes)
+    for _ in range(3):
+        start = time.perf_counter()
+        found = leak_check.check(text, ctx)
+        took = time.perf_counter() - start
+        assert took < 1.0, took
+        assert [f.code for f in found] == ["internal_note"], found
