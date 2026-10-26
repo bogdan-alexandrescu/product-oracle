@@ -613,19 +613,15 @@ async def _job_replies(s: AsyncSession, job: LlmJob, *, lock: bool = False) -> l
 
 
 async def run_job(s: AsyncSession, job: LlmJob, ask: Any) -> dict[str, Any]:
-    """Drafts every reply of the job in one call. Everything given is data."""
+    """Drafts each reply of the job in its own call, from that asker's words and the shared
+    decision only, so one asker's text cannot shape another's reply (#541). Everything
+    given is data."""
     root = await s.get(ProductRequest, job.request_id)
     replies = await _job_replies(s, job)
     if root is None or not replies:
         return {"replies": 0}
     ctx = await _context(s, root)
-    asked = {
-        r.id: r
-        for r in await s.scalars(
-            select(ProductRequest).where(ProductRequest.id.in_([x.request_id for x in replies]))
-        )
-    }
-    payload = {
+    shared = {
         "reason": ctx["reason_label"],
         "note": ctx["note"],
         "basis": ctx["basis"],
@@ -637,26 +633,33 @@ async def run_job(s: AsyncSession, job: LlmJob, ask: Any) -> dict[str, Any]:
             "Never promise later or a date. The decision is reviewed inside the company in 90 "
             "days, and the people who asked hear again only if it changes."
         ),
-        "replies": [
-            {
-                "id": str(r.id),
-                "kind": r.kind,
-                "asker": r.asker or UNNAMED,
-                "asker_kind": r.asker_kind,
-                "asked": r.asked,
-            }
-            for r in replies
-        ],
     }
-    # The read (nothing written yet) ends before the call: no lock while the model answers.
+    payloads = [
+        {
+            **shared,
+            "replies": [
+                {
+                    "id": str(r.id),
+                    "kind": r.kind,
+                    "asker": r.asker or UNNAMED,
+                    "asker_kind": r.asker_kind,
+                    "asked": r.asked,
+                }
+            ],
+        }
+        for r in replies
+    ]
+    # The read (nothing written yet) ends before the calls: no lock while the model answers.
     job_id = job.id
     await s.rollback()
-    answer = await ask("why_not_reply", payload)
-    drafted = {
-        str(x.get("id")): str(x.get("body") or "").strip()
-        for x in answer.get("replies") or []
-        if isinstance(x, dict)
-    }
+    drafted: dict[str, str] = {}
+    for payload in payloads:
+        mine = payload["replies"][0]["id"]
+        answer = await ask("why_not_reply", payload)
+        for x in answer.get("replies") or []:
+            # Only the id this call was given: an answer cannot write another asker's reply.
+            if isinstance(x, dict) and str(x.get("id")) == mine:
+                drafted[mine] = str(x.get("body") or "").strip()
     oracle = template_n = 0
     # Re-read under lock: a person's edit made meanwhile is theirs to keep.
     job = await s.get(LlmJob, job_id, populate_existing=True)
