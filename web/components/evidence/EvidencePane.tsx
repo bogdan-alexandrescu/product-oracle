@@ -657,7 +657,7 @@ function TargetChips({ target: t, confidence }: { target: SectionLinkTarget; con
     <>
       {t.ref && <Chip hero className="font-mono">{t.ref}</Chip>}
       {t.status && <Chip kind={t.status === "confirmed" ? "pass" : leftOut(t) ? "na" : "warn"}>{cap(t.status)}</Chip>}
-      {t.locked && <Chip kind="line">Locked</Chip>}
+      {t.locked && <Chip hero>Locked</Chip>}
       <Chip kind={tone(c)}>{c == null ? "no score" : score(c)}</Chip>
       {t.restricted && <Chip kind="na">Restricted</Chip>}
       {t.source_removed && <Chip kind="na">Source removed</Chip>}
@@ -914,6 +914,7 @@ function SectionsView(props: Shared & { doc: string; n: number }) {
     {
       key: "weakest",
       header: "Weakest",
+      phoneLabel: "Weakest",
       width: "118px",
       cell: (s) => {
         const w = weakest(s);
