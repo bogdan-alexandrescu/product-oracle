@@ -127,20 +127,20 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
   const peopleQ = useQuery(`people-ids|${peopleKey}`, () => peopleByIds(peopleKey ? peopleKey.split(",") : []), { keepPrevious: true });
   const nameOf = useCallback((id: string | null | undefined) => (id ? (peopleQ.data?.get(id)?.name ?? null) : null), [peopleQ.data]);
 
-  const [selected, setSelected] = useState<string | null>(null);
+  // The selected row is kept in the URL (?sel=entity:<id>, cite:<key>, section:<key>).
+  const selected = params.get("sel");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [result, setResult] = useState<{ tone: "pass" | "error"; text: string } | null>(null);
 
-  const select = (key: string) => {
-    setSelected(key);
+  const select = (key: string, more: Record<string, string | null> = {}) => {
+    setParams({ ...more, sel: key });
     setResult(null);
     if (phone) setSheetOpen(true);
   };
   const switchView = (v: View) => {
-    setSelected(null);
     setSheetOpen(false);
     setResult(null);
-    setParams({ view: v === "coverage" ? null : v });
+    setParams({ view: v === "coverage" ? null : v, sel: null });
   };
 
   const act = async (run: () => Promise<unknown>, done: string) => {
@@ -209,7 +209,7 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
           <p className="text-[15px] font-semibold text-text2">
             v{n} has no section <span className="font-mono">{only}</span>.
           </p>
-          <Button onClick={() => setParams({ section: null })}>Show all sections</Button>
+          <Button onClick={() => setParams({ section: null, sel: null })}>Show all sections</Button>
         </div>
       </Panel>
     );
@@ -275,10 +275,7 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
             {canAdd && sections[0] && (
               <Button
                 variant="solid"
-                onClick={() => {
-                  setParams({ view: "sections" });
-                  select(`section:${sections[0].section_key}`);
-                }}
+                onClick={() => select(`section:${sections[0].section_key}`, { view: "sections" })}
               >
                 Link a section
               </Button>
@@ -745,7 +742,7 @@ function LinkElsewhereForm({ target, sections, linked, add }: { target: SectionL
         }}
       >
         <Field label="Section">
-          <select className={INPUT} value={section} onChange={(e) => setSection(e.target.value)}>
+          <select aria-label="Section" className={INPUT} value={section} onChange={(e) => setSection(e.target.value)}>
             {options.map((s) => (
               <option key={s.section_key} value={s.section_key}>
                 {s.heading} ({s.section_key}){unsupported(s) ? " · unsupported" : ""}
@@ -796,7 +793,7 @@ function KindPrecision({
     <>
       <div className="grid grid-cols-2 gap-2">
         <Field label="Kind">
-          <select className={INPUT} value={kind} onChange={(e) => setKind(e.target.value as LinkKind)}>
+          <select aria-label="Kind" className={INPUT} value={kind} onChange={(e) => setKind(e.target.value as LinkKind)}>
             {KINDS.map((k) => (
               <option key={k.value} value={k.value}>
                 {k.label}
@@ -805,7 +802,7 @@ function KindPrecision({
           </select>
         </Field>
         <Field label="Precision">
-          <select className={INPUT} value={precision} onChange={(e) => setPrecision(e.target.value as LinkPrecision)}>
+          <select aria-label="Precision" className={INPUT} value={precision} onChange={(e) => setPrecision(e.target.value as LinkPrecision)}>
             {PRECISIONS.map((p) => (
               <option key={p.value} value={p.value}>
                 {p.label}
@@ -816,6 +813,7 @@ function KindPrecision({
       </div>
       <Field label="Claim" hint="(claim precision only)">
         <input
+          aria-label="Claim"
           className={INPUT}
           value={claim}
           disabled={precision !== "claim"}
@@ -1131,7 +1129,7 @@ function AddSectionLinkForm({ section, rows, add }: { section: SectionEvidence; 
       >
         <KindPrecision {...{ kind, setKind, precision, setPrecision, claim, setClaim }} />
         <Field label="Links to">
-          <select className={INPUT} value={to} onChange={(e) => setTo(e.target.value)} aria-busy={entitiesQ.loading}>
+          <select aria-label="Links to" className={INPUT} value={to} onChange={(e) => setTo(e.target.value)} aria-busy={entitiesQ.loading}>
             <option value="">Pick a baseline item, evidence or source item</option>
             {entities.length > 0 && (
               <optgroup label="Baseline items">

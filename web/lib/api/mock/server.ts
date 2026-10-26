@@ -3162,12 +3162,14 @@ function goalLinks(db: Db): V2Db["section_links"] {
 /**
  * v2 screen 3 "evidence" scenario: Checkout redesign PRD v2's sections linked to baseline
  * evidence (one from a removed source, one behind a claim), a restricted source item, a
- * feature and a stale link to a proposed one; and one link on the approved v1.
+ * feature and a stale link to a proposed one; and one link on the approved Usage alerts v1.
  */
 function evidenceLinks(db: Db): V2Db["section_links"] {
   const doc = findDocument(db, "checkout-redesign");
   if (!doc) return [];
-  const [v1, v2] = docVersions(db, doc);
+  const v2 = docVersions(db, doc)[1];
+  const alerts = findDocument(db, "usage-alerts");
+  const approved = alerts ? docVersions(db, alerts).find((v) => v.approved_at) : undefined;
   const entity = (key: string) => db.baseline.entities.find((e) => e.key === key)?.id ?? null;
   const evidence = (ref: string) => db.baseline.evidence.find((e) => e.ref === ref)?.id ?? null;
   const out: V2Db["section_links"] = [];
@@ -3181,7 +3183,7 @@ function evidenceLinks(db: Db): V2Db["section_links"] {
     if (!v || !v.sections.some((s) => s.section_key === section_key)) return;
     if (!target.entity_id && !target.evidence_id && !target.source_item_id) return;
     out.push({
-      id: uuid(), document_id: doc.id, version_id: v.id, section_key,
+      id: uuid(), document_id: v.document_id, version_id: v.id, section_key,
       // A stale link was made on an earlier revision of its section.
       section_hash: more.stale ? "0".repeat(16) : (v.sections.find((s) => s.section_key === section_key)?.content_hash ?? null),
       composition_revision: more.module_key ? 1 : null, module_key: more.module_key ?? null, kind,
@@ -3195,7 +3197,7 @@ function evidenceLinks(db: Db): V2Db["section_links"] {
   link(v2, "goal-trace", "implements", { entity_id: entity("f.usage-export") }, { stale: true, at: "2026-10-16T15:00:00Z" });
   link(v2, "scope", "tests", { entity_id: entity("f.guided-setup") }, { precision: "paragraph", module_key: "acceptance-criteria" });
   link(v2, "risks", "evidences", { evidence_id: evidence("Onboarding review (meeting)") }, { stale: true });
-  link(v1, "problem", "evidences", { evidence_id: evidence("Sample store spec") });
+  link(approved, "behaviour", "evidences", { evidence_id: evidence("Sample store spec") });
   return out;
 }
 
