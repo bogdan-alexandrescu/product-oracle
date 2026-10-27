@@ -34,9 +34,9 @@ Test cards (protects / fails_when / no_claim):
   occurrence is made; fails_when=a stale start silently makes the next week's occurrence
   and moves the ritual on again; no_claim=the occurrence's pre-read.
 - test_upcoming_one_row_per_ritual: protects=Upcoming lists a ritual once (its made
-  occurrence, else its next due time), only within UPCOMING_HORIZON, with the pre-read's
-  readiness, so the rail's count does not grow with every ritual; fails_when=a ritual
-  shows twice or a review months away counts; no_claim=the pre-read's contents.
+  occurrence, else its next due time) however far ahead (BGD: no horizon), soonest first,
+  with the pre-read's readiness; fails_when=a ritual shows twice or a review months away is
+  left out; no_claim=the pre-read's contents.
 - test_approve_in_meeting_publishes_the_one_pager: protects=a line edited through the
   meeting and the decider's Approve there publish the one-pager (version 2, no working
   draft, the edited line), what the meeting screen reads again after Approve; a
@@ -244,9 +244,9 @@ async def test_ritual_start_pins_its_due_time(client):
 async def test_upcoming_one_row_per_ritual(client):
     w = await world()
     ritual_id, due = await ritual(w, owner="decider")
-    await ritual(w, owner="decider", days=60)  # past the horizon: not listed, not counted
+    far_id, _ = await ritual(w, owner="decider", days=60)  # no horizon: listed, after the soon one
     listed = (await client.get(MEETINGS, headers=w.ctx.as_("viewer"))).json()["upcoming"]
-    assert [x["ritual_id"] for x in listed] == [ritual_id]
+    assert [x["ritual_id"] for x in listed] == [ritual_id, far_id]
     assert listed[0]["pre_read_ready"] is False
     m = await start(client, w, ritual_id=ritual_id, due_at=due.isoformat())
     async with tenant_session(w.ctx.tenant_id) as s:
@@ -255,7 +255,8 @@ async def test_upcoming_one_row_per_ritual(client):
         await s.commit()
     listed = (await client.get(MEETINGS, headers=w.ctx.as_("viewer"))).json()["upcoming"]
     assert [(x["ritual_id"], x["occurrence_id"]) for x in listed] == [
-        (ritual_id, m["occurrence_id"])
+        (ritual_id, m["occurrence_id"]),
+        (far_id, None),
     ]
     assert listed[0]["meeting_id"] == m["id"] and listed[0]["pre_read_ready"] is True
 

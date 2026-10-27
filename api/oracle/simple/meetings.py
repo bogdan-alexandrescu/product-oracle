@@ -99,8 +99,6 @@ SOURCE_KIND = "simple_meeting_decision"
 DEFAULT_LENGTH = 60
 INBOX_DAYS = 30
 UPCOMING_MAX = 20
-# How far ahead Upcoming (and the rail's count) lists a ritual's next review not made yet.
-UPCOMING_HORIZON = timedelta(days=14)
 # A minutes job still drafting after this long: "still drafting", send what is written.
 MINUTES_SLOW = timedelta(minutes=2)
 SUMMARY_MAX = 4000
@@ -904,8 +902,9 @@ async def _upcoming(
 ) -> list[SimpleUpcomingMeeting]:
     """The reviews to start, the one source Home's "Next review meeting" and the rail's
     Meetings count read too: one row per active ritual, soonest first: its open occurrence
-    (scheduled or ready, not over), else its next due time within UPCOMING_HORIZON when no
-    occurrence is made for it yet (rituals make them only ``prep_hours`` ahead)."""
+    (scheduled or ready, not over), else its next due time, however far ahead (BGD,
+    2026-10-27: no horizon), when no occurrence is made for it yet (rituals make them only
+    ``prep_hours`` ahead)."""
     from oracle.rituals.models import Ritual, RitualOccurrence
 
     now = company_time.now()
@@ -933,7 +932,6 @@ async def _upcoming(
             select(Ritual).where(
                 Ritual.status == "active",
                 Ritual.next_due_at.is_not(None),
-                Ritual.next_due_at <= now + UPCOMING_HORIZON,
             )
         ):
             if r.id not in seen:
