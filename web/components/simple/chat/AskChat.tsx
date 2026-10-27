@@ -1,13 +1,13 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
-import { askSay, askThread, type ChatThread } from "@/lib/api/simple-chat";
+import { askSay, askThread, type ChatMessage, type ChatThread } from "@/lib/api/simple-chat";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
-import { ChatThreadView } from "./ChatThread";
+import { ChatMessages, ChatThreadView } from "./ChatThread";
 
 /**
  * The Ask panel's one box on Simple's pages (S9, direction A; the production walk): a line
@@ -59,5 +59,32 @@ export function AskChat({ about, ask }: { about: string; ask?: (text: string) =>
         onCardChanged={() => void load()}
       />
     </section>
+  );
+}
+
+/**
+ * The same one box inside an Ask chat already started (Simple's pages): `text` goes to
+ * Oracle's plan reader first; a line it understands shows its line, answer or cards here
+ * (kept in the reader's own thread), else null and the chat posts the line to Ask.
+ */
+export async function askInChat(text: string, page: string | undefined): Promise<ReactNode | null> {
+  const t = await askSay(text, page, true);
+  if (t.understood === false) return null;
+  const from = t.messages.findLastIndex((m) => m.author_kind === "person");
+  return <AskLines lines={t.messages.slice(Math.max(from, 0))} />;
+}
+
+/** S9's lines shown in an Ask chat; a card applied or discarded reloads them from the reader's thread. */
+function AskLines({ lines }: { lines: ChatMessage[] }) {
+  const [shown, setShown] = useState(lines);
+  const reload = async () => {
+    const ids = new Set(lines.map((m) => m.id));
+    const t = await askThread();
+    setShown(t.messages.filter((m) => ids.has(m.id)));
+  };
+  return (
+    <div data-testid="ask-chat-lines">
+      <ChatMessages messages={shown} onCardChanged={() => void reload()} />
+    </div>
   );
 }

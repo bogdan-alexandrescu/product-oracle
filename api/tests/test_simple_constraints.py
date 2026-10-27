@@ -11,7 +11,8 @@ Test cards (protects / fails_when / no_claim):
   window estimates never conflict; fails_when=every Now item depending on another Now
   item is red; no_claim=none.
 - test_blocker_date: protects=an open blocker expected after the start flags it
-  [accept_risk], the line naming the item first; a resolved one or one expected before does not; fails_when=either way;
+  [accept_risk], the line naming the item first; a resolved one or one expected before
+  does not; fails_when=either way;
   no_claim=how a blocker's expected date is recorded (the API test seeds it).
 - test_outside_milestone: protects=a bar ending after its milestone's date flags it
   [accept_risk], the line naming the item first; fails_when=either way; no_claim=none.

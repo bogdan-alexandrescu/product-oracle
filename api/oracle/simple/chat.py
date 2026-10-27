@@ -373,11 +373,17 @@ def parse(c: Ctx, text: str) -> Reply:
                 start = day[1]  # type: ignore[index]
                 end = start + timedelta(days=29 if r.undated else length)
             s, en = start.isoformat(), end.isoformat()
-            return _card(f"Move {e.row.title} to {_day_words(start)} – {_day_words(end, True)}",
+            reply = _card(f"Move {e.row.title} to {_day_words(start)} – {_day_words(end, True)}",
                          "move_dates", e, {"item_id": str(e.row.id)}, _dates(e),
                          {"start_date": s, "end_date": en},
                          {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
                           "end_date": en})  # fmt: skip
+            if period and start < c.today:
+                # "this quarter" / "this month" / the current Qn start on their first day.
+                reply.body = (f"Here is the change. That period began {start:%b} {start.day}, so "
+                              "the move starts on a past day. Preview it, then apply or discard "
+                              "it.")  # fmt: skip
+            return reply
 
         return change(move)
     if m := re.fullmatch(rf"add (?:a )?milestone {QUOTE} to (.+) on {DAY}\.?", t, re.I):

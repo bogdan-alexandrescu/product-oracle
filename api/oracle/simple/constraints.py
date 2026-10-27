@@ -133,13 +133,16 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
         for b in n.blockers:
             if b.open and b.expected is not None and b.expected > n.start.date:
                 reason = (
-                    f"Starts {_day(n.start.date)}, but blocker '{_t(b.title)}' is expected "
-                    f"to clear {_day(b.expected)}"
+                    f"'{_t(n.title)}' starts {_day(n.start.date)}, but blocker '{_t(b.title)}' "
+                    f"is expected to clear {_day(b.expected)}"
                 )
                 flags.append(_flag(n, "blocker_date", reason, b.id))
         if n.milestone is not None and n.end.date > n.milestone[1]:
             name, day = n.milestone
-            reason = f"Ends {_day(n.end.date)}, after its milestone '{_t(name)}' ({_day(day)})"
+            reason = (
+                f"'{_t(n.title)}' ends {_day(n.end.date)}, after its milestone '{_t(name)}' "
+                f"({_day(day)})"
+            )
             flags.append(_flag(n, "outside_milestone", reason, name))
         if n.status == "cut":
             live = [d for d in dependents[n.id] if d.status != "cut"]

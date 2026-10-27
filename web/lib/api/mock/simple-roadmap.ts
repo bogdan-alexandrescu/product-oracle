@@ -345,7 +345,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   }
   if (s.milestone) {
     const day = addDays(w[0], s.milestone.day);
-    if (r.end.date > day) flag("outside_milestone", `Ends ${word(r.end.date)}, after its milestone '${s.milestone.name}' (${word(day)})`, ["accept_risk"], s.milestone.name);
+    if (r.end.date > day) flag("outside_milestone", `'${short(s.title)}' ends ${word(r.end.date)}, after its milestone '${s.milestone.name}' (${word(day)})`, ["accept_risk"], s.milestone.name);
   }
   if (s.status === "cut") {
     const live = [...all.values()].filter((x) => x.s.status !== "cut" && x.s.depends?.includes(s.key));

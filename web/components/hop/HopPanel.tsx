@@ -8,7 +8,7 @@ import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { isHidden, type DiscussionRow, type DiscussionSummary } from "@/components/discuss/DiscussionList";
 import { Button, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
 import { InlineError, TEXTAREA } from "@/components/review/parts";
-import { AskChat } from "@/components/simple/chat/AskChat";
+import { AskChat, askInChat } from "@/components/simple/chat/AskChat";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { GENERAL, subjectKey, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
@@ -241,7 +241,8 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
   const writes = can("create_discussion");
   const isPanelChat = d?.origin === "panel";
   // S9: on Simple's pages the panel's one box also changes the plan by chat (Detailed is unchanged).
-  const simple = (usePathname() ?? "").startsWith("/simple");
+  const pathname = usePathname() ?? "";
+  const simple = pathname.startsWith("/simple");
   const started = (id: string) => {
     setView({ kind: "thread", id });
     setTick((t) => t + 1);
@@ -337,6 +338,7 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
                 setTick((t) => t + 1);
               }}
               onChanged={() => setTick((t) => t + 1)}
+              say={simple && isPanelChat ? (text) => askInChat(text, pathname) : undefined}
             />
             {isPanelChat && d.me.can_manage && writes && (
               <div>

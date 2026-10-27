@@ -276,7 +276,15 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
       return change(() => {
         const i = findItem(items, x);
         if (!isItem(i)) return i;
-        if (period) return move(i, period[0], dated(i) ? addDays(period[0], length(i)) : period[1]);
+        if (period) {
+          const r = move(i, period[0], dated(i) ? addDays(period[0], length(i)) : period[1]);
+          // As chat.parse: "this quarter" / "this month" / the current Qn start on their first day.
+          if (period[0] < today()) {
+            const began = new Date(`${period[0]}T00:00:00Z`);
+            r.body = `Here is the change. That period began ${began.toLocaleString("en-US", { month: "short", timeZone: "UTC" })} ${began.getUTCDate()}, so the move starts on a past day. Preview it, then apply or discard it.`;
+          }
+          return r;
+        }
         return move(i, day!, addDays(day!, dated(i) ? length(i) : 29));
       });
     }
