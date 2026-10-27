@@ -27,6 +27,10 @@ Test cards (protects / fails_when / no_claim):
   drawing; a viewer's comment and a commenter's revise are 403; a restricted reader does
   not see a visual of a document it cannot see; fails_when=a role does more than its
   rule; no_claim=the web's buttons (the Playwright spec).
+- test_draft_change_visual_follows_the_draft: protects=the visual of a change applied
+  into a working draft is read by who sees the draft (its author, the decider, owners),
+  not by a viewer, who reads the published version; fails_when=a viewer reads a draft's
+  visual; no_claim=publishing (S3b's tests).
 - test_flow_for_contract: protects=the contract other lanes call: ``flow_for`` answers None
   without a drawing and the stored bundle as ``SimpleFlow`` after; ``request_visual``
   queues one job per subject (twice is once) and none for a switched-off document;
@@ -354,3 +358,16 @@ async def test_flow_for_contract(client):
     with pytest.raises(visuals.VisualError):
         async with tenant_session(ctx.tenant_id) as s:
             await visuals.request_visual(s, None, "nonsense", uuid.uuid4(), "x")
+
+
+async def test_draft_change_visual_follows_the_draft(client):
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")
+    r = await edit(client, ctx, "decider", view, "bets-1", "A setup checklist with invites")
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    cid = r.json()["change"]["id"]
+    await run_visual_jobs(ctx)
+    assert (await visual(client, ctx, "decider", "change", cid))["flow"]["version"] == 1
+    assert (await visual(client, ctx, "owner", "change", cid))["flow"] is not None
+    r = await client.get(f"{URL}/change/{cid}", headers=ctx.as_("viewer"))
+    assert r.status_code == 404, r.text
