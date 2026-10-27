@@ -73,6 +73,9 @@ const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   override_priority: { id: "item_id" },
   // S6: a person's goal value or effort for the item's feature (targets.py estimate_feature).
   estimate_feature: { id: "item_id" },
+  // S9: a milestone typed in chat, and a new feature ask (targets.py set_milestone, add_feature_ask).
+  set_milestone: { id: "item_id" },
+  add_feature_ask: { id: "ask_id", adds: true },
 };
 
 const iso = (ms: number): string => new Date(ms).toISOString();

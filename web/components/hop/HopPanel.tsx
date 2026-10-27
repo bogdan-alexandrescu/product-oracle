@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { isHidden, type DiscussionRow, type DiscussionSummary } from "@/components/discuss/DiscussionList";
 import { Button, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
 import { InlineError, TEXTAREA } from "@/components/review/parts";
+import { AskChat } from "@/components/simple/chat/AskChat";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { GENERAL, subjectKey, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
@@ -232,6 +234,8 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
   const d = useDiscussion(threadId, tick);
   const writes = can("create_discussion");
   const isPanelChat = d?.origin === "panel";
+  // S9: on Simple's pages the panel also offers change by chat (Detailed is unchanged).
+  const simple = (usePathname() ?? "").startsWith("/simple");
 
   const about = d ? { label: d.subject_label, url: d.subject_url } : { label: subject.label, url: subject.kind === "screen" ? String(subject.subject.path) : null };
 
@@ -286,6 +290,7 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
         {view.kind === "list" && (
           <>
+            {simple && <AskChat />}
             {writes ? (
               <NewChat
                 subject={subject}

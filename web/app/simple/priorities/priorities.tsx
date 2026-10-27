@@ -522,7 +522,7 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
   );
 }
 
-function FlowThumb({ flow }: { flow: Schemas["SimpleFlow"] }) {
+export function FlowThumb({ flow }: { flow: Schemas["SimpleFlow"] }) {
   return (
     <svg width="64" height="40" viewBox="0 0 64 40" aria-hidden className="text-text2">
       {flow.steps.slice(0, 4).map((_, i) => (
@@ -535,7 +535,7 @@ function FlowThumb({ flow }: { flow: Schemas["SimpleFlow"] }) {
   );
 }
 
-function FlowDetail({ flow }: { flow: Schemas["SimpleFlow"] }) {
+export function FlowDetail({ flow }: { flow: Schemas["SimpleFlow"] }) {
   return (
     <div className="mt-3 grid gap-4 sm:grid-cols-2" data-testid="flow-detail">
       <div>
