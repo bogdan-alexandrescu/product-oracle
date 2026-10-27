@@ -180,6 +180,18 @@ async def test_thirty_concurrent_writes_on_a_slow_status_share_one_bounded_read(
     assert calls == 1 and joined == 30
 
 
+async def test_a_wait_that_never_comes_says_what_it_waited_for():
+    """A wait of the shared-read test that reaches its ceiling fails with what it
+    waited for (how many writes reached the read, the connections checked out), not
+    with a bare TimeoutError."""
+    with pytest.raises(AssertionError, match=r"3/30 writes .* 2 database connections"):
+        await _until(
+            lambda: False,
+            lambda: "3/30 writes reached the status read; 2 database connections checked out",
+            ceiling=0.1,
+        )
+
+
 async def test_a_slow_status_read_times_out_to_read_only(client, owner, monkeypatch):
     _, auth = owner
     swarm = on()
