@@ -144,6 +144,8 @@ NOTIFICATION_KINDS = (
     # I1: a webhook paused for its creator, and a webhook's address changed (owners).
     "webhook_paused",
     "webhook_url_changed",
+    # Simple (#723): a one-pager's draft owner or decider reminds a waiting reviewer.
+    "review_reminder",
 )
 PATCH_ORIGINS = ("run", "llm_job", "agent", "person")
 PATCH_STATUSES = ("open", "accepted", "rejected", "superseded")

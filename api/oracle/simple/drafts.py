@@ -849,6 +849,7 @@ async def _in_review(
         principal.user_id,
     )
     d.waiting_on = list(policy.mandatory_reviewer_ids)
+    d.reminders = {}
     for sd in await db.scalars(
         select(SimpleSessionDraft).where(SimpleSessionDraft.draft_id == d.id)
     ):

@@ -20,6 +20,10 @@ S3b, working drafts (oracle.simple.drafts):
 - ``POST /v1/simple/drafts/{id}/withdraw``: its author or the decider: a submitted draft
   returns to working (its changes kept); the version is marked withdrawn.
 - ``POST /v1/simple/drafts/{id}/resume``: its author or the decider: a new session on it.
+
+S5 one-pagers: ``GET /v1/simple/one-pagers/{doc}`` (and ``/pdf``); ``POST
+/v1/simple/one-pagers/{doc}/remind``: the PRD's owners and its decider nudge each reviewer
+its submitted draft waits on (an Inbox notification), at most once a day each.
 """
 
 import asyncio
@@ -35,6 +39,7 @@ from oracle.simple.router import _people
 from oracle.simple.schemas import (
     ChangeStatus,
     OnePagerOut,
+    OnePagerRemindOut,
     SimpleChangeConflict,
     SimpleChangeIn,
     SimpleChangeOut,
@@ -224,6 +229,17 @@ async def get_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> One
     notes (changes, proposals). Lines change through POST /v1/simple/changes
     (``edit_line``)."""
     return await _run(db, one_pager.read(db, principal, doc))
+
+
+@router.post("/one-pagers/{doc}/remind", response_model=OnePagerRemindOut,
+             name="remind_simple_one_pager_reviewers")  # fmt: skip
+async def remind_simple_one_pager_reviewers(
+    doc: str, principal: Commenter, db: TenantDB
+) -> OnePagerRemindOut:
+    """Remind: each reviewer the PRD's submitted draft waits on gets an Inbox nudge "<name>
+    is waiting for your review of <PRD>", at most once a day per reviewer (409 when none
+    is due, or no submitted draft waits); the PRD's owners and its decider only (403)."""
+    return await _run(db, one_pager.remind(db, principal, doc))
 
 
 @router.get("/one-pagers/{doc}/pdf", name="export_simple_one_pager",

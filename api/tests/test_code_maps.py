@@ -600,7 +600,7 @@ async def test_a_merge_marks_the_map_stale_and_the_tick_refreshes_it_once(
     sync_yielding(monkeypatch, events)
 
     # A pull request merged before the map was built does not make it stale.
-    events.append(merged_pr(1, datetime.now(UTC) - timedelta(hours=3)))
+    events.append(merged_pr(1, datetime.now(UTC) - timedelta(hours=30)))
     await sync(client, owner, source_id)
     assert [m.status for m in await maps_of(tenant_id)] == ["ready"]
 
