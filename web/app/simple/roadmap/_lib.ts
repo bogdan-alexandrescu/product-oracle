@@ -22,6 +22,15 @@ export const daysBetween = (a: string, b: string): number => Math.round((ms(b) -
 
 export const shortDay = (day: string): string => calendarDay(day);
 
+/** A span in words, with its year when it is not this year's ("Jan 1 – Jun 30, 2027",
+ * "Oct 22, 2027 – Oct 22, 2028"). */
+export function spanWords(start: string, end: string, today: string): string {
+  const [ys, ye, yt] = [start, end, today].map((d) => d.slice(0, 4));
+  if (ys === ye && ys === yt) return `${shortDay(start)} – ${shortDay(end)}`;
+  if (ys === ye) return `${shortDay(start)} – ${shortDay(end)}, ${ye}`;
+  return `${shortDay(start)}, ${ys} – ${shortDay(end)}, ${ye}`;
+}
+
 export function quarterOf(day: string): { start: string; label: string } {
   const d = new Date(ms(day));
   const q = Math.floor(d.getUTCMonth() / 3);

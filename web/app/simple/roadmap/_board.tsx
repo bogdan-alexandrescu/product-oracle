@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
-import { barKind, broken, shortDay, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, spanWords, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -221,7 +221,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
               data-testid="board-dates"
               className={kind === "estimated" ? "rounded bg-[repeating-linear-gradient(45deg,var(--accent-soft)_0_4px,var(--accent-mid)_4px_6px)] px-1 text-accent-ink" : ""}
             >
-              {shortDay(item.start.date)} – {shortDay(item.end.date)}
+              {spanWords(item.start.date, item.end.date, data.today)}
               {kind === "estimated" && " · estimated"}
             </span>
             {kind === "draft" && <span>draft</span>}
@@ -256,7 +256,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
           <header className="flex items-baseline gap-2 px-1 pb-2">
             <h2 className="text-lg font-semibold">{c.label}</h2>
             <span className="text-sm text-text2">
-              {shortDay(c.window.start)} – {shortDay(c.window.end)}
+              {spanWords(c.window.start, c.window.end, data.today)}
             </span>
             <span className="tnum ml-auto text-sm text-text2" data-testid="column-count">
               {c.groups.reduce((n, g) => n + g.items.length, 0)}

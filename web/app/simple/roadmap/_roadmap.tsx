@@ -431,7 +431,7 @@ export function SimpleRoadmap() {
     if (format !== "board" && !svg.current) return;
     setExporting(true);
     try {
-      const pic = format === "board" ? boardPicture(boardColumns(data)) : chartPicture(svg.current!, labels);
+      const pic = format === "board" ? boardPicture(boardColumns(data), data.today) : chartPicture(svg.current!, labels);
       const title = `Roadmap · ${FORMAT_WORDS[format]}${format === "gantt" ? ` (${unit})` : ""}`;
       await exportView(kind, pic, { title, filters: filterWords(), brand: await brandOf() }, data.today, `roadmap-${format}`);
     } catch {

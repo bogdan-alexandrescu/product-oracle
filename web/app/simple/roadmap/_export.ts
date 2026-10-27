@@ -6,7 +6,7 @@
  * theme's colours resolved, onto a canvas; the PDF is one page holding that picture.
  */
 import type { BoardColumn } from "./_board";
-import { shortDay } from "./_lib";
+import { shortDay, spanWords } from "./_lib";
 
 const SCALE = 2;
 const HEAD = 88;
@@ -66,7 +66,7 @@ export function chartPicture(svg: SVGSVGElement, labels: HTMLElement | null): Pi
 }
 
 /** The board's columns, each group and card as boxes and text. */
-export function boardPicture(cols: BoardColumn[]): Picture {
+export function boardPicture(cols: BoardColumn[], today: string): Picture {
   const colW = 300;
   const gap = 12;
   const out: string[] = [];
@@ -76,7 +76,7 @@ export function boardPicture(cols: BoardColumn[]): Picture {
     const parts: string[] = [];
     let y = 34;
     parts.push(`<text x="${x + 10}" y="22" font-size="16" font-weight="600" fill="var(--text)">${esc(c.label)}</text>`);
-    parts.push(`<text x="${x + colW - 10}" y="22" font-size="12" text-anchor="end" fill="var(--text2)">${esc(`${shortDay(c.window.start)} – ${shortDay(c.window.end)}`)}</text>`);
+    parts.push(`<text x="${x + colW - 10}" y="22" font-size="12" text-anchor="end" fill="var(--text2)">${esc(spanWords(c.window.start, c.window.end, today))}</text>`);
     const cardOf = (i: BoardColumn["below"][number]) => {
       const est = i.estimated && !i.draft;
       const red = i.flags.some((f) => f.state === "red");
@@ -84,7 +84,7 @@ export function boardPicture(cols: BoardColumn[]): Picture {
       const stroke = red ? "var(--crit)" : "var(--line)";
       parts.push(`<rect x="${x + 8}" y="${y}" width="${colW - 16}" height="44" rx="8" fill="${fill}" stroke="${stroke}"${i.draft ? ' stroke-dasharray="5 3"' : ""}/>`);
       parts.push(`<text x="${x + 16}" y="${y + 18}" font-size="13" font-weight="500" fill="var(--text)"${i.status === "cut" ? ' text-decoration="line-through"' : ""}>${esc(cut(i.title, 38))}</text>`);
-      const meta = `${shortDay(i.start.date)} – ${shortDay(i.end.date)}${est ? " · estimated" : ""}${i.draft ? " · draft" : ""}`;
+      const meta = `${spanWords(i.start.date, i.end.date, today)}${est ? " · estimated" : ""}${i.draft ? " · draft" : ""}`;
       parts.push(`<text x="${x + 16}" y="${y + 35}" font-size="11" fill="var(--text2)">${esc(meta)}</text>`);
       y += 50;
     };
