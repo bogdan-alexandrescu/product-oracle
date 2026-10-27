@@ -132,6 +132,9 @@ const maxOf = (xs: string[]) => xs.reduce((a, b) => (b > a ? b : a));
  * earliest start (or milestone) to the month of the latest milestone (with none dated, the
  * latest committed end, else the latest end), at most 6 months.
  */
+/** Strings in code point order, as Python sorts them (the API's strip). */
+const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
 export function planByMonth(items: PlanInput[], today: string): PlanStrip | null {
   if (items.length === 0) return null;
   const groups = new Map<string, { name: string; date: string | null; of: PlanInput[] }>();
@@ -141,7 +144,7 @@ export function planByMonth(items: PlanInput[], today: string): PlanStrip | null
       loose.push(i);
       continue;
     }
-    const name = i.milestone ?? "Milestone";
+    const name = i.milestone || "Milestone";
     const key = `${name}|${i.milestoneDate ?? ""}`;
     const g = groups.get(key) ?? { name, date: i.milestoneDate, of: [] };
     g.of.push(i);
@@ -172,7 +175,7 @@ export function planByMonth(items: PlanInput[], today: string): PlanStrip | null
     past_edge: !!date && date > end,
   });
   const rows = [...groups.values()]
-    .sort((a, b) => (a.date === null) !== (b.date === null) ? (a.date === null ? 1 : -1) : (a.date ?? "").localeCompare(b.date ?? "") || a.name.localeCompare(b.name))
+    .sort((a, b) => (a.date === null) !== (b.date === null) ? (a.date === null ? 1 : -1) : byCodePoint(a.date ?? "", b.date ?? "") || byCodePoint(a.name, b.name))
     .map((g) => row(g.name, g.date, g.of, true));
   if (loose.length) rows.push(row("No milestone", null, loose, false));
   return {
@@ -190,15 +193,16 @@ export const planInput = (i: Item): PlanInput => ({
   start: i.start.date,
   end: i.end.date,
   estimated: i.estimated,
-  milestone: i.milestone ? (i.milestone.name ?? "Milestone") : null,
+  milestone: i.milestone ? i.milestone.name || "Milestone" : null,
   milestoneDate: i.milestone?.date ?? null,
 });
 
 /**
  * Home's plan: the PRD in play (the only PRD with items this quarter), or the top PRD by
  * priority when several (its best-ranked item), else the one with most items this quarter.
+ * With several and the ranking not read yet (`ranked` null), undefined: Home waits for it.
  */
-export function prdInPlay(roadmap: Roadmap | undefined, ranked: (string | null | undefined)[] = []): Schemas["SimpleDocRef"] | null {
+export function prdInPlay(roadmap: Roadmap | undefined, ranked: (string | null | undefined)[] | null = []): Schemas["SimpleDocRef"] | null | undefined {
   if (!roadmap) return null;
   const { start, end } = roadmap.windows.now;
   const now = roadmap.items.filter((i) => i.prd && i.status !== "cut" && i.start.date <= end && i.end.date >= start);
@@ -209,6 +213,8 @@ export function prdInPlay(roadmap: Roadmap | undefined, ranked: (string | null |
     prds.set(i.prd!.id, p);
   }
   if (prds.size <= 1) return [...prds.values()][0]?.prd ?? null;
+  // Several: the ranking picks; with none yet (null), undefined: wait for it.
+  if (ranked === null) return undefined;
   const byItem = new Map(roadmap.items.map((i) => [i.id, i]));
   for (const id of ranked) {
     const prd = id ? byItem.get(id)?.prd : null;

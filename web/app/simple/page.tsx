@@ -116,10 +116,11 @@ export default function SimpleHome() {
   const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems]);
   // The plan this quarter: the PRD in play (the top PRD by priority when several) by month.
   const priorities = useQuery(k("priorities"), () => unwrap(api.GET("/v1/simple/priorities")), { keepPrevious: true });
-  // Chosen once the ranking answered (or failed), so the strip never switches PRDs under the reader.
+  // With several PRDs in play, chosen once the ranking answered (or failed), so the strip never
+  // switches PRDs under the reader; with one, at once (undefined: waiting on the ranking).
   const ranked = priorities.data !== undefined || !!priorities.error;
   const planPrd = useMemo(
-    () => (ranked ? prdInPlay(roadmap.data, (priorities.data?.rows ?? []).map((r) => r.item_id)) : null),
+    () => prdInPlay(roadmap.data, ranked ? (priorities.data?.rows ?? []).map((r) => r.item_id) : null),
     [ranked, roadmap.data, priorities.data],
   );
   const plan = useMemo(
@@ -468,7 +469,7 @@ export default function SimpleHome() {
         <Block q={roadmap} testId="home-plan">
           {() => (
             <>
-              {!ranked ? (
+              {planPrd === undefined ? (
                 <Loading />
               ) : plan && planPrd ? (
                 <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" />

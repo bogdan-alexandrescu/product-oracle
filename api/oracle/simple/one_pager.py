@@ -191,8 +191,9 @@ _METRIC = re.compile(
     re.IGNORECASE,
 )
 _MD = re.compile(r"[*_`]+|\[([^\]]*)\]\([^)]*\)|\[\^?[\w-]+\]")
-# A markdown table's separator row ("|---|:---:|"); its header is the row above it.
-_TABLE_SEP = re.compile(r"^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)*\|?\s*$")
+# A markdown table's separator row ("|---|:---:|", GFM's "|-|-|" too); its header is the row
+# above it.
+_TABLE_SEP = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$")
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
 
 
@@ -329,9 +330,10 @@ def _row_line(cells: list[str]) -> str:
 
 
 def _unpiped(text: str) -> str:
-    """A line never starts or ends with a pipe: a table row's words read as one line."""
+    """A line never starts or ends with a pipe: a table row's words read as one line. Pipes
+    inside prose ("p50 | p95 | p99") stay as written."""
     t = text.strip()
-    if t.startswith("|") or t.endswith("|") or t.count("|") >= 2:
+    if t.startswith("|") or t.endswith("|"):
         t = _row_line(_cells(t)) if "|" in t.strip("| ") else t.strip(" |")
     return t.strip(" |")
 

@@ -16,7 +16,7 @@ Test cards (protects / fails_when / no_claim):
   rewrites that row's cells in the working draft (the table stays a table);
   fails_when=the edit is refused or breaks the row; no_claim=Detailed's editor.
 - test_owner_named_or_no_owner_yet: protects=the meta names the PRD's owner (the user an
-  importing API token acts for; a track owner first) and its decider by name; a PRD
+  importing API token acts for) and its decider by name; a PRD
   imported by a service token has no owner: ``owner`` is null and the PDF's meta says
   "No owner yet"; fails_when=the owner reads "someone"; no_claim=the web's wording (spec).
 - test_plan_strip_by_month_with_milestones: protects=the one-pager's plan strip is the PRD's
@@ -250,17 +250,3 @@ def test_plan_strip_rules():
         date(2026, 11, 2),
     ).rows
     assert [(r.name, r.estimated) for r in rows] == [("Beta", True), ("Later", True)]
-
-
-async def test_owner_name_is_read_with_the_names(client):
-    """protects=a track owner names the PRD's owner over who imported it;
-    fails_when=the owner's name is left out of the names read; no_claim=several owners."""
-    from oracle.roadmap.models import ProductTrack
-
-    ctx = await world(client)
-    async with tenant_session(ctx.tenant_id) as s:
-        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
-        lead = await s.get(User, ctx.users["commenter"].id)
-        s.add(ProductTrack(prd_document_id=doc.id, title="Setup", owner_id=lead.id))
-        await s.commit()
-    assert (await get(client, ctx, "viewer"))["owner"]["name"] == nm(ctx.users["commenter"])

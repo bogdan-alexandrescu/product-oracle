@@ -2,7 +2,9 @@
 span BY MONTH with its MILESTONES, today's line and a marker for commitments past the edge;
 one row per milestone ("M1 · 12 items"), the items with no milestone summed in one row, no
 per-item bars. The one-pager and its PDF draw it from :func:`strip`; Simple's Home draws the
-same strip from the roadmap read (web/lib/simple-home.ts ``planByMonth``, the same rules).
+same strip from the roadmap read (web/lib/simple-home.ts ``planByMonth``, the same rules;
+both run the cases in api/tests/fixtures/plan_strip_cases.json, so a change to one side
+fails until the other follows).
 
 The span: from the month of the earliest item start (or milestone date) to the month of the
 latest milestone date (with no dated milestone, the latest committed end; with none
