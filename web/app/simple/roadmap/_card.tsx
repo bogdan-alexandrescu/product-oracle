@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
 import { setPanelOpen } from "@/components/hop/open-state";
+import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
+import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -197,7 +199,51 @@ const OP_WORDS: Record<string, string> = {
   accept_risk: "Accept a risk",
   shift_dependents: "Move the dependents",
   move_dependency: "Move the dependency",
+  add_key_date: "Add a key date",
+  edit_key_date: "Change a key date",
+  remove_key_date: "Remove a key date",
+  add_item: "Add an item",
+  merge_item: "Merge a duplicate",
+  keep_both: "Keep both",
+  confirm_item: "Confirm the draft",
 };
+
+/** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
+ * (merge_item, keep_both through the change engine: editors apply, others propose). */
+export function LooksLike({ item, act, canChange }: { item: Item; act: Act; canChange: boolean }) {
+  if (!item.looks_like.length) return null;
+  return (
+    <div className="mt-2 space-y-1.5" data-testid="looks-like">
+      {item.looks_like.map((m) => (
+        <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-warn-bg px-2 py-1.5 text-sm text-warn" data-testid="looks-like-match">
+          <span className="min-w-0 flex-1">
+            Looks like <b>{m.code}</b> {m.title}
+          </span>
+          {canChange && (
+            <Button
+              className="!h-7"
+              onClick={() =>
+                void act(`Merged '${item.title}' into ${m.code}`, {
+                  op: "merge_item",
+                  target: m.kind === "item" ? { item_id: item.id, into_id: m.id } : { item_id: item.id, feature_id: m.id },
+                  before: {},
+                  after: {},
+                })
+              }
+            >
+              Merge
+            </Button>
+          )}
+        </div>
+      ))}
+      {canChange && (
+        <Button className="!h-7" variant="ghost" onClick={() => void act(`Kept '${item.title}' and ${item.looks_like.map((m) => m.code).join(", ")}`, { op: "keep_both", target: { item_id: item.id }, before: { kept_both: false }, after: {} })}>
+          Keep both
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export const opWords = (op: string): string => OP_WORDS[op] ?? op.replace(/_/g, " ");
 
@@ -205,10 +251,10 @@ export const opWords = (op: string): string => OP_WORDS[op] ?? op.replace(/_/g, 
  * a flow thumbnail. */
 export const featureProposal = (c: Change, items: Map<string, Item>): boolean => !!items.get(String(c.target.item_id))?.draft;
 
-/** A proposal's flow thumbnail (S10 draws the flows): opens the flow by widening the card. */
-function FlowThumb({ onOpen }: { onOpen: () => void }) {
+/** A flow thumbnail (S10 draws the flows): opens the flow by widening the card in place. */
+function FlowThumb({ onOpen, label = "Open the flow", testId = "flow-thumb" }: { onOpen: () => void; label?: string; testId?: string }) {
   return (
-    <button type="button" data-testid="flow-thumb" aria-label="Open the flow" onClick={onOpen} className="flex h-9 w-12 flex-none items-center justify-center rounded border border-line bg-surface2">
+    <button type="button" data-testid={testId} aria-label={label} onClick={onOpen} className="flex h-9 w-12 flex-none items-center justify-center rounded border border-line bg-surface2">
       <svg width="34" height="20" viewBox="0 0 34 20" aria-hidden>
         <rect x="1" y="6" width="8" height="8" rx="2" fill="none" stroke="var(--line-strong)" />
         <rect x="13" y="6" width="8" height="8" rx="2" fill="none" stroke="var(--line-strong)" />
@@ -235,7 +281,10 @@ export function FloatingCard({
   onDecide,
   onClose,
   onHorizon,
+  near,
 }: {
+  /** Roadmap-plus: the key dates the item ends within 2 weeks of, in words (none: no line). */
+  near?: string | null;
   item: Item;
   items: Map<string, Item>;
   proposals: Change[];
@@ -248,7 +297,8 @@ export function FloatingCard({
   /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
   onHorizon?: (h: Horizon) => void;
 }) {
-  const [wide, setWide] = useState<Change | null>(null);
+  // The widened card's visual: a draft's own flow ("item", S7) or a proposal's or the item's feature visual (S10).
+  const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useScreenSubject({ kind: "roadmap_item", subject: { item_id: item.id, key: item.key } }, item.title);
   useEffect(() => {
@@ -279,11 +329,43 @@ export function FloatingCard({
       className={`${place} max-w-[calc(100vw-16px)] overflow-y-auto border border-line bg-surface p-4 shadow-tip outline-none`}
     >
       <div className="flex items-start gap-2">
-        <h2 className="flex-1 text-lg leading-snug font-semibold">{item.title}</h2>
+        <h2 className="flex-1 text-lg leading-snug font-semibold">
+          {item.title}
+          {item.draft && item.status !== "merged" && (
+            <span className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na" data-testid="draft-tag">
+              Draft
+            </span>
+          )}
+        </h2>
         <button type="button" aria-label="Close" onClick={onClose} className="h-7 w-7 flex-none rounded text-text2 hover:bg-surface2">
           ×
         </button>
       </div>
+      {item.drafting && (
+        <p className="mt-1 text-sm text-accent-ink" role="status" data-testid="item-drafting">
+          Oracle is drafting…
+        </p>
+      )}
+      {item.merged_into && (
+        <p className="mt-1 text-sm text-text2" data-testid="item-merged">
+          Merged into {item.merged_into.code} {item.merged_into.title}
+        </p>
+      )}
+      <LooksLike item={item} act={act} canChange={canChange} />
+      {item.draft && item.status !== "merged" && (
+        <div className="mt-2 flex items-center gap-2 text-sm">
+          <span className="text-text2">Flow</span>
+          {item.flow ? (
+            <button type="button" data-testid="item-flow-thumb" aria-label="Open the flow" onClick={() => setWide(wide === "item" ? null : "item")} className="rounded-md border border-line bg-surface p-1">
+              <FlowPicture flow={item.flow} />
+            </button>
+          ) : (
+            <span className="rounded-md border border-dashed border-line px-2 py-0.5 text-text2" data-testid="item-flow-none">
+              No flow yet
+            </span>
+          )}
+        </div>
+      )}
       <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[15px]">
           <dt className="text-text2">Outcome</dt>
@@ -292,6 +374,12 @@ export function FloatingCard({
           <dd data-testid="card-owner">{item.owner?.name ?? <span className="text-text2">No owner yet</span>}</dd>
           <dt className="text-text2">Dates</dt>
           <dd data-testid="card-dates">{dates}</dd>
+          {near && (
+            <>
+              <dt className="text-text2">Near</dt>
+              <dd data-testid="card-near">{near}</dd>
+            </>
+          )}
           {onHorizon && (
             <>
               <dt className="self-center text-text2">Horizon</dt>
@@ -355,13 +443,36 @@ export function FloatingCard({
               <p className="text-sm text-text2">None open.</p>
             )}
           </section>
+          {!item.draft && (<section className="mt-3">
+            <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Flow</h3>
+            <div className="mt-1 flex items-center gap-2 text-[15px]" data-testid="card-flow">
+              <FlowThumb label="Open the item's flow" testId="item-flow-thumb" onOpen={() => setWide(wide !== "item" && wide?.id === item.id ? null : { kind: "feature", id: item.id })} />
+              <span className="min-w-0 flex-1">{item.flow ? item.flow.title : <span className="text-text2">No flow yet</span>}</span>
+            </div>
+          </section>)}
+          {item.decided_in.length > 0 && (
+            <section className="mt-3">
+              <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Decided</h3>
+              <ul className="mt-1 text-[15px]" data-testid="card-decided-in">
+                {item.decided_in.map((d) => (
+                  <li key={d.id}>
+                    Decided in{" "}
+                    <Link href={`/simple/decisions#d-${d.number}`} className="text-accent-ink hover:underline">
+                      D-{d.number}
+                    </Link>{" "}
+                    {d.title}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <section className="mt-3">
             <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Proposals on it</h3>
             {proposals.length ? (
               <ul className="mt-1 space-y-2" data-testid="card-proposals">
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2 text-[15px]">
-                    {featureProposal(c, items) && <FlowThumb onOpen={() => setWide(wide?.id === c.id ? null : c)} />}
+                    {featureProposal(c, items) && <FlowThumb onOpen={() => setWide(wide !== "item" && wide?.id === c.id ? null : { kind: "change", id: c.id })} />}
                     <span className="min-w-0 flex-1">
                       {opWords(c.op)} · <span className="text-text2">{c.by_name}</span>
                     </span>
@@ -382,14 +493,24 @@ export function FloatingCard({
           </section>
         </div>
         {wide && (
-          <section data-testid="flow-view" className={`mt-3 rounded-lg border border-dashed border-line-strong p-4 ${phone ? "" : "col-span-2"}`}>
+          <section data-testid="flow-view" className={`mt-3 ${phone ? "" : "col-span-2"}`}>
             <h3 className="font-semibold">The flow and the screen it touches</h3>
-            <p className="mt-1 text-sm text-text2" data-testid="flow-empty">
-              No flow yet: Oracle has not drawn a user flow or a wireframe for this proposal.
-            </p>
-            <Button variant="ghost" className="mt-2" onClick={() => setWide(null)}>
-              Close the flow
-            </Button>
+            {wide === "item" ? (
+              <>
+              {item.flow ? (
+                <FlowDetail flow={item.flow} />
+              ) : (
+                <p className="mt-1 text-sm text-text2" data-testid="flow-empty">
+                  No flow yet: Oracle has not drawn a user flow or a wireframe for this proposal.
+                </p>
+              )}
+              <Button variant="ghost" className="mt-2" onClick={() => setWide(null)}>
+                Close the flow
+              </Button>
+              </>
+            ) : (
+              <FlowPanel key={`${wide.kind}-${wide.id}`} subject={wide} onClose={() => setWide(null)} />
+            )}
           </section>
         )}
       </div>

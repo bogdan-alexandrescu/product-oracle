@@ -141,11 +141,15 @@ DECIDED_PER_ITEM = frozenset(
 # writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
-# Simple (#723): a date suggestion's dismissal and a proposal are decided by an owner, the
-# roadmap's decider or (with none) the item's track owner when an approver or owner (D-a);
-# accepting or editing a suggestion is a change (others' a proposal, D-b); a change is
-# undone by its author alone; the changes' list shows owners all, others those they made,
-# decide or review; a submitted draft is withdrawn by its author or the decider.
+# Simple (#723): a goal's suggestions are asked for and accepted by any commenter (others' as
+# proposals) and rejected (final) by an approver (S7); a chat thread, its cards and the meeting's
+# change mode, a visual's comments and revisions, and Remind are decided by the item: its owner or
+# attendees, the card's author, the subject's editors, the PRD's owners and decider (S9, S10,
+# Remind). A date suggestion's dismissal and a proposal are decided by an owner, the roadmap's
+# decider or (with none) the item's track owner when an approver or owner (D-a); accepting or
+# editing a suggestion is a change (others' a proposal, D-b); a change is undone by its author
+# alone; the changes' list shows owners all, others those they made, decide or review; a submitted
+# draft is withdrawn by its author or the decider.
 # A share link (O5) is an owner's to make for the Public audience and an approver's for the
 # others; its creator's or an owner's to extend, move or give a new passcode; and its
 # creator's or an owner's to revoke when Public (any approver's otherwise).
@@ -155,6 +159,7 @@ DECIDED_PER_ITEM = frozenset(
 # missing here.
 PER_ITEM: dict[str, Role | None] = {
     "accept_blocker_risk": "owner",
+    "accept_goal_suggestion": "commenter",
     "accept_intake_proposal": "approver",
     "accept_scope_enhancement": "approver",
     "accept_simple_change": "owner",
@@ -164,7 +169,9 @@ PER_ITEM: dict[str, Role | None] = {
     "answer_question": "owner",
     "answer_with_discussion_change": "approver",
     "apply_discussion_change": "approver",
+    "apply_simple_chat_card": None,
     "approve_feasibility_scope": "owner",
+    "approve_in_simple_meeting": "owner",
     # Simple S3b: an owner, else the roadmap's decider (with none, its owner); required
     # reviewers approve too; the author or the decider resumes (oracle.simple.drafts).
     "approve_simple_draft": "owner",
@@ -174,6 +181,7 @@ PER_ITEM: dict[str, Role | None] = {
     "cancel_again_run": "owner",
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
+    "comment_simple_visual": None,
     # A Fireflies endpoint is an owner's to set (on connect, or on its own route); below
     # that, connecting without one (the input decides).
     "connect_with_token": "owner",
@@ -195,12 +203,15 @@ PER_ITEM: dict[str, Role | None] = {
     "delete_checkpoint_action": "owner",
     "delete_discussion_message": None,
     "delete_scope_item": "approver",
+    "discard_simple_chat_card": None,
     "dismiss_date_suggestion": "owner",
     "dismiss_discussion_change": "approver",
     "dismiss_overrun_run": "owner",
     # H10: a request's replies are its filer's, an approver's or an owner's.
     "draft_request_replies": "approver",
     "edit_document_section": "approver",
+    "edit_simple_meeting_minutes": "owner",
+    "end_simple_meeting": "owner",
     "enhance_scope_requirement": "approver",
     # #482: an approver, or the document's decider (per item, oracle.trash.router).
     "estimate_regeneration": "approver",
@@ -217,6 +228,8 @@ PER_ITEM: dict[str, Role | None] = {
     "get_company_source_coverage": "owner",
     "get_deck": "approver",
     "get_next_question_batch": "approver",
+    "get_simple_chat": None,
+    "get_simple_meeting_chat": None,
     "keep_request_no": None,
     # #618 review: a track alert's audience keeps and reopens it (oracle.roadmap.alerts
     # in_audience): the track's owner, else every owner, and the leads for slips.
@@ -231,14 +244,19 @@ PER_ITEM: dict[str, Role | None] = {
     "open_request_reply": None,
     "patch_interview": "approver",
     "patch_scope_item": "approver",
+    "post_simple_chat": None,
+    "post_simple_meeting_chat": None,
     "propose_discussion_change": "commenter",
     "reassign_decision": "owner",
     "record_discussion_change": "approver",
     "record_metric_value": "approver",
     "redraft_interview_guide": "approver",
     "regenerate_spec": "owner",
+    "reject_goal_suggestion": "approver",
+    "remind_simple_one_pager_reviewers": None,
     "remove_evidence": "approver",
     "reopen_track_alert": None,
+    "request_simple_visual": None,
     "research_discussion_message": "approver",
     "resolve_discussion_change": "approver",
     "resume_simple_draft": None,
@@ -249,28 +267,34 @@ PER_ITEM: dict[str, Role | None] = {
     "retry_run": "owner",
     "review_decision": None,
     "review_design_artifact": "owner",
+    "revise_simple_visual": None,
     "revoke_interview": "approver",
     "revoke_share_link": "owner",
     "rotate_share_link_passcode": "owner",
+    "send_simple_meeting_minutes": "owner",
     "set_blocker_status": "owner",
     "set_checkpoint_note": "owner",
     "set_connection_endpoint": "owner",
     "set_document_visibility": "owner",
+    "set_simple_meeting_chat_mode": None,
     "skip_request_reply": "approver",
     "stage_checkpoint_action": "owner",
     "stage_discussion_change": "approver",
     "start_draft": "owner",
     "start_intake_run": "approver",
     "start_regeneration": "approver",
+    "start_simple_meeting": "owner",
     "stop_cancelling_run": "owner",
     "stop_slack_mirror": "approver",
     "submit_simple_draft": "owner",
     "suggest_discussion_change": None,
+    "suggest_goal_features": "commenter",
     "summarize_discussion": None,
     "take_team_turn": None,
     "tick": "owner",
     "undo_oracle_action": "owner",
     "undo_simple_change": None,
+    "undo_simple_chat_card": None,
     "update_blocker": "owner",
     "update_decision": None,
     "update_discussion": None,

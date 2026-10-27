@@ -108,10 +108,10 @@ for (const [where, use] of [
        * Card simple-waterfall-draws: protects = the waterfall draws each item as its four
        * phases (discover · build · beta · launch) from the API; a phase a milestone or
        * validation gate dates is solid, the others hatched (estimated), an undated item's
-       * phases all hatched, with the phases' key; dates do not move by dragging here (a
-       * click opens the card); fails_when = a phase is missing, a dated phase draws hatched
-       * or an estimated one solid, or a drag writes a change; no_claim = the split's
-       * arithmetic (api/tests for oracle.simple.dates.phases).
+       * phases all hatched, with the phases' key; a click (no drag) opens the card and moves
+       * nothing (the drag itself: simple-roadmap-plus.spec.ts); fails_when = a phase is
+       * missing, a dated phase draws hatched or an estimated one solid, or a click writes a
+       * change; no_claim = the split's arithmetic (api/tests for oracle.simple.dates.phases).
        */
       test("the waterfall phases", async ({ page }) => {
         await open(page, "waterfall");

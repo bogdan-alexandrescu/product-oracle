@@ -2,15 +2,20 @@
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
+import { lastPreview, PREVIEW_EVENT, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
+
 import {
   addDays,
   barKind,
   barSpan,
   broken,
+  closedItem,
   daysBetween,
   liveBreaks,
   ms,
   quarters,
+  rephase,
+  quarterValue,
   scale,
   shortDay,
   type Format,
@@ -18,6 +23,7 @@ import {
   type Item,
   type Roadmap,
   type Scale,
+  whereAttr,
 } from "./_lib";
 
 /** One row of the chart: a group's heading (its metric line) or an item. */
@@ -42,8 +48,8 @@ export function layout(data: Roadmap, compact: boolean): Layout {
   const below: Item[] = [];
   for (const g of data.groups) {
     const items = g.item_ids.map((id) => byId.get(id)).filter((i): i is Item => !!i);
-    const live = items.filter((i) => i.status !== "cut");
-    below.push(...items.filter((i) => i.status === "cut"));
+    const live = items.filter((i) => !closedItem(i));
+    below.push(...items.filter((i) => closedItem(i)));
     if (!live.length) continue;
     const metric = live.find((i) => i.goal?.metric)?.goal?.metric ?? null;
     rows.push({ kind: "group", key: g.key, title: g.title, metric: data.group === "goal" ? metric : null });
@@ -119,6 +125,11 @@ export interface ChartProps {
   /** HTML drawn over the chart (callouts, popovers, the card), in chart pixels. */
   overlay?: (l: Layout, sc: Scale) => ReactNode;
   chartRef?: (el: SVGSVGElement | null) => void;
+  /** S7: quick add's drop targets (the quarter columns and the goal headers). */
+  dropTargets?: boolean;
+  /** S7: a goal header's suggested-features button (group by goal): the count of open suggestions by goal id. */
+  goalSuggestions?: Map<string, number>;
+  onGoal?: (goalId: string, title: string) => void;
 }
 
 type Drag = {
@@ -145,7 +156,7 @@ declare global {
   }
 }
 
-export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef }: ChartProps) {
+export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, goalSuggestions, onGoal }: ChartProps) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(900);
   useEffect(() => {
@@ -181,6 +192,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     const rect = g.querySelector<SVGRectElement>("rect[data-body]");
     rect?.setAttribute("x", String(x));
     rect?.setAttribute("width", String(w));
+    const it = items.get(d.id);
+    if (format === "waterfall" && it) drawPhases(g, rephase(it, s, e), sc, x, w);
     g.dataset.dragStart = s;
     g.dataset.dragEnd = e;
     const breaks = liveBreaks(items, d.id, s, e);
@@ -218,13 +231,14 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     const [start, end] = moved[item.id] ?? barSpan(item);
     const r = (e.currentTarget.querySelector("rect[data-body]") as SVGRectElement).getBoundingClientRect();
     const edge = Math.min(10, r.width / 4);
-    const mode = !canDrag || item.status === "cut" ? "move" : e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
+    // The waterfall moves the whole item (its phases follow); the timeline and Gantt also stretch an end.
+    const mode = !canDrag || closedItem(item) || format === "waterfall" ? "move" : e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
     const touch = e.pointerType === "touch";
     // React clears currentTarget once the handler returns: keep the bar for the timeout.
     const target = e.currentTarget;
     const d: Drag = { id: item.id, mode, x0: e.clientX, start, end, dx: 0, moved: false, frame: null, pointer: e.pointerId, touch, armed: !touch, timer: null };
     drag.current = d;
-    if (touch && canDrag && item.status !== "cut") {
+    if (touch && canDrag && !closedItem(item)) {
       // Phone: a long press picks the bar up; moving first scrolls.
       d.timer = window.setTimeout(() => {
         begin(d);
@@ -245,7 +259,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       }
       return;
     }
-    if (!canDrag || items.get(d.id)?.status === "cut") return;
+    if (!canDrag || (items.get(d.id) && closedItem(items.get(d.id)!))) return;
     if (!d.moved && Math.abs(dx) < 4) return;
     e.preventDefault();
     if (!d.moved) {
@@ -282,8 +296,11 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     else if (g) {
       // Back where it was: redraw it from its dates.
       const rect = g.querySelector<SVGRectElement>("rect[data-body]");
-      rect?.setAttribute("x", String(sc.x(d.start)));
-      rect?.setAttribute("width", String(Math.max(sc.px, sc.x(d.end) - sc.x(d.start) + sc.px)));
+      const x0 = sc.x(d.start);
+      const w0 = Math.max(sc.px, sc.x(d.end) - x0 + sc.px);
+      rect?.setAttribute("x", String(x0));
+      rect?.setAttribute("width", String(w0));
+      if (format === "waterfall") drawPhases(g, moved[item.id] ? rephase(item, d.start, d.end) : item.phases, sc, x0, w0);
     }
   };
 
@@ -292,8 +309,10 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   // week; Shift+arrow moves only its end. Each press builds on the last one's local move;
   // the burst is one change (onKeyMove's caller sends it on a pause or blur).
   const keyMove = (it: Item, dir: 1 | -1, resize: boolean) => {
-    if (!canDrag || it.status === "cut") return;
+    if (!canDrag || closedItem(it)) return;
     const [s, e] = moved[it.id] ?? barSpan(it);
+    // The waterfall moves the whole item: Shift+arrow moves it too.
+    if (format === "waterfall") resize = false;
     const n = dir * (format === "gantt" && unit === "day" ? 1 : 7);
     const end = addDays(e, n);
     if (resize && end < s) return;
@@ -329,14 +348,30 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             <div
               key={`g-${r.key}-${n}`}
               data-testid={r.below ? "below-the-line" : "chart-group"}
+              data-add-where={dropTargets && data.group === "goal" && !r.below && r.key !== "none" ? whereAttr("goal", r.key) : undefined}
+              data-add-label={r.title}
               style={{ height: l.rowH }}
-              className={`flex flex-col justify-center truncate bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
+              className={`flex items-center gap-1 truncate bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
             >
-              <span className="truncate text-[15px] leading-tight font-semibold">{r.title}</span>
-              {r.metric && (
-                <span className="truncate text-xs text-text2" data-testid="group-metric">
-                  {r.metric}
-                </span>
+              <span className="flex min-w-0 flex-1 flex-col justify-center">
+                <span className="truncate text-[15px] leading-tight font-semibold">{r.title}</span>
+                {r.metric && (
+                  <span className="truncate text-xs text-text2" data-testid="group-metric">
+                    {r.metric}
+                  </span>
+                )}
+              </span>
+              {onGoal && data.group === "goal" && !r.below && r.key !== "none" && (
+                <button
+                  type="button"
+                  data-testid="goal-suggestions-open"
+                  aria-label={`Suggested features for ${r.title}`}
+                  title="Suggested features"
+                  onClick={() => onGoal(r.key, r.title)}
+                  className="flex h-6 flex-none items-center gap-0.5 rounded-full border border-accent-mid bg-surface px-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-soft"
+                >
+                  ✦<span className="tnum">{goalSuggestions?.get(r.key) ?? 0}</span>
+                </button>
               )}
             </div>
           ) : (
@@ -353,7 +388,12 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   #{r.place}
                 </span>
               )}
-              <span className={`truncate ${r.item.status === "cut" ? "text-text2 line-through" : ""}`}>{r.item.title}</span>
+              <span className={`truncate ${closedItem(r.item) ? "text-text2 line-through" : ""}`}>{r.item.title}</span>
+              {r.item.draft && !closedItem(r.item) && (
+                <span className="flex-none rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">
+                  Draft
+                </span>
+              )}
             </button>
           ),
         )}
@@ -398,7 +438,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               </marker>
             </defs>
             <rect x={0} y={0} width={chartW} height={l.height} fill="var(--surface)" />
-            <Axis ticks={ticks} sc={sc} height={l.height} format={format} />
+            <Axis ticks={ticks} sc={sc} height={l.height} format={format} drop={!!dropTargets && format !== "gantt"} />
             {l.rows.map((r, n) =>
               r.kind === "group" ? <rect key={`gb-${n}`} x={0} y={l.top + n * l.rowH} width={chartW} height={l.rowH} fill="var(--surface2)" /> : null,
             )}
@@ -412,10 +452,25 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   </text>
                 </g>
               ))}
+            {(data.key_dates ?? []).map((k) => {
+              const kx = sc.x(k.date) + sc.px / 2;
+              if (kx < 0 || kx > chartW) return null;
+              return (
+                <g key={k.id} data-testid="key-date-marker" data-name={k.name} data-date={k.date} data-draft={k.in_draft ? "true" : undefined} pointerEvents="none">
+                  <title>{`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`}</title>
+                  <line x1={kx} x2={kx} y1={14} y2={l.height} stroke="var(--accent-ink)" strokeWidth={1} opacity={0.7} strokeDasharray={k.in_draft ? "3 3" : undefined} />
+                  <rect x={kx - 5} y={3} width={10} height={10} transform={`rotate(45 ${kx} 8)`} fill={k.in_draft ? "var(--surface)" : "var(--accent-ink)"} stroke="var(--accent-ink)" />
+                  <text x={kx + 9} y={12} fontSize={11} fontWeight={600} fill="var(--accent-ink)" data-testid="key-date-label">
+                    {k.name}
+                  </text>
+                </g>
+              );
+            })}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
             {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} {...bars} /> : null))}
-            <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" />
-            <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600}>
+            <PreviewGhost l={l} sc={sc} items={items} />
+            <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" pointerEvents="none" />
+            <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600} pointerEvents="none">
               Today
             </text>
           </svg>
@@ -427,7 +482,28 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   );
 }
 
-function Axis({ ticks, sc, height, format }: { ticks: { day: string; label: string; major: boolean }[]; sc: Scale; height: number; format: Format }) {
+/** A phase's x and width inside its bar: a phase a gate dates past the item's end is drawn
+ * inside the bar (its title keeps the dates). */
+function phaseBox(p: Item["phases"][number], sc: Scale, x: number, w: number): [number, number] {
+  const px = Math.min(Math.max(sc.x(p.start), x), x + w - 1);
+  const right = Math.min(sc.x(p.end) + sc.px, x + w);
+  return [px, Math.max(1, right - px)];
+}
+
+/** Redraws a phased bar's phases by direct DOM writes (the drag paints without React). */
+function drawPhases(g: SVGGElement, phases: Item["phases"], sc: Scale, x: number, w: number) {
+  for (const p of phases) {
+    const r = g.querySelector<SVGRectElement>(`rect[data-phase="${p.key}"]`);
+    if (!r) continue;
+    const [px, pw] = phaseBox(p, sc, x, w);
+    r.setAttribute("x", String(px));
+    r.setAttribute("width", String(pw));
+    r.dataset.start = p.start;
+    r.dataset.end = p.end;
+  }
+}
+
+function Axis({ ticks, sc, height, format, drop }: { ticks: { day: string; label: string; major: boolean }[]; sc: Scale; height: number; format: Format; drop: boolean }) {
   return (
     <g data-testid="chart-axis">
       {ticks.map((t, n) => {
@@ -436,6 +512,7 @@ function Axis({ ticks, sc, height, format }: { ticks: { day: string; label: stri
         return (
           <g key={t.day}>
             {format !== "gantt" && n % 2 === 1 && <rect x={x} y={0} width={next - x} height={height} fill="var(--bg)" opacity={0.5} />}
+            {drop && <rect data-testid="quarter-drop" data-add-where={whereAttr("quarter", quarterValue(t.day))} data-add-label={t.label} x={x} y={0} width={next - x} height={height} fill="transparent" />}
             <line x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={t.major ? 1 : 0.5} />
             {(format !== "gantt" || t.major || sc.px >= 20) && (
               <text x={x + 4} y={24} fontSize={format !== "gantt" ? 13 : 11} fontWeight={format !== "gantt" ? 600 : 400} fill="var(--text2)" data-testid="axis-tick">
@@ -514,21 +591,23 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
   const x = sc.x(start);
   const w = Math.max(sc.px, sc.x(end) - x + sc.px);
   const pad = Math.round(h * 0.2);
-  const fill = item.status === "cut" ? "var(--na-bg)" : kind === "estimated" ? "url(#simple-hatch)" : kind === "draft" ? "var(--surface)" : "var(--accent)";
+  const fill = closedItem(item) ? "var(--na-bg)" : kind === "estimated" ? "url(#simple-hatch)" : kind === "draft" ? "var(--surface)" : "var(--accent)";
   const stroke = red ? "var(--crit)" : amber ? "var(--warn)" : kind === "dated" ? "var(--accent-ink)" : "var(--accent)";
   const s = item.suggestion;
   // The suggestion's handle sits left of the bar (a broken link's callout is on its right).
   const left = Math.min(x, s ? sc.x(s.start_date) : x) - 14;
   const mark = left >= 10 ? left : Math.max(sc.x(s?.end_date ?? end), x + w) + sc.px + 12;
-  const phaseWords = phased ? `, ${item.phases.map((p) => `${p.key} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${canDrag && item.status !== "cut" ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
+  // A moved bar's phases as the API will work them out again (dated gates stay).
+  const phases = phased && span ? rephase(item, start, end) : item.phases;
+  const phaseWords = phased ? `, ${phases.map((p) => `${p.key} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
+  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${canDrag && !closedItem(item) ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
   return (
     <g>
       <g
         data-testid="bar"
         data-bar-id={item.id}
         data-item={item.key}
-        data-kind={item.status === "cut" ? "cut" : kind}
+        data-kind={closedItem(item) ? "cut" : kind}
         data-broken={red ? "true" : amber ? "amber" : "false"}
         data-start={start}
         data-end={end}
@@ -537,7 +616,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
         role="button"
         tabIndex={0}
         aria-label={label}
-        className={`${canDrag && item.status !== "cut" ? "cursor-grab" : "cursor-pointer"} data-[picked=true]:[filter:drop-shadow(0_3px_6px_rgb(0_0_0/0.35))]`}
+        className={`${canDrag && !closedItem(item) ? "cursor-grab" : "cursor-pointer"} data-[picked=true]:[filter:drop-shadow(0_3px_6px_rgb(0_0_0/0.35))]`}
         style={{ touchAction: canDrag ? "none" : "auto" }}
         onPointerDown={(e) => onDown(e, item)}
         onKeyDown={(e) => {
@@ -552,11 +631,9 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
         onBlur={() => onKeyEnd(item)}
       >
         {phased &&
-          item.phases.map((p) => {
+          phases.map((p) => {
             const tone = PHASES.find((t) => t.key === p.key)!;
-            // A phase a gate dates past the item's end is drawn inside the bar (its title keeps the dates).
-            const px = Math.min(Math.max(sc.x(p.start), x), x + w - 1);
-            const right = Math.min(sc.x(p.end) + sc.px, x + w);
+            const [px, pw] = phaseBox(p, sc, x, w);
             return (
               <rect
                 key={p.key}
@@ -567,10 +644,10 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
                 data-end={p.end}
                 x={px}
                 y={y + pad}
-                width={Math.max(1, right - px)}
+                width={pw}
                 height={h - 2 * pad}
                 fill={p.estimated ? `url(#simple-hatch-${p.key})` : tone.ink}
-                opacity={item.status === "cut" ? 0.4 : 1}
+                opacity={closedItem(item) ? 0.4 : 1}
               >
                 <title>{`${tone.label}: ${shortDay(p.start)} – ${shortDay(p.end)}${p.estimated ? ", estimated" : ""}`}</title>
               </rect>
@@ -642,3 +719,56 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
     </g>
   );
 });
+
+/** S9: a chat card's Preview, ghosted on its bar ("simple:preview"): new dates, horizon, title, milestone, or a cut strike. */
+function PreviewGhost({ l, sc, items }: { l: Layout; sc: Scale; items: Map<string, Item> }) {
+  const [preview, setPreview] = useState<ChatPreview>(() => lastPreview()?.preview ?? null);
+  useEffect(() => {
+    const on = (e: Event) => setPreview((e as CustomEvent<PreviewDetail>).detail?.preview ?? null);
+    window.addEventListener(PREVIEW_EVENT, on);
+    return () => window.removeEventListener(PREVIEW_EVENT, on);
+  }, []);
+  if (!preview) return null;
+  const item = items.get(preview.item_id);
+  const y = l.y.get(preview.item_id);
+  if (!item || y === undefined) return null;
+  const [start, end] = barSpan(item);
+  const pad = Math.round(l.rowH * 0.2);
+  const box = (a: string, b: string) => ({ x: sc.x(a), w: Math.max(sc.px, sc.x(b) - sc.x(a) + sc.px) });
+  const cur = box(start, end);
+  const common = { "data-testid": "preview-ghost", "data-kind": preview.kind, pointerEvents: "none" as const };
+  if (preview.kind === "dates") {
+    const b = box(preview.start_date, preview.end_date);
+    return (
+      <g {...common} data-start={preview.start_date} data-end={preview.end_date}>
+        <rect x={b.x} y={y + pad} width={b.w} height={l.rowH - 2 * pad} rx={4} fill="var(--accent)" opacity={0.35} stroke="var(--accent-ink)" strokeDasharray="4 3" />
+      </g>
+    );
+  }
+  if (preview.kind === "cut") {
+    return (
+      <g {...common}>
+        <line x1={cur.x} x2={cur.x + cur.w} y1={y + l.rowH / 2} y2={y + l.rowH / 2} stroke="var(--crit)" strokeWidth={3} />
+      </g>
+    );
+  }
+  if (preview.kind === "milestone") {
+    return (
+      <g {...common} transform={`translate(${sc.x(preview.date)}, ${y + l.rowH / 2})`}>
+        <rect x={-6} y={-6} width={12} height={12} transform="rotate(45)" fill="var(--warn)" opacity={0.5} stroke="var(--warn)" strokeDasharray="3 2" />
+        <text x={10} y={4} fontSize={11} fill="var(--text2)">
+          {preview.name}
+        </text>
+      </g>
+    );
+  }
+  const words = preview.kind === "title" ? preview.title : `Moves to ${preview.horizon[0].toUpperCase()}${preview.horizon.slice(1)}`;
+  return (
+    <g {...common}>
+      <rect x={cur.x} y={y + pad} width={cur.w} height={l.rowH - 2 * pad} rx={4} fill="none" stroke="var(--accent-ink)" strokeDasharray="4 3" />
+      <text x={cur.x + cur.w + 8} y={y + l.rowH / 2 + 4} fontSize={12} fill="var(--accent-ink)" fontWeight={600}>
+        {words}
+      </text>
+    </g>
+  );
+}

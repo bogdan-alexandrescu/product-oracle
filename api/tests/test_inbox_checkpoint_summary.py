@@ -51,8 +51,8 @@ from tests.test_roadmap_reasons import SECOND, roadmap_items_check
 # about 170 when each item's trace is read on its own; plus the approved product strategy
 # once for every checkpoint's drift reasons (H4 §5); Simple's proposals and decisions on
 # them one (#723 S3a); the versions from Simple drafts waiting for a required reviewer one
-# (#723 S3b).
-MAX_INBOX_READS = 74
+# (#723 S3b); the minutes of Simple's review meetings one (#723 S8).
+MAX_INBOX_READS = 75
 # The timing of that call: a warm-up, then enough samples that the p95 is not one outlier.
 WARM_UP = 3
 SAMPLES = 40

@@ -60,6 +60,7 @@ from oracle.llm.transports import (
 )
 from oracle.requests.models import ProductRequest
 from oracle.runs.scope_models import PrdScope
+from oracle.simple.models import SimpleVisual
 from oracle.tenancy import tenant_session, unscoped_session
 from oracle.v2.models import ProductIntake
 
@@ -173,6 +174,7 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
                     LlmJob.interview_id,
                     LlmJob.scope_id,
                     LlmJob.request_id,
+                    LlmJob.visual_id,
                 )
                 .where(LlmJob.status == "queued")
                 .order_by(LlmJob.created_at, LlmJob.id)
@@ -181,7 +183,8 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
         ).all()
         busy: set[uuid.UUID] = set()
         for row in candidates:
-            job_id, document_id, intake_id, decision_id, interview_id, scope_id, request_id = row
+            (job_id, document_id, intake_id, decision_id, interview_id, scope_id, request_id,
+             visual_id) = row  # fmt: skip
             # A document's jobs run one at a time; so do an intake's, a decision's, an
             # interview's and a scope's (they have no document).
             if document_id is not None:
@@ -195,9 +198,12 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
             elif scope_id is not None:
                 # C7: a scope's enhancements, under its prd_scopes row's lock.
                 owner, model, column = scope_id, PrdScope, LlmJob.scope_id
-            else:
+            elif request_id is not None:
                 # H10: a declined request's why-not replies.
                 owner, model, column = request_id, ProductRequest, LlmJob.request_id
+            else:
+                # Simple S10: a proposal's visual, under its simple_visuals row's lock.
+                owner, model, column = visual_id, SimpleVisual, LlmJob.visual_id
             if owner in busy:
                 continue
             # The owner's row lock serialises claims of its jobs across workers.

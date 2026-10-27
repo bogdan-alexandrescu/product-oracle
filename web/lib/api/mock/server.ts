@@ -153,7 +153,10 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { routeOnePager, seedOnePager, type OnePagerDb } from "./simple-one-pager";
+import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
+import { routeSimpleChat, seedSimpleChat, type ChatDb } from "./simple-chat";
 import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -263,6 +266,12 @@ export interface Db {
   simple_roadmap?: SimpleDb;
   /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
   simple_one_pager?: OnePagerDb;
+  /** Simple S10 (#723): proposals' visuals, their versions and comments (./simple-visuals.ts). */
+  simple_visuals?: VisualsDb;
+  /** Simple S9: change-by-chat threads, their cards and the invented meeting (./simple-chat.ts). */
+  simple_chat?: ChatDb;
+  /** Simple S8 (#723): review meetings, their decisions and minutes (./simple-meetings.ts). */
+  simple_meetings?: MeetingsDb;
   /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
   sharing_items?: RoadmapDb["items"];
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
@@ -530,6 +539,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4).
+ * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
+ * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /**
@@ -2545,6 +2556,12 @@ function load(): Db {
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
+              : scenario === "simple-chat"
+                ? () => {
+                    const db = seedSimpleHomeScenario();
+                    db.simple_chat = seedSimpleChat(db.members);
+                    return db;
+                  }
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
@@ -4338,6 +4355,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       if (Object.keys(pings).some((k) => !(k in SLACK_PINGS))) return json(422, { detail: "slack_pings" });
       if (patch.document_view) mine.document_view = patch.document_view;
       if (patch.experience) mine.experience = patch.experience;
+      if (patch.priorities_line != null) {
+        // Roadmap-plus: where Simple's priorities draw the line (preferences.PrioritiesLine).
+        if (!/^(now|(key_date|milestone):[0-9a-f-]{36}|date:\d{4}-\d{2}-\d{2})$/.test(patch.priorities_line)) return json(422, { detail: "priorities_line" });
+        mine.priorities_line = patch.priorities_line;
+      }
       if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
       if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
       for (const [k, v] of Object.entries(pings)) if (typeof v === "boolean") mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
@@ -4345,6 +4367,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     mine.setup_hidden ??= false; // saved before A1
     mine.welcome_dismissed ??= false; // saved before the A1 welcome
     mine.experience ??= null; // unset until the person switches (#723)
+    mine.priorities_line ??= null; // this quarter until they pick a line (roadmap-plus)
     if ((mine.experience as string) === "studio") mine.experience = "detailed"; // its name before #723's rename, as the API reads it
     return json(200, mine);
   }
@@ -4952,38 +4975,71 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   // Simple S5: one-pagers and their line edits (edit_line) through the change engine.
   db.simple_one_pager ??= seedOnePager();
-  const onePagerRes = await routeOnePager(
-    db.simple_one_pager,
-    {
-      id: me.id,
-      role: me.role,
-      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
-      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
-    },
+  // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
+  db.simple_visuals ??= seedVisuals();
+  db.simple_one_pager.visuals = db.simple_visuals;
+  const visualsRes = await routeSimpleVisuals(
+    db.simple_visuals,
+    { id: me.id, role: me.role, names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])) },
     req,
     p,
   );
-  if (onePagerRes) return onePagerRes;
+  if (visualsRes) return visualsRes;
   db.simple_roadmap ??= seedSimpleRoadmap();
+  db.simple_roadmap.visuals = db.simple_visuals;
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
-  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, req, p, q);
+  const simpleRoute = async (r: Request): Promise<Response | null> => {
+    // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
+    // served the same invented page under its own slug and title.
+    const asked = p[1] === "simple" && p[2] === "one-pagers" ? db.documents.find((d) => d.slug === p[3] && d.kind === "prd") : undefined;
+    const onePagerDb = asked && asked.slug !== db.simple_one_pager!.doc.slug ? { ...db.simple_one_pager!, doc: { id: asked.id, slug: asked.slug, title: asked.title } } : db.simple_one_pager!;
+    const onePagerRes = await routeOnePager(
+      onePagerDb,
+      {
+        id: me.id,
+        role: me.role,
+        owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+        names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+        // The PRD's required reviewer: the seeded approver.
+        reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
+        notify: (user_id, kind, title, data, version) =>
+          ensureReviewV2(db).notifications.push({
+            id: uuid(), user_id, kind, title, document_id: db.simple_one_pager!.doc.id, version_number: version, section_key: null,
+            comment_id: null, campaign_id: null, actor: `user:${me.id}`, data, read_at: null, created_at: now(),
+          }),
+      },
+      r,
+      p,
+    );
+    if (onePagerRes) return onePagerRes;
+    const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
+    if (simpleRes) return simpleRes;
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, r, p, q);
+  };
+  // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
+  // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
+  // A meeting's chat (/simple/meetings/{id}/chat...) is S9's, below: its invented meeting lives in its own db.
+  if (p[1] === "simple" && p[4] !== "chat" && (p[2] === "meetings" || p[2] === "decisions" || db.simple_meetings)) {
+    const meetingsCtx: MeetingsCtx = {
+      me: { id: me.id, role: me.role },
+      members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
+      roadmap: db.simple_roadmap,
+      onePager: db.simple_one_pager,
+    };
+    const meetingsDb = ensureMeetings(db, meetingsCtx);
+    const meetingsRes = (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
+    if (meetingsRes) return meetingsRes;
+  }
+  const simpleRes = await simpleRoute(req);
   if (simpleRes) return simpleRes;
-  const simpleChanges = await routeSimpleChanges(
-    db.simple_roadmap,
-    {
-      id: me.id,
-      role: me.role,
-      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
-      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
-      roles: simpleRoles,
-    },
-    req,
-    p,
-    q,
-  );
-  if (simpleChanges) return simpleChanges;
+  // Simple S9: change by chat and "Walk me through it", through the change engine above.
+  if (p[1] === "simple" && ["chat", "meetings", "walk"].includes(p[2] ?? "")) {
+    db.simple_chat ??= seedSimpleChat(db.members);
+    const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, req, p);
+    if (chatRes) return chatRes;
+  }
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
   const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
@@ -5069,6 +5125,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     Object.assign(inbox, simpleRows);
     inbox.total += simpleRows.simple_proposals.length;
     inbox.needs_me = (inbox.needs_me ?? 0) + simpleRows.simple_proposals.length;
+    // Simple S8: minutes sent to me as an attendee (shown, not counted).
+    inbox.simple_minutes = meetingInboxRows(db.simple_meetings, me.id, seenBefore);
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
     const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;
@@ -5569,7 +5627,9 @@ export async function mockFetch(req: Request): Promise<Response> {
     const res = await route(db, req);
     // I1: the runs' changes this call made, as webhook events (./webhooks.ts).
     if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
-    save(db);
+    // S9: a meeting chat's poll (every 2 s, in each attendee's tab) writes nothing, so it never
+    // saves a stale copy over another tab's line, card or sign-in.
+    if (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname))) save(db);
     return res;
   });
   queue = next.catch(() => undefined);

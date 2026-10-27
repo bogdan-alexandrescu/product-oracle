@@ -20,10 +20,16 @@ S3b, working drafts (oracle.simple.drafts):
 - ``POST /v1/simple/drafts/{id}/withdraw``: its author or the decider: a submitted draft
   returns to working (its changes kept); the version is marked withdrawn.
 - ``POST /v1/simple/drafts/{id}/resume``: its author or the decider: a new session on it.
+
+S5 one-pagers: ``GET /v1/simple/one-pagers/{doc}`` (and ``/pdf``); ``POST
+/v1/simple/one-pagers/{doc}/remind``: the PRD's owners and its decider nudge each reviewer
+its submitted draft waits on (an Inbox notification), at most once a day each.
 """
 
 import asyncio
+import logging
 import uuid
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -35,6 +41,7 @@ from oracle.simple.router import _people
 from oracle.simple.schemas import (
     ChangeStatus,
     OnePagerOut,
+    OnePagerRemindOut,
     SimpleChangeConflict,
     SimpleChangeIn,
     SimpleChangeOut,
@@ -45,6 +52,8 @@ from oracle.simple.schemas import (
     SimpleSessionIn,
     SimpleSessionOut,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/simple", tags=["simple"])
 
@@ -59,6 +68,34 @@ async def _run(db, coro):
     try:
         return await coro
     except (changes.ChangeError, drafts.DraftError) as e:
+        await db.rollback()
+        raise HTTPException(e.status, e.detail) from e
+
+
+@asynccontextmanager
+async def _one_commit(db):
+    """S8: a change made through a meeting and its meeting decision commit together. The
+    change engine commits as it goes; inside this, its commits only flush, and the route
+    commits once both are written (a failure between them rolls both back)."""
+    commit = db.commit
+    db.commit = db.flush
+    try:
+        yield
+    finally:
+        db.commit = commit
+    await db.commit()
+
+
+async def _in_meeting(
+    db, principal: Principal, out: SimpleChangeResult, session_id, verb: str | None = None
+) -> None:
+    """S8: a change made, decided or undone through a meeting's session is a meeting
+    decision (oracle.simple.meetings)."""
+    from oracle.simple import meetings
+
+    try:
+        await meetings.after_change(db, principal, out.change.id, session_id, verb)
+    except meetings.MeetingError as e:
         await db.rollback()
         raise HTTPException(e.status, e.detail) from e
 
@@ -102,8 +139,28 @@ async def create_simple_change(
     """Make a change to a roadmap item: applied for an owner and the roadmap's decider
     (with no decider, its owner), proposed to them for approvers and commenters. 409 when
     ``before`` no longer matches the stored values (nothing is written). Returns the
-    constraint flags of the touched items (a proposal's as if applied)."""
-    return await _run(db, changes.create(db, principal, body))
+    constraint flags of the touched items (a proposal's as if applied). A change that adds
+    or reshapes a feature or flow comes with its visual: Oracle drafts it (S10)."""
+    async with _one_commit(db):
+        out = await _run(db, changes.create(db, principal, body))
+        await _in_meeting(db, principal, out, body.session_id)
+    await _with_visual(db, principal, out.change)
+    return out
+
+
+async def _with_visual(db, principal, change) -> None:
+    """S10: queue the change's visual; a refusal never fails the change."""
+    try:
+        from oracle.simple import visuals
+    except ImportError:  # pragma: no cover - the visuals lane is absent
+        return
+    try:
+        async with db.begin_nested():
+            await visuals.on_change(db, principal, change)
+        await db.commit()
+    except Exception:  # the change is saved; its visual is best effort
+        log.warning("simple: queueing the visual of change %s failed", change.id, exc_info=True)
+        await db.rollback()
 
 
 @router.post("/changes/{change_id}/undo", response_model=SimpleChangeResult,
@@ -114,7 +171,10 @@ async def undo_simple_change(
 ) -> SimpleChangeResult:
     """Undo one of the caller's applied changes, in its open session, while the target
     still holds its ``after``: writes an ``undone`` row (history is kept)."""
-    return await _run(db, changes.undo(db, principal, change_id))
+    async with _one_commit(db):
+        out = await _run(db, changes.undo(db, principal, change_id))
+        await _in_meeting(db, principal, out, out.change.session_id, "Undone")
+    return out
 
 
 @router.post("/changes/{change_id}/accept", response_model=SimpleChangeResult,
@@ -123,8 +183,11 @@ async def accept_simple_change(
     change_id: uuid.UUID, principal: Commenter, db: TenantDB, body: SimpleDecisionIn | None = None
 ) -> SimpleChangeResult:
     """Accept a proposal: it applies, unless the item changed since (409 "outdated")."""
-    reason = body.reason if body else None
-    return await _run(db, changes.decide(db, principal, change_id, "accept", reason))
+    reason, sid = (body.reason, body.session_id) if body else (None, None)
+    async with _one_commit(db):
+        out = await _run(db, changes.decide(db, principal, change_id, "accept", reason, sid))
+        await _in_meeting(db, principal, out, sid, "Accepted")
+    return out
 
 
 @router.post("/changes/{change_id}/decline", response_model=SimpleChangeResult,
@@ -133,8 +196,11 @@ async def decline_simple_change(
     change_id: uuid.UUID, principal: Commenter, db: TenantDB, body: SimpleDecisionIn | None = None
 ) -> SimpleChangeResult:
     """Decline a proposal, with an optional reason: nothing changes."""
-    reason = body.reason if body else None
-    return await _run(db, changes.decide(db, principal, change_id, "decline", reason))
+    reason, sid = (body.reason, body.session_id) if body else (None, None)
+    async with _one_commit(db):
+        out = await _run(db, changes.decide(db, principal, change_id, "decline", reason, sid))
+        await _in_meeting(db, principal, out, sid, "Declined")
+    return out
 
 
 @router.get("/changes", response_model=list[SimpleChangeOut], name="list_simple_changes")
@@ -224,6 +290,17 @@ async def get_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> One
     notes (changes, proposals). Lines change through POST /v1/simple/changes
     (``edit_line``)."""
     return await _run(db, one_pager.read(db, principal, doc))
+
+
+@router.post("/one-pagers/{doc}/remind", response_model=OnePagerRemindOut,
+             name="remind_simple_one_pager_reviewers")  # fmt: skip
+async def remind_simple_one_pager_reviewers(
+    doc: str, principal: Commenter, db: TenantDB
+) -> OnePagerRemindOut:
+    """Remind: each reviewer the PRD's submitted draft waits on gets an Inbox nudge "<name>
+    is waiting for your review of <PRD>", at most once a day per reviewer (409 when none
+    is due, or no submitted draft waits); the PRD's owners and its decider only (403)."""
+    return await _run(db, one_pager.remind(db, principal, doc))
 
 
 @router.get("/one-pagers/{doc}/pdf", name="export_simple_one_pager",

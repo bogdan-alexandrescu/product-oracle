@@ -64,7 +64,8 @@ async def get_simple_roadmap(
     """Every roadmap's items the caller may read on one timeline, grouped by goal, track or
     PRD: each with its resolved dates (source, estimated), open date suggestion,
     milestone, waterfall phases, dependencies both ways and constraint flags; plus the
-    tracks' milestones, the horizon windows and the company's today. Filters: ``prd``
+    tracks' milestones, the horizon windows, the company's today and the shown roadmaps' key
+    dates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``
     (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping)."""
     return await service.build(db, principal, group, prd, goal, track, from_, to)
 

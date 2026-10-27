@@ -616,6 +616,8 @@ async def test_document_view_is_remembered_per_user(client, tenant_id):
                         "feedback_wanted": False, "published": False},
         # #723 S1: the mode they last switched to; unset, they land by role.
         "experience": None,
+        # #723 roadmap-plus: where Simple's priorities draw the line; unset, this quarter.
+        "priorities_line": None,
     }  # fmt: skip
     resp = await client.patch("/v1/me/preferences", json={"document_view": "full"}, headers=viewer)
     assert resp.status_code == 200 and resp.json()["document_view"] == "full"

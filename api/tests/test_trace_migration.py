@@ -53,7 +53,7 @@ def test_0014_trace_follows_0014_usage_retry_at():
     # Re-chained at the wave 1 integration, part 2: 0014_* in merge order, one head.
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0014_trace").down_revision == "0014_usage_retry_at"
-    assert script.get_heads() == ["0080_simple_one_pagers"]
+    assert script.get_heads() == ["0086_simple_meetings"]
 
 
 def _seed(t, doc, ver, ent):

@@ -81,6 +81,10 @@ export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
   why_not_reply: "Why-not replies",
   public_text: "Public texts",
   one_pager: "One-pager",
+  item_draft: "Draft item",
+  goal_suggestions: "Goal suggestions",
+  simple_visual: "Proposal visual",
+  meeting_minutes: "Meeting minutes",
 };
 
 /** Each per-document switch in plain words (History > Oracle's work); the keys stay the API's JobSettings. */

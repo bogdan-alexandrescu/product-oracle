@@ -5,7 +5,7 @@ import datetime as dt
 import uuid
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 DateSource = Literal["typed", "accepted", "engineering", "tracker", "estimated"]
 RoadmapGroup = Literal["goal", "track", "prd"]
@@ -18,7 +18,7 @@ FlagKind = Literal[
     "draft_without_owner",
 ]
 FixKind = Literal["shift_dependents", "move_dependency", "accept_risk"]
-ItemStatus = Literal["planned", "in_progress", "done", "cut", "draft"]
+ItemStatus = Literal["planned", "in_progress", "done", "cut", "draft", "merged"]
 SuggestionStatus = Literal["open", "accepted", "edited", "dismissed"]
 
 
@@ -150,6 +150,37 @@ class SimpleRoadmapItem(BaseModel):
     deciders: list[str] = []
     reasons: list[str] = []
     open_decisions: list[SimpleOpenDecision] = []
+    # S7 (oracle.simple.additions): a draft's likely duplicates (not kept both; at most 2,
+    # best first), the item it was merged into, whether Oracle is drafting it, its flow
+    # (null: no flow yet) and the goals it is linked to directly.
+    looks_like: list["SimpleMatch"] = Field(
+        default=[],
+        description="S7: likely duplicates of a draft not kept both (at most 2, best first).",
+    )
+    merged_into: "SimpleMergedInto | None" = None
+    drafting: bool = Field(
+        default=False, description="S7: Oracle's drafting job for this draft is queued or running."
+    )
+    flow: "SimpleFlow | None" = None
+    goal_ids: list[str] = Field(
+        default=[], description="S7: the goals the item is linked to directly."
+    )
+
+    # S8: the decided decisions that changed the item (newest first; the Decisions page).
+    decided_in: list[SimpleOpenDecision] = []
+
+
+class SimpleMatch(BaseModel):
+    kind: Literal["item", "feature"]
+    id: str
+    code: str
+    title: str
+
+
+class SimpleMergedInto(BaseModel):
+    id: str
+    code: str
+    title: str
 
 
 class SimpleGroup(BaseModel):
@@ -169,6 +200,28 @@ class SimpleMilestone(BaseModel):
     item_ids: list[uuid.UUID]
 
 
+class SimpleKeyDate(BaseModel):
+    """Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board
+    meeting), as the reader reads it (the working draft's when they see it)."""
+
+    id: uuid.UUID
+    roadmap: "SimpleDocRef"
+    name: str
+    date: dt.date
+    note: str | None = None
+    # Added or changed in the roadmap's working draft (not published yet).
+    in_draft: bool = False
+
+
+class SimpleKeyDateRoadmap(BaseModel):
+    """A roadmap whose key dates the reader reads; ``applies``: their change applies (an
+    owner, the decider, with none its owner), ``can_change``: they may change or propose."""
+
+    roadmap: "SimpleDocRef"
+    applies: bool = False
+    can_change: bool = False
+
+
 class SimpleRoadmapOut(BaseModel):
     today: dt.date
     group: RoadmapGroup
@@ -181,6 +234,9 @@ class SimpleRoadmapOut(BaseModel):
     changes_in_review: int = 0
     # S3b: the open drafts the reader sees (their items read as the draft has them).
     drafts: list["SimpleDraftBrief"] = []
+    # Roadmap-plus: the key dates of the roadmaps shown, by day, and those roadmaps.
+    key_dates: list[SimpleKeyDate] = []
+    key_date_roadmaps: list[SimpleKeyDateRoadmap] = []
 
 
 class DateSuggestionEdit(BaseModel):
@@ -229,6 +285,19 @@ ChangeOp = Literal[
     # S5: a one-pager line, as a section patch of each of its source sections
     # (oracle.simple.one_pager).
     "edit_line",
+    # Roadmap-plus: a roadmap's key dates, into its working draft (oracle.simple.key_dates).
+    "add_key_date",
+    "edit_key_date",
+    "remove_key_date",
+    # S7: a draft item added (oracle.simple.additions), merged into another item or a
+    # feature, kept beside its look-alikes.
+    "add_item",
+    "merge_item",
+    "keep_both",
+    # S9: an item's own milestone (into the working draft) and a feature ask filed in
+    # Oracle's Requests (non-versioned), both made by chat as well.
+    "set_milestone",
+    "add_feature_ask",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -265,6 +334,9 @@ class SimpleChangeIn(BaseModel):
 
 class SimpleDecisionIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
+    # S8: a meeting's session: the accepted proposal applies into the meeting's drafts and
+    # the decision is a meeting decision.
+    session_id: uuid.UUID | None = None
 
 
 class SimplePersonRef(BaseModel):
@@ -486,8 +558,12 @@ class SimplePriorityRow(BaseModel):
     depends_on: list[str] = []
     after: SimplePriorityAfter | None = None
     override: SimplePriorityOverride | None = None
-    # This quarter's plan (horizon now).
+    # Above the line: this quarter's plan (horizon now) by default; with a date line, planned
+    # to finish by that day (its stored or estimated end).
     above_line: bool = False
+    # Roadmap-plus: the item's end as the roadmap resolves it (stored or estimated).
+    end_date: dt.date | None = None
+    end_estimated: bool = False
     # Serves no confirmed goal.
     no_goal: bool = False
     can_reorder: bool = False
@@ -502,15 +578,104 @@ class SimpleFlowScreen(BaseModel):
     regions: list[str]
 
 
+class SimpleFlowStep(BaseModel):
+    """A step of a user flow (S10): a decision point or a step, the feature that enables
+    it and what changes versus today."""
+
+    id: str
+    label: str
+    kind: Literal["step", "decision"] = "step"
+    feature: str | None = None
+    change: Literal["new", "changed", "same"] = "same"
+    section_key: str | None = None
+
+
+class SimpleFlowNote(BaseModel):
+    """A numbered annotation: the part of the drawing it is on (an element id of the flow
+    or a region of the wireframe), the PRD section and requirement it ties to."""
+
+    n: int
+    target: str
+    note: str
+    section_key: str | None = None
+    requirement: str | None = None
+
+
 class SimpleFlow(BaseModel):
+    """A proposal's visual (S10, oracle.simple.visuals): its newest drawing."""
+
     title: str
     steps: list[str]
     screen: SimpleFlowScreen
+    subject_kind: str | None = None
+    subject_id: uuid.UUID | None = None
+    version: int = 1
+    versions: int = 1
+    goal: str | None = None
+    nodes: list[SimpleFlowStep] = []
+    # The user flow as sanitised SVG (static, offline); the screen's low-fi wireframe as
+    # sanitised HTML, null when the proposal touches no screen.
+    svg: str | None = None
+    wireframe: str | None = None
+    touches_screen: bool = True
+    annotations: list[SimpleFlowNote] = []
+    made_at: dt.datetime | None = None
+
+
+class SimpleVisualVersionOut(BaseModel):
+    number: int
+    title: str
+    made_at: dt.datetime
+    made_by_name: str | None = None
+    # How many comments this version addressed.
+    addressed: int = 0
+
+
+class SimpleVisualCommentOut(BaseModel):
+    id: uuid.UUID
+    version: int
+    annotation: int | None = None
+    body: str
+    by_name: str
+    at: dt.datetime
+    # The version that addressed it (a revise); null: open.
+    addressed_in: int | None = None
+
+
+class SimpleVisualOut(BaseModel):
+    subject_kind: str
+    subject_id: uuid.UUID
+    brief: str | None = None
+    # The newest drawing; null: none yet ("No flow yet").
+    flow: SimpleFlow | None
+    # Newest first.
+    versions: list[SimpleVisualVersionOut]
+    comments: list[SimpleVisualCommentOut]
+    # Oracle is drawing it (a queued or running job).
+    pending: bool
+    # Commenters and up comment on a drawn visual; who changes the subject directly asks
+    # for a drawing and revises.
+    can_comment: bool
+    can_revise: bool
+
+
+class SimpleVisualCommentIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    # The numbered annotation the comment is on.
+    annotation: int | None = Field(default=None, ge=1)
+
+
+class SimpleVisualReviseIn(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class SimpleVisualRequestIn(BaseModel):
+    brief: str = Field(default="", max_length=2000)
 
 
 class SimplePriorityProposal(BaseModel):
     change_id: uuid.UUID
-    op: Literal["override_priority", "estimate_feature", "confirm_item", "cut"]
+    op: Literal["override_priority", "estimate_feature", "confirm_item", "cut", "merge_item"]
     item_id: uuid.UUID
     # The item's baseline feature (the row it shows under); None for a draft with none.
     feature_id: str | None = None
@@ -555,6 +720,17 @@ class SimpleGoalBucket(BaseModel):
     no_goal: bool = False
 
 
+class SimpleLine(BaseModel):
+    """Roadmap-plus: where the line on priorities is drawn. ``now``: this quarter's plan
+    (the Now horizon); ``key_date:<id>``, ``milestone:<id>``, ``date:<YYYY-MM-DD>``: planned
+    to finish by that day."""
+
+    key: str
+    kind: Literal["now", "key_date", "milestone", "date"]
+    label: str
+    date: dt.date | None = None
+
+
 class SimplePrioritiesOut(BaseModel):
     today: dt.date
     quarter: SimpleQuarter
@@ -568,8 +744,12 @@ class SimplePrioritiesOut(BaseModel):
     weeks_total: float
     # Commenter and up: may reorder and estimate (applies or proposes).
     can_change: bool
+    # Roadmap-plus: the line drawn, and the lines offered (Pick a date aside).
+    line: SimpleLine | None = None
+    lines: list[SimpleLine] = []
 
 
+SimpleRoadmapItem.model_rebuild()
 SimpleRoadmapOut.model_rebuild()
 
 
@@ -596,6 +776,11 @@ class OnePagerLine(BaseModel):
     # published: as the version has it; edited: the working draft's (the reader sees it);
     # proposal: someone proposes new wording (the margin note says who).
     state: Literal["published", "edited", "proposal"] = "published"
+    # S10: a bet's ("What we will build") visual subject and its newest drawing.
+    flow_subject: uuid.UUID | None = None
+    flow: "OnePagerFlow | None" = None
+    # S8: the decisions that changed this line (newest first; the Decisions page).
+    decisions: list[SimpleOpenDecision] = []
 
 
 class OnePagerItem(BaseModel):
@@ -631,6 +816,10 @@ class OnePagerFlow(BaseModel):
     title: str
     steps: list[str] = []
     screen: str | None = None
+    # S10: the visual it is (for the widened card's comments, versions and Revise).
+    subject_kind: str | None = None
+    subject_id: uuid.UUID | None = None
+    version: int | None = None
 
 
 class OnePagerNote(BaseModel):
@@ -648,6 +837,8 @@ class OnePagerNote(BaseModel):
     sections: list[OnePagerSectionPatch]
     can_undo: bool
     can_decide: bool
+    # S8: the titled meeting the change was made in ("…, in <meeting title>").
+    meeting_title: str | None = None
     # The line adds or reshapes a flow or feature (a "What we will build" bet): the note
     # shows its flow thumbnail, ``flow`` (null: "No flow yet").
     adds_feature: bool
@@ -663,6 +854,20 @@ class OnePagerDraft(BaseModel):
     decider_approved: bool
     waiting_on: list[SimplePersonRef]
     can_submit: bool
+    # Remind (owner, 2026-10-26): the last nudge to a waiting reviewer, and whether the
+    # caller (the PRD's owners, its decider) may nudge one now (each at most once a day).
+    reminded_at: dt.datetime | None = None
+    can_remind: bool = False
+
+    # S8: the meeting the decider approved it in ("Approved in <meeting title>").
+    approved_in: str | None = None
+
+
+class OnePagerRemindOut(BaseModel):
+    """Remind's answer: the reviewers nudged now (each gets an Inbox nudge)."""
+
+    reminded: list[SimplePersonRef]
+    reminded_at: dt.datetime
 
 
 class OnePagerSource(BaseModel):
@@ -696,3 +901,433 @@ class OnePagerOut(BaseModel):
     # propose; viewers read.
     can_edit: bool
     can_propose: bool
+
+
+# --------------------------------------------------------------------------- S7
+
+
+class SimpleGoalBrief(BaseModel):
+    id: str
+    key: str
+    title: str
+
+
+class SimpleEvidence(BaseModel):
+    label: str
+    kind: str
+    ref: str | None
+    url: str | None
+    confidence: Literal["high", "medium", "low"]
+
+
+class SimpleGoalSuggestion(BaseModel):
+    id: str
+    goal: SimpleGoalBrief
+    title: str
+    outcome: str
+    why: str
+    evidence: list[SimpleEvidence]
+    status: Literal["open", "accepted", "rejected"]
+    reason: str | None
+    origin: Literal["auto", "on_demand"]
+    created_at: dt.datetime
+    decided_by_name: str | None
+    decided_at: dt.datetime | None
+    change_id: str | None
+    item_id: str | None
+    looks_like: list[SimpleMatch]
+    flow: SimpleFlow | None
+    can_accept: bool
+    can_reject: bool
+
+
+class SimpleGoalSuggestionGoal(BaseModel):
+    goal: SimpleGoalBrief
+    pending: bool
+    empty: bool
+
+
+class SimpleGoalSuggestionsOut(BaseModel):
+    goals: list[SimpleGoalSuggestionGoal]
+    suggestions: list[SimpleGoalSuggestion]
+
+
+class SimpleSuggestJobOut(BaseModel):
+    goal_id: str
+    pending: bool
+    job_id: str
+
+
+class SimpleSuggestionAcceptIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    roadmap_id: uuid.UUID | None = None
+    session_id: uuid.UUID | None = None
+
+
+class SimpleSuggestionRejectIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=500)
+
+
+# --------------------------------------------------------------------------- S9 chat
+
+CardStatus = Literal["open", "applied", "proposed", "discarded", "undone"]
+ChangeMode = Literal["everyone", "presenter", "named"]
+
+
+class ChatIn(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    # The Simple page the person asks from (the Ask panel), for context.
+    page: str | None = Field(default=None, max_length=300)
+
+
+class ChatFix(BaseModel):
+    """A one-click fix for a broken link the card would make: its own change-engine op."""
+
+    label: str
+    op: ChangeOp
+    target: dict[str, Any]
+    before: dict[str, Any]
+    after: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatCardOut(BaseModel):
+    id: uuid.UUID
+    message_id: uuid.UUID | None
+    op: ChangeOp
+    target: dict[str, Any]
+    before: dict[str, Any]
+    after: dict[str, Any]
+    summary: str
+    item_id: uuid.UUID | None
+    item_title: str | None
+    status: CardStatus
+    # What the reader's Apply does now: the change engine applies or proposes it; None:
+    # the reader may not (``why_not``).
+    may: Literal["apply", "propose"] | None
+    why_not: str | None
+    # The constraint check as if applied, and one-click fixes of the links it breaks.
+    flags: list[SimpleItemFlags]
+    fixes: list[ChatFix]
+    # How the stage shows it before Apply: {kind: dates|horizon|title|milestone|cut, ...}.
+    preview: dict[str, Any] | None
+    # Cards that add or change a flow or feature: the design bundle (oracle.simple.visuals).
+    flow: SimpleFlow | None
+    change_id: uuid.UUID | None
+    decided_by_name: str | None
+    decided_at: dt.datetime | None
+    # The meeting decision an applied card became.
+    decision_id: uuid.UUID | None
+
+
+class ChatMessageOut(BaseModel):
+    id: uuid.UUID
+    author_kind: Literal["person", "oracle"]
+    author_id: uuid.UUID | None
+    author_name: str
+    body: str
+    at: dt.datetime
+    kind: Literal["request", "cards", "question", "answer", "note"]
+    cards: list[ChatCardOut]
+
+
+class ChatRulesOut(BaseModel):
+    change_mode: ChangeMode
+    change_people: list[SimplePersonRef]
+    presenter: SimplePersonRef
+    is_presenter: bool
+    may_apply: bool
+    ask_only: bool
+    ended: bool
+
+
+class ChatThreadOut(BaseModel):
+    id: uuid.UUID | None
+    meeting_id: uuid.UUID | None
+    messages: list[ChatMessageOut]
+    rules: ChatRulesOut | None
+
+
+class ChatModeIn(BaseModel):
+    change_mode: ChangeMode
+    change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)
+
+
+class ChatApplyIn(BaseModel):
+    # Apply the card's fixes[fix] instead of its own op.
+    fix: int | None = Field(default=None, ge=0)
+
+
+class ChatApplyOut(BaseModel):
+    card: ChatCardOut
+    result: SimpleChangeResult
+
+
+class WalkDecision(BaseModel):
+    id: uuid.UUID
+    title: str
+    url: str
+
+
+class WalkStepOut(BaseModel):
+    id: str
+    kind: Literal["broken_link", "agenda_decision", "proposal"]
+    title: str
+    why: str
+    card: ChatCardOut | None = None
+    change: SimpleChangeOut | None = None
+    decision: WalkDecision | None = None
+
+
+class WalkOut(BaseModel):
+    steps: list[WalkStepOut]
+
+
+# --------------------------------------------------------------------------- S8 meetings
+
+ChangeMode = Literal["everyone", "presenter", "named"]
+MeetingOrigin = Literal["one_pager", "roadmap", "ritual"]
+MeetingStatus = Literal["live", "ended"]
+MinutesState = Literal["drafting", "ready", "sent"]
+
+
+class SimpleAttendee(BaseModel):
+    id: uuid.UUID
+    name: str
+    # What the person is to the PRD: decider, required reviewer, owner (its tracks').
+    roles: list[Literal["decider", "reviewer", "owner", "presenter"]] = []
+    present: bool = True
+
+
+class SimpleDecidedFlow(BaseModel):
+    """The new flow or feature a meeting decision decided (a draft item) and its flow
+    (oracle.simple.visuals, S10); ``flow`` is None until one is drawn ("No flow yet")."""
+
+    kind: str
+    id: uuid.UUID
+    title: str
+    flow: SimpleFlow | None = None
+
+
+class SimpleMeetingDecision(BaseModel):
+    """A decision taken in a meeting: a ``decisions`` row, origin ``meeting``."""
+
+    id: uuid.UUID
+    number: int
+    title: str
+    approver: SimplePersonRef
+    at: dt.datetime
+    subjects: list[dict[str, Any]] = []
+    change_ids: list[uuid.UUID] = []
+    flow: SimpleDecidedFlow | None = None
+
+
+class SimpleActionItemIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    owner_id: uuid.UUID | None = None
+    due_date: dt.date | None = None
+
+
+class SimpleActionItemOut(SimpleActionItemIn):
+    owner_name: str | None = None
+
+
+class SimpleWait(BaseModel):
+    """What still waits on whom (an absent required reviewer's approval, a proposal)."""
+
+    what: str
+    on: list[SimplePersonRef] = []
+
+
+class SimpleMinutes(BaseModel):
+    summary: str = ""
+    open_questions: list[str] = []
+    action_items: list[SimpleActionItemOut] = []
+    waits: list[SimpleWait] = []
+    # extract: Oracle's quick draft, shown at once; oracle: the minutes job's; edited: a
+    # person's.
+    written_by: Literal["extract", "oracle", "edited"] = "extract"
+
+
+class SimpleMinutesIn(BaseModel):
+    summary: str = Field(default="", max_length=4000)
+    open_questions: list[str] = Field(default_factory=list, max_length=20)
+    action_items: list[SimpleActionItemIn] = Field(default_factory=list, max_length=30)
+
+
+class SimpleDelivery(BaseModel):
+    decisions: bool = True
+    inbox: bool = True
+    # chosen by whoever ended the meeting; status: queued, sent, failed, unavailable.
+    email: bool = False
+    email_status: str | None = None
+    slack: bool = False
+    slack_status: str | None = None
+    slack_channel: str | None = None
+
+
+class SimpleSlackState(BaseModel):
+    # The company's Slack notifications integration is installed and active.
+    connected: bool
+    # The Notifications channel minutes go to (Settings › Notifications), when set.
+    channel: str | None = None
+
+
+class SimpleMeetingBrief(BaseModel):
+    id: uuid.UUID
+    title: str
+    prd: SimpleDocRef
+    origin: MeetingOrigin
+    status: MeetingStatus
+    presenter: SimplePersonRef
+    attendees: list[SimpleAttendee]
+    length_min: int
+    started_at: dt.datetime
+    ended_at: dt.datetime | None
+    decisions: int
+    minutes_state: MinutesState | None = None
+    summary: str | None = None
+
+
+class SimpleMeetingCan(BaseModel):
+    # Change through the meeting (the presenter's change mode; the caller's own rights
+    # decide applied or proposed).
+    change: bool
+    # The presenter: change mode, presence.
+    set_rules: bool
+    # The PRD's decider (or an owner): Approve in the meeting.
+    approve: bool
+    # The presenter, an owner or the decider ends it, edits and sends the minutes.
+    end: bool
+
+
+class SimpleMeetingOut(SimpleMeetingBrief):
+    session_id: uuid.UUID
+    occurrence_id: uuid.UUID | None = None
+    change_mode: ChangeMode
+    change_people: list[SimplePersonRef] = []
+    roadmap_ids: list[uuid.UUID] = []
+    meeting_decisions: list[SimpleMeetingDecision] = []
+    open_decisions: list[SimpleOpenDecision] = []
+    pending_proposals: list[SimpleChangeOut] = []
+    drafts: list[SimpleDraftOut] = []
+    minutes: SimpleMinutes | None = None
+    delivery: SimpleDelivery | None = None
+    slack: SimpleSlackState
+    email_available: bool
+    can: SimpleMeetingCan
+    # Approve's answer: the roadmaps left for their own decider.
+    not_approved: list[SimpleNotApproved] = []
+
+
+class SimpleUpcomingMeeting(BaseModel):
+    """A scheduled ritual occurrence: a review to start from."""
+
+    occurrence_id: uuid.UUID
+    ritual_title: str
+    due_at: dt.datetime
+    ends_at: dt.datetime
+    length_min: int
+    attendees: list[SimplePersonRef]
+    meeting_id: uuid.UUID | None = None
+
+
+class SimpleMeetingsOut(BaseModel):
+    upcoming: list[SimpleUpcomingMeeting]
+    live: list[SimpleMeetingBrief]
+    past: list[SimpleMeetingBrief]
+
+
+class SimpleStartPrd(BaseModel):
+    document: SimpleDocRef
+    decider: SimplePersonRef | None
+    # Owners and the document's decider start a meeting; others see who starts it.
+    can_start: bool
+    starters: list[SimplePersonRef]
+    default_attendee_ids: list[uuid.UUID]
+
+
+class SimpleStartOptions(BaseModel):
+    prds: list[SimpleStartPrd]
+    members: list[SimplePersonRef]
+    length_min: int = 60
+    occurrence: SimpleUpcomingMeeting | None = None
+
+
+class SimpleMeetingIn(BaseModel):
+    prd: str = Field(min_length=1, max_length=200)
+    title: str | None = Field(default=None, max_length=200)
+    origin: MeetingOrigin = "one_pager"
+    occurrence_id: uuid.UUID | None = None
+    attendee_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
+    change_mode: ChangeMode = "everyone"
+    change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)
+    length_min: int = Field(default=60, ge=5, le=240)
+
+
+class SimpleMeetingRulesIn(BaseModel):
+    change_mode: ChangeMode | None = None
+    change_people: list[uuid.UUID] | None = Field(default=None, max_length=2)
+    absent_ids: list[uuid.UUID] | None = None
+
+
+class SimpleMeetingCommentIn(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    subjects: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
+
+
+class SimpleSendIn(BaseModel):
+    email: bool = False
+    slack: bool = False
+
+
+class SimpleDecisionRow(BaseModel):
+    id: uuid.UUID
+    number: int
+    title: str
+    origin: str
+    status: str
+    approver: SimplePersonRef | None
+    decided_at: dt.datetime | None
+    created_at: dt.datetime
+    subjects: list[dict[str, Any]] = []
+    # A meeting decision on a new flow or feature: that flow.
+    flow: SimpleDecidedFlow | None = None
+
+
+class SimpleMeetingGroup(BaseModel):
+    meeting: SimpleMeetingBrief
+    minutes: SimpleMinutes | None
+    decisions: list[SimpleDecisionRow]
+
+
+class SimpleFilterOption(BaseModel):
+    id: str
+    title: str
+
+
+class SimpleDecisionsOut(BaseModel):
+    """Simple's Decisions (direction B "By meeting"): the meetings' decisions grouped under
+    them, newest first, then the decisions taken outside meetings."""
+
+    meetings: list[SimpleMeetingGroup]
+    other: list[SimpleDecisionRow]
+    prds: list[SimpleFilterOption]
+    goals: list[SimpleFilterOption]
+    meeting_options: list[SimpleFilterOption]
+
+
+class InboxSimpleMinutes(BaseModel):
+    """A meeting's minutes, sent to each attendee (``simple_minutes``)."""
+
+    meeting_id: uuid.UUID
+    title: str
+    ended_at: dt.datetime | None
+    decisions: int
+    state: Literal["new", "open"]
+
+
+SimpleRoadmapItem.model_rebuild()
+OnePagerOut.model_rebuild()

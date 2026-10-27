@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { Avatar, Block, HomeCard, HomeRow, PlanStrip, RowIcon, Top } from "@/app/simple/_home/cards";
+import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
+import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
@@ -47,6 +49,8 @@ export default function SimpleHome() {
   const { me, can } = useMe();
   const zone = useCompanyZone();
   const [stamp, setStamp] = useState(0);
+  // S9: "Walk me through it" turns Home into a guided pass; Done returns here.
+  const [walking, setWalking] = useState(false);
   const k = (name: string) => `simple-home|${name}|${stamp}`;
   const reloadAll = () => {
     invalidateWaiting();
@@ -88,6 +92,9 @@ export default function SimpleHome() {
   const decidedLately = useQuery(k("decided"), () => unwrap(api.GET("/v1/decisions", { params: { query: { status: "decided" } } })));
   const onePagers = useQuery(k("one-pagers"), () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
 
+  // S7: Oracle's suggested features under each goal of the band (an accept reloads Home).
+  const suggestions = useGoalSuggestions(reloadAll);
+  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   const proposes = can("create_simple_change");
   const decidesAll = can("accept_simple_change");
   const reads = !proposes;
@@ -220,13 +227,33 @@ export default function SimpleHome() {
 
   return (
     <SimplePage title="Home">
+      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
         <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
         <p className="simple-lead">
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
+        {!walking && !reads && (
+          <div>
+            <button type="button" className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
+              Walk me through it
+            </button>
+          </div>
+        )}
       </header>
+
+      {walking && (
+        <Walk
+          onDone={() => {
+            setWalking(false);
+            reloadAll();
+          }}
+        />
+      )}
+
+      {!walking && (
+      <>
 
       {(roadmap.data?.changes_in_review ?? 0) > 0 && (
         <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
@@ -266,6 +293,17 @@ export default function SimpleHome() {
                         </span>
                       )}
                     </div>
+                    {(() => {
+                      const known = suggestions.data?.goals.find((x) => x.goal.id === g.id);
+                      if (!known) return null;
+                      const n = (suggestions.data?.suggestions ?? []).filter((x) => x.goal.id === g.id).length;
+                      return (
+                        <button type="button" data-testid="home-goal-suggestions" onClick={() => setGoalPanel(known.goal)} className="simple-small self-start font-semibold text-accent-ink hover:underline">
+                          {n ? `✦ ${n} suggested ${n === 1 ? "feature" : "features"}` : proposes ? "✦ Suggest features" : "✦ No suggested features"}
+                          {known.pending && " · Oracle is suggesting…"}
+                        </button>
+                      );
+                    })()}
                   </li>
                 ))}
               </ul>
@@ -519,6 +557,8 @@ export default function SimpleHome() {
             }}
           </Block>
         </HomeCard>
+      )}
+      </>
       )}
     </SimplePage>
   );

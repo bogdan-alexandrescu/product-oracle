@@ -66,11 +66,14 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
     from oracle.shares.models import ShareLink
     from oracle.simple.models import (
         RoadmapItemTask,
+        RoadmapKeyDate,
         SimpleActionItem,
         SimpleChange,
         SimpleDraft,
+        SimpleMeeting,
         SimpleOnePager,
         SimpleSessionDraft,
+        SimpleVisual,
     )
     from oracle.staging.models import NextDraftChange
     from oracle.v2.models import (
@@ -129,6 +132,10 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         SimpleOnePager: [("document_id", docs)],
         RoadmapItemTask: [("roadmap_document_id", docs)],
         SimpleActionItem: [("roadmap_document_id", docs)],
+        # Simple's key dates (roadmap-plus), visuals (S10) and review meetings (S8).
+        RoadmapKeyDate: [("roadmap_document_id", docs)],
+        SimpleVisual: [("document_id", docs)],
+        SimpleMeeting: [("prd_document_id", docs)],
     }
 
 

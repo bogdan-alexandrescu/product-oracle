@@ -22,7 +22,7 @@ import { expect, test, type Page } from "./test";
  *
  * Card one-pager-proposal: protects = a commenter's edit is a proposal ("proposes new
  * wording for line 3") they cannot decide; the owner sees it beside the line, opens its
- * flow thumbnail (the card widens in place: "No flow yet"), and accepts it, after which the
+ * flow thumbnail (the card widens in place to the visual Oracle drafted with it, S10), and accepts it, after which the
  * line reads the new wording; a viewer gets no edit control; fails_when = a commenter's
  * edit applies, the owner cannot accept, or a viewer can edit; no_claim = Slack or email.
  */
@@ -145,7 +145,8 @@ for (const phone of [false, true]) {
         const note = notes(page).filter({ hasText: "proposes new wording for line 3" }).filter({ visible: true });
         await note.getByRole("button", { name: "Flow for line 3" }).click();
         await expect(note).toHaveAttribute("data-widened", "true");
-        await expect(note.getByLabel("User flow")).toContainText("No flow yet");
+        // S10: Oracle drafted the bet's visual with the proposal.
+        await expect(note.getByLabel("User flow").getByTestId("flow-version")).toHaveText("Version 1 of 1");
         await note.getByRole("button", { name: "Close" }).click();
         await note.getByRole("button", { name: "Accept" }).click();
         const line = page.locator('[data-line="bets-2"]');

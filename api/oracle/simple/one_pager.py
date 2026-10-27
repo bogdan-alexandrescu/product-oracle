@@ -23,6 +23,12 @@ shared working draft (oracle.simple.drafts: ``overlay`` ``{"sections": {key: mar
 the decider (else that track owner, else the company's owners); viewers read. The line and
 its sections are written together, so they never disagree; submitting the draft imports
 the PRD's next version with the patched sections, through its review policy.
+
+**Remind** (owner, 2026-10-26): on a submitted draft, the PRD's owners (company owners, its
+track owners) and its decider press Remind (:func:`remind`): each reviewer the draft waits
+on gets an Inbox nudge "<name> is waiting for your review of <PRD>" (``review_reminder``),
+at most once a day per reviewer (``simple_drafts.reminders``), audited. It changes no
+document data, so it is not a change-engine op.
 """
 
 import hashlib
@@ -30,6 +36,7 @@ import json
 import re
 import uuid
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from html import escape
 from typing import Any
 
@@ -54,6 +61,7 @@ from oracle.simple.schemas import (
     OnePagerMetric,
     OnePagerNote,
     OnePagerOut,
+    OnePagerRemindOut,
     OnePagerSectionPatch,
     OnePagerSource,
     SimpleChangeConflict,
@@ -531,6 +539,16 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     row.blocks, row.built_by, row.job_id = blocks, "oracle", job.id
     row.built_at = company_time.now()
     await s.flush()
+    # S10: Oracle drafts each bet's visual with the page (once per bet's words).
+    from oracle.simple import visuals
+
+    for b in blocks:
+        for line in b["lines"] if b["key"] == "bets" else []:
+            sid = visuals.line_subject(document.id, line["text"])
+            await visuals.request_visual(
+                s, None, "one_pager_line", sid, line["text"], document_id=document.id
+            )
+    await s.flush()
     return {"built": True, "sections_hash": h}
 
 
@@ -553,6 +571,9 @@ async def _lines_in_use(db: AsyncSession, document: Document) -> bool:
 
 
 # --------------------------------------------------------------------------- who
+
+# Remind: a reviewer is nudged at most once in this long.
+REMIND_EVERY = timedelta(days=1)
 
 
 @dataclass
@@ -607,6 +628,31 @@ def decides(principal: Any, w: Who) -> bool:
     if w.decider is not None:
         return me == w.decider
     return me in w.track_owners and has_role(principal.role, "approver")
+
+
+def may_remind(principal: Any, w: Who) -> bool:
+    """Remind: the PRD's owners (a company owner, its track owners) and its decider."""
+    me = _me(principal)
+    return me is not None and (decides(principal, w) or me in w.track_owners)
+
+
+def due_reminders(d: SimpleDraft, now: datetime) -> list[uuid.UUID]:
+    """The reviewers a submitted draft waits on who were not reminded in the last day."""
+    if d.status != "submitted":
+        return []
+    sent = d.reminders or {}
+    return [
+        i
+        for i in d.waiting_on or []
+        if str(i) not in sent or now - datetime.fromisoformat(sent[str(i)]) >= REMIND_EVERY
+    ]
+
+
+def reminded_at(d: SimpleDraft) -> datetime | None:
+    """The draft's last reminder (to a reviewer it still waits on)."""
+    waiting = {str(i) for i in d.waiting_on or []}
+    at = [datetime.fromisoformat(v) for k, v in (d.reminders or {}).items() if k in waiting]
+    return max(at, default=None)
 
 
 def route(w: Who) -> list[uuid.UUID]:
@@ -780,6 +826,21 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))
     }
     now = company_time.now()
+    from oracle.simple import visuals
+
+    note_flows = await visuals.flows_for(db, "change", [c.id for c in live + shown])
+
+    from oracle.simple import meetings
+
+    approved_sid = ((d.decider_approval or {}).get("session_id") if d is not None else None) or None
+    titles = await meetings.titles_by_session(
+        db, sids | {c.session_id for c in shown if c.session_id}
+        | ({uuid.UUID(approved_sid)} if approved_sid else set())
+    )  # fmt: skip
+    line_ids = [x["id"] for blk in b.row.blocks for x in blk["lines"]]
+    by_line = await meetings.decided_in(
+        db, [{"kind": "section", "id": str(document.id), "ref": f"line:{i}"} for i in line_ids]
+    )
 
     def note(c: SimpleChange, kind: str) -> OnePagerNote:
         s = sessions.get(c.session_id) if c.session_id else None
@@ -792,6 +853,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             by_name=names.get(c.by, "someone"),
             at=c.at,
             in_meeting=s is not None and s.kind == "meeting",
+            meeting_title=titles.get(c.session_id) if c.session_id else None,
             before=str(c.before.get("line") or ""),
             after=str(c.after.get("line") or ""),
             sections=[
@@ -810,6 +872,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             and (s.last_change_at or s.started_at) > now - IDLE,
             can_decide=kind == "proposal" and may_decide(principal, c),
             adds_feature=line_id.startswith("bets-"),
+            flow=visuals.one_pager_flow(note_flows.get(c.id)),
         )
 
     notes = [note(c, "change") for c in live] + [note(c, "proposal") for c in shown]
@@ -835,6 +898,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                     else "proposal"
                     if line["id"] in proposed
                     else "published",
+                    decisions=by_line.get(("section", str(document.id), f"line:{line['id']}"), []),
                 )
             )
         blocks.append(
@@ -842,6 +906,13 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                 key=spec.key, title=spec.title, rules=spec.rules, kind=spec.kind, lines=lines
             )
         )  # type: ignore[arg-type]
+    # S10: each bet ("What we will build") carries its visual.
+    bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
+    for x in bets:
+        x.flow_subject = visuals.line_subject(document.id, x.text)
+    line_flows = await visuals.flows_for(db, "one_pager_line", [x.flow_subject for x in bets])
+    for x in bets:
+        x.flow = visuals.one_pager_flow(line_flows.get(x.flow_subject))
     slice_ = await service.build(db, principal, prd=str(document.id))
     items = [
         OnePagerItem(
@@ -875,6 +946,9 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                 SimplePersonRef(id=i, name=names.get(i, "someone")) for i in d.waiting_on or []
             ],
             can_submit=d.status == "working" and decides(principal, w),
+            reminded_at=reminded_at(d),
+            can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),
+            approved_in=titles.get(uuid.UUID(approved_sid)) if approved_sid else None,
         )
     patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
     used = {k for blk in b.row.blocks for x in blk["lines"] for k in x["source_keys"]}
@@ -906,6 +980,66 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         can_propose=not decides(principal, w)
         and _me(principal) is not None
         and has_role(principal.role, "commenter"),
+    )
+
+
+# --------------------------------------------------------------------------- Remind
+
+
+async def remind(db: AsyncSession, principal: Any, doc: str) -> OnePagerRemindOut:
+    """Nudge each reviewer the PRD's submitted draft waits on (an Inbox notification), each
+    at most once a day; commits. 403 to anyone but the PRD's owners and its decider; 409
+    with no submitted draft waiting, or when every waiting reviewer was reminded today."""
+    from oracle.review.collab import notify
+
+    document = await _document(db, principal, doc)
+    w = await who(db, document)
+    if not may_remind(principal, w):
+        raise ChangeError(403, "Only the PRD's owners and its decider remind its reviewers")
+    d = await _open_draft(db, document, lock=True)
+    if d is None or d.status != "submitted" or not d.waiting_on:
+        raise ChangeError(409, "No submitted draft of this PRD waits on a review")
+    now = company_time.now()
+    due = due_reminders(d, now)
+    if not due:
+        raise ChangeError(409, "Every reviewer it waits on was reminded in the last day")
+    me = _me(principal)
+    names = {
+        u.id: u.name or u.email
+        for u in await db.scalars(select(User).where(User.id.in_([*due, me])))
+    }
+    number = await db.scalar(
+        select(DocumentVersion.number).where(DocumentVersion.id == d.version_id)
+    )
+    n = (await drafts.counts(db, [d]))[d.id]
+    waits = f"Version {number} · {n} {'change' if n == 1 else 'changes'}"
+    await notify(
+        db,
+        due,
+        kind="review_reminder",
+        title=f"{names.get(me, 'Someone')} is waiting for your review of {document.title}",
+        actor=principal.actor,
+        document_id=document.id,
+        version_number=number,
+        data={
+            "draft_id": str(d.id),
+            "href": f"/simple/one-pagers/{document.slug}",
+            "waits": waits,
+        },
+    )
+    d.reminders = {**(d.reminders or {}), **{str(i): now.isoformat() for i in due}}
+    await audit.record(
+        db,
+        principal,
+        "simple_draft.reminded",
+        "simple_draft",
+        d.id,
+        data={"document_id": str(document.id), "reviewer_ids": [str(i) for i in due]},
+    )
+    await db.commit()
+    return OnePagerRemindOut(
+        reminded=[SimplePersonRef(id=i, name=names.get(i, "someone")) for i in due],
+        reminded_at=now,
     )
 
 
@@ -1078,7 +1212,7 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
 
 
-async def decide(db, principal, c: SimpleChange, action: str, reason: str | None):
+async def decide(db, principal, c: SimpleChange, action: str, reason: str | None, session_id=None):
     from oracle.simple import changes
 
     me, now = changes._me(principal), company_time.now()
@@ -1096,7 +1230,7 @@ async def decide(db, principal, c: SimpleChange, action: str, reason: str | None
         was = {k: v["body"] for k, v in (c.before.get("sections") or {}).items()}
         if text != c.before.get("line") or bodies != was:
             raise _conflict("outdated: the line or its sections changed since the proposal", text)
-        session = await _session_for_change(db, me, None, True, now)
+        session = await _session_for_change(db, me, session_id, True, now)
         await _apply(db, principal, c, b, c.after, session)
         session.last_change_at = now  # type: ignore[union-attr]
     c.status = "accepted" if action == "accept" else "declined"

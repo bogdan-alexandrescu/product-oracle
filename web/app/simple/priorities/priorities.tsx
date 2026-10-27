@@ -5,6 +5,9 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
+import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
+import { GoalSuggestionList, useGoalSuggestions, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
+import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
@@ -28,7 +31,7 @@ const SHAPES = ["circle", "square", "triangle", "diamond", "pentagon"] as const;
 type Shape = (typeof SHAPES)[number] | "cross";
 
 /** Whether the screen is a phone's (under 640 px). */
-function usePhone(): boolean {
+export function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
     const q = window.matchMedia("(max-width: 639px)");
@@ -70,10 +73,30 @@ export function Priorities() {
   const { can, capsReady } = useMe();
   const tab = (TABS.find((t) => t.key === params.get("tab"))?.key ?? "ranked") as Tab;
   const compare = params.get("compare") === "1";
-  const q = useQuery<Out>("simple-priorities", () => unwrap(api.GET("/v1/simple/priorities")), { keepPrevious: true });
+  // Roadmap-plus: the line, from the URL; landing without one, the person's remembered pick
+  // (preferences) is put back in the URL once.
+  const prefs = useQuery("me-preferences", () => unwrap(api.GET("/v1/me/preferences")));
+  const remembered = prefs.data?.priorities_line ?? null;
+  // Once the person picks, the URL alone says the line (Now: none).
+  const [picked, setPicked] = useState(false);
+  const line = params.get("line") ?? (picked ? null : remembered);
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || (!prefs.data && !prefs.error)) return;
+    restored.current = true;
+    if (!params.get("line") && remembered && remembered !== "now") setParams({ line: remembered });
+  }, [params, prefs.data, prefs.error, remembered, setParams]);
+  const q = useQuery<Out>(`simple-priorities:${line ?? "now"}`, () => unwrap(api.GET("/v1/simple/priorities", { params: { query: line ? { line } : {} } })), { keepPrevious: true });
+  const pickLine = (key: string) => {
+    setPicked(true);
+    setParams({ line: key === "now" ? null : key });
+    void api.PATCH("/v1/me/preferences", { body: { priorities_line: key } });
+  };
   const data = q.data;
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
+  // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
+  const suggestions = useGoalSuggestions(() => q.reload());
 
   async function changed(r: Sent, done: string, proposedTo: string): Promise<void> {
     if (!r.ok) {
@@ -130,6 +153,7 @@ export function Priorities() {
             </button>
           ))}
         </div>
+        {data && tab !== "buckets" && <LinePicker data={data} onPick={pickLine} />}
         {tab === "ranked" && (
           <label className="flex cursor-pointer items-center gap-2 text-[length:var(--simple-small)]">
             <button
@@ -152,7 +176,7 @@ export function Priorities() {
         <Ranked data={data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} />
       )}
       {data && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} />}
-      {data && tab === "buckets" && <Buckets data={data} />}
+      {data && tab === "buckets" && <Buckets data={data} suggestions={suggestions} />}
     </div>
   );
 }
@@ -250,13 +274,16 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
     }
   }
 
+  const firstBelow = rows.findIndex((r) => !r.above_line);
   return (
     <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
-      {rows.map((r, i) => {
+      {rows.flatMap((r, i) => {
+        const divider = i === firstBelow ? [<LineDivider key="the-line" data={data} />] : [];
         // Any of the feature's items (a proposal on its later item shows here too).
         const proposals = data.proposals.filter((p) => p.feature_id === r.feature_id && (p.op === "override_priority" || p.op === "estimate_feature"));
         const target = drag && drag.to === i && drag.from !== i;
-        return (
+        return [
+          ...divider,
           <li
             key={r.feature_id}
             ref={(el) => {
@@ -264,6 +291,8 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
             }}
             data-testid="prio-row"
             data-code={r.code}
+            data-above={r.above_line ? "true" : "false"}
+            data-end={r.end_date ?? ""}
             className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${target ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -295,6 +324,12 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
                   Oracle #{r.oracle_rank}
                 </span>
               )}
+              <span
+                aria-label={r.above_line ? "Above the line" : "Below the line"}
+                title={r.above_line ? "Above the line" : "Below the line"}
+                className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
+                data-testid="prio-line-mark"
+              />
               <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{r.code}</span>
               <span className="min-w-[12rem] flex-1 font-medium">{r.title}</span>
               <span className="ml-auto flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
@@ -329,8 +364,8 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
             {proposals.map((p) => (
               <ProposalCard key={p.change_id} p={p} changed={changed} />
             ))}
-          </li>
-        );
+          </li>,
+        ];
       })}
     </ol>
   );
@@ -457,7 +492,8 @@ function proposalWords(p: Proposal): string {
     return `${p.by_name} proposes rank ${o.position}: “${o.reason ?? p.reason ?? ""}”`;
   }
   if (p.op === "confirm_item") return `${p.by_name} proposes confirming it`;
-  if (p.op === "cut") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
+  // S7: a Merge is a merge_item change (train T's was a cut with this note).
+  if (p.op === "cut" || p.op === "merge_item") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
   const parts = [a.goal_value != null ? `goal value ${a.goal_value}` : null, a.effort != null ? `effort ${a.effort} wk` : null].filter(Boolean);
   return `${p.by_name} proposes ${parts.join(" and ")}`;
 }
@@ -481,7 +517,7 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
     );
   }
 
-  const flow = p.flow ? <FlowDetail flow={p.flow} /> : null;
+  const flow = p.flow ? <FlowPanel subject={subjectOf(p.flow) ?? { kind: "change", id: p.change_id }} /> : null;
   return (
     <div
       data-testid="prio-proposal"
@@ -518,44 +554,6 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
           {flow}
         </Sheet>
       )}
-    </div>
-  );
-}
-
-function FlowThumb({ flow }: { flow: Schemas["SimpleFlow"] }) {
-  return (
-    <svg width="64" height="40" viewBox="0 0 64 40" aria-hidden className="text-text2">
-      {flow.steps.slice(0, 4).map((_, i) => (
-        <g key={i}>
-          <rect x={2 + i * 16} y={12} width={11} height={16} rx={2} fill="none" stroke="currentColor" />
-          {i > 0 && <line x1={i * 16 - 3} y1={20} x2={i * 16 + 2} y2={20} stroke="currentColor" />}
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function FlowDetail({ flow }: { flow: Schemas["SimpleFlow"] }) {
-  return (
-    <div className="mt-3 grid gap-4 sm:grid-cols-2" data-testid="flow-detail">
-      <div>
-        <h3 className="font-semibold">User flow: {flow.title}</h3>
-        <ol className="mt-1 list-decimal pl-5">
-          {flow.steps.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ol>
-      </div>
-      <div aria-label={`Wireframe of ${flow.screen.title}`} role="img">
-        <h3 className="font-semibold">Screen: {flow.screen.title}</h3>
-        <div className="mt-1 flex flex-col gap-1 rounded-lg border border-line-strong bg-surface p-2">
-          {flow.screen.regions.map((r) => (
-            <div key={r} className="rounded border border-dashed border-line-strong px-2 py-1 text-[length:var(--simple-small)] text-text2">
-              {r}
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
@@ -598,7 +596,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
                   if (!target) return;
                   setMerging(null);
                   await changed(
-                    await send({ op: "cut", target: { item_id: d.item_id }, before: { cut: false }, after: { cut: true }, reason: `Merged into ${target.code}` }),
+                    await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.code}` }),
                     `Merged ${d.code} into ${target.code}`,
                     "the decider",
                   );
@@ -622,7 +620,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
             )}
             {/* A Confirm or Merge waiting for the decider. */}
             {proposals
-              .filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut"))
+              .filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut" || p.op === "merge_item"))
               .map((p) => (
                 <ProposalCard key={p.change_id} p={p} changed={changed} />
               ))}
@@ -733,6 +731,7 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
                   key={r.feature_id}
                   data-testid="vxe-point"
                   data-code={r.code}
+                  data-above={r.above_line ? "true" : "false"}
                   aria-label={`#${r.rank} ${r.code}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}`}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-default"}`}
                   style={{ left, top }}
@@ -767,30 +766,91 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
               No goal
             </li>
           )}
-          <li>Numbers are ranks; hollow is below the line (not this quarter).</li>
+          <li>Numbers are ranks; hollow is below the line ({lineWords(data)}).</li>
         </ul>
         {mayChange && <p className="mt-1 pl-6 text-[length:var(--simple-small)] text-text-faint">Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys).</p>}
       </section>
       <section aria-label="Ranked side list">
         <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Ranked</h2>
         <ol className="flex flex-col gap-1">
-          {rows.map((r) => (
-            <li key={r.feature_id} data-testid="side-row" data-code={r.code} className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1 text-[length:var(--simple-small)]">
+          {rows.flatMap((r, i) => [
+            ...(i === rows.findIndex((x) => !x.above_line) ? [<LineDivider key="the-line" data={data} compact />] : []),
+            <li key={r.feature_id} data-testid="side-row" data-code={r.code} data-above={r.above_line ? "true" : "false"} className={`flex items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1 text-[length:var(--simple-small)] ${r.above_line ? "" : "text-text2"}`}>
               <span className="w-6 text-right font-semibold tabular-nums">{r.rank}</span>
               <span className="font-mono text-[length:var(--simple-small)]">{r.code}</span>
               <span className="min-w-0 flex-1 truncate">{r.title}</span>
               <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
-            </li>
-          ))}
+            </li>,
+          ])}
         </ol>
       </section>
     </div>
   );
 }
 
+// --------------------------------------------------------------------------- the line
+
+/** The line in words: "not this quarter" for Now, else "not done by <day>". */
+function lineWords(data: Out): string {
+  const l = data.line;
+  return !l || l.kind === "now" ? "not this quarter" : `not planned to finish by ${l.label.replace(/^By /, "")}`;
+}
+
+/** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date · each dated milestone · Pick a date. */
+function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
+  const current = data.line ?? { key: "now", kind: "now" as const, label: "This quarter (Now)", date: null };
+  const [picking, setPicking] = useState(current.kind === "date");
+  const offered = data.lines ?? [];
+  const value = picking || current.kind === "date" ? "pick" : current.key;
+  const field = "rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]";
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[length:var(--simple-small)]" data-testid="line-picker">
+      <label htmlFor="prio-line" className="font-medium">
+        Line
+      </label>
+      <select
+        id="prio-line"
+        value={value}
+        className={field}
+        onChange={(e) => {
+          if (e.target.value === "pick") setPicking(true);
+          else {
+            setPicking(false);
+            onPick(e.target.value);
+          }
+        }}
+      >
+        {offered.map((l) => (
+          <option key={l.key} value={l.key}>
+            {l.kind === "key_date" ? `Key date: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
+          </option>
+        ))}
+        <option value="pick">{current.kind === "date" ? current.label : "Pick a date…"}</option>
+      </select>
+      {value === "pick" && (
+        <input type="date" aria-label="The line's date" className={field} defaultValue={current.date ?? ""} onChange={(e) => e.target.value && onPick(`date:${e.target.value}`)} />
+      )}
+    </div>
+  );
+}
+
+/** The divider row: everything after it in rank order that is hollow falls below the line. */
+function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }) {
+  const below = data.rows.filter((r) => !r.above_line);
+  return (
+    <li role="separator" data-testid="line-divider" className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? "py-0.5" : "py-1"}`}>
+      <span aria-hidden className="h-0.5 w-6 flex-none bg-accent-ink" />
+      <span>
+        The line: {data.line?.label ?? "This quarter (Now)"} · below it: {below.length} ({below.map((r) => r.code).join(", ")})
+      </span>
+      <span aria-hidden className="h-0.5 flex-1 bg-accent-ink" />
+    </li>
+  );
+}
+
 // --------------------------------------------------------------------------- goal buckets
 
-function Buckets({ data }: { data: Out }) {
+function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
   const buckets: Bucket[] = data.buckets;
   return (
     <section aria-label="Goal buckets">
@@ -820,6 +880,11 @@ function Buckets({ data }: { data: Out }) {
             </div>
             {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
             <p className="mt-1 text-[length:var(--simple-small)] text-text2">{b.codes.length ? b.codes.join(", ") : "Nothing this quarter"}</p>
+            {!b.no_goal && (
+              <div className="mt-3 border-t border-line pt-3">
+                <GoalSuggestionList goal={{ id: "", key: b.key, title: b.title }} api={suggestions} />
+              </div>
+            )}
           </li>
         ))}
       </ul>

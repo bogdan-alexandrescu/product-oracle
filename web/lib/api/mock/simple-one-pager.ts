@@ -10,10 +10,17 @@
  * viewers read. Those who see the draft (owners, its people) read the edited lines and the
  * margin notes; everyone else the published lines and a `changes_in_review` count. Undo
  * works for the change's author while its session is open.
+ *
+ * Submit and Remind (owner, 2026-10-26): an owner submits the draft (POST
+ * /v1/simple/drafts/{id}/submit): it waits on the PRD's required reviewers (`ctx.reviewers`).
+ * Remind (POST /v1/simple/one-pagers/{doc}/remind, owners and the decider) writes each
+ * waiting reviewer an Inbox nudge (`ctx.notify`, kind review_reminder) "<name> is waiting
+ * for your review of <PRD>", at most once a day per reviewer (409 when none is due).
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
+import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 
 type Role = Schemas["Me"]["role"];
 type Change = Schemas["SimpleChangeOut"];
@@ -25,7 +32,13 @@ export interface OnePagerCtx {
   role: Role;
   owners: string[];
   names: Record<string, string>;
+  /** The PRD's required reviewers (its review policy). */
+  reviewers: string[];
+  /** Writes one Inbox notification, as oracle.review.collab.notify. */
+  notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
 }
+
+const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
 
 interface Sec {
   key: string;
@@ -45,8 +58,17 @@ export interface OnePagerDb {
   version: number;
   sections: Sec[];
   blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[] }[];
-  draft: null | { id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string> };
-  changes: (Change & { session_open: boolean; in_meeting: boolean })[];
+  draft: null | {
+    id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string>;
+    status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
+  };
+  changes: (Change & { session_open: boolean; in_meeting: boolean; meeting_title?: string | null })[];
+  /** S10: the visuals (./simple-visuals.ts), shared with the roadmap's. */
+  visuals?: VisualsDb;
+  /** S8: decided decisions that changed each line (by line id), newest first (./simple-meetings.ts). */
+  decisions?: Record<string, { id: string; number: number; title: string }[]>;
+  /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
+  approval?: { approved_in: string; waiting_on: { id: string; name: string }[] } | null;
 }
 
 const DOC_ID = stableUuid("simple-one-pager-doc");
@@ -103,7 +125,26 @@ function decides(ctx: OnePagerCtx): boolean {
 }
 
 function seesDraft(db: OnePagerDb, ctx: OnePagerCtx): boolean {
-  return ctx.role === "owner" || (db.draft?.participants.includes(ctx.id) ?? false);
+  return ctx.role === "owner" || (db.draft?.participants.includes(ctx.id) ?? false) || (!!db.draft && ctx.reviewers.includes(ctx.id));
+}
+
+/** As one_pager.may_remind: the PRD's owners and its decider (none in the seed). */
+function mayRemind(ctx: OnePagerCtx): boolean {
+  return ctx.role === "owner";
+}
+
+/** As one_pager.due_reminders: waiting reviewers not reminded in the last day. */
+function dueReminders(db: OnePagerDb): string[] {
+  const d = db.draft;
+  if (!d || d.status !== "submitted") return [];
+  const sent = d.reminders ?? {};
+  return (d.waiting_on ?? []).filter((i) => !sent[i] || mockNowMs() - Date.parse(sent[i]) >= REMIND_EVERY_MS);
+}
+
+function remindedAt(db: OnePagerDb): string | null {
+  const d = db.draft;
+  const at = Object.entries(d?.reminders ?? {}).filter(([k]) => d?.waiting_on?.includes(k)).map(([, v]) => v).sort();
+  return at.length ? at[at.length - 1] : null;
 }
 
 function seedLine(db: OnePagerDb, id: string): SeedLine | undefined {
@@ -189,7 +230,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
       can_undo: kind === "change" && c.by === ctx.id && c.session_open,
       can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
-      adds_feature: lineId.startsWith("bets-"), flow: null,
+      adds_feature: lineId.startsWith("bets-"), flow: onePagerFlow(flowFor(db.visuals, "change", c.id)), meeting_title: c.meeting_title ?? null,
     };
   };
   const notes = [...live.map((c) => note(c, "change")), ...shown.map((c) => note(c, "proposal"))];
@@ -214,6 +255,9 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
         return {
           id: l.id, text, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
+          // S10: each bet carries its visual.
+          ...(b.key === "bets" ? { flow_subject: betSubject(text), flow: onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(text))) } : {}),
+          decisions: [...(db.decisions?.[l.id] ?? [])],
         };
       }),
     })),
@@ -225,7 +269,12 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
     notes,
     draft: sees && db.draft
-      ? { id: db.draft.id, status: "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: false, waiting_on: [], can_submit: decides(ctx) }
+      ? {
+          id: db.draft.id, status: db.draft.status ?? "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: !!db.approval, approved_in: db.approval?.approved_in ?? null,
+          waiting_on: db.approval?.waiting_on ?? (db.draft.waiting_on ?? []).map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })),
+          can_submit: (db.draft.status ?? "working") === "working" && decides(ctx) && liveChanges(db).length > 0,
+          reminded_at: remindedAt(db), can_remind: mayRemind(ctx) && dueReminders(db).length > 0,
+        }
       : null,
     changes_in_review: hiddenDraft + (proposals.length - shown.length),
     can_edit: decides(ctx),
@@ -249,6 +298,33 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
       });
     }
     return json(200, onePager(db, ctx));
+  }
+  if (p[2] === "drafts" && p[4] === "submit" && m === "POST" && db.draft && p[3] === db.draft.id) {
+    if (!decides(ctx)) return json(403, { detail: "Only an owner or the PRD's decider submits its draft" });
+    if ((db.draft.status ?? "working") !== "working") return json(409, { detail: "This draft is submitted already" });
+    db.draft.status = "submitted";
+    db.draft.waiting_on = [...ctx.reviewers];
+    db.draft.reminders = {};
+    db.changes.forEach((c) => (c.session_open = false));
+    return json(200, { id: db.draft.id, status: "submitted", version: db.version + 1, waiting_on: db.draft.waiting_on });
+  }
+  if (p[2] === "one-pagers" && p[4] === "remind" && m === "POST") {
+    if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
+    if (RANK[ctx.role] < RANK.commenter || !mayRemind(ctx)) return json(403, { detail: "Only the PRD's owners and its decider remind its reviewers" });
+    const d = db.draft;
+    if (!d || d.status !== "submitted" || !d.waiting_on?.length) return json(409, { detail: "No submitted draft of this PRD waits on a review" });
+    const due = dueReminders(db);
+    if (!due.length) return json(409, { detail: "Every reviewer it waits on was reminded in the last day" });
+    const at = new Date(mockNowMs()).toISOString();
+    const n = liveChanges(db).length;
+    for (const i of due) {
+      if (i === ctx.id) continue;
+      ctx.notify(i, "review_reminder", `${ctx.names[ctx.id] ?? "Someone"} is waiting for your review of ${db.doc.title}`, {
+        draft_id: d.id, href: `/simple/one-pagers/${db.doc.slug}`, waits: `Version ${db.version + 1} · ${n} ${n === 1 ? "change" : "changes"}`,
+      }, db.version + 1);
+    }
+    d.reminders = { ...(d.reminders ?? {}), ...Object.fromEntries(due.map((i) => [i, at])) };
+    return json(200, { reminded: due.map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })), reminded_at: at });
   }
   if (p[2] !== "changes") return null;
   if (m === "POST" && p.length === 3) {
@@ -286,6 +362,8 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
       c.draft_ids = [db.draft!.id];
     }
     db.changes.push(c);
+    // S10: a bet's new wording comes with its visual (Oracle drafts it with the proposal).
+    if (lineId.startsWith("bets-")) requestVisual(db.visuals, "change", c.id, `A bet of the PRD's one-pager, reworded to: ${next}`);
     return json(201, { change: out(db, ctx, c), flags: [] });
   }
   const c = db.changes.find((x) => x.id === p[3]);

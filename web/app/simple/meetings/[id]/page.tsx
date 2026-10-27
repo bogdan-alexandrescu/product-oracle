@@ -1,14 +1,23 @@
-import { SimplePage, SimplePlaceholder } from "@/components/simple/SimplePage";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
-/** One meeting (#723 S1): arrives with S8; until then, the rituals in Detailed. */
-export default function SimpleMeeting() {
+import { Loading } from "@/components/ui";
+import type { RouteProps } from "@/lib/route-props";
+import { SIMPLE_MODE } from "@/lib/simple-mode";
+
+import { MeetingScreen } from "./_meeting";
+
+async function Body({ params }: { params: RouteProps<{ id: string }>["params"] }) {
+  const { id } = await params;
+  return <MeetingScreen id={id} />;
+}
+
+/** Simple S8 (#723): one review meeting, full screen; once ended, its minutes. */
+export default function SimpleMeeting({ params }: RouteProps<{ id: string }>) {
+  if (!SIMPLE_MODE) notFound();
   return (
-    <SimplePage title="Meeting">
-      <SimplePlaceholder
-        arrives="the meeting's one-pager, roadmap and open decisions, full screen with a clock, and its minutes."
-        detailedHref="/company/rituals"
-        detailedLabel="Company › Rituals"
-      />
-    </SimplePage>
+    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+      <Body params={params} />
+    </Suspense>
   );
 }

@@ -56,6 +56,13 @@ MAX_TOKENS = {
     "public_text": 6000,
     # Simple S5: one PRD version's one-pager blocks and lines.
     "one_pager": 4000,
+    # Simple S7: a draft item's outcome, feature, dependencies and dates; a goal's features.
+    "item_draft": 1500,
+    "goal_suggestions": 3000,
+    # Simple S10: one proposal's user flow and wireframe (steps, regions, annotations).
+    "simple_visual": 3000,
+    # Simple S8: one meeting's minutes.
+    "meeting_minutes": 3000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -1043,6 +1050,34 @@ async def one_pager(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     return await op.run_job(s, job, ask)
 
 
+async def item_draft(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Drafts an item added in Simple (oracle.simple.additions)."""
+    from oracle.simple import additions
+
+    return await additions.run_item_draft(s, job, ask)
+
+
+async def goal_suggestions(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Suggests 3-5 features for a goal (oracle.simple.additions)."""
+    from oracle.simple import additions
+
+    return await additions.run_goal_suggestions(s, job, ask)
+
+
+async def simple_visual(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Draws or revises a proposal's visual (oracle.simple.visuals)."""
+    from oracle.simple import visuals
+
+    return await visuals.run_job(s, job, ask)
+
+
+async def meeting_minutes(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Drafts a review meeting's minutes (oracle.simple.meetings)."""
+    from oracle.simple import meetings
+
+    return await meetings.run_job(s, job, ask)
+
+
 # Run when a job of the kind fails for good, in the transaction that records it.
 ON_FAILURE: dict[str, Callable[[AsyncSession, LlmJob], Awaitable[None]]] = {
     "why_not_reply": why_not_reply_failed,
@@ -1063,6 +1098,10 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "why_not_reply": why_not_reply,
     "public_text": public_text,
     "one_pager": one_pager,
+    "item_draft": item_draft,
+    "goal_suggestions": goal_suggestions,
+    "simple_visual": simple_visual,
+    "meeting_minutes": meeting_minutes,
 }
 
 

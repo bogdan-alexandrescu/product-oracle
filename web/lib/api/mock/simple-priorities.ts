@@ -11,7 +11,8 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
-import { roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { closed, roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { flowFor } from "./simple-visuals";
 
 type Row = Schemas["SimplePriorityRow"];
 type Item = Schemas["SimpleRoadmapItem"];
@@ -39,14 +40,6 @@ const FEATURES: Record<string, { value: number; effort: number }> = {
   "price-tiers": { value: 0, effort: 3 },
 };
 const CONFIDENCE: Record<string, number> = { high: 0.8, medium: 0.5, low: 0.3 };
-/** S10 owns the flow bundles: one invented bundle shows the thumbnail; the rest have none. */
-const FLOWS: Record<string, Schemas["SimpleFlow"]> = {
-  "alert-mobile": {
-    title: "Act on a pushed alert",
-    steps: ["Get the push", "Open the alert", "See what crossed the line", "Snooze or assign it"],
-    screen: { title: "Alert on a phone", regions: ["Header: rule and time", "What crossed the line", "Chart of the last day", "Snooze and Assign buttons"] },
-  },
-};
 
 const round = (n: number): number => Math.round(n * 1000) / 1000;
 const featureId = (itemId: string): string => `feature-${itemId}`;
@@ -140,16 +133,45 @@ function activeOverride(db: SimpleDb, itemId: string): Schemas["SimpleChangeOut"
     .at(-1);
 }
 
+type Line = Schemas["SimpleLine"];
+const NOW_LINE: Line = { key: "now", kind: "now", label: "This quarter (Now)", date: null };
+
+const lineDay = (d: string): string => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+/** priorities.lines: Now, each key date and each dated milestone the reader sees. */
+function linesOf(read: Schemas["SimpleRoadmapOut"]): Line[] {
+  const tracks = new Set(read.items.map((i) => i.track?.id).filter(Boolean));
+  return [
+    NOW_LINE,
+    ...(read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date })),
+    ...read.milestones.filter((m) => m.date && tracks.has(m.track_id) && m.status !== "dropped").map((m): Line => ({ key: `milestone:${m.id}`, kind: "milestone", label: `${m.name} · ${lineDay(m.date!)}`, date: m.date! })),
+  ];
+}
+
+/** priorities.pick_line: the line named among those offered, or a picked day; else Now. */
+function pickLine(key: string | null, offered: Line[]): Line {
+  if (key?.startsWith("date:")) {
+    const day = key.slice(5);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day)) ? { key, kind: "date", label: `By ${lineDay(day)}`, date: day } : NOW_LINE;
+  }
+  return offered.find((x) => x.key === key) ?? NOW_LINE;
+}
+
 export function prioritiesOut(
   db: SimpleDb,
   ctx: PrioritiesCtx,
   route: (c: Schemas["SimpleChangeOut"]) => string[],
   decides: (itemId: string) => boolean,
+  lineKey: string | null = null,
 ): Schemas["SimplePrioritiesOut"] {
   const today = new Date(mockNowMs()).toISOString().slice(0, 10);
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
+  const lines = linesOf(read);
+  const line = pickLine(lineKey, lines);
+  const readItems = new Map(read.items.map((i) => [i.id, i]));
   // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).
-  const cut = new Set(db.items.filter((s) => s.status === "cut").map((s) => s.key));
+  // S7: a draft merged into another is closed too.
+  const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
   const live = read.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
   // Every feature ranks (the baseline is company-wide); one whose item the reader may not see
   // is a row with no item, never reorderable (priorities.py).
@@ -209,7 +231,9 @@ export function prioritiesOut(
       depends_on: depsOf(i, byId).map((d) => byId.get(d)!.key),
       after,
       override: o ? { by_name: o.by_name, reason: String((o.after.override as Values).reason), at: o.decided_at ?? o.at } : null,
-      above_line: mine && i.horizon === "now",
+      above_line: mine && (line.date ? readItems.get(i.id)!.end.date <= line.date : i.horizon === "now"),
+      end_date: mine ? readItems.get(i.id)!.end.date : null,
+      end_estimated: mine && readItems.get(i.id)!.end.estimated,
       no_goal: !i.goal,
       can_reorder: can && mine,
       applies: mine && decides(i.id),
@@ -218,15 +242,15 @@ export function prioritiesOut(
   });
   const codes = new Map(read.items.map((i) => [i.id, i]));
   const proposals: Schemas["SimplePriorityProposal"][] = (db.changes ?? [])
-    // Ranking proposals, and a draft's Confirm or Merge (a cut), as priorities.py.
+    // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py.
     .filter((c) => c.status === "proposed" && codes.has(String(c.target.item_id)))
-    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut") && codes.get(String(c.target.item_id))!.draft))
+    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut" || c.op === "merge_item") && codes.get(String(c.target.item_id))!.draft))
     .filter((c) => ctx.role === "owner" || c.by === ctx.id || route(c).includes(ctx.id))
     .map((c) => {
       const i = codes.get(String(c.target.item_id))!;
       return {
         change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureId(i.id), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
-        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), flow: FLOWS[i.key] ?? null,
+        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
       };
     });
   const drafts: Schemas["SimplePriorityDraft"][] = live
@@ -256,6 +280,6 @@ export function prioritiesOut(
   return {
     today, quarter: quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
-    rows, proposals, drafts, buckets, weeks_total: total, can_change: can,
+    rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,
   };
 }

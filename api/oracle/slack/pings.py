@@ -57,6 +57,7 @@ KIND_EVENT = {
     "assignment": "review_requested",
     "rereview_requested": "review_requested",
     "patch_proposed": "review_requested",
+    "review_reminder": "review_requested",
     "comment": "comments",
     "reply": "comments",
     "campaign": "feedback_wanted",
@@ -245,6 +246,15 @@ async def send(db: AsyncSession, http: httpx.AsyncClient, token: str, item: Slac
     if user is None or user.disabled_at is not None:
         raise Undeliverable("member_removed")
     event = str(item.payload.get("event") or "")
+    if item.payload.get("channel_post"):
+        # S8: a meeting's minutes go to the Notifications channel, chosen by their sender.
+        channel = await _notify_channel(db)
+        if channel is None:
+            raise Undeliverable("no_channel")
+        body = {"channel": channel, "text": str(item.payload["text"])[:3000], "mrkdwn": True,
+                "unfurl_links": False}  # fmt: skip
+        got = await slack_api.call(http, "chat.postMessage", token=token, json=body)
+        return str(got.get("ts") or "")
     if event in DEFAULTS and not (await _chosen(db, [user.id]))[user.id][event]:
         raise Undeliverable(TURNED_OFF)
     try:

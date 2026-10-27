@@ -207,6 +207,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         rows = [
             drafts.overlaid(r, overlays.get(r.roadmap_document_id, {}).get(str(r.id))) for r in rows
         ]
+        # S7: the items added in Simple to the drafts the reader sees.
+        rows += await drafts.added_rows(db, overlays)
         rows.sort(key=lambda r: (r.position, r.item_key))
     tracks: dict[uuid.UUID, ProductTrack] = {}
     owner_roles: dict[uuid.UUID, str] = {}
@@ -252,6 +254,16 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         else:
             bases_by_ref[(b.prd_document_id, b.tracker_key)].append(b)
     goals = await _goals(db, {r.feature_id for r in rows if r.feature_id})
+    # S7: the goals items are linked to directly (dropped on, suggested for).
+    linked = {
+        g.id: g
+        for g in await db.scalars(
+            select(Entity).where(
+                Entity.id.in_({g for r in rows for g in r.goal_ids or []}),
+                Entity.type == "goal",
+            )
+        )
+    }
     blockers = await _blockers(db, {b for r in rows for b in r.blocker_ids or []})
     cut = await _cut(db, roadmap_ids)
     suggestions = {
@@ -293,7 +305,8 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 roadmap=roadmap,
                 prd=prd,
                 track=track,
-                goal=goals.get(row.feature_id) if row.feature_id else None,
+                goal=(goals.get(row.feature_id) if row.feature_id else None)
+                or next((linked[g] for g in row.goal_ids or [] if g in linked), None),
                 window=window,
                 resolved=dates.resolve(cands, window),
                 status=_status(row, recs, cut.get(roadmap.id, set())),
@@ -369,6 +382,8 @@ def _candidates(
 
 
 def _status(row: RoadmapItem, recs: list[TrackerRecord], cut: set[str]) -> str:
+    if row.merged_into:
+        return "merged"
     if row.draft:
         return "draft"
     if row.cut or row.item_key in cut:
@@ -540,6 +555,8 @@ def item_out(
     names: dict | None = None,
     owners: list | None = None,
     decisions: dict[uuid.UUID, list[SimpleOpenDecision]] | None = None,
+    extra: dict[uuid.UUID, dict[str, Any]] | None = None,
+    decided: dict[uuid.UUID, list[SimpleOpenDecision]] | None = None,
 ) -> SimpleRoadmapItem:
     row, r = e.row, e.resolved
     names = names or {}
@@ -589,7 +606,41 @@ def item_out(
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),
         open_decisions=(decisions or {}).get(row.id, []),
+        goal_ids=[str(g) for g in row.goal_ids or []],
+        **(extra or {}).get(row.id, {}),
+        decided_in=(decided or {}).get(row.id, []),
     )
+
+
+async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
+    """S8: the decided decisions naming each item, in any version of its roadmap (an
+    approved draft is a new version: its rows are new, its keys are the same)."""
+    from oracle.simple import meetings
+
+    if not shown:
+        return {}
+    keyed = {(e.row.roadmap_document_id, e.row.item_key): e.row.id for e in shown}
+    alias: dict[uuid.UUID, uuid.UUID] = {}
+    for rid, doc, key in (
+        await db.execute(
+            select(RoadmapItem.id, RoadmapItem.roadmap_document_id, RoadmapItem.item_key).where(
+                RoadmapItem.roadmap_document_id.in_({d for d, _ in keyed}),
+                RoadmapItem.item_key.in_({k for _, k in keyed}),
+            )
+        )
+    ).all():
+        if (doc, key) in keyed:
+            alias[rid] = keyed[(doc, key)]
+    found = await meetings.decided_in(db, [{"kind": "roadmap_item", "id": str(i)} for i in alias])
+    out: dict[uuid.UUID, list] = defaultdict(list)
+    for (_, sid, _), lst in found.items():
+        target = alias.get(uuid.UUID(sid))
+        for d in lst:
+            if target is not None and all(x.id != d.id for x in out[target]):
+                out[target].append(d)
+    for lst in out.values():
+        lst.sort(key=lambda d: -d.number)
+    return out
 
 
 def _metric(goal: Entity) -> str | None:
@@ -630,7 +681,7 @@ async def build(
     start: date | None = None,
     end: date | None = None,
 ) -> SimpleRoadmapOut:
-    from oracle.simple import drafts
+    from oracle.simple import drafts, key_dates
 
     seen = await drafts.reader(db, principal)
     read = await load(db, seen.overlays)
@@ -661,9 +712,26 @@ async def build(
         for u in await db.scalars(select(User).where(User.id.in_(people)))
     }
     decisions = await _open_decisions(db, {e.row.id for e in shown})
+    from oracle.simple import additions
+
+    extra = await additions.item_extras(db, read, shown)
+    decided = await _decided(db, shown)
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
+    kds, kd_roadmaps = await key_dates.roadmap_key_dates(
+        db, principal, {e.roadmap.id: e.roadmap for e in shown}
+    )
+    from oracle.simple import visuals
+
+    flows = await visuals.flows_for(db, "feature", [e.row.id for e in shown])
+    items = [
+        item_out(e, principal, read.deciders, names, owners, decisions, extra, decided)
+        for e in shown
+    ]
+    for it in items:
+        # A draft's own visual (S7) first, else its feature's (S10).
+        it.flow = it.flow or flows.get(it.id)
     return SimpleRoadmapOut(
         today=read.today,
         group=group,  # type: ignore[arg-type]
@@ -671,7 +739,7 @@ async def build(
             **{h: SimpleWindow(start=w[h][0], end=w[h][1]) for h in ("now", "next", "later")}
         ),
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
-        items=[item_out(e, principal, read.deciders, names, owners, decisions) for e in shown],
+        items=items,
         milestones=[
             SimpleMilestone(
                 id=m.id,
@@ -690,4 +758,6 @@ async def build(
         ],
         changes_in_review=seen.changes_in_review,
         drafts=seen.visible,
+        key_dates=kds,
+        key_date_roadmaps=kd_roadmaps,
     )

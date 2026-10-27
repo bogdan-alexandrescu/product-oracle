@@ -101,6 +101,8 @@ const SETTING_DEFAULTS: Record<string, unknown> = {
   pricing_owner: null,
   // INT2: Oracle reads new intakes ($1.50 a read), on by default (owner answer Q2).
   intake_ai_read: true,
+  // Code maps (owner, 2026-10-26): a stale map's refresh at most daily.
+  code_map_refresh: "daily",
 };
 
 /** A company setting's value as stored, else its default (./reports.ts reads the report's channel). */
@@ -429,6 +431,9 @@ async function handle(db: ConnDb, req: Request, p: string[], role: string): Prom
             detail: `company_email_domains: ${domain} is a public mail provider, where anyone can have an address; enter the company's own domain`,
           });
         }
+      }
+      if (key === "code_map_refresh" && value !== null && value !== undefined && !["hourly", "every_6_hours", "daily", "weekly", "on_demand"].includes(String(value))) {
+        return json(422, { detail: "code_map_refresh must be one of hourly, every_6_hours, daily, weekly, on_demand" });
       }
       if (key === "planning_horizons" && value !== null && value !== undefined) {
         const error = horizonsError(value);

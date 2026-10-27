@@ -31,6 +31,7 @@ import { labelsOf, type PickerProps } from "./_browse-list";
 import { CodeMaps } from "./_code-maps";
 import { GithubPicker, githubReads } from "./_github-picker";
 import { SlackPicker } from "./_slack-picker";
+import { CodeMapRefreshSetting } from "./_code-map-refresh";
 import { CompanyDriveSettings } from "./CompanyDrive";
 import { driveConfig, driveFiles, DriveFiles, DriveNotes, ReconnectToChoose, type DriveFile } from "./DriveFiles";
 import {
@@ -996,6 +997,7 @@ export default function SourceSettingsPage() {
           )}
         </Panel>
         {can("put_setting") && <CompanyDriveSettings />}
+        {can("put_setting") && <CodeMapRefreshSetting />}
       </Split>
     </>
   );

@@ -166,6 +166,8 @@ EXCEPTIONS = {
     ("rituals/blocks.py", "outcomes_due"): "machine field: compared with stored ISO days",
     ("simple/constraints.py", "_day"): "a roadmap item's date: a calendar date, no time of day",
     ("simple/dates.py", "_day"): "a suggested start or end: a calendar date, no time of day",
+    ("simple/chat.py", "_day_words"): "a change card's item dates: calendar dates, no time of day",
+    ("simple/priorities.py", "_day"): "the line's key date or milestone: a calendar date, no time",
     ("review/collab.py", "set_assignment"): (
         "a section's due day: a picked calendar day the web stores at 17:00 UTC, so its UTC "
         "date is the day picked"

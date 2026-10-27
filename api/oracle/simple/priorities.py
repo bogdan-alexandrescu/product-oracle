@@ -9,8 +9,16 @@ draft item (drafts are not ranked yet: they sit among the drafts); a feature wit
 non-draft item is still a row (no item, not reorderable, no weeks in a bucket). Besides the
 rows: the open ``override_priority`` and ``estimate_feature`` proposals the caller may see
 (each with its item's feature, so one on a feature's other item shows under its row) and
-the ``confirm_item`` and ``cut`` (Merge) proposals on draft items, the visible
+the ``confirm_item``, ``merge_item`` (S7's Merge; train T's was a ``cut`` with a note) and
+``cut`` proposals on draft items, the visible
 draft items with the items they may merge into, and this quarter's engineer-weeks per goal.
+
+**The line** (roadmap-plus): above the line is this quarter's plan (the Now horizon) by
+default; ``?line=`` draws it at a day instead: ``key_date:<id>`` (a roadmap's key date),
+``milestone:<id>`` (a dated track milestone) or ``date:<YYYY-MM-DD>``; then a row is above
+the line when its item is planned to finish by that day (its stored or estimated end). An
+unknown line reads as Now. ``lines`` offers Now, every key date and every dated milestone
+the reader sees; the web keeps a person's pick in their preferences (``priorities_line``).
 
 Changes go through the change engine (``/v1/simple/changes``): ``override_priority`` (with
 each row's ``before_override``), ``estimate_feature`` and ``confirm_item``. It writes
@@ -19,9 +27,9 @@ nothing.
 
 import uuid
 from datetime import date
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,11 +38,12 @@ from oracle.authz import has_role
 from oracle.priorities import service as priorities
 from oracle.priorities.schemas import RankedFeature
 from oracle.roadmap.models import HORIZONS
-from oracle.simple import changes, drafts, service, targets
+from oracle.simple import changes, drafts, key_dates, service, targets
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader
 from oracle.simple.schemas import (
     SimpleGoalBucket,
+    SimpleLine,
     SimplePrioritiesOut,
     SimplePriorityAfter,
     SimplePriorityDraft,
@@ -51,7 +60,7 @@ router = APIRouter(prefix="/v1/simple", tags=["simple"])
 METHOD = "goal_weighted"
 PROPOSED_OPS = ("override_priority", "estimate_feature")
 # Confirm and Merge of a draft item, shown under the draft.
-DRAFT_OPS = ("confirm_item", "cut")
+DRAFT_OPS = ("confirm_item", "cut", "merge_item")
 MERGE_MAX = 8
 NONE = "none"
 
@@ -141,6 +150,10 @@ async def _proposals(
             e = None
         if e is not None and (c.op in PROPOSED_OPS or e.row.draft) and v.sees(c):
             shown.append((c, e))
+    from oracle.simple import visuals
+
+    by_change = await visuals.flows_for(db, "change", [c.id for c, _ in shown])
+    by_item = await visuals.flows_for(db, "feature", [e.row.id for _, e in shown])
     names = await changes._names(db, {c.by for c, _ in shown} | {
         p for c, _ in shown for p in v.route(c)
     })  # fmt: skip
@@ -158,7 +171,7 @@ async def _proposals(
             after=c.after,
             waiting_for=[names.get(p, "someone") for p in v.route(c)],
             can_decide=v.may_decide(c),
-            flow=None,
+            flow=by_change.get(c.id) or by_item.get(e.row.id),
         )  # fmt: skip
         for c, e in shown
     ]
@@ -166,7 +179,7 @@ async def _proposals(
 
 def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
     out = []
-    live = [e for e in read_.entries if e.status != "cut"]
+    live = [e for e in read_.entries if e.status not in ("cut", "merged")]
     for e in live:
         if not e.row.draft:
             continue
@@ -222,10 +235,66 @@ def _buckets(rows: list[SimplePriorityRow]) -> tuple[list[SimpleGoalBucket], flo
     return out, total
 
 
-async def build(db: AsyncSession, principal: Any) -> SimplePrioritiesOut:
+def _day(d: date) -> str:
+    return f"{d:%b} {d.day}, {d.year}"
+
+
+NOW_LINE = SimpleLine(key="now", kind="now", label="This quarter (Now)")
+
+
+async def lines(db: AsyncSession, principal: Any, read_: service.Read) -> list[SimpleLine]:
+    """The lines offered: Now, each key date and each dated milestone the reader sees."""
+    docs = {e.roadmap.id: e.roadmap for e in read_.entries}
+    kds, _ = await key_dates.roadmap_key_dates(db, principal, docs)
+    tracks = {e.track.id for e in read_.entries if e.track is not None}
+    out = [NOW_LINE]
+    out += [
+        SimpleLine(
+            key=f"key_date:{k.id}", kind="key_date", label=f"{k.name} · {_day(k.date)}", date=k.date
+        )  # fmt: skip
+        for k in kds
+    ]
+    out += [
+        SimpleLine(
+            key=f"milestone:{m.id}",
+            kind="milestone",
+            label=f"{m.name} · {_day(m.target_date)}",
+            date=m.target_date,
+        )  # fmt: skip
+        for m in read_.milestones
+        if m.target_date is not None and m.track_id in tracks and m.status != "dropped"
+    ]
+    return out
+
+
+def pick_line(key: str | None, offered: list[SimpleLine]) -> SimpleLine:
+    """The line ``key`` names among those offered, or a picked day; else Now."""
+    if key and key.startswith("date:"):
+        try:
+            day = date.fromisoformat(key[5:])
+        except ValueError:
+            return NOW_LINE
+        return SimpleLine(key=f"date:{day.isoformat()}", kind="date", label=f"By {_day(day)}",
+                          date=day)  # fmt: skip
+    return next((x for x in offered if x.key == key), NOW_LINE)
+
+
+def above(e: service.Entry | None, line: SimpleLine) -> bool:
+    if e is None:
+        return False
+    if line.date is None:
+        return e.row.horizon == "now"
+    return e.resolved.end.date <= line.date
+
+
+async def build(
+    db: AsyncSession, principal: Any, line_key: str | None = None
+) -> SimplePrioritiesOut:
     ranking = await priorities.compute(db, METHOD, principal, overrides=True)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     items = _items(read_)
+    offered = await lines(db, principal, read_)
+    line = pick_line(line_key, offered)
     active = {str(o.id): o for o in await priorities.active_overrides(db)}
     by_feature = {str(o.feature_id): o for o in active.values()}
     names = await changes._names(db, {o.created_by for o in active.values()})
@@ -265,7 +334,9 @@ async def build(db: AsyncSession, principal: Any) -> SimplePrioritiesOut:
                 )
                 if f.override is not None
                 else None,
-                above_line=e is not None and e.row.horizon == "now",
+                above_line=above(e, line),
+                end_date=e.resolved.end.date if e is not None else None,
+                end_estimated=e is not None and e.resolved.end.estimated,
                 no_goal=not f.serves_goal,
                 can_reorder=can_change and e is not None,
                 applies=e is not None and service.can_decide(principal, e, read_.deciders),
@@ -285,15 +356,20 @@ async def build(db: AsyncSession, principal: Any) -> SimplePrioritiesOut:
         buckets=buckets,
         weeks_total=total,
         can_change=can_change,
+        line=line,
+        lines=offered,
     )
 
 
 @router.get("/priorities", response_model=SimplePrioritiesOut, name="get_simple_priorities")
-async def get_simple_priorities(principal: Reader, db: TenantDB) -> SimplePrioritiesOut:
+async def get_simple_priorities(
+    principal: Reader, db: TenantDB, line: Annotated[str | None, Query(max_length=80)] = None
+) -> SimplePrioritiesOut:
     """The live goal-weighted ranking in the company's order joined with the roadmap items
     the caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate
     or the goals'), effort, score, the dependency it waits for, the override that placed it
     and whether the caller's change applies or is proposed; the open priority and estimate
     proposals, the draft items with what they may merge into, and this quarter's
-    engineer-weeks per goal."""
-    return await build(db, principal)
+    engineer-weeks per goal. ``line``: where the line is drawn (Now, a key date, a dated
+    milestone or a day; see the module)."""
+    return await build(db, principal, line)

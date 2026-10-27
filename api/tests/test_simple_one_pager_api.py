@@ -518,3 +518,127 @@ async def test_read_carries_the_source_sections_text(client):
     build = next(s for s in view["sections"] if s["key"] == "build")
     assert build["heading"] == "What we will build"
     assert "Invite suggestions from the admin's calendar" in build["body"]
+
+
+# --------------------------------------------------------------------------- Remind
+
+
+async def in_review(client, ctx: Ctx, reviewers=("approver",)) -> dict:
+    """The decider's line edit submitted: the draft waits on ``reviewers``."""
+    async with tenant_session(ctx.tenant_id) as s:
+        policy = await s.scalar(select(DocumentReviewPolicy))
+        policy.mandatory_reviewer_ids = [ctx.users[r].id for r in reviewers]
+        ctx.users["approver"].name = "Ann Prover"
+        s.add(ctx.users["approver"])
+        await s.commit()
+    view = await get(client, ctx, "decider")
+    r = await edit(client, ctx, "decider", view, "bets-2", "Invite suggestions from contacts")
+    assert r.status_code == 201, r.text
+    draft_id = (await get(client, ctx, "decider"))["draft"]["id"]
+    sub = await client.post(f"/v1/simple/drafts/{draft_id}/submit", headers=ctx.as_("decider"))
+    assert sub.status_code == 200, sub.text
+    return await get(client, ctx, "decider")
+
+
+async def nudges(ctx: Ctx) -> list:
+    from oracle.review.models import Notification
+
+    async with tenant_session(ctx.tenant_id) as s:
+        return list(
+            await s.scalars(
+                select(Notification)
+                .where(Notification.kind == "review_reminder")
+                .order_by(Notification.created_at)
+            )
+        )
+
+
+async def remind(client, ctx: Ctx, who: str):
+    return await client.post(f"{URL}/guided-setup/remind", headers=ctx.as_(who))
+
+
+async def test_remind_per_role(client):
+    from oracle.models import AuditEvent
+    from oracle.roadmap.models import ProductTrack
+
+    ctx = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        lead = User(email="lead@example.com", name="Lee Track", password_hash="x",
+                    role="approver")  # fmt: skip
+        s.add(lead)
+        await s.flush()
+        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        s.add(ProductTrack(prd_document_id=doc.id, title="Setup", owner_id=lead.id))
+        await s.commit()
+        ctx.users["lead"] = lead
+    view = await in_review(client, ctx)
+    d = view["draft"]
+    assert d["status"] == "submitted"
+    assert [p["name"] for p in d["waiting_on"]] == ["Ann Prover"]
+    assert d["can_remind"] is True and d["reminded_at"] is None
+    for who in ("approver", "commenter", "viewer"):
+        seen = (await get(client, ctx, who))["draft"]
+        assert seen is None or seen["can_remind"] is False, who
+        r = await remind(client, ctx, who)
+        assert r.status_code == 403, (who, r.text)
+    assert (await get(client, ctx, "lead"))["draft"]["can_remind"] is True
+    assert (await get(client, ctx, "owner"))["draft"]["can_remind"] is True
+    assert await nudges(ctx) == []
+
+    r = await remind(client, ctx, "decider")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert [p["name"] for p in body["reminded"]] == ["Ann Prover"] and body["reminded_at"]
+    [n] = await nudges(ctx)
+    assert n.user_id == ctx.users["approver"].id
+    assert n.title == "Dee Cider is waiting for your review of Guided setup"
+    assert n.document_id == uuid.UUID(view["document"]["id"])
+    assert n.data["href"] == "/simple/one-pagers/guided-setup"
+    assert n.data["draft_id"] == d["id"] and "Version 2" in n.data["waits"]
+    async with tenant_session(ctx.tenant_id) as s:
+        ev = await s.scalar(select(AuditEvent).where(AuditEvent.action == "simple_draft.reminded"))
+        assert ev is not None and ev.data["reviewer_ids"] == [str(ctx.users["approver"].id)]
+
+
+async def test_remind_at_most_once_a_day_per_reviewer(client, monkeypatch):
+    from datetime import timedelta
+
+    ctx = await world(client)
+    await in_review(client, ctx)
+    assert (await remind(client, ctx, "decider")).status_code == 200
+    again = await remind(client, ctx, "owner")
+    assert again.status_code == 409, again.text
+    assert len(await nudges(ctx)) == 1
+    d = (await get(client, ctx, "owner"))["draft"]
+    assert d["reminded_at"] is not None and d["can_remind"] is False
+
+    # A reviewer added to the waiting list since is still due.
+    async with tenant_session(ctx.tenant_id) as s:
+        draft = await s.scalar(select(SimpleDraft))
+        draft.waiting_on = [ctx.users["approver"].id, ctx.users["owner"].id]
+        await s.commit()
+    assert (await get(client, ctx, "decider"))["draft"]["can_remind"] is True
+    r = await remind(client, ctx, "decider")
+    assert r.status_code == 200 and [p["id"] for p in r.json()["reminded"]] == [
+        str(ctx.users["owner"].id)
+    ]
+    assert len(await nudges(ctx)) == 2
+
+    # A day later, both are due again.
+    monkeypatch.setattr(company_time, "now", lambda: NOW + timedelta(hours=24, minutes=1))
+    assert (await get(client, ctx, "decider"))["draft"]["can_remind"] is True
+    r = await remind(client, ctx, "decider")
+    assert r.status_code == 200 and len(r.json()["reminded"]) == 2
+    assert len(await nudges(ctx)) == 4
+
+
+async def test_remind_needs_a_submitted_draft(client):
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")
+    r = await edit(client, ctx, "decider", view, "bets-2", "Invite suggestions from contacts")
+    assert r.status_code == 201, r.text
+    d = (await get(client, ctx, "decider"))["draft"]
+    assert d["status"] == "working" and d["can_remind"] is False
+    r = await remind(client, ctx, "decider")
+    assert r.status_code == 409, r.text
+    assert await nudges(ctx) == []

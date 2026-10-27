@@ -188,6 +188,9 @@ class SimpleDraft(TenantScoped, Base):
         ARRAY(Uuid), nullable=False, server_default="{}"
     )
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Remind (owner, 2026-10-26): when each waiting reviewer was last nudged,
+    # ``{user_id: iso time}``; at most once a day each. Cleared on submit.
+    reminders: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
 
 
 class SimpleSessionDraft(TenantScoped, Base):
@@ -288,3 +291,283 @@ class SimpleOnePager(TenantScoped, Base):
     built_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class RoadmapKeyDate(TenantScoped, Base):
+    """Simple roadmap-plus: one of a roadmap's published key dates (a conference, a product
+    launch, a board meeting): a name, a day and an optional note. Owners' and the decider's
+    changes wait in the roadmap's working draft (``overlay["key_dates"]``) and are written
+    here when the draft is approved (oracle.simple.key_dates.publish)."""
+
+    __tablename__ = "roadmap_key_dates"
+
+    roadmap_document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    on_date: Mapped[date] = mapped_column(Date, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+
+
+# --------------------------------------------------------------------------- S7
+
+GOAL_SUGGESTION_STATUSES = ("open", "accepted", "rejected")
+GOAL_SUGGESTION_ORIGINS = ("auto", "on_demand")
+
+
+class SimpleGoalSuggestion(TenantScoped, Base):
+    """Simple S7 (oracle.simple.additions): a feature Oracle suggests for a goal. ``open``
+    until a person accepts it (an ``add_item`` change on the goal: ``change_id``,
+    ``item_id``; undoing or declining that change reopens it) or rejects it (with an
+    optional ``reason``; a rejected title is never suggested again for the goal).
+    ``evidence``: [{"label", "kind", "ref", "url", "confidence"}]."""
+
+    __tablename__ = "simple_goal_suggestions"
+    __table_args__ = (
+        CheckConstraint(_in("status", GOAL_SUGGESTION_STATUSES), name="status"),
+        CheckConstraint(_in("origin", GOAL_SUGGESTION_ORIGINS), name="origin"),
+        Index("ix_simple_goal_suggestions_goal_status", "goal_id", "status"),
+    )
+
+    goal_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entities.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    outcome: Mapped[str | None] = mapped_column(Text)
+    why: Mapped[str | None] = mapped_column(Text)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]", default=list
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open",
+                                        default="open")  # fmt: skip
+    origin: Mapped[str] = mapped_column(Text, nullable=False, server_default="on_demand",
+                                        default="on_demand")  # fmt: skip
+    reason: Mapped[str | None] = mapped_column(Text)
+    job_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("llm_jobs.id", ondelete="SET NULL")
+    )
+    change_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("simple_changes.id", ondelete="SET NULL")
+    )
+    item_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SimpleGoalAuto(TenantScoped, Base):
+    """A goal Oracle suggested features for automatically, once, when it had no items
+    (oracle.simple.additions.suggest_for_empty_goals): never again for that goal."""
+
+    __tablename__ = "simple_goal_autos"
+    __table_args__ = (UniqueConstraint("goal_id"),)
+
+    goal_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entities.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("llm_jobs.id", ondelete="SET NULL")
+    )
+
+
+VISUAL_SUBJECT_KINDS = (
+    "suggestion",
+    "draft_item",
+    "change",
+    "chat_card",
+    "one_pager_line",
+    "feature",
+)
+
+
+class SimpleVisual(TenantScoped, Base):
+    """Simple S10: the visual of one proposal (oracle.simple.visuals), held against its
+    subject (``subject_kind``, ``subject_id``). Its versions are the drawings; its comments
+    are what a person asked to change. ``document_id``: the roadmap or PRD the subject
+    belongs to (who reads it and who revises it follow that document), null when none."""
+
+    __tablename__ = "simple_visuals"
+    __table_args__ = (
+        CheckConstraint(_in("subject_kind", VISUAL_SUBJECT_KINDS), name="subject_kind"),
+        UniqueConstraint("tenant_id", "subject_kind", "subject_id"),
+    )
+
+    subject_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    subject_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+    # What the proposal adds or changes, in words (the drafting job's brief).
+    brief: Mapped[str] = mapped_column(Text, nullable=False)
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SimpleVisualVersion(TenantScoped, Base):
+    """One drawing of a visual: the user flow (its steps as data and as sanitised SVG), the
+    low-fi wireframe of the screen it touches (sanitised HTML, none when it touches no
+    screen) and the numbered annotations tying parts to PRD sections and requirements.
+    Version 1 is the draft; each revise adds the next."""
+
+    __tablename__ = "simple_visual_versions"
+    __table_args__ = (UniqueConstraint("visual_id", "number"),)
+
+    visual_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_visuals.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    goal: Mapped[str | None] = mapped_column(Text)
+    # [{"id", "label", "kind": step|decision, "feature", "change": new|changed|same,
+    #   "section_key"}]
+    steps: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    # {"title", "regions": [...]}; null: the proposal touches no screen.
+    screen: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    flow_svg: Mapped[str] = mapped_column(Text, nullable=False)
+    wireframe_html: Mapped[str | None] = mapped_column(Text)
+    annotations: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # Harmless markup the sanitiser dropped (reported, as the design check does).
+    removed: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # Who asked for this drawing (the proposal's author, or the reviser); null: Oracle.
+    made_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class SimpleVisualComment(TenantScoped, Base):
+    """A comment on a visual's version (optionally on one numbered annotation); a revise
+    addresses every open one (``addressed_in``: the version that did)."""
+
+    __tablename__ = "simple_visual_comments"
+
+    visual_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_visuals.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    annotation: Mapped[int | None] = mapped_column(Integer)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    author_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    addressed_in: Mapped[int | None] = mapped_column(Integer)
+
+
+CARD_STATUSES = ("open", "applied", "proposed", "discarded", "undone")
+
+
+class SimpleChatCard(TenantScoped, Base):
+    """Simple S9: one change card Oracle answered a chat request with (oracle.simple.chat):
+    the exact change-engine op it would make. Nothing is written until an allowed person
+    applies it (``change_id``: the change it became, applied or proposed); a discarded
+    card wrote nothing. ``discussion_id``/``message_id``: the thread line (Oracle's
+    discussions) it belongs to; ``meeting_id``: S8's meeting, when asked in one;
+    ``owner_id``: the person whose Ask panel or walk it is (outside meetings)."""
+
+    __tablename__ = "simple_chat_cards"
+    __table_args__ = (
+        CheckConstraint(_in("status", CARD_STATUSES), name="status"),
+        Index("ix_simple_chat_cards_message", "message_id"),
+    )
+
+    discussion_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussions.id", ondelete="CASCADE"), index=True
+    )
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussion_messages.id", ondelete="CASCADE")
+    )
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    op: Mapped[str] = mapped_column(Text, nullable=False)
+    target: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    before: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    after: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    item_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    preview: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")
+    change_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("simple_changes.id", ondelete="SET NULL")
+    )
+    decision_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+MEETING_ORIGINS = ("one_pager", "roadmap", "ritual")
+MEETING_STATUSES = ("live", "ended")
+CHANGE_MODES = ("everyone", "presenter", "named")
+MINUTES_STATES = ("drafting", "ready", "sent")
+
+
+class SimpleMeeting(TenantScoped, Base):
+    """Simple S8: a review meeting of one PRD (oracle.simple.meetings): a titled session
+    (``kind = 'meeting'``) joining the shared working drafts; its attendees, the
+    presenter's change mode, its length, and, once ended, its minutes and their delivery.
+    ``minutes``: {summary, open_questions, action_items, waits, written_by}; ``delivery``:
+    SimpleDelivery's fields."""
+
+    __tablename__ = "simple_meetings"
+    __table_args__ = (
+        CheckConstraint(_in("origin", MEETING_ORIGINS), name="origin"),
+        CheckConstraint(_in("status", MEETING_STATUSES), name="status"),
+        CheckConstraint(_in("change_mode", CHANGE_MODES), name="change_mode"),
+        CheckConstraint(
+            "minutes_state IS NULL OR " + _in("minutes_state", MINUTES_STATES),
+            name="minutes_state",
+        ),
+        CheckConstraint("length_min BETWEEN 5 AND 240", name="length_min"),
+        Index("ix_simple_meetings_started", "started_at"),
+    )
+
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    prd_document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    origin: Mapped[str] = mapped_column(Text, nullable=False)
+    occurrence_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("ritual_occurrences.id", ondelete="SET NULL")
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_sessions.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    presenter_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    attendee_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    absent_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    change_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="everyone")
+    change_people: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    length_min: Mapped[int] = mapped_column(Integer, nullable=False, server_default="60")
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="live")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    minutes: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    minutes_state: Mapped[str | None] = mapped_column(Text)
+    minutes_job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    delivery: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SimpleMeetingDecision(TenantScoped, Base):
+    """Simple S8: a decision taken in a meeting (a ``decisions`` row, origin ``meeting``)
+    and the Simple changes it made."""
+
+    __tablename__ = "simple_meeting_decisions"
+    __table_args__ = (UniqueConstraint("decision_id"),)
+
+    meeting_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_meetings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    decision_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("decisions.id", ondelete="CASCADE"), nullable=False
+    )
+    change_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

@@ -9,8 +9,10 @@
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
 import type { Schemas } from "@/lib/api/client";
+import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { seeded, stableUuid } from "./ids";
+import { flowFor, type VisualsDb } from "./simple-visuals";
 
 type Item = Schemas["SimpleRoadmapItem"];
 type Suggestion = Schemas["DateSuggestionOut"];
@@ -45,6 +47,23 @@ interface SeedItem {
   /** S4 (the floating card): the priority's rationale and the PRD section it came from. */
   why?: string;
   section?: string;
+  /** S7: goals linked directly besides `goal` (merges add the draft's). */
+  goals?: string[];
+  /** S7: the items this draft looks like (keys, best first), until kept both or merged. */
+  looks_like?: string[];
+  kept_both?: boolean;
+  /** S7: the key of the item this draft was merged into (the draft is closed). */
+  merged_into?: string;
+  /** S7: the baseline feature (with no item) this draft was linked to by a merge. */
+  // A draft merged with a baseline feature that has no item: linked to it (still a draft).
+  linked_feature?: string;
+  /** S7: Oracle's drafting job runs until this mock time (ms); the item is "drafting" until then. */
+  drafting_until?: number;
+  /** S7: a draft quick-added on a quarter: Oracle's date suggestion falls in it. */
+  quarter?: { start: string; end: string };
+  flow?: Schemas["SimpleFlow"] | null;
+  /** S7: notes a merge left on the kept item. */
+  notes?: string[];
 }
 
 interface SimpleDb {
@@ -68,6 +87,47 @@ interface SimpleDb {
   people?: Record<string, string>;
   /** S4: proposed decisions naming an item (item key -> decisions). */
   decisions?: Record<string, { number: number; title: string }[]>;
+  /** Roadmap-plus (api/oracle/simple/key_dates.py): each roadmap's key dates as its working
+   * draft has them (roadmap slug -> key dates); a draft keeps the published ones. */
+  key_dates?: Record<string, MockKeyDate[]>;
+  /** S7 (./simple-suggestions.ts): Oracle's feature suggestions for goals, its suggest jobs
+   * (goal key -> when the job is done, mock ms) and the goals suggested for automatically. */
+  goal_suggestions?: GoalSuggestionRow[];
+  goal_jobs?: Record<string, { until: number; job_id: string; origin: "auto" | "on_demand" }>;
+  auto_done?: string[];
+  /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
+  snapshots?: Record<string, SeedItem[]>;
+  /** S10: the visuals (./simple-visuals.ts), shared with the one-pager's. */
+  visuals?: VisualsDb;
+  /** S8: decided decisions that changed each item (by item id), newest first. */
+  decided_in?: Record<string, { id: string; number: number; title: string }[]>;
+}
+
+/** A roadmap's key date (roadmap_key_dates): invented names and days. */
+export interface MockKeyDate {
+  id: string;
+  name: string;
+  date: string;
+  note: string | null;
+}
+
+/** S7: one of Oracle's suggested features for a goal, as stored. */
+export interface GoalSuggestionRow {
+  id: string;
+  goal: string;
+  title: string;
+  outcome: string;
+  why: string;
+  evidence: Schemas["SimpleEvidence"][];
+  status: "open" | "accepted" | "rejected";
+  reason: string | null;
+  origin: "auto" | "on_demand";
+  created_at: string;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  change_id: string | null;
+  item_id: string | null;
+  flow: Schemas["SimpleFlow"] | null;
 }
 
 /** A reader, with every member's role (D-a: a track owner decides only as an approver or owner). */
@@ -85,7 +145,7 @@ export interface Who {
 interface MockDraft {
   out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "change_log" | "can_withdraw">;
   roadmap: string;
-  published: { items: SeedItem[]; own: SimpleDb["own"] };
+  published: { items: SeedItem[]; own: SimpleDb["own"]; key_dates?: MockKeyDate[] };
 }
 
 const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string }> = {
@@ -93,9 +153,15 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
   "onboarding-roadmap": { title: "Onboarding roadmap", visibility: "company", prd: "Guided setup" },
   "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes" },
 };
-const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation" };
+/** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
+export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
 /** S4: each goal's metric (the goal counters' line). */
-const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert" };
+const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert", "quiet-alerts": "Teams muting alerts" };
+export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
+export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
+export const ROADMAP_SLUGS = (): string[] => Object.keys(ROADMAPS);
+/** S7: an item closed for the plan (cut, or a draft merged into another). */
+export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged_into;
 const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
 
 const SEED: SeedItem[] = [
@@ -156,7 +222,17 @@ export function seedSimpleRoadmap(): SimpleDb {
     own: {},
     suggestions: [],
     decisions: { "alert-digest": [{ number: 7, title: "Send the digest weekly or daily?" }] },
+    key_dates: seedKeyDates(),
   }));
+}
+
+/** Roadmap-plus: invented key dates, days from this quarter's start on the mock's clock. */
+export function seedKeyDates(): Record<string, MockKeyDate[]> {
+  const q = simpleWindows(iso(mockNowMs())).now[0];
+  return {
+    "alerts-roadmap": [{ id: stableUuid("simple-key-date/conference"), name: "Customer conference", date: addDays(q, 44), note: "Keynote slot for alerts" }],
+    "onboarding-roadmap": [{ id: stableUuid("simple-key-date/board"), name: "Board meeting", date: addDays(q, 75), note: null }],
+  };
 }
 
 /**
@@ -179,7 +255,7 @@ export function storedDates(db: SimpleDb, key: string): { start: string | null; 
  */
 export function seedSimpleMany(n = 500): SimpleDb {
   const roadmaps = ["alerts-roadmap", "onboarding-roadmap", "pricing-roadmap"];
-  const goals = [...Object.keys(GOALS), undefined];
+  const goals = ["grow-retention", "faster-activation", undefined];
   const tracks = Object.keys(TRACKS);
   const horizons: Horizon[] = ["now", "next", "later"];
   const items: SeedItem[] = Array.from({ length: n }, (_, i) => {
@@ -234,9 +310,14 @@ function phases(start: string, end: string, s: SeedItem, w: [string, string]): S
     share += part;
     const own = named.get(key);
     let day = own ?? (i === PHASES.length - 1 ? end : addDays(start, Math.round(total * share) - 1));
-    if (day < cursor) day = cursor;
-    const out = { key, start: cursor, end: day, estimated: !own };
-    cursor = addDays(day, 1);
+    if (!own) {
+      // An estimated phase ends before the next dated gate (roadmap-plus: they may bunch up).
+      const gate = PHASES.slice(i + 1).map(([k]) => named.get(k)).filter((d): d is string => !!d).sort()[0];
+      if (gate && day >= gate) day = addDays(gate, -1);
+      if (day < cursor) day = cursor;
+    }
+    const out = { key, start: cursor < day ? cursor : day, end: day, estimated: !own };
+    if (addDays(day, 1) > cursor) cursor = addDays(day, 1);
     return out;
   });
 }
@@ -251,7 +332,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   };
   for (const key of s.depends ?? []) {
     const dep = all.get(key);
-    if (!dep || dep.s.status === "cut" || (dep.r.end.estimated && r.start.estimated)) continue;
+    if (!dep || closed(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
     if (dep.r.end.date >= r.start.date)
       flag("dependency_order", `Starts ${word(r.start.date)}, but '${short(dep.s.title)}' it depends on ends ${word(dep.r.end.date)}`, ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
   }
@@ -266,7 +347,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
       flag("cut_with_dependents", `Cut, but '${short(live[0].s.title)}'${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["accept_risk"]);
     }
   }
-  if (s.draft && !s.track) flag("draft_without_owner", "Draft with no owner to confirm it", []);
+  if (s.draft && !s.track && !closed(s)) flag("draft_without_owner", "Draft with no owner to confirm it", []);
   return out;
 }
 
@@ -324,7 +405,7 @@ function regenerate(db: SimpleDb, today: string): number {
   for (const { s, r } of resolved.values()) {
     const id = db.ids[s.key];
     const current = db.suggestions.find((x) => x.item_id === id && x.status === "open");
-    const undated = r.start.estimated && r.end.estimated && s.status !== "cut" && s.status !== "done";
+    const undated = r.start.estimated && r.end.estimated && !closed(s) && s.status !== "done" && !s.drafting_until;
     if (!undated || db.suggestions.some((x) => x.item_id === id && x.status === "dismissed")) {
       if (current) db.suggestions = db.suggestions.filter((x) => x !== current);
       continue;
@@ -378,6 +459,7 @@ export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: Sim
 function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleDb; hidden: number; visible: Schemas["SimpleDraftBrief"][] } {
   let items = db.items;
   let own = db.own;
+  let keyDates = db.key_dates ?? {};
   let hidden = 0;
   const visible: Schemas["SimpleDraftBrief"][] = [];
   for (const d of (db.drafts ?? []).filter((x) => OPEN_DRAFT.includes(x.out.status))) {
@@ -388,11 +470,12 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
     hidden += draftChanges(db, d.out.id);
     const keys = new Set(items.filter((s) => s.roadmap === d.roadmap).map((s) => s.key));
     items = [...items.filter((s) => s.roadmap !== d.roadmap), ...d.published.items];
+    keyDates = { ...keyDates, [d.roadmap]: d.published.key_dates ?? [] };
     own = { ...Object.fromEntries(Object.entries(own).filter(([k]) => !keys.has(k))), ...d.published.own };
   }
   const shownDocs = new Set(visible.map((v) => v.document_id));
   hidden += (db.changes ?? []).filter((c) => c.status === "proposed" && me.role !== "owner" && c.document_id && !shownDocs.has(c.document_id)).length;
-  return { db: { ...db, items, own }, hidden, visible };
+  return { db: { ...db, items, own, key_dates: keyDates }, hidden, visible };
 }
 
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
@@ -401,7 +484,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const ids = deciderIds(db, s, me?.roles);
     return (ids.length ? ids : (me?.owners ?? [])).map((id) => me?.names?.[id]).filter((n): n is string => !!n);
   };
-  const reader = me ? readerView(db, me) : { db, hidden: 0, visible: [] };
+  const reader = { ...(me ? readerView(db, me) : { db, hidden: 0, visible: [] }), full: db };
   db = reader.db;
   const today = iso(mockNowMs());
   const w = simpleWindows(today);
@@ -420,7 +503,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
-      status: s.draft ? "draft" : (s.status ?? "planned"),
+      status: s.merged_into ? "merged" : s.draft ? "draft" : (s.status ?? "planned"),
       draft: !!s.draft,
       start: r.start, end: r.end,
       source: r.end.estimated ? r.start.source : r.end.source,
@@ -435,11 +518,19 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       can_decide: decides(s),
       deciders: deciders(s),
       reasons: [
+        ...(s.notes ?? []),
         ...(s.why ? [s.why] : []),
         ...(s.goal ? [`Serves the goal ${GOALS[s.goal]}.`] : []),
         ...(s.section ? [`From ${rm.prd}, section ${s.section}.`] : []),
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
+      looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
+      merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
+      drafting: !!s.drafting_until,
+      flow: s.draft ? (s.flow ?? null) : flowFor(db.visuals, "feature", db.ids[s.key]),
+      goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
+      // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
+      decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
     };
   });
   const prd = q.get("prd");
@@ -474,11 +565,84 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ],
     changes_in_review: reader.hidden,
     drafts: reader.visible,
+    ...keyDatesOut(db, reader.full, shown, me ?? { id: "", role }),
   };
+}
+
+/** Roadmap-plus: the shown roadmaps' key dates (the draft's to who sees it) and who may change them. */
+function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: Item[], me: { id: string; role: Role }): Pick<Schemas["SimpleRoadmapOut"], "key_dates" | "key_date_roadmaps"> {
+  const slugs = [...new Set(shown.map((i) => i.roadmap.slug))].sort((a, b) => ROADMAPS[a].title.localeCompare(ROADMAPS[b].title));
+  const ref = (slug: string) => ({ id: stableUuid(`simple-doc/${slug}`), slug, title: ROADMAPS[slug].title });
+  const draftOf = (slug: string) => (full.drafts ?? []).find((d) => d.roadmap === slug && OPEN_DRAFT.includes(d.out.status));
+  const keyDates = slugs
+    .flatMap((slug) => {
+      const pub = draftOf(slug)?.published.key_dates ?? null;
+      return (db.key_dates?.[slug] ?? []).map((k) => {
+        const was = pub?.find((x) => x.id === k.id);
+        const inDraft = pub !== null && (!was || JSON.stringify(was) !== JSON.stringify(k));
+        return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft };
+      });
+    })
+    .sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1));
+  const may = me.role !== "viewer";
+  return { key_dates: keyDates, key_date_roadmaps: slugs.map((slug) => ({ roadmap: ref(slug), applies: may && canEditRoadmap(full, slug, me), can_change: may })) };
 }
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+}
+
+/** S7: the matches a draft keeps (live items, best first, at most 2). */
+export function matchesOf(db: SimpleDb, keys: string[]): Schemas["SimpleMatch"][] {
+  return keys
+    .map((k) => db.items.find((x) => x.key === k))
+    .filter((x): x is SeedItem => !!x && !closed(x))
+    .slice(0, 2)
+    .map((x) => ({ kind: "item" as const, id: db.ids[x.key], code: x.key, title: x.title }));
+}
+
+const WORDS = (t: string): Set<string> => new Set(t.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4));
+
+/** S7, Oracle's duplicate check (simplified): live items of the roadmap sharing a word of four
+ * letters or more with the title, most shared first. */
+export function lookalikes(db: SimpleDb, title: string, roadmap: string | null, except?: string): string[] {
+  const mine = WORDS(title);
+  return db.items
+    .filter((x) => x.key !== except && !closed(x) && !x.draft && (!roadmap || x.roadmap === roadmap))
+    .map((x) => ({ k: x.key, n: [...WORDS(x.title)].filter((w) => mine.has(w)).length }))
+    .filter((x) => x.n > 0)
+    .sort((a, b) => b.n - a.n || a.k.localeCompare(b.k))
+    .slice(0, 2)
+    .map((x) => x.k);
+}
+
+/** S7: Oracle's drafting job, done once the mock clock passes its time: the draft gets an
+ * outcome, a flow, a dependency on its goal's first live item and an open date suggestion
+ * (in the quarter it was dropped on, else its horizon's window). */
+export function settleDrafting(db: SimpleDb): void {
+  const now = mockNowMs();
+  const w = simpleWindows(iso(now));
+  for (const s of db.items) {
+    if (!s.drafting_until || s.drafting_until > now) continue;
+    delete s.drafting_until;
+    s.outcome ??= `Teams get ${s.title.toLowerCase()} without asking support`;
+    s.flow = plainFlow({
+      title: s.title,
+      steps: ["Open the alerts page", `Find ${s.title.toLowerCase()}`, "Set it up in one step", "See it working"],
+      screen: { title: `${s.title} settings`, regions: ["Header: what it does", "The one setting", "A preview", "Save and Cancel buttons"] },
+    });
+    const dep = db.items.find((x) => x.key !== s.key && x.goal && x.goal === s.goal && !closed(x) && !x.draft && x.roadmap === s.roadmap);
+    if (dep && !(s.depends ?? []).includes(dep.key)) s.depends = [...(s.depends ?? []), dep.key];
+    const [start, end] = s.quarter ? [s.quarter.start < iso(now) ? iso(now) : s.quarter.start, s.quarter.end] : w[s.horizon];
+    const id = db.ids[s.key];
+    db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open"));
+    db.suggestions.push({
+      id: stableUuid(`simple-suggestion/${s.key}/${start}/${end}`),
+      item_id: id, item_key: s.key, item_title: s.title, start_date: start, end_date: end,
+      basis: s.quarter ? `It falls in the quarter it was added to (${word(start)} – ${word(end)}).` : `It spans the ${s.horizon} window (${word(start)} – ${word(end)}).`,
+      status: "open", created_at: new Date(now).toISOString(), decided_by: null, decided_at: null, can_decide: false,
+    });
+  }
 }
 
 /** /v1/simple/roadmap and its date suggestions (api/oracle/simple/router.py). */
@@ -487,6 +651,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   const m = req.method;
   const today = iso(mockNowMs());
   if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, today);
+  settleDrafting(db);
   if (!p[3] && m === "GET") {
     const out = roadmapOut(db, me.role, q, me);
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });

@@ -15,6 +15,7 @@ JobKind = Literal[
     "refinement_batch",
     "public_text",
     "one_pager",
+    "meeting_minutes",
 ]
 # Every kind a job row may have: the document kinds and the intake's (oracle.intake.job).
 AnyJobKind = Literal[
@@ -25,10 +26,14 @@ AnyJobKind = Literal[
     "refinement_batch",
     "public_text",
     "one_pager",
+    "meeting_minutes",
     "intake_analysis",
     "decision_options",
     "scope_enhance",
     "why_not_reply",
+    "item_draft",
+    "goal_suggestions",
+    "simple_visual",
 ]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 Classification = Literal["question", "change_request", "factual_correction", "approval", "other"]
@@ -54,6 +59,8 @@ class LlmJobOut(ORM):
     scope_id: uuid.UUID | None = None
     # A declined request's why-not replies (H10) have request_id instead.
     request_id: uuid.UUID | None = None
+    # A proposal's visual (Simple S10) has visual_id instead.
+    visual_id: uuid.UUID | None = None
     version_number: int | None = None
     section_key: str | None = None
     status: JobStatus
