@@ -20,7 +20,8 @@ no llm budget.
 it a meeting chat answers 404): the presenter's change mode: ``everyone`` (any attendee),
 ``presenter`` (only the presenter) or ``named`` (the presenter and one or two named
 people); a viewer only asks questions (no cards); an ended meeting applies nothing. An
-applied card is a meeting decision (``record_meeting_decision``).
+applied card is a meeting decision (``record_meeting_decision``), and undoing the card
+reverses that decision. The presenter changes the mode through S8's ``set_rules``.
 
 **Visuals** (S10's oracle.simple.visuals, imported lazily): a card that adds or changes a
 flow or feature carries the stored flow and requests a visual when it has none.
@@ -35,10 +36,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import company_time
+from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
-from oracle.decisions.models import Decision
+from oracle.decisions.models import Decision, DecisionReview
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.members.names import display_name
 from oracle.simple import changes, drafts, service, targets
@@ -481,10 +482,13 @@ async def set_mode(
     if mode == "named" and not people:
         raise ChatError(422, "change_people: one or two people")
     meetings = _module(MEETINGS)
-    setter = getattr(meetings, "set_change_mode", None)
-    if setter is None:
-        raise ChatError(501, "Changing the mode arrives with the meeting screen")
-    await setter(db, principal, meeting_id, mode, people if mode == "named" else [])
+    body = meetings.SimpleMeetingRulesIn(
+        change_mode=mode, change_people=people if mode == "named" else []
+    )
+    try:
+        await meetings.set_rules(db, principal, meeting_id, body)
+    except getattr(meetings, "MeetingError", ()) as e:
+        raise ChatError(e.status, e.detail) from e
     await db.commit()
     return await rules_out(db, principal, await rules_of(db, meeting_id))
 
@@ -813,10 +817,9 @@ async def apply(
             raise ChatError(409, f"This card is {card.status} already")
         body = SimpleChangeIn(op=card.op, target=card.target, before=card.before,  # type: ignore[arg-type]
                               after=card.after)  # fmt: skip
-    session_id = None
-    if rules is not None and me == rules.presenter_id and getattr(rules, "session_id", None):
-        session_id = rules.session_id
-    body.session_id = session_id
+    # In a meeting the change goes into the meeting's session, whoever the mode lets apply
+    # (S8's engine takes them; their own rights still decide): made in the meeting.
+    body.session_id = getattr(rules, "session_id", None) if rules is not None else None
 
     async def make() -> SimpleChangeResult:
         # The card is taken in the change's own transaction (the engine commits both): two
@@ -848,8 +851,9 @@ async def apply(
         meetings = _module(MEETINGS)
         if meetings is not None:
             subjects = [{"kind": "roadmap_item", "id": str(card.item_id)}] if card.item_id else []
+            title = f.label if fix is not None else card.summary
             card.decision_id = await meetings.record_meeting_decision(
-                db, principal, rules.meeting_id, card.summary, subjects, [result.change.id]
+                db, principal, rules.meeting_id, title, subjects, [result.change.id]
             )
     await db.commit()
     return await one(db, principal, card, rules), result
@@ -861,6 +865,10 @@ async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatC
         raise ChatError(409, f"This card is {card.status} already")
     if not has_role(principal.role, "commenter"):
         raise ChatError(403, "Viewers ask questions; they don't discard cards")
+    # Those the change mode bars from applying may not discard either.
+    bar = _card_bar(principal, card, rules)
+    if bar is not None:
+        raise ChatError(403, bar)
     card.status, card.decided_by, card.decided_at = "discarded", _me(principal), company_time.now()
     await db.commit()
     return await one(db, principal, card, rules)
@@ -874,8 +882,25 @@ async def undo(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCard
     card = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
     assert card is not None
     card.status = "undone"
+    if card.decision_id is not None:
+        await _reverse(db, principal, card.decision_id)
     await db.commit()
     return await one(db, principal, card, rules)
+
+
+async def _reverse(db: AsyncSession, principal: Any, decision_id: uuid.UUID) -> None:
+    """The card's meeting decision no longer holds: reversed, with a review saying why, so
+    the Decisions log and the minutes stop showing it as decided."""
+    d = await db.get(Decision, decision_id, with_for_update=True)
+    if d is None or d.status != "decided":
+        return
+    note = "Undone in the meeting chat"
+    d.status = "reversed"
+    db.add(DecisionReview(decision_id=d.id, verdict="reversed", note=note,
+                          reviewed_by=_me(principal)))  # fmt: skip
+    await db.flush()
+    await audit.record(db, principal, "decision.review_reversed", "decision", d.id,
+                       {"note": note, "revisit_id": None})  # fmt: skip
 
 
 # --------------------------------------------------------------------------- the walk
@@ -903,6 +928,20 @@ async def _walk_card(db: AsyncSession, me: uuid.UUID, summary: str, fix: ChatFix
     return c
 
 
+async def _next_agenda(db: AsyncSession, principal: Any) -> tuple[str, list[Any]]:
+    """The next meeting the person attends (S8's live meetings, earliest first) and the open
+    decisions on its agenda; none without one (or without S8's module)."""
+    meetings = _module(MEETINGS)
+    if meetings is None:
+        return "", []
+    live = (await meetings.listing(db, principal)).live
+    for b in sorted(live, key=lambda b: b.started_at):
+        rules = await meetings.meeting_rules(db, b.id)
+        if rules is not None and not rules.ended and _attends(principal, rules):
+            return b.title, list((await meetings.one(db, principal, b.id)).open_decisions)
+    return "", []
+
+
 async def walk(db: AsyncSession, principal: Any) -> WalkOut:
     """What waits for the person, one card at a time: the broken links they decide first,
     then the decisions on the next meeting's agenda, then the proposals waiting on them."""
@@ -927,23 +966,11 @@ async def walk(db: AsyncSession, principal: Any) -> WalkOut:
                 cards.append((len(steps), card))
                 steps.append(WalkStepOut(id=f"link:{e.row.id}:{f.subject}", kind="broken_link",
                                          title=title, why=f.reason))  # fmt: skip
-    meetings = _module(MEETINGS)
-    agenda = getattr(meetings, "next_agenda_decisions", None) if meetings else None
-    decisions: list[Any]
-    if agenda is not None:
-        decisions = list(await agenda(db, principal))
-    else:
-        decisions = list(
-            await db.scalars(
-                select(Decision)
-                .where(Decision.status == "proposed", Decision.approver_id == me)
-                .order_by(Decision.created_at)
-            )
-        )
-    for d in decisions:
+    meeting, agenda = await _next_agenda(db, principal)
+    for d in agenda:
         steps.append(WalkStepOut(
             id=f"decision:{d.id}", kind="agenda_decision", title=d.title,
-            why="On the next meeting's agenda, waiting on your decision",
+            why=f"On the agenda of {meeting}: read it before the meeting.",
             decision=WalkDecision(id=d.id, title=d.title, url=f"/simple/decisions?d={d.id}"),
         ))  # fmt: skip
     proposed = list(

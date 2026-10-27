@@ -65,7 +65,7 @@ Test cards (protects / fails_when / no_claim):
   request for every commenter and up, its undo removes it; viewers get 403;
   fails_when=a role does more than its gesture; no_claim=Requests' triage.
 - test_walk_order_undo_and_fixes: protects=Walk me through it lists the broken links the
-  person decides first, then the decisions waiting on them, then the proposals waiting on
+  person decides first, then the next meeting's agenda, then the proposals waiting on
   them; a broken link's card applies a one-click fix and undoes; a commenter has no broken
   links to fix; fails_when=the order differs, or a step is someone else's;
   no_claim=progress and Done (web spec).
@@ -647,6 +647,6 @@ async def test_walk_order_undo_and_fixes(client, meetings):
     r = await client.post(f"{CARDS}/{link['id']}/undo", headers=ctx.as_("decider"))
     assert r.status_code == 200, r.text
     assert (await w.item("Bulk import")).start_date == date(2026, 11, 10)
-    # A commenter decides nothing here: no step is theirs.
+    # A commenter decides nothing here: only the agenda of the meeting they attend.
     r = await client.get("/v1/simple/walk", headers=ctx.as_("commenter"))
-    assert r.json()["steps"] == []
+    assert [s["kind"] for s in r.json()["steps"]] == ["agenda_decision"]
