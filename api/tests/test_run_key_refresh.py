@@ -14,7 +14,7 @@ from sqlalchemy import select
 from oracle.runs import workflow
 from oracle.runs.models import Run, RunSegment
 from oracle.runtokens import RunToken, verify_run_token
-from oracle.swarm import RuntimeUnavailable, set_runtime
+from oracle.swarm import FakeRuntime, Outcome, Parked, RuntimeUnavailable, WorkflowSpec, set_runtime
 from oracle.swarm.settings import get_runtime_settings
 from oracle.tenancy import tenant_session
 from tests.fixtures import seed_auth
@@ -166,6 +166,12 @@ async def test_a_parked_expired_step_gets_one_renewal_and_proceeds(client, owner
     assert fresh <= timedelta(seconds=sent["expires_in"])
     rows = await tokens(tenant_id, run["id"])
     assert [sorted(r.scopes) for r in rows if r.revoked_at is None] == [old_scopes]
+    async with tenant_session(tenant_id) as s:
+        knob = (await s.get(Run, run["id"])).knobs["workflow"]
+    # The decision's tail rule counts from the renewed key, not the submission's.
+    assert abs(datetime.fromisoformat(knob["expires_at"]) - claims.expires_at) < timedelta(
+        seconds=60
+    )
 
     await tick(client, auth)
     assert swarm.workflows["wf_1"].step(FIRST).state == "SUCCEEDED"
@@ -282,3 +288,33 @@ async def test_the_token_never_shows_in_logs_knobs_notes_or_the_run_api(client, 
         for seg in segments:
             assert token not in json.dumps(seg.artifacts, default=str)
             assert token not in (seg.error or "")
+
+
+async def test_the_local_runtime_parks_and_restores_too():
+    """protects=the fake runtime serves a parked mcp-expired step and the re-store call;
+    fails_when=the park is not served, a re-store does not promote it, the value is
+    kept, or a scripted refusal is not raised; no_claim=the run's tick (the local runtime
+    has caller MCP off, so its runs never attach a key)."""
+    park = Parked(
+        "baseline-1-researcher",
+        "t1",
+        "CREDENTIAL_MISSING",
+        credential="mcp",
+        code="mcp_credential_expired",
+        server="oracle",
+    )
+    runtime = FakeRuntime({"baseline": [Outcome(parked=(park,))]})
+    spec = WorkflowSpec(name="b", steps=(), labels={"segment": "baseline"})
+    wid = await runtime.submit(spec)
+    status = await runtime.status(wid)
+    assert status.state == "running" and status.parked == (park,) and park.mcp_expired
+    answer = await runtime.store_mcp_credentials(wid, "oracle", "ort_Secret123456", 600)
+    assert answer.promoted == 1 and (await runtime.status(wid)).parked == ()
+    assert "ort_Secret123456" not in repr(runtime.stored)
+
+    refusal = RuntimeUnavailable("refused", status=409, code="conflict")
+    runtime = FakeRuntime({"baseline": [Outcome(parked=(park,), restore_refusal=refusal)]})
+    wid = await runtime.submit(spec)
+    with pytest.raises(RuntimeUnavailable) as caught:
+        await runtime.store_mcp_credentials(wid, "oracle", "ort_Secret123456", 600)
+    assert caught.value.status == 409 and runtime.stored == []

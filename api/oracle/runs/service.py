@@ -6771,9 +6771,9 @@ def _mark_key_refresh(
     return wf
 
 
-def _renewed_note(at: datetime) -> str:
+def _renewed_note(at: datetime, zone: str) -> str:
     return (
-        f"Key renewed at {at.strftime('%Y-%m-%d %H:%M')} UTC: the step started after its key "
+        f"Key renewed at {company_time.stamp(at, zone)}: the step started after its key "
         "expired while it waited in SwarmCloud's queue"
     )
 
@@ -6840,7 +6840,10 @@ async def refresh_key(
     error: str | None = None
     if refused is None:
         refresh["state"] = "stored"
-        _note(target, _renewed_note(_now()))
+        # The decision's tail rule (:func:`_left`) counts from the renewed key.
+        minted_at = _parse_at(refresh.get("minted_at")) or _now()
+        wf["expires_at"] = workflow.expires_at(minted_at, seconds).isoformat()
+        _note(target, _renewed_note(_now(), await company_time.company_time_zone(db)))
         await audit.record(
             db, None, "run.key_renewed", "run", run.id,
             {"workflow_id": workflow_id, "server": server, "expires_in": seconds},
