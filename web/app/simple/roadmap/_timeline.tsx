@@ -415,8 +415,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             })}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
             {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} onDown={onDown} onKeyOpen={keyOpen} onKeyMove={keyMove} onSuggestion={onSuggestion} /> : null))}
-            <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" />
-            <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600}>
+            <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" pointerEvents="none" />
+            <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600} pointerEvents="none">
               Today
             </text>
           </svg>

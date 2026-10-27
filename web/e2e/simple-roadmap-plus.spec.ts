@@ -1,4 +1,4 @@
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -27,7 +27,12 @@ const phase = (page: Page, key: string, p: string): Locator => bar(page, key).lo
 const marker = (page: Page, name: string): Locator => page.locator(`g[data-testid="key-date-marker"][data-name="${name}"]`);
 const editor = (page: Page): Locator => page.getByTestId("key-dates-editor");
 
-async function openRoadmap(page: Page, format: "timeline" | "gantt" | "waterfall", email?: string) {
+async function openRoadmap(page: Page, format: "timeline" | "gantt" | "waterfall", email?: string, again = false) {
+  if (again) {
+    // Another person in the same browser (the mock's data stays): sign out first.
+    await page.goto("/home");
+    await signOut(page);
+  }
   await login(page, email);
   await page.goto(ROADMAP);
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
@@ -92,7 +97,7 @@ for (const [where, use] of [
         const build = await phase(page, "alert-rules", "build").getAttribute("data-end");
         const launch = await phase(page, "alert-rules", "launch").getAttribute("data-end");
         if (where === "phone") await longPressDrag(page, "alert-rules", 40);
-        else await mouseDrag(page, "alert-rules", 120);
+        else await mouseDrag(page, "alert-rules", 60);
         await expect(page.getByText(/Moved 'Alert rules engine' to .* in your working draft/)).toBeVisible();
         await expect(bar(page, "alert-rules")).not.toHaveAttribute("data-start", start);
         const start2 = (await bar(page, "alert-rules").getAttribute("data-start"))!;
@@ -125,8 +130,7 @@ for (const [where, use] of [
         await expect(page.getByText(/Moved 'Alert rules engine'.* in your working draft/)).toBeVisible();
         await expect(bar(page, "alert-rules")).toHaveAttribute("data-start", new Date(Date.parse(start) + 7 * 86_400_000).toISOString().slice(0, 10));
         await expect(bar(page, "alert-rules")).toHaveAttribute("data-end", new Date(Date.parse(end) + 7 * 86_400_000).toISOString().slice(0, 10));
-        await page.goto("/home");
-        await openRoadmap(page, "waterfall", COMMENTER);
+        await openRoadmap(page, "waterfall", COMMENTER, true);
         const c0 = (await bar(page, "alert-export").getAttribute("data-start"))!;
         await bar(page, "alert-export").focus();
         await page.keyboard.press("ArrowRight");
@@ -174,7 +178,7 @@ for (const [where, use] of [
         await page.getByTestId("key-dates-open").click();
         await expect(editor(page)).toHaveAttribute("data-sheet", where === "phone" ? "bottom" : "float");
         await expect(page.getByTestId("key-dates-hint")).toContainText("working draft");
-        await editor(page).getByLabel("Roadmap").selectOption({ label: "Alerts roadmap" });
+        await editor(page).getByLabel("Roadmap", { exact: true }).selectOption({ label: "Alerts roadmap" });
         await editor(page).getByLabel("New key date's name").fill("Partner summit");
         await editor(page).getByLabel("New key date's day").fill("2026-12-02");
         await editor(page).getByLabel("New key date's note").fill("Booth for alerts");
@@ -207,21 +211,19 @@ for (const [where, use] of [
         await openRoadmap(page, "gantt", COMMENTER);
         await page.getByTestId("key-dates-open").click();
         await expect(page.getByTestId("key-dates-hint")).toContainText("proposals");
-        await editor(page).getByLabel("Roadmap").selectOption({ label: "Onboarding roadmap" });
+        await editor(page).getByLabel("Roadmap", { exact: true }).selectOption({ label: "Onboarding roadmap" });
         await editor(page).getByLabel("New key date's name").fill("Product launch");
         await editor(page).getByLabel("New key date's day").fill("2026-12-08");
         await editor(page).getByRole("button", { name: "Propose" }).click();
         await expect(page.getByText(/Added the key date 'Product launch' proposed: it waits for the decider/)).toBeVisible();
         await expect(marker(page, "Product launch")).toHaveCount(0);
-        await page.goto("/home");
-        await openRoadmap(page, "gantt");
+        await openRoadmap(page, "gantt", undefined, true);
         await page.getByTestId("needs-decision").click();
         const row = page.getByTestId("tray-proposal").filter({ hasText: "Key date 'Product launch'" });
         await row.getByRole("button", { name: "Accept" }).click();
         await expect(page.getByText("Accepted: it is in your working draft")).toBeVisible();
         await expect(marker(page, "Product launch")).toHaveAttribute("data-date", "2026-12-08");
-        await page.goto("/home");
-        await openRoadmap(page, "waterfall", VIEWER);
+        await openRoadmap(page, "waterfall", VIEWER, true);
         await page.getByTestId("key-dates-open").click();
         await expect(page.getByTestId("key-dates-hint")).toContainText("you read them");
         await expect(editor(page).getByTestId("key-date-add")).toHaveCount(0);
@@ -245,7 +247,7 @@ for (const [where, use] of [
         await login(page, VIEWER);
         await page.goto(PRIORITIES);
         await expect(page.getByTestId("simple-priorities")).toBeVisible();
-        const select = page.getByTestId("line-picker").getByLabel("Line");
+        const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
         await expect(select).toHaveValue("now");
         await expect(page.getByTestId("line-divider").first()).toContainText("The line: This quarter (Now)");
         const options = await select.locator("option").allTextContents();
