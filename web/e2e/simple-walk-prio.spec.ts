@@ -79,7 +79,7 @@ for (const [where, size] of [
           const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
           const list = page.getByRole("list", { name: "Ranked list" }).locator("..");
           const rows = page.getByTestId("prio-row");
-          const title = (r: Locator) => r.locator("span.flex-1.font-medium");
+          const title = (r: Locator) => r.getByTestId("prio-title");
           const picks = (await select.locator("option").evaluateAll((os) => os.map((o) => [(o as HTMLOptionElement).value, o.textContent ?? ""]))).filter(([v]) => v !== "pick");
           let sawInterleaved = false;
           for (const [value, text] of picks) {
@@ -97,7 +97,7 @@ for (const [where, size] of [
 
           await page.getByRole("tab", { name: "Value / effort" }).click();
           const side = page.getByRole("region", { name: "Ranked side list" });
-          await checkLine(page, side, side.getByTestId("side-row"), (r) => r.locator("span.truncate"), "By Dec 31, 2026");
+          await checkLine(page, side, side.getByTestId("side-row"), (r) => r.getByTestId("prio-title"), "By Dec 31, 2026");
           await select.selectOption("now");
           await expect(page).not.toHaveURL(/line=/);
         });

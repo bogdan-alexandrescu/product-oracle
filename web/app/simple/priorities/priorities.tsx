@@ -334,7 +334,7 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
                 data-testid="prio-line-mark"
               />
               <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{r.code}</span>
-              <span className="min-w-[12rem] flex-1 font-medium">{r.title}</span>
+              <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">{r.title}</span>
               {!r.above_line && <MissesTag data={data} />}
               <span className="ml-auto flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
                 {r.no_goal ? (
@@ -785,7 +785,7 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
             <li key={r.feature_id} data-testid="side-row" data-code={r.code} data-above={r.above_line ? "true" : "false"} data-misses={r.above_line ? undefined : "true"} className={`flex items-center gap-2 rounded-lg border border-line px-2 py-1 text-[length:var(--simple-small)] ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}>
               <span className="w-6 text-right font-semibold tabular-nums">{r.rank}</span>
               <span className="font-mono text-[length:var(--simple-small)]">{r.code}</span>
-              <span className="min-w-0 flex-1 truncate">{r.title}</span>
+              <span className="min-w-0 flex-1 truncate" data-testid="prio-title">{r.title}</span>
               {!r.above_line && <MissesTag data={data} compact />}
               <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
             </li>,

@@ -15,7 +15,7 @@ export function HomeSkeleton() {
         <p className="simple-small">
           <Bar className="w-40" />
         </p>
-        <p className="simple-lead">
+        <p className="simple-lead max-[600px]:min-h-[2lh]">
           <Bar className="w-80 max-w-full" />
         </p>
         {/* Where "Walk me through it" lands for everyone who acts on the plan. */}

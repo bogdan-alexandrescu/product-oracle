@@ -251,7 +251,7 @@ export default function SimpleHome() {
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
         <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
-        <p className="simple-lead">
+        <p className="simple-lead max-[600px]:min-h-[2lh]">
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
