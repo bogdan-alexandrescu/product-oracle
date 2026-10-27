@@ -102,6 +102,8 @@ FIELDS = (
     "goal_ids",
     "merged_into",
     "kept_both",
+    # S9: set_milestone.
+    "milestone",
 )
 UUID_FIELDS = ("feature_id",)
 DATES = ("start_date", "end_date")

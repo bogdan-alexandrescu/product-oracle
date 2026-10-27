@@ -155,6 +155,7 @@ import {
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeOnePager, seedOnePager, type OnePagerDb } from "./simple-one-pager";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
+import { routeSimpleChat, seedSimpleChat, type ChatDb } from "./simple-chat";
 import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -266,6 +267,8 @@ export interface Db {
   simple_one_pager?: OnePagerDb;
   /** Simple S10 (#723): proposals' visuals, their versions and comments (./simple-visuals.ts). */
   simple_visuals?: VisualsDb;
+  /** Simple S9: change-by-chat threads, their cards and the invented meeting (./simple-chat.ts). */
+  simple_chat?: ChatDb;
   /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
   sharing_items?: RoadmapDb["items"];
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
@@ -533,6 +536,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4).
+ * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
+ * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /**
@@ -2548,6 +2553,12 @@ function load(): Db {
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
+              : scenario === "simple-chat"
+                ? () => {
+                    const db = seedSimpleHomeScenario();
+                    db.simple_chat = seedSimpleChat(db.members);
+                    return db;
+                  }
               : scenario === "simple-500"
                 ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
@@ -5011,6 +5022,12 @@ async function route(db: Db, req: Request): Promise<Response> {
     q,
   );
   if (simpleChanges) return simpleChanges;
+  // Simple S9: change by chat and "Walk me through it", through the change engine above.
+  if (p[1] === "simple" && ["chat", "meetings", "walk"].includes(p[2] ?? "")) {
+    db.simple_chat ??= seedSimpleChat(db.members);
+    const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, req, p);
+    if (chatRes) return chatRes;
+  }
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
   const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
@@ -5596,7 +5613,9 @@ export async function mockFetch(req: Request): Promise<Response> {
     const res = await route(db, req);
     // I1: the runs' changes this call made, as webhook events (./webhooks.ts).
     if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
-    save(db);
+    // S9: a meeting chat's poll (every 2 s, in each attendee's tab) writes nothing, so it never
+    // saves a stale copy over another tab's line, card or sign-in.
+    if (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname))) save(db);
     return res;
   });
   queue = next.catch(() => undefined);

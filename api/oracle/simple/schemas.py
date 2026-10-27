@@ -291,6 +291,10 @@ ChangeOp = Literal[
     "add_item",
     "merge_item",
     "keep_both",
+    # S9: an item's own milestone (into the working draft) and a feature ask filed in
+    # Oracle's Requests (non-versioned), both made by chat as well.
+    "set_milestone",
+    "add_feature_ask",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -952,6 +956,120 @@ class SimpleSuggestionRejectIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str | None = Field(default=None, max_length=500)
+
+
+# --------------------------------------------------------------------------- S9 chat
+
+CardStatus = Literal["open", "applied", "proposed", "discarded", "undone"]
+ChangeMode = Literal["everyone", "presenter", "named"]
+
+
+class ChatIn(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    # The Simple page the person asks from (the Ask panel), for context.
+    page: str | None = Field(default=None, max_length=300)
+
+
+class ChatFix(BaseModel):
+    """A one-click fix for a broken link the card would make: its own change-engine op."""
+
+    label: str
+    op: ChangeOp
+    target: dict[str, Any]
+    before: dict[str, Any]
+    after: dict[str, Any] = Field(default_factory=dict)
+
+
+class ChatCardOut(BaseModel):
+    id: uuid.UUID
+    message_id: uuid.UUID | None
+    op: ChangeOp
+    target: dict[str, Any]
+    before: dict[str, Any]
+    after: dict[str, Any]
+    summary: str
+    item_id: uuid.UUID | None
+    item_title: str | None
+    status: CardStatus
+    # What the reader's Apply does now: the change engine applies or proposes it; None:
+    # the reader may not (``why_not``).
+    may: Literal["apply", "propose"] | None
+    why_not: str | None
+    # The constraint check as if applied, and one-click fixes of the links it breaks.
+    flags: list[SimpleItemFlags]
+    fixes: list[ChatFix]
+    # How the stage shows it before Apply: {kind: dates|horizon|title|milestone|cut, ...}.
+    preview: dict[str, Any] | None
+    # Cards that add or change a flow or feature: the design bundle (oracle.simple.visuals).
+    flow: SimpleFlow | None
+    change_id: uuid.UUID | None
+    decided_by_name: str | None
+    decided_at: dt.datetime | None
+    # The meeting decision an applied card became.
+    decision_id: uuid.UUID | None
+
+
+class ChatMessageOut(BaseModel):
+    id: uuid.UUID
+    author_kind: Literal["person", "oracle"]
+    author_id: uuid.UUID | None
+    author_name: str
+    body: str
+    at: dt.datetime
+    kind: Literal["request", "cards", "question", "answer", "note"]
+    cards: list[ChatCardOut]
+
+
+class ChatRulesOut(BaseModel):
+    change_mode: ChangeMode
+    change_people: list[SimplePersonRef]
+    presenter: SimplePersonRef
+    is_presenter: bool
+    may_apply: bool
+    ask_only: bool
+    ended: bool
+
+
+class ChatThreadOut(BaseModel):
+    id: uuid.UUID | None
+    meeting_id: uuid.UUID | None
+    messages: list[ChatMessageOut]
+    rules: ChatRulesOut | None
+
+
+class ChatModeIn(BaseModel):
+    change_mode: ChangeMode
+    change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)
+
+
+class ChatApplyIn(BaseModel):
+    # Apply the card's fixes[fix] instead of its own op.
+    fix: int | None = Field(default=None, ge=0)
+
+
+class ChatApplyOut(BaseModel):
+    card: ChatCardOut
+    result: SimpleChangeResult
+
+
+class WalkDecision(BaseModel):
+    id: uuid.UUID
+    title: str
+    url: str
+
+
+class WalkStepOut(BaseModel):
+    id: str
+    kind: Literal["broken_link", "agenda_decision", "proposal"]
+    title: str
+    why: str
+    card: ChatCardOut | None = None
+    change: SimpleChangeOut | None = None
+    decision: WalkDecision | None = None
+
+
+class WalkOut(BaseModel):
+    steps: list[WalkStepOut]
 
 
 SimpleRoadmapItem.model_rebuild()

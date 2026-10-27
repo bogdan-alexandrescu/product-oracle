@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { Avatar, Block, HomeCard, HomeRow, PlanStrip, RowIcon, Top } from "@/app/simple/_home/cards";
+import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
 import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { SimplePage } from "@/components/simple/SimplePage";
@@ -48,6 +49,8 @@ export default function SimpleHome() {
   const { me, can } = useMe();
   const zone = useCompanyZone();
   const [stamp, setStamp] = useState(0);
+  // S9: "Walk me through it" turns Home into a guided pass; Done returns here.
+  const [walking, setWalking] = useState(false);
   const k = (name: string) => `simple-home|${name}|${stamp}`;
   const reloadAll = () => {
     invalidateWaiting();
@@ -231,7 +234,26 @@ export default function SimpleHome() {
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
+        {!walking && !reads && (
+          <div>
+            <button type="button" className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
+              Walk me through it
+            </button>
+          </div>
+        )}
       </header>
+
+      {walking && (
+        <Walk
+          onDone={() => {
+            setWalking(false);
+            reloadAll();
+          }}
+        />
+      )}
+
+      {!walking && (
+      <>
 
       {(roadmap.data?.changes_in_review ?? 0) > 0 && (
         <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
@@ -535,6 +557,8 @@ export default function SimpleHome() {
             }}
           </Block>
         </HomeCard>
+      )}
+      </>
       )}
     </SimplePage>
   );

@@ -43021,6 +43021,488 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/chat": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Chat",
+        "description": "The caller's Ask-panel thread: their requests, Oracle's replies and cards.",
+        "operationId": "get_simple_chat",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatThreadOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/chat/messages": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Post Simple Chat",
+        "description": "Ask Oracle in plain words; a change request gets change cards (nothing applies\nuntil Apply), an ambiguous one a question, a question about the plan an answer.",
+        "operationId": "post_simple_chat",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatThreadOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/chat": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Meeting Chat",
+        "description": "The meeting's one shared thread and who may apply its cards.",
+        "operationId": "get_simple_meeting_chat",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatThreadOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/chat/messages": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Post Simple Meeting Chat",
+        "description": "A line in the meeting's thread; a viewer's change request gets a note, no cards.",
+        "operationId": "post_simple_meeting_chat",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatThreadOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/chat/mode": {
+      "put": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Set Simple Meeting Chat Mode",
+        "description": "The presenter sets who may apply: everyone, only the presenter, or the presenter\nand one or two named people.",
+        "operationId": "set_simple_meeting_chat_mode",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatModeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatRulesOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/chat/cards/{card_id}/apply": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Apply Simple Chat Card",
+        "description": "Apply the card (or ``fix``: one of its fixes) through the change engine: applied\nfor an owner or the decider, proposed for others; 403 with the reason when the\nmeeting's change mode leaves the caller out.",
+        "operationId": "apply_simple_chat_card",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "card_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Card Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/ChatApplyIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatApplyOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale: nothing written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/SimpleChangeConflict"
+                  },
+                  "title": "Response 409 Apply Simple Chat Card"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/chat/cards/{card_id}/discard": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Discard Simple Chat Card",
+        "description": "Discard the card: nothing is written.",
+        "operationId": "discard_simple_chat_card",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "card_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Card Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCardOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/chat/cards/{card_id}/undo": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Undo Simple Chat Card",
+        "description": "Undo the change an applied card made (its author, in its session).",
+        "operationId": "undo_simple_chat_card",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "card_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Card Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatCardOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/walk": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Walk",
+        "description": "Walk me through it: the broken links first, then the decisions on the next\nmeeting's agenda, then the proposals waiting on the caller.",
+        "operationId": "get_simple_walk",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalkOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/priorities": {
       "get": {
         "tags": [
@@ -56278,6 +56760,570 @@
           "new_sources"
         ],
         "title": "ChangesReport"
+      },
+      "ChatApplyIn": {
+        "properties": {
+          "fix": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fix"
+          }
+        },
+        "type": "object",
+        "title": "ChatApplyIn"
+      },
+      "ChatApplyOut": {
+        "properties": {
+          "card": {
+            "$ref": "#/components/schemas/ChatCardOut"
+          },
+          "result": {
+            "$ref": "#/components/schemas/SimpleChangeResult"
+          }
+        },
+        "type": "object",
+        "required": [
+          "card",
+          "result"
+        ],
+        "title": "ChatApplyOut"
+      },
+      "ChatCardOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "message_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Id"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "move_dates",
+              "change_horizon",
+              "reorder",
+              "cut",
+              "restore",
+              "edit_title",
+              "edit_outcome",
+              "accept_date_suggestion",
+              "accept_risk",
+              "shift_dependents",
+              "move_dependency",
+              "override_priority",
+              "add_item_task",
+              "edit_item_task",
+              "set_item_task_status",
+              "add_action_item",
+              "edit_action_item",
+              "set_action_item_status",
+              "add_launch_task",
+              "set_launch_task_status",
+              "estimate_feature",
+              "confirm_item",
+              "edit_line",
+              "set_milestone",
+              "add_feature_ask"
+            ],
+            "title": "Op"
+          },
+          "target": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Target"
+          },
+          "before": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Before"
+          },
+          "after": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "After"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "item_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Title"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "applied",
+              "proposed",
+              "discarded",
+              "undone"
+            ],
+            "title": "Status"
+          },
+          "may": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "apply",
+                  "propose"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "May"
+          },
+          "why_not": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why Not"
+          },
+          "flags": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleItemFlags"
+            },
+            "type": "array",
+            "title": "Flags"
+          },
+          "fixes": {
+            "items": {
+              "$ref": "#/components/schemas/ChatFix"
+            },
+            "type": "array",
+            "title": "Fixes"
+          },
+          "preview": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "change_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Id"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decision_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "message_id",
+          "op",
+          "target",
+          "before",
+          "after",
+          "summary",
+          "item_id",
+          "item_title",
+          "status",
+          "may",
+          "why_not",
+          "flags",
+          "fixes",
+          "preview",
+          "flow",
+          "change_id",
+          "decided_by_name",
+          "decided_at",
+          "decision_id"
+        ],
+        "title": "ChatCardOut"
+      },
+      "ChatFix": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "move_dates",
+              "change_horizon",
+              "reorder",
+              "cut",
+              "restore",
+              "edit_title",
+              "edit_outcome",
+              "accept_date_suggestion",
+              "accept_risk",
+              "shift_dependents",
+              "move_dependency",
+              "override_priority",
+              "add_item_task",
+              "edit_item_task",
+              "set_item_task_status",
+              "add_action_item",
+              "edit_action_item",
+              "set_action_item_status",
+              "add_launch_task",
+              "set_launch_task_status",
+              "estimate_feature",
+              "confirm_item",
+              "edit_line",
+              "set_milestone",
+              "add_feature_ask"
+            ],
+            "title": "Op"
+          },
+          "target": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Target"
+          },
+          "before": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Before"
+          },
+          "after": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "op",
+          "target",
+          "before"
+        ],
+        "title": "ChatFix",
+        "description": "A one-click fix for a broken link the card would make: its own change-engine op."
+      },
+      "ChatIn": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "ChatIn"
+      },
+      "ChatMessageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "author_kind": {
+            "type": "string",
+            "enum": [
+              "person",
+              "oracle"
+            ],
+            "title": "Author Kind"
+          },
+          "author_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Id"
+          },
+          "author_name": {
+            "type": "string",
+            "title": "Author Name"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "request",
+              "cards",
+              "question",
+              "answer",
+              "note"
+            ],
+            "title": "Kind"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/ChatCardOut"
+            },
+            "type": "array",
+            "title": "Cards"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author_kind",
+          "author_id",
+          "author_name",
+          "body",
+          "at",
+          "kind",
+          "cards"
+        ],
+        "title": "ChatMessageOut"
+      },
+      "ChatModeIn": {
+        "properties": {
+          "change_mode": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "presenter",
+              "named"
+            ],
+            "title": "Change Mode"
+          },
+          "change_people": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "title": "Change People"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_mode"
+        ],
+        "title": "ChatModeIn"
+      },
+      "ChatRulesOut": {
+        "properties": {
+          "change_mode": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "presenter",
+              "named"
+            ],
+            "title": "Change Mode"
+          },
+          "change_people": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Change People"
+          },
+          "presenter": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "is_presenter": {
+            "type": "boolean",
+            "title": "Is Presenter"
+          },
+          "may_apply": {
+            "type": "boolean",
+            "title": "May Apply"
+          },
+          "ask_only": {
+            "type": "boolean",
+            "title": "Ask Only"
+          },
+          "ended": {
+            "type": "boolean",
+            "title": "Ended"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_mode",
+          "change_people",
+          "presenter",
+          "is_presenter",
+          "may_apply",
+          "ask_only",
+          "ended"
+        ],
+        "title": "ChatRulesOut"
+      },
+      "ChatThreadOut": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "meeting_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Id"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageOut"
+            },
+            "type": "array",
+            "title": "Messages"
+          },
+          "rules": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatRulesOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "meeting_id",
+          "messages",
+          "rules"
+        ],
+        "title": "ChatThreadOut"
       },
       "CheckOut": {
         "properties": {
@@ -76650,7 +77696,9 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line"
+              "edit_line",
+              "set_milestone",
+              "add_feature_ask"
             ],
             "title": "Op"
           },
@@ -109013,7 +110061,9 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line"
+              "edit_line",
+              "set_milestone",
+              "add_feature_ask"
             ],
             "title": "Op"
           },
@@ -109118,7 +110168,9 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line"
+              "edit_line",
+              "set_milestone",
+              "add_feature_ask"
             ],
             "title": "Op"
           },
@@ -123441,6 +124493,109 @@
           "reason"
         ],
         "title": "WaiveIn"
+      },
+      "WalkDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "url"
+        ],
+        "title": "WalkDecision"
+      },
+      "WalkOut": {
+        "properties": {
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/WalkStepOut"
+            },
+            "type": "array",
+            "title": "Steps"
+          }
+        },
+        "type": "object",
+        "required": [
+          "steps"
+        ],
+        "title": "WalkOut"
+      },
+      "WalkStepOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "broken_link",
+              "agenda_decision",
+              "proposal"
+            ],
+            "title": "Kind"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "why": {
+            "type": "string",
+            "title": "Why"
+          },
+          "card": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatCardOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChangeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WalkDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "title",
+          "why"
+        ],
+        "title": "WalkStepOut"
       },
       "WebFetchIn": {
         "properties": {

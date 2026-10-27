@@ -2,6 +2,8 @@
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
+import { lastPreview, PREVIEW_EVENT, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
+
 import {
   addDays,
   barKind,
@@ -466,6 +468,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             })}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
             {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} {...bars} /> : null))}
+            <PreviewGhost l={l} sc={sc} items={items} />
             <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" pointerEvents="none" />
             <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600} pointerEvents="none">
               Today
@@ -716,3 +719,56 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
     </g>
   );
 });
+
+/** S9: a chat card's Preview, ghosted on its bar ("simple:preview"): new dates, horizon, title, milestone, or a cut strike. */
+function PreviewGhost({ l, sc, items }: { l: Layout; sc: Scale; items: Map<string, Item> }) {
+  const [preview, setPreview] = useState<ChatPreview>(() => lastPreview()?.preview ?? null);
+  useEffect(() => {
+    const on = (e: Event) => setPreview((e as CustomEvent<PreviewDetail>).detail?.preview ?? null);
+    window.addEventListener(PREVIEW_EVENT, on);
+    return () => window.removeEventListener(PREVIEW_EVENT, on);
+  }, []);
+  if (!preview) return null;
+  const item = items.get(preview.item_id);
+  const y = l.y.get(preview.item_id);
+  if (!item || y === undefined) return null;
+  const [start, end] = barSpan(item);
+  const pad = Math.round(l.rowH * 0.2);
+  const box = (a: string, b: string) => ({ x: sc.x(a), w: Math.max(sc.px, sc.x(b) - sc.x(a) + sc.px) });
+  const cur = box(start, end);
+  const common = { "data-testid": "preview-ghost", "data-kind": preview.kind, pointerEvents: "none" as const };
+  if (preview.kind === "dates") {
+    const b = box(preview.start_date, preview.end_date);
+    return (
+      <g {...common} data-start={preview.start_date} data-end={preview.end_date}>
+        <rect x={b.x} y={y + pad} width={b.w} height={l.rowH - 2 * pad} rx={4} fill="var(--accent)" opacity={0.35} stroke="var(--accent-ink)" strokeDasharray="4 3" />
+      </g>
+    );
+  }
+  if (preview.kind === "cut") {
+    return (
+      <g {...common}>
+        <line x1={cur.x} x2={cur.x + cur.w} y1={y + l.rowH / 2} y2={y + l.rowH / 2} stroke="var(--crit)" strokeWidth={3} />
+      </g>
+    );
+  }
+  if (preview.kind === "milestone") {
+    return (
+      <g {...common} transform={`translate(${sc.x(preview.date)}, ${y + l.rowH / 2})`}>
+        <rect x={-6} y={-6} width={12} height={12} transform="rotate(45)" fill="var(--warn)" opacity={0.5} stroke="var(--warn)" strokeDasharray="3 2" />
+        <text x={10} y={4} fontSize={11} fill="var(--text2)">
+          {preview.name}
+        </text>
+      </g>
+    );
+  }
+  const words = preview.kind === "title" ? preview.title : `Moves to ${preview.horizon[0].toUpperCase()}${preview.horizon.slice(1)}`;
+  return (
+    <g {...common}>
+      <rect x={cur.x} y={y + pad} width={cur.w} height={l.rowH - 2 * pad} rx={4} fill="none" stroke="var(--accent-ink)" strokeDasharray="4 3" />
+      <text x={cur.x + cur.w + 8} y={y + l.rowH / 2 + 4} fontSize={12} fill="var(--accent-ink)" fontWeight={600}>
+        {words}
+      </text>
+    </g>
+  );
+}

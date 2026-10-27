@@ -32,6 +32,10 @@ company's owners. A proposal writes nothing, an add creates no row, until accept
 - ``add_action_item`` / ``edit_action_item`` / ``set_action_item_status``: the same on
   an action item (``target.action_item_id``; owner_id required; status open, done,
   dropped). Its undo deletes it.
+- ``add_feature_ask`` (S9): a feature ask filed in Oracle's Requests (``product_requests``,
+  state new, ``target.request_id``): ``after`` {title, requester_name, requester_kind,
+  channel}. Anyone who may file a request (commenter and up) files it directly, as in
+  Requests; its undo deletes it while it is still new and unchanged.
 - ``add_launch_task`` / ``set_launch_task_status``: a task on the item's live launch
   (a launch of its track whose items include it; ``target.launch_id``, ``task_id`` once
   added) through oracle.launches.service. The launches service deletes no task: the undo
@@ -58,6 +62,8 @@ from oracle.priorities import service as priorities
 from oracle.priorities.models import PriorityOverride
 from oracle.priorities.schemas import OverrideCreate
 from oracle.priorities.scoring import _number
+from oracle.requests.models import CHANNELS as REQUEST_CHANNELS
+from oracle.requests.models import REQUESTER_KINDS, ProductRequest
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import changes, service
 from oracle.simple.changes import ChangeError
@@ -82,6 +88,7 @@ KIND = {
     "set_action_item_status": "action",
     "add_launch_task": "launch",
     "set_launch_task_status": "launch",
+    "add_feature_ask": "ask",
 }
 OPS: frozenset[str] = frozenset(KIND)
 ID_KEY = {
@@ -89,12 +96,19 @@ ID_KEY = {
     "action": "action_item_id",
     "launch": "task_id",
     "estimate": "feature_id",
+    "ask": "request_id",
 }
 ESTIMATES = ("goal_value", "effort")
-MODEL: dict[str, Any] = {"task": RoadmapItemTask, "action": SimpleActionItem, "launch": LaunchTask}
+MODEL: dict[str, Any] = {
+    "task": RoadmapItemTask,
+    "action": SimpleActionItem,
+    "launch": LaunchTask,
+    "ask": ProductRequest,
+}
 STATUSES = {"task": TASK_STATUSES, "action": ACTION_STATUSES, "launch": LAUNCH_TASK_STATUSES}
 EDITABLE = ("title", "owner_id", "due_date")
-TITLE_MAX = {"task": 200, "action": 200, "launch": 300}
+TITLE_MAX = {"task": 200, "action": 200, "launch": 300, "ask": 200}
+NAME_MAX = 200
 REASON_MAX = 500
 SKIP_MAX = 2000
 UNDONE = "Undone in Simple"
@@ -297,6 +311,20 @@ async def _plan(
     target: dict[str, Any] = {"item_id": str(entry.row.id)} if entry is not None else {}
     if kind == "action" and body.target.get("meeting_id"):
         target["meeting_id"] = _id_str(body.target["meeting_id"], "target.meeting_id")
+    if kind == "ask":
+        name = " ".join(str(a.get("requester_name") or "").split()) or None
+        if name is not None and len(name) > NAME_MAX:
+            raise ChangeError(422, f"after.requester_name: at most {NAME_MAX} characters")
+        rkind = a.get("requester_kind") or ("customer" if name else "unknown")
+        channel = a.get("channel") or "other"
+        if rkind not in REQUESTER_KINDS:
+            raise ChangeError(422, f"after.requester_kind: one of {', '.join(REQUESTER_KINDS)}")
+        if channel not in REQUEST_CHANNELS or channel in ("interview", "in_app"):
+            raise ChangeError(422, "after.channel: where the ask came from")
+        target[ID_KEY[kind]] = str(uuid.uuid4())
+        after = {"title": _title(a.get("title"), kind), "requester_name": name,
+                 "requester_kind": rkind, "channel": channel}  # fmt: skip
+        return target, {}, after
     if entry is None and kind != "action":
         raise ChangeError(422, "target.item_id: the roadmap item")
 
@@ -539,6 +567,12 @@ async def _apply(
 
 async def _create(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
     kind, t, a = KIND[c.op], c.target, c.after
+    if kind == "ask":
+        db.add(ProductRequest(id=uuid.UUID(t["request_id"]), title=a["title"],
+                              channel=a["channel"], origin="person",
+                              requester_name=a["requester_name"],
+                              requester_kind=a["requester_kind"], filed_by=c.by))  # fmt: skip
+        return
     item = await db.get(RoadmapItem, uuid.UUID(t["item_id"])) if t.get("item_id") else None
     if t.get("item_id") and item is None:
         raise ChangeError(409, "The roadmap item is gone")
@@ -577,9 +611,12 @@ async def _create(db: AsyncSession, principal: Any, c: SimpleChange) -> None:
 
 
 async def _who(
-    db: AsyncSession, principal: Any, item_id: Any
+    db: AsyncSession, principal: Any, item_id: Any, op: str = ""
 ) -> tuple[service.Entry | None, bool, list]:
     """(the item's entry, whether the caller applies, who a proposal goes to)."""
+    if KIND.get(op) == "ask":
+        # Filing a feature ask is every commenter's right in Requests (C1).
+        return None, has_role(principal.role, "commenter"), []
     if item_id in (None, ""):
         if has_role(principal.role, "owner"):
             return None, True, []
@@ -602,7 +639,7 @@ async def _record(db: AsyncSession, principal: Any, c: SimpleChange, **data: Any
 
 async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
     me, now = changes._me(principal), company_time.now()
-    entry, applies, routed = await _who(db, principal, body.target.get("item_id"))
+    entry, applies, routed = await _who(db, principal, body.target.get("item_id"), body.op)
     session = await changes._session_for_change(db, me, body.session_id, applies, now)
     target, before, after = await _plan(db, body.op, body, entry)
     c = SimpleChange(session_id=session.id if session else None,
