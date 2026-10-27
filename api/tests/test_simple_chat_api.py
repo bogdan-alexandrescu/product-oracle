@@ -345,11 +345,12 @@ async def test_meeting_change_mode_decides_who_applies(client, meetings, mode):
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings, mode, ("decider",) if mode == "named" else ())
-    titles = {"owner": "A", "decider": "B", "commenter": "C"}
+    lines = {"owner": "rename Alert export to Alert export A",
+             "decider": "rename Alert digest to Alert digest B",
+             "commenter": "rename Partner API to Partner API C"}  # fmt: skip
     cards = {}
-    for who, suffix in titles.items():
-        m = await say(client, ctx, "owner", f"rename Alert digest to Alert digest {suffix}", mid)
-        cards[who] = m["cards"][0]["id"]
+    for who, line in lines.items():
+        cards[who] = (await say(client, ctx, "owner", line, mid))["cards"][0]["id"]
     for who, may in MAY[mode].items():
         c = await card_as(client, ctx, who, cards["owner"], mid)
         assert c["may"] == may, (mode, who)
@@ -365,7 +366,7 @@ async def test_meeting_change_mode_decides_who_applies(client, meetings, mode):
             )
     r = await client.post(f"{CARDS}/{cards['owner']}/apply", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
-    assert (await w.item("Alert digest")).title == "Alert digest A"
+    assert (await w.item("Alert export")).title == "Alert export A"
     # Not an attendee: no thread, no card.
     r = await client.get(f"/v1/simple/meetings/{mid}/chat", headers=ctx.as_("approver"))
     assert r.status_code == 403
