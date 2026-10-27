@@ -69,7 +69,7 @@ for (const [where, use] of [
       /**
        * Card simple-board-draws: protects = the Now / Next / Later board shows the same
        * items as the timeline in three columns by their horizon (each with its window and
-       * count), grouped by goal inside a column, estimated dates hatched, the draft dashed,
+       * count, with its years when not this year's), grouped by goal inside a column, estimated dates hatched, the draft dashed,
        * a broken link red with its reason, the cut item below the line; on a phone the
        * columns stack and the page never scrolls sideways; fails_when = an item sits in the
        * wrong column, a column or group is missing, or a phone scrolls sideways; no_claim =
@@ -88,6 +88,9 @@ for (const [where, use] of [
         await expect(card(page, "alert-digest")).toHaveAttribute("data-broken", "true");
         await expect(card(page, "alert-digest").getByTestId("board-broken")).toContainText("it depends on ends");
         await expect(column(page, "later").getByTestId("board-below")).toContainText("In-app tour");
+        // A window or span outside this year names its years.
+        await expect(column(page, "later").locator("header")).toContainText(/, 20\d\d – .*, 20\d\d/);
+        await expect(card(page, "setup-video").getByTestId("board-dates")).toContainText(/20\d\d/);
         await expect(page.getByTestId("legend")).toContainText("Drag a card to another column");
         if (where === "phone") {
           const now = (await column(page, "now").boundingBox())!;
