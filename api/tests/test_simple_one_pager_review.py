@@ -211,6 +211,9 @@ def test_legacy_shortened_line_shows_its_own_fact():
     assert (
         full == "Spend alerts warn at 80% of the cap and again when the cap is reached for the team"
     )
+    # A bullet line whose fact is gone has no whole text: never the section's bullets joined.
+    gone = "Admins get a setup checklist on their first visit to the…"
+    assert one_pager._tidy(gone, 6, None, [sec("bets", SETUP)])[1] is None
 
 
 def test_legacy_long_whole_line_keeps_its_last_word():
