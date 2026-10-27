@@ -1274,6 +1274,10 @@ class SimpleUpcomingMeeting(BaseModel):
     length_min: int
     attendees: list[SimplePersonRef]
     meeting_id: uuid.UUID | None = None
+    # Its occurrence's pre-read is built (Home's "Open pre-read").
+    pre_read_ready: bool = False
+    # Owners and the ritual's owner start a ritual's review (the caller may).
+    can_start: bool = False
 
 
 class SimpleMeetingsOut(BaseModel):
@@ -1303,8 +1307,10 @@ class SimpleMeetingIn(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     origin: MeetingOrigin = "one_pager"
     occurrence_id: uuid.UUID | None = None
-    # A ritual's next review before its occurrence is made (Meetings > Upcoming).
+    # A ritual's next review before its occurrence is made (Meetings > Upcoming), with the
+    # row's due time: a start the ritual has moved past is 409, never next week's review.
     ritual_id: uuid.UUID | None = None
+    due_at: dt.datetime | None = None
     attendee_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     change_mode: ChangeMode = "everyone"
     change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)

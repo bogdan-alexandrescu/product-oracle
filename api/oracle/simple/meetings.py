@@ -41,7 +41,7 @@ Visibility: a meeting is seen by whoever reads its PRD (oracle.docs.visibility).
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from sqlalchemy import func, or_, select, text
@@ -99,6 +99,8 @@ SOURCE_KIND = "simple_meeting_decision"
 DEFAULT_LENGTH = 60
 INBOX_DAYS = 30
 UPCOMING_MAX = 20
+# How far ahead Upcoming (and the rail's count) lists a ritual's next review not made yet.
+UPCOMING_HORIZON = timedelta(days=14)
 # A minutes job still drafting after this long: "still drafting", send what is written.
 MINUTES_SLOW = timedelta(minutes=2)
 SUMMARY_MAX = 4000
@@ -345,7 +347,7 @@ async def options(
         )
     occ = None
     if occurrence is not None:
-        occ = (await _upcoming(db, names, only=occurrence))[:1]
+        occ = (await _upcoming(db, names, principal, only=occurrence))[:1]
         occ = occ[0] if occ else None
         if occ is None:
             raise MeetingError(404, "No such scheduled review")
@@ -383,7 +385,7 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
     occurrence = None
     occurrence_id = body.occurrence_id
     if occurrence_id is None and body.ritual_id is not None:
-        occurrence_id = await _occurrence_now(db, body.ritual_id)
+        occurrence_id = await _occurrence_now(db, principal, body.ritual_id, body.due_at)
     if occurrence_id is not None:
         occurrence = await db.get(RitualOccurrence, occurrence_id)
         if occurrence is None:
@@ -425,17 +427,42 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
     return m
 
 
-async def _occurrence_now(db: AsyncSession, ritual_id: uuid.UUID) -> uuid.UUID:
-    """Starting a ritual's next review before its occurrence is made: make it now (its
-    ``next_due_at``) and move the ritual on to the one after, as Prepare now does."""
-    from oracle.rituals.models import Ritual
+def may_start_ritual(principal: Any, ritual: Any) -> bool:
+    """Starting a ritual's review uses up its occurrence: owners and the ritual's owner only,
+    as Prepare now and the ritual's edits in Detailed (review)."""
+    me = _me(principal)
+    return me is not None and (has_role(principal.role, "owner") or me == ritual.owner_id)
+
+
+async def _occurrence_now(
+    db: AsyncSession, principal: Any, ritual_id: uuid.UUID, due: datetime | None
+) -> uuid.UUID:
+    """Starting a ritual's review from its Upcoming row (``due``, the row's due time): its
+    occurrence at that time when made, else made now when ``due`` is the ritual's
+    ``next_due_at``, which then moves on to the one after, as Prepare now does. A row the
+    ritual has moved past (a stale page, a double click, crossing starts) is 409 with the
+    meeting already started on it, never next week's occurrence."""
+    from oracle.rituals.models import Ritual, RitualOccurrence
     from oracle.rituals.schedule import next_occurrence
     from oracle.rituals.service import _create_occurrence
 
     ritual = await db.get(Ritual, ritual_id, with_for_update=True)
-    if ritual is None or ritual.status != "active" or ritual.next_due_at is None:
+    if ritual is None or ritual.status != "active":
         raise MeetingError(404, "No such scheduled review")
-    due = ritual.next_due_at
+    if not may_start_ritual(principal, ritual):
+        raise MeetingError(403, "Only an owner or the ritual's owner starts its review")
+    if due is None:
+        raise MeetingError(422, "due_at: the review's due time is required with ritual_id")
+    made = await db.scalar(
+        select(RitualOccurrence.id).where(
+            RitualOccurrence.ritual_id == ritual.id, RitualOccurrence.due_at == due
+        )
+    )
+    if made is not None:
+        return made
+    if ritual.next_due_at is None or ritual.next_due_at != due:
+        raise MeetingError(409, {"message": "This scheduled review has moved on: reload Upcoming",
+                                 "meeting_id": None})  # fmt: skip
     occ_id = await _create_occurrence(db, ritual, due)
     ritual.next_due_at = next_occurrence(ritual.schedule, due)
     await db.flush()
@@ -873,12 +900,12 @@ async def _sees_change(db: AsyncSession, principal: Any, c: SimpleChange) -> boo
 
 
 async def _upcoming(
-    db: AsyncSession, names: dict, only: uuid.UUID | None = None
+    db: AsyncSession, names: dict, principal: Any, only: uuid.UUID | None = None
 ) -> list[SimpleUpcomingMeeting]:
     """The reviews to start, the one source Home's "Next review meeting" and the rail's
-    Meetings count read too: each active ritual's open occurrences (scheduled or ready,
-    not over) and its next due time when no occurrence is made for it yet (rituals make
-    them only ``prep_hours`` ahead), soonest first."""
+    Meetings count read too: one row per active ritual, soonest first: its open occurrence
+    (scheduled or ready, not over), else its next due time within UPCOMING_HORIZON when no
+    occurrence is made for it yet (rituals make them only ``prep_hours`` ahead)."""
     from oracle.rituals.models import Ritual, RitualOccurrence
 
     now = company_time.now()
@@ -897,11 +924,19 @@ async def _upcoming(
         (await db.execute(q.order_by(RitualOccurrence.due_at).limit(UPCOMING_MAX))).all()
     )
     if only is None:
-        made = {(r.id, o.due_at) for o, r in rows}
+        # A ritual once: its soonest open occurrence (rows are soonest first).
+        first: dict[uuid.UUID, tuple[Any, Any]] = {}
+        for o, r in rows:
+            first.setdefault(r.id, (o, r))
+        rows, seen = list(first.values()), set(first)
         for r in await db.scalars(
-            select(Ritual).where(Ritual.status == "active", Ritual.next_due_at.is_not(None))
+            select(Ritual).where(
+                Ritual.status == "active",
+                Ritual.next_due_at.is_not(None),
+                Ritual.next_due_at <= now + UPCOMING_HORIZON,
+            )
         ):
-            if (r.id, r.next_due_at) not in made:
+            if r.id not in seen:
                 rows.append((None, r))
         rows.sort(key=lambda x: x[0].due_at if x[0] is not None else x[1].next_due_at)
         rows = rows[:UPCOMING_MAX]
@@ -930,6 +965,8 @@ async def _upcoming(
                 for i in dict.fromkeys([r.owner_id, *(r.attendee_ids or [])])
             ],
             meeting_id=started.get(o.id) if o is not None else None,
+            pre_read_ready=o is not None and o.status == "ready",
+            can_start=may_start_ritual(principal, r),
         ))  # fmt: skip
     return out
 
@@ -950,7 +987,7 @@ async def listing(db: AsyncSession, principal: Any) -> SimpleMeetingsOut:
     out = await briefs(db, ms)
     names = {u.id: u.name or u.email for u in await _members(db)}
     return SimpleMeetingsOut(
-        upcoming=await _upcoming(db, names),
+        upcoming=await _upcoming(db, names, principal),
         live=[b for b in out if b.status == "live"],
         past=[b for b in out if b.status == "ended"],
     )

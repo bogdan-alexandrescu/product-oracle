@@ -37704,6 +37704,8 @@ export interface components {
             occurrence_id?: string | null;
             /** Ritual Id */
             ritual_id?: string | null;
+            /** Due At */
+            due_at?: string | null;
             /** Attendee Ids */
             attendee_ids?: string[];
             /**
@@ -38552,6 +38554,16 @@ export interface components {
             attendees: components["schemas"]["SimplePersonRef"][];
             /** Meeting Id */
             meeting_id?: string | null;
+            /**
+             * Pre Read Ready
+             * @default false
+             */
+            pre_read_ready: boolean;
+            /**
+             * Can Start
+             * @default false
+             */
+            can_start: boolean;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {

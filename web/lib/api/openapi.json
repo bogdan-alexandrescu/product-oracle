@@ -113625,6 +113625,18 @@
             ],
             "title": "Ritual Id"
           },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
           "attendee_ids": {
             "items": {
               "type": "string",
@@ -115679,6 +115691,16 @@
               }
             ],
             "title": "Meeting Id"
+          },
+          "pre_read_ready": {
+            "type": "boolean",
+            "title": "Pre Read Ready",
+            "default": false
+          },
+          "can_start": {
+            "type": "boolean",
+            "title": "Can Start",
+            "default": false
           }
         },
         "type": "object",
