@@ -62,6 +62,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const [open, setOpen] = useState<string | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
   const [wide, setWide] = useState<string | null>(null);
+  // Lines shortened with "…" shown whole, in place (CLD's production walk, 2026-10-27).
+  const [whole, setWhole] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -225,10 +227,23 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                           </form>
                         ) : (
                           <div className="flex items-start gap-2">
-                            <button type="button" className="flex-1 text-left" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)}>
-                              {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
-                              {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.text}
-                            </button>
+                            <span className="flex-1">
+                              <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)} data-testid="one-pager-line-text">
+                                {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
+                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full && whole.has(l.id) ? l.full : l.text}
+                              </button>
+                              {l.full && !l.metric && (
+                                <button
+                                  type="button"
+                                  className="simple-noprint ml-2 text-sm underline"
+                                  aria-expanded={whole.has(l.id)}
+                                  aria-label={`${whole.has(l.id) ? "Show less of" : "Show all of"} line ${numbers.get(l.id)}`}
+                                  onClick={() => setWhole((w) => { const n = new Set(w); if (n.has(l.id)) n.delete(l.id); else n.add(l.id); return n; })}
+                                >
+                                  {whole.has(l.id) ? "Show less" : "Show all"}
+                                </button>
+                              )}
+                            </span>
                             {l.flow_subject && (
                               <button
                                 type="button"
@@ -242,7 +257,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                               </button>
                             )}
                             {(v.can_edit || v.can_propose) && (
-                              <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.text); }}>
+                              <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}>
                                 {v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}
                               </button>
                             )}
@@ -283,7 +298,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                       <div className="md:hidden">{notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, no: numbers.get(l.id)!, busy, diff, setDiff, wide, setWide, undo, decide }} />)}</div>
                     </li>
                   ))}
-                  {b.lines.length === 0 && <li className="list-none text-base text-text-faint">—</li>}
+                  {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">Not written yet</li>}
                 </ul>
               )}
             </section>

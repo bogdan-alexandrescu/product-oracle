@@ -50,6 +50,8 @@ interface Sec {
 interface SeedLine {
   id: string;
   text: string;
+  /** The whole text when `text` is shortened with "…" (the API's OnePagerLine.full). */
+  full?: string;
   keys: string[];
   metric?: { name: string; from: string; to: string };
 }
@@ -70,6 +72,8 @@ export interface OnePagerDb {
   decisions?: Record<string, { id: string; number: number; title: string }[]>;
   /** Imported by a service token: the PRD has no owner yet. */
   ownerless?: boolean;
+  /** The PRD's roadmap slice, when not the default invented one (SLICE). */
+  slice?: SliceItem[];
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
   approval?: { approved_in: string; waiting_on: { id: string; name: string }[] } | null;
 }
@@ -122,13 +126,78 @@ export function seedOnePager(ownerless = false): OnePagerDb {
  * The PRD's roadmap slice (invented): 12 items carry M1, 5 carry M2, 3 carry M3, 2 have no
  * milestone; one of those is committed past M3's month (the strip's edge).
  */
-const SLICE: { title: string; horizon: "now" | "next" | "later"; start: string; end: string; estimated: boolean; milestone: [string, string] | null }[] = [
+type SliceItem = {
+  title: string;
+  horizon: "now" | "next" | "later";
+  start: string;
+  end: string;
+  estimated: boolean;
+  milestone: [string, string] | null;
+  /** The track milestone record naming the item, when any (the strip's row). */
+  record?: { id: string; name: string };
+};
+const BETA_LAUNCH = { id: stableUuid("op-milestone/beta-launch"), name: "Beta launch" };
+const SLICE: SliceItem[] = [
   ...Array.from({ length: 12 }, (_, i) => ({ title: `Setup step ${i + 1}`, horizon: "now" as const, start: "2026-10-05", end: "2026-11-20", estimated: false, milestone: ["M1", "2026-11-20"] as [string, string] })),
   ...Array.from({ length: 5 }, (_, i) => ({ title: `Calendar invites ${i + 1}`, horizon: "next" as const, start: "2026-11-23", end: "2026-12-18", estimated: i > 2, milestone: ["M2", "2026-12-18"] as [string, string] })),
   ...Array.from({ length: 3 }, (_, i) => ({ title: `Sample project ${i + 1}`, horizon: "later" as const, start: "2026-12-21", end: "2027-01-29", estimated: true, milestone: ["M3", "2027-01-29"] as [string, string] })),
   { title: "Setup help center", horizon: "now", start: "2026-10-12", end: "2026-12-11", estimated: false, milestone: null },
   { title: "Setup analytics", horizon: "later", start: "2026-11-02", end: "2027-03-12", estimated: false, milestone: null },
 ];
+
+/**
+ * CLD's production walk (2026-10-27), the "simple-walk" scenario: a slice whose milestone
+ * texts carry their items' notes, as real roadmaps do (one row per milestone on the strip),
+ * and a problem line the API cut at a word with its whole text kept. Invented data.
+ */
+const NOTED_SLICE: SliceItem[] = [
+  { title: "Baseline export", horizon: "now", start: "2026-10-05", end: "2026-11-18", estimated: false, milestone: ["M1 · Measure it, make it safe (baseline needs the export); Alert digest in M2 · Ship to beta", "2026-11-20"] },
+  { title: "Dry run", horizon: "now", start: "2026-10-12", end: "2026-11-20", estimated: true, milestone: ["M1 · Measure it, make it safe (owner asks for a dry run)", "2026-11-20"] },
+  { title: "Setup audit", horizon: "now", start: "2026-10-19", end: "2026-11-13", estimated: false, milestone: ["M1 · Measure it, make it safe; follow-up in M3", "2026-11-20"] },
+  { title: "Beta invites", horizon: "next", start: "2026-11-23", end: "2026-12-18", estimated: false, milestone: ["M2 · Ship to beta (two teams first)", "2026-12-18"] },
+  { title: "Beta feedback form", horizon: "next", start: "2026-12-01", end: "2026-12-11", estimated: true, milestone: ["M2 · Ship to beta", "2026-12-18"] },
+  // A track milestone record naming three items: two whose own texts differ, one with none.
+  { title: "Beta for two teams", horizon: "next", start: "2026-12-07", end: "2027-01-08", estimated: false, milestone: ["Beta launch, two teams first", "2027-01-15"], record: BETA_LAUNCH },
+  { title: "Beta terms", horizon: "next", start: "2026-12-14", end: "2027-01-12", estimated: true, milestone: ["Beta launch - after legal", "2027-01-15"], record: BETA_LAUNCH },
+  { title: "Beta docs", horizon: "next", start: "2026-12-14", end: "2027-01-08", estimated: true, milestone: null, record: BETA_LAUNCH },
+  { title: "Setup help center", horizon: "now", start: "2026-10-12", end: "2026-12-11", estimated: false, milestone: null },
+];
+export const WALK_PROBLEM =
+  "New workspace admins stall during setup because the checklist hides the invite step, and the queue of half-set-up teams grows every week a cohort lands; teams with more than ten people wait the longest, and the promise we make is a first teammate invited within a 48-hour window that we miss for most new teams after a weekend signup";
+
+export function seedWalkOnePager(): OnePagerDb {
+  const db = seedOnePager();
+  db.slice = NOTED_SLICE;
+  db.sections[0].body = WALK_PROBLEM;
+  // As the API stores it: 60 words at most, cut at a word with "…", the whole text kept.
+  db.blocks[0].lines[0] = { id: "problem-1", text: `${WALK_PROBLEM.split(" ").slice(0, 52).join(" ")}…`, full: WALK_PROBLEM, keys: ["problem"] };
+  return db;
+}
+
+/**
+ * A PRD started from an empty skeleton (the "simple-walk" scenario): its sections are the
+ * template's guidance only, and the lines an older build stored from them (an HTML comment,
+ * placeholders, a bare arrow) never show: the API's read drops them (one_pager.template_only)
+ * and an empty block reads "Not written yet". Invented data.
+ */
+export function seedSkeletonOnePager(doc: OnePagerDb["doc"]): OnePagerDb {
+  const db = seedOnePager();
+  const guide: Record<string, string> = {
+    problem: "<!-- Brief: fits one slide; say who has the problem and what it costs them. -->",
+    bets: "<Milestone>: <Feature>",
+    outcomes: "→",
+    not_doing: "<!-- What we leave out -->",
+    risks: "<Risk>: <mitigation>",
+  };
+  db.doc = doc;
+  db.sections = db.sections.map((x) => ({ ...x, body: "<!-- Write this section. -->\n- <Milestone>: <Feature>\n- →" }));
+  db.blocks = db.blocks.map((b) => ({ ...b, lines: b.kind === "timeline" ? [] : [{ id: `${b.key}-1`, text: guide[b.key] ?? "→", keys: [db.sections[0].key] }] }));
+  return db;
+}
+
+/** The API's one_pager.template_only: only a template's comments, placeholders or arrows. */
+const uncomment = (t: string) => t.replace(/<!--[\s\S]*?(?:-->|$)/g, " ");
+const templateOnly = (t: string) => !/[\p{L}\p{N}]/u.test(uncomment(t).replace(/<[^<>\n]*>/g, ""));
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -281,11 +350,11 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     built_at: "2026-10-20T15:05:00Z",
     blocks: db.blocks.map((b) => ({
       key: b.key, title: b.title, rules: b.rules, kind: b.kind,
-      lines: b.lines.map((l): Line => {
+      lines: b.lines.filter((l) => (sees && db.draft?.lines[l.id] !== undefined) || !templateOnly(l.text)).map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
-        const text = edited ? db.draft!.lines[l.id] : l.text;
+        const text = edited ? db.draft!.lines[l.id] : uncomment(l.text).split(/\s+/).filter(Boolean).join(" ");
         return {
-          id: l.id, text, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
+          id: l.id, text, full: edited ? null : l.full ?? null, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
           // S10: each bet carries its visual.
           ...(b.key === "bets" ? { flow_subject: betSubject(text), flow: onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(text))) } : {}),
@@ -293,9 +362,9 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
         };
       }),
     })),
-    timeline: SLICE.map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
+    timeline: (db.slice ?? SLICE).map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
-      SLICE.map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null })),
+      (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, record: x.record ?? null })),
       new Date(mockNowMs()).toISOString().slice(0, 10),
     ),
     sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),

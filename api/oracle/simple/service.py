@@ -403,11 +403,12 @@ def _milestone(
 ) -> SimpleItemMilestone | None:
     own = row.milestone or {}
     own_date = dates.as_date(own.get("date"))
-    if own_date is not None:
-        return SimpleItemMilestone(name=own.get("name"), date=own_date, source="item")
     m = track_ms.get((track.id, row.item_key)) if track is not None else None
+    record = {"record_id": m.id, "record_name": m.name} if m is not None else {}
+    if own_date is not None:
+        return SimpleItemMilestone(name=own.get("name"), date=own_date, source="item", **record)
     if m is not None:
-        return SimpleItemMilestone(name=m.name, date=m.target_date, source="track")
+        return SimpleItemMilestone(name=m.name, date=m.target_date, source="track", **record)
     if own.get("name"):
         return SimpleItemMilestone(name=own.get("name"), date=None, source="item")
     return None

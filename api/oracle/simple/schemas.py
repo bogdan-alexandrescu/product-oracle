@@ -83,6 +83,10 @@ class SimpleItemMilestone(BaseModel):
     date: dt.date | None = None
     # item: the item's own milestone; track: a track milestone naming the item.
     source: Literal["item", "track"]
+    # The track milestone record naming the item, whichever source the name and date are
+    # from: the plan strip groups its items by it, whatever their own texts say.
+    record_id: uuid.UUID | None = None
+    record_name: str | None = None
 
 
 class SimpleOwnerRef(BaseModel):
@@ -769,6 +773,9 @@ class OnePagerLine(BaseModel):
     # Stable within a version's one-pager: "<block>-<n>".
     id: str
     text: str
+    # The whole text when ``text`` is shortened (cut at a word boundary with "…"): the page
+    # offers it in place ("Show all").
+    full: str | None = None
     # The PRD sections the line rests on: a click opens the drill-down, "Open the
     # detailed view" lands on the first.
     source_keys: list[str]

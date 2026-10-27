@@ -29463,6 +29463,8 @@ export interface components {
             id: string;
             /** Text */
             text: string;
+            /** Full */
+            full?: string | null;
             /** Source Keys */
             source_keys: string[];
             metric?: components["schemas"]["OnePagerMetric"] | null;
@@ -37504,6 +37506,10 @@ export interface components {
              * @enum {string}
              */
             source: "item" | "track";
+            /** Record Id */
+            record_id?: string | null;
+            /** Record Name */
+            record_name?: string | null;
         };
         /**
          * SimpleKeyDate

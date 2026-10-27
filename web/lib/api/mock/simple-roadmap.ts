@@ -37,6 +37,8 @@ interface SeedItem {
   status?: Item["status"];
   draft?: boolean;
   milestone?: { name: string; day: number };
+  /** The track milestone record naming the item (its name), whatever its own text says. */
+  record?: string;
   /** The roadmap item's validation gates (days from the window's start); one naming a
    * phase ends that phase on its day (oracle.simple.dates.named_phases). */
   gates?: { phase: string; day: number }[];
@@ -295,6 +297,11 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
 
 const PHASES = [["discover", 0.15], ["build", 0.55], ["beta", 0.2], ["launch", 0.1]] as const;
 
+/** The track milestone record naming a seeded item, as the API's read carries it. */
+function recordOf(s: { record?: string; track?: string }): { record_id?: string; record_name?: string } {
+  return s.record ? { record_id: stableUuid(`simple-milestone/${s.track}/${s.record}`), record_name: s.record } : {};
+}
+
 /** oracle.simple.dates.phases: the milestone and gates naming a phase end it on their date;
  * every other phase keeps the 15/55/20/10 split of the bar, estimated. */
 function phases(start: string, end: string, s: SeedItem, w: [string, string]): Schemas["SimplePhase"][] {
@@ -509,7 +516,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       source: r.end.estimated ? r.start.source : r.end.source,
       estimated: r.start.estimated && r.end.estimated,
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
-      milestone: s.milestone ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item" } : null,
+      milestone: s.milestone
+        ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item", ...recordOf(s) }
+        : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
       phases: phases(r.start.date, r.end.date, s, w[s.horizon]),
       depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
@@ -562,6 +571,10 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     items: shown,
     milestones: [
       { id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now", status: "planned", item_ids: [db.ids["alert-digest"]] },
+      ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
+        const of = seeds.filter((s) => s.record === name);
+        return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: null, horizon: "now" as const, status: "planned" as const, item_ids: of.map((s) => db.ids[s.key]) };
+      }),
     ],
     changes_in_review: reader.hidden,
     drafts: reader.visible,
