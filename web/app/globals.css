@@ -169,6 +169,21 @@
   }
 }
 
+/*
+ * Simple (#723): Oracle's tokens plus these. Simple pages wrap their content in
+ * .simple-mode (18 px body type); the values follow the light and dark tokens above.
+ */
+:root {
+  --simple-body: 18px;
+  --simple-canvas: var(--bg);
+  --simple-card: var(--surface);
+  --simple-radius: 14px;
+}
+.simple-mode {
+  font-size: var(--simple-body);
+  line-height: 1.5;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);

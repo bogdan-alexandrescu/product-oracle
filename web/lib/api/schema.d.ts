@@ -36014,6 +36014,8 @@ export interface components {
             key: string;
             /** Title */
             title: string;
+            /** Metric */
+            metric?: string | null;
         };
         /** SimpleGroup */
         SimpleGroup: {
@@ -36074,6 +36076,31 @@ export interface components {
             status: "planned" | "done" | "dropped";
             /** Item Ids */
             item_ids: string[];
+        };
+        /**
+         * SimpleOpenDecision
+         * @description S4: a proposed decision naming the item as a subject (the floating card's).
+         */
+        SimpleOpenDecision: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+        };
+        /** SimpleOwnerRef */
+        SimpleOwnerRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
         };
         /** SimplePersonRef */
         SimplePersonRef: {
@@ -36375,6 +36402,7 @@ export interface components {
             needed_by: string[];
             /** Flags */
             flags: components["schemas"]["SimpleFlag"][];
+            owner?: components["schemas"]["SimpleOwnerRef"] | null;
             /**
              * Can Decide
              * @default false
@@ -36385,6 +36413,16 @@ export interface components {
              * @default []
              */
             deciders: string[];
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+            /**
+             * Open Decisions
+             * @default []
+             */
+            open_decisions: components["schemas"]["SimpleOpenDecision"][];
         };
         /** SimpleRoadmapOut */
         SimpleRoadmapOut: {

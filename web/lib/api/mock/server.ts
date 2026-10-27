@@ -152,7 +152,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
-import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
+import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -525,6 +525,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
+ * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /**
@@ -839,6 +840,7 @@ function seedSimpleDecidersScenario(): Db {
     commenter: join("cory.hale@example.com", "Cory Hale", "commenter", 2),
     viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
   });
+  db.simple_roadmap.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
   return db;
 }
 
@@ -2537,6 +2539,8 @@ function load(): Db {
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
+              : scenario === "simple-500"
+                ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
                   : scenario === "strategy-plan"

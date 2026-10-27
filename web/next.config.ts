@@ -48,6 +48,9 @@ const nextConfig: NextConfig = {
   distDir: process.env.NEXT_DIST_DIR || ".next",
   output: process.env.NEXT_DIST_DIR ? undefined : "standalone",
   cacheComponents: true,
+  // Simple (#723) behind ORACLE_SIMPLE_MODE, off by default; on in the mock build, whose
+  // specs drive Simple's screens (app/simple/_flag.ts).
+  env: { ORACLE_SIMPLE_MODE: process.env.ORACLE_SIMPLE_MODE ?? (process.env.NEXT_PUBLIC_API_MOCKS === "1" ? "1" : "") },
   partialPrefetching: true,
   turbopack: {
     rules: {

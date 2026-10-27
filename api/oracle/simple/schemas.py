@@ -69,6 +69,8 @@ class SimpleGoalRef(BaseModel):
     id: uuid.UUID
     key: str
     title: str
+    # S4: the goal's metric (its ``attrs.metric``), the goal counters' line.
+    metric: str | None = None
 
 
 class SimpleTrackRef(BaseModel):
@@ -81,6 +83,19 @@ class SimpleItemMilestone(BaseModel):
     date: dt.date | None = None
     # item: the item's own milestone; track: a track milestone naming the item.
     source: Literal["item", "track"]
+
+
+class SimpleOwnerRef(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class SimpleOpenDecision(BaseModel):
+    """S4: a proposed decision naming the item as a subject (the floating card's)."""
+
+    id: uuid.UUID
+    number: int
+    title: str
 
 
 class DateSuggestionOut(BaseModel):
@@ -126,10 +141,15 @@ class SimpleRoadmapItem(BaseModel):
     depends_on: list[uuid.UUID]
     needed_by: list[uuid.UUID]
     flags: list[SimpleFlag]
-    # Whether the caller applies changes to this item (service.can_decide), and the names of
-    # who decides it (D-a: the decider, else the deciding track owner, else the owners).
+    # Whether the caller applies changes to this item (service.can_decide), the names of who
+    # decides it (D-a: the decider, else the deciding track owner, else the owners), and S4's
+    # floating card: the item's track owner (enabled), up to 3 one-line reasons (the
+    # priority's rationale, the goal it serves, its PRD section) and the open decisions naming it.
+    owner: SimpleOwnerRef | None = None
     can_decide: bool = False
     deciders: list[str] = []
+    reasons: list[str] = []
+    open_decisions: list[SimpleOpenDecision] = []
 
 
 class SimpleGroup(BaseModel):

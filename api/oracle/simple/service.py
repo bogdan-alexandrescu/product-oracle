@@ -52,6 +52,8 @@ from oracle.simple.schemas import (
     SimpleGroup,
     SimpleItemMilestone,
     SimpleMilestone,
+    SimpleOpenDecision,
+    SimpleOwnerRef,
     SimplePhase,
     SimpleRoadmapItem,
     SimpleRoadmapOut,
@@ -86,6 +88,8 @@ class Entry:
     flags: list[constraints.Flag] = field(default_factory=list)
     # The track owner's role now (None: no owner, or a disabled one): D-a.
     owner_role: str | None = None
+    # S4: the track owner's name (or e-mail) when enabled.
+    owner_name: str | None = None
 
 
 @dataclass
@@ -206,9 +210,10 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         rows.sort(key=lambda r: (r.position, r.item_key))
     tracks: dict[uuid.UUID, ProductTrack] = {}
     owner_roles: dict[uuid.UUID, str] = {}
-    for t, role in (
+    owner_names: dict[uuid.UUID, str] = {}
+    for t, role, name, email in (
         await db.execute(
-            select(ProductTrack, User.role).outerjoin(
+            select(ProductTrack, User.role, User.name, User.email).outerjoin(
                 User, (User.id == ProductTrack.owner_id) & User.disabled_at.is_(None)
             )
         )
@@ -216,6 +221,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         tracks[t.id] = t
         if role is not None:
             owner_roles[t.id] = role
+            owner_names[t.id] = name or email
     track_of_prd = {t.prd_document_id: t for t in tracks.values()}
     milestones = list(
         await db.scalars(
@@ -295,6 +301,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 blockers=[blockers[b] for b in row.blocker_ids or [] if b in blockers],
                 suggestion=suggestions.get(row.id),
                 owner_role=owner_roles.get(track.id) if track is not None else None,
+                owner_name=owner_names.get(track.id) if track is not None else None,
             )
         )
     # Dependencies within each roadmap version, by item key.
@@ -485,11 +492,58 @@ def suggestion_out(s: RoadmapDateSuggestion, row: RoadmapItem, may: bool) -> Dat
     )
 
 
+def _reasons(e: Entry) -> list[str]:
+    """S4: up to 3 one-line reasons, from the item's evidence: its priority's rationale,
+    the goal its feature supports, the PRD section it was drawn from."""
+    out: list[str] = []
+    why = (e.row.priority or {}).get("rationale") or (e.row.priority or {}).get("reason")
+    if isinstance(why, str) and why.strip():
+        out.append(why.strip().splitlines()[0])
+    if e.goal is not None:
+        out.append(f"Serves the goal {e.goal.title}.")
+    if e.prd is not None and e.row.prd_section_key:
+        out.append(f"From {e.prd.title}, section {e.row.prd_section_key}.")
+    return out[:3]
+
+
+async def _open_decisions(
+    db: AsyncSession, ids: set[uuid.UUID]
+) -> dict[uuid.UUID, list[SimpleOpenDecision]]:
+    """S4: the proposed decisions naming each item (a ``roadmap_item`` subject), in one
+    statement."""
+    from oracle.decisions.models import Decision
+
+    out: dict[uuid.UUID, list[SimpleOpenDecision]] = defaultdict(list)
+    if not ids:
+        return out
+    rows = await db.scalars(
+        select(Decision)
+        .where(Decision.status == "proposed")
+        .where(Decision.subjects.contains([{"kind": "roadmap_item"}]))
+        .order_by(Decision.number)
+    )
+    for d in rows:
+        for subject in d.subjects or []:
+            try:
+                item_id = uuid.UUID(str(subject.get("id")))
+            except ValueError:
+                continue
+            if subject.get("kind") == "roadmap_item" and item_id in ids:
+                out[item_id].append(SimpleOpenDecision(id=d.id, number=d.number, title=d.title))
+    return out
+
+
 def item_out(
-    e: Entry, principal: Any, deciders: dict, names: dict | None = None, owners: list | None = None
+    e: Entry,
+    principal: Any,
+    deciders: dict,
+    names: dict | None = None,
+    owners: list | None = None,
+    decisions: dict[uuid.UUID, list[SimpleOpenDecision]] | None = None,
 ) -> SimpleRoadmapItem:
     row, r = e.row, e.resolved
     names = names or {}
+    may = can_decide(principal, e, deciders) if principal is not None else False
     return SimpleRoadmapItem(
         id=row.id,
         key=row.item_key,
@@ -498,7 +552,9 @@ def item_out(
         horizon=row.horizon,  # type: ignore[arg-type]
         roadmap=_ref(e.roadmap),  # type: ignore[arg-type]
         prd=_ref(e.prd),
-        goal=SimpleGoalRef(id=e.goal.id, key=e.goal.key, title=e.goal.title) if e.goal else None,
+        goal=SimpleGoalRef(id=e.goal.id, key=e.goal.key, title=e.goal.title, metric=_metric(e.goal))
+        if e.goal
+        else None,
         track=SimpleTrackRef(id=e.track.id, title=e.track.title) if e.track else None,
         confidence=row.confidence,
         status=e.status,  # type: ignore[arg-type]
@@ -507,9 +563,7 @@ def item_out(
         end=_date(r.end),
         source=r.source,
         estimated=r.estimated,
-        suggestion=suggestion_out(e.suggestion, row, can_decide(principal, e, deciders))
-        if e.suggestion is not None
-        else None,
+        suggestion=suggestion_out(e.suggestion, row, may) if e.suggestion is not None else None,
         milestone=e.milestone,
         phases=[
             SimplePhase(key=p.key, start=p.start, end=p.end, estimated=p.estimated)  # type: ignore[arg-type]
@@ -528,9 +582,21 @@ def item_out(
             )  # fmt: skip
             for f in e.flags
         ],
-        can_decide=can_decide(principal, e, deciders),
+        owner=SimpleOwnerRef(id=e.track.owner_id, name=e.owner_name)  # type: ignore[arg-type]
+        if e.track is not None and e.track.owner_id is not None and e.owner_name
+        else None,
+        can_decide=may,
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
+        reasons=_reasons(e),
+        open_decisions=(decisions or {}).get(row.id, []),
     )
+
+
+def _metric(goal: Entity) -> str | None:
+    metric = (goal.attrs or {}).get("metric")
+    if isinstance(metric, dict):
+        metric = metric.get("name") or metric.get("title")
+    return metric if isinstance(metric, str) and metric else None
 
 
 def _matches(e: Entry, value: str | None, *refs: Any) -> bool:
@@ -594,6 +660,7 @@ async def build(
         u.id: display_name(u.email, u.name)
         for u in await db.scalars(select(User).where(User.id.in_(people)))
     }
+    decisions = await _open_decisions(db, {e.row.id for e in shown})
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
@@ -604,7 +671,7 @@ async def build(
             **{h: SimpleWindow(start=w[h][0], end=w[h][1]) for h in ("now", "next", "later")}
         ),
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
-        items=[item_out(e, principal, read.deciders, names, owners) for e in shown],
+        items=[item_out(e, principal, read.deciders, names, owners, decisions) for e in shown],
         milestones=[
             SimpleMilestone(
                 id=m.id,
