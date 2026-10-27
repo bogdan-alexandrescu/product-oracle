@@ -408,6 +408,9 @@ SIMPLE_PER_ITEM = {
     # S8 meetings: an owner, or the PRD's decider / the presenter.
     "start_simple_meeting": "owner",
     "approve_in_simple_meeting": "owner",
+    # The presenter alone sets the change mode; attendees (or whom the mode lets change) comment.
+    "set_simple_meeting_rules": None,
+    "comment_in_simple_meeting": None,
     "end_simple_meeting": "owner",
     "edit_simple_meeting_minutes": "owner",
     "send_simple_meeting_minutes": "owner",

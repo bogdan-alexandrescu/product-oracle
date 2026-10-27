@@ -9,8 +9,10 @@ import { expect, test, type Page } from "./test";
  * Card one-pager-per-prd: protects = a line edited on one PRD's one-pager (the invented
  * page every mock PRD is served) shows on that PRD's page only: the seeded PRD's line stays
  * published while another PRD's is edited, and each keeps its own wording and working-draft
- * count after both are edited; fails_when = the mock serves every PRD one shared working
- * draft, so an edit made on one PRD's one-pager shows on another's; no_claim = the API
+ * count after both are edited, and the other PRD's one-pager opened by its document id (a
+ * link that carries the id) is that PRD's, with its edit;
+ * fails_when = the mock serves every PRD one shared working draft, so an edit made on one
+ * PRD's one-pager shows on another's, or finds a one-pager by slug only; no_claim = the API
  * (one working draft per roadmap, api/tests/test_simple_one_pager_api.py) and Remind's
  * per-PRD reviewers.
  */
@@ -35,6 +37,11 @@ for (const phone of [false, true]) {
         await login(page);
         await page.goto(OTHER);
         await expect(page.getByRole("heading", { level: 1, name: "Checkout redesign PRD" })).toBeVisible();
+        // The PRD's document id, read (never written) from the mock's saved state: a link that carries it.
+        const otherId = await page.evaluate(() => {
+          const db = JSON.parse(localStorage.getItem("po-mock-db-v2")!) as { documents: { id: string; slug: string }[] };
+          return db.documents.find((d) => d.slug === "checkout-redesign")!.id;
+        });
         await editLine2(page, "A checkout checklist with saved cards");
 
         await page.goto(SEEDED);
@@ -52,6 +59,10 @@ for (const phone of [false, true]) {
         await expect(line).toContainText("A checkout checklist with saved cards");
         await expect(line).not.toContainText("next two steps");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+
+        await page.goto(`/simple/one-pagers/${otherId}`);
+        await expect(page.getByRole("heading", { level: 1, name: "Checkout redesign PRD" })).toBeVisible();
+        await expect(line).toContainText("A checkout checklist with saved cards");
       });
     });
   }

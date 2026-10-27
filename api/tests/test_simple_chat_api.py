@@ -69,11 +69,12 @@ Test cards (protects / fails_when / no_claim):
   them; a broken link's card applies a one-click fix and undoes; a commenter has no broken
   links to fix; fails_when=the order differs, or a step is someone else's;
   no_claim=progress and Done (web spec).
-- test_meeting_apply_refused_at_decision_writes_nothing (u-followups 4): protects=when S8
-  refuses the meeting decision of an Apply (its change mode leaves the caller out, a
-  MeetingError) the answer is that HTTP error and neither the change nor the card's Apply
-  is kept; fails_when=the change commits before its meeting decision, or the MeetingError
-  is a 500; no_claim=which refusals S8 makes (its own tests).
+- test_meeting_apply_with_a_meeting_error_at_decision_writes_nothing (u-followups 4):
+  protects=when recording an Apply's meeting decision raises a MeetingError (faked here:
+  the refusal a change mode makes) the answer is that HTTP error and neither the change nor
+  the card's Apply is kept; fails_when=the change commits before its meeting decision, or
+  the MeetingError is a 500; no_claim=which refusals S8 makes, or a real change mode
+  refusing the caller (S8's own tests).
 - test_meeting_apply_with_a_failing_decision_write_writes_nothing (u-followups 4):
   protects=a decision write that fails rolls the change back with it (one commit, as
   changes_router's S8 path); fails_when=a change is left with no meeting decision;
@@ -559,7 +560,7 @@ async def _card_status(ctx: Ctx, card_id: str) -> str:
         return (await s.get(SimpleChatCard, uuid.UUID(card_id))).status
 
 
-async def test_meeting_apply_refused_at_decision_writes_nothing(client, meetings):
+async def test_meeting_apply_with_a_meeting_error_at_decision_writes_nothing(client, meetings):
     ctx = await make_people()
     w = await World(ctx).build()
     mid = _meeting(ctx, meetings, "everyone")
