@@ -43,6 +43,8 @@ class CompanyTick:
     date_suggestions: bool = False
     # Simple's sessions closed after 30 idle minutes.
     sessions_closed: int = 0
+    # Simple S7: goals Oracle queued suggestions for (once each, when they had no items).
+    goal_suggestions: int = 0
     # What raised, step by step (logged); the other steps still ran.
     errors: list[BaseException] = field(default_factory=list)
 
@@ -107,6 +109,16 @@ async def tick_company(
         except Exception:
             log.exception("tick: recording the failed suggestions run failed for %s", tenant_id)
             await db.rollback()
+    try:
+        # Simple S7 (#723): Oracle suggests features once for each goal with no items.
+        from oracle.simple import additions
+
+        out.goal_suggestions = await additions.suggest_for_empty_goals(db)
+        await db.commit()
+    except Exception as exc:
+        log.exception("tick: goal suggestions failed for company %s", tenant_id)
+        await db.rollback()
+        out.errors.append(exc)
     try:
         # Simple S3a (#723): sessions idle 30 minutes close.
         from oracle.simple import changes as simple_changes

@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -63,7 +63,13 @@ from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
-from oracle.simple.models import SimpleChange, SimpleDraft, SimpleSession, SimpleSessionDraft
+from oracle.simple.models import (
+    RoadmapDateSuggestion,
+    SimpleChange,
+    SimpleDraft,
+    SimpleSession,
+    SimpleSessionDraft,
+)
 from oracle.simple.schemas import (
     InboxSimpleApproval,
     SimpleDocRef,
@@ -89,7 +95,15 @@ FIELDS = (
     "accepted_risks",
     # S6: confirm_item.
     "draft",
+    # S7 (oracle.simple.additions): Oracle's drafting, merge_item and keep_both.
+    "feature_id",
+    "depends_on",
+    "note",
+    "goal_ids",
+    "merged_into",
+    "kept_both",
 )
+UUID_FIELDS = ("feature_id",)
 DATES = ("start_date", "end_date")
 # Blockers of review_problems that the approval itself resolves.
 APPROVAL_CODES = ("version_not_approved", "mandatory_reviewer_pending")
@@ -111,7 +125,22 @@ class DraftError(Exception):
 def _json(f: str, v: Any) -> Any:
     if f in DATES:
         return v.isoformat() if isinstance(v, date) else v
-    return list(v) if f == "accepted_risks" else v
+    if f in UUID_FIELDS:
+        return str(v) if v is not None else None
+    if f == "goal_ids":
+        return [str(x) for x in v or []]
+    return list(v or []) if f in ("accepted_risks", "depends_on") else v
+
+
+def _typed(f: str, v: Any) -> Any:
+    """A JSON value of the overlay as the row's attribute."""
+    if f in DATES:
+        return date.fromisoformat(v) if isinstance(v, str) else v
+    if f in UUID_FIELDS:
+        return uuid.UUID(str(v)) if v else None
+    if f == "goal_ids":
+        return [uuid.UUID(str(x)) for x in v or []]
+    return v
 
 
 def snapshot(row: RoadmapItem) -> dict[str, Any]:
@@ -125,11 +154,73 @@ def overlaid(row: RoadmapItem, values: dict[str, Any] | None) -> RoadmapItem:
         return row
     copy = RoadmapItem(**{a.key: getattr(row, a.key) for a in RoadmapItem.__mapper__.column_attrs})
     for f, v in values.items():
-        if f in DATES:
-            v = date.fromisoformat(v) if isinstance(v, str) else v
         if f in FIELDS:
-            setattr(copy, f, v)
+            setattr(copy, f, _typed(f, v))
     return copy
+
+
+def placed(row: RoadmapItem, base_version_id: uuid.UUID | None, values: dict | None):
+    """S7: a transient copy of an item added in Simple, read as part of the version its
+    draft was opened on (so dependencies by key resolve), with the draft's fields."""
+    copy = RoadmapItem(**{a.key: getattr(row, a.key) for a in RoadmapItem.__mapper__.column_attrs})
+    copy.roadmap_version_id = base_version_id
+    for f, v in (values or {}).items():
+        if f in FIELDS:
+            setattr(copy, f, _typed(f, v))
+    return copy
+
+
+async def added_rows(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]]) -> list:
+    """S7: the items added in Simple to the open drafts of the roadmaps in ``overlays``
+    (those the reader sees), each placed on its draft's base version."""
+    if not overlays:
+        return []
+    out = []
+    for row, base in (
+        await db.execute(
+            select(RoadmapItem, SimpleDraft.base_version_id)
+            .join(SimpleDraft, SimpleDraft.id == RoadmapItem.simple_draft_id)
+            .where(
+                SimpleDraft.status.in_(OPEN),
+                SimpleDraft.document_id.in_(list(overlays)),
+                RoadmapItem.roadmap_version_id.is_(None),
+            )
+        )
+    ).all():
+        out.append(placed(row, base, overlays[row.roadmap_document_id].get(str(row.id))))
+    return out
+
+
+async def drop_added(db: AsyncSession, d: SimpleDraft) -> None:
+    """S7: an approved draft's added items live on in its version: their draft rows go,
+    their date suggestions move to the published copies (same key, the draft's version)."""
+    added = {
+        r.item_key: r.id
+        for r in await db.scalars(
+            select(RoadmapItem).where(
+                RoadmapItem.simple_draft_id == d.id, RoadmapItem.roadmap_version_id.is_(None)
+            )
+        )
+    }
+    if added and d.version_id is not None:
+        for key, copy in (
+            await db.execute(
+                select(RoadmapItem.item_key, RoadmapItem.id).where(
+                    RoadmapItem.roadmap_version_id == d.version_id,
+                    RoadmapItem.item_key.in_(list(added)),
+                )
+            )
+        ).all():
+            await db.execute(
+                update(RoadmapDateSuggestion)
+                .where(RoadmapDateSuggestion.item_id == added[key])
+                .values(item_id=copy)
+            )
+    await db.execute(
+        delete(RoadmapItem).where(
+            RoadmapItem.simple_draft_id == d.id, RoadmapItem.roadmap_version_id.is_(None)
+        )
+    )
 
 
 # --------------------------------------------------------------------------- who
@@ -679,6 +770,9 @@ OP_WORDS = {
     "add_key_date": "Added the key date",
     "edit_key_date": "Changed the key date",
     "remove_key_date": "Removed the key date",
+    "add_item": "Added",
+    "merge_item": "Merged",
+    "keep_both": "Kept beside its look-alikes:",
 }
 
 
@@ -742,7 +836,16 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
             f"on version {base.number if base else '?'}",
         )
     base_rows = await views.version_items(db, base)
-    titles = {str(r.id): r.title for r in base_rows}
+    # S7: the items added in Simple (on no version until now), unless merged away.
+    added = [
+        r
+        for r in await db.scalars(
+            select(RoadmapItem)
+            .where(RoadmapItem.simple_draft_id == d.id, RoadmapItem.roadmap_version_id.is_(None))
+            .order_by(RoadmapItem.position, RoadmapItem.item_key)
+        )
+    ]
+    titles = {str(r.id): r.title for r in [*base_rows, *added]}
     lines = [f"Changed in Simple on version {base.number}:", ""]
     for c in live:
         kd = None
@@ -775,10 +878,24 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
     await db.execute(delete(RoadmapItem).where(RoadmapItem.roadmap_version_id == version.id))
     overlay = d.overlay or {}
     bases = {
-        p: await schedule.verified_bases(db, p) for p in {r.prd_document_id for r in base_rows}
+        p: await schedule.verified_bases(db, p)
+        for p in {r.prd_document_id for r in [*base_rows, *added]}
     }
-    for old in base_rows:
+    for old in [*base_rows, *added]:
         cur = overlaid(old, overlay.get(str(old.id)))
+        if old in added and cur.merged_into:
+            continue
+        note = (
+            f"from version {base.number}, changed in Simple"
+            if str(old.id) in overlay
+            else f"from version {base.number}"
+        )
+        if old in added:
+            note = f"added in Simple on version {base.number}"
+        if cur.note and cur.note != old.note and (old in added or str(old.id) in overlay):
+            # Notes a merge moved onto the item (S7).
+            note += "\n" + (cur.note[len(old.note or "") :] if cur.note.startswith(old.note or "")
+                            else cur.note).strip()  # fmt: skip
         fields = {c: getattr(cur, c) for c in items_mod.COPIED}
         fields.update(
             {f: getattr(cur, f) for f in FIELDS},
@@ -786,9 +903,7 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
             milestone=items_mod.recheck_date(
                 old.milestone, bases[old.prd_document_id], old.item_key, cur.horizon
             ),
-            note=f"from version {base.number}, changed in Simple"
-            if str(old.id) in overlay
-            else f"from version {base.number}",
+            note=note,
         )
         db.add(
             RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id, **fields)
@@ -953,6 +1068,7 @@ async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> lis
             return other
         d.status, d.approved_at = "approved", company_time.now()
         await key_dates.publish(db, d)
+        await drop_added(db, d)
         await audit.record(
             db,
             dp,
@@ -1125,6 +1241,7 @@ async def on_version_approved(db: AsyncSession, principal: Any, version: Documen
         return
     d.status, d.approved_at, d.waiting_on = "approved", company_time.now(), []
     await key_dates.publish(db, d)
+    await drop_added(db, d)
     await db.flush()
     await audit.record(db, principal, "simple_draft.approved", "simple_draft", d.id,
                        data={"version": version.number, "via": "approve_version",

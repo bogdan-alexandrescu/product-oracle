@@ -227,11 +227,11 @@ async def test_proposals_wait_for_the_decider(client):
 
 
 async def test_draft_and_second_item_proposals(client):
-    """protects=a commenter's Confirm (confirm_item) and Merge (a cut of a draft item) are
-    listed among the proposals waiting for the decider, and every proposal carries its
-    feature_id so one on a feature's second item (pay-7, ledger's later item) shows under the
-    feature's row; fails_when=a draft's proposal is dropped or a proposal can't be placed;
-    no_claim=a cut of a ranked item (the roadmap's)."""
+    """protects=a commenter's Confirm (confirm_item) and Merge (S7's merge_item; train T's
+    cut with a note is still listed) are listed among the proposals waiting for the decider,
+    and every proposal carries its feature_id so one on a feature's second item (pay-7,
+    ledger's later item) shows under the feature's row; fails_when=a draft's proposal is
+    dropped or a proposal can't be placed; no_claim=a cut of a ranked item (the roadmap's)."""
     ctx = await make_people()
     w = await World(ctx).build()
     r = await w.change(client, "commenter", "confirm_item", "pay-5", {"draft": True}, {})
@@ -239,13 +239,17 @@ async def test_draft_and_second_item_proposals(client):
     r = await w.change(client, "commenter", "cut", "pay-5", {"cut": False}, {"cut": True},
                        reason="Merged into pay-3")  # fmt: skip
     assert r.status_code == 201, r.text
+    r = await client.post(CHANGES, headers=ctx.as_("commenter"), json={
+        "op": "merge_item", "target": {"item_id": w.ids["pay-5"], "into_id": w.ids["pay-3"]},
+        "before": {}, "after": {}, "reason": "Merged into pay-3"})  # fmt: skip
+    assert r.status_code == 201 and r.json()["change"]["status"] == "proposed", r.text
     r = await w.change(client, "commenter", "estimate_feature", "pay-7",
                        {"goal_value": None, "effort": 1}, {"goal_value": 6})  # fmt: skip
     assert r.status_code == 201, r.text
     out = await w.read(client, "commenter")
     by_op = {p["op"]: p for p in out["proposals"]}
-    assert sorted(by_op) == ["confirm_item", "cut", "estimate_feature"]
-    for op in ("confirm_item", "cut"):
+    assert sorted(by_op) == ["confirm_item", "cut", "estimate_feature", "merge_item"]
+    for op in ("confirm_item", "cut", "merge_item"):
         assert (by_op[op]["code"], by_op[op]["feature_id"]) == ("pay-5", w.ids["widgets"])
         assert by_op[op]["waiting_for"] == ["Dee Cider"]
     assert by_op["cut"]["reason"] == "Merged into pay-3"

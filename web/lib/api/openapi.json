@@ -41674,7 +41674,7 @@
           "simple"
         ],
         "summary": "Get Simple Roadmap",
-        "description": "Every roadmap's items the caller may read on one timeline, grouped by goal, track or\nPRD: each with its resolved dates (source, estimated), open date suggestion,\nmilestone, waterfall phases, dependencies both ways and constraint flags; plus the\ntracks' milestones, the horizon windows, the company's today and the shown roadmaps' key\ndates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``\n(slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).",
+        "description": "Every roadmap's items the caller may read on one timeline, grouped by goal, track or\nPRD: each with its resolved dates (source, estimated), open date suggestion,\nmilestone, waterfall phases, dependencies both ways and constraint flags; plus the\ntracks' milestones, the horizon windows and the company's today. Filters: ``prd``\n(slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).",
         "operationId": "get_simple_roadmap",
         "security": [
           {
@@ -42976,58 +42976,6 @@
         "x-min-role": "viewer"
       }
     },
-    "/v1/simple/one-pagers/{doc}/remind": {
-      "post": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Remind Simple One Pager Reviewers",
-        "description": "Remind: each reviewer the PRD's submitted draft waits on gets an Inbox nudge \"<name>\nis waiting for your review of <PRD>\", at most once a day per reviewer (409 when none\nis due, or no submitted draft waits); the PRD's owners and its decider only (403).",
-        "operationId": "remind_simple_one_pager_reviewers",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "doc",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Doc"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OnePagerRemindOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "commenter"
-      }
-    },
     "/v1/simple/one-pagers/{doc}/pdf": {
       "get": {
         "tags": [
@@ -43073,14 +43021,14 @@
         "x-min-role": "viewer"
       }
     },
-    "/v1/simple/priorities": {
+    "/v1/simple/goal-suggestions": {
       "get": {
         "tags": [
           "simple"
         ],
-        "summary": "Get Simple Priorities",
-        "description": "The live goal-weighted ranking in the company's order joined with the roadmap items\nthe caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate\nor the goals'), effort, score, the dependency it waits for, the override that placed it\nand whether the caller's change applies or is proposed; the open priority and estimate\nproposals, the draft items with what they may merge into, and this quarter's\nengineer-weeks per goal. ``line``: where the line is drawn (Now, a key date, a dated\nmilestone or a day; see the module).",
-        "operationId": "get_simple_priorities",
+        "summary": "List Goal Suggestions",
+        "description": "S7: goal suggestions and each goal's pending and empty state.",
+        "operationId": "list_goal_suggestions",
         "security": [
           {
             "HTTPBearer": []
@@ -43091,20 +43039,42 @@
         ],
         "parameters": [
           {
-            "name": "line",
+            "name": "goal_id",
             "in": "query",
             "required": false,
             "schema": {
               "anyOf": [
                 {
                   "type": "string",
-                  "maxLength": 80
+                  "format": "uuid"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "title": "Line"
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "open",
+                    "accepted",
+                    "rejected"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": "open",
+              "title": "Status"
             }
           }
         ],
@@ -43114,7 +43084,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SimplePrioritiesOut"
+                  "$ref": "#/components/schemas/SimpleGoalSuggestionsOut"
                 }
               }
             }
@@ -43130,6 +43100,230 @@
             }
           }
         },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/goals/{goal_id}/suggest": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Suggest Goal Features",
+        "description": "S7: Suggest features (a job proposes 3-5).",
+        "operationId": "suggest_goal_features",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleSuggestJobOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/goal-suggestions/{suggestion_id}/accept": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Accept Goal Suggestion",
+        "description": "S7: accept a goal suggestion (an add_item change).",
+        "operationId": "accept_goal_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SimpleSuggestionAcceptIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleChangeResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/goal-suggestions/{suggestion_id}/reject": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Reject Goal Suggestion",
+        "description": "S7: reject a goal suggestion with an optional reason.",
+        "operationId": "reject_goal_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "suggestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Suggestion Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SimpleSuggestionRejectIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalSuggestion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/priorities": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Priorities",
+        "description": "The live goal-weighted ranking in the company's order joined with the roadmap items\nthe caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate\nor the goals'), effort, score, the dependency it waits for, the override that placed it\nand whether the caller's change applies or is proposed; the open priority and estimate\nproposals, the draft items with what they may merge into, and this quarter's\nengineer-weeks per goal.",
+        "operationId": "get_simple_priorities",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimplePrioritiesOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "x-min-role": "viewer"
       }
     },
@@ -76369,9 +76563,9 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
-              "add_key_date",
-              "edit_key_date",
-              "remove_key_date"
+              "add_item",
+              "merge_item",
+              "keep_both"
             ],
             "title": "Op"
           },
@@ -82692,7 +82886,9 @@
               "intake_analysis",
               "decision_options",
               "scope_enhance",
-              "why_not_reply"
+              "why_not_reply",
+              "item_draft",
+              "goal_suggestions"
             ],
             "title": "Kind"
           },
@@ -86916,8 +87112,7 @@
               "patch_proposed",
               "published",
               "webhook_paused",
-              "webhook_url_changed",
-              "review_reminder"
+              "webhook_url_changed"
             ],
             "title": "Kind"
           },
@@ -87545,23 +87740,6 @@
           "can_submit": {
             "type": "boolean",
             "title": "Can Submit"
-          },
-          "reminded_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reminded At"
-          },
-          "can_remind": {
-            "type": "boolean",
-            "title": "Can Remind",
-            "default": false
           }
         },
         "type": "object",
@@ -87969,29 +88147,6 @@
           "can_propose"
         ],
         "title": "OnePagerOut"
-      },
-      "OnePagerRemindOut": {
-        "properties": {
-          "reminded": {
-            "items": {
-              "$ref": "#/components/schemas/SimplePersonRef"
-            },
-            "type": "array",
-            "title": "Reminded"
-          },
-          "reminded_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Reminded At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "reminded",
-          "reminded_at"
-        ],
-        "title": "OnePagerRemindOut",
-        "description": "Remind's answer: the reviewers nudged now (each gets an Inbox nudge)."
       },
       "OnePagerSectionPatch": {
         "properties": {
@@ -91289,22 +91444,11 @@
               }
             ],
             "title": "Experience"
-          },
-          "priorities_line": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Priorities Line"
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple)."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -91369,18 +91513,6 @@
               }
             ],
             "title": "Experience"
-          },
-          "priorities_line": {
-            "anyOf": [
-              {
-                "type": "string",
-                "pattern": "^(now|(key_date|milestone):[0-9a-f-]{36}|date:\\d{4}-\\d{2}-\\d{2})$"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Priorities Line"
           }
         },
         "type": "object",
@@ -108730,9 +108862,9 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
-              "add_key_date",
-              "edit_key_date",
-              "remove_key_date"
+              "add_item",
+              "merge_item",
+              "keep_both"
             ],
             "title": "Op"
           },
@@ -108838,9 +108970,9 @@
               "estimate_feature",
               "confirm_item",
               "edit_line",
-              "add_key_date",
-              "edit_key_date",
-              "remove_key_date"
+              "add_item",
+              "merge_item",
+              "keep_both"
             ],
             "title": "Op"
           },
@@ -109357,6 +109489,58 @@
         "title": "SimpleDraftOut",
         "description": "A working draft of one roadmap (S3b): its changes until submitted, then the version\nin review and who it waits on."
       },
+      "SimpleEvidence": {
+        "properties": {
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "kind",
+          "ref",
+          "url",
+          "confidence"
+        ],
+        "title": "SimpleEvidence"
+      },
       "SimpleFlag": {
         "properties": {
           "kind": {
@@ -109472,6 +109656,29 @@
         ],
         "title": "SimpleFlowScreen"
       },
+      "SimpleGoalBrief": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "title"
+        ],
+        "title": "SimpleGoalBrief"
+      },
       "SimpleGoalBucket": {
         "properties": {
           "key": {
@@ -109547,6 +109754,207 @@
           "title"
         ],
         "title": "SimpleGoalRef"
+      },
+      "SimpleGoalSuggestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "goal": {
+            "$ref": "#/components/schemas/SimpleGoalBrief"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "why": {
+            "type": "string",
+            "title": "Why"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleEvidence"
+            },
+            "type": "array",
+            "title": "Evidence"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted",
+              "rejected"
+            ],
+            "title": "Status"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "on_demand"
+            ],
+            "title": "Origin"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "decided_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By Name"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "change_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "looks_like": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMatch"
+            },
+            "type": "array",
+            "title": "Looks Like"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_accept": {
+            "type": "boolean",
+            "title": "Can Accept"
+          },
+          "can_reject": {
+            "type": "boolean",
+            "title": "Can Reject"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "goal",
+          "title",
+          "outcome",
+          "why",
+          "evidence",
+          "status",
+          "reason",
+          "origin",
+          "created_at",
+          "decided_by_name",
+          "decided_at",
+          "change_id",
+          "item_id",
+          "looks_like",
+          "flow",
+          "can_accept",
+          "can_reject"
+        ],
+        "title": "SimpleGoalSuggestion"
+      },
+      "SimpleGoalSuggestionGoal": {
+        "properties": {
+          "goal": {
+            "$ref": "#/components/schemas/SimpleGoalBrief"
+          },
+          "pending": {
+            "type": "boolean",
+            "title": "Pending"
+          },
+          "empty": {
+            "type": "boolean",
+            "title": "Empty"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal",
+          "pending",
+          "empty"
+        ],
+        "title": "SimpleGoalSuggestionGoal"
+      },
+      "SimpleGoalSuggestionsOut": {
+        "properties": {
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleGoalSuggestionGoal"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "suggestions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleGoalSuggestion"
+            },
+            "type": "array",
+            "title": "Suggestions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goals",
+          "suggestions"
+        ],
+        "title": "SimpleGoalSuggestionsOut"
       },
       "SimpleGroup": {
         "properties": {
@@ -109637,116 +110045,60 @@
         ],
         "title": "SimpleItemMilestone"
       },
-      "SimpleKeyDate": {
+      "SimpleMatch": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "item",
+              "feature"
+            ],
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "code",
+          "title"
+        ],
+        "title": "SimpleMatch"
+      },
+      "SimpleMergedInto": {
         "properties": {
           "id": {
             "type": "string",
-            "format": "uuid",
             "title": "Id"
           },
-          "roadmap": {
-            "$ref": "#/components/schemas/SimpleDocRef"
-          },
-          "name": {
+          "code": {
             "type": "string",
-            "title": "Name"
+            "title": "Code"
           },
-          "date": {
+          "title": {
             "type": "string",
-            "format": "date",
-            "title": "Date"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "in_draft": {
-            "type": "boolean",
-            "title": "In Draft",
-            "default": false
+            "title": "Title"
           }
         },
         "type": "object",
         "required": [
           "id",
-          "roadmap",
-          "name",
-          "date"
+          "code",
+          "title"
         ],
-        "title": "SimpleKeyDate",
-        "description": "Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board\nmeeting), as the reader reads it (the working draft's when they see it)."
-      },
-      "SimpleKeyDateRoadmap": {
-        "properties": {
-          "roadmap": {
-            "$ref": "#/components/schemas/SimpleDocRef"
-          },
-          "applies": {
-            "type": "boolean",
-            "title": "Applies",
-            "default": false
-          },
-          "can_change": {
-            "type": "boolean",
-            "title": "Can Change",
-            "default": false
-          }
-        },
-        "type": "object",
-        "required": [
-          "roadmap"
-        ],
-        "title": "SimpleKeyDateRoadmap",
-        "description": "A roadmap whose key dates the reader reads; ``applies``: their change applies (an\nowner, the decider, with none its owner), ``can_change``: they may change or propose."
-      },
-      "SimpleLine": {
-        "properties": {
-          "key": {
-            "type": "string",
-            "title": "Key"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "now",
-              "key_date",
-              "milestone",
-              "date"
-            ],
-            "title": "Kind"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Date"
-          }
-        },
-        "type": "object",
-        "required": [
-          "key",
-          "kind",
-          "label"
-        ],
-        "title": "SimpleLine",
-        "description": "Roadmap-plus: where the line on priorities is drawn. ``now``: this quarter's plan\n(the Now horizon); ``key_date:<id>``, ``milestone:<id>``, ``date:<YYYY-MM-DD>``: planned\nto finish by that day."
+        "title": "SimpleMergedInto"
       },
       "SimpleMilestone": {
         "properties": {
@@ -109966,24 +110318,6 @@
           "can_change": {
             "type": "boolean",
             "title": "Can Change"
-          },
-          "line": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SimpleLine"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "lines": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleLine"
-            },
-            "type": "array",
-            "title": "Lines",
-            "default": []
           }
         },
         "type": "object",
@@ -110157,7 +110491,8 @@
               "override_priority",
               "estimate_feature",
               "confirm_item",
-              "cut"
+              "cut",
+              "merge_item"
             ],
             "title": "Op"
           },
@@ -110396,23 +110731,6 @@
             "title": "Above Line",
             "default": false
           },
-          "end_date": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "End Date"
-          },
-          "end_estimated": {
-            "type": "boolean",
-            "title": "End Estimated",
-            "default": false
-          },
           "no_goal": {
             "type": "boolean",
             "title": "No Goal",
@@ -110577,7 +110895,8 @@
               "in_progress",
               "done",
               "cut",
-              "draft"
+              "draft",
+              "merged"
             ],
             "title": "Status"
           },
@@ -110695,6 +111014,50 @@
             "type": "array",
             "title": "Open Decisions",
             "default": []
+          },
+          "looks_like": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMatch"
+            },
+            "type": "array",
+            "title": "Looks Like",
+            "description": "S7: likely duplicates of a draft not kept both (at most 2, best first).",
+            "default": []
+          },
+          "merged_into": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleMergedInto"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "drafting": {
+            "type": "boolean",
+            "title": "Drafting",
+            "description": "S7: Oracle's drafting job for this draft is queued or running.",
+            "default": false
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goal_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Goal Ids",
+            "description": "S7: the goals the item is linked to directly.",
+            "default": []
           }
         },
         "type": "object",
@@ -110767,22 +111130,6 @@
             },
             "type": "array",
             "title": "Drafts",
-            "default": []
-          },
-          "key_dates": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleKeyDate"
-            },
-            "type": "array",
-            "title": "Key Dates",
-            "default": []
-          },
-          "key_date_roadmaps": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleKeyDateRoadmap"
-            },
-            "type": "array",
-            "title": "Key Date Roadmaps",
             "default": []
           }
         },
@@ -110872,6 +111219,79 @@
           "closed_at"
         ],
         "title": "SimpleSessionOut"
+      },
+      "SimpleSuggestJobOut": {
+        "properties": {
+          "goal_id": {
+            "type": "string",
+            "title": "Goal Id"
+          },
+          "pending": {
+            "type": "boolean",
+            "title": "Pending"
+          },
+          "job_id": {
+            "type": "string",
+            "title": "Job Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal_id",
+          "pending",
+          "job_id"
+        ],
+        "title": "SimpleSuggestJobOut"
+      },
+      "SimpleSuggestionAcceptIn": {
+        "properties": {
+          "roadmap_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Roadmap Id"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SimpleSuggestionAcceptIn"
+      },
+      "SimpleSuggestionRejectIn": {
+        "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SimpleSuggestionRejectIn"
       },
       "SimpleTrackRef": {
         "properties": {

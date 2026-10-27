@@ -78,6 +78,7 @@ from oracle.setup import router as setup_router
 from oracle.shares.public import router as public_shares_router
 from oracle.shares.public import short_router as share_address_router
 from oracle.shares.router import router as shares_router
+from oracle.simple.additions_router import router as simple_additions_router
 from oracle.simple.changes_router import router as simple_changes_router
 from oracle.simple.priorities import router as simple_priorities_router
 from oracle.simple.router import router as simple_router
@@ -299,6 +300,7 @@ def create_app() -> FastAPI:
     app.include_router(plan_router)
     app.include_router(simple_router)
     app.include_router(simple_changes_router)
+    app.include_router(simple_additions_router)
     app.include_router(simple_priorities_router)
     app.include_router(strategy_router)
     app.include_router(launches_router)

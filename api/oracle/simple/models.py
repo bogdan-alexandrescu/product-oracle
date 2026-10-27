@@ -308,3 +308,63 @@ class RoadmapKeyDate(TenantScoped, Base):
     on_date: Mapped[date] = mapped_column(Date, nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+
+
+# --------------------------------------------------------------------------- S7
+
+GOAL_SUGGESTION_STATUSES = ("open", "accepted", "rejected")
+GOAL_SUGGESTION_ORIGINS = ("auto", "on_demand")
+
+
+class SimpleGoalSuggestion(TenantScoped, Base):
+    """Simple S7 (oracle.simple.additions): a feature Oracle suggests for a goal. ``open``
+    until a person accepts it (an ``add_item`` change on the goal: ``change_id``,
+    ``item_id``; undoing or declining that change reopens it) or rejects it (with an
+    optional ``reason``; a rejected title is never suggested again for the goal).
+    ``evidence``: [{"label", "kind", "ref", "url", "confidence"}]."""
+
+    __tablename__ = "simple_goal_suggestions"
+    __table_args__ = (
+        CheckConstraint(_in("status", GOAL_SUGGESTION_STATUSES), name="status"),
+        CheckConstraint(_in("origin", GOAL_SUGGESTION_ORIGINS), name="origin"),
+        Index("ix_simple_goal_suggestions_goal_status", "goal_id", "status"),
+    )
+
+    goal_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entities.id", ondelete="CASCADE"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    outcome: Mapped[str | None] = mapped_column(Text)
+    why: Mapped[str | None] = mapped_column(Text)
+    evidence: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]", default=list
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open",
+                                        default="open")  # fmt: skip
+    origin: Mapped[str] = mapped_column(Text, nullable=False, server_default="on_demand",
+                                        default="on_demand")  # fmt: skip
+    reason: Mapped[str | None] = mapped_column(Text)
+    job_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("llm_jobs.id", ondelete="SET NULL")
+    )
+    change_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("simple_changes.id", ondelete="SET NULL")
+    )
+    item_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SimpleGoalAuto(TenantScoped, Base):
+    """A goal Oracle suggested features for automatically, once, when it had no items
+    (oracle.simple.additions.suggest_for_empty_goals): never again for that goal."""
+
+    __tablename__ = "simple_goal_autos"
+    __table_args__ = (UniqueConstraint("goal_id"),)
+
+    goal_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("entities.id", ondelete="CASCADE"), nullable=False
+    )
+    job_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("llm_jobs.id", ondelete="SET NULL")
+    )

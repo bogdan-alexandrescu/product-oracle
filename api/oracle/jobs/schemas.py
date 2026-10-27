@@ -29,6 +29,8 @@ AnyJobKind = Literal[
     "decision_options",
     "scope_enhance",
     "why_not_reply",
+    "item_draft",
+    "goal_suggestions",
 ]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 Classification = Literal["question", "change_request", "factual_correction", "approval", "other"]
