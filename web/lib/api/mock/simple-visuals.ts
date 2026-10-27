@@ -1,0 +1,218 @@
+import type { Schemas } from "@/lib/api/client";
+
+import { stableUuid } from "./ids";
+
+/**
+ * Simple S10 (#723, D26): proposals' visuals (oracle.simple.visuals), with INVENTED
+ * drawings. Each visual is held against its subject (kind, id) with its versions (newest
+ * last) and comments. The mock's Oracle draws at once: asking for a drawing or pressing
+ * Revise answers with the next version (the API queues the simple_visual job).
+ *
+ * Who: everyone reads; commenters and up comment on a drawn visual; owners (who change
+ * the subject directly) ask for a drawing and revise.
+ */
+
+type Flow = Schemas["SimpleFlow"];
+type Step = Schemas["SimpleFlowStep"];
+
+interface MockVisual {
+  kind: string;
+  id: string;
+  brief: string;
+  versions: Flow[];
+  comments: Schemas["SimpleVisualCommentOut"][];
+  made_by: (string | null)[];
+}
+
+export interface VisualsDb {
+  visuals: Record<string, MockVisual>;
+}
+
+interface Ctx {
+  id: string;
+  role: string;
+  names: Record<string, string>;
+}
+
+/** Subjects drawn with their proposal, never asked for by id (the API's UNASKABLE_KINDS). */
+const UNASKABLE = ["suggestion", "chat_card", "one_pager_line"];
+const RANK: Record<string, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
+const at = "2026-10-26T15:00:00Z";
+const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** A one-pager bet's subject id (the API's is a uuid5 of the PRD and the bet's words). */
+export const betSubject = (text: string): string => stableUuid(`simple-visual/bet/${text.trim().toLowerCase()}`);
+
+function drawSvg(title: string, steps: Step[]): string {
+  const w = 150;
+  const boxes = steps
+    .map((s, i) => {
+      const x = 20 + i * (w + 30);
+      const stroke = s.change === "new" ? 'stroke="#111" stroke-width="3"' : s.change === "changed" ? 'stroke="#333" stroke-dasharray="6 4"' : 'stroke="#777"';
+      const shape =
+        s.kind === "decision"
+          ? `<polygon id="${s.id}" points="${x + w / 2},64 ${x + w},100 ${x + w / 2},136 ${x},100" fill="#f4f4f4" ${stroke}/>`
+          : `<rect id="${s.id}" x="${x}" y="70" width="${w}" height="60" rx="8" fill="#fafafa" ${stroke}/>`;
+      const tag = s.change !== "same" ? `<text x="${x + 4}" y="62" font-size="10" font-weight="bold">${s.change === "new" ? "NEW" : "CHANGED"}</text>` : "";
+      return `${shape}${tag}<text x="${x + w / 2}" y="104" font-size="12" text-anchor="middle">${i + 1}. ${esc(s.label.slice(0, 24))}</text>`;
+    })
+    .join("");
+  const width = 40 + steps.length * (w + 30);
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} 170" width="${width}" height="170" font-family="sans-serif"><text x="20" y="28" font-size="15" font-weight="bold">${esc(title)}</text>${boxes}</svg>`;
+}
+
+function drawWireframe(title: string, regions: string[]): string {
+  const blocks = regions.map((r, i) => `<div data-annotation="r${i + 1}" style="border:1px solid #999;padding:12px;margin:8px 0;background:#eee">${esc(r)}</div>`).join("");
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(title)}</title><style>html{filter:grayscale(100%)}body{font-family:sans-serif;margin:0;padding:16px}</style></head><body><main><h1>${esc(title)}</h1>${blocks}</main></body></html>`;
+}
+
+function flowOf(kind: string, id: string, n: number, versions: number, d: { title: string; goal: string; steps: Step[]; screen: { title: string; regions: string[] }; notes: Schemas["SimpleFlowNote"][] }): Flow {
+  return {
+    title: d.title,
+    steps: d.steps.map((s) => s.label),
+    screen: d.screen,
+    subject_kind: kind,
+    subject_id: id,
+    version: n,
+    versions,
+    goal: d.goal,
+    nodes: d.steps,
+    svg: drawSvg(d.title, d.steps),
+    wireframe: drawWireframe(d.screen.title, d.screen.regions),
+    touches_screen: true,
+    annotations: d.notes,
+    made_at: at,
+  };
+}
+
+const step = (id: string, label: string, feature: string | null, change: Step["change"], kind: Step["kind"] = "step"): Step => ({ id, label, feature, change, kind, section_key: null });
+
+/** Oracle's invented first drawing of a proposal from its words. */
+function draft(kind: string, id: string, brief: string): Flow {
+  const what = brief.replace(/^[^:]*:\s*/, "").trim() || "The new flow";
+  return flowOf(kind, id, 1, 1, {
+    title: what.length > 60 ? `${what.slice(0, 57)}…` : what,
+    goal: "Teammate invited in week one",
+    steps: [step("s1", "Open the home page", "Progress meter", "same"), step("s2", "See the next step", what.slice(0, 40), "new"), step("s3", "Do it now?", null, "new", "decision"), step("s4", "Finish the step", "Setup checklist", "changed")],
+    screen: { title: "Home", regions: ["Header", "Next step card", "Progress meter"] },
+    notes: [
+      { n: 1, target: "s2", note: "The new step the proposal adds", section_key: "build", requirement: "R1" },
+      { n: 2, target: "r2", note: "Where the next step shows on the home page", section_key: "build", requirement: null },
+    ],
+  });
+}
+
+export function seedVisuals(): VisualsDb {
+  const db: VisualsDb = { visuals: {} };
+  const bet = betSubject("A setup checklist that shows the next step");
+  add(db, "one_pager_line", bet, "A setup checklist that shows the next step", flowOf("one_pager_line", bet, 1, 1, {
+    title: "Finish setup from the checklist",
+    goal: "Setup finished in a day",
+    steps: [step("s1", "Sign in as a new admin", null, "same"), step("s2", "See the setup checklist", "Setup checklist", "new"), step("s3", "Invite now or later?", null, "new", "decision"), step("s4", "Invite a teammate", "Invite suggestions", "changed"), step("s5", "See the progress meter fill", "Progress meter", "new")],
+    screen: { title: "Home with the checklist", regions: ["Header", "Setup checklist: 4 steps", "Invite suggestions", "Progress meter"] },
+    notes: [
+      { n: 1, target: "s2", note: "The checklist shows the next step", section_key: "build", requirement: "R1" },
+      { n: 2, target: "s3", note: "Admins may skip inviting for now", section_key: "build", requirement: "R2" },
+      { n: 3, target: "r2", note: "The checklist region", section_key: "build", requirement: "R1" },
+    ],
+  }));
+  const mobile = stableUuid("simple-item/alert-mobile");
+  add(db, "feature", mobile, "Mobile alert push", flowOf("feature", mobile, 1, 1, {
+    title: "Act on a pushed alert",
+    goal: "Fewer missed alerts",
+    steps: [step("s1", "Get the push", "Mobile alert push", "new"), step("s2", "Open the alert", null, "same"), step("s3", "See what crossed the line", "Alert rules", "changed"), step("s4", "Snooze or assign it", null, "new", "decision")],
+    screen: { title: "Alert on a phone", regions: ["Header: rule and time", "What crossed the line", "Chart of the last day", "Snooze and Assign buttons"] },
+    notes: [{ n: 1, target: "s1", note: "The push names the rule", section_key: "alerts", requirement: "R4" }],
+  }));
+  return db;
+}
+
+function add(db: VisualsDb, kind: string, id: string, brief: string, first?: Flow): MockVisual {
+  const v: MockVisual = { kind, id, brief, versions: first ? [first] : [], comments: [], made_by: first ? [null] : [] };
+  db.visuals[`${kind}:${id}`] = v;
+  return v;
+}
+
+/** The newest drawing of a subject's visual (train T's `flow` fields); null: "No flow yet". */
+export function flowFor(db: VisualsDb | undefined, kind: string, id: string): Flow | null {
+  const v = db?.visuals[`${kind}:${id}`];
+  return v?.versions.at(-1) ?? null;
+}
+
+/** The one-pager's shape of a flow. */
+export function onePagerFlow(f: Flow | null): Schemas["OnePagerFlow"] | null {
+  return f ? { title: f.title, steps: f.steps, screen: f.touches_screen ? f.screen.title : null, subject_kind: f.subject_kind, subject_id: f.subject_id, version: f.version } : null;
+}
+
+/** Oracle drafts the visual WITH the proposal (the API's request_visual hook). */
+export function requestVisual(db: VisualsDb | undefined, kind: string, id: string, brief: string): void {
+  if (!db || db.visuals[`${kind}:${id}`]) return;
+  add(db, kind, id, brief, draft(kind, id, brief));
+}
+
+function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx): Schemas["SimpleVisualOut"] {
+  const owner = (RANK[ctx.role] ?? 0) >= RANK.owner;
+  if (!v) return { subject_kind: kind, subject_id: id, flow: null, versions: [], comments: [], pending: false, can_comment: false, can_revise: owner && !UNASKABLE.includes(kind) };
+  const n = v.versions.length;
+  return {
+    subject_kind: kind,
+    subject_id: id,
+    brief: v.brief,
+    flow: n ? { ...v.versions[n - 1], versions: n } : null,
+    versions: v.versions
+      .map((f, i) => ({ number: f.version, title: f.title, made_at: f.made_at ?? at, made_by_name: v.made_by[i] ? (ctx.names[v.made_by[i]!] ?? "someone") : null, addressed: v.comments.filter((c) => c.addressed_in === f.version).length }))
+      .reverse(),
+    comments: v.comments,
+    pending: false,
+    can_comment: n > 0 && (RANK[ctx.role] ?? 0) >= RANK.commenter,
+    can_revise: owner,
+  };
+}
+
+async function json(status: number, body: unknown): Promise<Response> {
+  return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+}
+
+/** `/v1/simple/visuals/{kind}/{subject_id}[/versions/{n}|/comments|/revise|/request]`. */
+export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, p: string[]): Promise<Response | null> {
+  if (p[1] !== "simple" || p[2] !== "visuals" || p.length < 5) return null;
+  const [kind, id] = [p[3], p[4]];
+  const key = `${kind}:${id}`;
+  const v = db.visuals[key];
+  const m = req.method;
+  if (m === "GET" && p.length === 5) return json(200, out(v, kind, id, ctx));
+  if (m === "GET" && p[5] === "versions") {
+    const f = v?.versions.find((x) => x.version === Number(p[6]));
+    return f ? json(200, { ...f, versions: v!.versions.length }) : json(404, { detail: "No such version" });
+  }
+  if (m !== "POST") return null;
+  const b = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+  if (p[5] === "comments") {
+    if ((RANK[ctx.role] ?? 0) < RANK.commenter) return json(403, { detail: "Commenters and up comment on a visual" });
+    if (!v?.versions.length) return json(409, { detail: "Oracle has not drawn this visual yet" });
+    const body = String(b.body ?? "").trim();
+    if (!body) return json(422, { detail: "Say what should change" });
+    v.comments.push({ id: stableUuid(`simple-visual-comment/${key}/${v.comments.length}`), version: v.versions.at(-1)!.version, annotation: (b.annotation as number | null) ?? null, body, by_name: ctx.names[ctx.id] ?? "someone", at, addressed_in: null });
+    return json(201, out(v, kind, id, ctx));
+  }
+  if (p[5] === "revise") {
+    if ((RANK[ctx.role] ?? 0) < RANK.owner) return json(403, { detail: "Only who changes this directly revises its visual" });
+    if (!v?.versions.length) return json(409, { detail: "Oracle has not drawn this visual yet" });
+    const open = v.comments.filter((c) => c.addressed_in === null);
+    if (!open.length) return json(409, { detail: "Nothing to revise from: comment first" });
+    const cur = v.versions.at(-1)!;
+    const n = cur.version + 1;
+    const nodes = [...cur.nodes, ...open.map((c, i) => step(`c${n}-${i + 1}`, c.body.slice(0, 40), null, "new"))];
+    v.versions.push({ ...cur, version: n, title: `${cur.title} (revised)`, nodes, steps: nodes.map((s) => s.label), svg: drawSvg(`${cur.title} (revised)`, nodes) });
+    v.made_by.push(ctx.id);
+    for (const c of open) c.addressed_in = n;
+    return json(202, out(v, kind, id, ctx));
+  }
+  if (p[5] === "request") {
+    if (UNASKABLE.includes(kind)) return json(422, { detail: "Oracle draws this visual with its proposal; it is not asked for" });
+    if ((RANK[ctx.role] ?? 0) < RANK.owner) return json(403, { detail: "Only who changes this directly asks Oracle for its visual" });
+    requestVisual(db, kind, id, String(b.brief ?? "") || "The new flow");
+    return json(202, out(db.visuals[key], kind, id, ctx));
+  }
+  return null;
+}

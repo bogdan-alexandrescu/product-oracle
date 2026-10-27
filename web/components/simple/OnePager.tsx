@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
+import { FlowMini, FlowPanel } from "@/components/simple/FlowVisual";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
@@ -230,11 +231,29 @@ export function OnePager({ doc }: { doc: string }) {
                               {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
                               {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.text}
                             </button>
+                            {l.flow_subject && (
+                              <button
+                                type="button"
+                                aria-label={`Flow for bet ${numbers.get(l.id)}`}
+                                aria-expanded={wide === l.id}
+                                data-testid="bet-flow-thumb"
+                                className="simple-noprint flex-none rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-0.5"
+                                onClick={() => setWide(wide === l.id ? null : l.id)}
+                              >
+                                {l.flow ? <FlowMini flow={l.flow} /> : <span className="block px-2 py-2 text-xs">No flow yet</span>}
+                              </button>
+                            )}
                             {(v.can_edit || v.can_propose) && (
                               <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.text); }}>
                                 {v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}
                               </button>
                             )}
+                          </div>
+                        )}
+                        {wide === l.id && l.flow_subject && (
+                          // A phone's widened card is a full-height sheet.
+                          <div className="simple-noprint fixed inset-0 z-40 overflow-auto bg-[var(--simple-paper)] p-4 md:static md:z-auto md:bg-transparent md:p-0" data-widened="true" aria-label={`User flow of bet ${numbers.get(l.id)}`} role="group">
+                            <FlowPanel subject={{ kind: "one_pager_line", id: l.flow_subject }} onClose={() => setWide(null)} />
                           </div>
                         )}
                         {open === l.id && (
@@ -342,15 +361,7 @@ function MarginNote({
       )}
       {widened && (
         <div className="mt-3" aria-label="User flow">
-          {n.flow ? (
-            <>
-              <p className="font-semibold">{n.flow.title}</p>
-              <ol className="list-decimal pl-5">{n.flow.steps.map((s) => <li key={s}>{s}</li>)}</ol>
-              {n.flow.screen && <div className="mt-2 rounded border border-dashed p-6 text-center">{n.flow.screen}</div>}
-            </>
-          ) : (
-            <p>No flow yet</p>
-          )}
+          <FlowPanel subject={{ kind: n.flow?.subject_kind ?? "change", id: n.flow?.subject_id ?? n.change_id }} />
           <Button className="mt-2" onClick={() => setWide(null)}>Close</Button>
         </div>
       )}

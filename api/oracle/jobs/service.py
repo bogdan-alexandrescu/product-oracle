@@ -52,6 +52,7 @@ SWITCH_LABELS = {
     "one_pager": "One-pager",
     "item_draft": "Draft items added in Simple",
     "goal_suggestions": "Suggest features for goals",
+    "simple_visual": "Draw visuals",
 }
 #: Kinds that share another kind's per-document switch: the next-draft batch is
 #: refinement, so turning refinement off turns it off too.

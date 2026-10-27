@@ -688,6 +688,15 @@ async def build(
     kds, kd_roadmaps = await key_dates.roadmap_key_dates(
         db, principal, {e.roadmap.id: e.roadmap for e in shown}
     )
+    from oracle.simple import visuals
+
+    flows = await visuals.flows_for(db, "feature", [e.row.id for e in shown])
+    items = [
+        item_out(e, principal, read.deciders, names, owners, decisions, extra) for e in shown
+    ]
+    for it in items:
+        # A draft's own visual (S7) first, else its feature's (S10).
+        it.flow = it.flow or flows.get(it.id)
     return SimpleRoadmapOut(
         today=read.today,
         group=group,  # type: ignore[arg-type]
@@ -695,9 +704,7 @@ async def build(
             **{h: SimpleWindow(start=w[h][0], end=w[h][1]) for h in ("now", "next", "later")}
         ),
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
-        items=[
-            item_out(e, principal, read.deciders, names, owners, decisions, extra) for e in shown
-        ],
+        items=items,
         milestones=[
             SimpleMilestone(
                 id=m.id,

@@ -82,6 +82,7 @@ from oracle.simple.additions_router import router as simple_additions_router
 from oracle.simple.changes_router import router as simple_changes_router
 from oracle.simple.priorities import router as simple_priorities_router
 from oracle.simple.router import router as simple_router
+from oracle.simple.visuals_router import router as simple_visuals_router
 from oracle.slack.events import router as slack_events_router
 from oracle.sources.fireflies_browse import router as fireflies_browse_router
 from oracle.sources.repair import run_at_startup as repair_version_urls_at_startup
@@ -302,6 +303,7 @@ def create_app() -> FastAPI:
     app.include_router(simple_changes_router)
     app.include_router(simple_additions_router)
     app.include_router(simple_priorities_router)
+    app.include_router(simple_visuals_router)
     app.include_router(strategy_router)
     app.include_router(launches_router)
     app.include_router(metrics_router)

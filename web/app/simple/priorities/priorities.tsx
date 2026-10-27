@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as R
 import { Button, Sheet, toast } from "@/components/ds";
 import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
 import { GoalSuggestionList, useGoalSuggestions, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
+import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
@@ -516,7 +517,7 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
     );
   }
 
-  const flow = p.flow ? <FlowDetail flow={p.flow} /> : null;
+  const flow = p.flow ? <FlowPanel subject={subjectOf(p.flow) ?? { kind: "change", id: p.change_id }} /> : null;
   return (
     <div
       data-testid="prio-proposal"

@@ -59,6 +59,8 @@ MAX_TOKENS = {
     # Simple S7: a draft item's outcome, feature, dependencies and dates; a goal's features.
     "item_draft": 1500,
     "goal_suggestions": 3000,
+    # Simple S10: one proposal's user flow and wireframe (steps, regions, annotations).
+    "simple_visual": 3000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -1060,6 +1062,13 @@ async def goal_suggestions(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, 
     return await additions.run_goal_suggestions(s, job, ask)
 
 
+async def simple_visual(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Draws or revises a proposal's visual (oracle.simple.visuals)."""
+    from oracle.simple import visuals
+
+    return await visuals.run_job(s, job, ask)
+
+
 # Run when a job of the kind fails for good, in the transaction that records it.
 ON_FAILURE: dict[str, Callable[[AsyncSession, LlmJob], Awaitable[None]]] = {
     "why_not_reply": why_not_reply_failed,
@@ -1082,6 +1091,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "one_pager": one_pager,
     "item_draft": item_draft,
     "goal_suggestions": goal_suggestions,
+    "simple_visual": simple_visual,
 }
 
 

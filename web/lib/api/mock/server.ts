@@ -154,6 +154,7 @@ import {
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeOnePager, seedOnePager, type OnePagerDb } from "./simple-one-pager";
+import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -263,6 +264,8 @@ export interface Db {
   simple_roadmap?: SimpleDb;
   /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
   simple_one_pager?: OnePagerDb;
+  /** Simple S10 (#723): proposals' visuals, their versions and comments (./simple-visuals.ts). */
+  simple_visuals?: VisualsDb;
   /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
   sharing_items?: RoadmapDb["items"];
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
@@ -4958,6 +4961,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   // Simple S5: one-pagers and their line edits (edit_line) through the change engine.
   db.simple_one_pager ??= seedOnePager();
+  // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
+  db.simple_visuals ??= seedVisuals();
+  db.simple_one_pager.visuals = db.simple_visuals;
+  const visualsRes = await routeSimpleVisuals(
+    db.simple_visuals,
+    { id: me.id, role: me.role, names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])) },
+    req,
+    p,
+  );
+  if (visualsRes) return visualsRes;
   const onePagerRes = await routeOnePager(
     db.simple_one_pager,
     {
@@ -4978,6 +4991,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   );
   if (onePagerRes) return onePagerRes;
   db.simple_roadmap ??= seedSimpleRoadmap();
+  db.simple_roadmap.visuals = db.simple_visuals;
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));

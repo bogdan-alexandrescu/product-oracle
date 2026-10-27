@@ -27,6 +27,7 @@ its submitted draft waits on (an Inbox notification), at most once a day each.
 """
 
 import asyncio
+import logging
 import uuid
 from typing import Annotated
 
@@ -50,6 +51,8 @@ from oracle.simple.schemas import (
     SimpleSessionIn,
     SimpleSessionOut,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/simple", tags=["simple"])
 
@@ -107,8 +110,26 @@ async def create_simple_change(
     """Make a change to a roadmap item: applied for an owner and the roadmap's decider
     (with no decider, its owner), proposed to them for approvers and commenters. 409 when
     ``before`` no longer matches the stored values (nothing is written). Returns the
-    constraint flags of the touched items (a proposal's as if applied)."""
-    return await _run(db, changes.create(db, principal, body))
+    constraint flags of the touched items (a proposal's as if applied). A change that adds
+    or reshapes a feature or flow comes with its visual: Oracle drafts it (S10)."""
+    result = await _run(db, changes.create(db, principal, body))
+    await _with_visual(db, principal, result.change)
+    return result
+
+
+async def _with_visual(db, principal, change) -> None:
+    """S10: queue the change's visual; a refusal never fails the change."""
+    try:
+        from oracle.simple import visuals
+    except ImportError:  # pragma: no cover - the visuals lane is absent
+        return
+    try:
+        async with db.begin_nested():
+            await visuals.on_change(db, principal, change)
+        await db.commit()
+    except Exception:  # the change is saved; its visual is best effort
+        log.warning("simple: queueing the visual of change %s failed", change.id, exc_info=True)
+        await db.rollback()
 
 
 @router.post("/changes/{change_id}/undo", response_model=SimpleChangeResult,

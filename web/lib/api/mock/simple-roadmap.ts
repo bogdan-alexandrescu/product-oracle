@@ -11,6 +11,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { seeded, stableUuid } from "./ids";
+import { flowFor, type VisualsDb } from "./simple-visuals";
 
 type Item = Schemas["SimpleRoadmapItem"];
 type Suggestion = Schemas["DateSuggestionOut"];
@@ -95,6 +96,8 @@ interface SimpleDb {
   auto_done?: string[];
   /** S7: the seeds a merge changed, as they were (change id -> seeds), for its undo. */
   snapshots?: Record<string, SeedItem[]>;
+  /** S10: the visuals (./simple-visuals.ts), shared with the one-pager's. */
+  visuals?: VisualsDb;
 }
 
 /** A roadmap's key date (roadmap_key_dates): invented names and days. */
@@ -521,7 +524,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
       merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
       drafting: !!s.drafting_until,
-      flow: s.draft ? (s.flow ?? null) : null,
+      flow: s.draft ? (s.flow ?? null) : flowFor(db.visuals, "feature", db.ids[s.key]),
       goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
     };
   });

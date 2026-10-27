@@ -42224,7 +42224,7 @@
           "simple"
         ],
         "summary": "Create Simple Change",
-        "description": "Make a change to a roadmap item: applied for an owner and the roadmap's decider\n(with no decider, its owner), proposed to them for approvers and commenters. 409 when\n``before`` no longer matches the stored values (nothing is written). Returns the\nconstraint flags of the touched items (a proposal's as if applied).",
+        "description": "Make a change to a roadmap item: applied for an owner and the roadmap's decider\n(with no decider, its owner), proposed to them for approvers and commenters. 409 when\n``before`` no longer matches the stored values (nothing is written). Returns the\nconstraint flags of the touched items (a proposal's as if applied). A change that adds\nor reshapes a feature or flow comes with its visual: Oracle drafts it (S10).",
         "operationId": "create_simple_change",
         "security": [
           {
@@ -43021,281 +43021,6 @@
         "x-min-role": "viewer"
       }
     },
-    "/v1/simple/goal-suggestions": {
-      "get": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "List Goal Suggestions",
-        "description": "S7: goal suggestions and each goal's pending and empty state.",
-        "operationId": "list_goal_suggestions",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Goal Id"
-            }
-          },
-          {
-            "name": "status",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "enum": [
-                    "open",
-                    "accepted",
-                    "rejected"
-                  ],
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "default": "open",
-              "title": "Status"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleGoalSuggestionsOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      }
-    },
-    "/v1/simple/goals/{goal_id}/suggest": {
-      "post": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Suggest Goal Features",
-        "description": "S7: Suggest features (a job proposes 3-5).",
-        "operationId": "suggest_goal_features",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "goal_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Goal Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleSuggestJobOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      }
-    },
-    "/v1/simple/goal-suggestions/{suggestion_id}/accept": {
-      "post": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Accept Goal Suggestion",
-        "description": "S7: accept a goal suggestion (an add_item change).",
-        "operationId": "accept_goal_suggestion",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "suggestion_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Suggestion Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/SimpleSuggestionAcceptIn"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleChangeResult"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      }
-    },
-    "/v1/simple/goal-suggestions/{suggestion_id}/reject": {
-      "post": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Reject Goal Suggestion",
-        "description": "S7: reject a goal suggestion with an optional reason.",
-        "operationId": "reject_goal_suggestion",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "suggestion_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Suggestion Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/SimpleSuggestionRejectIn"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleGoalSuggestion"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      }
-    },
     "/v1/simple/priorities": {
       "get": {
         "tags": [
@@ -43325,6 +43050,369 @@
           }
         ],
         "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Visual",
+        "description": "The subject's visual: its newest drawing (null: none yet), versions newest first,\ncomments, whether Oracle is drawing it, and what the caller may do.",
+        "operationId": "get_simple_visual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleVisualOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}/versions/{number}": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Visual Version",
+        "description": "One version of the visual (the history).",
+        "operationId": "get_simple_visual_version",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleFlow"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}/comments": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Comment Simple Visual",
+        "description": "Comment on the newest drawing, or on one of its numbered annotations.",
+        "operationId": "comment_simple_visual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleVisualCommentIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleVisualOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}/revise": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Revise Simple Visual",
+        "description": "Revise: Oracle redraws the visual from its open comments (and the note) as the next\nversion (the ``simple_visual`` job). Who changes the subject directly; 409 with no\nopen comment and no note.",
+        "operationId": "revise_simple_visual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SimpleVisualReviseIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleVisualOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}/request": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Request Simple Visual",
+        "description": "Ask Oracle to draw a subject's visual (a feature on the roadmap that has none).",
+        "operationId": "request_simple_visual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SimpleVisualRequestIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleVisualOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/strategy/stack": {
@@ -76562,10 +76650,7 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line",
-              "add_item",
-              "merge_item",
-              "keep_both"
+              "edit_line"
             ],
             "title": "Op"
           },
@@ -82887,8 +82972,7 @@
               "decision_options",
               "scope_enhance",
               "why_not_reply",
-              "item_draft",
-              "goal_suggestions"
+              "simple_visual"
             ],
             "title": "Kind"
           },
@@ -82951,6 +83035,18 @@
               }
             ],
             "title": "Request Id"
+          },
+          "visual_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Id"
           },
           "version_number": {
             "anyOf": [
@@ -87778,6 +87874,40 @@
               }
             ],
             "title": "Screen"
+          },
+          "subject_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Kind"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
           }
         },
         "type": "object",
@@ -87870,6 +88000,28 @@
             ],
             "title": "State",
             "default": "published"
+          },
+          "flow_subject": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flow Subject"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -108861,10 +109013,7 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line",
-              "add_item",
-              "merge_item",
-              "keep_both"
+              "edit_line"
             ],
             "title": "Op"
           },
@@ -108969,10 +109118,7 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line",
-              "add_item",
-              "merge_item",
-              "keep_both"
+              "edit_line"
             ],
             "title": "Op"
           },
@@ -109489,58 +109635,6 @@
         "title": "SimpleDraftOut",
         "description": "A working draft of one roadmap (S3b): its changes until submitted, then the version\nin review and who it waits on."
       },
-      "SimpleEvidence": {
-        "properties": {
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "kind": {
-            "type": "string",
-            "title": "Kind"
-          },
-          "ref": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ref"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Url"
-          },
-          "confidence": {
-            "type": "string",
-            "enum": [
-              "high",
-              "medium",
-              "low"
-            ],
-            "title": "Confidence"
-          }
-        },
-        "type": "object",
-        "required": [
-          "label",
-          "kind",
-          "ref",
-          "url",
-          "confidence"
-        ],
-        "title": "SimpleEvidence"
-      },
       "SimpleFlag": {
         "properties": {
           "kind": {
@@ -109625,6 +109719,105 @@
           },
           "screen": {
             "$ref": "#/components/schemas/SimpleFlowScreen"
+          },
+          "subject_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Kind"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "versions": {
+            "type": "integer",
+            "title": "Versions",
+            "default": 1
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFlowStep"
+            },
+            "type": "array",
+            "title": "Nodes",
+            "default": []
+          },
+          "svg": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Svg"
+          },
+          "wireframe": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wireframe"
+          },
+          "touches_screen": {
+            "type": "boolean",
+            "title": "Touches Screen",
+            "default": true
+          },
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFlowNote"
+            },
+            "type": "array",
+            "title": "Annotations",
+            "default": []
+          },
+          "made_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made At"
           }
         },
         "type": "object",
@@ -109633,7 +109826,54 @@
           "steps",
           "screen"
         ],
-        "title": "SimpleFlow"
+        "title": "SimpleFlow",
+        "description": "A proposal's visual (S10, oracle.simple.visuals): its newest drawing."
+      },
+      "SimpleFlowNote": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "requirement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n",
+          "target",
+          "note"
+        ],
+        "title": "SimpleFlowNote",
+        "description": "A numbered annotation: the part of the drawing it is on (an element id of the flow\nor a region of the wireframe), the PRD section and requirement it ties to."
       },
       "SimpleFlowScreen": {
         "properties": {
@@ -109656,28 +109896,65 @@
         ],
         "title": "SimpleFlowScreen"
       },
-      "SimpleGoalBrief": {
+      "SimpleFlowStep": {
         "properties": {
           "id": {
             "type": "string",
             "title": "Id"
           },
-          "key": {
+          "label": {
             "type": "string",
-            "title": "Key"
+            "title": "Label"
           },
-          "title": {
+          "kind": {
             "type": "string",
-            "title": "Title"
+            "enum": [
+              "step",
+              "decision"
+            ],
+            "title": "Kind",
+            "default": "step"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "new",
+              "changed",
+              "same"
+            ],
+            "title": "Change",
+            "default": "same"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
           }
         },
         "type": "object",
         "required": [
           "id",
-          "key",
-          "title"
+          "label"
         ],
-        "title": "SimpleGoalBrief"
+        "title": "SimpleFlowStep",
+        "description": "A step of a user flow (S10): a decision point or a step, the feature that enables\nit and what changes versus today."
       },
       "SimpleGoalBucket": {
         "properties": {
@@ -109754,207 +110031,6 @@
           "title"
         ],
         "title": "SimpleGoalRef"
-      },
-      "SimpleGoalSuggestion": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "goal": {
-            "$ref": "#/components/schemas/SimpleGoalBrief"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "outcome": {
-            "type": "string",
-            "title": "Outcome"
-          },
-          "why": {
-            "type": "string",
-            "title": "Why"
-          },
-          "evidence": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleEvidence"
-            },
-            "type": "array",
-            "title": "Evidence"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "open",
-              "accepted",
-              "rejected"
-            ],
-            "title": "Status"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "origin": {
-            "type": "string",
-            "enum": [
-              "auto",
-              "on_demand"
-            ],
-            "title": "Origin"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Created At"
-          },
-          "decided_by_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decided By Name"
-          },
-          "decided_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decided At"
-          },
-          "change_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Change Id"
-          },
-          "item_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Item Id"
-          },
-          "looks_like": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleMatch"
-            },
-            "type": "array",
-            "title": "Looks Like"
-          },
-          "flow": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SimpleFlow"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "can_accept": {
-            "type": "boolean",
-            "title": "Can Accept"
-          },
-          "can_reject": {
-            "type": "boolean",
-            "title": "Can Reject"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "goal",
-          "title",
-          "outcome",
-          "why",
-          "evidence",
-          "status",
-          "reason",
-          "origin",
-          "created_at",
-          "decided_by_name",
-          "decided_at",
-          "change_id",
-          "item_id",
-          "looks_like",
-          "flow",
-          "can_accept",
-          "can_reject"
-        ],
-        "title": "SimpleGoalSuggestion"
-      },
-      "SimpleGoalSuggestionGoal": {
-        "properties": {
-          "goal": {
-            "$ref": "#/components/schemas/SimpleGoalBrief"
-          },
-          "pending": {
-            "type": "boolean",
-            "title": "Pending"
-          },
-          "empty": {
-            "type": "boolean",
-            "title": "Empty"
-          }
-        },
-        "type": "object",
-        "required": [
-          "goal",
-          "pending",
-          "empty"
-        ],
-        "title": "SimpleGoalSuggestionGoal"
-      },
-      "SimpleGoalSuggestionsOut": {
-        "properties": {
-          "goals": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleGoalSuggestionGoal"
-            },
-            "type": "array",
-            "title": "Goals"
-          },
-          "suggestions": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleGoalSuggestion"
-            },
-            "type": "array",
-            "title": "Suggestions"
-          }
-        },
-        "type": "object",
-        "required": [
-          "goals",
-          "suggestions"
-        ],
-        "title": "SimpleGoalSuggestionsOut"
       },
       "SimpleGroup": {
         "properties": {
@@ -110044,61 +110120,6 @@
           "source"
         ],
         "title": "SimpleItemMilestone"
-      },
-      "SimpleMatch": {
-        "properties": {
-          "kind": {
-            "type": "string",
-            "enum": [
-              "item",
-              "feature"
-            ],
-            "title": "Kind"
-          },
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          }
-        },
-        "type": "object",
-        "required": [
-          "kind",
-          "id",
-          "code",
-          "title"
-        ],
-        "title": "SimpleMatch"
-      },
-      "SimpleMergedInto": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "code": {
-            "type": "string",
-            "title": "Code"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "code",
-          "title"
-        ],
-        "title": "SimpleMergedInto"
       },
       "SimpleMilestone": {
         "properties": {
@@ -110491,8 +110512,7 @@
               "override_priority",
               "estimate_feature",
               "confirm_item",
-              "cut",
-              "merge_item"
+              "cut"
             ],
             "title": "Op"
           },
@@ -110895,8 +110915,7 @@
               "in_progress",
               "done",
               "cut",
-              "draft",
-              "merged"
+              "draft"
             ],
             "title": "Status"
           },
@@ -111015,31 +111034,6 @@
             "title": "Open Decisions",
             "default": []
           },
-          "looks_like": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleMatch"
-            },
-            "type": "array",
-            "title": "Looks Like",
-            "description": "S7: likely duplicates of a draft not kept both (at most 2, best first).",
-            "default": []
-          },
-          "merged_into": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SimpleMergedInto"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "drafting": {
-            "type": "boolean",
-            "title": "Drafting",
-            "description": "S7: Oracle's drafting job for this draft is queued or running.",
-            "default": false
-          },
           "flow": {
             "anyOf": [
               {
@@ -111049,15 +111043,6 @@
                 "type": "null"
               }
             ]
-          },
-          "goal_ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Goal Ids",
-            "description": "S7: the goals the item is linked to directly.",
-            "default": []
           }
         },
         "type": "object",
@@ -111220,79 +111205,6 @@
         ],
         "title": "SimpleSessionOut"
       },
-      "SimpleSuggestJobOut": {
-        "properties": {
-          "goal_id": {
-            "type": "string",
-            "title": "Goal Id"
-          },
-          "pending": {
-            "type": "boolean",
-            "title": "Pending"
-          },
-          "job_id": {
-            "type": "string",
-            "title": "Job Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "goal_id",
-          "pending",
-          "job_id"
-        ],
-        "title": "SimpleSuggestJobOut"
-      },
-      "SimpleSuggestionAcceptIn": {
-        "properties": {
-          "roadmap_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Roadmap Id"
-          },
-          "session_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Session Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "SimpleSuggestionAcceptIn"
-      },
-      "SimpleSuggestionRejectIn": {
-        "properties": {
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 500
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "title": "SimpleSuggestionRejectIn"
-      },
       "SimpleTrackRef": {
         "properties": {
           "id": {
@@ -111311,6 +111223,232 @@
           "title"
         ],
         "title": "SimpleTrackRef"
+      },
+      "SimpleVisualCommentIn": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "annotation": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "SimpleVisualCommentIn"
+      },
+      "SimpleVisualCommentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "annotation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "addressed_in": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Addressed In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "body",
+          "by_name",
+          "at"
+        ],
+        "title": "SimpleVisualCommentOut"
+      },
+      "SimpleVisualOut": {
+        "properties": {
+          "subject_kind": {
+            "type": "string",
+            "title": "Subject Kind"
+          },
+          "subject_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Subject Id"
+          },
+          "brief": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brief"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleVisualVersionOut"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "comments": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleVisualCommentOut"
+            },
+            "type": "array",
+            "title": "Comments"
+          },
+          "pending": {
+            "type": "boolean",
+            "title": "Pending"
+          },
+          "can_comment": {
+            "type": "boolean",
+            "title": "Can Comment"
+          },
+          "can_revise": {
+            "type": "boolean",
+            "title": "Can Revise"
+          }
+        },
+        "type": "object",
+        "required": [
+          "subject_kind",
+          "subject_id",
+          "flow",
+          "versions",
+          "comments",
+          "pending",
+          "can_comment",
+          "can_revise"
+        ],
+        "title": "SimpleVisualOut"
+      },
+      "SimpleVisualRequestIn": {
+        "properties": {
+          "brief": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Brief",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "SimpleVisualRequestIn"
+      },
+      "SimpleVisualReviseIn": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "SimpleVisualReviseIn"
+      },
+      "SimpleVisualVersionOut": {
+        "properties": {
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "made_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Made At"
+          },
+          "made_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made By Name"
+          },
+          "addressed": {
+            "type": "integer",
+            "title": "Addressed",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "title",
+          "made_at"
+        ],
+        "title": "SimpleVisualVersionOut"
       },
       "SimpleWindow": {
         "properties": {

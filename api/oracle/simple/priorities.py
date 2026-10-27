@@ -150,6 +150,10 @@ async def _proposals(
             e = None
         if e is not None and (c.op in PROPOSED_OPS or e.row.draft) and v.sees(c):
             shown.append((c, e))
+    from oracle.simple import visuals
+
+    by_change = await visuals.flows_for(db, "change", [c.id for c, _ in shown])
+    by_item = await visuals.flows_for(db, "feature", [e.row.id for _, e in shown])
     names = await changes._names(db, {c.by for c, _ in shown} | {
         p for c, _ in shown for p in v.route(c)
     })  # fmt: skip
@@ -167,7 +171,7 @@ async def _proposals(
             after=c.after,
             waiting_for=[names.get(p, "someone") for p in v.route(c)],
             can_decide=v.may_decide(c),
-            flow=None,
+            flow=by_change.get(c.id) or by_item.get(e.row.id),
         )  # fmt: skip
         for c, e in shown
     ]

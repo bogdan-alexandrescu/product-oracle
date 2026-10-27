@@ -12,6 +12,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { closed, roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { flowFor } from "./simple-visuals";
 
 type Row = Schemas["SimplePriorityRow"];
 type Item = Schemas["SimpleRoadmapItem"];
@@ -39,14 +40,6 @@ const FEATURES: Record<string, { value: number; effort: number }> = {
   "price-tiers": { value: 0, effort: 3 },
 };
 const CONFIDENCE: Record<string, number> = { high: 0.8, medium: 0.5, low: 0.3 };
-/** S10 owns the flow bundles: one invented bundle shows the thumbnail; the rest have none. */
-const FLOWS: Record<string, Schemas["SimpleFlow"]> = {
-  "alert-mobile": {
-    title: "Act on a pushed alert",
-    steps: ["Get the push", "Open the alert", "See what crossed the line", "Snooze or assign it"],
-    screen: { title: "Alert on a phone", regions: ["Header: rule and time", "What crossed the line", "Chart of the last day", "Snooze and Assign buttons"] },
-  },
-};
 
 const round = (n: number): number => Math.round(n * 1000) / 1000;
 const featureId = (itemId: string): string => `feature-${itemId}`;
@@ -257,7 +250,7 @@ export function prioritiesOut(
       const i = codes.get(String(c.target.item_id))!;
       return {
         change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureId(i.id), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
-        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), flow: FLOWS[i.key] ?? null,
+        after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), flow: flowFor(db.visuals, "change", c.id) ?? flowFor(db.visuals, "feature", i.id),
       };
     });
   const drafts: Schemas["SimplePriorityDraft"][] = live
