@@ -1226,7 +1226,8 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     ]
     meta = [f"Version {out.version}"]
     if out.published_at:
-        meta.append(f"published {out.published_at.date().isoformat()}")
+        zone = await company_time.company_time_zone(db)
+        meta.append(f"published {company_time.day_in_words(out.published_at, zone)}")
     if out.owner:
         meta.append(f"owner {escape(out.owner.name)}")
     if out.decider:
