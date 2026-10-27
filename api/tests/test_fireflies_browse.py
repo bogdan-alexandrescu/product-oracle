@@ -21,7 +21,7 @@ from oracle.sources.connectors.fireflies import (
     MAX_SERIES_KEY,
     FirefliesConnector,
 )
-from oracle.sources.models import Source, SourceItem
+from oracle.sources.models import Source, SourceItem, SourceItemVersion
 from oracle.tenancy import tenant_session
 from tests.connection_helpers import clear_provider_http, use_provider_http
 from tests.fireflies_fake import (
@@ -1235,3 +1235,116 @@ async def test_an_edit_is_checked_against_the_row_read_under_the_lock(
         await service.update_source(early, stale, {"config": first})
     async with tenant_session(tenant_id) as s:
         assert (await s.get(Source, sid)).config == first
+
+
+# --- re-reading recent meetings still without a summary (owner 2026-10-26) -------------
+
+
+def _days_ago(days: float) -> str:
+    when = datetime.now(UTC) - timedelta(days=days)
+    return when.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+async def _contents(tenant_id, source_id) -> dict[str, str]:
+    async with tenant_session(tenant_id) as s:
+        rows = await s.execute(
+            select(SourceItem.external_id, SourceItemVersion.content)
+            .join(SourceItemVersion, SourceItemVersion.id == SourceItem.current_version_id)
+            .where(SourceItem.source_id == source_id, SourceItem.deleted_at.is_(None))
+        )
+        return dict(rows.all())
+
+
+def _summarised(content: str) -> bool:
+    return content.startswith("## Overview\n\nAbout ")
+
+
+# protects=owner 2026-10-26: Fireflies writes the summary after the transcript, so each
+# sync re-reads the meetings of the last 7 days still stored without a summary and stores
+# the one it now has; a meeting stored with a summary, or older than 7 days, is not read
+# again; fails_when=the 2-day-old meeting keeps no summary after the archive has one, or
+# the summarised or 9-day-old meeting is fetched again; no_claim=a later title or speaker
+# change of a summarised meeting (owner: not picked up).
+async def test_a_sync_rereads_a_recent_meeting_still_without_a_summary(
+    fake, connector, tenant_id, alice, conn
+):
+    fake.meetings = [
+        meeting("R2", "Pricing sync", _days_ago(2)),
+        meeting("H2", "Hiring sync", _days_ago(2.5)),
+        meeting("O9", "Offsite debrief", _days_ago(9)),
+    ]
+    fake.unsummarised = {"R2", "O9"}
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        first = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert first["outcome"] == "completed", first
+        stored = await _contents(tenant_id, source_id)
+        assert {i: _summarised(c) for i, c in stored.items()} == {
+            "R2": False,
+            "H2": True,
+            "O9": False,
+        }
+
+        # Fireflies has written both summaries since.
+        fake.unsummarised = set()
+        fake.requests.clear()
+        second = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+    assert second["outcome"] == "completed", second
+    assert fake.detail_ids() == ["R2"]
+    stored = await _contents(tenant_id, source_id)
+    assert stored["R2"].startswith("## Overview\n\nAbout Pricing sync.")
+    assert not _summarised(stored["O9"])
+    assert _summarised(stored["H2"])
+
+
+# protects=owner 2026-10-26: re-reads count against the same limits and never starve new
+# meetings: a new meeting is fetched before any re-read, so with room for one transcript
+# the new one is stored and the re-read waits for the next sync; fails_when=the re-read
+# goes first (the new meeting is not stored) or a rate-limited re-read loses the new
+# meeting; no_claim=how long the next sync waits (oracle.sources.background).
+async def test_new_meetings_come_before_rereads_when_the_budget_is_tight(
+    fake, connector, tenant_id, alice, conn
+):
+    fake.meetings = [meeting("R2", "Pricing sync", _days_ago(2))]
+    fake.unsummarised = {"R2"}
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        first = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert first["outcome"] == "completed", first
+
+        fake.unsummarised = set()
+        fake.meetings.append(meeting("N1", "Launch check-in", _days_ago(1)))
+        fake.requests.clear()
+        fake.detail_budget = 1
+        tight = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert tight["outcome"] == "rate_limited", tight
+        assert fake.detail_ids() == ["N1", "R2"]
+        stored = await _contents(tenant_id, source_id)
+        assert _summarised(stored["N1"])
+        assert not _summarised(stored["R2"])
+
+        fake.detail_budget = None
+        fake.requests.clear()
+        later = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+    assert later["outcome"] == "completed", later
+    assert fake.detail_ids() == ["R2"]
+    assert _summarised((await _contents(tenant_id, source_id))["R2"])
+
+
+# protects=participants in the sync: the people who spoke (speakers[].name, asked for in
+# the transcript query) then participants then meeting_attendees, de-duplicated in order;
+# fails_when=the query does not ask for speakers or the stored acl drops them;
+# no_claim=who can see the item (a source's items are its owner's, S3).
+async def test_a_synced_meeting_records_speakers_and_invitees(
+    fake, connector, tenant_id, alice, conn
+):
+    fake.meetings = [
+        meeting("K7", "Kickoff", _days_ago(1), participants=["ada@example.com", "lin@x.io"])
+    ]
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        sync = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+    assert sync["outcome"] == "completed", sync
+    async with tenant_session(tenant_id) as s:
+        item = await s.scalar(select(SourceItem).where(SourceItem.source_id == source_id))
+    assert item.acl == {"participants": ["Ada", "ada@example.com", "lin@x.io"]}
