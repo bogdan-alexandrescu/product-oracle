@@ -112,7 +112,7 @@ for (const [where, size] of [
          * skeleton placeholders, the rail's frame on a desktop), then fills them in place for an
          * owner and a viewer alike: the goal band starts where its skeleton stood, no card the
          * skeleton names moves, and the first card under the band starts where the skeleton's
-         * first card stood; fails_when = Home stays blank until the permissions answer, or the
+         * first card stood (both measured from the band's foot, as the band grows with the goals); fails_when = Home stays blank until the permissions answer, or the
          * band or a card jumps when it fills (a viewer has no "Walk me through it", an owner has
          * cards a viewer does not); no_claim = how fast the real API answers, the cards' contents
          * (simple-home specs).
@@ -138,19 +138,23 @@ for (const [where, size] of [
           await expect(page.getByTestId("home-skeleton-rows").first()).toBeVisible();
           if (where === "desktop") await expect(page.getByTestId("simple-nav-skeleton")).toBeVisible();
           const before = (await goals.boundingBox())!;
-          const firstCard = (await cards.first().boundingBox())!;
+          // Cards are measured from the band's foot: the band itself grows with the goals there are.
+          const foot = async () => (await goals.boundingBox())!.y + (await goals.boundingBox())!.height;
+          const firstCard = (await cards.first().boundingBox())!.y - (await foot());
           const named = await cards.evaluateAll((els) => els.filter((e) => e.getAttribute("aria-label")).map((e) => [e.getAttribute("aria-label")!, e.getBoundingClientRect().top] as const));
+          const skeletonFoot = await foot();
           await expect(page.getByTestId("home-sentence")).toBeVisible({ timeout: 8000 });
           await expect(page.getByTestId("home-goal").first()).toBeVisible();
           await expect(page.getByTestId("simple-nav-skeleton")).toHaveCount(0);
           const after = (await goals.boundingBox())!;
           expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
           expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1);
-          expect(Math.abs((await cards.first().boundingBox())!.y - firstCard.y)).toBeLessThanOrEqual(1);
+          const filledFoot = await foot();
           for (const [name, top] of named) {
             const now = await page.getByRole("region", { name, exact: true }).evaluate((e) => e.getBoundingClientRect().top);
-            expect(Math.abs(now - top), name).toBeLessThanOrEqual(1);
+            expect(Math.abs(now - filledFoot - (top - skeletonFoot)), name).toBeLessThanOrEqual(1);
           }
+          expect(Math.abs((await cards.first().boundingBox())!.y - filledFoot - firstCard)).toBeLessThanOrEqual(1);
           await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
         });
       }
@@ -206,8 +210,9 @@ test("Value/effort's side caption names three that miss the line and counts the 
   await page.getByRole("tab", { name: "Value / effort" }).click();
   const side = page.getByRole("region", { name: "Ranked side list" });
   const caption = side.getByTestId("line-caption");
+  await expect(side.getByTestId("side-row").first()).toBeVisible();
   const missing = await titles(side.getByTestId("side-row"));
-  await expect(caption).toContainText(`${missing.length} of `);
+  await expect(caption).toContainText(`${missing.length} of ${await side.getByTestId("side-row").count()} miss ${label}`);
   await expect(caption).toContainText(`${missing.slice(0, 3).join(", ")} and ${missing.length - 3} more`);
   for (const t of missing.slice(3)) await expect(caption).not.toContainText(t);
   expect(await caption.getAttribute("title")).toBe(missing.join(", "));
