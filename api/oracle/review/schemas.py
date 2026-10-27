@@ -435,6 +435,7 @@ NotificationKind = Literal[
     "published",
     "webhook_paused",
     "webhook_url_changed",
+    "review_reminder",
 ]
 
 

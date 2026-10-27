@@ -303,6 +303,7 @@ export type NeedGroup =
   | "metrics"
   | "outcomes"
   | "webhooks"
+  | "reminders"
   | "shipped";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 

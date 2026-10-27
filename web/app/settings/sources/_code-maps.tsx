@@ -82,7 +82,8 @@ function CodeMapLine({ repo, map, onChange, sourceId }: { repo: string; map?: Co
         {map?.status === "building" && map.run_status === "awaiting_approval" && <span className="text-text2">waits for an owner to approve its cost</span>}
         {usable && map.as_of && <span className="text-text2">as of {formatDateTime(map.as_of)}</span>}
         <span className="ml-auto flex flex-none flex-wrap items-center gap-1">
-          {(!map || map.status === "failed") && (
+          {/* A stale map refreshes at once on Map the code, whatever the refresh setting. */}
+          {(!map || map.status === "failed" || map.status === "stale") && (
             <Button disabled={busy} onClick={start}>
               Map the code
             </Button>

@@ -663,6 +663,17 @@ class OnePagerDraft(BaseModel):
     decider_approved: bool
     waiting_on: list[SimplePersonRef]
     can_submit: bool
+    # Remind (owner, 2026-10-26): the last nudge to a waiting reviewer, and whether the
+    # caller (the PRD's owners, its decider) may nudge one now (each at most once a day).
+    reminded_at: dt.datetime | None = None
+    can_remind: bool = False
+
+
+class OnePagerRemindOut(BaseModel):
+    """Remind's answer: the reviewers nudged now (each gets an Inbox nudge)."""
+
+    reminded: list[SimplePersonRef]
+    reminded_at: dt.datetime
 
 
 class OnePagerSource(BaseModel):

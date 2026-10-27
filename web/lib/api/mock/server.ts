@@ -4959,6 +4959,13 @@ async function route(db: Db, req: Request): Promise<Response> {
       role: me.role,
       owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
       names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+      // The PRD's required reviewer: the seeded approver.
+      reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
+      notify: (user_id, kind, title, data, version) =>
+        ensureReviewV2(db).notifications.push({
+          id: uuid(), user_id, kind, title, document_id: db.simple_one_pager!.doc.id, version_number: version, section_key: null,
+          comment_id: null, campaign_id: null, actor: `user:${me.id}`, data, read_at: null, created_at: now(),
+        }),
     },
     req,
     p,

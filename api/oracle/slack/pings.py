@@ -57,6 +57,7 @@ KIND_EVENT = {
     "assignment": "review_requested",
     "rereview_requested": "review_requested",
     "patch_proposed": "review_requested",
+    "review_reminder": "review_requested",
     "comment": "comments",
     "reply": "comments",
     "campaign": "feedback_wanted",

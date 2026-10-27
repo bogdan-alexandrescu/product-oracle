@@ -76,6 +76,11 @@ from every member's Google Docs sources in the same request, with no Drive call
   and the logo routes, so its revision bumps on every change. A reset here bumps it too
   and deletes the stored logos (``oracle.branding.reset``).
 
+- ``code_map_refresh`` (owner, 2026-10-26): how often the ticker refreshes a stale code map
+  (``oracle.engineering.codemaps.refresh_due``): ``hourly``, ``every_6_hours``, ``daily``
+  (the default), ``weekly`` or ``on_demand`` (never automatically; Map the code refreshes
+  at once whatever the choice). Settings › Sources.
+
 ``PUT`` with ``{"value": null}`` resets a key to its default.
 """
 
@@ -161,6 +166,8 @@ DEFAULTS: dict[str, Any] = {
     "intake_ai_read": True,
     # O5 lane 4: the company's branding (oracle.branding), changed on PUT /v1/branding only.
     "branding": BRANDING_DEFAULT,
+    # Code maps (owner, 2026-10-26): a stale map's refresh run at most daily; each run costs.
+    "code_map_refresh": "daily",
 }
 MAX_WEB_SEARCHES_PER_MONTH = 2000
 # Settings the publish gate reads: a change takes the review gate exclusively, so it
@@ -356,6 +363,12 @@ async def validate(session: AsyncSession, principal: Principal, key: str, value:
         hi = MAX_WEB_SEARCHES_PER_MONTH
         if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= hi:
             raise InvalidSetting(f"web_searches_per_month must be a whole number from 0 to {hi}")
+        return value
+    if key == "code_map_refresh":
+        from oracle.engineering.codemaps import REFRESH_CHOICES
+
+        if value not in REFRESH_CHOICES:
+            raise InvalidSetting(f"code_map_refresh must be one of {', '.join(REFRESH_CHOICES)}")
         return value
     if key == "outcome_calibration":
         if value not in ("apply", "show"):

@@ -188,6 +188,9 @@ class SimpleDraft(TenantScoped, Base):
         ARRAY(Uuid), nullable=False, server_default="{}"
     )
     approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Remind (owner, 2026-10-26): when each waiting reviewer was last nudged,
+    # ``{user_id: iso time}``; at most once a day each. Cleared on submit.
+    reminders: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
 
 
 class SimpleSessionDraft(TenantScoped, Base):

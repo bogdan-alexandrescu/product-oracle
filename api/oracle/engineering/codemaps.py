@@ -15,7 +15,8 @@
   refresh coalesce into one follow-up).
 - :func:`refresh_due`: the ticker's step: maps whose run ended without a map are
   ``failed``; a repo whose latest map is stale gets one refresh run when its last run
-  started more than :data:`REFRESH_EVERY` ago and none is building.
+  started longer ago than the company's ``code_map_refresh`` setting (:data:`REFRESH_EVERY`:
+  hourly to weekly, daily by default; ``on_demand`` never) and none is building.
 - :func:`for_run` and :func:`recorded_ids`: the shared ready maps a run uses, recorded on
   the run as it starts (``knobs["code_maps"]``), and their ids for the tech brief check.
 
@@ -42,7 +43,17 @@ from oracle.sources.models import Source
 from oracle.tenancy import current_tenant, tenant_session
 
 FLOW = "code_map"
-REFRESH_EVERY = timedelta(hours=1)
+# The company setting ``code_map_refresh`` (owner, 2026-10-26): the least time between a
+# repo's last map run and the ticker's refresh of its stale map; None: only on demand
+# (Map the code), never automatically.
+REFRESH_EVERY: dict[str, timedelta | None] = {
+    "hourly": timedelta(hours=1),
+    "every_6_hours": timedelta(hours=6),
+    "daily": timedelta(days=1),
+    "weekly": timedelta(weeks=1),
+    "on_demand": None,
+}
+REFRESH_CHOICES = tuple(REFRESH_EVERY)
 # The runs a map's build waits on; any other status ended it.
 ACTIVE_RUN = ("draft", "awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
 
@@ -338,13 +349,18 @@ async def _ended(db: AsyncSession) -> int:
 
 async def refresh_due(db: AsyncSession) -> int:
     """The ticker's step (commits): end the builds whose run ended, then start one
-    refresh run per repo whose latest map is stale, when its last run started more than
-    :data:`REFRESH_EVERY` ago and none is building, in the source owner's name. Returns
-    how many refresh runs it started."""
+    refresh run per repo whose latest map is stale, when its last run started longer ago
+    than the company's ``code_map_refresh`` (:data:`REFRESH_EVERY`; ``on_demand`` starts
+    none) and none is building, in the source owner's name. Returns how many refresh runs
+    it started."""
     from oracle.runs import service as runs_service
+    from oracle.tenant_settings_api import get_setting
 
     await _ended(db)
     await db.commit()
+    every = REFRESH_EVERY.get(await get_setting(db, "code_map_refresh"), REFRESH_EVERY["daily"])
+    if every is None:
+        return 0
     newest = (
         select(
             CodeMap.id,
@@ -364,7 +380,7 @@ async def refresh_due(db: AsyncSession) -> int:
             .join(newest, and_(newest.c.id == CodeMap.id, newest.c.n == 1))
             .join(Source, Source.id == CodeMap.source_id)
             .join(User, User.id == Source.owner_user_id)
-            .where(CodeMap.status == "stale", CodeMap.created_at < _now() - REFRESH_EVERY)
+            .where(CodeMap.status == "stale", CodeMap.created_at < _now() - every)
             .order_by(CodeMap.created_at)
         )
     ).all()

@@ -42976,6 +42976,58 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/one-pagers/{doc}/remind": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Remind Simple One Pager Reviewers",
+        "description": "Remind: each reviewer the PRD's submitted draft waits on gets an Inbox nudge \"<name>\nis waiting for your review of <PRD>\", at most once a day per reviewer (409 when none\nis due, or no submitted draft waits); the PRD's owners and its decider only (403).",
+        "operationId": "remind_simple_one_pager_reviewers",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnePagerRemindOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/simple/one-pagers/{doc}/pdf": {
       "get": {
         "tags": [
@@ -86832,7 +86884,8 @@
               "patch_proposed",
               "published",
               "webhook_paused",
-              "webhook_url_changed"
+              "webhook_url_changed",
+              "review_reminder"
             ],
             "title": "Kind"
           },
@@ -87460,6 +87513,23 @@
           "can_submit": {
             "type": "boolean",
             "title": "Can Submit"
+          },
+          "reminded_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reminded At"
+          },
+          "can_remind": {
+            "type": "boolean",
+            "title": "Can Remind",
+            "default": false
           }
         },
         "type": "object",
@@ -87867,6 +87937,29 @@
           "can_propose"
         ],
         "title": "OnePagerOut"
+      },
+      "OnePagerRemindOut": {
+        "properties": {
+          "reminded": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Reminded"
+          },
+          "reminded_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Reminded At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reminded",
+          "reminded_at"
+        ],
+        "title": "OnePagerRemindOut",
+        "description": "Remind's answer: the reviewers nudged now (each gets an Inbox nudge)."
       },
       "OnePagerSectionPatch": {
         "properties": {
