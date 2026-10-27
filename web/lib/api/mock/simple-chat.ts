@@ -545,6 +545,9 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (!c || !sees(chat, c, ctx)) return json(404, { detail: "No such card" });
     if (p[5] === "discard") {
       if (c.status !== "open") return json(409, { detail: `This card is ${c.status} already` });
+      // Those the change mode bars from applying may not discard either (the API's rule).
+      const { may, why_not } = mayOf(db, chat, c, ctx);
+      if (!may) return json(403, { detail: why_not ?? "You may not discard this card" });
       c.status = "discarded";
       return json(200, cardOut(db, chat, c, ctx));
     }
@@ -576,7 +579,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const meeting = meetingOf(chat, c);
       if (meeting && (c.status as StoredCard["status"]) === "applied") {
         c.decision_id = crypto.randomUUID();
-        meeting.decisions.push({ id: c.decision_id, title: c.summary, card_id: c.id, at: c.decided_at! });
+        meeting.decisions.push({ id: c.decision_id, title: n == null ? c.summary : c.fixes[n].label, card_id: c.id, at: c.decided_at! });
       }
       return json(200, { card: cardOut(db, chat, c, ctx), result });
     }

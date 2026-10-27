@@ -132,7 +132,7 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
           <button
             type="button"
             className="simple-button"
-            disabled={busy}
+            disabled={busy || !card.may}
             onClick={() =>
               void run(async () => {
                 stopPreview();
