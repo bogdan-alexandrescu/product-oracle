@@ -5,9 +5,13 @@ import { CONSOLE_HELD_RUN, ROADMAP_DRIFT_RUN, ROADMAP_FILE_PROBLEM_RUN, ROADMAP_
 
 export const ADMIN = MOCK_LOGIN;
 
-/** Signs in as the mock owner, or as the mock member with `email` (one per role). */
+/**
+ * Signs in as the mock owner, or as the mock member with `email` (one per role), from a link
+ * to Detailed's Home (`?next=/home`): a viewer or commenter would otherwise land in Simple
+ * (#723; e2e/simple-mode.spec.ts signs in without one).
+ */
 export async function login(page: Page, email: string = ADMIN.email) {
-  await page.goto("/login");
+  await page.goto("/login?next=%2Fhome");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(ADMIN.password);
   await page.getByRole("button", { name: "Sign in" }).click();

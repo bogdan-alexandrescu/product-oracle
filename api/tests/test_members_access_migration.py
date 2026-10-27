@@ -61,7 +61,7 @@ def scratch_db():
 
 def test_one_head():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0075_live_tokens"]
+    assert script.get_heads() == ["0076_board_wide_tables"]
     assert script.get_revision(REVISION).down_revision == BEFORE
 
 

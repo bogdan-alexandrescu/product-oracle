@@ -24,6 +24,7 @@ from sqlalchemy import select, text, update
 from oracle.auth.service import create_api_token
 from oracle.config import get_settings
 from oracle.connections.models import Connection
+from oracle.live import fireflies as fireflies_live
 from oracle.main import app
 from oracle.sources.models import BrowseCall
 from oracle.tenancy import tenant_session
@@ -33,6 +34,7 @@ from tests.live_fakes import (
     ARCHIVE_TOTAL,
     LIVE_KEY,
     FakeSources,
+    ms,
 )
 from tests.sources_helpers import client_for, make_connection, make_user
 
@@ -159,7 +161,13 @@ async def test_archive_count_with_limit_1(sources, tenant_id, alice, archive):
         "title": "Roadmap review",
         "date": "2026-10-20T16:00:00Z",
         "duration_s": 1800.0,
-        "participants": ["Ada", "Grace"],
+        "participants": [
+            "Ada",
+            "Grace",
+            "ada@example.com",
+            "grace@example.com",
+            "linus@example.com",
+        ],
     }
     cite = body["cite"]
     assert cite["ref"] == "l:1"
@@ -173,10 +181,11 @@ async def test_archive_count_with_limit_1(sources, tenant_id, alice, archive):
     assert set(sources.archive.authorizations) == {f"Bearer {LIVE_KEY}"}
 
 
-# protects=amendment A's tolerant reading: ISO and epoch-ms dates, duration_s, duration
-# (seconds) and duration_min, participants as names or objects, an entry without a title
-# dropped and counted in skipped, unknown fields ignored; fails_when=any of these is read
-# wrongly or the bad entry is kept; no_claim=the real archive's shapes (AC 10's walk).
+# protects=the archive's real list shape read by field name: ISO dates, duration_min,
+# participants = speakers then attendees, de-duplicated in order (an empty attendees
+# list adds no one), an entry without a title dropped and counted in skipped;
+# fails_when=any of these is read wrongly or the bad entry is kept; no_claim=the shapes
+# amendment A tolerates beyond the real one (test_amendment_a_tolerated_shapes).
 async def test_archive_meetings_are_read_by_field_name(sources, tenant_id, alice, archive):
     async with client_for(alice) as a:
         resp = await a.get(f"/v1/live/fireflies/{archive}/meetings")
@@ -184,12 +193,49 @@ async def test_archive_meetings_are_read_by_field_name(sources, tenant_id, alice
     assert resp.status_code == 200, resp.text
     assert body["skipped"] == 1
     assert [(m["id"], m["date"], m["duration_s"], m["participants"]) for m in body["meetings"]] == [
-        ("m-301", "2026-10-20T16:00:00Z", 1800.0, ["Ada", "Grace"]),
+        (
+            "m-301",
+            "2026-10-20T16:00:00Z",
+            1800.0,
+            ["Ada", "Grace", "ada@example.com", "grace@example.com", "linus@example.com"],
+        ),
         ("m-300", "2026-10-13T16:00:00Z", 2400.0, ["Ada", "Linus"]),
-        ("m-299", "2026-10-06T16:00:00Z", 1800.0, ["Ada"]),
+        ("m-299", "2026-10-06T16:00:00Z", 1800.0, ["ada@example.com"]),
     ]
-    assert "extra_field" not in resp.text
     assert sources.archive.calls[-1] == ("list_meetings", {"limit": 20, "offset": 0})
+
+
+# protects=amendment A's tolerant reading, kept beside the real shape: epoch-ms dates,
+# duration_s, duration (seconds), legacy participants as names or objects, lines with
+# start_time (seconds), unknown fields ignored; fails_when=any of these is read wrongly;
+# no_claim=that the archive sends them (its real shape is the fake's).
+def test_amendment_a_tolerated_shapes():
+    meeting = fireflies_live.read_meeting(
+        {
+            "id": 7,
+            "title": "Old shape",
+            "date": ms("2026-10-13T16:00:00Z"),
+            "duration": 2400,
+            "participants": [{"name": "Ada", "email": "ada@example.com"}, "Linus"],
+            "extra_field": {"ignored": True},
+        }
+    )
+    assert meeting == {
+        "id": "7",
+        "title": "Old shape",
+        "date": datetime(2026, 10, 13, 16, tzinfo=UTC),
+        "duration_s": 2400.0,
+        "participants": ["Ada", "Linus"],
+    }
+    assert (
+        fireflies_live.read_meeting({"id": "x", "title": "T", "duration_s": 90})["duration_s"]
+        == 90.0
+    )
+    assert fireflies_live.read_line({"speaker": "Ada", "start_time": 1.5, "text": "Hi."}) == {
+        "speaker": "Ada",
+        "start_ms": 1500,
+        "text": "Hi.",
+    }
 
 
 # protects=list filters reach the archive as amendment A names them (date_from, date_to as
@@ -319,10 +365,35 @@ async def test_archive_get_meeting(sources, tenant_id, alice, archive):
         {"meeting_id": "m-301", "part": "summary", "max_lines": 400},
     )
     body = full.json()
+    # The archive answers next_offset (no "truncated"): more lines remain.
     assert len(body["lines"]) == 5 and body["truncated"] is True
     assert body["lines"][1] == {"speaker": "Grace", "start_ms": 5000, "text": "Invented line 1."}
-    # start_time in seconds becomes start_ms (amendment A).
     assert [line["start_ms"] for line in seconds.json()["lines"]] == [1500, 3000]
+    assert seconds.json()["truncated"] is False
+
+
+# protects=owner 2026-10-26: the archive's get_transcript is flat and its summary is
+# ``overview`` (there is no ``summary`` key), so a meeting with one reads it and one
+# Fireflies has not summarised yet reads null; participants are speakers then attendees,
+# de-duplicated; fails_when=the reader looks for a ``summary`` key or a ``meeting``
+# wrapper (a real summary reads as none), or drops attendees or speakers; no_claim=the
+# keywords, chapters and action items (not answered by get_meeting).
+async def test_archive_get_meeting_reads_overview_as_summary(sources, tenant_id, alice, archive):
+    async with client_for(alice) as a:
+        summarised = await a.get(f"/v1/live/fireflies/{archive}/meetings/m-301")
+        unsummarised = await a.get(f"/v1/live/fireflies/{archive}/meetings/m-299")
+    assert summarised.status_code == 200, summarised.text
+    assert summarised.json()["summary"] == "The roadmap was reviewed."
+    assert summarised.json()["participants"] == [
+        "Ada",
+        "Grace",
+        "ada@example.com",
+        "grace@example.com",
+        "linus@example.com",
+    ]
+    assert unsummarised.status_code == 200, unsummarised.text
+    assert unsummarised.json()["summary"] is None
+    assert unsummarised.json()["participants"] == ["ada@example.com"]
 
 
 # protects=get_lines by offset/limit (defaults 0 and 200, next_offset) and by
@@ -468,8 +539,9 @@ async def test_graphql_caps_and_refusals(sources, tenant_id, alice, graphql):
 
 
 # protects=amendment B's one meeting: transcript(id), sentences as lines (start_time x
-# 1000), summary from overview else short_summary, and lines sliced by offset/limit or
-# start_ms..end_ms; fails_when=any of these drifts; no_claim=-.
+# 1000), summary from overview else short_summary, participants = speakers[].name then
+# participants then meeting_attendees (de-duplicated, in order), and lines sliced by
+# offset/limit or start_ms..end_ms; fails_when=any of these drifts; no_claim=-.
 async def test_graphql_meeting_and_lines(sources, tenant_id, alice, graphql):
     async with client_for(alice) as a:
         full = await a.get(
@@ -489,8 +561,16 @@ async def test_graphql_meeting_and_lines(sources, tenant_id, alice, graphql):
     assert body["truncated"] is True
     assert body["lines"][1] == {"speaker": "Ada", "start_ms": 2500, "text": "Sentence 1."}
     assert len(body["lines"]) == 4
-    assert body["participants"] == ["ada@example.com", "grace@example.com"]
+    # speakers[].name, then participants, then meeting_attendees: de-duplicated in order.
+    assert body["participants"] == [
+        "Ada",
+        "Grace",
+        "ada@example.com",
+        "grace@example.com",
+        "linus@example.com",
+    ]
     assert short.json()["summary"] == "Planned the quarter."
+    assert short.json()["participants"] == ["Ada", "ada@example.com"]
     assert short.json()["lines"] is None
     assert [line["text"] for line in page.json()["lines"]] == ["Sentence 2.", "Sentence 3."]
     assert page.json()["next_offset"] == 4

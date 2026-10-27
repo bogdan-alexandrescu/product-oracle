@@ -38,6 +38,7 @@ import { failedAt, formatDateTime, formatDay } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
 
 import { NewRunDialog, type RunStart } from "./_new-run-dialog";
+import { QueueWaitNote } from "./_queue-wait";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -967,6 +968,11 @@ function SegmentItem({
             <p className="text-crit">
               {s.status === "failed" && s.finished_at && <span data-testid="failed-at">{failedAt(s.finished_at)}. </span>}
               {s.error}
+            </p>
+          )}
+          {s.queue_wait && (
+            <p>
+              <QueueWaitNote wait={s.queue_wait} testId="segment-queue-wait" />
             </p>
           )}
           {s.status === "running" && <SegmentProgress segment={s} />}

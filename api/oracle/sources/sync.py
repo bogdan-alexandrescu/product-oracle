@@ -52,6 +52,7 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Literal
 
 from sqlalchemy import case, cast, func, select, update
@@ -63,7 +64,7 @@ from oracle.engineering import codemaps
 from oracle.integrations.models import CompanyIntegration
 from oracle.sources import base, service, store
 from oracle.sources.connectors import github
-from oracle.sources.models import Source, SourceItem
+from oracle.sources.models import Source, SourceItem, SourceItemVersion
 
 log = logging.getLogger(__name__)
 
@@ -380,6 +381,25 @@ async def _sync(db: AsyncSession, source: Source) -> SyncStats:
             return set(rows)
 
         extra["known"] = known
+    if getattr(connector, "rereads", False):
+
+        async def lacking(since: datetime, mark: str) -> list[str]:
+            """The external ids of stored items dated since ``since`` whose current
+            content does not start with ``mark``, newest first."""
+            rows = await db.scalars(
+                select(SourceItem.external_id)
+                .join(SourceItemVersion, SourceItemVersion.id == SourceItem.current_version_id)
+                .where(
+                    SourceItem.source_id == source_id,
+                    SourceItem.deleted_at.is_(None),
+                    SourceItem.occurred_at >= since,
+                    ~SourceItemVersion.content.startswith(mark, autoescape=True),
+                )
+                .order_by(SourceItem.occurred_at.desc())
+            )
+            return list(rows)
+
+        extra["lacking"] = lacking
 
     # What the connector reads: Google Docs also gets the company's domains and drives.
     run_config = dict(config)

@@ -6,6 +6,16 @@
       "date": 1791644400000,
       "transcript_url": "https://app.fireflies.ai/view/01TRANSCRIPT4",
       "organizer_email": "ada@example.com",
+      "speakers": [
+        {
+          "id": 0,
+          "name": "Ada Example"
+        },
+        {
+          "id": 1,
+          "name": "Lin Example"
+        }
+      ],
       "participants": [
         "ada@example.com",
         "lin@example.com"
