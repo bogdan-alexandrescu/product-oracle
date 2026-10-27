@@ -10,6 +10,8 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
+import { DecidedItem } from "../meetings/_flow";
+
 type Row = Schemas["SimpleDecisionRow"];
 type Group = Schemas["SimpleMeetingGroup"];
 
@@ -126,7 +128,7 @@ function Rows({ rows }: { rows: Row[] }) {
   return (
     <ul className="mt-2 divide-y divide-border">
       {rows.map((r) => (
-        <li key={r.id} id={`d-${r.number}`} data-testid="decision-row" className="flex flex-wrap items-baseline justify-between gap-2 py-2 target:bg-[var(--simple-edited)]">
+        <DecidedItem key={r.id} id={`d-${r.number}`} testId="decision-row" flow={r.flow} className="justify-between py-2 target:bg-[var(--simple-edited)]">
           <span>
             <strong>D-{r.number}</strong> {r.title}
             {r.status !== "decided" && <span className="simple-small"> · {r.status}</span>}
@@ -134,7 +136,7 @@ function Rows({ rows }: { rows: Row[] }) {
           <span className="simple-small">
             {r.approver?.name ?? "No approver"} · {formatInZone(r.decided_at ?? r.created_at, zone, { month: "short", day: "numeric" })}
           </span>
-        </li>
+        </DecidedItem>
       ))}
     </ul>
   );

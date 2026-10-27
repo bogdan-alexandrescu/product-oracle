@@ -109815,6 +109815,41 @@
         ],
         "title": "SimpleDate"
       },
+      "SimpleDecidedFlow": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "title"
+        ],
+        "title": "SimpleDecidedFlow",
+        "description": "The new flow or feature a meeting decision decided (a draft item) and its flow\n(oracle.simple.visuals, S10); ``flow`` is None until one is drawn (\"No flow yet\")."
+      },
       "SimpleDecisionIn": {
         "properties": {
           "reason": {
@@ -109903,6 +109938,16 @@
             "type": "array",
             "title": "Subjects",
             "default": []
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDecidedFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -110826,6 +110871,16 @@
             "type": "array",
             "title": "Change Ids",
             "default": []
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDecidedFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

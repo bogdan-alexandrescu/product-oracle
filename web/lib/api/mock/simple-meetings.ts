@@ -14,12 +14,18 @@
  *
  * Delivery: email is available unless localStorage MOCK_MEETINGS_KEY holds "no-email";
  * Slack is connected (to #product-reviews) when it holds "slack".
+ *
+ * Each decided flow is linked (meetings.decided_flows): a meeting decision on a draft item
+ * names it with its flow, S10's (the priorities mock's bundles); "flow" in MOCK_MEETINGS_KEY
+ * stands for S10 having drawn one for Team invite nudges. A scheduled review has at most one
+ * meeting (409 naming it).
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { seedSimpleProposal } from "./simple-changes";
 import type { OnePagerDb } from "./simple-one-pager";
+import { FLOWS } from "./simple-priorities";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
@@ -72,6 +78,8 @@ interface Decision {
   subjects: { kind: string; id: string; ref?: string }[];
   meeting_id: string | null;
   change_ids: string[];
+  /** The roadmap items its changes touched (meetings.decided_flows reads them). */
+  item_ids?: string[];
 }
 
 interface Occurrence {
@@ -286,6 +294,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     roadmap_ids: [...new Set(prdItems(ctx, p).map((i) => i.roadmap.id))].sort(),
     meeting_decisions: db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst).map((d) => ({
       id: d.id, number: d.number, title: d.title, approver: ref(ctx, d.approver_id ?? ""), at: d.at, subjects: d.subjects, change_ids: d.change_ids,
+      flow: decidedFlow(ctx, d),
     })),
     open_decisions: openDecisions(ctx, db, p),
     pending_proposals: proposals(ctx, p),
@@ -314,11 +323,26 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
     }));
 }
 
-function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[]): Decision {
+/** An invented bundle S10 would draw for Team invite nudges (the "flow" flag). */
+const INVITE_FLOW: Schemas["SimpleFlow"] = {
+  title: "Invite your team",
+  steps: ["Finish setup", "See the nudge", "Pick teammates", "Send the invites"],
+  screen: { title: "Invite step", regions: ["Header: invite your team", "Teammate emails", "Send invites button"] },
+};
+
+/** A meeting decision on a new flow or feature (a draft item): that item and its flow. */
+function decidedFlow(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecidedFlow"] | null {
+  const item = items(ctx).find((i) => i.draft && (d.item_ids ?? []).includes(i.id));
+  if (!item) return null;
+  const flow = flags().includes("flow") && item.key === "setup-ideas" ? INVITE_FLOW : (FLOWS[item.key] ?? null);
+  return { kind: "draft_item", id: item.id, title: item.title, flow };
+}
+
+function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, subjects: Decision["subjects"], changeIds: string[], itemIds: string[] = []): Decision {
   const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
   const d: Decision = {
     id: crypto.randomUUID(), number, title, origin: "meeting", status: "decided", approver_id: ctx.me.id, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
-    subjects, meeting_id: m.id, change_ids: changeIds,
+    subjects, meeting_id: m.id, change_ids: changeIds, item_ids: itemIds,
   };
   db.decisions.push(d);
   // The items and lines it names link to it (decided_in, a line's decisions), newest first.
@@ -381,7 +405,7 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   const [words, subjects] = describe(ctx, c);
   const title = verb ? `${verb}: ${words}` : c.status === "proposed" ? `Proposed: ${words}` : words;
   const prd = prds(ctx).find((x) => x.slug === m.prd)!;
-  record(db, ctx, m, title, [...subjects, { kind: "document", id: prd.id }], [c.id]);
+  record(db, ctx, m, title, [...subjects, { kind: "document", id: prd.id }], [c.id], c.target.item_id ? [String(c.target.item_id)] : []);
   const line = ctx.onePager.changes.find((x) => x.id === c.id);
   if (line) Object.assign(line, { in_meeting: true, meeting_title: m.title });
   return res;
@@ -425,7 +449,7 @@ export function meetingInboxRows(db: MeetingsDb | undefined, me: string, seen: s
 function row(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecisionRow"] {
   return {
     id: d.id, number: d.number, title: d.title, origin: d.origin, status: d.status, approver: d.approver_id ? ref(ctx, d.approver_id) : null,
-    decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects,
+    decided_at: d.status === "decided" ? d.at : null, created_at: d.at, subjects: d.subjects, flow: decidedFlow(ctx, d),
   };
 }
 
@@ -497,6 +521,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     if (length < 5 || length > 240) return json(422, { detail: "length_min: 5 to 240" });
     const occ = b.occurrence_id ? db.occurrences.find((o) => o.id === b.occurrence_id) : undefined;
     if (b.occurrence_id && !occ) return json(404, { detail: "No such scheduled review" });
+    const first = occ && db.meetings.find((x) => x.occurrence_id === occ.id);
+    if (first) return json(409, { detail: { message: "This scheduled review has its meeting already", meeting_id: first.id } });
     const title = (b.title ?? "").trim() || (occ ? `${occ.ritual_title}: ${prd.title}` : `Review: ${prd.title}`);
     const m: Meeting = {
       id: crypto.randomUUID(), title: title.slice(0, 200), prd: prd.slug, origin: occ ? "ritual" : (b.origin ?? "one_pager"), occurrence_id: occ?.id ?? null,

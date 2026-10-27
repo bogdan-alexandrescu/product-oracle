@@ -40,7 +40,7 @@ const FEATURES: Record<string, { value: number; effort: number }> = {
 };
 const CONFIDENCE: Record<string, number> = { high: 0.8, medium: 0.5, low: 0.3 };
 /** S10 owns the flow bundles: one invented bundle shows the thumbnail; the rest have none. */
-const FLOWS: Record<string, Schemas["SimpleFlow"]> = {
+export const FLOWS: Record<string, Schemas["SimpleFlow"]> = {
   "alert-mobile": {
     title: "Act on a pushed alert",
     steps: ["Get the push", "Open the alert", "See what crossed the line", "Snooze or assign it"],

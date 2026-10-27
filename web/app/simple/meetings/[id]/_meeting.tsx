@@ -13,6 +13,7 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { opWords } from "../../roadmap/_card";
+import { DecidedItem } from "../_flow";
 
 type Meeting = Schemas["SimpleMeetingOut"];
 type Mode = Meeting["change_mode"];
@@ -417,7 +418,11 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
           <h3 className="font-semibold">Decisions taken</h3>
           {m.meeting_decisions.length ? (
             <ul aria-label="Decisions taken" className="space-y-1">
-              {m.meeting_decisions.map((x) => <li key={x.id}><strong>D-{x.number}</strong> {x.title} · {x.approver.name}</li>)}
+              {m.meeting_decisions.map((x) => (
+                <DecidedItem key={x.id} flow={x.flow}>
+                  <span><strong>D-{x.number}</strong> {x.title} · {x.approver.name}</span>
+                </DecidedItem>
+              ))}
             </ul>
           ) : (
             <p className="simple-small">No decision was taken.</p>

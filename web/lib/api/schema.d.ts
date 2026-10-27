@@ -36372,6 +36372,23 @@ export interface components {
             /** Estimated */
             estimated: boolean;
         };
+        /**
+         * SimpleDecidedFlow
+         * @description The new flow or feature a meeting decision decided (a draft item) and its flow
+         *     (oracle.simple.visuals, S10); ``flow`` is None until one is drawn ("No flow yet").
+         */
+        SimpleDecidedFlow: {
+            /** Kind */
+            kind: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            flow?: components["schemas"]["SimpleFlow"] | null;
+        };
         /** SimpleDecisionIn */
         SimpleDecisionIn: {
             /** Reason */
@@ -36409,6 +36426,7 @@ export interface components {
             subjects: {
                 [key: string]: unknown;
             }[];
+            flow?: components["schemas"]["SimpleDecidedFlow"] | null;
         };
         /**
          * SimpleDecisionsOut
@@ -36784,6 +36802,7 @@ export interface components {
              * @default []
              */
             change_ids: string[];
+            flow?: components["schemas"]["SimpleDecidedFlow"] | null;
         };
         /** SimpleMeetingGroup */
         SimpleMeetingGroup: {

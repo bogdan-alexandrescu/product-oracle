@@ -28,7 +28,7 @@ const SHAPES = ["circle", "square", "triangle", "diamond", "pentagon"] as const;
 type Shape = (typeof SHAPES)[number] | "cross";
 
 /** Whether the screen is a phone's (under 640 px). */
-function usePhone(): boolean {
+export function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
     const q = window.matchMedia("(max-width: 639px)");
@@ -102,7 +102,7 @@ export function Priorities() {
   const shapes = goalShapes(data?.rows ?? []);
 
   return (
-    <div data-mode="simple" className="mx-auto w-full max-w-6xl px-4 py-6 text-[length:var(--simple-text)] leading-[var(--simple-leading)] text-text" data-testid="simple-priorities">
+    <div className="mx-auto w-full max-w-6xl px-4 py-6 text-[length:var(--simple-text)] leading-[var(--simple-leading)] text-text" data-testid="simple-priorities">
       <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-[length:var(--simple-h1)] font-semibold leading-[var(--simple-h1-leading)]">Priorities</h1>
@@ -522,7 +522,7 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
   );
 }
 
-function FlowThumb({ flow }: { flow: Schemas["SimpleFlow"] }) {
+export function FlowThumb({ flow }: { flow: Schemas["SimpleFlow"] }) {
   return (
     <svg width="64" height="40" viewBox="0 0 64 40" aria-hidden className="text-text2">
       {flow.steps.slice(0, 4).map((_, i) => (
@@ -535,7 +535,7 @@ function FlowThumb({ flow }: { flow: Schemas["SimpleFlow"] }) {
   );
 }
 
-function FlowDetail({ flow }: { flow: Schemas["SimpleFlow"] }) {
+export function FlowDetail({ flow }: { flow: Schemas["SimpleFlow"] }) {
   return (
     <div className="mt-3 grid gap-4 sm:grid-cols-2" data-testid="flow-detail">
       <div>
