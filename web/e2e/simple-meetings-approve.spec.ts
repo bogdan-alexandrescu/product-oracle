@@ -12,18 +12,26 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  * decision "Approved Guided setup (published)", and the PRD's one-pager, opened again
  * outside the meeting, reads "Version 4" with the edited line and no working draft;
  * fails_when = the banner says published while the one-pager stays on Version 3 or keeps
- * its draft; no_claim = the review policy itself (api: test_simple_meetings_approve).
+ * its draft; no_claim = the review policy itself: the mock publishes here whatever the API
+ * does, so this card pins the screen and the mock together, and the API's real fix is
+ * test_simple_meetings_approve's (test_required_sections_without_reviewers_publish).
  *
  * Card approve-waits-on-reviewer: protects = with the required reviewer marked absent,
  * Approve says "not yet published: Waiting on Approver's approval" in the banner and the
- * decision, and the one-pager stays on Version 3 with its working draft; fails_when = the
- * banner or decision says "published" for a version that is not; no_claim = the
- * reviewer's own approve (api tests).
+ * decision, and the one-pager stays on Version 3 with its working draft, whose bar says the
+ * same; fails_when = the banner or decision says "published" for a version that is not, or
+ * the decision or the bar words it otherwise than the banner; no_claim = the reviewer's own
+ * approve (api tests).
  *
  * Card approve-section-reviewer: protects = a required section whose named reviewer is
- * absent holds publishing and the banner names it ("Sections What we will build need
- * Commenter's approval"); fails_when = the banner says "published"; no_claim = how the
- * API words several sections.
+ * absent holds publishing and the draft waits on them (their Inbox request): "Waiting on
+ * Commenter's approval" in the banner, the decision and the one-pager's draft bar;
+ * fails_when = the banner says "published" or the draft does not wait on them;
+ * no_claim = how the API words several sections.
+ *
+ * Card approve-needs-reviewer: protects = a decider's approval held only by a required
+ * section with nobody to approve it shows on the one-pager's draft bar ("Sections What we
+ * will build need a reviewer"); fails_when = the bar shows nothing for it.
  *
  * Card minutes-later: protects = the end screen reads the meeting again until the
  * minutes job ends, with no reload: "Drafting…" turns into Oracle's minutes in the
@@ -104,23 +112,41 @@ for (const phone of [false, true]) {
         const banner = page.getByTestId("approved-banner");
         await expect(banner).toHaveText("Approved in Review: Guided setup · not yet published: Waiting on Approver's approval");
         await expect(banner).not.toContainText("· published");
-        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (not yet published: waiting on Approver's approval)");
+        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (not yet published: Waiting on Approver's approval)");
         await expect(page.getByRole("region", { name: "All decisions" })).not.toContainText("(published)");
         const pager = await onePagerOutside(page);
         await expect(pager).toContainText("Version 3");
         await expect(pager).not.toContainText("Version 4");
-        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("publishes when Approver approves");
+        await expect(page.getByRole("status", { name: "Working draft" })).toContainText(
+          "Approved in Review: Guided setup · not yet published: Waiting on Approver's approval",
+        );
       });
 
-      test("Approve with a required section's reviewer absent names the section and the person", async ({ page, context }) => {
+      test("Approve with a required section's reviewer absent waits on that person", async ({ page, context }) => {
         await flags(context, "section-reviewer");
         await startWithAnEdit(page);
         await expect(page.getByTestId("approved-banner")).toHaveText(
-          "Approved in Review: Guided setup · not yet published: Sections What we will build need Commenter's approval",
+          "Approved in Review: Guided setup · not yet published: Waiting on Commenter's approval",
         );
-        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("not yet published: Sections What we will build need Commenter's approval");
+        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (not yet published: Waiting on Commenter's approval)");
         const pager = await onePagerOutside(page);
         await expect(pager).toContainText("Version 3");
+        await expect(page.getByRole("status", { name: "Working draft" })).toContainText(
+          "Approved in Review: Guided setup · not yet published: Waiting on Commenter's approval",
+        );
+      });
+
+      test("Approve held by a required section with nobody to approve it says so on the one-pager", async ({ page, context }) => {
+        await flags(context, "section-needs-reviewer");
+        await startWithAnEdit(page);
+        await expect(page.getByTestId("approved-banner")).toHaveText(
+          "Approved in Review: Guided setup · not yet published: Sections What we will build need a reviewer",
+        );
+        const pager = await onePagerOutside(page);
+        await expect(pager).toContainText("Version 3");
+        await expect(page.getByRole("status", { name: "Working draft" })).toContainText(
+          "Approved in Review: Guided setup · not yet published: Sections What we will build need a reviewer",
+        );
       });
 
       test("The end screen shows Oracle's minutes when the job answers later, without a reload", async ({ page, context }) => {
