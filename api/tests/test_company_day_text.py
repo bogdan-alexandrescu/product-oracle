@@ -168,7 +168,7 @@ EXCEPTIONS = {
     ("simple/dates.py", "_day"): "a suggested start or end: a calendar date, no time of day",
     ("simple/chat.py", "_day_words"): "a change card's item dates: calendar dates, no time of day",
     ("simple/priorities.py", "_day"): "the line's key date or milestone: a calendar date, no time",
-    ("simple/one_pager.py", "_plan_html"): "the PDF plan strip's months and milestone days: calendar dates",
+    ("simple/one_pager.py", "_plan_html"): "the PDF plan strip's months: calendar dates",
     ("review/collab.py", "set_assignment"): (
         "a section's due day: a picked calendar day the web stores at 17:00 UTC, so its UTC "
         "date is the day picked"
