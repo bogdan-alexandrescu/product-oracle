@@ -389,3 +389,48 @@ async def test_confirm_item_into_the_working_draft(client):
         assert d.overlay[w.ids["pay-5"]]["draft"] is False
     assert (await w.read(client))["drafts"] == []
     assert [d["code"] for d in (await w.read(client, "viewer"))["drafts"]] == ["pay-5"]
+
+
+def test_short_codes_feature_code_initials_and_clashes():
+    """protects=each row's short code is its feature's code when it has one (F-12), else two
+    or three capitals from its key (initials of up to three words, or a one-word key's first
+    two letters), unique among the rows with a digit added on a clash in key order (natural:
+    pay-2 before pay-10), never by rank; fails_when=a code repeats, follows the input's order,
+    drops the feature code or runs past three letters; no_claim=the web's drawing."""
+    from oracle.simple.priorities import short_codes
+
+    rows = [
+        ("pay-10", "ledger"),
+        ("delivery-integrity", "delivery"),
+        ("data-ingest", "ingest"),
+        ("pay-2", "F-12"),
+        ("pricing", "pricing"),
+        ("a-b-c-d", "abcd"),
+        ("x", "x"),
+        ("pay-3", "sync"),
+    ]
+    assert short_codes(rows) == ["PA2", "DI2", "DI", "F-12", "PR", "ABC", "XX", "PA"]
+    # The same rows in another order (another rank) keep their codes.
+    again = dict(zip([k for k, _ in rows[::-1]], short_codes(rows[::-1]), strict=True))
+    assert again == dict(zip([k for k, _ in rows], short_codes(rows), strict=True))
+
+
+async def test_short_codes_stay_when_the_rank_moves(client):
+    """protects=each priorities row carries a short code computed once on the API (the item's
+    key's initials, unique within the read: pay-1 PA, pay-2 PA2, ...; a feature-only row from
+    its feature's key), and a re-estimate that moves pay-2 from rank 2 to rank 1 leaves every
+    code where it was; fails_when=a row has no short code, two rows share one, or a code
+    follows the rank; no_claim=the web's highlight of the moved row."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    before = {r["code"]: r["short_code"] for r in (await w.read(client))["rows"]}
+    assert before == {"pay-1": "PA", "pay-2": "PA2", "pay-3": "PA3", "pay-4": "PA4",
+                      "insights": "IN", "widgets": "WI"}  # fmt: skip
+    r = await w.change(client, "owner", "estimate_feature", "pay-2",
+                       {"goal_value": None, "effort": 8}, {"goal_value": 20})  # fmt: skip
+    assert r.status_code == 201, r.text
+    out = await w.read(client)
+    assert out["rows"][0]["code"] == "pay-2"
+    assert {r["code"]: r["short_code"] for r in out["rows"]} == before
+    # A commenter reads the same codes.
+    assert {r["code"]: r["short_code"] for r in (await w.read(client, "commenter"))["rows"]} == before
