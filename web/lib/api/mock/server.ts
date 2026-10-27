@@ -522,7 +522,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "read-only-credential" where My account is read through an oracle:read personal token
  * (AC1: it changes nothing, the name included);
  * "simple-deciders" as the default company plus a decider of Simple's pricing roadmap and
- * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a).
+ * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a);
+ * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
+ * pricing roadmap's decider (#723 S1 Home review).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /**
@@ -863,6 +865,21 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * #723 S1 Home review "simple-home-deciders" scenario: "simple-deciders" (Dana Decider decides
+ * the pricing roadmap, Avery Lane, an approver, owns the alerts track) plus the commenter's
+ * proposal to retitle New plan tiers, which waits on Dana. Invented data.
+ */
+function seedSimpleHomeDecidersScenario(): Db {
+  const db = seedSimpleDecidersScenario();
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? "Commenter", owners, roles };
+  seedSimpleProposal(db.simple_roadmap!, who, "edit_title", "price-tiers", { title: "New plan tiers" }, { title: "New plan tiers, yearly" }, "2026-10-26T15:00:00Z");
   return db;
 }
 
@@ -2518,6 +2535,8 @@ function load(): Db {
                 ? seedSimpleDecidersScenario
               : scenario === "simple-home"
                 ? seedSimpleHomeScenario
+              : scenario === "simple-home-deciders"
+                ? seedSimpleHomeDecidersScenario
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
                   : scenario === "strategy-plan"
