@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
-import { login } from "./helpers";
-import { expect, test, type Page } from "./test";
+import { login, signOut } from "./helpers";
+import { expect, test, type BrowserContext, type Page } from "./test";
 
 /**
  * #734 review (D-a): who decides a Simple change, in the "simple-deciders" scenario: the
@@ -23,7 +23,7 @@ type Item = { key: string; id: string; title: string; suggestion: { id: string; 
 type Body = {
   change: { id: string; status: string; can_undo: boolean; routed_to: string[] };
   items: Item[];
-  id: string;
+  user_id: string;
   simple_proposals: { id: string }[];
 };
 type Call = { status: number; body: Body };
@@ -44,10 +44,19 @@ async function call(page: Page, method: string, path: string, body?: unknown): P
   );
 }
 
-/** A tab signed in as `email`, through the sign-in page. */
+const signedIn = new WeakSet<BrowserContext>();
+
+/** A tab signed in as `email`, through the sign-in page (a new tab starts as the last one
+ * signed in: there it signs out first). */
 async function as(page: Page, email: string): Promise<Page> {
-  const tab = await page.context().newPage();
+  const context = page.context();
+  const tab = await context.newPage();
+  if (signedIn.has(context)) {
+    await tab.goto("/home");
+    await signOut(tab);
+  }
   await login(tab, email);
+  signedIn.add(context);
   return tab;
 }
 
@@ -63,11 +72,12 @@ async function retitle(tab: Page, key: string, title: string): Promise<Call> {
 }
 
 async function meId(tab: Page): Promise<string> {
-  return (await call(tab, "GET", "/v1/me")).body.id;
+  return (await call(tab, "GET", "/v1/me")).body.user_id;
 }
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
+test.beforeEach(async ({ context }) => {
+  // Every tab of the context: each person signs in in a tab of their own.
+  await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
 });
 
 test("an approver track owner's change applies and undoes", async ({ page }) => {
