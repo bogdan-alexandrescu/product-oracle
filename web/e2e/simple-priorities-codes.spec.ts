@@ -1,5 +1,11 @@
 import { login } from "./helpers";
-import { expect, test, type BrowserContext, type Locator, type Page } from "./test";
+import {
+  expect,
+  test,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from "./test";
 
 /**
  * Simple Priorities: stable item codes on Value / effort (#723; the owner's pick "Short code +
@@ -20,11 +26,15 @@ async function open(page: Page, email: string): Promise<Page> {
 }
 
 async function dark(context: BrowserContext): Promise<void> {
-  await context.addInitScript(() => localStorage.setItem("oracle-theme", "dark"));
+  await context.addInitScript(() =>
+    localStorage.setItem("oracle-theme", "dark"),
+  );
 }
 
-const point = (tab: Page, code: string): Locator => tab.locator(`[data-testid="vxe-point"][data-code="${code}"]`);
-const side = (tab: Page, code: string): Locator => tab.locator(`[data-testid="side-row"][data-code="${code}"]`);
+const point = (tab: Page, code: string): Locator =>
+  tab.locator(`[data-testid="vxe-point"][data-code="${code}"]`);
+const side = (tab: Page, code: string): Locator =>
+  tab.locator(`[data-testid="side-row"][data-code="${code}"]`);
 
 /** Drags a mark `weeks` to the left (less effort), as a person does with a mouse or a finger. */
 async function dragLeft(tab: Page, code: string, weeks: number): Promise<void> {
@@ -35,13 +45,26 @@ async function dragLeft(tab: Page, code: string, weeks: number): Promise<void> {
   // maxE is 5 weeks across the plot's inner 92%.
   await tab.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
   await tab.mouse.down();
-  await tab.mouse.move(at.x + at.width / 2 - (plot.width * 0.92 * weeks) / 5, at.y + at.height / 2 + 3, { steps: 10 });
+  await tab.mouse.move(
+    at.x + at.width / 2 - (plot.width * 0.92 * weeks) / 5,
+    at.y + at.height / 2 + 3,
+    { steps: 10 },
+  );
   await tab.mouse.up();
 }
 
 /** Every mark's code, by item. */
 const markCodes = (tab: Page) =>
-  tab.getByTestId("vxe-point").evaluateAll((els) => Object.fromEntries(els.map((e) => [e.getAttribute("data-code"), e.querySelector('[data-testid="vxe-code"]')?.textContent ?? null])));
+  tab
+    .getByTestId("vxe-point")
+    .evaluateAll((els) =>
+      Object.fromEntries(
+        els.map((e) => [
+          e.getAttribute("data-code"),
+          e.querySelector('[data-testid="vxe-code"]')?.textContent ?? null,
+        ]),
+      ),
+    );
 
 const CODES = {
   "setup-checklist": "SC",
@@ -66,24 +89,54 @@ test.describe("desktop", () => {
    * the moved row is not highlighted; no_claim = the API's codes (pytest
    * test_short_codes_stay_when_the_rank_moves), the real scoring.
    */
-  test("drag a mark to another quadrant: its code stays, the list shows moved #5 → #2", async ({ page }) => {
+  test("drag a mark to another quadrant: its code stays, the list shows moved #5 → #2", async ({
+    page,
+  }) => {
     const admin = await open(page, "admin@example.com");
     expect(await markCodes(admin)).toEqual(CODES);
-    await expect(admin.getByLabel("Legend")).toContainText("Codes stay with the item; ranks are in the list.");
-    await expect(admin.getByLabel("Legend")).not.toContainText("Numbers are ranks");
-    await expect(side(admin, "setup-import").getByTestId("side-rank")).toHaveText("5");
-    await expect(side(admin, "setup-import").getByTestId("side-code")).toHaveText("F-12");
-    await expect(point(admin, "setup-import")).toHaveAttribute("title", /^#5 F-12 · /);
+    await expect(admin.getByLabel("Legend")).toContainText(
+      "Codes stay with the item; ranks are in the list.",
+    );
+    await expect(admin.getByLabel("Legend")).not.toContainText(
+      "Numbers are ranks",
+    );
+    await expect(
+      side(admin, "setup-import").getByTestId("side-rank"),
+    ).toHaveText("5");
+    await expect(
+      side(admin, "setup-import").getByTestId("side-code"),
+    ).toHaveText("F-12");
+    await expect(point(admin, "setup-import")).toHaveAttribute(
+      "title",
+      /^#5 F-12 · /,
+    );
 
     await dragLeft(admin, "setup-import", 2);
-    await expect(admin.getByText("Re-estimated setup-import: effort 1 wk")).toBeVisible();
-    await expect(side(admin, "setup-import").getByTestId("side-rank")).toHaveText("2");
+    await expect(
+      admin.getByText("Re-estimated setup-import: effort 1 wk"),
+    ).toBeVisible();
+    await expect(
+      side(admin, "setup-import").getByTestId("side-rank"),
+    ).toHaveText("2");
     expect(await markCodes(admin)).toEqual(CODES);
-    await expect(side(admin, "setup-import").getByTestId("side-code")).toHaveText("F-12");
-    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText("moved #5 → #2");
-    await expect(side(admin, "setup-import")).toHaveAttribute("data-moved", "true");
-    await expect(point(admin, "setup-import")).toHaveAttribute("data-moved", "true");
-    await expect(point(admin, "setup-import")).toHaveAttribute("title", /^#2 F-12 · /);
+    await expect(
+      side(admin, "setup-import").getByTestId("side-code"),
+    ).toHaveText("F-12");
+    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
+      "moved #5 → #2",
+    );
+    await expect(side(admin, "setup-import")).toHaveAttribute(
+      "data-moved",
+      "true",
+    );
+    await expect(point(admin, "setup-import")).toHaveAttribute(
+      "data-moved",
+      "true",
+    );
+    await expect(point(admin, "setup-import")).toHaveAttribute(
+      "title",
+      /^#2 F-12 · /,
+    );
     await expect(admin.locator('[data-moved="true"]')).toHaveCount(2);
   });
 
@@ -94,28 +147,52 @@ test.describe("desktop", () => {
    * move leaves the old item highlighted or none, or the other views show item keys instead
    * of the codes; no_claim = screen-reader announcements.
    */
-  test("a keyboard move highlights the moved item; the ranked list and buckets show the codes", async ({ page }) => {
+  test("a keyboard move highlights the moved item; the ranked list and buckets show the codes", async ({
+    page,
+  }) => {
     const admin = await open(page, "admin@example.com");
     await dragLeft(admin, "setup-import", 2);
-    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText("moved #5 → #2");
-    await expect(side(admin, "alert-sso").getByTestId("side-rank")).toHaveText("7");
-    await point(admin, "alert-sso").focus();
-    await admin.keyboard.press("ArrowUp");
-    await admin.keyboard.press("ArrowUp");
-    await admin.keyboard.press("ArrowUp");
-    await expect(side(admin, "alert-sso").getByTestId("moved")).toHaveText(/^moved #7 → #\d$/);
-    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveCount(0);
-    await expect(point(admin, "alert-sso")).toHaveAttribute("data-moved", "true");
-    await expect(point(admin, "setup-import")).not.toHaveAttribute("data-moved", "true");
+    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
+      "moved #5 → #2",
+    );
+    await expect(
+      side(admin, "alert-mobile").getByTestId("side-rank"),
+    ).toHaveText("5");
+    await point(admin, "alert-mobile").focus();
+    await admin.keyboard.press("ArrowLeft");
+    await expect(side(admin, "alert-mobile").getByTestId("moved")).toHaveText(
+      "moved #5 → #4",
+    );
+    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveCount(
+      0,
+    );
+    await expect(point(admin, "alert-mobile")).toHaveAttribute(
+      "data-moved",
+      "true",
+    );
+    await expect(point(admin, "setup-import")).not.toHaveAttribute(
+      "data-moved",
+      "true",
+    );
     expect(await markCodes(admin)).toEqual(CODES);
 
     await admin.getByRole("tab", { name: "Ranked list" }).click();
-    const ranked = admin.locator('[data-testid="prio-row"][data-code="setup-import"]');
+    const ranked = admin.locator(
+      '[data-testid="prio-row"][data-code="setup-import"]',
+    );
     await expect(ranked.getByTestId("prio-code")).toHaveText("F-12");
     await expect(ranked.getByTestId("prio-rank")).toHaveText("2");
     await admin.getByRole("tab", { name: "Goal buckets" }).click();
-    await expect(admin.locator('[data-testid="goal-bucket"][data-key="faster-activation"]')).toContainText("F-12");
-    await expect(admin.locator('[data-testid="goal-bucket"][data-key="faster-activation"]')).not.toContainText("setup-import");
+    await expect(
+      admin.locator(
+        '[data-testid="goal-bucket"][data-key="faster-activation"]',
+      ),
+    ).toContainText("F-12");
+    await expect(
+      admin.locator(
+        '[data-testid="goal-bucket"][data-key="faster-activation"]',
+      ),
+    ).not.toContainText("setup-import");
   });
 
   /**
@@ -123,13 +200,40 @@ test.describe("desktop", () => {
    * proposal: the codes show, nothing re-ranks and no item is marked moved; fails_when = a
    * proposal is shown as a move; no_claim = the decider's accept (simple-priorities.spec.ts).
    */
-  test("a commenter's move is proposed and highlights nothing", async ({ page }) => {
+  test("a commenter's move is proposed and highlights nothing", async ({
+    page,
+  }) => {
     const cory = await open(page, "commenter@example.com");
     await point(cory, "setup-import").focus();
     await cory.keyboard.press("ArrowUp");
-    await expect(cory.getByText("Proposed: waiting for the decider")).toBeVisible();
+    await expect(
+      cory.getByText("Proposed: waiting for the decider"),
+    ).toBeVisible();
     await expect(cory.locator('[data-moved="true"]')).toHaveCount(0);
     expect(await markCodes(cory)).toEqual(CODES);
+  });
+
+  /**
+   * Card simple-priorities-codes-viewer: protects = a viewer, in dark, reads the same codes on
+   * the marks and in the side list with the ranks there, and the legend; fails_when = a
+   * viewer's marks show ranks or other codes; no_claim = the API's refusal of a viewer's
+   * change (pytest test_viewer_reads_and_runs_are_refused).
+   */
+  test("a viewer in dark reads the codes and the ranks in the list", async ({
+    page,
+  }) => {
+    await dark(page.context());
+    const viewer = await open(page, "viewer@example.com");
+    expect(await markCodes(viewer)).toEqual(CODES);
+    await expect(side(viewer, "alert-sso").getByTestId("side-code")).toHaveText(
+      "AS",
+    );
+    await expect(side(viewer, "alert-sso").getByTestId("side-rank")).toHaveText(
+      "7",
+    );
+    await expect(viewer.getByLabel("Legend")).toContainText(
+      "Codes stay with the item; ranks are in the list.",
+    );
   });
 });
 
@@ -142,12 +246,18 @@ test.describe("phone", () => {
    * same code; fails_when = the phone shows ranks on the marks or loses the highlight;
    * no_claim = touch hardware gestures (Playwright drives pointer events).
    */
-  test("drag a mark on a phone, dark: code kept, moved #5 → #2", async ({ page }) => {
+  test("drag a mark on a phone, dark: code kept, moved #5 → #2", async ({
+    page,
+  }) => {
     await dark(page.context());
     const admin = await open(page, "admin@example.com");
     await dragLeft(admin, "setup-import", 2);
-    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText("moved #5 → #2");
-    await expect(side(admin, "setup-import").getByTestId("side-code")).toHaveText("F-12");
+    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
+      "moved #5 → #2",
+    );
+    await expect(
+      side(admin, "setup-import").getByTestId("side-code"),
+    ).toHaveText("F-12");
     expect(await markCodes(admin)).toEqual(CODES);
   });
 });
