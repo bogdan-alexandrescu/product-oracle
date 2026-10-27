@@ -162,6 +162,11 @@ const METRICS: Record<string, string> = { "grow-retention": "Teams active after 
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
 export const ROADMAP_SLUGS = (): string[] => Object.keys(ROADMAPS);
+/** Whether a commenter or viewer reads the roadmap (oracle.docs.visibility). */
+export const readsRoadmap = (slug: string, role: Role): boolean => !(role === "commenter" || role === "viewer") || ROADMAPS[slug]?.visibility === "company";
+/** The roadmap a slug or id names, when the role reads it. */
+export const readableRoadmap = (asked: string | null, role: Role): string | undefined =>
+  asked ? ROADMAP_SLUGS().find((r) => (r === asked || roadmapId(r) === asked) && readsRoadmap(r, role)) : undefined;
 /** S7: an item closed for the plan (cut, or a draft merged into another). */
 export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged_into;
 const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
@@ -549,6 +554,9 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
     };
   });
+  // The Roadmap filter (service.build's ``roadmap``): one readable roadmap, by id or slug.
+  const readable = ROADMAP_SLUGS().filter((r) => readsRoadmap(r, role));
+  const chosen = readableRoadmap(q.get("roadmap"), role);
   const prd = q.get("prd");
   const goal = q.get("goal");
   const track = q.get("track");
@@ -556,6 +564,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const to = q.get("to");
   const shown = items.filter(
     (i) =>
+      (!q.get("roadmap") || i.roadmap.slug === chosen) &&
       (!prd || i.prd?.slug === prd || i.prd?.id === prd) &&
       (!goal || i.goal?.key === goal || i.goal?.id === goal) &&
       (!track || i.track?.id === track) &&
@@ -585,13 +594,15 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ],
     changes_in_review: reader.hidden,
     drafts: reader.visible,
-    ...keyDatesOut(db, reader.full, shown, me ?? { id: "", role }),
+    ...keyDatesOut(db, reader.full, chosen ? [chosen] : [...new Set(shown.map((i) => i.roadmap.slug))], me ?? { id: "", role }),
+    roadmaps: keyDatesOut(db, reader.full, readable, me ?? { id: "", role }).key_date_roadmaps,
+    roadmap: chosen ? { id: roadmapId(chosen), slug: chosen, title: ROADMAPS[chosen].title } : null,
   };
 }
 
 /** Roadmap-plus: the shown roadmaps' key dates (the draft's to who sees it) and who may change them. */
-function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: Item[], me: { id: string; role: Role }): Pick<Schemas["SimpleRoadmapOut"], "key_dates" | "key_date_roadmaps"> {
-  const slugs = [...new Set(shown.map((i) => i.roadmap.slug))].sort((a, b) => ROADMAPS[a].title.localeCompare(ROADMAPS[b].title));
+function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: string[], me: { id: string; role: Role }): Pick<Schemas["SimpleRoadmapOut"], "key_dates" | "key_date_roadmaps"> {
+  const slugs = [...shown].sort((a, b) => ROADMAPS[a].title.localeCompare(ROADMAPS[b].title));
   const ref = (slug: string) => ({ id: stableUuid(`simple-doc/${slug}`), slug, title: ROADMAPS[slug].title });
   const draftOf = (slug: string) => (full.drafts ?? []).find((d) => d.roadmap === slug && OPEN_DRAFT.includes(d.out.status));
   const keyDates = slugs
@@ -673,6 +684,7 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   if (!db.suggestions.length && !Object.keys(db.own).length) regenerate(db, today);
   settleDrafting(db);
   if (!p[3] && m === "GET") {
+    if (q.get("roadmap") && !readableRoadmap(q.get("roadmap"), me.role)) return json(404, { detail: "No such roadmap" });
     const out = roadmapOut(db, me.role, q, me);
     return out ? json(200, out) : json(422, { detail: "group: goal, track or prd" });
   }

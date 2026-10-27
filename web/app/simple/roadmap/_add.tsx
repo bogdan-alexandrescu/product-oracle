@@ -6,27 +6,41 @@ import { Button, Sheet } from "@/components/ds";
 
 import type { Where } from "./_lib";
 
+type Ref = { id: string; title: string };
+
 /**
  * S7's quick add. A desktop types a title, then drags its chip onto a quarter column of the
  * timeline, a Now / Next / Later column of the board or a goal's header (any element with
  * data-add-where="kind:value"); Enter opens the same choice as a form. A phone taps Add: a
  * sheet with the title and where. The page sends the add_item change (editors apply,
- * others propose).
+ * others propose). The Roadmap filter decides which roadmap: one chosen (`target`) is named
+ * in the field; with all roadmaps and more than one (`roadmaps`), the field and the sheet
+ * ask which (a select), and nothing is sent until one is chosen.
  */
 export function QuickAdd({
   phone,
   options,
   verb,
   onAdd,
+  target = null,
+  roadmaps = [],
 }: {
   phone: boolean;
   options: Where[];
   /** "Add" when the caller's change applies there, else "Propose". */
-  verb: (w: Where) => "Add" | "Propose";
-  onAdd: (title: string, where: Where) => Promise<boolean>;
+  verb: (w: Where, roadmap?: string) => "Add" | "Propose";
+  onAdd: (title: string, where: Where, roadmap?: string) => Promise<boolean>;
+  /** The one roadmap the item goes to (the Roadmap filter's), named in the field. */
+  target?: string | null;
+  /** All roadmaps and more than one: the roadmaps to choose from. */
+  roadmaps?: Ref[];
 }) {
   const [title, setTitle] = useState("");
+  const [rm, setRm] = useState("");
   const [sheet, setSheet] = useState(false);
+  const ask = roadmaps.length > 0;
+  const chosen = ask ? roadmaps.find((r) => r.id === rm)?.id : undefined;
+  const ready = !!title.trim() && (!ask || !!chosen);
   const drag = useRef<{ pointer: number; ghost: HTMLElement; x0: number; y0: number; over: HTMLElement | null } | null>(null);
 
   const whereAt = (x: number, y: number): HTMLElement | null => {
@@ -52,12 +66,12 @@ export function QuickAdd({
 
   const send = async (where: Where) => {
     const t = title.trim();
-    if (!t) return;
-    if (await onAdd(t, where)) setTitle("");
+    if (!t || (ask && !chosen)) return;
+    if (await onAdd(t, where, chosen)) setTitle("");
   };
 
   const onDown = (e: ReactPointerEvent<HTMLElement>) => {
-    if (e.button !== 0 || !title.trim()) return;
+    if (e.button !== 0 || !ready) return;
     e.preventDefault();
     const chip = e.currentTarget;
     try {
@@ -100,8 +114,12 @@ export function QuickAdd({
       initial={title}
       options={options}
       verb={verb}
-      onSubmit={async (t, w) => {
-        const ok = await onAdd(t, w);
+      roadmaps={roadmaps}
+      initialRoadmap={rm}
+      target={target}
+      onSubmit={async (t, w, r) => {
+        if (r) setRm(r);
+        const ok = await onAdd(t, w, r);
         if (ok) {
           setTitle("");
           setSheet(false);
@@ -127,6 +145,27 @@ export function QuickAdd({
       <label htmlFor="quick-add-title" className="text-sm font-semibold whitespace-nowrap">
         Add an item
       </label>
+      {target && (
+        <span data-testid="quick-add-target" className="text-sm whitespace-nowrap text-text2">
+          to {target}
+        </span>
+      )}
+      {ask && (
+        <select
+          aria-label="Roadmap"
+          data-testid="quick-add-roadmap"
+          value={rm}
+          onChange={(e) => setRm(e.target.value)}
+          className={`h-9 rounded-lg border bg-surface px-2 text-[15px] text-text ${title.trim() && !chosen ? "border-accent" : "border-line-strong"}`}
+        >
+          <option value="">Which roadmap?</option>
+          {roadmaps.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.title}
+            </option>
+          ))}
+        </select>
+      )}
       <input
         id="quick-add-title"
         value={title}
@@ -143,23 +182,23 @@ export function QuickAdd({
       />
       <span
         role="button"
-        tabIndex={title.trim() ? 0 : -1}
-        aria-disabled={!title.trim()}
+        tabIndex={ready ? 0 : -1}
+        aria-disabled={!ready}
         data-testid="quick-add-chip"
-        aria-label={title.trim() ? `Drag '${title.trim()}' onto a quarter, a column or a goal (Enter chooses where)` : "Type a title first"}
+        aria-label={ready ? `Drag '${title.trim()}' onto a quarter, a column or a goal (Enter chooses where)` : title.trim() ? "Choose a roadmap first" : "Type a title first"}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={(e) => end(e, true)}
         onPointerCancel={(e) => end(e, false)}
         onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && title.trim()) {
+          if ((e.key === "Enter" || e.key === " ") && ready) {
             e.preventDefault();
             setSheet(true);
           }
         }}
         style={{ touchAction: "none" }}
         className={`inline-flex h-9 max-w-[18rem] items-center gap-1.5 rounded-full border px-3 text-sm font-semibold select-none ${
-          title.trim() ? "cursor-grab border-accent bg-accent-soft text-accent-ink" : "cursor-not-allowed border-line text-text2"
+          ready ? "cursor-grab border-accent bg-accent-soft text-accent-ink" : "cursor-not-allowed border-line text-text2"
         }`}
       >
         <span aria-hidden>⠿</span>
@@ -172,8 +211,27 @@ export function QuickAdd({
   );
 }
 
-function AddForm({ initial, options, verb, onSubmit }: { initial: string; options: Where[]; verb: (w: Where) => "Add" | "Propose"; onSubmit: (title: string, where: Where) => Promise<void> }) {
+function AddForm({
+  initial,
+  options,
+  verb,
+  roadmaps,
+  initialRoadmap,
+  target,
+  onSubmit,
+}: {
+  initial: string;
+  options: Where[];
+  verb: (w: Where, roadmap?: string) => "Add" | "Propose";
+  roadmaps: Ref[];
+  initialRoadmap: string;
+  target: string | null;
+  onSubmit: (title: string, where: Where, roadmap?: string) => Promise<void>;
+}) {
   const [title, setTitle] = useState(initial);
+  const [rm, setRm] = useState(initialRoadmap);
+  const ask = roadmaps.length > 0;
+  const roadmap = ask ? roadmaps.find((r) => r.id === rm)?.id : undefined;
   const [where, setWhere] = useState(options[0] ? `${options[0].kind}:${options[0].value}` : "");
   const [busy, setBusy] = useState(false);
   const chosen = options.find((o) => `${o.kind}:${o.value}` === where);
@@ -187,10 +245,10 @@ function AddForm({ initial, options, verb, onSubmit }: { initial: string; option
       className="flex flex-col gap-3 p-4"
       onSubmit={async (e) => {
         e.preventDefault();
-        if (!title.trim() || !chosen) return;
+        if (!title.trim() || !chosen || (ask && !roadmap)) return;
         setBusy(true);
         try {
-          await onSubmit(title.trim(), chosen);
+          await onSubmit(title.trim(), chosen, roadmap);
         } finally {
           setBusy(false);
         }
@@ -206,6 +264,24 @@ function AddForm({ initial, options, verb, onSubmit }: { initial: string; option
           className="h-11 rounded-lg border border-line-strong bg-surface px-3 text-[16px] font-normal text-text"
         />
       </label>
+      {target && (
+        <p className="text-sm text-text2" data-testid="quick-add-target">
+          Goes to {target}
+        </p>
+      )}
+      {ask && (
+        <label className="flex flex-col gap-1 text-sm font-semibold">
+          Roadmap
+          <select value={rm} onChange={(e) => setRm(e.target.value)} className="h-11 rounded-lg border border-line-strong bg-surface px-2 text-[16px] font-normal text-text">
+            <option value="">Which roadmap?</option>
+            {roadmaps.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.title}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       <label className="flex flex-col gap-1 text-sm font-semibold">
         Where
         <select value={where} onChange={(e) => setWhere(e.target.value)} className="h-11 rounded-lg border border-line-strong bg-surface px-2 text-[16px] font-normal text-text">
@@ -222,8 +298,8 @@ function AddForm({ initial, options, verb, onSubmit }: { initial: string; option
           ))}
         </select>
       </label>
-      <Button type="submit" variant="solid" disabled={busy || !title.trim() || !chosen}>
-        {chosen ? verb(chosen) : "Add"}
+      <Button type="submit" variant="solid" disabled={busy || !title.trim() || !chosen || (ask && !roadmap)}>
+        {chosen ? verb(chosen, roadmap) : "Add"}
       </Button>
     </form>
   );

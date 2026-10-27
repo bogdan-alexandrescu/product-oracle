@@ -4468,6 +4468,11 @@ async function route(db: Db, req: Request): Promise<Response> {
         if (!/^(now|(key_date|milestone):[0-9a-f-]{36}|date:\d{4}-\d{2}-\d{2})$/.test(patch.priorities_line)) return json(422, { detail: "priorities_line" });
         mine.priorities_line = patch.priorities_line;
       }
+      if (patch.simple_roadmap != null) {
+        // The Simple roadmap's Roadmap filter (preferences.SimpleRoadmapPick).
+        if (!/^(all|[0-9a-f-]{36})$/.test(patch.simple_roadmap)) return json(422, { detail: "simple_roadmap" });
+        mine.simple_roadmap = patch.simple_roadmap;
+      }
       if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
       if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
       for (const [k, v] of Object.entries(pings)) if (typeof v === "boolean") mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
@@ -4476,6 +4481,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     mine.welcome_dismissed ??= false; // saved before the A1 welcome
     mine.experience ??= null; // unset until the person switches (#723)
     mine.priorities_line ??= null; // this quarter until they pick a line (roadmap-plus)
+    mine.simple_roadmap ??= null; // all roadmaps until they pick one
     if ((mine.experience as string) === "studio") mine.experience = "detailed"; // its name before #723's rename, as the API reads it
     return json(200, mine);
   }
