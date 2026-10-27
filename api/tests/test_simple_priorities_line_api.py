@@ -24,8 +24,9 @@ async def world() -> World:
             row = await s.get(RoadmapItem, uuid.UUID(w.ids[key]))
             row.start_date, row.end_date, row.date_source = date(2026, 10, 1), end, "typed"
         doc = (await s.get(RoadmapItem, uuid.UUID(w.ids["pay-1"]))).roadmap_document_id
+        owner = w.ctx.users["owner"].id
         kd = RoadmapKeyDate(roadmap_document_id=doc, name="Board meeting",
-                            on_date=date(2026, 12, 10), created_by=w.ctx.users["owner"].id)  # fmt: skip
+                            on_date=date(2026, 12, 10), created_by=owner)  # fmt: skip
         s.add(kd)
         track_id = (await s.get(RoadmapItem, uuid.UUID(w.ids["pay-1"]))).track_id
         m = TrackMilestone(track_id=track_id, name="GA", target_date=date(2027, 1, 31),

@@ -42,6 +42,8 @@ Ops and the fields they write (``before`` must name the key fields):
   now overlap move the same way, transitively.
 - ``move_dependency``: the dependency ends the day before the item starts, keeping its
   length. Both fixes key ``before``/``after`` by item id.
+- ``add_key_date`` / ``edit_key_date`` / ``remove_key_date`` (roadmap-plus): a roadmap's
+  key dates, into its working draft (oracle.simple.key_dates).
 """
 
 import uuid
@@ -97,6 +99,8 @@ FLAG_KINDS = (
     "draft_without_owner",
 )
 WRITTEN = ("applied", "accepted", "undone")
+# Roadmap-plus: a roadmap's key dates (oracle.simple.key_dates).
+KEY_DATE_OPS = ("add_key_date", "edit_key_date", "remove_key_date")
 
 
 class ChangeError(Exception):
@@ -312,7 +316,7 @@ def current_route(
 ) -> list[uuid.UUID]:
     """An open proposal's decider now (S3a-minor: the decider may have changed since it
     was made); its stored route when its item is not read."""
-    if c.status != "proposed" or c.op == "edit_line":
+    if c.status != "proposed" or c.op == "edit_line" or c.op in KEY_DATE_OPS:
         return list(c.routed_to or [])
     item_id = c.target.get("item_id")
     if not item_id:
@@ -641,8 +645,10 @@ async def _flags(
 
 
 async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
-    from oracle.simple import one_pager, targets
+    from oracle.simple import key_dates, one_pager, targets
 
+    if body.op in key_dates.OPS:
+        return await key_dates.create(db, principal, body)
     if body.op in targets.OPS:
         return await targets.create(db, principal, body)
     if body.op in one_pager.OPS:
@@ -714,10 +720,12 @@ async def decide(
     db: AsyncSession, principal: Any, change_id: uuid.UUID, action: str, reason: str | None
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
-    from oracle.simple import one_pager, targets
+    from oracle.simple import key_dates, one_pager, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in key_dates.OPS:
+        return await key_dates.decide(db, principal, c, action, reason)
     if c.op in targets.OPS:
         return await targets.decide(db, principal, c, action, reason)
     if c.op in one_pager.OPS:
@@ -753,10 +761,12 @@ async def decide(
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
-    from oracle.simple import one_pager, targets
+    from oracle.simple import key_dates, one_pager, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in key_dates.OPS:
+        return await key_dates.undo(db, principal, c)
     if c.op in targets.OPS:
         return await targets.undo(db, principal, c)
     if c.op in one_pager.OPS:
@@ -840,8 +850,10 @@ class _View:
             return None
 
     def may_decide(self, c: SimpleChange) -> bool:
-        from oracle.simple import one_pager, targets
+        from oracle.simple import key_dates, one_pager, targets
 
+        if c.op in key_dates.OPS:
+            return key_dates.may_decide(self.principal, c, self)
         if c.op in targets.OPS:
             return targets.may_decide(self.principal, c, self)
         if c.op in one_pager.OPS:

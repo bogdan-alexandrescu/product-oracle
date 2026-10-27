@@ -288,3 +288,20 @@ class SimpleOnePager(TenantScoped, Base):
     built_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+class RoadmapKeyDate(TenantScoped, Base):
+    """Simple roadmap-plus: one of a roadmap's published key dates (a conference, a product
+    launch, a board meeting): a name, a day and an optional note. Owners' and the decider's
+    changes wait in the roadmap's working draft (``overlay["key_dates"]``) and are written
+    here when the draft is approved (oracle.simple.key_dates.publish)."""
+
+    __tablename__ = "roadmap_key_dates"
+
+    roadmap_document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    on_date: Mapped[date] = mapped_column(Date, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)

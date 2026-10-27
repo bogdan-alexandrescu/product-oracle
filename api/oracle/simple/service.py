@@ -630,7 +630,7 @@ async def build(
     start: date | None = None,
     end: date | None = None,
 ) -> SimpleRoadmapOut:
-    from oracle.simple import drafts
+    from oracle.simple import drafts, key_dates
 
     seen = await drafts.reader(db, principal)
     read = await load(db, seen.overlays)
@@ -664,6 +664,9 @@ async def build(
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
+    kds, kd_roadmaps = await key_dates.roadmap_key_dates(
+        db, principal, {e.roadmap.id: e.roadmap for e in shown}
+    )
     return SimpleRoadmapOut(
         today=read.today,
         group=group,  # type: ignore[arg-type]
@@ -690,4 +693,6 @@ async def build(
         ],
         changes_in_review=seen.changes_in_review,
         drafts=seen.visible,
+        key_dates=kds,
+        key_date_roadmaps=kd_roadmaps,
     )

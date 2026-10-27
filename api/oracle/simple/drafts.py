@@ -676,6 +676,9 @@ OP_WORDS = {
     "move_dependency": "Moved the dependency of",
     "confirm_item": "Confirmed",
     "edit_line": "New wording for",
+    "add_key_date": "Added the key date",
+    "edit_key_date": "Changed the key date",
+    "remove_key_date": "Removed the key date",
 }
 
 
@@ -742,9 +745,13 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
     titles = {str(r.id): r.title for r in base_rows}
     lines = [f"Changed in Simple on version {base.number}:", ""]
     for c in live:
-        lines.append(
-            f"- {OP_WORDS.get(c.op, c.op)} {titles.get(str(c.target.get('item_id')), 'an item')}"
+        kd = c.after.get("key_date") or c.before.get("key_date") if "key_date" in c.after else None
+        what = (
+            f"'{kd['name']}'"
+            if isinstance(kd, dict)
+            else titles.get(str(c.target.get("item_id")), "an item")
         )
+        lines.append(f"- {OP_WORDS.get(c.op, c.op)} {what}")
     markdown = await changeset._markdown(db, base, "\n".join(lines))
     result = await docs_service.import_draft(
         db,
@@ -921,6 +928,7 @@ async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> lis
     from oracle.review.publish import review_problems
     from oracle.review.service import approve_version
     from oracle.review.state import section_states
+    from oracle.simple import key_dates
 
     if d.status != "submitted":
         # Settled already (approved in the Detailed view, or returned to working).
@@ -941,6 +949,7 @@ async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> lis
             await db.flush()
             return other
         d.status, d.approved_at = "approved", company_time.now()
+        await key_dates.publish(db, d)
         await audit.record(
             db,
             dp,
@@ -1104,11 +1113,15 @@ async def withdraw(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) 
 
 async def on_version_approved(db: AsyncSession, principal: Any, version: DocumentVersion) -> None:
     """``approve_version`` approved a roadmap version: the Simple draft it came from is
-    approved too (the ordinary approval path settles it, S3b-1)."""
+    approved too (the ordinary approval path settles it, S3b-1), and its key dates are
+    published."""
+    from oracle.simple import key_dates
+
     d = await _submitted_for(db, version.id)
     if d is None:
         return
     d.status, d.approved_at, d.waiting_on = "approved", company_time.now(), []
+    await key_dates.publish(db, d)
     await db.flush()
     await audit.record(db, principal, "simple_draft.approved", "simple_draft", d.id,
                        data={"version": version.number, "via": "approve_version",
