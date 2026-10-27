@@ -10,8 +10,10 @@ in the meeting. The presenter decides who may change things through the meeting
 two named people).
 
 **Who starts one**: an owner or the PRD's decider; everyone else sees who may start it
-and joins once it is live. Default attendees: the PRD's decider, its required reviewers
-and its owners (its tracks' owners); any member can be added.
+and joins once it is live. A scheduled review occurrence has at most one meeting. A meeting
+whose session closed for idleness (oracle.simple.changes.MEETING_IDLE) ends on its next
+read, with Oracle's quick minutes (:func:`_settle`). Default attendees: the PRD's decider,
+its required reviewers and its owners (its tracks' owners); any member can be added.
 
 **Every action is a meeting decision**: each approve, cut, move, accept, decline, undo or
 comment made in the meeting is recorded by :func:`record_meeting_decision`: a
@@ -29,6 +31,10 @@ each attendee's Inbox, always; email to the attendees (Oracle's mailer) and a po
 company's Slack Notifications channel are optional, chosen by whoever sends. Action items
 are added through the change engine (``add_action_item`` with the meeting's id).
 
+**Each decided flow is linked**: a meeting decision on a new flow or feature (a draft item)
+carries that item and its flow from S10's ``oracle.simple.visuals.flow_for`` (none while
+that module is absent or has drawn none: "No flow yet").
+
 Visibility: a meeting is seen by whoever reads its PRD (oracle.docs.visibility).
 """
 
@@ -38,7 +44,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Literal
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -62,6 +68,7 @@ from oracle.simple.schemas import (
     InboxSimpleMinutes,
     SimpleActionItemOut,
     SimpleAttendee,
+    SimpleDecidedFlow,
     SimpleDecisionRow,
     SimpleDecisionsOut,
     SimpleDelivery,
@@ -147,6 +154,8 @@ def _rules(m: SimpleMeeting) -> MeetingRules:
 
 async def meeting_rules(db: AsyncSession, meeting_id: uuid.UUID) -> MeetingRules | None:
     m = await db.get(SimpleMeeting, meeting_id)
+    if m is not None:
+        await _settle(db, [m])
     return _rules(m) if m is not None else None
 
 
@@ -374,6 +383,15 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
         occurrence = await db.get(RitualOccurrence, body.occurrence_id)
         if occurrence is None:
             raise MeetingError(404, "No such scheduled review")
+        # One meeting per occurrence: two crossing starts wait on each other here.
+        await db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+                         {"k": f"simple_meetings.occurrence:{occurrence.id}"})  # fmt: skip
+        first = await db.scalar(
+            select(SimpleMeeting.id).where(SimpleMeeting.occurrence_id == occurrence.id)
+        )
+        if first is not None:
+            raise MeetingError(409, {"message": "This scheduled review has its meeting already",
+                                     "meeting_id": str(first)})  # fmt: skip
         if not title:
             ritual = await db.get(Ritual, occurrence.ritual_id)
             title = f"{ritual.title}: {document.title}" if ritual else ""
@@ -409,7 +427,32 @@ async def _get(db: AsyncSession, principal: Any, meeting_id: uuid.UUID, lock: bo
     document = await db.get(Document, m.prd_document_id)
     if document is None or not await _readable(db, principal, document):
         raise MeetingError(404, "No such meeting")
+    await _settle(db, [m])
     return m, document
+
+
+async def _settle(db: AsyncSession, ms: list[SimpleMeeting]) -> None:
+    """A live meeting whose session closed (idle past MEETING_IDLE, or closed) ends: no
+    more changes through it, Oracle's quick minutes for its presenter to edit and send.
+    The caller commits."""
+    from oracle.simple import changes
+
+    now = company_time.now()
+    for m in ms:
+        if m.status != "live":
+            continue
+        session = await db.get(SimpleSession, m.session_id)
+        if session is not None and session.closed_at is None and not changes._idle(session, now):
+            continue
+        if session is not None and session.closed_at is None:
+            session.closed_at = now
+        m.status = "ended"
+        m.ended_at = session.closed_at if session is not None else now
+        m.ended_by = m.presenter_id
+        m.minutes = await extract(db, m)
+        m.minutes_state = "ready"
+        await db.flush()
+        await audit.record(db, None, "simple_meeting.ended_idle", "simple_meeting", m.id, data={})
 
 
 def _presenter_or_decider(principal: Any, m: SimpleMeeting, w: PrdWho) -> bool:
@@ -714,6 +757,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
     [brief] = await briefs(db, [m])
     rules = _rules(m)
     links = (await _decisions(db, [m.id]))[m.id]
+    flows = await decided_flows(db, links)
     item_ids, roadmap_ids = await _prd_items(db, document)
     names = await _names(db, {d.approver_id for _, d in links} | set(m.change_people))
     proposals = list(
@@ -757,6 +801,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
                 at=link.at,
                 subjects=list(d.subjects or []),
                 change_ids=list(link.change_ids or []),
+                flow=flows.get(d.id),
             )  # fmt: skip
             for link, d in links
         ],
@@ -842,6 +887,7 @@ async def listing(db: AsyncSession, principal: Any) -> SimpleMeetingsOut:
     } if ms else {}  # fmt: skip
     readable = {i for i, d in docs.items() if await _readable(db, principal, d)}
     ms = [m for m in ms if m.prd_document_id in readable]
+    await _settle(db, ms)
     out = await briefs(db, ms)
     names = {u.id: u.name or u.email for u in await _members(db)}
     return SimpleMeetingsOut(
@@ -1270,6 +1316,49 @@ async def decided_in(
     return out
 
 
+# --------------------------------------------------------------------------- flows
+
+
+async def decided_flows(db: AsyncSession, links: list) -> dict[uuid.UUID, SimpleDecidedFlow]:
+    """Each meeting decision on a new flow or feature (a change to a draft item): that
+    item and its flow from S10 (None until drawn, or without S10's module)."""
+    try:
+        from oracle.simple import visuals
+    except ImportError:
+        visuals = None
+    change_ids = {c for link, _ in links for c in link.change_ids or []}
+    if not change_ids:
+        return {}
+    item_of = {}
+    for c in await db.scalars(select(SimpleChange).where(SimpleChange.id.in_(change_ids))):
+        try:
+            item_of[c.id] = uuid.UUID(str((c.target or {}).get("item_id")))
+        except ValueError:
+            continue
+    rows = {
+        r.id: r
+        for r in await db.scalars(
+            select(RoadmapItem).where(
+                RoadmapItem.id.in_(set(item_of.values())), RoadmapItem.draft.is_(True)
+            )
+        )
+    } if item_of else {}  # fmt: skip
+    out: dict[uuid.UUID, SimpleDecidedFlow] = {}
+    flows: dict[uuid.UUID, Any] = {}
+    for link, d in links:
+        row = next((rows[item_of[c]] for c in link.change_ids or []
+                    if item_of.get(c) in rows), None)  # fmt: skip
+        if row is None:
+            continue
+        if row.id not in flows:
+            flows[row.id] = (
+                await visuals.flow_for(db, "draft_item", row.id) if visuals is not None else None
+            )
+        out[d.id] = SimpleDecidedFlow(kind="draft_item", id=row.id, title=row.title,
+                                      flow=flows[row.id])  # fmt: skip
+    return out
+
+
 # --------------------------------------------------------------------------- the page
 
 
@@ -1298,6 +1387,7 @@ async def decisions_page(
         select(Document).where(Document.kind == "prd", Document.deleted_at.is_(None)))}  # fmt: skip
     readable = {i for i, d in docs.items() if await _readable(db, principal, d)}
     ms = [m for m in ms if m.prd_document_id in readable]
+    await _settle(db, ms)
     read = await service.load(db)
     goals = {e.goal.id: e.goal for e in read.entries if e.goal is not None}
     prd_doc = None
@@ -1340,12 +1430,17 @@ async def decisions_page(
         shown_ms = [m for m in shown_ms if any(keep(d) for _, d in links[m.id])]
     others: list[Decision] = []
     if meeting is None:
-        q = select(Decision).order_by(Decision.number.desc()).limit(200)
+        q = select(Decision).where(Decision.origin != "meeting")
         if in_meetings:
             q = q.where(Decision.id.not_in(in_meetings))
-        others = [d for d in await db.scalars(q) if d.origin != "meeting" and keep(d)]
+        if match is not None:
+            # The filter before the limit: an older matching decision is not crowded out.
+            q = q.where(or_(*[Decision.subjects.contains([{"id": i}]) for i in match]))
+        q = q.order_by(Decision.number.desc()).limit(200)
+        others = [d for d in await db.scalars(q) if keep(d)]
     names = await _names(db, {d.approver_id for lst in links.values() for _, d in lst}
                          | {d.approver_id for d in others})  # fmt: skip
+    flows = await decided_flows(db, [x for m in shown_ms for x in links[m.id]])
     groups = []
     for b, m in zip(await briefs(db, shown_ms), shown_ms, strict=True):
         minutes = SimpleMinutes.model_validate(m.minutes) if m.minutes else None
@@ -1354,7 +1449,8 @@ async def decisions_page(
         groups.append(SimpleMeetingGroup(
             meeting=b,
             minutes=await _named(db, minutes) if minutes else None,
-            decisions=[_row(d, names) for _, d in links[m.id] if whole or keep(d)],
+            decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
+                       for _, d in links[m.id] if whole or keep(d)],
         ))  # fmt: skip
     return SimpleDecisionsOut(
         meetings=groups,

@@ -56,13 +56,17 @@ async def _run(db, coro):
 
 
 async def _out(db, principal, meeting_id, not_approved=None) -> SimpleMeetingOut:
-    return await _run(db, meetings.one(db, principal, meeting_id, not_approved))
+    out = await _run(db, meetings.one(db, principal, meeting_id, not_approved))
+    await db.commit()  # a meeting idle past its session ends on read
+    return out
 
 
 @router.get("/meetings", response_model=SimpleMeetingsOut, name="list_simple_meetings")
 async def list_simple_meetings(principal: Reader, db: TenantDB) -> SimpleMeetingsOut:
     """Upcoming reviews from the rituals, live meetings and past ones (newest first)."""
-    return await _run(db, meetings.listing(db, principal))
+    out = await _run(db, meetings.listing(db, principal))
+    await db.commit()
+    return out
 
 
 @router.get("/meetings/options", response_model=SimpleStartOptions,
@@ -191,4 +195,6 @@ async def get_simple_decisions(
 ) -> SimpleDecisionsOut:
     """Every decision newest first, grouped under the meeting that took it (beside its
     minutes), then those taken outside meetings; filter by PRD, goal or meeting."""
-    return await _run(db, meetings.decisions_page(db, principal, prd, goal, meeting))
+    out = await _run(db, meetings.decisions_page(db, principal, prd, goal, meeting))
+    await db.commit()
+    return out

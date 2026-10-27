@@ -87,7 +87,7 @@ async def test_decided_flow_is_linked(client, monkeypatch):
     out = await get(client, w, m["id"])
     by_title = {d["title"]: d for d in out["meeting_decisions"]}
     linked = by_title["Renamed Edit_Title A"]["flow"]
-    assert linked == {"kind": "draft_item", "id": str(item), "title": "Ledger v2",
+    assert linked == {"kind": "draft_item", "id": str(item), "title": "Edit_Title A",
                       "flow": FLOW.model_dump()}  # fmt: skip
     assert ("draft_item", item) in calls
     # A planned item's change is no new flow: no link.

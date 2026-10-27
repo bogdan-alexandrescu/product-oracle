@@ -725,6 +725,16 @@ class SimpleAttendee(BaseModel):
     present: bool = True
 
 
+class SimpleDecidedFlow(BaseModel):
+    """The new flow or feature a meeting decision decided (a draft item) and its flow
+    (oracle.simple.visuals, S10); ``flow`` is None until one is drawn ("No flow yet")."""
+
+    kind: str
+    id: uuid.UUID
+    title: str
+    flow: SimpleFlow | None = None
+
+
 class SimpleMeetingDecision(BaseModel):
     """A decision taken in a meeting: a ``decisions`` row, origin ``meeting``."""
 
@@ -735,6 +745,7 @@ class SimpleMeetingDecision(BaseModel):
     at: dt.datetime
     subjects: list[dict[str, Any]] = []
     change_ids: list[uuid.UUID] = []
+    flow: SimpleDecidedFlow | None = None
 
 
 class SimpleActionItemIn(BaseModel):
@@ -906,6 +917,8 @@ class SimpleDecisionRow(BaseModel):
     decided_at: dt.datetime | None
     created_at: dt.datetime
     subjects: list[dict[str, Any]] = []
+    # A meeting decision on a new flow or feature: that flow.
+    flow: SimpleDecidedFlow | None = None
 
 
 class SimpleMeetingGroup(BaseModel):

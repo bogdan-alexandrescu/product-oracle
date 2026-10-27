@@ -24,6 +24,7 @@ S3b, working drafts (oracle.simple.drafts):
 
 import asyncio
 import uuid
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -61,6 +62,20 @@ async def _run(db, coro):
     except (changes.ChangeError, drafts.DraftError) as e:
         await db.rollback()
         raise HTTPException(e.status, e.detail) from e
+
+
+@asynccontextmanager
+async def _one_commit(db):
+    """S8: a change made through a meeting and its meeting decision commit together. The
+    change engine commits as it goes; inside this, its commits only flush, and the route
+    commits once both are written (a failure between them rolls both back)."""
+    commit = db.commit
+    db.commit = db.flush
+    try:
+        yield
+    finally:
+        db.commit = commit
+    await db.commit()
 
 
 async def _in_meeting(
@@ -117,8 +132,9 @@ async def create_simple_change(
     (with no decider, its owner), proposed to them for approvers and commenters. 409 when
     ``before`` no longer matches the stored values (nothing is written). Returns the
     constraint flags of the touched items (a proposal's as if applied)."""
-    out = await _run(db, changes.create(db, principal, body))
-    await _in_meeting(db, principal, out, body.session_id)
+    async with _one_commit(db):
+        out = await _run(db, changes.create(db, principal, body))
+        await _in_meeting(db, principal, out, body.session_id)
     return out
 
 
@@ -130,8 +146,9 @@ async def undo_simple_change(
 ) -> SimpleChangeResult:
     """Undo one of the caller's applied changes, in its open session, while the target
     still holds its ``after``: writes an ``undone`` row (history is kept)."""
-    out = await _run(db, changes.undo(db, principal, change_id))
-    await _in_meeting(db, principal, out, out.change.session_id, "Undone")
+    async with _one_commit(db):
+        out = await _run(db, changes.undo(db, principal, change_id))
+        await _in_meeting(db, principal, out, out.change.session_id, "Undone")
     return out
 
 
@@ -142,8 +159,9 @@ async def accept_simple_change(
 ) -> SimpleChangeResult:
     """Accept a proposal: it applies, unless the item changed since (409 "outdated")."""
     reason, sid = (body.reason, body.session_id) if body else (None, None)
-    out = await _run(db, changes.decide(db, principal, change_id, "accept", reason, sid))
-    await _in_meeting(db, principal, out, sid, "Accepted")
+    async with _one_commit(db):
+        out = await _run(db, changes.decide(db, principal, change_id, "accept", reason, sid))
+        await _in_meeting(db, principal, out, sid, "Accepted")
     return out
 
 
@@ -154,8 +172,9 @@ async def decline_simple_change(
 ) -> SimpleChangeResult:
     """Decline a proposal, with an optional reason: nothing changes."""
     reason, sid = (body.reason, body.session_id) if body else (None, None)
-    out = await _run(db, changes.decide(db, principal, change_id, "decline", reason, sid))
-    await _in_meeting(db, principal, out, sid, "Declined")
+    async with _one_commit(db):
+        out = await _run(db, changes.decide(db, principal, change_id, "decline", reason, sid))
+        await _in_meeting(db, principal, out, sid, "Declined")
     return out
 
 
