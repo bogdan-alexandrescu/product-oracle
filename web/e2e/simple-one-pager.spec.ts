@@ -134,8 +134,13 @@ for (const phone of [false, true]) {
         const mine = notes(page).filter({ hasText: "proposes new wording for line 3" }).filter({ visible: true });
         await expect(mine).toBeVisible();
         await expect(mine.getByRole("button", { name: "Accept" })).toHaveCount(0);
+        // The account menu lives in the desktop rail: switch people there, then back to
+        // the phone's width for the owner's part.
+        const size = page.viewportSize()!;
+        await page.setViewportSize({ width: 1366, height: 900 });
         await signOut(page);
         await login(page);
+        await page.setViewportSize(size);
         await page.goto(URL);
         const note = notes(page).filter({ hasText: "proposes new wording for line 3" }).filter({ visible: true });
         await note.getByRole("button", { name: "Flow for line 3" }).click();
