@@ -11,7 +11,8 @@ people: a run's token is refused (the ``simple`` area is in no run-token scope).
 - ``POST .../approve``: the PRD's decider (or an owner) approves the meeting's drafts.
 - ``POST .../end``: the presenter, the decider or an owner; Oracle drafts the minutes.
 - ``PUT .../minutes``: edit them before sending; ``POST .../send``: Decisions and Inbox
-  always, email and Slack when chosen.
+  always, email and Slack when chosen, whatever the minutes job's state (what is written).
+- ``POST .../minutes/redraft``: "Draft again", requeues a failed ``meeting_minutes`` job.
 - ``GET /v1/simple/decisions``: viewer and up; grouped by meeting, filters ``prd``,
   ``goal``, ``meeting``.
 
@@ -158,6 +159,18 @@ async def edit_simple_meeting_minutes(
     meeting_id: uuid.UUID, body: SimpleMinutesIn, principal: Commenter, db: TenantDB
 ) -> SimpleMeetingOut:
     await _run(db, meetings.edit_minutes(db, principal, meeting_id, body))
+    await db.commit()
+    return await _out(db, principal, meeting_id)
+
+
+@router.post("/meetings/{meeting_id}/minutes/redraft", response_model=SimpleMeetingOut,
+             name="redraft_simple_meeting_minutes")  # fmt: skip
+async def redraft_simple_meeting_minutes(
+    meeting_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> SimpleMeetingOut:
+    """Draft again: the presenter, the PRD's decider or an owner requeues a failed minutes
+    job (409 unless it failed)."""
+    await _run(db, meetings.redraft(db, principal, meeting_id))
     await db.commit()
     return await _out(db, principal, meeting_id)
 
