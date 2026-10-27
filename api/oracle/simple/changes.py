@@ -309,7 +309,7 @@ def current_route(
 ) -> list[uuid.UUID]:
     """An open proposal's decider now (S3a-minor: the decider may have changed since it
     was made); its stored route when its item is not read."""
-    if c.status != "proposed":
+    if c.status != "proposed" or c.op == "edit_line":
         return list(c.routed_to or [])
     item_id = c.target.get("item_id")
     if not item_id:
@@ -634,10 +634,12 @@ async def _flags(
 
 
 async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
-    from oracle.simple import targets
+    from oracle.simple import one_pager, targets
 
     if body.op in targets.OPS:
         return await targets.create(db, principal, body)
+    if body.op in one_pager.OPS:
+        return await one_pager.create(db, principal, body)
     me, now = _me(principal), company_time.now()
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
@@ -705,12 +707,14 @@ async def decide(
     db: AsyncSession, principal: Any, change_id: uuid.UUID, action: str, reason: str | None
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
-    from oracle.simple import targets
+    from oracle.simple import one_pager, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
     if c.op in targets.OPS:
         return await targets.decide(db, principal, c, action, reason)
+    if c.op in one_pager.OPS:
+        return await one_pager.decide(db, principal, c, action, reason)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -742,12 +746,14 @@ async def decide(
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
-    from oracle.simple import targets
+    from oracle.simple import one_pager, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
     if c.op in targets.OPS:
         return await targets.undo(db, principal, c)
+    if c.op in one_pager.OPS:
+        return await one_pager.undo(db, principal, c)
     if c.status != "applied":
         raise ChangeError(409, f"Only an applied change undoes; this one is {c.status}")
     if c.by != me:
@@ -827,17 +833,20 @@ class _View:
             return None
 
     def may_decide(self, c: SimpleChange) -> bool:
-        from oracle.simple import targets
+        from oracle.simple import one_pager, targets
 
         if c.op in targets.OPS:
             return targets.may_decide(self.principal, c, self)
+        if c.op in one_pager.OPS:
+            return one_pager.may_decide(self.principal, c)
         e = self.entry(c)
         return e is not None and service.can_decide(self.principal, e, self.deciders)
 
     def sees(self, c: SimpleChange) -> bool:
         """Working changes and proposals: their people, the session's, the document's
         owners, decider and reviewers (#723 owner answer)."""
-        if c.document_id is not None and c.document_id not in self.docs:
+        # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
+        if c.document_id is not None and c.document_id not in self.docs and c.op != "edit_line":
             return False
         if self.me is None:
             return False

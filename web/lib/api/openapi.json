@@ -42924,6 +42924,103 @@
         "x-per-item": null
       }
     },
+    "/v1/simple/one-pagers/{doc}": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple One Pager",
+        "description": "A PRD's one-pager (slug or id): its published version's blocks, each line with its\nsource sections, built by the ``one_pager`` job and cached per version and section\nhashes; to those who see the PRD's working draft, its edited lines and the margin\nnotes (changes, proposals). Lines change through POST /v1/simple/changes\n(``edit_line``).",
+        "operationId": "get_simple_one_pager",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OnePagerOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/one-pagers/{doc}/pdf": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Export Simple One Pager",
+        "description": "The one-pager as a branded one-page PDF (its published lines).",
+        "operationId": "export_simple_one_pager",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Doc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/strategy/stack": {
       "get": {
         "tags": [
@@ -76142,7 +76239,8 @@
               "edit_action_item",
               "set_action_item_status",
               "add_launch_task",
-              "set_launch_task_status"
+              "set_launch_task_status",
+              "edit_line"
             ],
             "title": "Op"
           },
@@ -82459,6 +82557,7 @@
               "quality_review",
               "refinement_batch",
               "public_text",
+              "one_pager",
               "intake_analysis",
               "decision_options",
               "scope_enhance",
@@ -87227,6 +87326,552 @@
           "status"
         ],
         "title": "OccurrenceSummary"
+      },
+      "OnePagerBlock": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "rules": {
+            "type": "string",
+            "title": "Rules"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "lines",
+              "metrics",
+              "timeline"
+            ],
+            "title": "Kind"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerLine"
+            },
+            "type": "array",
+            "title": "Lines",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "rules",
+          "kind"
+        ],
+        "title": "OnePagerBlock"
+      },
+      "OnePagerDraft": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "working",
+              "submitted"
+            ],
+            "title": "Status"
+          },
+          "changes": {
+            "type": "integer",
+            "title": "Changes"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "decider_approved": {
+            "type": "boolean",
+            "title": "Decider Approved"
+          },
+          "waiting_on": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Waiting On"
+          },
+          "can_submit": {
+            "type": "boolean",
+            "title": "Can Submit"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "changes",
+          "base_version",
+          "decider_approved",
+          "waiting_on",
+          "can_submit"
+        ],
+        "title": "OnePagerDraft"
+      },
+      "OnePagerFlow": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Steps",
+            "default": []
+          },
+          "screen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Screen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "OnePagerFlow",
+        "description": "A design bundle's flow (S10's), as the API returns it; none yet: null."
+      },
+      "OnePagerItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "horizon": {
+            "type": "string",
+            "enum": [
+              "now",
+              "next",
+              "later"
+            ],
+            "title": "Horizon"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "horizon",
+          "start",
+          "end",
+          "estimated"
+        ],
+        "title": "OnePagerItem",
+        "description": "The timeline strip: the PRD's slice of the Simple roadmap."
+      },
+      "OnePagerLine": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source_keys": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Source Keys"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerMetric"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "published",
+              "edited",
+              "proposal"
+            ],
+            "title": "State",
+            "default": "published"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "source_keys"
+        ],
+        "title": "OnePagerLine"
+      },
+      "OnePagerMetric": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "from": {
+            "type": "string",
+            "title": "From",
+            "default": ""
+          },
+          "to": {
+            "type": "string",
+            "title": "To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "to"
+        ],
+        "title": "OnePagerMetric"
+      },
+      "OnePagerNote": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "line_id": {
+            "type": "string",
+            "title": "Line Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "change",
+              "proposal"
+            ],
+            "title": "Kind"
+          },
+          "by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "By"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "in_meeting": {
+            "type": "boolean",
+            "title": "In Meeting"
+          },
+          "before": {
+            "type": "string",
+            "title": "Before"
+          },
+          "after": {
+            "type": "string",
+            "title": "After"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerSectionPatch"
+            },
+            "type": "array",
+            "title": "Sections"
+          },
+          "can_undo": {
+            "type": "boolean",
+            "title": "Can Undo"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide"
+          },
+          "adds_feature": {
+            "type": "boolean",
+            "title": "Adds Feature"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "line_id",
+          "kind",
+          "by",
+          "by_name",
+          "at",
+          "in_meeting",
+          "before",
+          "after",
+          "sections",
+          "can_undo",
+          "can_decide",
+          "adds_feature"
+        ],
+        "title": "OnePagerNote",
+        "description": "A margin note beside its line: a change in the working draft or a proposal."
+      },
+      "OnePagerOut": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "span_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Span Start"
+          },
+          "span_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Span End"
+          },
+          "built_by": {
+            "type": "string",
+            "enum": [
+              "extract",
+              "oracle"
+            ],
+            "title": "Built By"
+          },
+          "built_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Built At"
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerBlock"
+            },
+            "type": "array",
+            "title": "Blocks"
+          },
+          "timeline": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerItem"
+            },
+            "type": "array",
+            "title": "Timeline"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerSource"
+            },
+            "type": "array",
+            "title": "Sections",
+            "default": []
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerNote"
+            },
+            "type": "array",
+            "title": "Notes"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerDraft"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "changes_in_review": {
+            "type": "integer",
+            "title": "Changes In Review"
+          },
+          "can_edit": {
+            "type": "boolean",
+            "title": "Can Edit"
+          },
+          "can_propose": {
+            "type": "boolean",
+            "title": "Can Propose"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "version",
+          "published_at",
+          "owner",
+          "decider",
+          "span_start",
+          "span_end",
+          "built_by",
+          "built_at",
+          "blocks",
+          "timeline",
+          "notes",
+          "draft",
+          "changes_in_review",
+          "can_edit",
+          "can_propose"
+        ],
+        "title": "OnePagerOut"
+      },
+      "OnePagerSectionPatch": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "before": {
+            "type": "string",
+            "title": "Before"
+          },
+          "after": {
+            "type": "string",
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "heading",
+          "before",
+          "after"
+        ],
+        "title": "OnePagerSectionPatch"
+      },
+      "OnePagerSource": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "heading",
+          "body"
+        ],
+        "title": "OnePagerSource",
+        "description": "A source section of the page's lines, as the reader reads it (the drill-down)."
       },
       "OracleAsker": {
         "properties": {
@@ -107801,7 +108446,8 @@
               "edit_action_item",
               "set_action_item_status",
               "add_launch_task",
-              "set_launch_task_status"
+              "set_launch_task_status",
+              "edit_line"
             ],
             "title": "Op"
           },
@@ -107903,7 +108549,8 @@
               "edit_action_item",
               "set_action_item_status",
               "add_launch_task",
-              "set_launch_task_status"
+              "set_launch_task_status",
+              "edit_line"
             ],
             "title": "Op"
           },

@@ -152,6 +152,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, simpleInboxRows } from "./simple-changes";
+import { routeOnePager, seedOnePager, type OnePagerDb } from "./simple-one-pager";
 import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -259,6 +260,8 @@ export interface Db {
   roadmap?: RoadmapDb;
   /** Simple S2 (#723): the company-wide roadmap's items and date suggestions (./simple-roadmap.ts). */
   simple_roadmap?: SimpleDb;
+  /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
+  simple_one_pager?: OnePagerDb;
   /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
   sharing_items?: RoadmapDb["items"];
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
@@ -4836,6 +4839,20 @@ async function route(db: Db, req: Request): Promise<Response> {
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
+  // Simple S5: one-pagers and their line edits (edit_line) through the change engine.
+  db.simple_one_pager ??= seedOnePager();
+  const onePagerRes = await routeOnePager(
+    db.simple_one_pager,
+    {
+      id: me.id,
+      role: me.role,
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+    },
+    req,
+    p,
+  );
+  if (onePagerRes) return onePagerRes;
   db.simple_roadmap ??= seedSimpleRoadmap();
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles }, req, p, q);
