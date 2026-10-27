@@ -12135,74 +12135,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/simple/goal-suggestions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** S7: goal suggestions and each goal's pending and empty state. */
-        get: operations["list_goal_suggestions"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/simple/goals/{goal_id}/suggest": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** S7: Suggest features (a job proposes 3-5). */
-        post: operations["suggest_goal_features"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/simple/goal-suggestions/{suggestion_id}/accept": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** S7: accept a goal suggestion (an add_item change). */
-        post: operations["accept_goal_suggestion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/simple/goal-suggestions/{suggestion_id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** S7: reject a goal suggestion with an optional reason. */
-        post: operations["reject_goal_suggestion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/simple/sessions": {
         parameters: {
             query?: never;
@@ -12517,6 +12449,86 @@ export interface paths {
         get: operations["export_simple_one_pager"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Goal Suggestions
+         * @description S7: goal suggestions and each goal's pending and empty state.
+         */
+        get: operations["list_goal_suggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goals/{goal_id}/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Suggest Goal Features
+         * @description S7: Suggest features (a job proposes 3-5).
+         */
+        post: operations["suggest_goal_features"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-suggestions/{suggestion_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Goal Suggestion
+         * @description S7: accept a goal suggestion (an add_item change).
+         */
+        post: operations["accept_goal_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/goal-suggestions/{suggestion_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject Goal Suggestion
+         * @description S7: reject a goal suggestion with an optional reason.
+         */
+        post: operations["reject_goal_suggestion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -26780,7 +26792,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply" | "item_draft" | "goal_suggestions";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -36286,6 +36298,22 @@ export interface components {
              */
             can_withdraw: boolean;
         };
+        /** SimpleEvidence */
+        SimpleEvidence: {
+            /** Label */
+            label: string;
+            /** Kind */
+            kind: string;
+            /** Ref */
+            ref: string | null;
+            /** Url */
+            url: string | null;
+            /**
+             * Confidence
+             * @enum {string}
+             */
+            confidence: "high" | "medium" | "low";
+        };
         /** SimpleFlag */
         SimpleFlag: {
             /**
@@ -36322,6 +36350,15 @@ export interface components {
             /** Regions */
             regions: string[];
         };
+        /** SimpleGoalBrief */
+        SimpleGoalBrief: {
+            /** Id */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
         /** SimpleGoalBucket */
         SimpleGoalBucket: {
             /** Key */
@@ -36354,6 +36391,67 @@ export interface components {
             /** Metric */
             metric?: string | null;
         };
+        /** SimpleGoalSuggestion */
+        SimpleGoalSuggestion: {
+            /** Id */
+            id: string;
+            goal: components["schemas"]["SimpleGoalBrief"];
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome: string;
+            /** Why */
+            why: string;
+            /** Evidence */
+            evidence: components["schemas"]["SimpleEvidence"][];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "accepted" | "rejected";
+            /** Reason */
+            reason: string | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "auto" | "on_demand";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided By Name */
+            decided_by_name: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Change Id */
+            change_id: string | null;
+            /** Item Id */
+            item_id: string | null;
+            /** Looks Like */
+            looks_like: components["schemas"]["SimpleMatch"][];
+            flow: components["schemas"]["SimpleFlow"] | null;
+            /** Can Accept */
+            can_accept: boolean;
+            /** Can Reject */
+            can_reject: boolean;
+        };
+        /** SimpleGoalSuggestionGoal */
+        SimpleGoalSuggestionGoal: {
+            goal: components["schemas"]["SimpleGoalBrief"];
+            /** Pending */
+            pending: boolean;
+            /** Empty */
+            empty: boolean;
+        };
+        /** SimpleGoalSuggestionsOut */
+        SimpleGoalSuggestionsOut: {
+            /** Goals */
+            goals: components["schemas"]["SimpleGoalSuggestionGoal"][];
+            /** Suggestions */
+            suggestions: components["schemas"]["SimpleGoalSuggestion"][];
+        };
         /** SimpleGroup */
         SimpleGroup: {
             /** Key */
@@ -36384,6 +36482,29 @@ export interface components {
              * @enum {string}
              */
             source: "item" | "track";
+        };
+        /** SimpleMatch */
+        SimpleMatch: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "item" | "feature";
+            /** Id */
+            id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleMergedInto */
+        SimpleMergedInto: {
+            /** Id */
+            id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
         };
         /** SimpleMilestone */
         SimpleMilestone: {
@@ -36766,7 +36887,6 @@ export interface components {
              * @default []
              */
             looks_like: components["schemas"]["SimpleMatch"][];
-            /** S7: the item this draft was merged into. */
             merged_into?: components["schemas"]["SimpleMergedInto"] | null;
             /**
              * Drafting
@@ -36774,7 +36894,6 @@ export interface components {
              * @default false
              */
             drafting: boolean;
-            /** S7: a draft item's flow (null: no flow yet). */
             flow?: components["schemas"]["SimpleFlow"] | null;
             /**
              * Goal Ids
@@ -36782,133 +36901,6 @@ export interface components {
              * @default []
              */
             goal_ids: string[];
-        };
-        /** SimpleMatch */
-        SimpleMatch: {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "item" | "feature";
-            /** Id */
-            id: string;
-            /** Code */
-            code: string;
-            /** Title */
-            title: string;
-        };
-        /** SimpleMergedInto */
-        SimpleMergedInto: {
-            /** Id */
-            id: string;
-            /** Code */
-            code: string;
-            /** Title */
-            title: string;
-        };
-        /** SimpleGoalBrief */
-        SimpleGoalBrief: {
-            /** Id */
-            id: string;
-            /** Key */
-            key: string;
-            /** Title */
-            title: string;
-        };
-        /** SimpleEvidence */
-        SimpleEvidence: {
-            /** Label */
-            label: string;
-            /** Kind */
-            kind: string;
-            /** Ref */
-            ref: string | null;
-            /** Url */
-            url: string | null;
-            /**
-             * Confidence
-             * @enum {string}
-             */
-            confidence: "high" | "medium" | "low";
-        };
-        /** SimpleGoalSuggestion */
-        SimpleGoalSuggestion: {
-            /** Id */
-            id: string;
-            goal: components["schemas"]["SimpleGoalBrief"];
-            /** Title */
-            title: string;
-            /** Outcome */
-            outcome: string;
-            /** Why */
-            why: string;
-            /** Evidence */
-            evidence: components["schemas"]["SimpleEvidence"][];
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "open" | "accepted" | "rejected";
-            /** Reason */
-            reason: string | null;
-            /**
-             * Origin
-             * @enum {string}
-             */
-            origin: "auto" | "on_demand";
-            /** Created At */
-            created_at: string;
-            /** Decided By Name */
-            decided_by_name: string | null;
-            /** Decided At */
-            decided_at: string | null;
-            /** Change Id */
-            change_id: string | null;
-            /** Item Id */
-            item_id: string | null;
-            /** Looks Like */
-            looks_like: components["schemas"]["SimpleMatch"][];
-            flow: components["schemas"]["SimpleFlow"] | null;
-            /** Can Accept */
-            can_accept: boolean;
-            /** Can Reject */
-            can_reject: boolean;
-        };
-        /** SimpleGoalSuggestionGoal */
-        SimpleGoalSuggestionGoal: {
-            goal: components["schemas"]["SimpleGoalBrief"];
-            /** Pending */
-            pending: boolean;
-            /** Empty */
-            empty: boolean;
-        };
-        /** SimpleGoalSuggestionsOut */
-        SimpleGoalSuggestionsOut: {
-            /** Goals */
-            goals: components["schemas"]["SimpleGoalSuggestionGoal"][];
-            /** Suggestions */
-            suggestions: components["schemas"]["SimpleGoalSuggestion"][];
-        };
-        /** SimpleSuggestJobOut */
-        SimpleSuggestJobOut: {
-            /** Goal Id */
-            goal_id: string;
-            /** Pending */
-            pending: boolean;
-            /** Job Id */
-            job_id: string;
-        };
-        /** SimpleSuggestionAcceptIn */
-        SimpleSuggestionAcceptIn: {
-            /** Roadmap Id */
-            roadmap_id?: string | null;
-            /** Session Id */
-            session_id?: string | null;
-        };
-        /** SimpleSuggestionRejectIn */
-        SimpleSuggestionRejectIn: {
-            /** Reason */
-            reason?: string | null;
         };
         /** SimpleRoadmapOut */
         SimpleRoadmapOut: {
@@ -36975,6 +36967,27 @@ export interface components {
             last_change_at: string | null;
             /** Closed At */
             closed_at: string | null;
+        };
+        /** SimpleSuggestJobOut */
+        SimpleSuggestJobOut: {
+            /** Goal Id */
+            goal_id: string;
+            /** Pending */
+            pending: boolean;
+            /** Job Id */
+            job_id: string;
+        };
+        /** SimpleSuggestionAcceptIn */
+        SimpleSuggestionAcceptIn: {
+            /** Roadmap Id */
+            roadmap_id?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+        };
+        /** SimpleSuggestionRejectIn */
+        SimpleSuggestionRejectIn: {
+            /** Reason */
+            reason?: string | null;
         };
         /** SimpleTrackRef */
         SimpleTrackRef: {
@@ -66539,7 +66552,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["SimpleSuggestionAcceptIn"];
+                "application/json": components["schemas"]["SimpleSuggestionAcceptIn"] | null;
             };
         };
         responses: {
@@ -66574,7 +66587,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["SimpleSuggestionRejectIn"];
+                "application/json": components["schemas"]["SimpleSuggestionRejectIn"] | null;
             };
         };
         responses: {
