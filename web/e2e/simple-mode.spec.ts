@@ -241,8 +241,9 @@ test("a /simple link opens in Simple for an owner whose saved mode is Detailed",
   await expect(page.getByRole("heading", { level: 1, name: "One-pagers" })).toBeVisible();
   await page.getByRole("link", { name: "Checkout redesign PRD" }).click();
   await expectSimple(page, "/simple/one-pagers/checkout-redesign");
-  await expect(page.getByTestId("one-pager-placeholder")).toContainText("S5");
-  await page.getByRole("link", { name: "Open the detailed view", exact: true }).click();
+  // S5's one-pager is the page the list opens.
+  await expect(page.getByTestId("one-pager")).toBeVisible();
+  await page.getByTestId("one-pager").getByRole("link", { name: "Open the detailed view", exact: true }).first().click();
   await expectDetailed(page, "/documents/checkout-redesign");
 
   // The saved mode is still Detailed: the next landing is Detailed's Home.
@@ -353,7 +354,7 @@ test("phone: Simple's rail is a tab bar and a More drawer, every page fits 390 p
     await fits();
   }
   await page.goto("/simple/one-pagers/checkout-redesign");
-  await expect(page.getByTestId("one-pager-placeholder")).toBeVisible();
+  await expect(page.getByTestId("one-pager")).toBeVisible();
   await fits();
 
   // The switch lives in the More drawer on a phone, and works there.
