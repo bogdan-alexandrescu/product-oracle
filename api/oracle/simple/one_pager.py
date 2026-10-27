@@ -329,7 +329,8 @@ def _tidy(
 ) -> tuple[str, str | None]:
     """A stored line as it reads: comments out, cut at a word boundary (a line cut mid-word
     by an older build loses its broken word; one that is its source fact whole stays), and
-    its whole text when it is shortened (as stored, else its own source fact)."""
+    its whole text when it is shortened (as stored, else its own source fact, else its prose
+    sections' sentences)."""
     text = " ".join(_uncomment(text).split())
     own = _own_fact(text, sources)
     if len(text) >= LINE_MAX and not text.endswith("…") and own != text:
@@ -338,8 +339,16 @@ def _tidy(
     if not shown.endswith("…"):
         return shown, None
     whole = full or (cut if cut and not cut.endswith("…") else None) or own
+    # A prose section's line is its sentences; a bullet's or a row's is its own fact only.
+    whole = whole or " ".join(f for sec in sources if not _listed(sec) for f in _facts(sec))
     whole = whole[:FULL_MAX] if whole else None
     return shown, (whole if whole and whole != shown else None)
+
+
+def _listed(sec: Section) -> bool:
+    """Whether a section's facts are its bullets or table rows (one line each), not prose."""
+    rows, rest = _tables(_uncomment(sec.body_md or ""))
+    return bool(rows) or any(_BULLET.match(line) for line in rest)
 
 
 def _own_fact(text: str, sources: list[Section]) -> str | None:
