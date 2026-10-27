@@ -2,7 +2,7 @@
 
 Card: protects=roadmap_items' start_date, end_date, date_source (checked), accepted_risks
 ('[]') and draft (false) and the roadmap_date_suggestions table (one open suggestion per
-item) come and go with the revision, chained on 0075_live_tokens as the single head, and
+item) come and go with the revision, chained on 0076_board_wide_tables as the single head, and
 the downgrade takes the internal ``simple_date_suggestions`` setting with it;
 fails_when=a column, default, check or the open-suggestion index is missing, or the
 downgrade leaves any of them or touches other settings; no_claim=the routes' use
@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
 REVISION = "0077_simple_roadmap_dates"
-PREVIOUS = "0075_live_tokens"
+PREVIOUS = "0076_board_wide_tables"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_simple_dates")

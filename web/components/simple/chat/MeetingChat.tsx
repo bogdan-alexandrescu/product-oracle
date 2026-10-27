@@ -97,7 +97,7 @@ function ModeControl({ meetingId, rules, onSaved }: { meetingId: string; rules: 
   useEffect(() => {
     if (mode !== "named" || people.length) return;
     unwrap(api.GET("/v1/people", { params: { query: {} } }))
-      .then((rows) => setPeople(rows.filter((p) => p.user_id !== rules.presenter.id && p.role !== "viewer")))
+      .then((rows) => setPeople(rows.filter((p) => p.user_id !== rules.presenter.id)))
       .catch(() => setPeople([]));
   }, [mode, people.length, rules.presenter.id]);
 
