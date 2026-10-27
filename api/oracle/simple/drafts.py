@@ -288,6 +288,9 @@ def sees(principal: Any, d: SimpleDraft, w: Who) -> bool:
         return False
     if has_role(principal.role, "owner") or me == d.created_by or me in (d.participant_ids or []):
         return True
+    if me in (d.waiting_on or []):
+        # A section's reviewer it waits on (their Inbox request), #723 review.
+        return True
     doc = d.document_id
     return (
         me == w.deciders.get(doc)
@@ -699,7 +702,6 @@ async def outs(
     out = []
     for d in ds:
         doc = docs[d.document_id]
-        reviewer = me is not None and me in w.reviewers.get(d.document_id, [])
         out.append(
             SimpleDraftOut(
                 id=d.id,
@@ -722,7 +724,7 @@ async def outs(
                 and me is not None
                 and me in (d.created_by, w.deciders.get(d.document_id)),
                 can_approve=d.status == "submitted"
-                and (_approver_of(principal, d, w) or (reviewer and me in (d.waiting_on or []))),
+                and (_approver_of(principal, d, w) or me in (d.waiting_on or [])),
                 change_log=logs.get(d.id, []),
                 can_withdraw=d.status == "submitted"
                 and me is not None
@@ -1049,12 +1051,15 @@ async def _sections_approve(
     version: DocumentVersion,
     decider: Principal,
     present: list[uuid.UUID],
+    unassigned: bool = True,
 ) -> None:
     """The sections the review policy wants approved, with the decider's Approve (#723,
     production): a section with an assigned reviewer (its owner or reviewers) is approved
     by the one present (the decider if assigned), never over their heads; a section with
     nobody assigned (a PRD started from an empty skeleton) by the decider, as any approver
-    may in Studio. What stays unapproved is named by :func:`_blocker_words`."""
+    may in Studio (not with ``unassigned=False``: an absent section reviewer approving
+    their own later). An assigned one left unapproved waits on its people
+    (:func:`_section_people`); what else stays is named by :func:`_blocker_words`."""
     from oracle.review.service import review_section
     from oracle.review.state import section_states
 
@@ -1064,6 +1069,8 @@ async def _sections_approve(
             continue
         assigned = [i for i in dict.fromkeys([s.owner_id, *s.reviewer_ids]) if i is not None]
         if not assigned:
+            if not unassigned:
+                continue
             by = decider
         elif decider.user_id in assigned:
             by = decider
@@ -1088,57 +1095,58 @@ async def _sections_approve(
 
 
 def _people(names: list[str]) -> str:
+    """ "Rae", "Rae and Sam", "Rae, Sam and Tom"."""
     return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
 
 
+def _assigned(s: Any) -> list[uuid.UUID]:
+    return [i for i in dict.fromkeys([s.owner_id, *s.reviewer_ids]) if i is not None] if s else []
+
+
+def _section_people(blockers: list, states: Any) -> list[uuid.UUID]:
+    """The people assigned to the required sections still unapproved: the draft waits on
+    them as on its required reviewers (an Inbox request each; their approve approves their
+    sections), #723 review."""
+    by_key = {s.section_key: s for s in states.sections}
+    return list(
+        dict.fromkeys(
+            i
+            for b in blockers
+            if b.code == "missing_approval"
+            for k in b.section_keys or []
+            for i in _assigned(by_key.get(k))
+        )
+    )
+
+
 async def _blocker_words(db: AsyncSession, blockers: list, states: Any) -> list[str]:
-    """The review policy's blockers in a person's words: a section that still needs an
-    approval names its reviewers ("Sections Scope need Rae's approval") or says it has
-    none ("Sections Scope need a reviewer"); others keep the policy's message."""
+    """The review policy's blockers in a person's words: a required section that still
+    needs an approval and has nobody assigned says so ("Sections Scope need a reviewer");
+    one with people assigned is in ``waiting_on`` (:func:`_section_people`) and not
+    repeated; others keep the policy's message."""
     by_key = {s.section_key: s for s in states.sections}
     out = []
     for b in blockers:
         if b.code != "missing_approval":
             out.append(b.message)
             continue
-        groups: dict[tuple, list[str]] = {}
-        for k in b.section_keys or []:
-            s = by_key.get(k)
-            who_ids = (
-                tuple(i for i in dict.fromkeys([s.owner_id, *s.reviewer_ids]) if i is not None)
-                if s
-                else ()
-            )
-            groups.setdefault(who_ids, []).append(s.heading if s else k)
-        ids = {i for g in groups for i in g}
-        names = (
-            dict((await db.execute(select(User.id, User.name).where(User.id.in_(ids)))).all())
-            if ids
-            else {}
-        )
-        for who_ids, headings in groups.items():
-            what = ", ".join(headings)
-            if not who_ids:
-                out.append(f"Sections {what} need a reviewer")
-            else:
-                people = _people([names.get(i) or "someone" for i in who_ids])
-                out.append(f"Sections {what} need {people}'s approval")
+        headings = [
+            by_key[k].heading if k in by_key else k
+            for k in b.section_keys or []
+            if not _assigned(by_key.get(k))
+        ]
+        if headings:
+            out.append(f"Sections {', '.join(headings)} need a reviewer")
     return out
 
 
-async def holds(db: AsyncSession, d: SimpleDraft) -> list[str]:
-    """What, besides its required reviewers (``waiting_on``), holds a submitted draft's
-    version back, in :func:`_blocker_words`' words (a meeting's banner reads it)."""
-    from oracle.review.publish import review_problems
-    from oracle.review.state import section_states
-
-    if d.status != "submitted" or d.version_id is None:
+def held(d: SimpleDraft) -> list[str]:
+    """What, besides the people it waits on, held the draft's version back when it was
+    last settled (:func:`_settle` keeps it with the decider's approval), so a meeting's
+    5 s poll and the one-pager read it without the review policy's checks."""
+    if d.status != "submitted" or d.decider_approval is None:
         return []
-    document = await db.get(Document, d.document_id)
-    version = await db.get(DocumentVersion, d.version_id)
-    states = await section_states(db, document, version)
-    blockers, _, _, _ = await review_problems(db, document, version, states)
-    return await _blocker_words(db, [b for b in blockers if b.code not in APPROVAL_CODES], states)
+    return list(d.decider_approval.get("held") or [])
 
 
 async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> list[str]:
@@ -1157,9 +1165,16 @@ async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> lis
     states = await section_states(db, document, version)
     blockers, _, _, _ = await review_problems(db, document, version, states)
     d.waiting_on = list(
-        dict.fromkeys(i for b in blockers if b.code == "mandatory_reviewer_pending" for i in b.ids)
+        dict.fromkeys(
+            [
+                *(i for b in blockers if b.code == "mandatory_reviewer_pending" for i in b.ids),
+                *_section_people(blockers, states),
+            ]
+        )
     )
     other = await _blocker_words(db, [b for b in blockers if b.code not in APPROVAL_CODES], states)
+    if d.decider_approval is not None:
+        d.decider_approval = {**d.decider_approval, "held": other}
     if d.decider_approval is not None and not d.waiting_on and not other:
         dp = await principal_for(db, tenant_id, uuid.UUID(d.decider_approval["by"]))
         await _review_error(approve_version(db, dp, document.slug, version.number))
@@ -1197,12 +1212,19 @@ async def _approve(
     version = await db.get(DocumentVersion, d.version_id)
     reviewers = w.reviewers.get(d.document_id, [])
     is_approver = _approver_of(actor, d, w)
-    if not is_approver and actor.user_id not in reviewers:
+    waited_on = actor.user_id in (d.waiting_on or [])
+    if not is_approver and actor.user_id not in reviewers and not waited_on:
         raise DraftError(403, "Only the decider and the required reviewers approve this draft")
     for r in dict.fromkeys([*([actor.user_id] if actor.user_id in reviewers else []), *present]):
         if r in reviewers:
             rp = actor if r == actor.user_id else await principal_for(db, tenant_id, r)
             await _reviewer_approves(db, rp, document, version)
+    if waited_on and not is_approver and actor.user_id not in reviewers:
+        # An absent section reviewer approves their sections (#723 review).
+        await _sections_approve(db, tenant_id, document, version, actor, [], unassigned=False)
+        if d.status != "submitted":
+            # Their approval settled it (on_section_verdict).
+            return []
     if is_approver:
         await _sections_approve(db, tenant_id, document, version, actor, present)
         d.decider_approval = {
@@ -1333,7 +1355,7 @@ async def withdraw(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) 
 
 
 async def on_version_approved(db: AsyncSession, principal: Any, version: DocumentVersion) -> None:
-    """``approve_version`` approved a roadmap version: the Simple draft it came from is
+    """``approve_version`` approved a roadmap's or a PRD's version: the Simple draft it came from is
     approved too (the ordinary approval path settles it, S3b-1), and its key dates are
     published."""
     from oracle.simple import key_dates

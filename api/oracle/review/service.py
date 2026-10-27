@@ -759,9 +759,9 @@ async def review_section(
         session, await session.get(Document, version.document_id), principal, version.number
     )
     await session.flush()
-    if document is not None and document.kind == "roadmap":
-        # #730 review: a verdict on a version submitted from a Simple draft settles it or
-        # returns it to working.
+    if document is not None:
+        # #730 review: a verdict on a version submitted from a Simple draft (a roadmap's,
+        # or a PRD's from its one-pager, #723 review) settles it or returns it to working.
         from oracle.simple import drafts as simple_drafts
 
         await simple_drafts.on_section_verdict(session, principal, version, verdict)
@@ -1187,15 +1187,17 @@ async def approve_version(
         from oracle.launches import service as launches_service
 
         await launches_service.plan_roadmap(session, version, actor=principal, owner_id=who)
-        # #730 review: approving it here settles the Simple draft it came from.
-        from oracle.simple import drafts as simple_drafts
-
-        await simple_drafts.on_version_approved(session, principal, version)
         if not already:
             # H3: the first approval records each item's prediction against its goal.
             from oracle.quality import capture
 
             await capture.predictions_for_roadmap(session, principal, version, owner_id=who)
+    if document.kind in ("roadmap", "prd"):
+        # #730 review: approving it here settles the Simple draft it came from (a PRD's
+        # from its one-pager too, #723 review).
+        from oracle.simple import drafts as simple_drafts
+
+        await simple_drafts.on_version_approved(session, principal, version)
     if document.kind in ("strategy", "vision", "roadmap") and (
         not already or previous_approver != who
     ):

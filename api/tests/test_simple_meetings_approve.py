@@ -31,7 +31,7 @@ Test cards (protects / fails_when / no_claim):
   no_claim=a rejection in Studio.
 - test_live_poll_reads_holds_without_recomputing: protects=the meeting's read (polled
   every 5 s) shows what the decider's Approve recorded as holding a draft, without the
-  review policy's checks; fails_when=it runs drafts.holds per read; no_claim=Studio
+  review policy's checks; fails_when=it words the policy's blockers per read; no_claim=Studio
   edits after the Approve.
 - test_published_words_match_the_banner: protects=the recorded decision words a held
   draft as the meeting's banner does ("Waiting on", " · "); fails_when=they differ.
@@ -201,7 +201,7 @@ async def test_live_poll_reads_holds_without_recomputing(client, monkeypatch):
     async def boom(*a, **k):
         raise AssertionError("the meeting's read recomputed the draft's holds")
 
-    monkeypatch.setattr(drafts, "holds", boom)
+    monkeypatch.setattr(drafts, "_blocker_words", boom)
     r = await client.get(f"{MEETINGS}/{m['id']}", headers=ctx.as_("decider"))
     assert r.status_code == 200, r.text
     d = next(d for d in r.json()["drafts"] if d["status"] == "submitted")

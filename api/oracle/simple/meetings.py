@@ -630,17 +630,16 @@ async def comment(
 
 def published_words(d: Any, names: dict[uuid.UUID, str]) -> str:
     """ "published" only when the draft's version really is (#723, production); else what
-    still holds it: "not yet published: waiting on Rae's approval; Sections Scope need a
-    reviewer"."""
+    still holds it, in the meeting banner's words: "not yet published: Waiting on Rae's
+    approval · Sections Scope need a reviewer"."""
     if d.status == "approved":
         return "published"
     why = []
     if d.waiting_on:
-        people = [names.get(i, "someone") for i in d.waiting_on]
-        who = people[0] if len(people) == 1 else ", ".join(people[:-1]) + " and " + people[-1]
-        why.append(f"waiting on {who}'s approval")
+        who = drafts._people([names.get(i, "someone") for i in d.waiting_on])
+        why.append(f"Waiting on {who}'s approval")
     why += list(d.blocked_by or [])
-    return "not yet published: " + ("; ".join(why) or "its review is not complete")
+    return "not yet published: " + (" · ".join(why) or "its review is not complete")
 
 
 async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
@@ -885,13 +884,13 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
 
 async def _draft_outs(db: AsyncSession, principal: Any, ds: list) -> list:
     """The meeting's drafts; one its decider approved that has not published names what
-    still holds it (``blocked_by``), so the banner never says "published" for it."""
+    still holds it (``blocked_by``, as last settled: drafts.held), so the banner never
+    says "published" for it."""
     if not ds:
         return []
     out = await drafts.outs(db, principal, ds)
     for o, d in zip(out, ds, strict=True):
-        if o.status == "submitted" and o.decider_approved:
-            o.blocked_by = await drafts.holds(db, d)
+        o.blocked_by = drafts.held(d)
     return out
 
 
