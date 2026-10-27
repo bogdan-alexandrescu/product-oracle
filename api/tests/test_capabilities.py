@@ -384,6 +384,50 @@ async def test_an_approver_is_told_the_owner_starts_strategy_drafts(client):
     assert resp.status_code == 403, resp.text
 
 
+# Train U review: each Simple route's lowest role its handler never refuses (u-followups 1).
+SIMPLE_PER_ITEM = {
+    # Remind: the PRD's owners (a company owner always) and its decider (oracle.simple.one_pager).
+    "remind_simple_one_pager_reviewers": "owner",
+    # S10: who changes the subject directly (an owner always); any commenter who reads it.
+    "request_simple_visual": "owner",
+    "revise_simple_visual": "owner",
+    "comment_simple_visual": "commenter",
+    # S9: the Ask panel is every person's own thread; a meeting's is its attendees'.
+    "get_simple_chat": "viewer",
+    "post_simple_chat": "viewer",
+    "get_simple_meeting_chat": None,
+    "post_simple_meeting_chat": None,
+    "set_simple_meeting_chat_mode": None,
+    "apply_simple_chat_card": None,
+    "discard_simple_chat_card": None,
+    "undo_simple_chat_card": None,
+    # S7 suggestions.
+    "suggest_goal_features": "commenter",
+    "accept_goal_suggestion": "commenter",
+    "reject_goal_suggestion": "approver",
+    # S8 meetings: an owner, or the PRD's decider / the presenter.
+    "start_simple_meeting": "owner",
+    "approve_in_simple_meeting": "owner",
+    # The presenter alone sets the change mode; attendees (or whom the mode lets change) comment.
+    "set_simple_meeting_rules": None,
+    "comment_in_simple_meeting": None,
+    "end_simple_meeting": "owner",
+    "edit_simple_meeting_minutes": "owner",
+    "send_simple_meeting_minutes": "owner",
+}
+
+
+def test_simple_per_item_names_the_lowest_role_the_handler_accepts():
+    """protects=PER_ITEM says, for each Simple route train U added, the lowest role its
+    handler never refuses, so can() does not hide Remind, a visual's request, revise or
+    comment, or the Ask-panel chat from people the API lets in; fails_when=an entry is
+    stricter (None: only the item decides) or looser than the handler; no_claim=routes
+    outside Simple (the tests above)."""
+    import oracle.capabilities as caps
+
+    assert {op: caps.PER_ITEM.get(op, "missing") for op in SIMPLE_PER_ITEM} == SIMPLE_PER_ITEM
+
+
 def test_per_item_keys_are_in_alphabetical_order():
     """protects=PER_ITEM reads as a sorted list (#504 review); fails_when=a key is added out
     of order; no_claim=the roles it names (the tests above)."""

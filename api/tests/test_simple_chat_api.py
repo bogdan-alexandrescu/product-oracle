@@ -69,6 +69,16 @@ Test cards (protects / fails_when / no_claim):
   them; a broken link's card applies a one-click fix and undoes; a commenter has no broken
   links to fix; fails_when=the order differs, or a step is someone else's;
   no_claim=progress and Done (web spec).
+- test_meeting_apply_with_a_meeting_error_at_decision_writes_nothing (u-followups 4):
+  protects=when recording an Apply's meeting decision raises a MeetingError (faked here:
+  the refusal a change mode makes) the answer is that HTTP error and neither the change nor
+  the card's Apply is kept; fails_when=the change commits before its meeting decision, or
+  the MeetingError is a 500; no_claim=which refusals S8 makes, or a real change mode
+  refusing the caller (S8's own tests).
+- test_meeting_apply_with_a_failing_decision_write_writes_nothing (u-followups 4):
+  protects=a decision write that fails rolls the change back with it (one commit, as
+  changes_router's S8 path); fails_when=a change is left with no meeting decision;
+  no_claim=the error's status (an unexpected failure is a 500).
 """
 
 import sys
@@ -89,7 +99,8 @@ from oracle.requests.models import ProductRequest
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts
-from oracle.simple.models import SimpleChange
+from oracle.simple.meetings import MeetingError
+from oracle.simple.models import SimpleChange, SimpleChatCard
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
 from tests.test_simple_roadmap_api import NOW, Seed
@@ -542,6 +553,47 @@ async def test_meeting_fix_is_a_decision_titled_with_the_fix(client, meetings):
                           headers=ctx.as_("owner"))  # fmt: skip
     assert r.status_code == 200, r.text
     assert meetings.decisions[-1]["title"] == label
+
+
+async def _card_status(ctx: Ctx, card_id: str) -> str:
+    async with tenant_session(ctx.tenant_id) as s:
+        return (await s.get(SimpleChatCard, uuid.UUID(card_id))).status
+
+
+async def test_meeting_apply_with_a_meeting_error_at_decision_writes_nothing(client, meetings):
+    ctx = await make_people()
+    w = await World(ctx).build()
+    mid = _meeting(ctx, meetings, "everyone")
+    card = (await say(client, ctx, "owner", "move Ledger v2 to Q2", mid))["cards"][0]
+
+    async def refuse(db, principal, meeting_id, title, subjects, change_ids):
+        raise MeetingError(403, "The presenter has not let you change things in this meeting")
+
+    meetings.module.MeetingError = MeetingError  # type: ignore[attr-defined]
+    meetings.module.record_meeting_decision = refuse  # type: ignore[attr-defined]
+    r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 403, r.text
+    assert "presenter" in r.json()["detail"]
+    assert await n_changes(ctx) == 0
+    assert (await w.item("Ledger v2")).start_date == date(2026, 10, 1)
+    assert await _card_status(ctx, card["id"]) == "open"
+
+
+async def test_meeting_apply_with_a_failing_decision_write_writes_nothing(client, meetings):
+    ctx = await make_people()
+    w = await World(ctx).build()
+    mid = _meeting(ctx, meetings, "everyone")
+    card = (await say(client, ctx, "owner", "move Ledger v2 to Q2", mid))["cards"][0]
+
+    async def fail(db, principal, meeting_id, title, subjects, change_ids):
+        raise RuntimeError("the decisions table refused the row")
+
+    meetings.module.record_meeting_decision = fail  # type: ignore[attr-defined]
+    with pytest.raises(RuntimeError):
+        await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("owner"))
+    assert await n_changes(ctx) == 0
+    assert (await w.item("Ledger v2")).start_date == date(2026, 10, 1)
+    assert await _card_status(ctx, card["id"]) == "open"
 
 
 async def _proposed_decisions(ctx: Ctx, *titles: str) -> list[Decision]:

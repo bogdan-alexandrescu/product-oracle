@@ -203,7 +203,7 @@ function metricOf(text: string): Line["metric"] {
 }
 
 function write(db: OnePagerDb, ctx: OnePagerCtx, lineId: string, values: Record<string, unknown>) {
-  db.draft ??= { id: stableUuid(`simple-one-pager-draft-${mockNowMs()}`), base: db.version, participants: [], lines: {}, sections: {} };
+  db.draft ??= { id: stableUuid(`simple-one-pager-draft-${db.doc.id}-${mockNowMs()}`), base: db.version, participants: [], lines: {}, sections: {} };
   if (!db.draft.participants.includes(ctx.id)) db.draft.participants.push(ctx.id);
   const line = String(values.line);
   if (line === seedLine(db, lineId)?.text) delete db.draft.lines[lineId];
@@ -365,7 +365,7 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     const after = { line: next, sections: Object.fromEntries(keys.map((k, i) => [k, { heading: heads[k], body: patched[i]! }])) };
     const applies = decides(ctx);
     const c = {
-      id: stableUuid(`op-change-${db.changes.length}-${mockNowMs()}`), session_id: applies ? stableUuid(`op-session-${ctx.id}`) : null,
+      id: stableUuid(`op-change-${db.doc.id}-${db.changes.length}-${mockNowMs()}`), session_id: applies ? stableUuid(`op-session-${ctx.id}`) : null,
       document_id: db.doc.id, draft_ids: [] as string[], op: "edit_line" as const,
       target: { document_id: db.doc.id, line_id: lineId, version: db.version }, before, after,
       status: (applies ? "applied" : "proposed") as Change["status"], by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone",
