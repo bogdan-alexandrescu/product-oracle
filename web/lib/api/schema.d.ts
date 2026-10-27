@@ -29415,6 +29415,11 @@ export interface components {
             can_remind: boolean;
             /** Approved In */
             approved_in?: string | null;
+            /**
+             * Blocked By
+             * @default []
+             */
+            blocked_by: string[];
         };
         /**
          * OnePagerFlow

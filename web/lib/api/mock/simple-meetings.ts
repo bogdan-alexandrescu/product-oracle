@@ -24,8 +24,10 @@
  * "no-reviewers": Guided setup has no required reviewer (a PRD started from an empty skeleton).
  * Approve publishes only when nothing holds it: an absent required reviewer, or (with
  * "section-reviewer") the commenter named as the reviewer of Guided setup's required section
- * "What we will build" and absent; the decision then reads "not yet published: …" and the
- * draft's blocked_by names the section and the person (drafts.holds).
+ * "What we will build" and absent, whom the draft then waits on too (drafts._section_people);
+ * with "section-needs-reviewer" that section has nobody who may approve it and the draft's
+ * blocked_by says so (drafts.held). The decision then reads "not yet published: …" in the
+ * banner's words.
  *
  * Each decided flow is linked (meetings.decided_flows): a meeting decision on a draft item
  * names it with its flow, S10's (the priorities mock's bundles); "flow" in MOCK_MEETINGS_KEY
@@ -736,14 +738,15 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const present = m.attendee_ids.filter((i) => !m.absent_ids.includes(i));
     const waiting = prd.reviewers.filter((i) => i !== ctx.me.id && !present.includes(i));
     // "section-reviewer": Guided setup's required section "What we will build" names the
-    // commenter as its reviewer; absent, it is not approved over their head (drafts._sections_approve).
+    // commenter as its reviewer; absent, it is not approved over their head and the draft
+    // waits on them (drafts._sections_approve, drafts._section_people).
     const sectionReviewer = flags().includes("section-reviewer") ? ctx.members.find((x) => x.email === "commenter@example.com") : undefined;
-    const blocked = sectionReviewer && !present.includes(sectionReviewer.id) && sectionReviewer.id !== ctx.me.id
-      ? [`Sections What we will build need ${sectionReviewer.name}'s approval`] : [];
+    if (sectionReviewer && !present.includes(sectionReviewer.id) && sectionReviewer.id !== ctx.me.id && !waiting.includes(sectionReviewer.id)) waiting.push(sectionReviewer.id);
+    const blocked = flags().includes("section-needs-reviewer") ? ["Sections What we will build need a reviewer"] : [];
     m.approved = { at: now, waiting_on: waiting, blocked_by: blocked };
-    const why = [...(waiting.length ? [`waiting on ${people(waiting.map((i) => nameOf(ctx, i)))}'s approval`] : []), ...blocked];
-    record(db, ctx, m, `Approved ${prd.title} (${why.length ? `not yet published: ${why.join("; ")}` : "published"})`, [{ kind: "document", id: prd.id }], []);
-    if (prd.slug === ctx.onePager.doc.slug && why.length) ctx.onePager.approval = { approved_in: m.title, waiting_on: waiting.map((i) => ref(ctx, i)) };
+    const why = [...(waiting.length ? [`Waiting on ${people(waiting.map((i) => nameOf(ctx, i)))}'s approval`] : []), ...blocked];
+    record(db, ctx, m, `Approved ${prd.title} (${why.length ? `not yet published: ${why.join(" · ")}` : "published"})`, [{ kind: "document", id: prd.id }], []);
+    if (prd.slug === ctx.onePager.doc.slug && why.length) ctx.onePager.approval = { approved_in: m.title, waiting_on: waiting.map((i) => ref(ctx, i)), blocked_by: blocked };
     else if (prd.slug === ctx.onePager.doc.slug) publishOnePager(ctx.onePager);
     return ok();
   }

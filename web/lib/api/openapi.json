@@ -90143,6 +90143,14 @@
               }
             ],
             "title": "Approved In"
+          },
+          "blocked_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocked By",
+            "default": []
           }
         },
         "type": "object",
