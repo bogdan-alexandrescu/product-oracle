@@ -150,7 +150,9 @@ verdict on the same section supersedes the earlier item.
 | `POST .../versions/{n}/approve` | approve version; document -> `approved` |
 | `GET .../versions/{n}/export?format=html\|pdf\|md\|pptx&layer=full\|brief\|deck` | export with version banner: Full (html, pdf, md), Brief (html, pdf), Deck (pdf, pptx) |
 | `GET .../versions/{n}/deck` | the brief as slides for Present mode (theme CSS, notes, expandable detail) |
-| `GET /v1/me/preferences`, `PATCH /v1/me/preferences` | per-user choices: `document_view` (`brief`/`full`), `experience` (`simple`/`detailed`, #723: the mode the person last switched to; unset, they land in `GET /v1/me/capabilities` `default_experience`: Simple for viewers and commenters, Detailed for approvers and owners) |
+| `GET /v1/me/preferences`, `PATCH /v1/me/preferences` | per-user choices: `document_view` (`brief`/`full`), `experience` (`simple`/`detailed`, #723: the mode the person last switched to; unset, they land in `GET /v1/me/capabilities` `default_experience`: Simple for viewers and commenters, Detailed for approvers and owners); `priorities_line` (roadmap-plus: where Simple's priorities draw the line: `now`, `key_date:<id>`, `milestone:<id>` or `date:<YYYY-MM-DD>`; unset, this quarter) |
+| `GET /v1/simple/roadmap` (key dates), `POST /v1/simple/changes` (`add_key_date`, `edit_key_date`, `remove_key_date`) | roadmap-plus (#723, behind `ORACLE_SIMPLE_MODE`): each roadmap's key dates (name, day, optional note) in `key_dates`, the working draft's to who sees it, with `key_date_roadmaps` saying whose change applies; owners and the decider apply into the roadmap's working draft (published when it is approved), approvers and commenters propose, viewers read |
+| `GET /v1/simple/priorities?line=` | roadmap-plus: the line on priorities (`now` by default, a key date, a dated milestone or a day); `line`, `lines` and each row's `end_date` |
 | `GET /healthz` | liveness + DB check |
 
 Agent track uses `Authorization: Bearer <api token>`; the UI uses the session cookie.
