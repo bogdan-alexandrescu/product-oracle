@@ -87762,6 +87762,14 @@
             "type": "array",
             "title": "Timeline"
           },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/OnePagerSource"
+            },
+            "type": "array",
+            "title": "Sections",
+            "default": []
+          },
           "notes": {
             "items": {
               "$ref": "#/components/schemas/OnePagerNote"
@@ -87840,6 +87848,30 @@
           "after"
         ],
         "title": "OnePagerSectionPatch"
+      },
+      "OnePagerSource": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "heading": {
+            "type": "string",
+            "title": "Heading"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "heading",
+          "body"
+        ],
+        "title": "OnePagerSource",
+        "description": "A source section of the page's lines, as the reader reads it (the drill-down)."
       },
       "OracleAsker": {
         "properties": {

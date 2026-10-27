@@ -445,7 +445,10 @@ async def test_job_answer_never_moves_a_drafted_line(client):
 
 
 def test_patch_replaces_the_source_fact_or_refuses():
-    body = "- A setup checklist that shows the next step\n- Invite suggestions from the admin's calendar\n"
+    body = (
+        "- A setup checklist that shows the next step\n"
+        "- Invite suggestions from the admin's calendar\n"
+    )
     # A paraphrased line (the job's wording) replaces the bullet it rests on.
     out = one_pager.patch(body, "Checklist showing the next setup step", "A guided tour")
     assert out == "- A guided tour\n- Invite suggestions from the admin's calendar\n"

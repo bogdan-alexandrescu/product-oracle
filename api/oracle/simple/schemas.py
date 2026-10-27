@@ -501,6 +501,14 @@ class OnePagerDraft(BaseModel):
     can_submit: bool
 
 
+class OnePagerSource(BaseModel):
+    """A source section of the page's lines, as the reader reads it (the drill-down)."""
+
+    key: str
+    heading: str
+    body: str
+
+
 class OnePagerOut(BaseModel):
     document: SimpleDocRef
     version: int
@@ -515,6 +523,7 @@ class OnePagerOut(BaseModel):
     blocks: list[OnePagerBlock]
     # The timeline strip: the PRD's slice of the Simple roadmap (the span is its ends).
     timeline: list[OnePagerItem]
+    sections: list[OnePagerSource] = []
     notes: list[OnePagerNote]
     draft: OnePagerDraft | None
     # Drafts and proposals the reader may not see (the count only).

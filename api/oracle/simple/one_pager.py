@@ -55,6 +55,7 @@ from oracle.simple.schemas import (
     OnePagerNote,
     OnePagerOut,
     OnePagerSectionPatch,
+    OnePagerSource,
     SimpleChangeConflict,
     SimpleChangeIn,
     SimpleChangeResult,
@@ -424,9 +425,15 @@ class Built:
     row: SimpleOnePager
 
 
-async def built(db: AsyncSession, document: Document, *, queue: bool = True) -> Built:
+async def built(
+    db: AsyncSession, document: Document, *, queue: bool = True, persist: bool = True
+) -> Built:
     """The cached one-pager of the published version and its mapped sections; built now
-    (Oracle's quick read) and the ``one_pager`` job queued when the hash is new."""
+    (Oracle's quick read) and the ``one_pager`` job queued when the hash is new. With
+    ``persist`` false (a viewer's read) a new quick read stays in memory: nothing is
+    written. Two first reads of a version insert one row: the second reads the first's."""
+    from sqlalchemy.exc import IntegrityError
+
     from oracle.jobs import service as jobs
 
     v = await published(db, document)
@@ -448,8 +455,20 @@ async def built(db: AsyncSession, document: Document, *, queue: bool = True) -> 
             built_by="extract",
             built_at=company_time.now(),
         )
-        db.add(row)
-        await db.flush()
+        if not persist:
+            return Built(document, v, specs, secs, row)
+        try:
+            async with db.begin_nested():
+                db.add(row)
+                await db.flush()
+        except IntegrityError:
+            row = await db.scalar(
+                select(SimpleOnePager).where(
+                    SimpleOnePager.version_id == v.id, SimpleOnePager.sections_hash == h
+                )
+            )
+            assert row is not None
+            return Built(document, v, specs, secs, row)
         if queue and any(mapped.values()):
             try:
                 job = await jobs.enqueue(
@@ -497,6 +516,10 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     blocks = clean_answer(answer, specs, mapped)
     if blocks is None:
         return {"built": False, "reason": "the answer missed a block's lines or section keys"}
+    if await _lines_in_use(s, document):
+        # Line ids are positions: replacing the lines under an open draft or proposal would
+        # move its edit onto another line. The next version (a new hash) gets the answer.
+        return {"built": False, "reason": "a working draft or a proposal holds this page's lines"}
     row = await s.scalar(
         select(SimpleOnePager).where(
             SimpleOnePager.version_id == v.id, SimpleOnePager.sections_hash == h
@@ -509,6 +532,24 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     row.built_at = company_time.now()
     await s.flush()
     return {"built": True, "sections_hash": h}
+
+
+async def _lines_in_use(db: AsyncSession, document: Document) -> bool:
+    """An open draft or an open proposal of the PRD names the cached page's line ids."""
+    if await _open_draft(db, document) is not None:
+        return True
+    return (
+        await db.scalar(
+            select(SimpleChange.id)
+            .where(
+                SimpleChange.document_id == document.id,
+                SimpleChange.op == "edit_line",
+                SimpleChange.status == "proposed",
+            )
+            .limit(1)
+        )
+        is not None
+    )
 
 
 # --------------------------------------------------------------------------- who
@@ -625,17 +666,67 @@ def _section_body(b: Built, d: SimpleDraft | None, key: str) -> tuple[str, str] 
     return sec.heading, patched.get(key, sec.body_md)
 
 
-def patch(body: str, old: str, new: str) -> str:
-    """The section with the line's new words: the old line's words replaced where the
-    section holds them (a bullet, a sentence), else the new line added as a bullet."""
-    if old and old.rstrip("…") in body:
-        return body.replace(old.rstrip("…"), new, 1)
-    for line in body.splitlines():
-        m = _BULLET.match(line)
-        if m and _plain(m.group(1)) == old:
-            return body.replace(m.group(1), new, 1)
-    sep = "" if body.endswith("\n") or not body else "\n"
-    return f"{body}{sep}\n- {new}\n"
+def _spans(body: str) -> tuple[list[str], bool]:
+    """A section's facts as written: its bullets' text, else its sentences."""
+    bullets = [m.group(1) for line in body.splitlines() if (m := _BULLET.match(line))]
+    if bullets:
+        return bullets, True
+    return [x.strip() for x in _SENTENCE.split(body.strip()) if x.strip()], False
+
+
+def _stems(text: str) -> set[str]:
+    return {w[:4] for w in re.findall(r"[\w%]+", text.casefold()) if len(w) > 2}
+
+
+def _hits(spans: list[str], old: str) -> list[str]:
+    """The facts a line says: those its words hold (a quick read's line, the concatenated
+    Problem, a truncated line), else the one fact a paraphrase (the job's wording) rests on."""
+    o = _plain(old).rstrip("…").strip()
+    if not o:
+        return []
+    exact = [r for r in spans if (p := _plain(r)) and (p in o or (o in p and len(o.split()) > 2))]
+    if exact:
+        return exact
+    line = _stems(o)
+    scored = [(len(_stems(r) & line) / max(len(_stems(r)), 1), r) for r in spans]
+    best = max(scored, default=(0.0, ""))
+    return [best[1]] if best[0] >= 0.6 else []
+
+
+def _drop(body: str, raw: str, bullets: bool) -> str:
+    if bullets:
+        pat = r"^[ \t]*(?:[-*+]|\d+[.)])[ \t]+" + re.escape(raw) + r"[ \t]*(?:\n|$)"
+        return re.sub(pat, "", body, count=1, flags=re.M)
+    return re.sub(re.escape(raw) + r"[ \t]*", "", body, count=1)
+
+
+def patch(body: str, old: str, new: str, *, first: bool = True) -> str | None:
+    """The section with the line's new words: the fact(s) the old line says replaced by
+    the new line (``first``), or dropped (a later section of a line resting on several,
+    which the new words now speak for). None when the section holds nothing the line says:
+    the edit is refused rather than a new claim added beside the old one."""
+    spans, bullets = _spans(body)
+    hits = _hits(spans, old)
+    if not hits:
+        stripped = old.rstrip("…").strip()
+        if not stripped or stripped not in body:
+            return None
+        return body.replace(stripped, new, 1) if first else body.replace(stripped, "", 1)
+    out = body
+    for i, raw in enumerate(hits):
+        out = out.replace(raw, new, 1) if first and i == 0 else _drop(out, raw, bullets)
+    return out
+
+
+def patch_all(bodies: dict[str, str], old: str, new: str) -> dict[str, str] | None:
+    """Every source section of a line patched (see :func:`patch`), or None."""
+    out: dict[str, str] = {}
+    for i, (k, body) in enumerate(bodies.items()):
+        got = patch(body, old, new, first=i == 0)
+        if got is None:
+            return None
+        out[k] = got
+    return out
 
 
 # --------------------------------------------------------------------------- the read
@@ -645,8 +736,11 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     from oracle.simple import service
 
     document = await _document(db, principal, doc)
-    b = await built(db, document)
-    await db.commit()
+    # A viewer's read writes nothing (the page is built in memory until a writer reads it).
+    writer = _me(principal) is not None and has_role(principal.role, "commenter")
+    b = await built(db, document, persist=writer)
+    if writer:
+        await db.commit()
     w = await who(db, document)
     d = await _open_draft(db, document)
     me = _me(principal)
@@ -726,14 +820,16 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         lines = []
         for line in raw["lines"]:
             edited = line["id"] in line_text
+            text = line_text.get(line["id"], line["text"])
+            metric = OnePagerMetric.model_validate(line["metric"]) if line.get("metric") else None
+            if edited and spec.kind == "metrics":
+                metric = metric_of(text)  # the edited words' numbers, never the published
             lines.append(
                 OnePagerLine(
                     id=line["id"],
-                    text=line_text.get(line["id"], line["text"]),
+                    text=text,
                     source_keys=line["source_keys"],
-                    metric=OnePagerMetric.model_validate(line["metric"])
-                    if line.get("metric")
-                    else None,
+                    metric=metric,
                     state="edited"
                     if edited
                     else "proposal"
@@ -780,6 +876,15 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             ],
             can_submit=d.status == "working" and decides(principal, w),
         )
+    patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
+    used = {k for blk in b.row.blocks for x in blk["lines"] for k in x["source_keys"]}
+    sources = [
+        OnePagerSource(
+            key=x.section_key, heading=x.heading, body=patched.get(x.section_key, x.body_md)
+        )  # fmt: skip
+        for x in b.sections
+        if x.section_key in used
+    ]
     person = lambda i: SimplePersonRef(id=i, name=names.get(i, "someone")) if i else None  # noqa: E731
     return OnePagerOut(
         document=SimpleDocRef(id=document.id, slug=document.slug, title=document.title),
@@ -793,6 +898,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         built_at=b.row.built_at,  # type: ignore[arg-type]
         blocks=[*blocks, timeline.model_copy(update={"lines": []})],
         timeline=items,
+        sections=sources,
         notes=notes,
         draft=draft,
         changes_in_review=hidden,
@@ -857,8 +963,11 @@ def _write(d: SimpleDraft, b: Built, line_id: str, values: dict[str, Any]) -> No
     d.overlay = {"sections": secs, "lines": lines}
 
 
-async def _current(db: AsyncSession, b: Built, line_id: str) -> tuple[str, dict[str, str]]:
-    d = await _open_draft(db, b.document)
+async def _current(
+    db: AsyncSession, b: Built, line_id: str, d: SimpleDraft | None
+) -> tuple[str, dict[str, str]]:
+    """The line and its sections as the caller reads them: the draft ``d`` overlaid, or the
+    published version (None: the caller does not see the draft)."""
     line = _lines(b).get(line_id)
     if line is None:
         raise ChangeError(404, "No such line on this one-pager")
@@ -903,12 +1012,23 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     block = line_id.rsplit("-", 1)[0]
     if block == "problem" and len(new.split()) > PROBLEM_WORDS:
         raise ChangeError(422, f"The problem is at most {PROBLEM_WORDS} words")
-    text, bodies = await _current(db, b, line_id)
+    w = await who(db, document)
+    d = await _open_draft(db, document)
+    # Who cannot see the working draft proposes against the published line and sections
+    # (and a conflict shows them nothing of the draft).
+    sees = d is not None and sees_draft(principal, d, w)
+    text, bodies = await _current(db, b, line_id, d if sees else None)
     if text != old:
         raise _conflict("This line changed since you read it", text)
     if not bodies:
         raise ChangeError(409, "This line rests on no section of the PRD")
-    w = await who(db, document)
+    patched = patch_all(bodies, text, new)
+    if patched is None:
+        raise ChangeError(
+            409,
+            "Oracle could not find this line's words in its sections; "
+            "open the detailed view to edit them",
+        )
     applies = decides(principal, w)
     if not applies and not has_role(principal.role, "commenter"):
         raise ChangeError(403, "Viewers read the one-pager")
@@ -916,9 +1036,7 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     heads = {s.section_key: s.heading for s in b.sections}
     after = {
         "line": new,
-        "sections": {
-            k: {"heading": heads.get(k, k), "body": patch(v, text, new)} for k, v in bodies.items()
-        },
+        "sections": {k: {"heading": heads.get(k, k), "body": v} for k, v in patched.items()},
     }
     before = {
         "line": text,
@@ -972,7 +1090,9 @@ async def decide(db, principal, c: SimpleChange, action: str, reason: str | None
         document = await db.get(Document, c.document_id)
         await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
         b = await built(db, document)
-        text, bodies = await _current(db, b, str(c.target["line_id"]))
+        text, bodies = await _current(
+            db, b, str(c.target["line_id"]), await _open_draft(db, document)
+        )
         was = {k: v["body"] for k, v in (c.before.get("sections") or {}).items()}
         if text != c.before.get("line") or bodies != was:
             raise _conflict("outdated: the line or its sections changed since the proposal", text)
@@ -1012,7 +1132,7 @@ async def undo(db, principal, c: SimpleChange):
     document = await db.get(Document, c.document_id)
     await db.execute(select(Document.id).where(Document.id == document.id).with_for_update())
     b = await built(db, document)
-    text, bodies = await _current(db, b, str(c.target["line_id"]))
+    text, bodies = await _current(db, b, str(c.target["line_id"]), await _open_draft(db, document))
     if text != c.after.get("line") or bodies != {
         k: v["body"] for k, v in (c.after.get("sections") or {}).items()
     }:
@@ -1127,9 +1247,11 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
             continue
         items = []
         for line in blk.lines:
-            text = escape(published_lines.get(line.id, line.text))
-            if line.metric:
-                m = line.metric
+            pub = published_lines.get(line.id)
+            text = escape(pub["text"] if pub else line.text)
+            m = OnePagerMetric.model_validate(pub["metric"]) if pub and pub.get("metric") else None
+            m = m if pub else line.metric
+            if m:
                 span = f"{escape(m.from_ or '—')} → {escape(m.to)}"
                 text = f"<span class='metric'>{escape(m.name)}: <b>{span}</b></span>"
             items.append(f"<li>{text}</li>")
@@ -1138,7 +1260,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     return "".join(parts), f"{out.document.slug}-v{out.version}-one-pager"
 
 
-async def _published_lines(db: AsyncSession, out: OnePagerOut) -> dict[str, str]:
+async def _published_lines(db: AsyncSession, out: OnePagerOut) -> dict[str, dict[str, Any]]:
     row = await db.scalar(
         select(SimpleOnePager)
         .join(DocumentVersion, DocumentVersion.id == SimpleOnePager.version_id)
@@ -1146,6 +1268,4 @@ async def _published_lines(db: AsyncSession, out: OnePagerOut) -> dict[str, str]
         .order_by(SimpleOnePager.built_at.desc())
         .limit(1)
     )
-    return {
-        line["id"]: line["text"] for blk in (row.blocks if row else []) for line in blk["lines"]
-    }
+    return {line["id"]: line for blk in (row.blocks if row else []) for line in blk["lines"]}

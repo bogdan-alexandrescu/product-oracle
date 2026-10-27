@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -151,12 +151,19 @@ async def who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
     ):
         out.deciders[p.document_id] = p.decider_id
         out.reviewers[p.document_id] = list(p.mandatory_reviewer_ids or [])
+    # A roadmap's owners own its tracks; a PRD's (a one-pager's draft, S5) own the tracks
+    # it is the PRD of, as oracle.simple.one_pager.who reads them.
     for t in await db.scalars(
         select(ProductTrack).where(
-            ProductTrack.roadmap_document_id.in_(doc_ids), ProductTrack.owner_id.is_not(None)
+            or_(
+                ProductTrack.roadmap_document_id.in_(doc_ids),
+                ProductTrack.prd_document_id.in_(doc_ids),
+            ),
+            ProductTrack.owner_id.is_not(None),
         )
     ):
-        out.owners.setdefault(t.roadmap_document_id, set()).add(t.owner_id)
+        for doc in {t.roadmap_document_id, t.prd_document_id} & doc_ids:
+            out.owners.setdefault(doc, set()).add(t.owner_id)
     return out
 
 

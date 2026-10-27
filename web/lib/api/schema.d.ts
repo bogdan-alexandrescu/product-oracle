@@ -28676,6 +28676,11 @@ export interface components {
             blocks: components["schemas"]["OnePagerBlock"][];
             /** Timeline */
             timeline: components["schemas"]["OnePagerItem"][];
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["OnePagerSource"][];
             /** Notes */
             notes: components["schemas"]["OnePagerNote"][];
             draft: components["schemas"]["OnePagerDraft"] | null;
@@ -28696,6 +28701,18 @@ export interface components {
             before: string;
             /** After */
             after: string;
+        };
+        /**
+         * OnePagerSource
+         * @description A source section of the page's lines, as the reader reads it (the drill-down).
+         */
+        OnePagerSource: {
+            /** Key */
+            key: string;
+            /** Heading */
+            heading: string;
+            /** Body */
+            body: string;
         };
         /**
          * OracleAsker
