@@ -60,7 +60,7 @@ for (const phone of [false, true]) {
 
     test(`two attendees share the thread; only the presenter applies; the applied card is a decision (${where})`, async ({ page }) => {
       // protects: the meeting chat is one thread two tabs both see (polled); in "Only the presenter" mode another attendee's card is disabled with why, the presenter's Apply applies it and the card shows who applied it and the meeting decision it became
-      // fails_when: the second tab never sees the first tab's line or card, a non-presenter may apply, or the applied card shows no decision
+      // fails_when: the second tab never sees the first tab's line or card, a non-presenter may apply or discard, or the applied card shows no decision
       // no_claim: the real API's meeting rules and record_meeting_decision (api/tests), S8's meeting screen
       const owner = await attend(page, EMAILS.owner, true);
       const approver = await attend(page, EMAILS.approver, false);
@@ -71,6 +71,8 @@ for (const phone of [false, true]) {
       await say(approver, "rename Setup checklist to First-run checklist");
       const mine = cardOf(approver, "Rename Setup checklist to “First-run checklist”");
       await expect(mine.getByRole("button", { name: "Apply" })).toBeDisabled();
+      // The mode that bars them from applying bars them from discarding too.
+      await expect(mine.getByRole("button", { name: "Discard" })).toBeDisabled();
       await expect(mine.getByTestId("chat-card-why-not")).toHaveText("Only the presenter applies changes in this meeting");
 
       // The presenter's tab sees the approver's line and card, and may apply it.
