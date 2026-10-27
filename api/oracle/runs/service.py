@@ -1433,6 +1433,8 @@ HOLD_UNKNOWN = "status unknown"
 HOLD_READ_SECONDS = 3.0
 HOLD_CACHE_SECONDS = 5.0
 _hold_clock = time.monotonic
+# The read's deadline (tests fire it themselves rather than wait on the runner's clock).
+_hold_deadline = asyncio.timeout
 
 # Run, workflow, and each review step no checkpoint stands for yet with the step it
 # depends on (None: not known, so it holds).
@@ -1524,7 +1526,7 @@ async def _read_hold(key: _HoldKey) -> str | None:
     run_id, workflow_id, reviews = key
     held: str | None = None
     try:
-        async with asyncio.timeout(HOLD_READ_SECONDS):
+        async with _hold_deadline(HOLD_READ_SECONDS):
             status = await get_runtime().status(workflow_id)
     except (RuntimeUnavailable, TimeoutError) as exc:
         log.warning(
