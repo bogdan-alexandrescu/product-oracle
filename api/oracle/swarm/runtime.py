@@ -163,6 +163,26 @@ class Parked:
     reason: str
     opened_at: datetime | None = None
     expires_at: datetime | None = None
+    # CREDENTIAL_MISSING (SwarmCloud #2498): which credential the step waits for ("mcp"),
+    # why (mcp_credential_expired, or mcp_credential_missing when there is no row), the
+    # server's name (the key a re-store names), when that credential expired and when the
+    # step parked. From the task's ``blocked_by`` entry or its ``waiting.detail``.
+    credential: str | None = None
+    code: str | None = None
+    server: str | None = None
+    expired_at: datetime | None = None
+    parked_at: datetime | None = None
+
+    @property
+    def mcp_expired(self) -> bool:
+        """Parked because the workflow's MCP credential expired while the step waited:
+        Oracle re-stores a fresh one and the step goes on."""
+        return (
+            self.reason == "CREDENTIAL_MISSING"
+            and self.credential == "mcp"
+            and self.code == "mcp_credential_expired"
+            and bool(self.server)
+        )
 
 
 @dataclass(frozen=True)
@@ -233,6 +253,15 @@ class RecordedAnswer:
     @property
     def answered(self) -> bool:
         return self.answer_id is not None or self.state == "answered"
+
+
+@dataclass(frozen=True)
+class StoredCredentials:
+    """SwarmCloud's answer to a re-store: each server stored and its new expiry, and how
+    many parked steps it returned to READY. Never the value."""
+
+    stored: tuple[tuple[str, datetime | None], ...] = ()
+    promoted: int = 0
 
 
 class RuntimeUnavailable(RuntimeError):
@@ -343,6 +372,16 @@ class AgentRuntime(Protocol):
         on_behalf_of: str | None = None,
     ) -> Answer:
         """Answer a waiting step as Oracle's principal."""
+        ...
+
+    async def store_mcp_credentials(
+        self, workflow_id: str, server: str, value: str, expires_in: int
+    ) -> StoredCredentials:
+        """Replace server ``server``'s credential in the workflow (``PUT
+        /v1/workflows/{id}/mcp-credentials``): the steps parked on it return to READY.
+        Refusals are told apart by their HTTP status (403 not Oracle's to change, 404 not
+        found, 409 the workflow finished, 422 refused before anything was stored), never
+        by the body's code. ``value`` goes only in the request body."""
         ...
 
     async def answer_record(self, workflow_id: str, step_id: str, artifact: str) -> RecordedAnswer:

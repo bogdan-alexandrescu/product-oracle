@@ -96,6 +96,9 @@ class Step:
     cost: float = 0.0
     # Held at admission (FakeSwarmCloud.held).
     held: bool = False
+    # Parked CREDENTIAL_MISSING because the MCP credential expired (#2498): when.
+    parked_at: datetime | None = None
+    expired_at: datetime | None = None
 
 
 @dataclass
@@ -106,6 +109,8 @@ class Workflow:
     submitted_at: datetime
     credential: dict[str, Any] | None
     state: str = "RUNNING"
+    # When the credential was last stored (submission, or a re-store).
+    credential_at: datetime | None = None
 
     def step(self, step_id: str) -> Step:
         return next(s for s in self.steps if s.step_id == step_id)
@@ -188,6 +193,15 @@ class FakeSwarmCloud:
         self.held: dict[str, str] = {}
         # Files an agent step writes instead of the default content: step_id -> files.
         self.step_files: dict[str, dict[str, str]] = {}
+        # #2498: a step that would start after the MCP credential expired parks
+        # CREDENTIAL_MISSING instead of failing ("blocked_by": in task.blocked_by,
+        # "waiting": in task.waiting.detail; None: it fails, as before #2498).
+        self.park_expired: str | None = None
+        # Re-stores (PUT .../mcp-credentials) as sent, and what the next ones answer
+        # instead (each used once); promote_on_restore False leaves the park in place.
+        self.restores: list[dict[str, Any]] = []
+        self.fail_restores: list[httpx.Response] = []
+        self.promote_on_restore = True
         self._n = 0
 
     def runtime(self, **kw: Any) -> SwarmCloudRuntime:
@@ -253,6 +267,9 @@ class FakeSwarmCloud:
                 self.fail_lookups -= 1
                 return _err(503, "unavailable", "the task listing is unavailable")
             return self._tasks(request.url.params)
+        m = re.fullmatch(r"/v1/workflows/([^/]+)/mcp-credentials", path)
+        if m and method == "PUT":
+            return self._restore(m[1], body)
         m = re.fullmatch(r"/v1/workflows/([^/]+)(/cancel|/steps/([^/]+)/input)?", path)
         if m and (self.html_404 or m[1] in self.html_404_ids):
             return httpx.Response(404, text="<html><body>Not Found</body></html>")
@@ -418,6 +435,56 @@ class FakeSwarmCloud:
             resp, self.fail_after_create = self.fail_after_create, None
             return resp
         return httpx.Response(201, json={"workflow": {"workflow_id": wid}, "dispatch": {}})
+
+    def _restore(self, workflow_id: str, body: Any) -> httpx.Response:
+        """#2498's re-store: every refusal before anything is stored; the generic body
+        codes (conflict, forbidden) as SwarmCloud ships them for now."""
+        self.restores.append({"workflow_id": workflow_id, **(body or {})})
+        if self.fail_restores:
+            return self.fail_restores.pop(0)
+        wf = self.workflows.get(workflow_id)
+        if wf is None:
+            return _err(404, "not_found", "no such workflow")
+        self._advance(wf)
+        if all(s.state in ("SUCCEEDED", "FAILED", "CANCELLED", "DEAD_LETTERED") for s in wf.steps):
+            return _err(409, "conflict", "the workflow has finished")
+        creds = (body or {}).get("mcp_credentials")
+        if not isinstance(creds, dict) or not creds:
+            return _err(422, "mcp_credential_shape", "mcp_credentials is required")
+        named = {n for s in wf.steps for n in (s.input.get("mcp_servers") or [])}
+        for name, cred in creds.items():
+            if name not in named:
+                return _err(422, "mcp_credential_unexpected", name)
+            if name not in self.servers or not self.servers[name].get("enabled", True):
+                return _err(422, "mcp_server_unregistered", name)
+            value, ttl = (cred or {}).get("value"), (cred or {}).get("expires_in")
+            if (
+                not isinstance(value, str)
+                or not 8 <= len(value.encode()) <= 8192
+                or not isinstance(ttl, int)
+                or not 60 <= ttl <= 86400
+            ):
+                return _err(422, "mcp_credential_shape", name)
+        stored, promoted = [], []
+        for name, cred in creds.items():
+            wf.credential = {"value": cred["value"], "expires_in": cred["expires_in"]}
+            wf.credential_at = self.now
+            stored.append(
+                {
+                    "server": name,
+                    "expires_at": (self.now + timedelta(seconds=cred["expires_in"])).isoformat(),
+                }
+            )
+            for s in wf.steps:
+                if (
+                    self.promote_on_restore
+                    and s.state == "PARKED"
+                    and s.park_reason == "CREDENTIAL_MISSING"
+                    and name in (s.input.get("mcp_servers") or [])
+                ):
+                    s.state, s.park_reason, s.parked_at = "PENDING", None, None
+                    promoted.append(s.step_id)
+        return httpx.Response(200, json={"stored": stored, "promoted": promoted})
 
     def _tasks(self, params: httpx.QueryParams) -> httpx.Response:
         """Oracle's tasks, newest first. ``submitted_by`` is applied in the query, so its
@@ -611,7 +678,8 @@ class FakeSwarmCloud:
     def _credential_live(self, wf: Workflow) -> bool:
         if wf.credential is None:
             return True
-        return self.now < wf.submitted_at + timedelta(seconds=wf.credential["expires_in"])
+        since = wf.credential_at or wf.submitted_at
+        return self.now < since + timedelta(seconds=wf.credential["expires_in"])
 
     def _advance(self, wf: Workflow) -> None:
         if wf.state != "RUNNING":
@@ -685,6 +753,12 @@ class FakeSwarmCloud:
             code, message = self.step_failure.pop(s.step_id)
             s.state, s.error_code, s.last_error = "FAILED", code, f"{code}: {message}"
             return
+        if servers and not self._credential_live(wf) and self.park_expired:
+            s.state, s.park_reason = "PARKED", "CREDENTIAL_MISSING"
+            s.parked_at = self.now
+            since = wf.credential_at or wf.submitted_at
+            s.expired_at = since + timedelta(seconds=wf.credential["expires_in"])  # type: ignore[index]
+            return
         if servers and not self._credential_live(wf):
             s.state = "FAILED"
             s.error_code = "mcp_credential_expired"
@@ -722,6 +796,20 @@ class FakeSwarmCloud:
                 task["park_reason"] = "DEPENDENCY_INCOMPLETE"
             elif s.park_reason:
                 task["park_reason"] = s.park_reason
+            if s.park_reason == "CREDENTIAL_MISSING" and s.parked_at is not None:
+                detail = {
+                    "reason": "CREDENTIAL_MISSING",
+                    "credential": "mcp",
+                    "code": "mcp_credential_expired",
+                    "server": (s.input.get("mcp_servers") or ["oracle"])[0],
+                    "expired_at": s.expired_at.isoformat() if s.expired_at else None,
+                    "parked_at": s.parked_at.isoformat(),
+                }
+                if self.park_expired == "waiting":
+                    route = f"PUT /v1/workflows/{wf.workflow_id}/mcp-credentials"
+                    task["waiting"] = {"detail": {**detail, "restore_route": route}}
+                else:
+                    task["blocked_by"] = [detail]
             task["metadata"] = dict(s.metadata)
             if s.await_input and s.opened_at:
                 task["metadata"]["await_input"] = {
