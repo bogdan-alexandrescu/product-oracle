@@ -167,12 +167,15 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               href={d.href}
               data-testid={d.testId}
               aria-current={isActive(pathname, d) ? "page" : undefined}
+              // The destination is the link's name; its count is the description (never "Meetings 3").
+              aria-label={d.label}
+              aria-describedby={n > 0 ? `${d.testId}-count` : undefined}
               className="flex h-12 items-center gap-3 rounded-xl px-3 text-[length:var(--simple-rail-label)] leading-6 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text aria-[current=page]:bg-rail-active aria-[current=page]:font-semibold aria-[current=page]:text-rail-active-text"
             >
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {n > 0 && (
-                <span data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className="simple-count tnum">
+                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className="simple-count tnum">
                   {n}
                 </span>
               )}

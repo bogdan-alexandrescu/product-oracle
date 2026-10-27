@@ -28,7 +28,6 @@ import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
-import { seedSimpleProposal } from "./simple-changes";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
@@ -153,9 +152,14 @@ function items(ctx: MeetingsCtx) {
 }
 
 /** Seeds on first use: a scheduled review, one past meeting whose minutes were sent, and
- * decisions outside meetings; a commenter's proposal on Guided setup's roadmap. */
+ * decisions outside meetings. */
 export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: MeetingsCtx): MeetingsDb {
   if (holder.simple_meetings) return holder.simple_meetings;
+  // A new company ("empty" scenario, as server.ts's MOCK_SCENARIO_KEY): no past meetings, decisions or seeded proposal.
+  // Home and the rail read meetings too, so seeding here would fill every empty Home.
+  if (typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === "empty") {
+    return (holder.simple_meetings = { meetings: [], decisions: [], occurrences: [], inbox_seen: {} });
+  }
   const now = mockNowMs();
   const owner = owners(ctx)[0];
   const approver = ctx.members.find((m) => m.email === "approver@example.com")?.id;
@@ -202,10 +206,8 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
   };
   if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [{ id: db.decisions[0].id, number: 1, title: db.decisions[0].title }];
   if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [{ id: db.decisions[3].id, number: 4, title: db.decisions[3].title }];
-  if (commenter && !(ctx.roadmap.changes ?? []).some((c) => c.status === "proposed" && c.target.item_id === item("setup-ideas")?.id)) {
-    const roles = Object.fromEntries(ctx.members.map((m) => [m.id, m.role]));
-    seedSimpleProposal(ctx.roadmap, { id: commenter.id, name: commenter.name, owners: owners(ctx), roles }, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, iso(now - 3_600_000), "Invites matter in week one");
-  }
+  // No seeded proposal here: Home and the rail read meetings on every page, and a proposal made as a side effect
+  // of that read changed what the roadmap and Home showed (train W integration).
   holder.simple_meetings = db;
   return db;
 }

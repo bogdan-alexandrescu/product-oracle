@@ -190,7 +190,7 @@ for (const phone of [false, true]) {
         await context.addInitScript(
           ([fail, slow]) => {
             if (!sessionStorage.getItem("e2e-once")) {
-              localStorage.setItem(fail, "/v1/rituals");
+              localStorage.setItem(fail, "/v1/simple/meetings");
               localStorage.setItem(slow, "/v1/simple/roadmap");
               sessionStorage.setItem("e2e-once", "1");
             }

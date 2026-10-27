@@ -256,7 +256,10 @@ test("Simple's rail has its six destinations and none of Detailed's", async ({ p
   await expectSimple(page, "/simple");
   const rail = simpleRail(page);
   const links = rail.getByRole("link", { name: /^(Home|One-pagers|Roadmap|Priorities|Meetings|Decisions)$/ });
-  await expect(links).toHaveText(["Home", "One-pagers", "Roadmap", "Priorities", "Meetings", "Decisions"]);
+  // Names, not text: a destination may carry a count ("Meetings" described as "1 review live or coming up").
+  const names = ["Home", "One-pagers", "Roadmap", "Priorities", "Meetings", "Decisions"];
+  await expect(links).toHaveCount(names.length);
+  for (const [i, name] of names.entries()) await expect(links.nth(i)).toHaveAccessibleName(name);
   for (const detailed of ["Requests", "Baseline", "PRDs", "Plan", "Runs", "Inbox", "Company", "Settings"]) {
     await expect(rail.getByRole("link", { name: detailed, exact: true })).toHaveCount(0);
   }
