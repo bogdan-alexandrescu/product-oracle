@@ -54,7 +54,7 @@ for (const scheme of ["light", "dark"] as const) {
       const box = (await link.boundingBox())!;
       expect(box.y + box.height).toBeLessThanOrEqual(tabs.y);
       await fingerTap(page, link);
-      await expect(page).toHaveURL((u) => u.pathname + u.search === href);
+      await expect(page).toHaveURL((u) => u.pathname + u.search + u.hash === href);
     });
 
     /**
