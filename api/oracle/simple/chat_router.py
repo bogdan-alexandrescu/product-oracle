@@ -19,7 +19,7 @@ from fastapi import APIRouter, HTTPException
 
 from oracle.auth.deps import TenantDB
 from oracle.simple import changes, chat, drafts
-from oracle.simple.changes_router import CONFLICT, Commenter, Reader
+from oracle.simple.changes_router import CONFLICT, Commenter, Reader, _one_commit
 from oracle.simple.schemas import (
     ChatApplyIn,
     ChatApplyOut,
@@ -92,10 +92,13 @@ async def apply_simple_chat_card(
 ) -> ChatApplyOut:
     """Apply the card (or ``fix``: one of its fixes) through the change engine: applied
     for an owner or the decider, proposed for others; 403 with the reason when the
-    meeting's change mode leaves the caller out."""
-    card, result = await _run(
-        db, chat.apply(db, principal, card_id, body.fix if body is not None else None)
-    )
+    meeting's change mode leaves the caller out. In a meeting the change and its meeting
+    decision commit together (S8's one commit): a refusal or failure between them keeps
+    neither."""
+    async with _one_commit(db):
+        card, result = await _run(
+            db, chat.apply(db, principal, card_id, body.fix if body is not None else None)
+        )
     return ChatApplyOut(card=card, result=result)
 
 

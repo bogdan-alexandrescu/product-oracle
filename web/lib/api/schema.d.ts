@@ -12674,7 +12674,9 @@ export interface paths {
          * Apply Simple Chat Card
          * @description Apply the card (or ``fix``: one of its fixes) through the change engine: applied
          *     for an owner or the decider, proposed for others; 403 with the reason when the
-         *     meeting's change mode leaves the caller out.
+         *     meeting's change mode leaves the caller out. In a meeting the change and its meeting
+         *     decision commit together (S8's one commit): a refusal or failure between them keeps
+         *     neither.
          */
         post: operations["apply_simple_chat_card"];
         delete?: never;

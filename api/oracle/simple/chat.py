@@ -852,9 +852,12 @@ async def apply(
         if meetings is not None:
             subjects = [{"kind": "roadmap_item", "id": str(card.item_id)}] if card.item_id else []
             title = f.label if fix is not None else card.summary
-            card.decision_id = await meetings.record_meeting_decision(
-                db, principal, rules.meeting_id, title, subjects, [result.change.id]
-            )
+            try:
+                card.decision_id = await meetings.record_meeting_decision(
+                    db, principal, rules.meeting_id, title, subjects, [result.change.id]
+                )
+            except getattr(meetings, "MeetingError", ()) as e:
+                raise ChatError(e.status, e.detail) from e
     await db.commit()
     return await one(db, principal, card, rules), result
 

@@ -142,14 +142,16 @@ DECIDED_PER_ITEM = frozenset(
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
 # Simple (#723): a goal's suggestions are asked for and accepted by any commenter (others' as
-# proposals) and rejected (final) by an approver (S7); a chat thread, its cards and the meeting's
-# change mode, a visual's comments and revisions, and Remind are decided by the item: its owner or
-# attendees, the card's author, the subject's editors, the PRD's owners and decider (S9, S10,
-# Remind). A date suggestion's dismissal and a proposal are decided by an owner, the roadmap's
-# decider or (with none) the item's track owner when an approver or owner (D-a); accepting or
-# editing a suggestion is a change (others' a proposal, D-b); a change is undone by its author
-# alone; the changes' list shows owners all, others those they made, decide or review; a submitted
-# draft is withdrawn by its author or the decider.
+# proposals) and rejected (final) by an approver (S7); a meeting's chat thread, a card and the
+# meeting's change mode are decided by the item: its attendees, the card's author, the presenter
+# (S9); the Ask panel's thread is every person's own. A visual is commented on by any commenter
+# who reads it, and asked for or revised by who changes its subject directly; Remind is the PRD's
+# owners' and decider's (S10, Remind): an owner always. A date suggestion's dismissal and a
+# proposal are decided by an owner, the roadmap's decider or (with none) the item's track owner
+# when an approver or owner (D-a); accepting or editing a suggestion is a change (others' a
+# proposal, D-b); a change is undone by its author alone; the changes' list shows owners all,
+# others those they made, decide or review; a submitted draft is withdrawn by its author or the
+# decider.
 # A share link (O5) is an owner's to make for the Public audience and an approver's for the
 # others; its creator's or an owner's to extend, move or give a new passcode; and its
 # creator's or an owner's to revoke when Public (any approver's otherwise).
@@ -181,7 +183,7 @@ PER_ITEM: dict[str, Role | None] = {
     "cancel_again_run": "owner",
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
-    "comment_simple_visual": None,
+    "comment_simple_visual": "commenter",
     # A Fireflies endpoint is an owner's to set (on connect, or on its own route); below
     # that, connecting without one (the input decides).
     "connect_with_token": "owner",
@@ -228,7 +230,7 @@ PER_ITEM: dict[str, Role | None] = {
     "get_company_source_coverage": "owner",
     "get_deck": "approver",
     "get_next_question_batch": "approver",
-    "get_simple_chat": None,
+    "get_simple_chat": "viewer",
     "get_simple_meeting_chat": None,
     "keep_request_no": None,
     # #618 review: a track alert's audience keeps and reopens it (oracle.roadmap.alerts
@@ -244,7 +246,7 @@ PER_ITEM: dict[str, Role | None] = {
     "open_request_reply": None,
     "patch_interview": "approver",
     "patch_scope_item": "approver",
-    "post_simple_chat": None,
+    "post_simple_chat": "viewer",
     "post_simple_meeting_chat": None,
     "propose_discussion_change": "commenter",
     "reassign_decision": "owner",
@@ -253,10 +255,10 @@ PER_ITEM: dict[str, Role | None] = {
     "redraft_interview_guide": "approver",
     "regenerate_spec": "owner",
     "reject_goal_suggestion": "approver",
-    "remind_simple_one_pager_reviewers": None,
+    "remind_simple_one_pager_reviewers": "owner",
     "remove_evidence": "approver",
     "reopen_track_alert": None,
-    "request_simple_visual": None,
+    "request_simple_visual": "owner",
     "research_discussion_message": "approver",
     "resolve_discussion_change": "approver",
     "resume_simple_draft": None,
@@ -267,7 +269,7 @@ PER_ITEM: dict[str, Role | None] = {
     "retry_run": "owner",
     "review_decision": None,
     "review_design_artifact": "owner",
-    "revise_simple_visual": None,
+    "revise_simple_visual": "owner",
     "revoke_interview": "approver",
     "revoke_share_link": "owner",
     "rotate_share_link_passcode": "owner",

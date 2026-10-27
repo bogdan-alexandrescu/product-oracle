@@ -43026,7 +43026,7 @@
           }
         },
         "x-min-role": "commenter",
-        "x-per-item": null
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/one-pagers/{doc}/pdf": {
@@ -43381,7 +43381,7 @@
           }
         ],
         "x-min-role": "viewer",
-        "x-per-item": null
+        "x-per-item": "viewer"
       }
     },
     "/v1/simple/chat/messages": {
@@ -43433,7 +43433,7 @@
           }
         ],
         "x-min-role": "viewer",
-        "x-per-item": null
+        "x-per-item": "viewer"
       }
     },
     "/v1/simple/meetings/{meeting_id}/chat": {
@@ -43624,7 +43624,7 @@
           "simple"
         ],
         "summary": "Apply Simple Chat Card",
-        "description": "Apply the card (or ``fix``: one of its fixes) through the change engine: applied\nfor an owner or the decider, proposed for others; 403 with the reason when the\nmeeting's change mode leaves the caller out.",
+        "description": "Apply the card (or ``fix``: one of its fixes) through the change engine: applied\nfor an owner or the decider, proposed for others; 403 with the reason when the\nmeeting's change mode leaves the caller out. In a meeting the change and its meeting\ndecision commit together (S8's one commit): a refusal or failure between them keeps\nneither.",
         "operationId": "apply_simple_chat_card",
         "security": [
           {
@@ -44820,7 +44820,7 @@
           }
         },
         "x-min-role": "commenter",
-        "x-per-item": null
+        "x-per-item": "commenter"
       }
     },
     "/v1/simple/visuals/{kind}/{subject_id}/revise": {
@@ -44900,7 +44900,7 @@
           }
         },
         "x-min-role": "commenter",
-        "x-per-item": null
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/visuals/{kind}/{subject_id}/request": {
@@ -44980,7 +44980,7 @@
           }
         },
         "x-min-role": "commenter",
-        "x-per-item": null
+        "x-per-item": "owner"
       }
     },
     "/v1/strategy/stack": {
