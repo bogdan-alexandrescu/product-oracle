@@ -94,6 +94,13 @@ JOBS = (
     "discussion_reply",
     # G3: a discussion's summary draft for the people and agents who did not read it.
     "discussion_summary",
+    # Simple S7: a quick-added draft item's outcome, flow and dates; a goal's suggested features.
+    "item_draft",
+    "goal_suggestions",
+    # Simple S10: a proposal's user flow and wireframe (oracle.simple.visuals).
+    "simple_visual",
+    # Simple S8: a review meeting's minutes (oracle.simple.meetings).
+    "meeting_minutes",
 )
 
 #: Accounts one call may try before giving up (the first plus two swaps).
