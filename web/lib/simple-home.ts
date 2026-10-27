@@ -110,7 +110,15 @@ export function brokenLinks(roadmap: Roadmap | undefined): BrokenLink[] {
 const DAY = 86_400_000;
 
 export type PlanStrip = Schemas["SimplePlanStrip"];
-export type PlanInput = { start: string; end: string; estimated: boolean; milestone: string | null; milestoneDate: string | null };
+export type PlanInput = {
+  start: string;
+  end: string;
+  estimated: boolean;
+  milestone: string | null;
+  milestoneDate: string | null;
+  /** The milestone record the item links (a track milestone), when any: its row. */
+  record?: { id: string; name: string | null } | null;
+};
 
 /** The plan strip shows this many rows; the rest are "+N more on the roadmap". */
 export const PLAN_ROWS = 8;
@@ -135,7 +143,8 @@ const maxOf = (xs: string[]) => xs.reduce((a, b) => (b > a ? b : a));
 /** Strings in code point order, as Python sorts them (the API's strip). */
 const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-const MILESTONE_CODE = /^(M\d+)(?!\w)\s*[·:\-–—]?\s*(.*)$/i;
+// M1..M99: "M1.5 · X" and "M2026 roadmap" are texts, not codes.
+const MILESTONE_CODE = /^(M\d{1,2})(?![\w.])\s*[·:\-–—]?\s*(.*)$/i;
 
 /**
  * A milestone text's group key and its row label, as the API's plan_strip.milestone_of
@@ -156,22 +165,24 @@ export function milestoneOf(text: string | null): [string, string] {
 
 export function planByMonth(items: PlanInput[], today: string): PlanStrip | null {
   if (items.length === 0) return null;
-  // One row per milestone (its code, else its text before any note), not per text.
+  // One row per milestone (the record the item links, else its code, else its text before
+  // any note), not per text.
   const keyed = new Map<string, { label: string; i: PlanInput }[]>();
   const loose: PlanInput[] = [];
   for (const i of items) {
-    if (!i.milestone && !i.milestoneDate) {
+    if (!i.record && !i.milestone && !i.milestoneDate) {
       loose.push(i);
       continue;
     }
-    const [key, label] = milestoneOf(i.milestone);
+    const [key, label] = i.record ? [`record:${i.record.id}`, milestoneOf(i.record.name)[1]] : milestoneOf(i.milestone);
     keyed.set(key, [...(keyed.get(key) ?? []), { label, i }]);
   }
   const groups = new Map<string, { name: string; date: string | null; of: PlanInput[] }>();
-  for (const of of keyed.values()) {
+  for (const [key, of] of keyed) {
     const counts = new Map<string, number>();
     for (const x of of) counts.set(x.label, (counts.get(x.label) ?? 0) + 1);
-    const name = [...counts].sort((a, b) => b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
+    // A named label ("M4 · Rollout") before the bare code ("M4"), then the commonest.
+    const name = [...counts].sort((a, b) => Number(a[0] === key) - Number(b[0] === key) || b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
     const dates = of.flatMap((x) => (x.i.milestoneDate ? [x.i.milestoneDate] : []));
     const date = dates.length ? maxOf(dates) : null;
     groups.set(`${name}|${date ?? ""}`, { name, date, of: of.map((x) => x.i) });
@@ -221,6 +232,7 @@ export const planInput = (i: Item): PlanInput => ({
   estimated: i.estimated,
   milestone: i.milestone ? i.milestone.name || "Milestone" : null,
   milestoneDate: i.milestone?.date ?? null,
+  record: i.milestone?.record_id ? { id: i.milestone.record_id, name: i.milestone.record_name ?? null } : null,
 });
 
 /**

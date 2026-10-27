@@ -126,7 +126,17 @@ export function seedOnePager(ownerless = false): OnePagerDb {
  * The PRD's roadmap slice (invented): 12 items carry M1, 5 carry M2, 3 carry M3, 2 have no
  * milestone; one of those is committed past M3's month (the strip's edge).
  */
-type SliceItem = { title: string; horizon: "now" | "next" | "later"; start: string; end: string; estimated: boolean; milestone: [string, string] | null };
+type SliceItem = {
+  title: string;
+  horizon: "now" | "next" | "later";
+  start: string;
+  end: string;
+  estimated: boolean;
+  milestone: [string, string] | null;
+  /** The track milestone record naming the item, when any (the strip's row). */
+  record?: { id: string; name: string };
+};
+const BETA_LAUNCH = { id: stableUuid("op-milestone/beta-launch"), name: "Beta launch" };
 const SLICE: SliceItem[] = [
   ...Array.from({ length: 12 }, (_, i) => ({ title: `Setup step ${i + 1}`, horizon: "now" as const, start: "2026-10-05", end: "2026-11-20", estimated: false, milestone: ["M1", "2026-11-20"] as [string, string] })),
   ...Array.from({ length: 5 }, (_, i) => ({ title: `Calendar invites ${i + 1}`, horizon: "next" as const, start: "2026-11-23", end: "2026-12-18", estimated: i > 2, milestone: ["M2", "2026-12-18"] as [string, string] })),
@@ -146,6 +156,10 @@ const NOTED_SLICE: SliceItem[] = [
   { title: "Setup audit", horizon: "now", start: "2026-10-19", end: "2026-11-13", estimated: false, milestone: ["M1 · Measure it, make it safe; follow-up in M3", "2026-11-20"] },
   { title: "Beta invites", horizon: "next", start: "2026-11-23", end: "2026-12-18", estimated: false, milestone: ["M2 · Ship to beta (two teams first)", "2026-12-18"] },
   { title: "Beta feedback form", horizon: "next", start: "2026-12-01", end: "2026-12-11", estimated: true, milestone: ["M2 · Ship to beta", "2026-12-18"] },
+  // A track milestone record naming three items: two whose own texts differ, one with none.
+  { title: "Beta for two teams", horizon: "next", start: "2026-12-07", end: "2027-01-08", estimated: false, milestone: ["Beta launch, two teams first", "2027-01-15"], record: BETA_LAUNCH },
+  { title: "Beta terms", horizon: "next", start: "2026-12-14", end: "2027-01-12", estimated: true, milestone: ["Beta launch - after legal", "2027-01-15"], record: BETA_LAUNCH },
+  { title: "Beta docs", horizon: "next", start: "2026-12-14", end: "2027-01-08", estimated: true, milestone: null, record: BETA_LAUNCH },
   { title: "Setup help center", horizon: "now", start: "2026-10-12", end: "2026-12-11", estimated: false, milestone: null },
 ];
 export const WALK_PROBLEM =
@@ -334,7 +348,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     })),
     timeline: (db.slice ?? SLICE).map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
-      (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null })),
+      (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, record: x.record ?? null })),
       new Date(mockNowMs()).toISOString().slice(0, 10),
     ),
     sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),

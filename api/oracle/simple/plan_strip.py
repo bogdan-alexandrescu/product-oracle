@@ -13,9 +13,10 @@ month before today's, when that is later).
 
 Rows group by the milestone itself, not its text (CLD's production walk, 2026-10-27): real
 items carry notes after the milestone ("M1 · Measure it (needs the export); Digest in M2"),
-so the key is the milestone's code (M1, M2, ...), else the text before the first " (" or
-";". A row reads "<code> · <milestone name>" (the name most of its items give), dated by
-the latest of its items' milestone dates.
+so the key is the milestone record the item links (a track milestone naming it), else the
+milestone's code (M1, M2, ...), else the text before the first " (" or ";". A row reads
+"<code> · <milestone name>" (the record's name, else the name most of its items give,
+a named label before a bare code), dated by the latest of its items' milestone dates.
 """
 
 import re
@@ -36,9 +37,13 @@ class PlanItem:
     estimated: bool
     milestone: str | None = None
     milestone_date: date | None = None
+    # The milestone record the item links (a track milestone's id and name), when any.
+    record_id: str | None = None
+    record_name: str | None = None
 
 
-_CODE = re.compile(r"^(M\d+)(?![\w])\s*[·:\-–—]?\s*(.*)$", re.IGNORECASE)
+# M1..M99: "M1.5 · X" and "M2026 roadmap" are texts, not codes.
+_CODE = re.compile(r"^(M\d{1,2})(?![\w.])\s*[·:\-–—]?\s*(.*)$", re.IGNORECASE)
 
 
 def milestone_of(text: str | None) -> tuple[str, str]:
@@ -71,15 +76,19 @@ def strip(items: list[PlanItem], today: date) -> SimplePlanStrip | None:
     keyed: dict[str, list[tuple[str, PlanItem]]] = {}
     loose: list[PlanItem] = []
     for i in items:
-        if i.milestone or i.milestone_date:
+        if i.record_id:
+            key, label = f"record:{i.record_id}", milestone_of(i.record_name)[1]
+            keyed.setdefault(key, []).append((label, i))
+        elif i.milestone or i.milestone_date:
             key, label = milestone_of(i.milestone)
             keyed.setdefault(key, []).append((label, i))
         else:
             loose.append(i)
     groups: dict[tuple[str, date | None], list[PlanItem]] = {}
-    for of in keyed.values():
+    for key, of in keyed.items():
         labels = Counter(label for label, _ in of)
-        name = min(labels, key=lambda x: (-labels[x], x))
+        # A named label ("M4 · Rollout") before the bare code ("M4"), then the commonest.
+        name = min(labels, key=lambda x: (x == key, -labels[x], x))
         when = max((i.milestone_date for _, i in of if i.milestone_date), default=None)
         groups[(name, when)] = [i for _, i in of]
     dated = [d for _, d in groups if d is not None]

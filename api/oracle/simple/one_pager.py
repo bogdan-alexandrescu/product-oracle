@@ -328,17 +328,45 @@ def _tidy(
     text: str, words: int, full: str | None, sources: list[Section]
 ) -> tuple[str, str | None]:
     """A stored line as it reads: comments out, cut at a word boundary (a line cut mid-word
-    by an older build loses its broken word), and its whole text when it is shortened (as
-    stored, else its source sections' facts)."""
+    by an older build loses its broken word; one that is its source fact whole stays), and
+    its whole text when it is shortened (as stored, else its own source fact)."""
     text = " ".join(_uncomment(text).split())
-    if len(text) >= LINE_MAX and not text.endswith("…"):
+    own = _own_fact(text, sources)
+    if len(text) >= LINE_MAX and not text.endswith("…") and own != text:
         text = (text.rsplit(" ", 1)[0] if " " in text else text).rstrip(",;:") + "…"
     shown, cut = clip(text, words)
     if not shown.endswith("…"):
         return shown, None
-    whole = full or (cut if cut and not cut.endswith("…") else None)
-    whole = whole or " ".join(f for sec in sources for f in _facts(sec))[:FULL_MAX] or None
+    whole = full or (cut if cut and not cut.endswith("…") else None) or own
+    whole = whole[:FULL_MAX] if whole else None
     return shown, (whole if whole and whole != shown else None)
+
+
+def _own_fact(text: str, sources: list[Section]) -> str | None:
+    """The source fact a stored line was taken from: the first that starts with the line's
+    words (less a trailing "…"), else None."""
+    head = text.removesuffix("…").rstrip(",;: ")
+    if not head:
+        return None
+    return next((f for sec in sources for f in _facts(sec) if f.startswith(head)), None)
+
+
+def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
+    """The plan strip's reading of a PRD's roadmap items (uncut), each with the milestone
+    record that links it, when any."""
+    return [
+        plan_strip.PlanItem(
+            i.start.date,
+            i.end.date,
+            i.estimated,
+            (i.milestone.name or "Milestone") if i.milestone else None,
+            i.milestone.date if i.milestone else None,
+            str(i.milestone.record_id) if i.milestone and i.milestone.record_id else None,
+            i.milestone.record_name if i.milestone else None,
+        )
+        for i in items
+        if i.status != "cut"
+    ]
 
 
 def _cells(row: str) -> list[str]:
@@ -1080,20 +1108,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         for i in slice_.items
         if i.status != "cut"
     ]
-    plan = plan_strip.strip(
-        [
-            plan_strip.PlanItem(
-                i.start.date,
-                i.end.date,
-                i.estimated,
-                (i.milestone.name or "Milestone") if i.milestone else None,
-                i.milestone.date if i.milestone else None,
-            )
-            for i in slice_.items
-            if i.status != "cut"
-        ],
-        slice_.today,
-    )
+    plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )

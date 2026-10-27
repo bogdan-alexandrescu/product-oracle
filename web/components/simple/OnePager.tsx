@@ -249,7 +249,7 @@ export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId
                               </button>
                             )}
                             {(v.can_edit || v.can_propose) && (
-                              <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.text); }}>
+                              <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}>
                                 {v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}
                               </button>
                             )}

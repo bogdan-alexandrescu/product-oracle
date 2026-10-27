@@ -83,6 +83,10 @@ class SimpleItemMilestone(BaseModel):
     date: dt.date | None = None
     # item: the item's own milestone; track: a track milestone naming the item.
     source: Literal["item", "track"]
+    # The track milestone record naming the item, whichever source the name and date are
+    # from: the plan strip groups its items by it, whatever their own texts say.
+    record_id: uuid.UUID | None = None
+    record_name: str | None = None
 
 
 class SimpleOwnerRef(BaseModel):

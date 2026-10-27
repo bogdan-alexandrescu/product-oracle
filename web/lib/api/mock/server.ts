@@ -919,6 +919,16 @@ function seedSimpleWalkScenario(): Db {
     rm.items.push({ key, title, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start, end, source: "typed", milestone: { name, day } });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   }
+  // A track milestone record naming three items: two whose own texts differ, one with none.
+  const linked: [string, string, number, number, string | null][] = [
+    ["walk-beta-two", "Beta for two teams", 55, 80, "Beta launch, two teams first"],
+    ["walk-beta-legal", "Beta terms", 60, 85, "Beta launch - after legal"],
+    ["walk-beta-docs", "Beta docs", 60, 80, null],
+  ];
+  for (const [key, title, start, end, name] of linked) {
+    rm.items.push({ key, title, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start, end, source: "typed", record: "Beta launch", ...(name ? { milestone: { name, day: 90 } } : {}) });
+    rm.ids[key] = stableUuid(`simple-item/${key}`);
+  }
   db.simple_one_pager = seedWalkOnePager();
   const skeleton = db.documents.find((d) => d.kind === "prd" && d.slug === "checkout-redesign");
   if (skeleton) db.simple_one_pagers = { [skeleton.id]: seedSkeletonOnePager({ id: skeleton.id, slug: skeleton.slug, title: skeleton.title }) };
