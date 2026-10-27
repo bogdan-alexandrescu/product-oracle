@@ -197,6 +197,9 @@ const OP_WORDS: Record<string, string> = {
   accept_risk: "Accept a risk",
   shift_dependents: "Move the dependents",
   move_dependency: "Move the dependency",
+  add_key_date: "Add a key date",
+  edit_key_date: "Change a key date",
+  remove_key_date: "Remove a key date",
 };
 
 export const opWords = (op: string): string => OP_WORDS[op] ?? op.replace(/_/g, " ");
@@ -235,7 +238,10 @@ export function FloatingCard({
   onDecide,
   onClose,
   onHorizon,
+  near,
 }: {
+  /** Roadmap-plus: the key dates the item ends within 2 weeks of, in words (none: no line). */
+  near?: string | null;
   item: Item;
   items: Map<string, Item>;
   proposals: Change[];
@@ -292,6 +298,12 @@ export function FloatingCard({
           <dd data-testid="card-owner">{item.owner?.name ?? <span className="text-text2">No owner yet</span>}</dd>
           <dt className="text-text2">Dates</dt>
           <dd data-testid="card-dates">{dates}</dd>
+          {near && (
+            <>
+              <dt className="text-text2">Near</dt>
+              <dd data-testid="card-near">{near}</dd>
+            </>
+          )}
           {onHorizon && (
             <>
               <dt className="self-center text-text2">Horizon</dt>

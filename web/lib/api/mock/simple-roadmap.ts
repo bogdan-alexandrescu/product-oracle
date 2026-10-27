@@ -68,6 +68,17 @@ interface SimpleDb {
   people?: Record<string, string>;
   /** S4: proposed decisions naming an item (item key -> decisions). */
   decisions?: Record<string, { number: number; title: string }[]>;
+  /** Roadmap-plus (api/oracle/simple/key_dates.py): each roadmap's key dates as its working
+   * draft has them (roadmap slug -> key dates); a draft keeps the published ones. */
+  key_dates?: Record<string, MockKeyDate[]>;
+}
+
+/** A roadmap's key date (roadmap_key_dates): invented names and days. */
+export interface MockKeyDate {
+  id: string;
+  name: string;
+  date: string;
+  note: string | null;
 }
 
 /** A reader, with every member's role (D-a: a track owner decides only as an approver or owner). */
@@ -85,7 +96,7 @@ export interface Who {
 interface MockDraft {
   out: Omit<Schemas["SimpleDraftOut"], "changes" | "can_submit" | "can_resume" | "can_approve" | "change_log" | "can_withdraw">;
   roadmap: string;
-  published: { items: SeedItem[]; own: SimpleDb["own"] };
+  published: { items: SeedItem[]; own: SimpleDb["own"]; key_dates?: MockKeyDate[] };
 }
 
 const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string }> = {
@@ -156,7 +167,17 @@ export function seedSimpleRoadmap(): SimpleDb {
     own: {},
     suggestions: [],
     decisions: { "alert-digest": [{ number: 7, title: "Send the digest weekly or daily?" }] },
+    key_dates: seedKeyDates(),
   }));
+}
+
+/** Roadmap-plus: invented key dates, days from this quarter's start on the mock's clock. */
+export function seedKeyDates(): Record<string, MockKeyDate[]> {
+  const q = simpleWindows(iso(mockNowMs())).now[0];
+  return {
+    "alerts-roadmap": [{ id: stableUuid("simple-key-date/conference"), name: "Customer conference", date: addDays(q, 44), note: "Keynote slot for alerts" }],
+    "onboarding-roadmap": [{ id: stableUuid("simple-key-date/board"), name: "Board meeting", date: addDays(q, 75), note: null }],
+  };
 }
 
 /**
@@ -234,9 +255,14 @@ function phases(start: string, end: string, s: SeedItem, w: [string, string]): S
     share += part;
     const own = named.get(key);
     let day = own ?? (i === PHASES.length - 1 ? end : addDays(start, Math.round(total * share) - 1));
-    if (day < cursor) day = cursor;
-    const out = { key, start: cursor, end: day, estimated: !own };
-    cursor = addDays(day, 1);
+    if (!own) {
+      // An estimated phase ends before the next dated gate (roadmap-plus: they may bunch up).
+      const gate = PHASES.slice(i + 1).map(([k]) => named.get(k)).filter((d): d is string => !!d).sort()[0];
+      if (gate && day >= gate) day = addDays(gate, -1);
+      if (day < cursor) day = cursor;
+    }
+    const out = { key, start: cursor < day ? cursor : day, end: day, estimated: !own };
+    if (addDays(day, 1) > cursor) cursor = addDays(day, 1);
     return out;
   });
 }
@@ -378,6 +404,7 @@ export function seesDraft(d: MockDraft, me: { id: string; role: Role }, db?: Sim
 function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleDb; hidden: number; visible: Schemas["SimpleDraftBrief"][] } {
   let items = db.items;
   let own = db.own;
+  let keyDates = db.key_dates ?? {};
   let hidden = 0;
   const visible: Schemas["SimpleDraftBrief"][] = [];
   for (const d of (db.drafts ?? []).filter((x) => OPEN_DRAFT.includes(x.out.status))) {
@@ -388,11 +415,12 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
     hidden += draftChanges(db, d.out.id);
     const keys = new Set(items.filter((s) => s.roadmap === d.roadmap).map((s) => s.key));
     items = [...items.filter((s) => s.roadmap !== d.roadmap), ...d.published.items];
+    keyDates = { ...keyDates, [d.roadmap]: d.published.key_dates ?? [] };
     own = { ...Object.fromEntries(Object.entries(own).filter(([k]) => !keys.has(k))), ...d.published.own };
   }
   const shownDocs = new Set(visible.map((v) => v.document_id));
   hidden += (db.changes ?? []).filter((c) => c.status === "proposed" && me.role !== "owner" && c.document_id && !shownDocs.has(c.document_id)).length;
-  return { db: { ...db, items, own }, hidden, visible };
+  return { db: { ...db, items, own, key_dates: keyDates }, hidden, visible };
 }
 
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
@@ -401,7 +429,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const ids = deciderIds(db, s, me?.roles);
     return (ids.length ? ids : (me?.owners ?? [])).map((id) => me?.names?.[id]).filter((n): n is string => !!n);
   };
-  const reader = me ? readerView(db, me) : { db, hidden: 0, visible: [] };
+  const reader = { ...(me ? readerView(db, me) : { db, hidden: 0, visible: [] }), full: db };
   db = reader.db;
   const today = iso(mockNowMs());
   const w = simpleWindows(today);
@@ -474,7 +502,27 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ],
     changes_in_review: reader.hidden,
     drafts: reader.visible,
+    ...keyDatesOut(db, reader.full, shown, me ?? { id: "", role }),
   };
+}
+
+/** Roadmap-plus: the shown roadmaps' key dates (the draft's to who sees it) and who may change them. */
+function keyDatesOut(db: SimpleDb, full: SimpleDb, shown: Item[], me: { id: string; role: Role }): Pick<Schemas["SimpleRoadmapOut"], "key_dates" | "key_date_roadmaps"> {
+  const slugs = [...new Set(shown.map((i) => i.roadmap.slug))].sort((a, b) => ROADMAPS[a].title.localeCompare(ROADMAPS[b].title));
+  const ref = (slug: string) => ({ id: stableUuid(`simple-doc/${slug}`), slug, title: ROADMAPS[slug].title });
+  const draftOf = (slug: string) => (full.drafts ?? []).find((d) => d.roadmap === slug && OPEN_DRAFT.includes(d.out.status));
+  const keyDates = slugs
+    .flatMap((slug) => {
+      const pub = draftOf(slug)?.published.key_dates ?? null;
+      return (db.key_dates?.[slug] ?? []).map((k) => {
+        const was = pub?.find((x) => x.id === k.id);
+        const inDraft = pub !== null && (!was || JSON.stringify(was) !== JSON.stringify(k));
+        return { id: k.id, roadmap: ref(slug), name: k.name, date: k.date, note: k.note, in_draft: inDraft };
+      });
+    })
+    .sort((a, b) => (a.date === b.date ? a.name.localeCompare(b.name) : a.date < b.date ? -1 : 1));
+  const may = me.role !== "viewer";
+  return { key_dates: keyDates, key_date_roadmaps: slugs.map((slug) => ({ roadmap: ref(slug), applies: may && canEditRoadmap(full, slug, me), can_change: may })) };
 }
 
 function json(status: number, body: unknown): Response {

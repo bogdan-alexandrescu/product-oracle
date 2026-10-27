@@ -169,6 +169,28 @@ class SimpleMilestone(BaseModel):
     item_ids: list[uuid.UUID]
 
 
+class SimpleKeyDate(BaseModel):
+    """Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board
+    meeting), as the reader reads it (the working draft's when they see it)."""
+
+    id: uuid.UUID
+    roadmap: "SimpleDocRef"
+    name: str
+    date: dt.date
+    note: str | None = None
+    # Added or changed in the roadmap's working draft (not published yet).
+    in_draft: bool = False
+
+
+class SimpleKeyDateRoadmap(BaseModel):
+    """A roadmap whose key dates the reader reads; ``applies``: their change applies (an
+    owner, the decider, with none its owner), ``can_change``: they may change or propose."""
+
+    roadmap: "SimpleDocRef"
+    applies: bool = False
+    can_change: bool = False
+
+
 class SimpleRoadmapOut(BaseModel):
     today: dt.date
     group: RoadmapGroup
@@ -181,6 +203,9 @@ class SimpleRoadmapOut(BaseModel):
     changes_in_review: int = 0
     # S3b: the open drafts the reader sees (their items read as the draft has them).
     drafts: list["SimpleDraftBrief"] = []
+    # Roadmap-plus: the key dates of the roadmaps shown, by day, and those roadmaps.
+    key_dates: list[SimpleKeyDate] = []
+    key_date_roadmaps: list[SimpleKeyDateRoadmap] = []
 
 
 class DateSuggestionEdit(BaseModel):
@@ -229,6 +254,10 @@ ChangeOp = Literal[
     # S5: a one-pager line, as a section patch of each of its source sections
     # (oracle.simple.one_pager).
     "edit_line",
+    # Roadmap-plus: a roadmap's key dates, into its working draft (oracle.simple.key_dates).
+    "add_key_date",
+    "edit_key_date",
+    "remove_key_date",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -486,8 +515,12 @@ class SimplePriorityRow(BaseModel):
     depends_on: list[str] = []
     after: SimplePriorityAfter | None = None
     override: SimplePriorityOverride | None = None
-    # This quarter's plan (horizon now).
+    # Above the line: this quarter's plan (horizon now) by default; with a date line, planned
+    # to finish by that day (its stored or estimated end).
     above_line: bool = False
+    # Roadmap-plus: the item's end as the roadmap resolves it (stored or estimated).
+    end_date: dt.date | None = None
+    end_estimated: bool = False
     # Serves no confirmed goal.
     no_goal: bool = False
     can_reorder: bool = False
@@ -555,6 +588,17 @@ class SimpleGoalBucket(BaseModel):
     no_goal: bool = False
 
 
+class SimpleLine(BaseModel):
+    """Roadmap-plus: where the line on priorities is drawn. ``now``: this quarter's plan
+    (the Now horizon); ``key_date:<id>``, ``milestone:<id>``, ``date:<YYYY-MM-DD>``: planned
+    to finish by that day."""
+
+    key: str
+    kind: Literal["now", "key_date", "milestone", "date"]
+    label: str
+    date: dt.date | None = None
+
+
 class SimplePrioritiesOut(BaseModel):
     today: dt.date
     quarter: SimpleQuarter
@@ -568,6 +612,9 @@ class SimplePrioritiesOut(BaseModel):
     weeks_total: float
     # Commenter and up: may reorder and estimate (applies or proposes).
     can_change: bool
+    # Roadmap-plus: the line drawn, and the lines offered (Pick a date aside).
+    line: SimpleLine | None = None
+    lines: list[SimpleLine] = []
 
 
 SimpleRoadmapOut.model_rebuild()

@@ -1,10 +1,10 @@
 """``/v1/me/preferences``: what the signed-in user (or API token) chose for themselves."""
 
 import uuid
-from typing import Literal
+from typing import Annotated, Literal
 
 from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StringConstraints
 from sqlalchemy import select
 
 from oracle.auth.deps import CurrentPrincipal, TenantDB
@@ -13,6 +13,12 @@ from oracle.preferences.models import UserPreference
 DocumentView = Literal["brief", "full"]
 # #723: the mode a person works in, Simple or Detailed; unset until they switch.
 Experience = Literal["simple", "detailed"]
+# Roadmap-plus: where Simple's priorities draw the line ("now", "key_date:<id>",
+# "milestone:<id>", "date:<YYYY-MM-DD>"; oracle.simple.priorities).
+PrioritiesLine = Annotated[
+    str,
+    StringConstraints(pattern=r"^(now|(key_date|milestone):[0-9a-f-]{36}|date:\d{4}-\d{2}-\d{2})$"),
+]
 
 
 class SlackPings(BaseModel):
@@ -44,13 +50,15 @@ class Preferences(BaseModel):
     they hid Home's Set up checklist (A1); a header chip shows it again.
     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
     ``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they
-    last switched to (#723); unset, they land by role (viewers and commenters in Simple)."""
+    last switched to (#723); unset, they land by role (viewers and commenters in Simple).
+    ``priorities_line``: where Simple's priorities draw the line; unset, this quarter."""
 
     document_view: DocumentView = "brief"
     setup_hidden: bool = False
     welcome_dismissed: bool = False
     slack_pings: SlackPings = SlackPings()
     experience: Experience | None = None
+    priorities_line: str | None = None
 
 
 class PreferencesUpdate(BaseModel):
@@ -59,6 +67,7 @@ class PreferencesUpdate(BaseModel):
     welcome_dismissed: bool | None = None
     slack_pings: SlackPingsUpdate | None = None
     experience: Experience | None = None
+    priorities_line: PrioritiesLine | None = None
 
 
 router = APIRouter(prefix="/v1/me", tags=["auth"])

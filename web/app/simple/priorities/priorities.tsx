@@ -70,7 +70,25 @@ export function Priorities() {
   const { can, capsReady } = useMe();
   const tab = (TABS.find((t) => t.key === params.get("tab"))?.key ?? "ranked") as Tab;
   const compare = params.get("compare") === "1";
-  const q = useQuery<Out>("simple-priorities", () => unwrap(api.GET("/v1/simple/priorities")), { keepPrevious: true });
+  // Roadmap-plus: the line, from the URL; landing without one, the person's remembered pick
+  // (preferences) is put back in the URL once.
+  const prefs = useQuery("me-preferences", () => unwrap(api.GET("/v1/me/preferences")));
+  const remembered = prefs.data?.priorities_line ?? null;
+  // Once the person picks, the URL alone says the line (Now: none).
+  const [picked, setPicked] = useState(false);
+  const line = params.get("line") ?? (picked ? null : remembered);
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || (!prefs.data && !prefs.error)) return;
+    restored.current = true;
+    if (!params.get("line") && remembered && remembered !== "now") setParams({ line: remembered });
+  }, [params, prefs.data, prefs.error, remembered, setParams]);
+  const q = useQuery<Out>(`simple-priorities:${line ?? "now"}`, () => unwrap(api.GET("/v1/simple/priorities", { params: { query: line ? { line } : {} } })), { keepPrevious: true });
+  const pickLine = (key: string) => {
+    setPicked(true);
+    setParams({ line: key === "now" ? null : key });
+    void api.PATCH("/v1/me/preferences", { body: { priorities_line: key } });
+  };
   const data = q.data;
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
@@ -130,6 +148,7 @@ export function Priorities() {
             </button>
           ))}
         </div>
+        {data && tab !== "buckets" && <LinePicker data={data} onPick={pickLine} />}
         {tab === "ranked" && (
           <label className="flex cursor-pointer items-center gap-2 text-[length:var(--simple-small)]">
             <button
@@ -250,13 +269,16 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
     }
   }
 
+  const firstBelow = rows.findIndex((r) => !r.above_line);
   return (
     <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
-      {rows.map((r, i) => {
+      {rows.flatMap((r, i) => {
+        const divider = i === firstBelow ? [<LineDivider key="the-line" data={data} />] : [];
         // Any of the feature's items (a proposal on its later item shows here too).
         const proposals = data.proposals.filter((p) => p.feature_id === r.feature_id && (p.op === "override_priority" || p.op === "estimate_feature"));
         const target = drag && drag.to === i && drag.from !== i;
-        return (
+        return [
+          ...divider,
           <li
             key={r.feature_id}
             ref={(el) => {
@@ -264,6 +286,8 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
             }}
             data-testid="prio-row"
             data-code={r.code}
+            data-above={r.above_line ? "true" : "false"}
+            data-end={r.end_date ?? ""}
             className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${target ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -295,6 +319,12 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
                   Oracle #{r.oracle_rank}
                 </span>
               )}
+              <span
+                aria-label={r.above_line ? "Above the line" : "Below the line"}
+                title={r.above_line ? "Above the line" : "Below the line"}
+                className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
+                data-testid="prio-line-mark"
+              />
               <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{r.code}</span>
               <span className="min-w-[12rem] flex-1 font-medium">{r.title}</span>
               <span className="ml-auto flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
@@ -329,8 +359,8 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
             {proposals.map((p) => (
               <ProposalCard key={p.change_id} p={p} changed={changed} />
             ))}
-          </li>
-        );
+          </li>,
+        ];
       })}
     </ol>
   );
@@ -733,6 +763,7 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
                   key={r.feature_id}
                   data-testid="vxe-point"
                   data-code={r.code}
+                  data-above={r.above_line ? "true" : "false"}
                   aria-label={`#${r.rank} ${r.code}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}`}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-default"}`}
                   style={{ left, top }}
@@ -767,24 +798,85 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
               No goal
             </li>
           )}
-          <li>Numbers are ranks; hollow is below the line (not this quarter).</li>
+          <li>Numbers are ranks; hollow is below the line ({lineWords(data)}).</li>
         </ul>
         {mayChange && <p className="mt-1 pl-6 text-[length:var(--simple-small)] text-text-faint">Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys).</p>}
       </section>
       <section aria-label="Ranked side list">
         <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Ranked</h2>
         <ol className="flex flex-col gap-1">
-          {rows.map((r) => (
-            <li key={r.feature_id} data-testid="side-row" data-code={r.code} className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1 text-[length:var(--simple-small)]">
+          {rows.flatMap((r, i) => [
+            ...(i === rows.findIndex((x) => !x.above_line) ? [<LineDivider key="the-line" data={data} compact />] : []),
+            <li key={r.feature_id} data-testid="side-row" data-code={r.code} data-above={r.above_line ? "true" : "false"} className={`flex items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1 text-[length:var(--simple-small)] ${r.above_line ? "" : "text-text2"}`}>
               <span className="w-6 text-right font-semibold tabular-nums">{r.rank}</span>
               <span className="font-mono text-[length:var(--simple-small)]">{r.code}</span>
               <span className="min-w-0 flex-1 truncate">{r.title}</span>
               <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
-            </li>
-          ))}
+            </li>,
+          ])}
         </ol>
       </section>
     </div>
+  );
+}
+
+// --------------------------------------------------------------------------- the line
+
+/** The line in words: "not this quarter" for Now, else "not done by <day>". */
+function lineWords(data: Out): string {
+  const l = data.line;
+  return !l || l.kind === "now" ? "not this quarter" : `not planned to finish by ${l.label.replace(/^By /, "")}`;
+}
+
+/** Roadmap-plus: the "Line" picker: This quarter (Now) · each key date · each dated milestone · Pick a date. */
+function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void }) {
+  const current = data.line ?? { key: "now", kind: "now" as const, label: "This quarter (Now)", date: null };
+  const [picking, setPicking] = useState(current.kind === "date");
+  const offered = data.lines ?? [];
+  const value = picking || current.kind === "date" ? "pick" : current.key;
+  const field = "rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]";
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-[length:var(--simple-small)]" data-testid="line-picker">
+      <label htmlFor="prio-line" className="font-medium">
+        Line
+      </label>
+      <select
+        id="prio-line"
+        value={value}
+        className={field}
+        onChange={(e) => {
+          if (e.target.value === "pick") setPicking(true);
+          else {
+            setPicking(false);
+            onPick(e.target.value);
+          }
+        }}
+      >
+        {offered.map((l) => (
+          <option key={l.key} value={l.key}>
+            {l.kind === "key_date" ? `Key date: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
+          </option>
+        ))}
+        <option value="pick">{current.kind === "date" ? current.label : "Pick a date…"}</option>
+      </select>
+      {value === "pick" && (
+        <input type="date" aria-label="The line's date" className={field} defaultValue={current.date ?? ""} onChange={(e) => e.target.value && onPick(`date:${e.target.value}`)} />
+      )}
+    </div>
+  );
+}
+
+/** The divider row: everything after it in rank order that is hollow falls below the line. */
+function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }) {
+  const below = data.rows.filter((r) => !r.above_line);
+  return (
+    <li role="separator" data-testid="line-divider" className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? "py-0.5" : "py-1"}`}>
+      <span aria-hidden className="h-0.5 w-6 flex-none bg-accent-ink" />
+      <span>
+        The line: {data.line?.label ?? "This quarter (Now)"} · below it: {below.length} ({below.map((r) => r.code).join(", ")})
+      </span>
+      <span aria-hidden className="h-0.5 flex-1 bg-accent-ink" />
+    </li>
   );
 }
 

@@ -21,7 +21,8 @@ window. Every resolved date says its source and whether it is estimated.
 
 **Waterfall** (:func:`phases`): discover, build, beta, launch. The item's milestone and
 validation gates that name a phase (``phase``, else ``name``) and carry a ``date`` end that
-phase on that date; every other phase keeps the 15/55/20/10 split of the bar, estimated.
+phase on that date, wherever the bar is moved; every other phase keeps the 15/55/20/10
+split of the bar, estimated, ending before the next dated gate (they may bunch up).
 
 **Suggestion** (:func:`suggest`), for an undated item (both dates estimated): start = the
 later of its window's start and the day after its dependencies' latest resolved end;
@@ -185,6 +186,9 @@ def named_phases(milestone: dict | None, gates: list | None) -> dict[str, date]:
 
 
 def phases(start: Dated, end: Dated, milestone: dict | None, gates: list | None) -> list[Phase]:
+    """The four phases over the bar. A phase a dated gate ends stays on the gate's day
+    wherever the bar moves; an estimated phase keeps its share of the bar but ends before
+    the next dated gate, so phases between gates may bunch up (roadmap-plus)."""
     named = named_phases(milestone, gates)
     total = (end.date - start.date).days + 1
     out: list[Phase] = []
@@ -196,10 +200,12 @@ def phases(start: Dated, end: Dated, milestone: dict | None, gates: list | None)
             day, estimated = named[key], False
         else:
             day = end.date if last else start.date + timedelta(days=round(total * share) - 1)
-            estimated = True
-        day = max(day, cursor)
-        out.append(Phase(key, cursor, day, estimated))
-        cursor = day + DAY
+            gate = min((named[k] for k in PHASES[i + 1 :] if k in named), default=None)
+            if gate is not None and day >= gate:
+                day = gate - DAY
+            day, estimated = max(day, cursor), True
+        out.append(Phase(key, min(cursor, day), day, estimated))
+        cursor = max(cursor, day + DAY)
     return out
 
 
