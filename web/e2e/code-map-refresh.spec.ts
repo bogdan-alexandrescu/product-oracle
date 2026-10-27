@@ -1,5 +1,5 @@
 import { login, signOut } from "./helpers";
-import { expect, test } from "./test";
+import { expect, test, type Page } from "./test";
 
 /**
  * Code map refresh as a company setting (owner, 2026-10-26), on the mock layer: Settings ›
@@ -16,6 +16,16 @@ import { expect, test } from "./test";
  * "Refresh stale code maps" (can("put_setting") is the owner's); fails_when = a non-owner is
  * offered the setting; no_claim = the API's 403 (api/tests/test_code_maps.py).
  */
+
+/** Switches people: the account menu lives in the desktop rail, so sign out there and come
+ * back to the test's width (as e2e/simple-one-pager.spec.ts does). */
+async function switchTo(page: Page, email?: string) {
+  const size = page.viewportSize()!;
+  await page.setViewportSize({ width: 1366, height: 820 });
+  await signOut(page);
+  await login(page, email);
+  await page.setViewportSize(size);
+}
 
 for (const phone of [false, true]) {
   for (const scheme of ["light", "dark"] as const) {
@@ -42,8 +52,7 @@ for (const phone of [false, true]) {
 
       test("an approver is not offered the setting", async ({ page }) => {
         await login(page);
-        await signOut(page);
-        await login(page, "approver@example.com");
+        await switchTo(page, "approver@example.com");
         await page.goto("/settings/sources");
         await expect(page.getByRole("heading", { name: "Sources" }).first()).toBeVisible();
         await expect(page.getByLabel("Refresh stale code maps")).toHaveCount(0);

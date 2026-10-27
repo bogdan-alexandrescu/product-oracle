@@ -33,6 +33,16 @@ async function submitted(page: Page) {
   await expect(bar(page).getByTestId("draft-waits-on")).toContainText("waiting on review from");
 }
 
+/** Switches people: the account menu lives in the desktop rail, so sign out there and come
+ * back to the test's width (as e2e/simple-one-pager.spec.ts does). */
+async function switchTo(page: Page, email?: string) {
+  const size = page.viewportSize()!;
+  await page.setViewportSize({ width: 1366, height: 820 });
+  await signOut(page);
+  await login(page, email);
+  await page.setViewportSize(size);
+}
+
 for (const phone of [false, true]) {
   for (const scheme of ["light", "dark"] as const) {
     test.describe(`${phone ? "phone" : "desktop"} · ${scheme}`, () => {
@@ -48,8 +58,7 @@ for (const phone of [false, true]) {
         await expect(bar(page).getByTestId("reminded-at")).toHaveText("Reminded 2h ago");
         await expect(bar(page).getByRole("button", { name: "Remind" })).toHaveCount(0);
 
-        await signOut(page);
-        await login(page, "approver@example.com");
+        await switchTo(page, "approver@example.com");
         await page.goto("/inbox");
         const nudge = page.getByText(/is waiting for your review of Guided setup/).first();
         await expect(nudge).toBeVisible();
@@ -57,8 +66,7 @@ for (const phone of [false, true]) {
         await expect(bar(page)).toContainText("waiting on review from");
         await expect(bar(page).getByRole("button", { name: "Remind" })).toHaveCount(0);
 
-        await signOut(page);
-        await login(page);
+        await switchTo(page);
         await page.clock.fastForward("23:00:00");
         await page.goto(URL);
         await expect(bar(page).getByRole("button", { name: "Remind" })).toBeVisible();
@@ -66,8 +74,7 @@ for (const phone of [false, true]) {
 
       test("a commenter reads the bar without Remind", async ({ page }) => {
         await submitted(page);
-        await signOut(page);
-        await login(page, "commenter@example.com");
+        await switchTo(page, "commenter@example.com");
         await page.goto(URL);
         await expect(page.getByRole("heading", { level: 1, name: "Guided setup" })).toBeVisible();
         await expect(page.getByRole("button", { name: "Remind" })).toHaveCount(0);
