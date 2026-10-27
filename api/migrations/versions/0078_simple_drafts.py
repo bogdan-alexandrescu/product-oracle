@@ -113,7 +113,9 @@ def upgrade() -> None:
         _fk(t, "draft_id", "simple_drafts", "CASCADE"),
         _fk(t, "draft_version_id", "document_versions", "SET NULL"),
         sa.UniqueConstraint(
-            "session_id", "document_id", name=op.f("uq_simple_session_drafts_session_id_document_id")
+            "session_id",
+            "document_id",
+            name=op.f("uq_simple_session_drafts_session_id_document_id"),
         ),
     )
     op.create_index(op.f("ix_simple_session_drafts_tenant_id"), t, ["tenant_id"])
