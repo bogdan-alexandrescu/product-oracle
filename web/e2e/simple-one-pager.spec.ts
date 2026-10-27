@@ -83,6 +83,47 @@ for (const phone of [false, true]) {
         await expect(line).toContainText("A setup checklist that shows the next step");
       });
 
+      test("an edited metric line shows its new numbers", async ({ page }) => {
+        await login(page);
+        await page.goto(URL);
+        await page.getByRole("button", { name: "Edit line 5" }).click();
+        await page.getByLabel("Line 5").fill("Teammate invited in week one from 48% to 70%");
+        await page.getByRole("button", { name: "Save" }).click();
+        const line = page.locator('[data-line="outcomes-1"]');
+        await expect(line).toHaveAttribute("data-state", "edited");
+        await expect(line).toContainText("48% → 70%");
+        await expect(line).not.toContainText("65%");
+      });
+
+      test("a line's sources show the section's text", async ({ page }) => {
+        await login(page, "viewer@example.com");
+        await page.goto(URL);
+        await page.getByRole("button", { name: /A setup checklist that shows the next step/ }).click();
+        const sources = page.getByRole("dialog", { name: "Sources of line 2" });
+        await expect(sources).toContainText("What we will build");
+        await expect(sources).toContainText("Invite suggestions from the admin's calendar");
+      });
+
+      if (!phone) {
+        test("a margin note sits beside its line", async ({ page }) => {
+          await login(page);
+          await page.goto(URL);
+          await page.getByRole("button", { name: "Edit line 9" }).click();
+          await page.getByLabel("Line 9").fill("Calendar access may worry admins");
+          await page.getByRole("button", { name: "Save" }).click();
+          const line = page.locator('[data-line="risks-1"]');
+          await expect(line).toHaveAttribute("data-state", "edited");
+          const note = page.getByRole("complementary", { name: "Margin" }).getByRole("note", { name: "Change to line 9" });
+          await expect(note).toBeVisible();
+          await expect(async () => {
+            const a = (await line.boundingBox())!;
+            const b = (await note.boundingBox())!;
+            expect(Math.abs(a.y - b.y)).toBeLessThan(24);
+            expect(b.x).toBeGreaterThan(a.x + a.width);
+          }).toPass();
+        });
+      }
+
       test("a commenter proposes, the owner accepts after opening the flow", async ({ page }) => {
         await login(page, "commenter@example.com");
         await page.goto(URL);

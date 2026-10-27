@@ -348,3 +348,170 @@ async def test_pdf_one_page(client):
         if pdf_available():
             assert page_count(html) == 1
     assert (await client.get(f"{URL}/{uuid.uuid4()}", headers=ctx.as_("viewer"))).status_code == 404
+
+
+# --------------------------------------------------------------------------- review (#734)
+
+
+async def test_proposal_reads_the_published_line_when_the_draft_is_hidden(client):
+    """A commenter who cannot see the working draft proposes against the published line and
+    section; neither the proposal nor a conflict carries the draft's words."""
+    ctx = await world(client)
+    seen = await get(client, ctx, "commenter")
+    r = await edit(client, ctx, "owner", await get(client, ctx), "bets-1", "Owners-only wording")
+    assert r.status_code == 201, r.text
+    r = await edit(client, ctx, "commenter", seen, "bets-1", "A checklist of next steps")
+    assert r.status_code == 201, r.text
+    prop = r.json()["change"]
+    assert prop["status"] == "proposed"
+    assert prop["before"]["line"] == line(seen, "bets-1")["text"]
+    assert "Owners-only wording" not in r.text
+    stale = await edit(client, ctx, "commenter", seen, "bets-1", "Other", before="Not the line")
+    assert stale.status_code == 409 and "Owners-only wording" not in stale.text
+
+
+async def test_track_owner_submits_a_prd_draft_without_decider(client):
+    """With no decider, the PRD's track owner (an approver) edits lines and submits the
+    draft: drafts.who reads the PRD's tracks (prd_document_id)."""
+    from oracle.roadmap.models import ProductTrack
+
+    ctx = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        policy = await s.scalar(select(DocumentReviewPolicy))
+        policy.decider_id = None
+        s.add(
+            ProductTrack(prd_document_id=doc.id, title="Setup", owner_id=ctx.users["approver"].id)
+        )
+        await s.commit()
+    view = await get(client, ctx, "approver")
+    assert view["can_edit"] is True
+    r = await edit(client, ctx, "approver", view, "bets-2", "Invite suggestions from contacts")
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    draft = (await get(client, ctx, "approver"))["draft"]
+    assert draft["can_submit"] is True
+    got = await client.get(f"/v1/simple/drafts/{draft['id']}", headers=ctx.as_("approver"))
+    assert got.status_code == 200, got.text
+    sub = await client.post(f"/v1/simple/drafts/{draft['id']}/submit", headers=ctx.as_("approver"))
+    assert sub.status_code == 200, sub.text
+
+
+async def test_edited_metric_line_shows_its_new_numbers(client):
+    """An edited outcome's metric is read from its new words; the PDF keeps the published."""
+    ctx = await world(client)
+    view = await get(client, ctx)
+    r = await edit(
+        client, ctx, "owner", view, "outcomes-1", "Teammate invited in week one from 48% to 70%"
+    )
+    assert r.status_code == 201, r.text
+    m = line(await get(client, ctx), "outcomes-1")["metric"]
+    assert m == {"name": "Teammate invited in week one", "from": "48%", "to": "70%"}
+    async with tenant_session(ctx.tenant_id) as s:
+        from oracle.auth.deps import Principal
+
+        p = Principal(tenant_id=ctx.tenant_id, kind="user", role="owner",
+                      user_id=ctx.users["owner"].id)  # fmt: skip
+        html, _ = await one_pager.pdf_html(s, p, "guided-setup")
+        assert "65%" in html and "70%" not in html
+
+
+async def test_job_answer_never_moves_a_drafted_line(client):
+    """The job's answer does not replace the quick read while the working draft holds a
+    line edit: line ids stay on the line that was edited."""
+    ctx = await world(client)
+    view = await get(client, ctx)
+    before = {x["id"]: x["text"] for b in view["blocks"] for x in b["lines"]}
+    r = await edit(client, ctx, "owner", view, "bets-2", "Invite suggestions from contacts")
+    assert r.status_code == 201, r.text
+    answer = {"blocks": [
+        {"key": "problem", "lines": [{"text": "Admins stall.", "source_keys": ["problem"]}]},
+        {"key": "bets", "lines": [{"text": t, "source_keys": ["build"]}
+                                  for t in ("Sample", "Checklist", "Invites")]},
+        {"key": "outcomes", "lines": [{"text": t, "source_keys": ["outcomes"]}
+                                      for t in ("Invites up", "Setup")]},
+    ]}  # fmt: skip
+
+    async def ask(kind, payload):
+        return answer
+
+    async with tenant_session(ctx.tenant_id) as s:
+        job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
+        assert (await one_pager.run_job(s, job, ask))["built"] is False
+        await s.commit()
+    after = await get(client, ctx)
+    assert line(after, "bets-2")["text"] == "Invite suggestions from contacts"
+    assert line(after, "bets-1")["text"] == before["bets-1"]
+    assert line(after, "bets-3")["text"] == before["bets-3"]
+
+
+def test_patch_replaces_the_source_fact_or_refuses():
+    body = "- A setup checklist that shows the next step\n- Invite suggestions from the admin's calendar\n"
+    # A paraphrased line (the job's wording) replaces the bullet it rests on.
+    out = one_pager.patch(body, "Checklist showing the next setup step", "A guided tour")
+    assert out == "- A guided tour\n- Invite suggestions from the admin's calendar\n"
+    # A truncated line replaces its bullet.
+    out = one_pager.patch(body, "Invite suggestions from the…", "Invites from contacts")
+    assert out == "- A setup checklist that shows the next step\n- Invites from contacts\n"
+    # Nothing to replace: refused, never appended.
+    assert one_pager.patch(body, "Pricing changes for large teams", "x") is None
+
+
+async def test_problem_line_patches_each_of_its_sections(client):
+    """The Problem line spans two sections: its new words replace the first section's facts
+    and the second loses the facts the line no longer says; nothing old is kept beside it."""
+    ctx = await world(client)
+    view = await get(client, ctx)
+    r = await edit(client, ctx, "owner", view, "problem-1", "New admins stall in setup.")
+    assert r.status_code == 201, r.text
+    secs = r.json()["change"]["after"]["sections"]
+    assert secs["problem"]["body"].strip() == "New admins stall in setup."
+    assert "fewer than ten people" not in secs["who"]["body"]
+    # A line no section holds is refused with the way to the detailed view.
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.scalar(select(SimpleOnePager))
+        blocks = [dict(b) for b in row.blocks]
+        blocks[3] = {**blocks[3], "lines": [{"id": "not_doing-1", "text": "Pricing for big teams",
+                                             "source_keys": ["not-doing"]}]}  # fmt: skip
+        row.blocks = blocks
+        await s.commit()
+    view = await get(client, ctx)
+    r = await edit(client, ctx, "owner", view, "not_doing-1", "No pricing work")
+    assert r.status_code == 409 and "detailed view" in r.text
+
+
+async def test_first_reads_race_on_a_new_version(client):
+    """Two first reads of a new version build one row; neither fails."""
+    ctx = await world(client)
+    async with tenant_session(ctx.tenant_id) as s1, tenant_session(ctx.tenant_id) as s2:
+        doc1 = await s1.scalar(select(Document))
+        doc2 = await s2.scalar(select(Document))
+        a = await one_pager.built(s1, doc1, queue=False)
+        import asyncio
+
+        task = asyncio.create_task(one_pager.built(s2, doc2, queue=False))
+        await asyncio.sleep(0.3)
+        await s1.commit()
+        b = await task
+        await s2.commit()
+        assert a.row.id == b.row.id
+    async with tenant_session(ctx.tenant_id) as s:
+        assert len(list(await s.scalars(select(SimpleOnePager)))) == 1
+
+
+async def test_viewer_read_writes_nothing(client):
+    """A viewer's GET builds the page in memory: no cached row, no job."""
+    ctx = await world(client)
+    view = await get(client, ctx, "viewer")
+    assert block(view, "bets")["lines"]
+    async with tenant_session(ctx.tenant_id) as s:
+        assert list(await s.scalars(select(SimpleOnePager))) == []
+        assert list(await s.scalars(select(LlmJob).where(LlmJob.kind == "one_pager"))) == []
+
+
+async def test_read_carries_the_source_sections_text(client):
+    """The drill-down shows each source section's heading and text."""
+    ctx = await world(client)
+    view = await get(client, ctx)
+    build = next(s for s in view["sections"] if s["key"] == "build")
+    assert build["heading"] == "What we will build"
+    assert "Invite suggestions from the admin's calendar" in build["body"]
