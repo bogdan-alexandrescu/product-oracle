@@ -47,6 +47,9 @@ JOB_KINDS = (
     "refinement_batch",
     "public_text",
     "one_pager",
+    # Simple S7 (oracle.simple.additions): a draft item drafted, a goal's suggestions.
+    "item_draft",
+    "goal_suggestions",
 )
 # Jobs on a product intake (CR-03, migration 0014_intake): light extraction from a brief
 # and its pinned sources. They have no document; ``intake_id`` says whose they are.

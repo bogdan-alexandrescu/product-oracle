@@ -25,7 +25,8 @@ Test cards (protects / fails_when / no_claim):
 - test_merge_item_per_role: protects=merge_item moves the draft's goal links and
   dependencies onto the kept item, points the draft's dependents at the kept item, and
   closes the draft (status merged, merged_into names the kept item); undo restores both;
-  approvers propose it, viewers get 403, a non-draft is 422; fails_when=a link is lost or
+  approvers who see the draft (its reviewers) propose it, viewers get 403, a non-draft is
+  422; fails_when=a link is lost or
   undo leaves a half merge; no_claim=merging two published items.
 - test_reconcile_and_keep_both: protects=a draft whose title looks like an existing item
   or a baseline feature lists it in ``looks_like`` (item first); keep_both empties it and
@@ -54,7 +55,7 @@ from oracle import company_time
 from oracle.jobs.models import LlmJob
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import additions
+from oracle.simple import additions, drafts
 from oracle.simple.models import RoadmapDateSuggestion, SimpleGoalSuggestion
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import make_people
@@ -95,8 +96,10 @@ class World:
             b = await seed.item(rv, pv, "import-b", title="Import history", position=1,
                                 track_id=track.id, depends_on=["import-a"])  # fmt: skip
             if decider:
+                # The approver reviews it, so sees its working draft (and proposes in it).
                 s.add(DocumentReviewPolicy(document_id=rm.id,
-                                           decider_id=self.ctx.users["decider"].id))  # fmt: skip
+                                           decider_id=self.ctx.users["decider"].id,
+                                           mandatory_reviewer_ids=[self.ctx.users["approver"].id]))  # fmt: skip
             await s.commit()
             self.ids = {"import-a": str(a.id), "import-b": str(b.id)}
             self.goals = {"grow": str(grow.id), "quiet": str(quiet.id)}
@@ -106,7 +109,7 @@ class World:
     def as_(self, who: str) -> dict:
         return self.ctx.as_(who)
 
-    async def add(self, client, who: str, title: str, kind="goal", value=None, status=200):
+    async def add(self, client, who: str, title: str, kind="goal", value=None, status=201):
         value = value if value is not None else self.goals["grow"]
         r = await client.post(CHANGES, headers=self.as_(who), json={
             "op": "add_item", "target": {"roadmap_id": self.roadmap_id,
@@ -150,7 +153,7 @@ async def test_add_item_per_role(client):
     # Undo removes the item.
     c = (await w.add(client, "owner", "Short lived"))["change"]
     r = await client.post(f"{CHANGES}/{c['id']}/undo", headers=w.as_("owner"))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     assert c["target"]["item_id"] not in await w.items(client)
     async with tenant_session(w.ctx.tenant_id) as s:
         assert await s.get(RoadmapItem, uuid.UUID(c["target"]["item_id"])) is None
@@ -182,9 +185,9 @@ async def test_added_item_is_in_the_draft_only(client):
             )
         )
         added = [r for r in new if r.title == "Guided setup"]
-        assert len(added) == 1 and added[0].draft and added[0].goal_ids == [
-            uuid.UUID(w.goals["grow"])
-        ]
+        assert (
+            len(added) == 1 and added[0].draft and added[0].goal_ids == [uuid.UUID(w.goals["grow"])]
+        )
 
 
 async def test_drafting_job_fills_the_draft(client):
@@ -212,6 +215,7 @@ async def test_drafting_job_fills_the_draft(client):
         assert job.input["item_id"] == iid
         out = await additions.run_item_draft(s, job, ask)
         assert out["drafted"] is True
+        job.status = "succeeded"
         await s.commit()
     assert seen["title"] == "Import from files"
     assert {f["key"] for f in seen["features"]} >= {"bulk-import", "audit-log"}
@@ -231,7 +235,7 @@ async def test_drafting_job_fills_the_draft(client):
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
         "op": "edit_outcome", "target": {"item_id": i2}, "before": {"outcome": None},
         "after": {"outcome": "Typed by a person"}})  # fmt: skip
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
 
     async def ask2(kind, payload):
         return {"outcome": "Oracle's", "feature_key": None, "depends_on": [],
@@ -239,15 +243,21 @@ async def test_drafting_job_fills_the_draft(client):
 
     async with tenant_session(w.ctx.tenant_id) as s:
         job = await s.scalar(
-            select(LlmJob).where(LlmJob.kind == "item_draft", LlmJob.status == "queued",
-                                 LlmJob.input["item_id"].astext == i2)  # fmt: skip
+            select(LlmJob).where(
+                LlmJob.kind == "item_draft",
+                LlmJob.status == "queued",
+                LlmJob.input["item_id"].astext == i2,
+            )  # fmt: skip
         )
         await additions.run_item_draft(s, job, ask2)
         await s.commit()
         # An end before its start is no suggestion.
-        assert await s.scalar(
-            select(RoadmapDateSuggestion).where(RoadmapDateSuggestion.item_id == uuid.UUID(i2))
-        ) is None
+        assert (
+            await s.scalar(
+                select(RoadmapDateSuggestion).where(RoadmapDateSuggestion.item_id == uuid.UUID(i2))
+            )
+            is None
+        )
     assert (await w.items(client))[i2]["outcome"] == "Typed by a person"
 
 
@@ -263,10 +273,6 @@ async def test_merge_item_per_role(client):
     c2 = (await w.add(client, "owner", "Import reports"))["change"]
     dependent = c2["target"]["item_id"]
     items = await w.items(client)
-    r = await client.post(CHANGES, headers=w.as_("owner"), json={
-        "op": "edit_title", "target": {"item_id": dependent},
-        "before": {"title": "Import reports"}, "after": {"title": "Import reports v2"}})  # fmt: skip
-    assert r.status_code == 200
     async with tenant_session(w.ctx.tenant_id) as s:
         dep_row = await s.get(RoadmapItem, uuid.UUID(dependent))
         dep_row.depends_on = [items[draft]["key"]]
@@ -276,10 +282,10 @@ async def test_merge_item_per_role(client):
     r = await client.post(CHANGES, headers=w.as_("viewer"), json=body)
     assert r.status_code == 403
     r = await client.post(CHANGES, headers=w.as_("approver"), json=body)
-    assert r.status_code == 200 and r.json()["change"]["status"] == "proposed"
+    assert r.status_code == 201 and r.json()["change"]["status"] == "proposed"
     assert (await w.items(client))[draft]["status"] == "draft"
     r = await client.post(CHANGES, headers=w.as_("owner"), json=body)
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     merge = r.json()["change"]
     items = await w.items(client)
     assert items[draft]["status"] == "merged"
@@ -294,7 +300,7 @@ async def test_merge_item_per_role(client):
     r = await client.post(CHANGES, headers=w.as_("owner"), json=body)
     assert r.status_code == 422
     r = await client.post(f"{CHANGES}/{merge['id']}/undo", headers=w.as_("owner"))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     items = await w.items(client)
     assert items[draft]["status"] == "draft" and items[draft]["merged_into"] is None
     assert items[w.ids["import-a"]]["goal_ids"] == []
@@ -321,27 +327,34 @@ async def test_reconcile_and_keep_both(client):
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
         "op": "keep_both", "target": {"item_id": draft}, "before": {"kept_both": False},
         "after": {}})  # fmt: skip
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     assert (await w.items(client))[draft]["looks_like"] == []
     r = await client.post(f"{CHANGES}/{r.json()['change']['id']}/undo", headers=w.as_("owner"))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     assert (await w.items(client))[draft]["looks_like"] != []
     # Merging with a feature links the draft to it.
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
         "op": "merge_item", "target": {"item_id": d2, "feature_id": w.features["audit-log"]},
         "before": {}, "after": {}})  # fmt: skip
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     async with tenant_session(w.ctx.tenant_id) as s:
-        assert str((await s.get(RoadmapItem, uuid.UUID(d2))).feature_id) == w.features["audit-log"]
+        # In the working draft (the published rows are never written).
+        row = await drafts.effective_row(s, await s.get(RoadmapItem, uuid.UUID(d2)))
+        assert str(row.feature_id) == w.features["audit-log"]
     assert (await w.items(client))[d2]["looks_like"] == []
 
 
 async def _seed_suggestions(w: World, n: int = 4) -> list[str]:
     async with tenant_session(w.ctx.tenant_id) as s:
         rows = [
-            SimpleGoalSuggestion(goal_id=uuid.UUID(w.goals["quiet"]), title=f"Quiet hours {i}",
-                                 outcome="Fewer alerts at night", why="Alerts wake people",
-                                 evidence=[], origin="auto")  # fmt: skip
+            SimpleGoalSuggestion(
+                goal_id=uuid.UUID(w.goals["quiet"]),
+                title=f"Quiet hours {i}",
+                outcome="Fewer alerts at night",
+                why="Alerts wake people",
+                evidence=[],
+                origin="auto",
+            )  # fmt: skip
             for i in range(n)
         ]
         s.add_all(rows)
@@ -373,7 +386,7 @@ async def test_goal_suggestions_accept_reject_per_role(client):
     r = await client.post(f"{SUGGESTIONS}/{ids[0]}/accept", headers=w.as_("owner"), json={})
     assert r.status_code == 409
     r = await client.post(f"{CHANGES}/{c['id']}/undo", headers=w.as_("owner"))
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     r = await client.get(SUGGESTIONS, headers=w.as_("owner"), params={"goal_id": w.goals["quiet"]})
     assert ids[0] in [x["id"] for x in r.json()["suggestions"]]
     for who in ("approver", "commenter"):

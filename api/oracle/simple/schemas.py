@@ -5,7 +5,7 @@ import datetime as dt
 import uuid
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 DateSource = Literal["typed", "accepted", "engineering", "tracker", "estimated"]
 RoadmapGroup = Literal["goal", "track", "prd"]
@@ -18,7 +18,7 @@ FlagKind = Literal[
     "draft_without_owner",
 ]
 FixKind = Literal["shift_dependents", "move_dependency", "accept_risk"]
-ItemStatus = Literal["planned", "in_progress", "done", "cut", "draft"]
+ItemStatus = Literal["planned", "in_progress", "done", "cut", "draft", "merged"]
 SuggestionStatus = Literal["open", "accepted", "edited", "dismissed"]
 
 
@@ -150,6 +150,34 @@ class SimpleRoadmapItem(BaseModel):
     deciders: list[str] = []
     reasons: list[str] = []
     open_decisions: list[SimpleOpenDecision] = []
+    # S7 (oracle.simple.additions): a draft's likely duplicates (not kept both; at most 2,
+    # best first), the item it was merged into, whether Oracle is drafting it, its flow
+    # (null: no flow yet) and the goals it is linked to directly.
+    looks_like: list["SimpleMatch"] = Field(
+        default=[],
+        description="S7: likely duplicates of a draft not kept both (at most 2, best first).",
+    )
+    merged_into: "SimpleMergedInto | None" = None
+    drafting: bool = Field(
+        default=False, description="S7: Oracle's drafting job for this draft is queued or running."
+    )
+    flow: "SimpleFlow | None" = None
+    goal_ids: list[str] = Field(
+        default=[], description="S7: the goals the item is linked to directly."
+    )
+
+
+class SimpleMatch(BaseModel):
+    kind: Literal["item", "feature"]
+    id: str
+    code: str
+    title: str
+
+
+class SimpleMergedInto(BaseModel):
+    id: str
+    code: str
+    title: str
 
 
 class SimpleGroup(BaseModel):
@@ -229,6 +257,11 @@ ChangeOp = Literal[
     # S5: a one-pager line, as a section patch of each of its source sections
     # (oracle.simple.one_pager).
     "edit_line",
+    # S7: a draft item added (oracle.simple.additions), merged into another item or a
+    # feature, kept beside its look-alikes.
+    "add_item",
+    "merge_item",
+    "keep_both",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -510,7 +543,7 @@ class SimpleFlow(BaseModel):
 
 class SimplePriorityProposal(BaseModel):
     change_id: uuid.UUID
-    op: Literal["override_priority", "estimate_feature", "confirm_item", "cut"]
+    op: Literal["override_priority", "estimate_feature", "confirm_item", "cut", "merge_item"]
     item_id: uuid.UUID
     # The item's baseline feature (the row it shows under); None for a draft with none.
     feature_id: str | None = None
@@ -696,3 +729,74 @@ class OnePagerOut(BaseModel):
     # propose; viewers read.
     can_edit: bool
     can_propose: bool
+
+
+# --------------------------------------------------------------------------- S7
+
+
+class SimpleGoalBrief(BaseModel):
+    id: str
+    key: str
+    title: str
+
+
+class SimpleEvidence(BaseModel):
+    label: str
+    kind: str
+    ref: str | None
+    url: str | None
+    confidence: Literal["high", "medium", "low"]
+
+
+class SimpleGoalSuggestion(BaseModel):
+    id: str
+    goal: SimpleGoalBrief
+    title: str
+    outcome: str
+    why: str
+    evidence: list[SimpleEvidence]
+    status: Literal["open", "accepted", "rejected"]
+    reason: str | None
+    origin: Literal["auto", "on_demand"]
+    created_at: dt.datetime
+    decided_by_name: str | None
+    decided_at: dt.datetime | None
+    change_id: str | None
+    item_id: str | None
+    looks_like: list[SimpleMatch]
+    flow: SimpleFlow | None
+    can_accept: bool
+    can_reject: bool
+
+
+class SimpleGoalSuggestionGoal(BaseModel):
+    goal: SimpleGoalBrief
+    pending: bool
+    empty: bool
+
+
+class SimpleGoalSuggestionsOut(BaseModel):
+    goals: list[SimpleGoalSuggestionGoal]
+    suggestions: list[SimpleGoalSuggestion]
+
+
+class SimpleSuggestJobOut(BaseModel):
+    goal_id: str
+    pending: bool
+    job_id: str
+
+
+class SimpleSuggestionAcceptIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    roadmap_id: uuid.UUID | None = None
+    session_id: uuid.UUID | None = None
+
+
+class SimpleSuggestionRejectIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str | None = Field(default=None, max_length=500)
+
+
+SimpleRoadmapItem.model_rebuild()

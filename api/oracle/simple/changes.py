@@ -42,6 +42,14 @@ Ops and the fields they write (``before`` must name the key fields):
   now overlap move the same way, transitively.
 - ``move_dependency``: the dependency ends the day before the item starts, keeping its
   length. Both fixes key ``before``/``after`` by item id.
+- ``add_item`` (S7): a new draft item; oracle.simple.additions makes it (its own rules for
+  who applies, its undo removes the item).
+- ``merge_item`` (S7): a draft (``target.item_id``) merged into another item of its
+  roadmap (``target.into_id``): the kept item takes the draft's goal links, dependencies
+  and note, the draft's dependents depend on the kept item, the draft closes
+  (``merged_into``: the kept item's key); or linked to a baseline feature
+  (``target.feature_id``). Keyed by item id like the fixes; ``before`` is read, not given.
+- ``keep_both`` (S7): kept_both; the draft's look-alikes are no longer offered.
 """
 
 import uuid
@@ -87,8 +95,11 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "edit_outcome": ("outcome",),
     "accept_risk": ("risk",),
     "confirm_item": ("draft",),
+    "keep_both": ("kept_both",),
 }
 FIXES = ("shift_dependents", "move_dependency")
+# The ops that key ``before``/``after`` by item id.
+KEYED = (*FIXES, "merge_item")
 FLAG_KINDS = (
     "dependency_order",
     "blocker_date",
@@ -251,12 +262,10 @@ def read(row: RoadmapItem, fields: tuple[str, ...] | list[str], target: dict[str
     """The item's stored values of ``fields``, as JSON."""
     out: dict[str, Any] = {}
     for f in fields:
-        if f in DATES:
-            out[f] = _iso(getattr(row, f))
-        elif f == "risk":
+        if f == "risk":
             out[f] = _risk_of(row, target)
         else:
-            out[f] = getattr(row, f)
+            out[f] = drafts._json(f, getattr(row, f))
     return out
 
 
@@ -276,7 +285,7 @@ def write(row: RoadmapItem, values: dict[str, Any], target: dict[str, Any]) -> N
             ]
             row.accepted_risks = kept + ([v] if v is not None else [])
         else:
-            setattr(row, f, v)
+            setattr(row, f, drafts._typed(f, v))
 
 
 def _normal(fields: tuple[str, ...], values: dict[str, Any]) -> dict[str, Any]:
@@ -334,7 +343,7 @@ async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
 
 
 def _touched(c: SimpleChange) -> set[str]:
-    if c.op in FIXES:
+    if c.op in KEYED:
         return set(c.after) | set(c.before)
     return {str(c.target.get("item_id"))}
 
@@ -462,12 +471,14 @@ async def _plan(
             for i, (s, e) in moves.items()
         }
         return entry, target, before, after
+    if op == "merge_item":
+        return await _merge_plan(db, entry, target, by_id)
     fields = FIELDS[op]
     missing = [f for f in fields if f not in body.before]
     if missing:
         raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
-    if op == "confirm_item" and not row.draft:
-        raise ChangeError(422, "Only a draft item is confirmed")
+    if op in ("confirm_item", "keep_both") and (not row.draft or row.merged_into):
+        raise ChangeError(422, "Only a draft item is confirmed or kept")
     current = read(row, fields, target)
     # A suggestion accepted after the item got dates is "outdated" (S2-minor).
     lead = "outdated" if op == "accept_date_suggestion" else "Changed since you saw it"
@@ -520,6 +531,8 @@ async def _plan(
         after = {"cut": op == "cut"}
     elif op == "confirm_item":
         after = {"draft": False}
+    elif op == "keep_both":
+        after = {"kept_both": True}
     elif op == "edit_title":
         title = " ".join(str(a.get("title") or "").split())
         if not title or len(title) > TITLE_MAX:
@@ -550,6 +563,56 @@ async def _plan(
     return entry, target, read(row, stored, target), after
 
 
+async def _merge_plan(
+    db: AsyncSession, entry: service.Entry, target: dict[str, Any], by_id: dict
+) -> tuple[service.Entry, dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """S7: merge_item's writes, keyed by item id (see the module's docstring)."""
+    from oracle.baseline.models import Entity
+
+    row = entry.row
+    if not row.draft or entry.status in ("merged", "cut"):
+        raise ChangeError(422, "Only an open draft item is merged")
+    after: dict[str, dict[str, Any]] = {}
+    if target.get("feature_id"):
+        fid = _uuid(target["feature_id"], "feature_id")
+        feature = await db.get(Entity, fid)
+        if feature is None or feature.type != "feature":
+            raise ChangeError(422, "target.feature_id: a baseline feature")
+        target["feature_id"], target["code"], target["title"] = str(fid), feature.key, feature.title
+        after[str(row.id)] = {"feature_id": str(fid), "kept_both": True}
+    else:
+        into = _uuid(target.get("into_id"), "into_id")
+        kept = by_id.get(into)
+        if kept is None:
+            raise ChangeError(404, "No such roadmap item to merge into")
+        if kept is entry or kept.roadmap.id != entry.roadmap.id or kept.status == "merged":
+            raise ChangeError(422, "target.into_id: another open item of the same roadmap")
+        target["into_id"], target["code"], target["title"] = (
+            str(into), kept.row.item_key, kept.row.title
+        )  # fmt: skip
+        dk, kk = row.item_key, kept.row.item_key
+        goals = [str(g) for g in kept.row.goal_ids or []]
+        goals += [str(g) for g in row.goal_ids or [] if str(g) not in goals]
+        deps = [k for k in kept.row.depends_on or [] if k != dk]
+        deps += [k for k in row.depends_on or [] if k not in deps and k not in (kk, dk)]
+        note = f"Merged from {dk} {row.title}" + (f": {row.note}" if row.note else "")
+        after[str(kept.row.id)] = {
+            "goal_ids": goals,
+            "depends_on": deps,
+            "note": f"{kept.row.note}\n{note}" if kept.row.note else note,
+        }
+        after[str(row.id)] = {"merged_into": kk}
+        for nid in entry.needed_by:
+            n = by_id.get(nid)
+            if n is None or n is kept or n is entry:
+                continue
+            ks = [k for k in n.row.depends_on or [] if k != dk]
+            after[str(nid)] = {"depends_on": ks + ([kk] if kk not in ks else [])}
+    rows = {str(e.row.id): e.row for e in by_id.values()}
+    before = {k: read(rows[k], tuple(v), target) for k, v in after.items()}
+    return entry, target, before, after
+
+
 async def _apply(
     db: AsyncSession,
     c: SimpleChange,
@@ -560,7 +623,7 @@ async def _apply(
 ) -> None:
     """Write ``values`` (a change's after, or its before for an undo) into the working
     drafts of the items' roadmaps (S3b), and the change's own side effects."""
-    c.draft_ids = await drafts.write_items(db, c, values, session, FIXES, write, undo=undo)
+    c.draft_ids = await drafts.write_items(db, c, values, session, KEYED, write, undo=undo)
     if c.op == "accept_date_suggestion":
         s = await db.get(RoadmapDateSuggestion, uuid.UUID(c.target["suggestion_id"]))
         if s is not None and not undo and s.status == "open":
@@ -581,7 +644,7 @@ async def _apply(
 async def _current(db: AsyncSession, c: SimpleChange, like: dict[str, Any]) -> dict[str, Any]:
     """The stored values of the fields ``like`` names (keyed as it is), as the items'
     open drafts have them."""
-    if c.op in FIXES:
+    if c.op in KEYED:
         rows = await drafts.effective(
             db,
             list(
@@ -641,8 +704,10 @@ async def _flags(
 
 
 async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
-    from oracle.simple import one_pager, targets
+    from oracle.simple import additions, one_pager, targets
 
+    if body.op in additions.OPS:
+        return await additions.create(db, principal, body)
     if body.op in targets.OPS:
         return await targets.create(db, principal, body)
     if body.op in one_pager.OPS:
@@ -651,7 +716,19 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     ids = [_uuid(body.target.get("item_id"), "item_id")]
     if body.op in FIXES and body.target.get("subject"):
         ids.append(_uuid(body.target["subject"], "subject"))
-    if body.op in FIXES:
+    if body.op == "merge_item":
+        # A merge rewrites the draft's dependents: every item of the roadmap is locked.
+        doc = await db.scalar(
+            select(RoadmapItem.roadmap_document_id).where(RoadmapItem.id == ids[0])
+        )
+        ids += [
+            i
+            for i in await db.scalars(
+                select(RoadmapItem.id).where(RoadmapItem.roadmap_document_id == doc)
+            )
+            if i not in ids
+        ]
+    elif body.op in FIXES:
         # A fix may move any item of the version (dependents, transitively): every one is
         # locked before service.load reads them.
         version = await db.scalar(
@@ -693,7 +770,7 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     else:
         # As if applied, on what the proposer reads; nothing is written.
         rows = {str(e.row.id): e.row for e in read_.entries}
-        flags = await _flags(db, c, drafts.simulate(c, after, rows, seen, FIXES, write))
+        flags = await _flags(db, c, drafts.simulate(c, after, rows, seen, KEYED, write))
     db.add(c)
     await db.flush()
     await audit.record(db, principal, f"simple_change.{c.status}", "simple_change", c.id,
@@ -714,10 +791,12 @@ async def decide(
     db: AsyncSession, principal: Any, change_id: uuid.UUID, action: str, reason: str | None
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
-    from oracle.simple import one_pager, targets
+    from oracle.simple import additions, one_pager, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in additions.OPS:
+        return await additions.decide(db, principal, c, action, reason)
     if c.op in targets.OPS:
         return await targets.decide(db, principal, c, action, reason)
     if c.op in one_pager.OPS:
@@ -753,10 +832,12 @@ async def decide(
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
-    from oracle.simple import one_pager, targets
+    from oracle.simple import additions, one_pager, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in additions.OPS:
+        return await additions.undo(db, principal, c)
     if c.op in targets.OPS:
         return await targets.undo(db, principal, c)
     if c.op in one_pager.OPS:
@@ -840,8 +921,10 @@ class _View:
             return None
 
     def may_decide(self, c: SimpleChange) -> bool:
-        from oracle.simple import one_pager, targets
+        from oracle.simple import additions, one_pager, targets
 
+        if c.op in additions.OPS:
+            return additions.may_decide(self.principal, c, self)
         if c.op in targets.OPS:
             return targets.may_decide(self.principal, c, self)
         if c.op in one_pager.OPS:
@@ -895,7 +978,8 @@ def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChange
 
 
 async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -> _View:
-    read_ = await service.load(db)
+    # S7: with the drafts the reader sees, so items added in Simple are known.
+    read_ = await service.load(db, await drafts.overlays_for(db, principal))
     sids = {c.session_id for c in changes if c.session_id}
     sessions = (
         {s.id: s for s in await db.scalars(select(SimpleSession).where(SimpleSession.id.in_(sids)))}

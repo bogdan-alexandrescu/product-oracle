@@ -273,8 +273,12 @@ class RoadmapItem(TenantScoped, Base):
         UniqueConstraint("roadmap_version_id", "item_key"),
         CheckConstraint(_in("horizon", HORIZONS), name="horizon"),
         CheckConstraint(_in("freshness", FRESHNESS), name="freshness"),
+        # S7: or an item added in Simple, in its roadmap's working draft only.
         CheckConstraint(
-            "(roadmap_version_id IS NULL) <> (draft_roadmap_id IS NULL)", name="one_owner"
+            "((roadmap_version_id IS NULL) <> (draft_roadmap_id IS NULL)) OR "
+            "(simple_draft_id IS NOT NULL AND roadmap_version_id IS NULL "
+            "AND draft_roadmap_id IS NULL)",
+            name="one_owner",
         ),
         CheckConstraint(
             f"date_source IS NULL OR {_in('date_source', DATE_SOURCES)}", name="date_source"
@@ -345,6 +349,17 @@ class RoadmapItem(TenantScoped, Base):
     # Simple S3a: cut in Simple (oracle.simple.changes); restore clears it.
     cut: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
                                       server_default=false())  # fmt: skip
+    # Simple S7 (oracle.simple.additions): an item added in Simple lives in its roadmap's
+    # working draft (on no version) until the draft is submitted; the goals it was dropped
+    # on or suggested for; the key of the item a draft was merged into; and whether a
+    # person kept it beside the items it looks like.
+    simple_draft_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("simple_drafts.id", ondelete="CASCADE"), index=True
+    )
+    goal_ids: Mapped[list[uuid.UUID]] = _uuids()
+    merged_into: Mapped[str | None] = mapped_column(Text)
+    kept_both: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                            server_default=false())  # fmt: skip
     updated_at: Mapped[datetime] = _updated_at()
 
 
