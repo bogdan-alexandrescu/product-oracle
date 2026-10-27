@@ -1,7 +1,8 @@
 """Fakes for the live Fireflies tools (#710): no network, invented meetings only.
 
 :class:`FakeArchive` is a Fireflies Archive's MCP endpoint (streamable HTTP, JSON
-answers) implementing exactly amendment A's table: ``list_meetings`` (its ``total`` is
+answers, get_transcript in the archive's real flat shape) implementing amendment A's
+table: ``list_meetings`` (its ``total`` is
 always 4321, as the spec's fake), ``search_meetings``, ``get_transcript``, ``get_lines``
 and ``list_people``. :class:`FakeGraphQL` is Fireflies' own GraphQL API
 (``api.fireflies.ai``, amendment B): ``user { num_transcripts }``, ``transcripts`` and
@@ -28,43 +29,58 @@ def ms(when: str) -> int:
     return int(datetime.fromisoformat(when.replace("Z", "+00:00")).timestamp() * 1000)
 
 
+def _at(start_ms: int) -> str:
+    seconds = start_ms // 1000
+    return f"{seconds // 60:02d}:{seconds % 60:02d}"
+
+
 def _lines(n: int, start_ms: int = 0, step_ms: int = 5000) -> list[dict[str, Any]]:
     return [
         {
-            "speaker": "Ada" if i % 2 == 0 else "Grace",
+            "at": _at(start_ms + i * step_ms),
             "start_ms": start_ms + i * step_ms,
+            "speaker": "Ada" if i % 2 == 0 else "Grace",
             "text": f"Invented line {i}.",
         }
         for i in range(n)
     ]
 
 
-# Invented meetings, newest first, in the archive's tolerated shapes (amendment A): ISO
-# or epoch-ms dates, duration in duration_s / duration (seconds) / duration_min,
-# participants as names or objects, lines with start_ms or start_time (seconds).
+# Invented meetings, newest first, in the archive's real get_transcript shape: FLAT (no
+# "meeting" wrapper), ISO dates, duration_min, speakers (who spoke) and attendees
+# (invitee emails, may be empty) as strings, the summary in ``overview`` (no ``summary``
+# key), keywords, chapters, action_items and lines {at, start_ms, speaker, text}.
+# ``series`` is the fake's own, for its list filter; it is never answered.
 ARCHIVE_MEETINGS: list[dict[str, Any]] = [
     {
         "id": "m-301",
         "title": "Roadmap review",
         "date": "2026-10-20T16:00:00Z",
-        "duration_s": 1800,
-        "participants": ["Ada", "Grace"],
+        "duration_min": 30,
+        "speakers": ["Ada", "Grace"],
+        "attendees": ["ada@example.com", "grace@example.com", "linus@example.com"],
+        "overview": "The roadmap was reviewed.",
+        "keywords": ["roadmap"],
+        "chapters": [{"title": "Opening", "start_ms": 0, "end_ms": 30000}],
+        "action_items": [{"owner": "Ada", "text": "Share the roadmap.", "at": "00:20"}],
         "series": "roadmap",
-        "summary": "The roadmap was reviewed.",
         "lines": _lines(12),
-        "extra_field": {"ignored": True},
     },
     {
         "id": "m-300",
         "title": "Weekly sync",
-        "date": ms("2026-10-13T16:00:00Z"),
-        "duration": 2400,
-        "participants": [{"name": "Ada", "email": "ada@example.com"}, {"name": "Linus"}],
+        "date": "2026-10-13T16:00:00Z",
+        "duration_min": 40,
+        "speakers": ["Ada", "Linus"],
+        "attendees": [],
+        "overview": "Weekly sync notes.",
+        "keywords": [],
+        "chapters": [],
+        "action_items": [{"owner": None, "text": "Book the room.", "at": None}],
         "series": "weekly",
-        "summary": "Weekly sync notes.",
         "lines": [
-            {"speaker": "Ada", "start_time": 1.5, "text": "Hello."},
-            {"speaker": "Linus", "start_time": 3, "text": "Hi."},
+            {"at": "00:01", "start_ms": 1500, "speaker": "Ada", "text": "Hello."},
+            {"at": "00:03", "start_ms": 3000, "speaker": "Linus", "text": "Hi."},
         ],
     },
     {
@@ -72,14 +88,34 @@ ARCHIVE_MEETINGS: list[dict[str, Any]] = [
         "title": "Weekly sync",
         "date": "2026-10-06T16:00:00Z",
         "duration_min": 30,
-        "participants": ["Ada"],
+        # The one who spoke is also the one invited: named once.
+        "speakers": ["ada@example.com"],
+        "attendees": ["ada@example.com"],
+        # Fireflies has not written the summary yet.
+        "overview": None,
+        "keywords": [],
+        "chapters": [],
+        "action_items": [],
         "series": "weekly",
-        "summary": "Earlier weekly sync.",
         "lines": [],
     },
     # Dropped and counted in ``skipped``: no title.
-    {"id": "m-298", "date": "2026-10-01T16:00:00Z"},
+    {"id": "m-298", "date": "2026-10-01T16:00:00Z", "speakers": [], "attendees": []},
 ]
+
+# What a get_transcript answer carries besides its lines (part="summary").
+_TRANSCRIPT_FIELDS = (
+    "id",
+    "title",
+    "date",
+    "duration_min",
+    "speakers",
+    "attendees",
+    "overview",
+    "keywords",
+    "chapters",
+    "action_items",
+)
 
 ARCHIVE_TOOLS = ("list_meetings", "search_meetings", "get_transcript", "get_lines", "list_people")
 
@@ -91,7 +127,12 @@ def _day(value: Any) -> str:
 
 
 def _public(m: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in m.items() if k not in ("lines", "summary", "series")}
+    """A meeting as the list and search tools answer it: no summary, lines or series."""
+    return {
+        k: v
+        for k, v in m.items()
+        if k in ("id", "title", "date", "duration_min", "speakers", "attendees")
+    }
 
 
 @dataclass
@@ -214,10 +255,7 @@ class FakeArchive:
             found = [
                 m
                 for m in found
-                if any(
-                    (p if isinstance(p, str) else p.get("name")) in people
-                    for p in m.get("participants", [])
-                )
+                if any(p in people for p in m.get("speakers", []) + m.get("attendees", []))
             ]
         page = self._page(found, args)
         for m in page:
@@ -228,15 +266,17 @@ class FakeArchive:
         return next((m for m in self.meetings if m["id"] == meeting_id), None)
 
     def _get_transcript(self, args: dict[str, Any]) -> dict[str, Any] | None:
+        """FLAT: the meeting's fields, and for part="all" its lines up to max_lines with
+        next_offset (get_lines continues from there); no lines for part="summary"."""
         m = self._find(args.get("meeting_id"))
         if m is None:
             return None
-        out = {**_public(m), "summary": m.get("summary")}
-        if args.get("part") == "all":
+        out = {k: m[k] for k in _TRANSCRIPT_FIELDS if k in m}
+        if args.get("part") != "summary":
             lines = m.get("lines", [])
             cap = int(args.get("max_lines") or len(lines) or 1)
             out["lines"] = lines[:cap]
-            out["truncated"] = len(lines) > cap
+            out["next_offset"] = cap if len(lines) > cap else None
         return out
 
     def _get_lines(self, args: dict[str, Any]) -> dict[str, Any] | None:
@@ -261,15 +301,29 @@ class FakeArchive:
         return {"people": []}
 
 
-# Fireflies' own API: dates in epoch ms, duration in minutes, sentences with start_time.
+# Fireflies' own API: dates in epoch ms, duration in minutes, sentences with start_time,
+# speakers as {id, name}, participants as emails, meeting_attendees as {displayName,
+# email}, and the summary an object (overview, short_summary, keywords, action_items,
+# outline).
 GRAPHQL_MEETINGS: list[dict[str, Any]] = [
     {
         "id": "g-12",
         "title": "Design review",
         "date": ms("2026-10-21T17:00:00Z"),
         "duration": 45,
+        "speakers": [{"id": 0, "name": "Ada"}, {"id": 1, "name": "Grace"}],
         "participants": ["ada@example.com", "grace@example.com"],
-        "summary": {"overview": "The design was reviewed.", "short_summary": "Design."},
+        "meeting_attendees": [
+            {"displayName": "Grace", "email": "grace@example.com"},
+            {"displayName": "Linus", "email": "linus@example.com"},
+        ],
+        "summary": {
+            "overview": "The design was reviewed.",
+            "short_summary": "Design.",
+            "keywords": ["design"],
+            "action_items": "**Ada**\nShip the design (00:05)",
+            "outline": "Design review (00:00 - 00:15)",
+        },
         "sentences": [
             {"index": i, "speaker_name": "Ada", "text": f"Sentence {i}.", "start_time": i * 2.5}
             for i in range(6)
@@ -280,8 +334,16 @@ GRAPHQL_MEETINGS: list[dict[str, Any]] = [
         "title": "Planning",
         "date": ms("2026-10-14T17:00:00Z"),
         "duration": 30,
+        "speakers": [{"id": 0, "name": "Ada"}],
         "participants": ["ada@example.com"],
-        "summary": {"overview": None, "short_summary": "Planned the quarter."},
+        "meeting_attendees": [],
+        "summary": {
+            "overview": None,
+            "short_summary": "Planned the quarter.",
+            "keywords": [],
+            "action_items": None,
+            "outline": None,
+        },
         "sentences": [],
     },
 ]
