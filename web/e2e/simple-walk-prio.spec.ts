@@ -1,4 +1,4 @@
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 import { MOCK_FAIL_ONCE_KEY, MOCK_SIMPLE_MODE_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
@@ -217,4 +217,41 @@ test("Value/effort's side caption names three that miss the line and counts the 
   for (const t of missing.slice(3)) await expect(caption).not.toContainText(t);
   expect(await caption.getAttribute("title")).toBe(missing.join(", "));
   await select.selectOption("now");
+});
+
+/**
+ * Card walk-prio-home-in-review: protects = when the plan has changes in review, the notice
+ * that says so shows in the plan card, never pushing the goal band down as the roadmap
+ * answers after the goals; fails_when = the goal band moves when the roadmap answers;
+ * no_claim = which changes a reader counts as in review (simple-roadmap mock and API tests).
+ */
+test("the changes-in-review notice never pushes the goal band down", async ({ page, context }) => {
+  // A commenter proposes a fix on the plan: a viewer reads the published plan, the change in review.
+  await login(page, "commenter@example.com");
+  await page.goto("/simple");
+  const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" });
+  await broken.getByRole("button", { name: "Propose: Move dependents" }).click();
+  await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
+  await signOut(page);
+  await login(page, ROLES.viewer);
+  await page.goto("/home");
+  await context.addInitScript(
+    ([slow, ms]) => {
+      if (!sessionStorage.getItem("walk-prio-slow")) {
+        localStorage.setItem(slow, "/v1/simple/roadmap");
+        localStorage.setItem(ms, "3000");
+        sessionStorage.setItem("walk-prio-slow", "1");
+      }
+    },
+    [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY],
+  );
+  await page.goto("/simple");
+  const goals = page.getByTestId("home-goals");
+  await expect(page.getByTestId("home-goal").first()).toBeVisible();
+  await expect(page.getByTestId("home-in-review")).toHaveCount(0);
+  const before = (await goals.boundingBox())!;
+  await expect(page.getByTestId("home-in-review")).toBeVisible({ timeout: 8000 });
+  await expect(page.getByTestId("home-in-review")).toContainText("in review. You see the published plan until they are approved.");
+  expect(Math.abs((await goals.boundingBox())!.y - before.y)).toBeLessThanOrEqual(1);
+  await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
 });
