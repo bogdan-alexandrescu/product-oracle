@@ -82,10 +82,11 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
     return () => document.removeEventListener("touchmove", stop);
   }, []);
 
+  // The column under the pointer, by the columns' boxes (the dragged card is over it).
   const columnAt = (x: number, y: number): Horizon | null => {
-    for (const el of document.elementsFromPoint(x, y)) {
-      const h = (el as HTMLElement).dataset?.horizonColumn;
-      if (h) return h as Horizon;
+    for (const el of root.current?.querySelectorAll<HTMLElement>("[data-horizon-column]") ?? []) {
+      const r = el.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return el.dataset.horizonColumn as Horizon;
     }
     return null;
   };
