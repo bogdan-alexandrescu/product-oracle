@@ -244,10 +244,10 @@ for (const [where, use] of [
 
       /**
        * Card roadmap-plus-priorities-line: protects = on Priorities the line is this
-       * quarter's plan by default (a divider row names who falls below, hollow marks);
+       * quarter's plan by default (the caption "N of M miss <line>", hollow marks);
        * the Line picker offers each key date and each dated milestone and Pick a date; a
        * pick redraws the line (above = planned to finish by that day, by each row's end),
-       * shows in the URL and is remembered for the person (opening Priorities again brings
+       * shows in the URL (the caption names the line) and is remembered for the person (opening Priorities again brings
        * it back); the 2x2 draws below-the-line marks hollow; fails_when = the default is not
        * Now, a pick does not redraw, the URL or the preference loses it, or a row's mark
        * disagrees with its end; no_claim = the ranking itself (API tests).
@@ -258,13 +258,13 @@ for (const [where, use] of [
         await expect(page.getByTestId("simple-priorities")).toBeVisible();
         const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
         await expect(select).toHaveValue("now");
-        await expect(page.getByTestId("line-divider").first()).toContainText("The line: This quarter (Now)");
+        await expect(page.getByTestId("line-caption").first()).toContainText("miss This quarter (Now)");
         const options = await select.locator("option").allTextContents();
         expect(options).toEqual(expect.arrayContaining([expect.stringMatching(/^Key date: Customer conference · Nov 14, 2026$/), expect.stringMatching(/^Milestone: Beta · /), "Pick a date…"]));
         const kd = (await select.locator("option", { hasText: "Customer conference" }).getAttribute("value"))!;
         await select.selectOption(kd);
         await expect(page).toHaveURL(new RegExp(`line=${encodeURIComponent(kd).replace(/%3A/i, "(:|%3A)")}`));
-        await expect(page.getByTestId("line-divider").first()).toContainText("Customer conference · Nov 14, 2026");
+        await expect(page.getByTestId("line-caption").first()).toContainText("miss Customer conference · Nov 14, 2026");
         const rows = page.locator('[data-testid="prio-row"]');
         await expect(rows.first()).toBeVisible();
         for (const r of await rows.all()) {
@@ -280,13 +280,13 @@ for (const [where, use] of [
         await select.selectOption("pick");
         await page.getByLabel("The line's date").fill("2026-12-31");
         await expect(page).toHaveURL(/line=date(:|%3A)2026-12-31/);
-        await expect(page.getByTestId("line-divider").first()).toContainText("By Dec 31, 2026");
+        await expect(page.getByTestId("line-caption").first()).toContainText("miss By Dec 31, 2026");
         await page.getByRole("tab", { name: "Value / effort" }).click();
         const points = page.getByTestId("vxe-point");
         await expect(points.first()).toBeVisible();
         expect(await page.locator('[data-testid="vxe-point"][data-above="false"]').count()).toBeGreaterThan(0);
         await expect(page.getByLabel("Legend")).toContainText("not planned to finish by Dec 31, 2026");
-        await expect(page.getByTestId("line-divider")).toHaveCount(1);
+        await expect(page.getByTestId("line-caption")).toHaveCount(1);
         await select.selectOption("now");
         await expect(page).not.toHaveURL(/line=/);
       });

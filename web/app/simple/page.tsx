@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Avatar, Block, HomeCard, HomeRow, RowIcon, Top } from "@/app/simple/_home/cards";
+import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
 import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { SimplePage } from "@/components/simple/SimplePage";
-import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -246,7 +245,7 @@ export default function SimpleHome() {
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
         <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
-        <p className="simple-lead">
+        <p className="simple-lead max-[600px]:min-h-[2lh]">
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
@@ -255,6 +254,12 @@ export default function SimpleHome() {
             <button type="button" className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
               Walk me through it
             </button>
+          </div>
+        )}
+        {/* A reader has no walk: its slot keeps its height so nothing below moves from the skeleton. */}
+        {!walking && reads && (
+          <div aria-hidden data-testid="home-walk-slot" className="invisible">
+            <span className="simple-button">Walk me through it</span>
           </div>
         )}
       </header>
@@ -271,14 +276,8 @@ export default function SimpleHome() {
       {!walking && (
       <>
 
-      {(roadmap.data?.changes_in_review ?? 0) > 0 && (
-        <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
-          {roadmap.data!.changes_in_review} {roadmap.data!.changes_in_review === 1 ? "change is" : "changes are"} in review. You see the published plan until they are approved.
-        </p>
-      )}
-
       <section aria-label="Goals" data-testid="home-goals">
-        <Block q={{ ...goals, data: tiles }} testId="home-goals">
+        <Block q={{ ...goals, data: tiles }} testId="home-goals" skeleton={<GoalBandSkeleton />}>
           {(rows) =>
             rows.length === 0 ? (
               <p className="simple-small" data-testid="home-goals-empty">
@@ -411,7 +410,7 @@ export default function SimpleHome() {
       )}
 
       <HomeCard id="meeting" icon="clock" title="Next review meeting" all="/simple/meetings">
-        <Block q={meeting} testId="home-meeting">
+        <Block q={meeting} testId="home-meeting" skeleton={<SkeletonRows n={1} />}>
           {({ next }) =>
             !next ? (
               <p className="simple-small" data-testid="home-meeting-empty">
@@ -470,10 +469,16 @@ export default function SimpleHome() {
 
       <HomeCard id="plan" icon="roadmap" title="The plan this quarter" all="/simple/roadmap">
         <Block q={roadmap} testId="home-plan">
-          {() => (
+          {(r) => (
             <>
+              {/* In the plan's card, filled with it: above the goal band it pushed everything down. */}
+              {r.changes_in_review > 0 && (
+                <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
+                  {r.changes_in_review} {r.changes_in_review === 1 ? "change is" : "changes are"} in review. You see the published plan until they are approved.
+                </p>
+              )}
               {planPrd === undefined ? (
-                <Loading />
+                <SkeletonRows />
               ) : plan && planPrd ? (
                 <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" />
               ) : (

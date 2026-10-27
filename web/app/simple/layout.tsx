@@ -1,10 +1,31 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { Suspense, type ReactNode } from "react";
 
+import { HomeSkeleton } from "@/app/simple/_home/skeleton";
 import { useSimpleShown } from "@/components/simple/SimpleShell";
+import { useMe } from "@/lib/me";
+import { SIMPLE_HOME } from "@/lib/experience";
 
-/** Simple's pages draw only once Simple is known to be on (#725 review: no flash while off). */
+/**
+ * Simple's pages draw only once Simple is known to be on (#725 review: no flash while off).
+ * Home draws its frame and skeleton until then (#723 production walk: no blank first paint),
+ * and its queries start only once Simple is on; nothing once Simple is known to be off.
+ */
 export default function SimpleLayout({ children }: { children: ReactNode }) {
-  return useSimpleShown() ? children : null;
+  // The pathname is read on the client only (a prerender draws nothing, as before).
+  return (
+    <Suspense fallback={null}>
+      <Gate>{children}</Gate>
+    </Suspense>
+  );
+}
+
+function Gate({ children }: { children: ReactNode }) {
+  const shown = useSimpleShown();
+  const { me, capsReady, simpleMode } = useMe();
+  const home = usePathname() === SIMPLE_HOME;
+  if (shown) return children;
+  return home && !(me && capsReady && !simpleMode) ? <HomeSkeleton /> : null;
 }

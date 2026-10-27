@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
 import { Icon, type IconName } from "@/components/ds/Icon";
-import { Loading } from "@/components/ui";
 
 /**
  * The parts of Simple's Home (#723 S1, "Brief as cards"): a section card with its header row
@@ -51,14 +50,16 @@ export function HomeCard({
   );
 }
 
-/** A block's data: its rows, or Loading, or a failure with Retry (the rest of Home stays). */
+/** A block's data: its rows, or skeleton rows while it loads, or a failure with Retry (the rest of Home stays). */
 export function Block<T>({
   q,
   testId,
+  skeleton,
   children,
 }: {
   q: { data: T | undefined; error: string | null; reload: () => unknown };
   testId: string;
+  skeleton?: ReactNode;
   children: (data: T) => ReactNode;
 }) {
   if (q.error)
@@ -70,8 +71,67 @@ export function Block<T>({
         </button>
       </div>
     );
-  if (q.data === undefined) return <Loading />;
+  if (q.data === undefined) return skeleton ?? <SkeletonRows />;
   return <>{children(q.data)}</>;
+}
+
+/** A grey bar the size of the text it stands for. */
+export function Bar({ className = "" }: { className?: string }) {
+  return <span aria-hidden className={`inline-block h-[1em] animate-pulse rounded bg-surface2 align-middle ${className}`} />;
+}
+
+/** A block still loading (#723 production walk: Home paints at once): rows the height of real rows. */
+export function SkeletonRows({ n = 2 }: { n?: number }) {
+  return (
+    <div role="status" data-testid="home-skeleton-rows" className="flex flex-col">
+      <span className="sr-only">Loading…</span>
+      {Array.from({ length: n }, (_, i) => (
+        <div key={i} aria-hidden className="simple-row">
+          <span className="block size-9 flex-none animate-pulse rounded-full bg-surface2" />
+          <div className="flex min-w-0 flex-col gap-1">
+            <Bar className="w-2/3" />
+            <Bar className="w-1/3 text-[length:var(--simple-small)]" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A card before the person's permissions are known: the header row and rows the size of a real
+ * card's, but no title, since which card lands here depends on what the person may do.
+ */
+export function HomeCardSkeleton({ n = 2 }: { n?: number }) {
+  return (
+    <section data-testid="home-card-skeleton" className="simple-card">
+      <header aria-hidden className="flex items-center gap-3">
+        <span className="size-9 flex-none animate-pulse rounded-full bg-surface2" />
+        <span className="simple-h2 min-w-0 flex-1">
+          <Bar className="w-48 max-w-full" />
+        </span>
+      </header>
+      <SkeletonRows n={n} />
+    </section>
+  );
+}
+
+/** The goal band while the goals load: three tiles the size of real ones. */
+export function GoalBandSkeleton() {
+  return (
+    <div role="status" data-testid="home-goals-skeleton">
+      <span className="sr-only">Loading…</span>
+      <ul aria-hidden className="simple-goal-band">
+        {[0, 1, 2].map((i) => (
+          <li key={i} className="simple-goal">
+            <Bar className="w-12" />
+            <Bar className="w-3/4" />
+            <Bar className="mt-auto w-20" />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
 }
 
 /** Rows share one layout: lead (avatar or icon) · title · meta · before/after · thumbnail, then the actions column. */

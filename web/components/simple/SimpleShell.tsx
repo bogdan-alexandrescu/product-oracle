@@ -105,7 +105,7 @@ export function useSimpleShown(): boolean {
 export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet") => ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { me, role, capsReady, simpleMode } = useMe();
+  const { me, role, capsReady, capsError, simpleMode } = useMe();
   const counts = useSimpleCounts(!!me);
   const [more, setMore] = useState(false);
   const [lastPath, setLastPath] = useState(pathname);
@@ -119,6 +119,28 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   }, [off, pathname, router]);
 
   const shown = useSimpleShown();
+  // While the person's permissions load, the rail's frame (its width, the brand) so the page
+  // beside it never jumps; nothing when Simple turns out to be off (Detailed opens instead).
+  if (!shown && !off && !capsError)
+    return (
+      <nav
+        aria-label="Simple"
+        aria-busy="true"
+        data-testid="simple-nav-skeleton"
+        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [border-right:var(--simple-rail-border)] max-[600px]:hidden"
+      >
+        <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
+          <Mark size={32} tone="sky" className="block" />
+          <span className="font-display text-[18px] font-semibold text-rail-active-text">Oracle</span>
+        </span>
+        {SIMPLE_DESTINATIONS.map((d) => (
+          <span key={d.href} aria-hidden className="flex h-12 items-center gap-3 px-3">
+            <span className="size-5 flex-none animate-pulse rounded bg-rail-hover" />
+            <span className="h-3 w-24 animate-pulse rounded bg-rail-hover" />
+          </span>
+        ))}
+      </nav>
+    );
   if (!shown) return null;
 
   const tabDests = TABS.map((t) => SIMPLE_DESTINATIONS.find((d) => d.label === t)!);
