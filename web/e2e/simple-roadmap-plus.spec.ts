@@ -192,9 +192,10 @@ for (const [where, use] of [
         await expect(page.getByText(/Changed the key date 'Customer conference' in your working draft/)).toBeVisible();
         await expect(marker(page, "Customer conference")).toHaveAttribute("data-date", "2026-11-18");
         await editor(page).getByRole("button", { name: "Remove Partner summit" }).click();
-        await expect(page.getByText(/Removed the key date 'Partner summit'/)).toBeVisible();
+        const toastLine = page.getByRole("status").filter({ hasText: "Removed the key date 'Partner summit'" });
+        await expect(toastLine).toBeVisible();
         await expect(marker(page, "Partner summit")).toHaveCount(0);
-        await page.getByRole("button", { name: "Undo" }).first().click();
+        await toastLine.getByRole("button", { name: "Undo" }).click();
         await expect(marker(page, "Partner summit")).toHaveCount(1);
         await expect(page.getByTestId("key-dates-open")).toContainText("3");
       });

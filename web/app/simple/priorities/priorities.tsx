@@ -70,15 +70,22 @@ export function Priorities() {
   const { can, capsReady } = useMe();
   const tab = (TABS.find((t) => t.key === params.get("tab"))?.key ?? "ranked") as Tab;
   const compare = params.get("compare") === "1";
-  // Roadmap-plus: the line, from the URL, else the person's remembered pick (preferences).
+  // Roadmap-plus: the line, from the URL; landing without one, the person's remembered pick
+  // (preferences) is put back in the URL once.
   const prefs = useQuery("me-preferences", () => unwrap(api.GET("/v1/me/preferences")));
   const remembered = prefs.data?.priorities_line ?? null;
-  const line = params.get("line") ?? remembered;
+  // Once the person picks, the URL alone says the line (Now: none).
+  const [picked, setPicked] = useState(false);
+  const line = params.get("line") ?? (picked ? null : remembered);
+  const restored = useRef(false);
   useEffect(() => {
+    if (restored.current || (!prefs.data && !prefs.error)) return;
+    restored.current = true;
     if (!params.get("line") && remembered && remembered !== "now") setParams({ line: remembered });
-  }, [params, remembered, setParams]);
+  }, [params, prefs.data, prefs.error, remembered, setParams]);
   const q = useQuery<Out>(`simple-priorities:${line ?? "now"}`, () => unwrap(api.GET("/v1/simple/priorities", { params: { query: line ? { line } : {} } })), { keepPrevious: true });
   const pickLine = (key: string) => {
+    setPicked(true);
     setParams({ line: key === "now" ? null : key });
     void api.PATCH("/v1/me/preferences", { body: { priorities_line: key } });
   };
