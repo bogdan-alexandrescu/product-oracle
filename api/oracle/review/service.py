@@ -759,6 +759,12 @@ async def review_section(
         session, await session.get(Document, version.document_id), principal, version.number
     )
     await session.flush()
+    if document is not None and document.kind == "roadmap":
+        # #730 review: a verdict on a version submitted from a Simple draft settles it or
+        # returns it to working.
+        from oracle.simple import drafts as simple_drafts
+
+        await simple_drafts.on_section_verdict(session, principal, version, verdict)
     return review, item
 
 
@@ -1115,6 +1121,12 @@ async def approve_version(
             f"version {version.number} is not the current version (version {latest} is); "
             "approve the current version",
         )
+    if document.kind == "roadmap":
+        # #730 review: a version withdrawn from review in Simple is never approved.
+        from oracle.simple import drafts as simple_drafts
+
+        if message := await simple_drafts.withdrawn_message(session, version):
+            raise ReviewError("conflict", message)
     already = version.approved_at is not None
     previous_approver = version.approved_by
     # A re-approval by someone else (the decider set after an earlier approval) is the
@@ -1175,6 +1187,10 @@ async def approve_version(
         from oracle.launches import service as launches_service
 
         await launches_service.plan_roadmap(session, version, actor=principal, owner_id=who)
+        # #730 review: approving it here settles the Simple draft it came from.
+        from oracle.simple import drafts as simple_drafts
+
+        await simple_drafts.on_version_approved(session, principal, version)
         if not already:
             # H3: the first approval records each item's prediction against its goal.
             from oracle.quality import capture

@@ -8,7 +8,7 @@ import { ADMIN, signOut } from "./helpers";
  * protects=the mode a person lands in, keeps and switches to; fails_when=the switch shows
  * with Simple off, a role lands in the wrong mode, the choice is forgotten, a page switches
  * to an unrelated one, or Simple's rail shows Detailed's destinations; no_claim=the final look
- * (the owner's mockup picks restyle it through the data-mode tokens).
+ * (simple-home.spec.ts covers the restyle to the owner's picks).
  */
 
 const EMAILS = {
@@ -279,9 +279,8 @@ test("Simple's rail has its six destinations and none of Detailed's", async ({ p
 
 test("each placeholder names what arrives and links its Detailed page", async ({ page }) => {
   await signIn(page, EMAILS.owner);
+  // Roadmap (S4) and Priorities (S6) are screens now; Meetings and Decisions arrive with S8.
   for (const [path, detailed] of [
-    ["/simple/roadmap", "/plan"],
-    ["/simple/priorities", "/priorities"],
     ["/simple/meetings", "/company/rituals"],
     ["/simple/decisions", "/company/decisions"],
   ]) {
@@ -294,15 +293,14 @@ test("each placeholder names what arrives and links its Detailed page", async ({
   }
 });
 
-test("Simple's Home: what waits on me, the next meeting and the plan's Now", async ({ page }) => {
+test("Simple's Home: what waits on me, the next meeting and the plan this quarter", async ({ page }) => {
   await signIn(page, EMAILS.owner);
   await page.goto("/simple");
   await expectSimple(page, "/simple");
-  await expect(page.getByRole("heading", { level: 2, name: "Waiting for you" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Next meeting" })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "Now", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { level: 2, name: "This quarter" })).toHaveCount(0);
-  await expect(page.getByTestId("simple-quarter").getByTestId("simple-quarter-item").first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Decisions waiting for you" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "Next review meeting" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 2, name: "The plan this quarter" })).toBeVisible();
+  await expect(page.getByTestId("home-plan").getByTestId("home-strip-bar").first()).toBeVisible();
 });
 
 test("Simple's Home: each part says when it has nothing", async ({ page }) => {
@@ -318,9 +316,9 @@ test("Simple's Home: each part says when it has nothing", async ({ page }) => {
   }
   await page.goto("/simple");
   await expectSimple(page, "/simple");
-  await expect(page.getByTestId("simple-waiting-empty")).toContainText("Nothing waits on you");
-  await expect(page.getByTestId("simple-meeting-empty")).toContainText("No meeting scheduled");
-  await expect(page.getByTestId("simple-quarter-empty")).toContainText("Nothing in the plan's Now yet");
+  await expect(page.getByTestId("home-decisions-empty")).toContainText("No decision waits on you");
+  await expect(page.getByTestId("home-meeting-empty")).toContainText("No review meeting scheduled");
+  await expect(page.getByTestId("home-proposals-empty")).toContainText("No proposals on your items");
 });
 
 test("phone: Simple's rail is a tab bar and a More drawer, every page fits 390 px", async ({ page }) => {

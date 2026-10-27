@@ -164,6 +164,8 @@ EXCEPTIONS = {
     ("requests/triage.py", "daily_due"): "machine field: the triage_day knob",
     ("requests/triage.py", "daily"): "machine field: the triage_day knob",
     ("rituals/blocks.py", "outcomes_due"): "machine field: compared with stored ISO days",
+    ("simple/constraints.py", "_day"): "a roadmap item's date: a calendar date, no time of day",
+    ("simple/dates.py", "_day"): "a suggested start or end: a calendar date, no time of day",
     ("review/collab.py", "set_assignment"): (
         "a section's due day: a picked calendar day the web stores at 17:00 UTC, so its UTC "
         "date is the day picked"

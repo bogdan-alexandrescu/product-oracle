@@ -64,6 +64,14 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
     from oracle.runs.models import Checkpoint, Run, RunSegment
     from oracle.runs.scope_models import PrdScope
     from oracle.shares.models import ShareLink
+    from oracle.simple.models import (
+        RoadmapItemTask,
+        SimpleActionItem,
+        SimpleChange,
+        SimpleDraft,
+        SimpleOnePager,
+        SimpleSessionDraft,
+    )
     from oracle.staging.models import NextDraftChange
     from oracle.v2.models import (
         ArtifactRequest,
@@ -113,6 +121,14 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         RunSegment: [("run_id", runs)],
         KnowledgeGap: [("intake_id", intakes), ("document_id", docs)],
         StakeholderQuestion: [("intake_id", intakes), ("document_id", docs)],
+        # Simple (#723): a trashed PRD's or roadmap's changes, working drafts, one-pager,
+        # item tasks and action items leave Simple's reads with it.
+        SimpleChange: [("document_id", docs)],
+        SimpleDraft: [("document_id", docs)],
+        SimpleSessionDraft: [("document_id", docs)],
+        SimpleOnePager: [("document_id", docs)],
+        RoadmapItemTask: [("roadmap_document_id", docs)],
+        SimpleActionItem: [("roadmap_document_id", docs)],
     }
 
 

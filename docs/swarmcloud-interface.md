@@ -61,6 +61,17 @@ carries one credential map:
 - Failures on a step: the task FAILED with `mcp_credential_expired|missing`; PARKED
   `CREDENTIAL_MISSING` while the server is disabled; or the attempt failing at attach
   with `mcp_server_withheld` and a `result_summary.mcp_check` cause.
+- A step that starts after the credential expired (#2498): PARKED `CREDENTIAL_MISSING`
+  with `credential: "mcp"`, `code: "mcp_credential_expired"`, `server`, `expired_at` and
+  `parked_at` in `task.blocked_by[]` or `task.waiting.detail`. Oracle renews the run's
+  key once per park (same scopes, a lifetime sized for the steps still to run) and
+  re-stores it with `PUT /v1/workflows/{id}/mcp-credentials`
+  (`{"mcp_credentials": {"<park's server>": {"value", "expires_in"}}}`, keyed by the
+  park's `server`), which returns the parked steps to READY. A park whose `expired_at`
+  is before the key Oracle stored last is not renewed again. Refusals are told apart by
+  HTTP status only: 404 and 409 (finished) end quietly; 403 and 422 revoke the refused
+  key and show advice on the run once per workflow. A `mcp_credential_missing` park, or
+  an expired one without a `server`, is not renewed; the run says why.
 
 ## 2. A step that waits for a person (#1436) [OFF]
 

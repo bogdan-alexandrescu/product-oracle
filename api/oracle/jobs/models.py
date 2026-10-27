@@ -38,6 +38,7 @@ from oracle.docs.models import _in
 # quality_review (CR-08): light judging of a PRD version, stored as labelled model output.
 # refinement_batch (C1e): the next draft from every staged suggestion, in one pass.
 # public_text (O5): a roadmap's public item texts, drafted for a person to approve.
+# one_pager (Simple S5): a PRD version's one-pager, built from its mapped sections.
 JOB_KINDS = (
     "review_comments",
     "reporting",
@@ -45,6 +46,7 @@ JOB_KINDS = (
     "quality_review",
     "refinement_batch",
     "public_text",
+    "one_pager",
 )
 # Jobs on a product intake (CR-03, migration 0014_intake): light extraction from a brief
 # and its pinned sources. They have no document; ``intake_id`` says whose they are.

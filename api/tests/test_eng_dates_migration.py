@@ -61,7 +61,7 @@ def _check() -> str:
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0076_board_wide_tables"]
+    assert script.get_heads() == ["0080_simple_one_pagers"]
 
 
 def test_up_down_up_keeps_every_other_kind(scratch_db):

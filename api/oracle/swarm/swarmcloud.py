@@ -68,6 +68,7 @@ from oracle.swarm.runtime import (
     RecordedAnswer,
     RuntimeUnavailable,
     StepStatus,
+    StoredCredentials,
     WorkflowSpec,
     WorkflowState,
     WorkflowStatus,
@@ -1101,13 +1102,20 @@ class SwarmCloudRuntime:
             )
             if task is not None and task_state == "PARKED":
                 waiting = (task.get("metadata") or {}).get("await_input") or {}
+                reason = str(task.get("park_reason") or "")
+                blocked = _blocked(task) if reason == "CREDENTIAL_MISSING" else {}
                 parked.append(
                     Parked(
                         step_id=step_id,
                         task_id=str(task_id),
-                        reason=str(task.get("park_reason") or ""),
+                        reason=reason,
                         opened_at=_parse_time(waiting.get("opened_at")),
                         expires_at=_parse_time(waiting.get("expires_at")),
+                        credential=_text(blocked.get("credential")),
+                        code=_text(blocked.get("code")),
+                        server=_text(blocked.get("server")),
+                        expired_at=_parse_time(blocked.get("expired_at")),
+                        parked_at=_parse_time(blocked.get("parked_at")),
                     )
                 )
         error = code = None
@@ -1136,6 +1144,30 @@ class SwarmCloudRuntime:
 
     async def cost(self, workflow_id: str) -> Decimal:
         return self._cost(await self._read(workflow_id))
+
+    async def store_mcp_credentials(
+        self, workflow_id: str, server: str, value: str, expires_in: int
+    ) -> StoredCredentials:
+        body = {"mcp_credentials": {server: {"value": value, "expires_in": expires_in}}}
+        async with self._client() as client:
+            # A refusal carries its HTTP status (403, 404, 409, 422): the caller branches
+            # on that, since SwarmCloud's specific codes are not switched on yet.
+            resp = await self._call(
+                client, "PUT", f"/v1/workflows/{workflow_id}/mcp-credentials", json=body
+            )
+        answer = _json(resp)
+        rows = answer.get("stored") if isinstance(answer.get("stored"), list) else []
+        stored = tuple(
+            (str(r.get("server") or ""), _parse_time(r.get("expires_at")))
+            for r in rows
+            if isinstance(r, dict)
+        )
+        promoted = answer.get("promoted")
+        if isinstance(promoted, list):
+            promoted = len(promoted)
+        return StoredCredentials(
+            stored=stored, promoted=promoted if isinstance(promoted, int) else 0
+        )
 
     async def artifacts(
         self, workflow_id: str, steps: tuple[str, ...] | None = None
@@ -1227,6 +1259,23 @@ def mcp_server_body(url: str) -> dict[str, Any]:
             "call_timeout_seconds": 60,
         },
     }
+
+
+def _text(value: Any) -> str | None:
+    return _redact(str(value)) if isinstance(value, str) and value else None
+
+
+def _blocked(task: dict[str, Any]) -> dict[str, Any]:
+    """What a task parked CREDENTIAL_MISSING waits for (SwarmCloud #2498): its
+    ``blocked_by`` entry for the MCP credential, else its ``waiting.detail``; empty when it
+    carries neither (a disabled server, as before)."""
+    entries = task.get("blocked_by")
+    for entry in entries if isinstance(entries, list) else []:
+        if isinstance(entry, dict) and entry.get("credential") == "mcp":
+            return entry
+    waiting = task.get("waiting")
+    detail = waiting.get("detail") if isinstance(waiting, dict) else None
+    return detail if isinstance(detail, dict) else {}
 
 
 def _task_of(payload: dict[str, Any], step_id: str) -> str | None:
@@ -1493,6 +1542,11 @@ class UnconfiguredSwarmCloud:
         payload: dict[str, Any],
         on_behalf_of: str | None = None,
     ) -> Answer:
+        raise self._refuse()
+
+    async def store_mcp_credentials(
+        self, workflow_id: str, server: str, value: str, expires_in: int
+    ) -> StoredCredentials:
         raise self._refuse()
 
     async def answer_record(self, workflow_id: str, step_id: str, artifact: str) -> RecordedAnswer:

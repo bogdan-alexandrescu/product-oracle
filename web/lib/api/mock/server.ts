@@ -10,7 +10,7 @@ import { citationHref } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
-import { mockUuid, seeded } from "./ids";
+import { mockUuid, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
@@ -82,6 +82,7 @@ import {
   seedRuns,
   seedScopeReviewRuns,
   seedStoredRefusalRun,
+  seedKeyRenewedRun,
   sendBackEntries,
   BUILD_UNDER_WAY,
   type RunsContext,
@@ -151,6 +152,9 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
+import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { routeOnePager, seedOnePager, type OnePagerDb } from "./simple-one-pager";
+import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -255,6 +259,10 @@ export interface Db {
   draft_roadmaps?: DraftRoadmapDb;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** Simple S2 (#723): the company-wide roadmap's items and date suggestions (./simple-roadmap.ts). */
+  simple_roadmap?: SimpleDb;
+  /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
+  simple_one_pager?: OnePagerDb;
   /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
   sharing_items?: RoadmapDb["items"];
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
@@ -516,7 +524,12 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
  * tick retries it);
  * "read-only-credential" where My account is read through an oracle:read personal token
- * (AC1: it changes nothing, the name included).
+ * (AC1: it changes nothing, the name included);
+ * "simple-deciders" as the default company plus a decider of Simple's pricing roadmap and
+ * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a);
+ * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
+ * pricing roadmap's decider (#723 S1 Home review).
+ * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /**
@@ -524,13 +537,15 @@ export const MOCK_SCENARIO_KEY = "po-mock-scenario";
  * localStorage key to "off" to see the app without it (no switch, everyone in Detailed).
  */
 export const MOCK_SIMPLE_MODE_KEY = "po-mock-simple-mode";
+/** SwarmCloud #2498: a running SwarmCloud run whose key Oracle renewed while its step waited in the queue. */
+export const KEY_RENEWED_SCENARIO = "key-renewed";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
 export const STORED_REFUSALS_SCENARIO = "stored-refusals";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
 export const MOCK_FAIL_KEY = "po-mock-fail";
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
 export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
-/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later. */
+/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). */
 export const MOCK_SLOW_KEY = "po-mock-slow";
 export const MOCK_SLOW_MS = 1500;
 /**
@@ -809,6 +824,73 @@ function seedPrivateFinding(): Db {
 
 /** "questions" in a company of 25 members: zoe.zimmer@example.com sorts last, past the
  * people picker's first page of 20. */
+/**
+ * #734 review "simple-deciders" scenario (D-a): the default company plus four invented
+ * people: Dana Decider (an approver), the pricing roadmap's decider; Avery Lane (an
+ * approver), Cory Hale (a commenter) and Vic Moss (a viewer), the owners of the alerts,
+ * onboarding and welcome tracks of Simple's roadmap (./simple-roadmap.ts).
+ */
+function seedSimpleDecidersScenario(): Db {
+  const db = seed();
+  const join = (email: string, name: string, role: "approver" | "commenter" | "viewer", i: number) => {
+    const m = {
+      email, name, role, engineering_lead: false, created_at: `2026-09-${String(10 + i).padStart(2, "0")}T09:00:00Z`,
+      id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
+    };
+    db.members.push(m);
+    return m.id;
+  };
+  db.simple_roadmap = seedSimpleDeciders({
+    decider: join("dana.decider@example.com", "Dana Decider", "approver", 0),
+    approver: join("avery.lane@example.com", "Avery Lane", "approver", 1),
+    commenter: join("cory.hale@example.com", "Cory Hale", "commenter", 2),
+    viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
+  });
+  db.simple_roadmap.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
+  return db;
+}
+
+/**
+ * #723 S1 Home's "simple-home" scenario: the default company whose confirmed goals are those
+ * Simple's roadmap items serve (Grow retention, Faster activation) plus a guardrail goal, each
+ * with a weight and a metric path; two proposals the commenter made (routed to the owners);
+ * the approver's decision on usage caps waits as in every company. Invented data.
+ */
+function seedSimpleHomeScenario(): Db {
+  const db = seed();
+  db.simple_roadmap = seedSimpleRoadmap();
+  const template = db.baseline.entities.find((e) => e.type === "goal")!;
+  for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
+  const goal = (key: string, title: string, attrs: Record<string, unknown>) =>
+    db.baseline.entities.push({ ...template, id: stableUuid(`simple-goal/${key}`), key, title, body: null, attrs, status: "confirmed", locked: false, locked_by: null, locked_at: null });
+  goal("grow-retention", "G-R Grow retention", { metric: "teams with weekly alerts on", unit: "teams", comparison: "at_least", start: 50, current: 100, current_as_of: "2026-10-01", target: 200, weight: 3, horizon: "medium" });
+  goal("faster-activation", "G-A Faster activation", { metric: "new teams set up in a day", unit: "%", comparison: "at_least", start: 30, target: 60, weight: 2, horizon: "short" });
+  goal("quiet-alerts", "G-Q Keep alerts quiet", { metric: "teams muting alerts", unit: "teams", comparison: "at_most", start: 12, target: 10, weight: 1, horizon: "short", guardrail: true });
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? "Commenter", owners, roles };
+  seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
+  seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
+  seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * #723 S1 Home review "simple-home-deciders" scenario: "simple-deciders" (Dana Decider decides
+ * the pricing roadmap, Avery Lane, an approver, owns the alerts track) plus the commenter's
+ * proposal to retitle New plan tiers, which waits on Dana. Invented data.
+ */
+function seedSimpleHomeDecidersScenario(): Db {
+  const db = seedSimpleDecidersScenario();
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? "Commenter", owners, roles };
+  seedSimpleProposal(db.simple_roadmap!, who, "edit_title", "price-tiers", { title: "New plan tiers" }, { title: "New plan tiers, yearly" }, "2026-10-26T15:00:00Z");
+  return db;
+}
+
 function seedManyPeople(): Db {
   const db = seedQuestions();
   const join = (email: string, i: number) => ({
@@ -2457,6 +2539,14 @@ function load(): Db {
               ? seedPrivateFinding
               : scenario === "many-people"
                 ? seedManyPeople
+              : scenario === "simple-deciders"
+                ? seedSimpleDecidersScenario
+              : scenario === "simple-home"
+                ? seedSimpleHomeScenario
+              : scenario === "simple-home-deciders"
+                ? seedSimpleHomeDecidersScenario
+              : scenario === "simple-500"
+                ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
                   : scenario === "strategy-plan"
@@ -2571,6 +2661,7 @@ function load(): Db {
     // #644 re-review: the "discussion-replies" seed's failed reply stored the refusal on Oct 18.
     for (const m of db.discussions.messages) if (m.status === "failed") m.error = SPENT;
   }
+  if (scenario === KEY_RENEWED_SCENARIO) seedKeyRenewedRun(db.runs!, runsContext(db));
   if (scenario === VERSION_WARNINGS_SCENARIO) {
     const prd = db.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
@@ -4784,10 +4875,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // the decision log (./decisions.ts): commenters propose, edit and withdraw.
   // A decision checks who decides itself (A3: an engineering lead below the approver role).
   // So do F3's schedule bases (./roadmap.ts date rights): a named engineering lead below the
-  // approver role records, verifies, rejects and withdraws them.
+  // approver role records, verifies, rejects and withdraws them. So do Simple's routes
+  // (./simple-changes.ts: commenters propose, D-a track owners decide as approvers).
   const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
   const need: Role | null =
-    m === "GET" || draftWrite || p[1] === "decisions" || p[1] === "schedule-bases"
+    m === "GET" || draftWrite || p[1] === "decisions" || p[1] === "schedule-bases" || p[1] === "simple"
       ? null
       : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
           // As the API: commenters propose a blocker's solution options.
@@ -4857,6 +4949,41 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (editsRes) return editsRes;
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
+  // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
+  // Simple S5: one-pagers and their line edits (edit_line) through the change engine.
+  db.simple_one_pager ??= seedOnePager();
+  const onePagerRes = await routeOnePager(
+    db.simple_one_pager,
+    {
+      id: me.id,
+      role: me.role,
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+    },
+    req,
+    p,
+  );
+  if (onePagerRes) return onePagerRes;
+  db.simple_roadmap ??= seedSimpleRoadmap();
+  const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
+  const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
+  const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
+  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, req, p, q);
+  if (simpleRes) return simpleRes;
+  const simpleChanges = await routeSimpleChanges(
+    db.simple_roadmap,
+    {
+      id: me.id,
+      role: me.role,
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+      roles: simpleRoles,
+    },
+    req,
+    p,
+    q,
+  );
+  if (simpleChanges) return simpleChanges;
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
   const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
@@ -4934,6 +5061,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
+    // Simple S3a: proposals waiting for me count; decisions on mine are shown.
+    const simpleRows = simpleInboxRows(db.simple_roadmap, me.id, seenBefore, {
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
+    });
+    Object.assign(inbox, simpleRows);
+    inbox.total += simpleRows.simple_proposals.length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + simpleRows.simple_proposals.length;
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
     const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;
@@ -5438,7 +5573,8 @@ export async function mockFetch(req: Request): Promise<Response> {
     return res;
   });
   queue = next.catch(() => undefined);
-  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_SLOW_KEY)) {
+  const slow = localStorage.getItem(MOCK_SLOW_KEY);
+  if ((req.method === "GET" && url.pathname === slow) || slow === `${req.method} ${url.pathname}`) {
     return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), MOCK_SLOW_MS)));
   }
   return next;
