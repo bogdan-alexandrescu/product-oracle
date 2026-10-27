@@ -30697,7 +30697,7 @@ export interface components {
          *     last switched to (#723); unset, they land by role (viewers and commenters in Simple).
          *     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).
          *     ``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);
-         *     unset, all roadmaps.
+         *     unset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all.
          */
         Preferences: {
             /**
@@ -30732,6 +30732,7 @@ export interface components {
             priorities_line?: string | null;
             /** Simple Roadmap */
             simple_roadmap?: string | null;
+            simple_filters?: components["schemas"]["SimpleFilters"] | null;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -30748,6 +30749,7 @@ export interface components {
             priorities_line?: string | null;
             /** Simple Roadmap */
             simple_roadmap?: string | null;
+            simple_filters?: components["schemas"]["SimpleFilters"] | null;
         };
         /**
          * PreviousAttempt
@@ -37271,6 +37273,27 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /**
+         * SimpleFilters
+         * @description The Simple roadmap's PRD, Goal and Track picks, remembered like its Roadmap filter.
+         */
+        SimpleFilters: {
+            /**
+             * Prd
+             * @default
+             */
+            prd: string;
+            /**
+             * Goal
+             * @default
+             */
+            goal: string;
+            /**
+             * Track
+             * @default
+             */
+            track: string;
         };
         /** SimpleFlag */
         SimpleFlag: {

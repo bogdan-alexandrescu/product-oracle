@@ -594,7 +594,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     ],
     changes_in_review: reader.hidden,
     drafts: reader.visible,
-    ...keyDatesOut(db, reader.full, chosen ? [chosen] : [...new Set(shown.map((i) => i.roadmap.slug))], me ?? { id: "", role }),
+    // One roadmap chosen: its key dates; all roadmaps: every readable one's (oracle.simple.service).
+    ...keyDatesOut(db, reader.full, chosen ? [chosen] : readable, me ?? { id: "", role }),
     roadmaps: keyDatesOut(db, reader.full, readable, me ?? { id: "", role }).key_date_roadmaps,
     roadmap: chosen ? { id: roadmapId(chosen), slug: chosen, title: ROADMAPS[chosen].title } : null,
   };

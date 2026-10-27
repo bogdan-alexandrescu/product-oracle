@@ -238,7 +238,8 @@ class SimpleRoadmapOut(BaseModel):
     changes_in_review: int = 0
     # S3b: the open drafts the reader sees (their items read as the draft has them).
     drafts: list["SimpleDraftBrief"] = []
-    # Roadmap-plus: the key dates of the roadmaps shown, by day, and those roadmaps.
+    # Roadmap-plus: the key dates of the roadmap chosen (else of every roadmap the reader
+    # may read), by day, and those roadmaps.
     key_dates: list[SimpleKeyDate] = []
     key_date_roadmaps: list[SimpleKeyDateRoadmap] = []
     # The Roadmap filter: every roadmap the reader may read (whether their change applies

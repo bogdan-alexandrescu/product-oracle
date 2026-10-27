@@ -23,7 +23,7 @@ const value = (k: KeyDate) => ({ name: k.name, date: k.date, note: k.note ?? nul
  */
 export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data: Roadmap; act: Act; mayChange: boolean; phone: boolean; onClose: () => void }) {
   const chosen = data.roadmap ?? null;
-  // The roadmaps listed: the chosen one, else those of the items shown.
+  // The roadmaps listed: the chosen one, else every roadmap the person may read.
   const roadmaps = data.key_date_roadmaps ?? [];
   // Where a new key date may go: the chosen roadmap, else every roadmap the person may read.
   const addable = chosen ? roadmaps : (data.roadmaps ?? roadmaps).filter((r) => r.can_change);

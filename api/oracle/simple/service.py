@@ -736,12 +736,13 @@ async def build(
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
-    kd_docs = {e.roadmap.id: e.roadmap for e in shown}
-    if chosen is not None:
-        # One roadmap chosen: its key dates even when the other filters hide its items.
-        kd_docs = {chosen.id: chosen}
+    # One roadmap chosen: its key dates; all roadmaps: every readable roadmap's, even when
+    # the other filters hide its items (the Key dates editor lists and targets them all).
+    kd_docs = {chosen.id: chosen} if chosen is not None else readable
     kds, kd_roadmaps = await key_dates.roadmap_key_dates(db, principal, kd_docs)
-    _, all_roadmaps = await key_dates.roadmap_key_dates(db, principal, readable)
+    all_roadmaps = kd_roadmaps
+    if chosen is not None:
+        _, all_roadmaps = await key_dates.roadmap_key_dates(db, principal, readable)
     from oracle.simple import visuals
 
     flows = await visuals.flows_for(db, "feature", [e.row.id for e in shown])

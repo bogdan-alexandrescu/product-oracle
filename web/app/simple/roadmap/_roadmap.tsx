@@ -8,7 +8,7 @@ import { GoalPanel, SuggestionCard, useGoalSuggestions, type GoalBrief, type Goa
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { shownDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -410,21 +410,41 @@ export function SimpleRoadmap() {
   }, [drafting, roadmap.data, reloadRoadmap]);
 
   // The Roadmap filter: landing without ?roadmap=, the person's remembered pick (preferences)
-  // once the roadmaps they may read are known (a roadmap they no longer read is dropped).
+  // once the roadmaps they may read are known (a roadmap they no longer read is dropped);
+  // their PRD (unless a link names one), Goal and Track picks come back with it.
   const prefs = useQuery("me-preferences", () => unwrap(api.GET("/v1/me/preferences")));
-  const [restored, setRestored] = useState(!!params.get("roadmap"));
+  const [restored, setRestored] = useState(false);
   const known = roadmap.data?.roadmaps;
   if (!restored && known && (prefs.data || prefs.error)) {
     setRestored(true);
     const pick = prefs.data?.simple_roadmap;
-    if (pick && pick !== "all" && known.some((r) => r.roadmap.id === pick)) setF({ ...f, roadmap: pick });
+    const kept = prefs.data?.simple_filters;
+    const next = { ...f, goal: kept?.goal || f.goal, track: kept?.track || f.track };
+    if (!params.get("prd")) next.prd = kept?.prd || f.prd;
+    if (!params.get("roadmap") && pick && pick !== "all" && known.some((r) => r.roadmap.id === pick)) next.roadmap = pick;
+    if (next.roadmap !== f.roadmap || next.prd !== f.prd || next.goal !== f.goal || next.track !== f.track) setF(next);
   }
+  // A pick is saved for next time; one the server could not save says so.
+  const remember = async (body: Schemas["PreferencesUpdate"], failed: string) => {
+    try {
+      const saved = await unwrap(api.PATCH("/v1/me/preferences", { body }));
+      prefs.setData(() => saved);
+    } catch {
+      toast({ message: failed });
+    }
+  };
   const pickRoadmap = (id: string) => {
     setRestored(true);
     setCard(null);
     setPop(null);
     setF({ ...f, roadmap: id });
-    void api.PATCH("/v1/me/preferences", { body: { simple_roadmap: id || "all" } });
+    void remember({ simple_roadmap: id || "all" }, "Could not remember this roadmap for next time");
+  };
+  const pickFilter = (k: "prd" | "goal" | "track", v: string) => {
+    setRestored(true);
+    const next = { ...f, [k]: v };
+    setF(next);
+    void remember({ simple_filters: { prd: next.prd, goal: next.goal, track: next.track } }, "Could not remember these filters for next time");
   };
 
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
@@ -763,9 +783,9 @@ export function SimpleRoadmap() {
         {readable.length > 1 && (
           <Select label="Roadmap" all="All roadmaps" testId="filter-roadmap" value={data.roadmap?.id ?? ""} options={readable.map((r) => [r.roadmap.id, r.roadmap.title])} onChange={pickRoadmap} />
         )}
-        <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => setF({ ...f, prd })} />
-        <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => setF({ ...f, goal })} />
-        <Select label="Track" value={f.track} options={seen.track} onChange={(track) => setF({ ...f, track })} />
+        <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => pickFilter("prd", prd)} />
+        <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => pickFilter("goal", goal)} />
+        <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
         <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setF({ ...f, from })} />
         <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setF({ ...f, to })} />
         <SegmentedControl<Group>
