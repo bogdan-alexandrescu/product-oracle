@@ -229,9 +229,9 @@ async def test_proposals_wait_for_the_decider(client):
 async def test_draft_and_second_item_proposals(client):
     """protects=a commenter's Confirm (confirm_item) and Merge (S7's merge_item; train T's
     cut with a note is still listed) are listed among the proposals waiting for the decider,
-    and every proposal carries its feature_id so one on a feature's second item (pay-7, ledger's later item) shows under the
-    feature's row; fails_when=a draft's proposal is dropped or a proposal can't be placed;
-    no_claim=a cut of a ranked item (the roadmap's)."""
+    and every proposal carries its feature_id so one on a feature's second item (pay-7,
+    ledger's later item) shows under the feature's row; fails_when=a draft's proposal is
+    dropped or a proposal can't be placed; no_claim=a cut of a ranked item (the roadmap's)."""
     ctx = await make_people()
     w = await World(ctx).build()
     r = await w.change(client, "commenter", "confirm_item", "pay-5", {"draft": True}, {})
