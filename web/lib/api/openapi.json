@@ -114823,6 +114823,11 @@
             "type": "string",
             "title": "Code"
           },
+          "short_code": {
+            "type": "string",
+            "title": "Short Code",
+            "default": ""
+          },
           "title": {
             "type": "string",
             "title": "Title"

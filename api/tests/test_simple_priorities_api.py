@@ -433,4 +433,6 @@ async def test_short_codes_stay_when_the_rank_moves(client):
     assert out["rows"][0]["code"] == "pay-2"
     assert {r["code"]: r["short_code"] for r in out["rows"]} == before
     # A commenter reads the same codes.
-    assert {r["code"]: r["short_code"] for r in (await w.read(client, "commenter"))["rows"]} == before
+    assert {
+        r["code"]: r["short_code"] for r in (await w.read(client, "commenter"))["rows"]
+    } == before
