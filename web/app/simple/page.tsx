@@ -440,6 +440,14 @@ export default function SimpleHome() {
                           .slice(0, 4)
                           .map((a) => a.name)
                           .join(", ")}`}
+                      <br />
+                      {next.pre_read_ready && next.occurrence_id ? (
+                        <Link className="underline" href={`/company/rituals/${next.occurrence_id}`}>
+                          Open pre-read
+                        </Link>
+                      ) : (
+                        "Pre-read not ready yet"
+                      )}
                     </>
                   }
                   actions={
@@ -447,11 +455,11 @@ export default function SimpleHome() {
                       <Link href={`/simple/meetings/${next.meeting_id}`} className="simple-button simple-button-primary">
                         Open meeting
                       </Link>
-                    ) : (
+                    ) : next.can_start ? (
                       <Link href={`/simple/meetings?start=${next.ritual_id}`} className="simple-button simple-button-primary">
                         Start meeting
                       </Link>
-                    )
+                    ) : undefined
                   }
                 />
               </ul>

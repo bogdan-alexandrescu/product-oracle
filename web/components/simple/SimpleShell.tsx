@@ -38,23 +38,25 @@ function isActive(pathname: string, d: Dest): boolean {
  * The rail's yellow counts (S1 restyle, the owner's pick): only where something waits on the
  * signed-in person, from the Inbox: Decisions (decisions they decide), Roadmap (proposals they
  * decide and drafts waiting for their approval); Meetings counts what its page lists (the
- * production walk): the live meetings and the upcoming reviews not started yet.
+ * production walk): the live meetings and the upcoming reviews not started yet, read when the
+ * rail mounts, when something waiting changes and on the Meetings pages, not on every other
+ * route change (review).
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const [meetings, setMeetings] = useState<number | null>(null);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/meetings")).catch(() => null)])
-      .then(([inbox, meetings]) => {
+    loadInbox()
+      .then((inbox) => {
         if (!alive) return;
         setCounts({
           Decisions: inbox.decisions.filter((d) => d.counts).length,
           Roadmap: inbox.simple_proposals.length + inbox.simple_approvals.length,
-          Meetings: meetings ? meetings.live.length + meetings.upcoming.filter((o) => !o.meeting_id).length : 0,
         });
       })
       .catch(() => undefined);
@@ -62,7 +64,18 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
       alive = false;
     };
   }, [enabled, pathname, changes]);
-  return counts;
+  const meetingsPath = pathname.startsWith("/simple/meetings") ? pathname : "";
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    unwrap(api.GET("/v1/simple/meetings"))
+      .then((m) => alive && setMeetings(m.live.length + m.upcoming.filter((o) => !o.meeting_id).length))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [enabled, changes, meetingsPath]);
+  return counts && { ...counts, Meetings: meetings ?? 0 };
 }
 
 /** What a rail count counts, said in words (its label and tooltip). */

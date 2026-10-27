@@ -19,7 +19,8 @@ import { SIMPLE_MODE } from "../_flag";
  * the live meetings to join, and past ones with their minutes' summary. "Start a review"
  * opens the start sheet. Upcoming is the one list of scheduled reviews: Home's "Next review
  * meeting" is its first row and the rail's Meetings count is its rows not started plus the
- * live meetings; Home's Start opens here (`?start=` the ritual) with the sheet open.
+ * live meetings; Home's Start opens here (`?start=` the ritual) with the sheet open. Start shows
+ * where the row's can_start says (owners and the ritual's owner).
  */
 export default function SimpleMeetings() {
   return (
@@ -38,7 +39,7 @@ function Meetings() {
   // Home's Start meeting (`?start=` its ritual): the sheet opens on that review, once.
   if (startParam && !opened && q.data) {
     setOpened(true);
-    const o = q.data.upcoming.find((x) => x.ritual_id === startParam && !x.meeting_id);
+    const o = q.data.upcoming.find((x) => x.ritual_id === startParam && !x.meeting_id && x.can_start);
     if (o) setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o });
   }
   if (!SIMPLE_MODE) notFound();
@@ -72,9 +73,9 @@ function Meetings() {
                   </span>
                   {o.meeting_id ? (
                     <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/meetings/${o.meeting_id}`}>Open</Link>
-                  ) : (
+                  ) : o.can_start ? (
                     <Button onClick={() => setSheet(o.occurrence_id ? { occurrence: o.occurrence_id } : { ritual: o })}>Start review</Button>
-                  )}
+                  ) : null}
                 </li>
               ))}
             </ul>

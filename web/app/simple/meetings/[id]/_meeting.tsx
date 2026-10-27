@@ -26,6 +26,9 @@ function clock(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** How often a live meeting's screen reads the meeting again (other screens' Approve, Undo, changes). */
+const LIVE_POLL_MS = 5_000;
+
 /** Names for ids, from the meeting's attendees. */
 const namer = (m: Meeting) => (id: string) => m.attendees.find((a) => a.id === id)?.name ?? "a reviewer";
 
@@ -75,6 +78,13 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
   }, []);
+  // Every screen on the meeting follows it (the production walk: Approve on the decider's
+  // screen left the others on the old version and its draft bar): read it again every
+  // LIVE_POLL_MS, and the one-pager with it when its decisions or drafts move on.
+  useEffect(() => {
+    const t = window.setInterval(() => void reload(), LIVE_POLL_MS);
+    return () => window.clearInterval(t);
+  }, [reload]);
   const path = { params: { path: { meeting_id: m.id } } };
   const rules = (body: Schemas["SimpleMeetingRulesIn"]) => act(() => unwrap(api.PATCH("/v1/simple/meetings/{meeting_id}/rules", { ...path, body })));
   const absent = m.attendees.filter((a) => !a.present).map((a) => a.id);

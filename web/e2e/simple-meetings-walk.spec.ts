@@ -2,13 +2,6 @@ import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
 import { login, signOut } from "./helpers";
 import { expect, test, type BrowserContext, type Page } from "./test";
 
-declare global {
-  interface Window {
-    /** The mock's calls ("GET /v1/…"), recorded while a spec sets it (lib/api/mock/server.ts). */
-    __poMockCalls?: string[];
-  }
-}
-
 /**
  * Simple S8 (#723), the production walk's three meeting findings, driven through the UI on
  * the mock's invented PRD "Guided setup" and its built-in rituals
@@ -57,7 +50,7 @@ declare global {
  * occurrence; no_claim = crossing starts on the API (test_simple_meetings_walk).
  *
  * Card walk-rail-count (review): moving between Simple's pages does not read the full
- * meetings list again for the rail's count (window.__poMockCalls); fails_when = every
+ * meetings list again for the rail's count (the mock's call log); fails_when = every
  * route change reads /v1/simple/meetings; no_claim = the Inbox's own reads.
  */
 
@@ -285,7 +278,7 @@ for (const phone of [false, true]) {
           await login(page);
           await page.goto("/simple/roadmap");
           await expect(page.getByTestId("simple-nav-meetings-count")).toBeVisible();
-          await page.evaluate(() => (window.__poMockCalls = []));
+          await page.evaluate(() => ((globalThis as { __poMockCalls?: string[] }).__poMockCalls = []));
           await page.getByTestId("simple-nav-decisions").filter({ visible: true }).click();
           await expect(page).toHaveURL(/\/simple\/decisions/);
           await page.getByTestId("simple-nav-one-pagers").filter({ visible: true }).click();
@@ -293,7 +286,7 @@ for (const phone of [false, true]) {
           await page.getByTestId("simple-nav-roadmap").filter({ visible: true }).click();
           await expect(page).toHaveURL(/\/simple\/roadmap/);
           await expect(page.getByTestId("simple-nav-meetings-count")).toBeVisible();
-          const calls = await page.evaluate(() => window.__poMockCalls ?? []);
+          const calls = await page.evaluate(() => (globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? []);
           expect(calls.filter((c) => c === "GET /v1/simple/meetings")).toEqual([]);
         });
       }

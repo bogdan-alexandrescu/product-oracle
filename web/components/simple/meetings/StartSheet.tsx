@@ -112,6 +112,7 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
         body: {
           prd: chosen.document.slug, origin: occurrence || ritual ? "ritual" : origin, occurrence_id: occurrence ?? null,
           ritual_id: !occurrence && ritual ? ritual.ritual_id : null,
+          due_at: !occurrence && ritual ? ritual.due_at : null,
           attendee_ids: people, change_mode: mode, change_people: mode === "named" ? named : [], length_min: length,
         },
       }));
