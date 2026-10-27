@@ -232,11 +232,12 @@ async def test_malformed_and_unknown(client):
 
 
 async def test_key_date_edits_skip_the_full_roadmap_read(client, monkeypatch):
-    """protects=a key-date create, its proposal's accept and an applied change find the
-    roadmap and its shown version without the whole roadmap read (service.load: every
-    roadmap's items, records and constraints), so a large tenant does not pay for it per
-    edit; the draft still opens on the shown version; fails_when=a key-date edit calls
-    service.load; no_claim=the roadmap read itself (GET /v1/simple/roadmap)."""
+    """protects=a key-date create and its proposal's accept find the roadmap and its shown
+    version without a whole roadmap read of their own (service.load: every roadmap's items,
+    records and constraints), so a large tenant pays for one read per edit (the change's
+    response), not two; an unknown roadmap is still 404 and the draft still opens on the
+    shown version; fails_when=key_dates reads the whole roadmap to find one; no_claim=the
+    response's own read (oracle.simple.changes._view, shared by every op)."""
     from oracle.simple import service
 
     w = await world()
@@ -246,18 +247,28 @@ async def test_key_date_edits_skip_the_full_roadmap_read(client, monkeypatch):
                 RoadmapItem.roadmap_document_id == uuid.UUID(w.roadmap_id)
             )
         )
+    calls: list[str] = []
+    load = service.load
 
-    async def no_full_read(*a, **k):
-        raise AssertionError("a key-date edit read the whole roadmap")
+    async def counted(*a, **k):
+        calls.append("load")
+        return await load(*a, **k)
 
-    monkeypatch.setattr(service, "load", no_full_read)
-    r = await post(client, w, "decider", "add_key_date", None, LAUNCH)
-    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    # Every whole read is counted; the response's view (changes._view) makes one.
+    monkeypatch.setattr(service, "load", counted)
+
+    async def reads(request) -> int:
+        calls.clear()
+        r = await request
+        assert r.status_code in (200, 201), r.text
+        return len(calls)
+
+    assert await reads(post(client, w, "decider", "add_key_date", None, LAUNCH)) == 1
     p = await post(client, w, "commenter", "add_key_date", None, {**LAUNCH, "name": "Summit"})
     assert p.status_code == 201 and p.json()["change"]["status"] == "proposed", p.text
-    a = await client.post(f"{CHANGES}/{p.json()['change']['id']}/accept",
-                          headers=w.ctx.as_("decider"))  # fmt: skip
-    assert a.status_code == 200 and a.json()["change"]["status"] == "accepted", a.text
+    accept = client.post(f"{CHANGES}/{p.json()['change']['id']}/accept",
+                         headers=w.ctx.as_("decider"))  # fmt: skip
+    assert await reads(accept) == 1
     body = {"op": "add_key_date", "target": {"document_id": str(uuid.uuid4())},
             "before": {"key_date": None}, "after": LAUNCH}  # fmt: skip
     r = await client.post(CHANGES, json=body, headers=w.ctx.as_("decider"))
