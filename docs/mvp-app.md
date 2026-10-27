@@ -151,6 +151,11 @@ verdict on the same section supersedes the earlier item.
 | `GET .../versions/{n}/export?format=html\|pdf\|md\|pptx&layer=full\|brief\|deck` | export with version banner: Full (html, pdf, md), Brief (html, pdf), Deck (pdf, pptx) |
 | `GET .../versions/{n}/deck` | the brief as slides for Present mode (theme CSS, notes, expandable detail) |
 | `GET /v1/me/preferences`, `PATCH /v1/me/preferences` | per-user choices: `document_view` (`brief`/`full`), `experience` (`simple`/`detailed`, #723: the mode the person last switched to; unset, they land in `GET /v1/me/capabilities` `default_experience`: Simple for viewers and commenters, Detailed for approvers and owners) |
+| `GET /v1/simple/visuals/{kind}/{subject_id}` | Simple S10 (#723, D26): a proposal's visual (`kind`: `suggestion`, `draft_item`, `change`, `chat_card`, `one_pager_line`, `feature`): the newest drawing (user flow as sanitised SVG, low-fi wireframe as sanitised HTML, steps, numbered annotations tied to PRD sections and requirements; null: "No flow yet"), versions newest first, comments, `pending`, `can_comment`, `can_revise`; viewer and up (a proposal's: who may read the proposal) |
+| `GET /v1/simple/visuals/{kind}/{subject_id}/versions/{n}` | one older drawing (the history) |
+| `POST /v1/simple/visuals/{kind}/{subject_id}/comments` | comment on the newest drawing or one annotation (`{body, annotation}`); commenter and up |
+| `POST /v1/simple/visuals/{kind}/{subject_id}/revise` | Oracle redraws it from the open comments (and `note`) as the next version (the `simple_visual` llm job); who changes the subject directly (an owner, its decider, with none its track owner); 409 with nothing to revise from |
+| `POST /v1/simple/visuals/{kind}/{subject_id}/request` | ask Oracle to draw a subject with no visual (a roadmap feature); same people as revise |
 | `GET /healthz` | liveness + DB check |
 
 Agent track uses `Authorization: Bearer <api token>`; the UI uses the session cookie.
