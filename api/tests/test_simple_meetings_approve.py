@@ -14,7 +14,7 @@ Test cards (protects / fails_when / no_claim):
   with a named reviewer, Studio's own approve.
 - test_absent_required_reviewer_waits: protects=with an absent required reviewer the
   meeting's Approve does not publish and says so: the draft waits on them, the one-pager
-  stays on version 1, the decision reads "not yet published: waiting on <name>'s
+  stays on version 1, the decision reads "not yet published: Waiting on <name>'s
   approval", in the banner's words; then their own approve publishes version 2;
   fails_when=the decision says "published" while version 2 is unapproved, its wording
   differs from the banner's, or their approve does not publish; no_claim=the Inbox row
