@@ -48,7 +48,12 @@ function Drawing({ flow, big }: { flow: Flow; big?: boolean }) {
       <div>
         <h3 className="font-semibold">Screen: {flow.touches_screen ? flow.screen.title : "none (it touches no screen)"}</h3>
         {flow.wireframe ? (
-          <iframe title={`Wireframe of ${flow.screen.title}`} sandbox="" srcDoc={flow.wireframe} data-testid="flow-wireframe" className={`mt-2 w-full rounded-lg border border-line bg-white ${big ? "h-[420px]" : "h-56"}`} />
+          <>
+            <p className="text-[length:var(--simple-small)] text-text2" data-testid="flow-regions">
+              Regions: {flow.screen.regions.join(" · ")}
+            </p>
+            <iframe title={`Wireframe of ${flow.screen.title}`} sandbox="" srcDoc={flow.wireframe} data-testid="flow-wireframe" className={`mt-2 w-full rounded-lg border border-line bg-white ${big ? "h-[420px]" : "h-56"}`} />
+          </>
         ) : flow.touches_screen ? (
           <div aria-label={`Wireframe of ${flow.screen.title}`} role="img" className="mt-1 flex flex-col gap-1 rounded-lg border border-line-strong bg-surface p-2">
             {flow.screen.regions.map((r) => (
