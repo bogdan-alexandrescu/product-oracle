@@ -20,6 +20,11 @@ Test cards (protects / fails_when / no_claim):
   its changes kept and undoable again, the version marked withdrawn and refused by the
   ordinary approve, new changes accepted, a new submit making the next version;
   fails_when=the draft stays submitted or loses its changes; no_claim=feedback threads.
+- test_any_non_approved_verdict_returns_the_draft (required, optional x changes_requested,
+  rejected): protects=the owner decision of 2026-10-26 (#734 review), any verdict other
+  than approved, on a required or an optional section, returns the draft to working, its
+  changes kept and undoable, the version marked withdrawn; fails_when=an optional section's
+  verdict leaves the draft submitted; no_claim=which sections a template requires.
 - test_withdraw (author, decider): protects=S3b-1, the draft's author or the decider
   withdraws a submitted draft back to working (a required reviewer 403, a commenter 404),
   the version is marked withdrawn and can't be approved, and the roadmap takes new
@@ -207,6 +212,53 @@ async def test_a_blocking_verdict_returns_the_draft(client, verdict):
     r = await client.post(f"{DRAFTS}/{d['id']}/submit", headers=w.ctx.as_("decider"))
     assert r.status_code == 200, r.text
     assert r.json()["version"] == 3
+
+
+async def required_keys(w: World, n: int) -> set[str]:
+    """The required sections of version ``n`` (the template's, its modules' and the policy's)."""
+    from oracle.docs.models import Document
+    from oracle.review.state import effective_policy, required_sections
+
+    v = await version(w, n)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        doc = await s.get(Document, v.document_id)
+        return set(await required_sections(s, doc, v, await effective_policy(s, doc)))
+
+
+@pytest.mark.parametrize("section", ["required", "optional"])
+@pytest.mark.parametrize("verdict", ["changes_requested", "rejected"])
+async def test_any_non_approved_verdict_returns_the_draft(client, section, verdict):
+    # Owner decision 2026-10-26 (#734 review): a required or an optional section's
+    # verdict other than approved returns the draft, its changes kept and undoable.
+    w = await world(reviewers=("approver",))
+    s = await submitted(client, w)
+    d, change = s["draft"], s["change"]
+    keys = await section_keys(w, 2)
+    if section == "required":
+        # The policy makes the version's first section required.
+        async with tenant_session(w.ctx.tenant_id) as db:
+            p = await db.scalar(
+                select(DocumentReviewPolicy).where(
+                    DocumentReviewPolicy.document_id == uuid.UUID(w.roadmap_id)
+                )
+            )
+            p.required_section_keys = [keys[0]]
+            await db.commit()
+    required = await required_keys(w, 2)
+    pick = [k for k in keys if (k in required) == (section == "required")]
+    assert pick, (section, keys, required)
+    r = await client.put(
+        f"{DOCS}/{await slug(w)}/versions/2/sections/{pick[0]}/review",
+        json={"verdict": verdict, "note": "Not this quarter"},
+        headers=w.ctx.as_("approver"),
+    )
+    assert r.status_code in (200, 201), r.text
+    row = await draft_row(w, d["id"])
+    assert row.status == "working" and row.version_id is None
+    assert (await the_draft(client, w))["changes"] == 1
+    assert any(n.get("code") == drafts.WITHDRAWN for n in (await version(w, 2)).notes)
+    r = await client.post(f"{CHANGES}/{change['id']}/undo", headers=w.ctx.as_("decider"))
+    assert r.status_code == 201, r.text
 
 
 @pytest.mark.parametrize("author", ["owner", "decider"])
