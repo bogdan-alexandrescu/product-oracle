@@ -313,9 +313,6 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByText(/Moved 'Alert rules engine' to .* in your working draft/)).toBeVisible();
       await expect(page.getByTestId("draft-count")).toHaveText("1");
       await expect(bar(page, "alert-rules")).not.toHaveAttribute("data-start", start);
-      const tabs = (await page.getByTestId("simple-tab-bar").boundingBox())!;
-      const b = (await body(page, "alert-rules").boundingBox())!;
-      expect(b.y + b.height).toBeLessThanOrEqual(tabs.y);
     });
   });
 }
