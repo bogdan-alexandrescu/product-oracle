@@ -411,11 +411,15 @@ function Composer({
   messages,
   onSent,
   handle,
+  say,
+  onSaid,
 }: {
   d: Discussion;
   messages: Message[];
   onSent: () => Promise<void>;
   handle?: Ref<ComposerHandle>;
+  say?: (text: string) => Promise<ReactNode | null>;
+  onSaid?: (shown: ReactNode) => void;
 }) {
   const { me } = useMe();
   const [text, setText] = useState("");
@@ -479,6 +483,23 @@ function Composer({
   };
   const send = async () => {
     if (!text.trim() || anyBlocked) return;
+    if (say && !mentions.length) {
+      setSending(true);
+      setError(null);
+      try {
+        const shown = await say(text.trim());
+        if (shown !== null) {
+          onSaid?.(shown);
+          setText("");
+          return;
+        }
+      } catch (e) {
+        setError(detail(e));
+        return;
+      } finally {
+        setSending(false);
+      }
+    }
     if (!(await post(text.trim(), mentions))) return;
     setText("");
     setMentions([]);
@@ -618,6 +639,7 @@ export function DiscussionThread({
   composer,
   focusChanges = false,
   inlineKinds,
+  say,
 }: {
   id: string;
   onBack?: () => void;
@@ -636,6 +658,11 @@ export function DiscussionThread({
   focusChanges?: boolean;
   /** Kinds the caller shows under messages (B6: goal versions); the changes card leaves them out. */
   inlineKinds?: string[];
+  /**
+   * The composer's line goes here first (Simple's one Ask box: S9's plan reader); what it
+   * returns shows in the thread after the last message, and null posts the line as usual.
+   */
+  say?: (text: string) => Promise<ReactNode | null>;
 }) {
   const { me, can } = useMe();
   const myId = me?.user_id ?? null;
@@ -651,6 +678,8 @@ export function DiscussionThread({
   // G3: bumped when a reply ends, so the changes card reloads.
   const [changesKey, setChangesKey] = useState(0);
   const [mirroring, setMirroring] = useState(false);
+  // What `say` showed, each after the message that was last when it was said.
+  const [said, setSaid] = useState<{ after: string | null; node: ReactNode }[]>([]);
   const router = useRouter();
   // G8: the starter or an approver may mirror an open discussion; they need the install's state.
   // A G7 panel chat never is (Share as discussion opens it), so it shows no Slack at all.
@@ -730,6 +759,17 @@ export function DiscussionThread({
     );
   }
   const { d, messages } = state;
+  // Said before any message, or after one no longer listed: at the top.
+  const saidAfter = (id: string | null) =>
+    said.flatMap((x, i) =>
+      x.after === id || (id === null && x.after !== null && !messages.some((m) => m.id === x.after))
+        ? [
+            <li key={`said-${i}`} className="min-w-0">
+              {x.node}
+            </li>,
+          ]
+        : [],
+    );
   const open = d.status === "open";
   const priv = d.visibility === "private";
   const starter = d.me.can_manage;
@@ -1042,8 +1082,10 @@ export function DiscussionThread({
       {error && <InlineError>{error}</InlineError>}
 
       <ol className="flex min-w-0 flex-col gap-3" aria-label="Messages">
-        {messages.length === 0 && <li className="text-sm text-text2">No messages yet</li>}
-        {messages.map((m) =>
+        {messages.length === 0 && !said.length && <li className="text-sm text-text2">No messages yet</li>}
+        {saidAfter(null)}
+        {messages.flatMap((m) => [
+
           m.author_kind === "system" && m.research ? (
             <ResearchLine key={m.id} m={m} />
           ) : m.author_kind === "system" ? (
@@ -1092,7 +1134,8 @@ export function DiscussionThread({
               {renderAfter?.(m, { d, messages })}
             </li>
           ),
-        )}
+          saidAfter(m.id),
+        ])}
       </ol>
 
       {d.me.private_findings && (
@@ -1111,6 +1154,8 @@ export function DiscussionThread({
           d={d}
           messages={messages}
           handle={composer}
+          say={say}
+          onSaid={(node) => setSaid((all) => [...all, { after: messages.at(-1)?.id ?? null, node }])}
           onSent={async () => {
             await reload();
             onChanged?.();

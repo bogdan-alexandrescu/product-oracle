@@ -8,7 +8,7 @@ import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { isHidden, type DiscussionRow, type DiscussionSummary } from "@/components/discuss/DiscussionList";
 import { Button, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
 import { InlineError, TEXTAREA } from "@/components/review/parts";
-import { AskChat } from "@/components/simple/chat/AskChat";
+import { AskChat, askInChat } from "@/components/simple/chat/AskChat";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { GENERAL, subjectKey, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
@@ -75,6 +75,17 @@ function ChatRow({ row, onOpen }: { row: DiscussionRow; onOpen: (id: string) => 
   );
 }
 
+/** Starts a private panel chat on the subject with the person's line; Oracle's reply streams in it. */
+async function startChat(subject: ScreenSubject, text: string): Promise<string> {
+  const d = await unwrap(
+    api.POST("/v1/discussions", {
+      body: { subject_kind: subject.kind, subject: subject.subject, origin: "panel", visibility: "private" },
+    }),
+  );
+  await unwrap(api.POST("/v1/discussions/{discussion_id}/messages", { params: { path: { discussion_id: d.id } }, body: { body: text.trim(), mention_oracle: false } }));
+  return d.id;
+}
+
 /** The first chat on the open subject: a private panel chat, then the message, then Oracle's streamed reply. */
 function NewChat({ subject, onStarted }: { subject: ScreenSubject; onStarted: (id: string) => void }) {
   const [text, setText] = useState("");
@@ -85,14 +96,9 @@ function NewChat({ subject, onStarted }: { subject: ScreenSubject; onStarted: (i
     setBusy(true);
     setError(null);
     try {
-      const d = await unwrap(
-        api.POST("/v1/discussions", {
-          body: { subject_kind: subject.kind, subject: subject.subject, origin: "panel", visibility: "private" },
-        }),
-      );
-      await unwrap(api.POST("/v1/discussions/{discussion_id}/messages", { params: { path: { discussion_id: d.id } }, body: { body: text.trim(), mention_oracle: false } }));
+      const id = await startChat(subject, text);
       setText("");
-      onStarted(d.id);
+      onStarted(id);
     } catch (e) {
       setError(detail(e));
     } finally {
@@ -234,8 +240,13 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
   const d = useDiscussion(threadId, tick);
   const writes = can("create_discussion");
   const isPanelChat = d?.origin === "panel";
-  // S9: on Simple's pages the panel also offers change by chat (Detailed is unchanged).
-  const simple = (usePathname() ?? "").startsWith("/simple");
+  // S9: on Simple's pages the panel's one box also changes the plan by chat (Detailed is unchanged).
+  const pathname = usePathname() ?? "";
+  const simple = pathname.startsWith("/simple");
+  const started = (id: string) => {
+    setView({ kind: "thread", id });
+    setTick((t) => t + 1);
+  };
 
   const about = d ? { label: d.subject_label, url: d.subject_url } : { label: subject.label, url: subject.kind === "screen" ? String(subject.subject.path) : null };
 
@@ -290,15 +301,10 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
         {view.kind === "list" && (
           <>
-            {simple && <AskChat />}
-            {writes ? (
-              <NewChat
-                subject={subject}
-                onStarted={(id) => {
-                  setView({ kind: "thread", id });
-                  setTick((t) => t + 1);
-                }}
-              />
+            {simple ? (
+              <AskChat about={subject.label} ask={writes ? async (text) => started(await startChat(subject, text)) : undefined} />
+            ) : writes ? (
+              <NewChat subject={subject} onStarted={started} />
             ) : null}
             {here !== null && here.length === 0 && recent !== null && recent.length === 0 && (
               <p className="text-[15px] text-text2" data-testid="hop-empty">
@@ -332,6 +338,7 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
                 setTick((t) => t + 1);
               }}
               onChanged={() => setTick((t) => t + 1)}
+              say={simple && isPanelChat ? (text) => askInChat(text, pathname) : undefined}
             />
             {isPanelChat && d.me.can_manage && writes && (
               <div>

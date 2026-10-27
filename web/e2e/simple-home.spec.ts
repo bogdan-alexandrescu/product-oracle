@@ -128,7 +128,7 @@ for (const phone of [false, true]) {
 
         // A broken dependency: Move dependents applies into the roadmap's working draft, with Undo.
         const broken = card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" });
-        await expect(broken).toContainText("depends on ends");
+        await expect(broken).toContainText("which it depends on, ends");
         await broken.getByRole("button", { name: "Move dependents" }).click();
         await expect(page.getByText("Move dependents: applied to your working draft")).toBeVisible();
         await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" })).toHaveCount(0);

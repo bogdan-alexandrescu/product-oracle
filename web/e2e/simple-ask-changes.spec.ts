@@ -102,7 +102,7 @@ for (const phone of [false, true]) {
       await say(ask, "move Mobile alert push to October 25");
       const late = ask.getByTestId("chat-card").filter({ hasText: "Move Mobile alert push" });
       await expect(late.getByTestId("chat-card-flag").first()).toBeVisible();
-      await expect(late.getByTestId("chat-card-fix")).toContainText("Propose: Start after");
+      await expect(late.getByTestId("chat-card-fix").first()).toHaveText("Propose: Start Mobile alert push after Alert rules engine ends");
     });
   });
 }

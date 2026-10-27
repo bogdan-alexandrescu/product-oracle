@@ -17560,6 +17560,11 @@ export interface components {
             text: string;
             /** Page */
             page?: string | null;
+            /**
+             * Only Understood
+             * @default false
+             */
+            only_understood: boolean;
         };
         /** ChatMessageOut */
         ChatMessageOut: {
@@ -17630,6 +17635,11 @@ export interface components {
             /** Messages */
             messages: components["schemas"]["ChatMessageOut"][];
             rules: components["schemas"]["ChatRulesOut"] | null;
+            /**
+             * Understood
+             * @default true
+             */
+            understood: boolean;
         };
         /** CheckOut */
         CheckOut: {

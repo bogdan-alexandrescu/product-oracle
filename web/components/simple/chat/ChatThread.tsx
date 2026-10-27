@@ -51,25 +51,7 @@ export function ChatThreadView({
 
   return (
     <div className="flex min-h-0 flex-col gap-3" data-testid={testId}>
-      <ol className="flex flex-col gap-3" aria-label="Messages">
-        {thread?.messages.map((m) => (
-          <li key={m.id} data-testid="chat-message" data-kind={m.kind} data-author={m.author_kind} className={`flex flex-col gap-2 ${m.author_kind === "person" ? "items-end" : "items-start"}`}>
-            <div className={`max-w-[95%] rounded-xl px-3 py-2 ${m.author_kind === "person" ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}>
-              <p className="simple-small font-semibold">{m.author_name}</p>
-              <p className="whitespace-pre-wrap" data-testid="chat-message-body">
-                {m.body}
-              </p>
-            </div>
-            {m.cards.length > 0 && (
-              <div className="flex w-full flex-col gap-2">
-                {m.cards.map((c) => (
-                  <ChatCard key={c.id} card={c} onChanged={onCardChanged} />
-                ))}
-              </div>
-            )}
-          </li>
-        ))}
-      </ol>
+      <ChatMessages messages={thread?.messages ?? []} onCardChanged={onCardChanged} />
       <div ref={end} />
       <form
         className="flex flex-col gap-2"
@@ -110,5 +92,30 @@ export function ChatThreadView({
         </div>
       </form>
     </div>
+  );
+}
+
+/** S9's lines, oldest first, with Oracle's cards (a thread's, or those shown in an Ask chat). */
+export function ChatMessages({ messages, onCardChanged }: { messages: Thread["messages"]; onCardChanged?: () => void }) {
+  return (
+    <ol className="flex flex-col gap-3" aria-label="Messages">
+      {messages.map((m) => (
+        <li key={m.id} data-testid="chat-message" data-kind={m.kind} data-author={m.author_kind} className={`flex flex-col gap-2 ${m.author_kind === "person" ? "items-end" : "items-start"}`}>
+          <div className={`max-w-[95%] rounded-xl px-3 py-2 ${m.author_kind === "person" ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}>
+            <p className="simple-small font-semibold">{m.author_name}</p>
+            <p className="whitespace-pre-wrap" data-testid="chat-message-body">
+              {m.body}
+            </p>
+          </div>
+          {m.cards.length > 0 && (
+            <div className="flex w-full flex-col gap-2">
+              {m.cards.map((c) => (
+                <ChatCard key={c.id} card={c} onChanged={onCardChanged} />
+              ))}
+            </div>
+          )}
+        </li>
+      ))}
+    </ol>
   );
 }

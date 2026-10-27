@@ -58268,6 +58268,11 @@
               }
             ],
             "title": "Page"
+          },
+          "only_understood": {
+            "type": "boolean",
+            "title": "Only Understood",
+            "default": false
           }
         },
         "type": "object",
@@ -58467,6 +58472,11 @@
                 "type": "null"
               }
             ]
+          },
+          "understood": {
+            "type": "boolean",
+            "title": "Understood",
+            "default": true
           }
         },
         "type": "object",

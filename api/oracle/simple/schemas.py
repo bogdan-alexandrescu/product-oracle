@@ -1021,6 +1021,9 @@ class ChatIn(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
     # The Simple page the person asks from (the Ask panel), for context.
     page: str | None = Field(default=None, max_length=300)
+    # The Ask panel's one box: write nothing when Oracle's reader does not know the line
+    # (the answer says understood=false and the panel asks Oracle's Ask instead).
+    only_understood: bool = False
 
 
 class ChatFix(BaseModel):
@@ -1088,6 +1091,8 @@ class ChatThreadOut(BaseModel):
     meeting_id: uuid.UUID | None
     messages: list[ChatMessageOut]
     rules: ChatRulesOut | None
+    # False when Oracle's reader did not know the last line (the Ask panel's one box).
+    understood: bool = True
 
 
 class ChatModeIn(BaseModel):
