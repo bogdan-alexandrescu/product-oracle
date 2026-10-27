@@ -260,7 +260,7 @@ test("the Gantt: day and week, today's line, arrows, the same card", async ({ pa
   await bar(page, "alert-rules").click();
   await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Alert rules engine" })).toBeVisible();
   await page.getByTestId("format-board").click();
-  await expect(page.getByTestId("format-later")).toBeVisible();
+  await expect(page.getByTestId("board")).toBeVisible();
 });
 
 /**
