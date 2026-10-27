@@ -142,14 +142,14 @@ DECIDED_PER_ITEM = frozenset(
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
 # Simple (#723): a goal's suggestions are asked for and accepted by any commenter (others' as
-# proposals) and rejected (final) by an approver (S7); a chat thread, its cards and the
-# meeting's change mode, a visual's comments and revisions, and Remind are decided by the
-# item: its owner or attendees, the card's author, the subject's editors, the PRD's owners
-# and decider (S9, S10, Remind). A date suggestion's dismissal and a proposal are decided by
-# an owner, the roadmap's decider or (with none) the item's track owner when an approver or owner (D-a);
-# accepting or editing a suggestion is a change (others' a proposal, D-b); a change is
-# undone by its author alone; the changes' list shows owners all, others those they made,
-# decide or review; a submitted draft is withdrawn by its author or the decider.
+# proposals) and rejected (final) by an approver (S7); a chat thread, its cards and the meeting's
+# change mode, a visual's comments and revisions, and Remind are decided by the item: its owner or
+# attendees, the card's author, the subject's editors, the PRD's owners and decider (S9, S10,
+# Remind). A date suggestion's dismissal and a proposal are decided by an owner, the roadmap's
+# decider or (with none) the item's track owner when an approver or owner (D-a); accepting or
+# editing a suggestion is a change (others' a proposal, D-b); a change is undone by its author
+# alone; the changes' list shows owners all, others those they made, decide or review; a submitted
+# draft is withdrawn by its author or the decider.
 # A share link (O5) is an owner's to make for the Public audience and an approver's for the
 # others; its creator's or an owner's to extend, move or give a new passcode; and its
 # creator's or an owner's to revoke when Public (any approver's otherwise).
