@@ -4991,8 +4991,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const simpleRoute = async (r: Request): Promise<Response | null> => {
+    // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
+    // served the same invented page under its own slug and title.
+    const asked = p[1] === "simple" && p[2] === "one-pagers" ? db.documents.find((d) => d.slug === p[3] && d.kind === "prd") : undefined;
+    const onePagerDb = asked && asked.slug !== db.simple_one_pager!.doc.slug ? { ...db.simple_one_pager!, doc: { id: asked.id, slug: asked.slug, title: asked.title } } : db.simple_one_pager!;
     const onePagerRes = await routeOnePager(
-      db.simple_one_pager!,
+      onePagerDb,
       {
         id: me.id,
         role: me.role,
