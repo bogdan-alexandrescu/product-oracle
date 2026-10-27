@@ -34,6 +34,8 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  */
 
 async function switchTo(page: Page, email: string) {
+  // From a fresh page: the full-screen meeting covers the rail's account menu.
+  await page.goto("/simple");
   const size = page.viewportSize()!;
   await page.setViewportSize({ width: 1366, height: 820 });
   await signOut(page);
@@ -102,7 +104,7 @@ for (const phone of [false, true]) {
         await minutesRegion(page).getByLabel("Summary").fill("Written by hand while Oracle failed.");
         await minutesRegion(page).getByLabel("Open questions").fill("Who writes the checklist copy?");
         await minutesRegion(page).getByRole("button", { name: "Add action item" }).click();
-        await minutesRegion(page).getByLabel("Action item 1").fill("Draft the checklist copy");
+        await minutesRegion(page).getByLabel("Action item 1", { exact: true }).fill("Draft the checklist copy");
         await delivery(page).getByRole("button", { name: "Send" }).click();
         await expect(delivery(page).getByRole("status", { name: "Sent" })).toBeVisible();
         await expect(page.getByTestId("minutes-summary")).toHaveText("Written by hand while Oracle failed.");
@@ -145,7 +147,7 @@ for (const phone of [false, true]) {
         await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
         await sheet.getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: `${ritual}: Guided setup` })).toBeVisible();
-        await page.getByTestId("meeting-screen").getByRole("link", { name: "Meetings" }).click();
+        await page.goto("/simple/meetings");
         const live = page.getByRole("region", { name: "Live" });
         await expect(live).toContainText(`${ritual}: Guided setup`);
         await expect(upcoming.getByTestId("meetings-upcoming-row").filter({ hasText: ritual }).first().getByRole("link", { name: "Open" })).toBeVisible();
@@ -166,7 +168,7 @@ for (const phone of [false, true]) {
         const sheet = page.getByRole("dialog", { name: "Start a review" });
         await sheet.getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        const onePager = page.getByTestId("one-pager");
+        const onePager = page.getByTestId("meeting-screen").getByTestId("one-pager");
         await expect(onePager).toContainText("Version 3");
         await page.getByRole("button", { name: "Edit line 2" }).click();
         await page.getByLabel("Line 2").fill("A setup checklist with the next two steps");
