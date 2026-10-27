@@ -27,6 +27,7 @@ export function StartSheet({
   onClose,
   prd,
   occurrence,
+  ritual,
   origin = "one_pager",
 }: {
   open: boolean;
@@ -35,6 +36,8 @@ export function StartSheet({
   prd?: string;
   /** A scheduled review it starts from. */
   occurrence?: string;
+  /** A ritual's next review whose occurrence is not made yet (starting it makes it). */
+  ritual?: Schemas["SimpleUpcomingMeeting"];
   origin?: Origin;
 }) {
   useEffect(() => {
@@ -57,28 +60,28 @@ export function StartSheet({
           <h2 className="simple-h2">Start a review</h2>
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </div>
-        <Body prd={prd} occurrence={occurrence} origin={origin} />
+        <Body prd={prd} occurrence={occurrence} ritual={ritual} origin={origin} />
       </div>
     </div>
   );
 }
 
-function Body({ prd, occurrence, origin }: { prd?: string; occurrence?: string; origin: Origin }) {
+function Body({ prd, occurrence, ritual, origin }: { prd?: string; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin }) {
   const q = useQuery(`simple-meeting-options|${prd ?? ""}|${occurrence ?? ""}`, () =>
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: prd || undefined, occurrence: occurrence || undefined } } })),
   );
   const live = useQuery("simple-meetings", () => unwrap(api.GET("/v1/simple/meetings")));
   if (q.loading && !q.data) return <Loading />;
   if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
-  return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} origin={origin} live={live.data?.live ?? []} />;
+  return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} ritual={ritual} origin={origin} live={live.data?.live ?? []} />;
 }
 
-function Form({ options, fixed, occurrence, origin, live }: { options: Options; fixed: boolean; occurrence?: string; origin: Origin; live: Schemas["SimpleMeetingBrief"][] }) {
+function Form({ options, fixed, occurrence, ritual, origin, live }: { options: Options; fixed: boolean; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; live: Schemas["SimpleMeetingBrief"][] }) {
   const router = useRouter();
   const zone = useCompanyZone();
   const [slug, setSlug] = useState(options.prds[0]?.document.slug ?? "");
   const chosen = options.prds.find((p) => p.document.slug === slug);
-  const occ = options.occurrence ?? null;
+  const occ = options.occurrence ?? ritual ?? null;
   const defaults = (p = chosen) => [...new Set([...(p?.default_attendee_ids ?? []), ...(occ?.attendees.map((a) => a.id) ?? [])])];
   const [people, setPeople] = useState<string[]>(() => defaults());
   const [mode, setMode] = useState<Mode>("everyone");
@@ -107,7 +110,8 @@ function Form({ options, fixed, occurrence, origin, live }: { options: Options; 
     try {
       const m = await unwrap(api.POST("/v1/simple/meetings", {
         body: {
-          prd: chosen.document.slug, origin: occurrence ? "ritual" : origin, occurrence_id: occurrence ?? null,
+          prd: chosen.document.slug, origin: occurrence || ritual ? "ritual" : origin, occurrence_id: occurrence ?? null,
+          ritual_id: !occurrence && ritual ? ritual.ritual_id : null,
           attendee_ids: people, change_mode: mode, change_people: mode === "named" ? named : [], length_min: length,
         },
       }));

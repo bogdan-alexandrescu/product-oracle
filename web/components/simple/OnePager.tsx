@@ -43,10 +43,18 @@ const TINT: Record<Line["state"], string> = {
  * API's can_* fields. Inside a review meeting (S8, `sessionId`), its line edits and decisions
  * go through the meeting's session and become the meeting's decisions.
  */
-export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId?: string; onChanged?: () => void }) {
+export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; sessionId?: string; refresh?: string; onChanged?: () => void }) {
   const q = useQuery(`simple-one-pager|${doc}`, () =>
     unwrap(api.GET("/v1/simple/one-pagers/{doc}", { params: { path: { doc } } })),
   );
+  // A meeting's screen: read again when the meeting moves on (Approve publishes the draft).
+  const seenRefresh = useRef(refresh);
+  const reloadPage = q.reload;
+  useEffect(() => {
+    if (seenRefresh.current === refresh) return;
+    seenRefresh.current = refresh;
+    void reloadPage();
+  }, [refresh, reloadPage]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
