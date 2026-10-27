@@ -49,9 +49,6 @@ const featureId = (itemId: string): string => `feature-${itemId}`;
 
 const FEATURE_CODE = /^[A-Z]{1,3}-\d+$/;
 
-/** pay-2 before pay-10. */
-const natural = (a: string, b: string): number => a.localeCompare(b, "en", { numeric: true, sensitivity: "base" });
-
 /** Initials of up to three words of `key`; a one-word key's first two letters. */
 function initials(key: string): string {
   const words = key.toLowerCase().match(/[a-z]+/g) ?? [];
@@ -60,21 +57,21 @@ function initials(key: string): string {
 }
 
 /**
- * priorities.short_codes: each row's short code from [its code, its feature's key]: the
- * feature's key when it is a code (F-12), else the initials of the row's code, a digit added
- * on a clash in key order (never rank order), so a code stays with its item.
+ * priorities.short_codes: each feature's short code, for feature keys in creation order: the
+ * key when it is a code (F-12), else its initials, a digit added on a clash in creation order,
+ * so every reader reads the same code and a new feature never renames an older one.
  */
-export function shortCodes(rows: [string, string][]): string[] {
-  const out: (string | null)[] = rows.map(([, feature]) => (FEATURE_CODE.test(feature) ? feature : null));
+export function shortCodes(keys: string[]): string[] {
+  const out: (string | null)[] = keys.map((k) => (FEATURE_CODE.test(k) ? k : null));
   const taken = new Set(out.filter((c): c is string => c !== null));
-  const todo = rows.map((_, i) => i).filter((i) => out[i] === null).sort((a, b) => natural(rows[a][0], rows[b][0]));
-  for (const i of todo) {
-    const base = initials(rows[i][0]);
+  keys.forEach((k, i) => {
+    if (out[i] !== null) return;
+    const base = initials(k);
     let code = base;
     for (let n = 2; taken.has(code); n++) code = `${base}${n}`;
     taken.add(code);
     out[i] = code;
-  }
+  });
   return out as string[];
 }
 
@@ -275,8 +272,13 @@ export function prioritiesOut(
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
     };
   });
-  // In the mock each item's key is its feature's key, unless the feature has its own code.
-  shortCodes(rows.map((r, n) => [r.code, FEATURES[yours[n].key]?.code ?? yours[n].key])).forEach((c, n) => (rows[n].short_code = c));
+  // In the mock each item's key is its feature's key (its own code when it has one); FEATURES
+  // is in creation order, a feature outside it after them by key.
+  const featureKey = (k: string): string => FEATURES[k]?.code ?? k;
+  const created = [...Object.keys(FEATURES), ...yours.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
+  const shorts = shortCodes(created);
+  const short = new Map(created.map((k, n) => [k, shorts[n]]));
+  yours.forEach((i, n) => (rows[n].short_code = short.get(featureKey(i.key))!));
   const codes = new Map(read.items.map((i) => [i.id, i]));
   const proposals: Schemas["SimplePriorityProposal"][] = (db.changes ?? [])
     // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py.

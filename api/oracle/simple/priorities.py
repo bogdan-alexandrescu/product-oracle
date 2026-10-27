@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle.auth.deps import TenantDB
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.priorities import service as priorities
 from oracle.priorities.schemas import RankedFeature
 from oracle.roadmap.models import HORIZONS
@@ -213,13 +214,6 @@ def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
 FEATURE_CODE = re.compile(r"[A-Z]{1,3}-\d+")
 
 
-def _natural(key: str) -> tuple:
-    """pay-2 before pay-10."""
-    return tuple(
-        (0, int(p), "") if p.isdigit() else (1, 0, p) for p in re.split(r"(\d+)", key.lower())
-    )
-
-
 def _initials(key: str) -> str:
     """Initials of up to three words of ``key``; a one-word key's first two letters."""
     words = re.findall(r"[a-z]+", key.lower())
@@ -228,19 +222,17 @@ def _initials(key: str) -> str:
     return ((words[0] if words else "") + "xx")[:2].upper()
 
 
-def short_codes(rows: list[tuple[str, str]]) -> list[str]:
-    """Each row's short code, for rows of (its code: the item's or the feature's key, its
-    feature's key): the feature's key when it is a code (F-12), else the initials of the row's
-    code, a digit added on a clash (DI, DI2) in key order, never rank order, so a code stays
-    with its item however it ranks."""
-    out: list[str | None] = [
-        feature if FEATURE_CODE.fullmatch(feature) else None for _, feature in rows
-    ]
+def short_codes(keys: list[str]) -> list[str]:
+    """Each feature's short code, for feature keys in the features' creation order: the key
+    when it is a code (F-12), else its initials, a digit added on a clash (DI, DI2) in creation
+    order. From the feature alone, never the item a reader sees, nor the key's order or the
+    rank: every reader reads the same code, and a new feature never renames an older one."""
+    out: list[str | None] = [k if FEATURE_CODE.fullmatch(k) else None for k in keys]
     taken = {c for c in out if c is not None}
-    for i in sorted(
-        (i for i, c in enumerate(out) if c is None), key=lambda i: _natural(rows[i][0])
-    ):
-        base = _initials(rows[i][0])
+    for i, k in enumerate(keys):
+        if out[i] is not None:
+            continue
+        base = _initials(k)
         code, n = base, 1
         while code in taken:
             n += 1
@@ -248,6 +240,19 @@ def short_codes(rows: list[tuple[str, str]]) -> list[str]:
         taken.add(code)
         out[i] = code
     return out  # type: ignore[return-value]
+
+
+async def _short_codes(db: AsyncSession) -> dict[str, str]:
+    """Every feature's short code by its key, over all the company's features (dropped ones
+    keep theirs, so no code moves when one goes)."""
+    keys = list(
+        await db.scalars(
+            select(Entity.key)
+            .where(Entity.type == "feature")
+            .order_by(Entity.created_at, Entity.key)
+        )
+    )
+    return dict(zip(keys, short_codes(keys), strict=True))
 
 
 def _buckets(rows: list[SimplePriorityRow]) -> tuple[list[SimpleGoalBucket], float]:
@@ -384,9 +389,9 @@ async def build(
                 before_override=targets._snap(by_feature.get(f.entity_id)),
             )
         )
-    keys = {f.entity_id: f.key for f in ranking.features}
-    for r, c in zip(rows, short_codes([(r.code, keys[r.feature_id]) for r in rows]), strict=True):
-        r.short_code = c
+    short = await _short_codes(db)
+    for f, r in zip(ranking.features, rows, strict=True):
+        r.short_code = short.get(f.key, f.key)
     _after(rows, deps)
     buckets, total = _buckets(rows)
     return SimplePrioritiesOut(

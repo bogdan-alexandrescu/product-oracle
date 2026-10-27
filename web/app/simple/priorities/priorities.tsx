@@ -101,14 +101,16 @@ export function Priorities() {
   // until the next move or leaving the page: highlighted with "moved #a → #b".
   const [moved, setMoved] = useState<Moved | null>(null);
 
-  async function changed(r: Sent, done: string, proposedTo: string, row?: Row): Promise<void> {
+  // An applied change is the next move: `row` is the item it moved (highlighted), none clears
+  // the highlight; `moves` false (a decline) leaves it.
+  async function changed(r: Sent, done: string, proposedTo: string, row?: Row, moves = true): Promise<void> {
     if (!r.ok) {
       toast({ message: r.message });
       return;
     }
     await q.reload();
     const c = r.change;
-    if (c.status === "applied" && row) setMoved({ featureId: row.feature_id, from: row.rank });
+    if (c.status === "applied" && moves) setMoved(row ? { featureId: row.feature_id, from: row.rank } : null);
     if (c.status === "applied")
       toast({
         message: done,
@@ -193,7 +195,7 @@ function goalShapes(rows: Row[]): Map<string, Shape> {
   return out;
 }
 
-type Changed = (r: Sent, done: string, proposedTo: string, row?: Row) => Promise<void>;
+type Changed = (r: Sent, done: string, proposedTo: string, row?: Row, moves?: boolean) => Promise<void>;
 type Moved = { featureId: string; from: number };
 
 /** "moved #8 → #3" for the row just moved (its rank now from the read); null for any other row. */
@@ -398,7 +400,7 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
               </p>
             )}
             {proposals.map((p) => (
-              <ProposalCard key={p.change_id} p={p} changed={changed} />
+              <ProposalCard key={p.change_id} p={p} row={r} changed={changed} />
             ))}
           </li>,
         ];
@@ -536,7 +538,7 @@ function proposalWords(p: Proposal): string {
 }
 
 /** A proposal inline under its row: the flow thumbnail (or "No flow yet") widens the card in place; a phone opens a full-height sheet. */
-function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
+function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Changed }) {
   const [open, setOpen] = useState(false);
   const phone = usePhone();
   const [busy, setBusy] = useState(false);
@@ -551,6 +553,8 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
         : { ok: false, status: r.response.status, message: `Could not decide: ${detailMessage(r.error, r.response)}`, pushback: false },
       action === "accept" ? `Accepted ${p.code}'s proposal` : `Declined ${p.code}'s proposal`,
       "",
+      row,
+      action === "accept",
     );
   }
 
