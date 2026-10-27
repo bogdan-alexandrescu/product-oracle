@@ -306,10 +306,11 @@ async def test_role_rules(client, role, comment, revise):
     if role in ("approver", "viewer"):
         assert got.status_code == 404
         # The published bet's visual is for every reader.
-        sid = uuid.uuid4()
+        bet = line(await get(client, ctx, role), "bets-2")
+        sid = bet["flow_subject"]
         async with tenant_session(ctx.tenant_id) as s:
             doc_id = (await s.scalar(select(SimpleVisual))).document_id
-            await visuals.request_visual(s, None, "one_pager_line", sid, "Checklist",
+            await visuals.request_visual(s, None, "one_pager_line", sid, bet["text"],
                                          document_id=doc_id)  # fmt: skip
             await s.commit()
         await run_visual_jobs(ctx)
