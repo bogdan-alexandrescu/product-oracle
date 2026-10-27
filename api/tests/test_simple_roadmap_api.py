@@ -416,6 +416,7 @@ async def seed_many(ctx: Ctx, n: int = 500) -> None:
         await s.commit()
 
 
+@pytest.mark.timing
 async def test_500_items_answer_under_300_ms(client):
     ctx = await make_ctx()
     await seed_many(ctx)
