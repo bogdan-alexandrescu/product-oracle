@@ -96,6 +96,16 @@ async def test_reads_initialize_and_tools_list_never_read_swarmcloud(client, own
 CEILING = 60
 
 
+async def _until(done, what, ceiling: float = CEILING) -> None:
+    """Waits until ``done()``; at the ceiling fails with ``what()``, what it waited for."""
+    try:
+        async with asyncio.timeout(ceiling):
+            while not done():
+                await asyncio.sleep(0.05)
+    except TimeoutError:
+        raise AssertionError(f"{what()} after {ceiling} s") from None
+
+
 @pytest.mark.timing
 async def test_thirty_concurrent_writes_on_a_slow_status_share_one_bounded_read(
     client, owner, monkeypatch
@@ -154,14 +164,17 @@ async def test_thirty_concurrent_writes_on_a_slow_status_share_one_bounded_read(
 
     monkeypatch.setattr(runtime, "status", slow)
 
-    async def all_joined() -> None:
-        while joined < 30:
-            await asyncio.sleep(0.05)
-
     writes = [asyncio.create_task(_push(token, f"r8-{n}")) for n in range(30)]
     try:
-        await asyncio.wait_for(reading.wait(), CEILING)
-        await asyncio.wait_for(all_joined(), CEILING)
+        # A write that holds a connection over the read exhausts the pool: the others
+        # never reach the read, and the wait says so.
+        await _until(
+            lambda: joined >= 30 and reading.is_set(),
+            lambda: (
+                f"{joined}/30 writes reached the status read ({calls} reads); "
+                f"{get_engine().pool.checkedout()} database connections checked out"
+            ),
+        )
         # All 30 wait on the one read, which hangs: no connection is held over it, and a
         # cookie request is served meanwhile.
         assert calls == 1 and not any(w.done() for w in writes)
