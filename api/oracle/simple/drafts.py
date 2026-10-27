@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -153,12 +153,19 @@ async def who(db: AsyncSession, doc_ids: set[uuid.UUID]) -> Who:
     ):
         out.deciders[p.document_id] = p.decider_id
         out.reviewers[p.document_id] = list(p.mandatory_reviewer_ids or [])
+    # A roadmap's owners own its tracks; a PRD's (a one-pager's draft, S5) own the tracks
+    # it is the PRD of, as oracle.simple.one_pager.who reads them.
     for t in await db.scalars(
         select(ProductTrack).where(
-            ProductTrack.roadmap_document_id.in_(doc_ids), ProductTrack.owner_id.is_not(None)
+            or_(
+                ProductTrack.roadmap_document_id.in_(doc_ids),
+                ProductTrack.prd_document_id.in_(doc_ids),
+            ),
+            ProductTrack.owner_id.is_not(None),
         )
     ):
-        out.owners.setdefault(t.roadmap_document_id, set()).add(t.owner_id)
+        for doc in {t.roadmap_document_id, t.prd_document_id} & doc_ids:
+            out.owners.setdefault(doc, set()).add(t.owner_id)
     return out
 
 
@@ -668,6 +675,7 @@ OP_WORDS = {
     "shift_dependents": "Moved the dependents of",
     "move_dependency": "Moved the dependency of",
     "confirm_item": "Confirmed",
+    "edit_line": "New wording for",
 }
 
 
@@ -697,7 +705,6 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
     """The draft becomes the roadmap's next version, in review under its policy (the
     caller commits)."""
     from oracle.docs import service as docs_service
-    from oracle.review.state import effective_policy
     from oracle.roadmap import changeset, schedule, views
     from oracle.roadmap import items as items_mod
 
@@ -712,6 +719,8 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
     if not live:
         raise DraftError(422, "Nothing to submit: the draft has no changes")
     document = await db.get(Document, d.document_id)
+    if document.kind != "roadmap":
+        return await _submit_sections(db, principal, d, document, live)
     base = await db.get(DocumentVersion, d.base_version_id) if d.base_version_id else None
     approved = await changeset.approved_version(db, document)
     latest = await db.scalar(
@@ -775,6 +784,62 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
         db.add(
             RoadmapItem(roadmap_document_id=document.id, roadmap_version_id=version.id, **fields)
         )
+    return await _in_review(db, principal, d, document, base, version, live)
+
+
+async def _submit_sections(
+    db: AsyncSession, principal: Principal, d: SimpleDraft, document: Document, live: list
+) -> SimpleDraftOut:
+    """S5: a PRD's draft (one-pager lines as section patches) becomes its next version:
+    the published version's markdown with every patched section, imported as a person's
+    draft would be, then in review under its policy."""
+    from oracle.docs import service as docs_service
+    from oracle.simple import one_pager
+
+    base = await db.get(DocumentVersion, d.base_version_id) if d.base_version_id else None
+    current = await one_pager.published(db, document)
+    if base is None or current.id != base.id:
+        raise DraftError(
+            409,
+            "The published PRD changed since this draft was opened: its changes were made on "
+            f"version {base.number if base else '?'}",
+        )
+    latest = await db.scalar(
+        select(func.max(DocumentVersion.number)).where(DocumentVersion.document_id == document.id)
+    )
+    secs = list(
+        await db.scalars(
+            select(Section).where(Section.version_id == base.id).order_by(Section.ordinal)
+        )
+    )
+    try:
+        markdown = one_pager.patched_markdown(base, secs, (d.overlay or {}).get("sections") or {})
+    except one_pager.ChangeError as e:
+        raise DraftError(e.status, e.detail) from e
+    result = await docs_service.import_draft(
+        db, document.slug, markdown, principal, kind=document.kind, base_version=latest,
+        cause="simple_draft", commit=False,
+    )  # fmt: skip
+    version = await db.scalar(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.number == result.version.number,
+        )
+    )
+    return await _in_review(db, principal, d, document, base, version, live)
+
+
+async def _in_review(
+    db: AsyncSession,
+    principal: Principal,
+    d: SimpleDraft,
+    document: Document,
+    base: DocumentVersion,
+    version: DocumentVersion,
+    live: list,
+) -> SimpleDraftOut:
+    from oracle.review.state import effective_policy
+
     policy = await effective_policy(db, document)
     now = company_time.now()
     d.status, d.version_id, d.submitted_at, d.submitted_by = (

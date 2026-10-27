@@ -12411,6 +12411,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/one-pagers/{doc}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple One Pager
+         * @description A PRD's one-pager (slug or id): its published version's blocks, each line with its
+         *     source sections, built by the ``one_pager`` job and cached per version and section
+         *     hashes; to those who see the PRD's working draft, its edited lines and the margin
+         *     notes (changes, proposals). Lines change through POST /v1/simple/changes
+         *     (``edit_line``).
+         */
+        get: operations["get_simple_one_pager"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/one-pagers/{doc}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Simple One Pager
+         * @description The one-pager as a branded one-page PDF (its published lines).
+         */
+        get: operations["export_simple_one_pager"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/priorities": {
         parameters: {
             query?: never;
@@ -24372,7 +24416,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line";
             /**
              * Status
              * @enum {string}
@@ -26668,7 +26712,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -28480,6 +28524,231 @@ export interface components {
              * @enum {string}
              */
             status: "scheduled" | "ready" | "held" | "skipped" | "missed" | "failed";
+        };
+        /** OnePagerBlock */
+        OnePagerBlock: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Rules */
+            rules: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "lines" | "metrics" | "timeline";
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["OnePagerLine"][];
+        };
+        /** OnePagerDraft */
+        OnePagerDraft: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "submitted";
+            /** Changes */
+            changes: number;
+            /** Base Version */
+            base_version: number | null;
+            /** Decider Approved */
+            decider_approved: boolean;
+            /** Waiting On */
+            waiting_on: components["schemas"]["SimplePersonRef"][];
+            /** Can Submit */
+            can_submit: boolean;
+        };
+        /**
+         * OnePagerFlow
+         * @description A design bundle's flow (S10's), as the API returns it; none yet: null.
+         */
+        OnePagerFlow: {
+            /** Title */
+            title: string;
+            /**
+             * Steps
+             * @default []
+             */
+            steps: string[];
+            /** Screen */
+            screen?: string | null;
+        };
+        /**
+         * OnePagerItem
+         * @description The timeline strip: the PRD's slice of the Simple roadmap.
+         */
+        OnePagerItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Estimated */
+            estimated: boolean;
+        };
+        /** OnePagerLine */
+        OnePagerLine: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+            /** Source Keys */
+            source_keys: string[];
+            metric?: components["schemas"]["OnePagerMetric"] | null;
+            /**
+             * State
+             * @default published
+             * @enum {string}
+             */
+            state: "published" | "edited" | "proposal";
+        };
+        /** OnePagerMetric */
+        OnePagerMetric: {
+            /** Name */
+            name: string;
+            /**
+             * From
+             * @default
+             */
+            from: string;
+            /** To */
+            to: string;
+        };
+        /**
+         * OnePagerNote
+         * @description A margin note beside its line: a change in the working draft or a proposal.
+         */
+        OnePagerNote: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            /** Line Id */
+            line_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "change" | "proposal";
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** In Meeting */
+            in_meeting: boolean;
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
+            /** Sections */
+            sections: components["schemas"]["OnePagerSectionPatch"][];
+            /** Can Undo */
+            can_undo: boolean;
+            /** Can Decide */
+            can_decide: boolean;
+            /** Adds Feature */
+            adds_feature: boolean;
+            flow?: components["schemas"]["OnePagerFlow"] | null;
+        };
+        /** OnePagerOut */
+        OnePagerOut: {
+            document: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version: number;
+            /** Published At */
+            published_at: string | null;
+            owner: components["schemas"]["SimplePersonRef"] | null;
+            decider: components["schemas"]["SimplePersonRef"] | null;
+            /** Span Start */
+            span_start: string | null;
+            /** Span End */
+            span_end: string | null;
+            /**
+             * Built By
+             * @enum {string}
+             */
+            built_by: "extract" | "oracle";
+            /**
+             * Built At
+             * Format: date-time
+             */
+            built_at: string;
+            /** Blocks */
+            blocks: components["schemas"]["OnePagerBlock"][];
+            /** Timeline */
+            timeline: components["schemas"]["OnePagerItem"][];
+            /**
+             * Sections
+             * @default []
+             */
+            sections: components["schemas"]["OnePagerSource"][];
+            /** Notes */
+            notes: components["schemas"]["OnePagerNote"][];
+            draft: components["schemas"]["OnePagerDraft"] | null;
+            /** Changes In Review */
+            changes_in_review: number;
+            /** Can Edit */
+            can_edit: boolean;
+            /** Can Propose */
+            can_propose: boolean;
+        };
+        /** OnePagerSectionPatch */
+        OnePagerSectionPatch: {
+            /** Key */
+            key: string;
+            /** Heading */
+            heading: string;
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
+        };
+        /**
+         * OnePagerSource
+         * @description A source section of the page's lines, as the reader reads it (the drill-down).
+         */
+        OnePagerSource: {
+            /** Key */
+            key: string;
+            /** Heading */
+            heading: string;
+            /** Body */
+            body: string;
         };
         /**
          * OracleAsker
@@ -35698,7 +35967,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -35734,7 +36003,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -65907,6 +66176,66 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["SimpleResumeOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_one_pager: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnePagerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_simple_one_pager: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

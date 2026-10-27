@@ -70,7 +70,7 @@ def test_chains_on_mains_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # 0024_segment_skipped chains on it; one head.
-    assert script.get_heads() == ["0078_simple_drafts"]
+    assert script.get_heads() == ["0079_simple_one_pagers"]
     assert script.get_revision("0024_segment_skipped").down_revision == REVISION
 
 

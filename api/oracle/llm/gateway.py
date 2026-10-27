@@ -81,6 +81,8 @@ JOBS = (
     "why_not_reply",
     # O5: a roadmap's public item texts, drafted for a person to approve.
     "public_text",
+    # Simple S5: a PRD version's one-pager (oracle.simple.one_pager).
+    "one_pager",
     # C9: Oracle reads a person's reason for a move or pin against the evidence.
     "override_reason_check",
     # C3 Interviews: a customer interview's guide and snapshot (queued) and its turns

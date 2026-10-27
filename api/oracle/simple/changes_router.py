@@ -22,16 +22,19 @@ S3b, working drafts (oracle.simple.drafts):
 - ``POST /v1/simple/drafts/{id}/resume``: its author or the decider: a new session on it.
 """
 
+import asyncio
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 
 from oracle.auth.deps import Principal, TenantDB
-from oracle.simple import changes, drafts
+from oracle.export.pdf import PdfUnavailable, html_to_pdf
+from oracle.simple import changes, drafts, one_pager
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
     ChangeStatus,
+    OnePagerOut,
     SimpleChangeConflict,
     SimpleChangeIn,
     SimpleChangeOut,
@@ -208,3 +211,33 @@ async def resume_simple_draft(
     s, d = await _run(db, drafts.resume(db, principal, draft_id))
     await db.commit()
     return SimpleResumeOut(session=changes.session_out(s), draft=d)
+
+
+# --------------------------------------------------------------------------- S5 one-pagers
+
+
+@router.get("/one-pagers/{doc}", response_model=OnePagerOut, name="get_simple_one_pager")
+async def get_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> OnePagerOut:
+    """A PRD's one-pager (slug or id): its published version's blocks, each line with its
+    source sections, built by the ``one_pager`` job and cached per version and section
+    hashes; to those who see the PRD's working draft, its edited lines and the margin
+    notes (changes, proposals). Lines change through POST /v1/simple/changes
+    (``edit_line``)."""
+    return await _run(db, one_pager.read(db, principal, doc))
+
+
+@router.get("/one-pagers/{doc}/pdf", name="export_simple_one_pager",
+            response_class=Response)  # fmt: skip
+async def export_simple_one_pager(doc: str, principal: Reader, db: TenantDB) -> Response:
+    """The one-pager as a branded one-page PDF (its published lines)."""
+    html, stem = await _run(db, one_pager.pdf_html(db, principal, doc))
+    await db.commit()
+    try:
+        content = await asyncio.to_thread(html_to_pdf, html)
+    except PdfUnavailable as e:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(e)) from None
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{stem}.pdf"'},
+    )

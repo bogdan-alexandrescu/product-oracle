@@ -42,6 +42,7 @@ CURRENT = {
     "scope_enhance": "scope_enhance.v1",
     "why_not_reply": "why_not_reply.v1",
     "public_text": "public_text.v1",
+    "one_pager": "one_pager.v1",
     "discussion_reply": "discussion_reply.v2",
     # B6: appended to discussion_reply's for a discussion on a goal.
     "discussion_reply_goal": "discussion_reply_goal.v2",

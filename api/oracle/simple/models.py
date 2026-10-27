@@ -21,6 +21,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    func,
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
@@ -259,3 +260,31 @@ class SimpleActionItem(TenantScoped, Base):
     due_date: Mapped[date | None] = mapped_column(Date)
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")
     created_by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+
+
+class SimpleOnePager(TenantScoped, Base):
+    """Simple S5: a PRD version's one-pager as built (oracle.simple.one_pager): its blocks,
+    each line with the section keys it came from. One row per version and hash of the
+    mapped sections (``sections_hash``): a changed mapped section is a new hash, so the
+    one-pager is rebuilt. ``built_by``: ``extract`` (Oracle's quick read of the sections,
+    shown at once) until the ``one_pager`` job's answer replaces it (``oracle``)."""
+
+    __tablename__ = "simple_one_pagers"
+    __table_args__ = (
+        CheckConstraint("built_by IN ('extract', 'oracle')", name="built_by"),
+        UniqueConstraint("version_id", "sections_hash"),
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    sections_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    blocks: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    built_by: Mapped[str] = mapped_column(Text, nullable=False, server_default="extract")
+    job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    built_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )

@@ -226,6 +226,9 @@ ChangeOp = Literal[
     # draft item confirmed (into the working draft).
     "estimate_feature",
     "confirm_item",
+    # S5: a one-pager line, as a section patch of each of its source sections
+    # (oracle.simple.one_pager).
+    "edit_line",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -568,3 +571,128 @@ class SimplePrioritiesOut(BaseModel):
 
 
 SimpleRoadmapOut.model_rebuild()
+
+
+# --------------------------------------------------------------------------- S5 one-pagers
+
+
+class OnePagerMetric(BaseModel):
+    name: str
+    # Empty when the section states no starting value.
+    from_: str = Field(default="", alias="from", serialization_alias="from")
+    to: str
+
+    model_config = {"populate_by_name": True}
+
+
+class OnePagerLine(BaseModel):
+    # Stable within a version's one-pager: "<block>-<n>".
+    id: str
+    text: str
+    # The PRD sections the line rests on: a click opens the drill-down, "Open the
+    # detailed view" lands on the first.
+    source_keys: list[str]
+    metric: OnePagerMetric | None = None
+    # published: as the version has it; edited: the working draft's (the reader sees it);
+    # proposal: someone proposes new wording (the margin note says who).
+    state: Literal["published", "edited", "proposal"] = "published"
+
+
+class OnePagerItem(BaseModel):
+    """The timeline strip: the PRD's slice of the Simple roadmap."""
+
+    id: uuid.UUID
+    title: str
+    horizon: Literal["now", "next", "later"]
+    start: dt.date
+    end: dt.date
+    estimated: bool
+
+
+class OnePagerBlock(BaseModel):
+    key: str
+    title: str
+    # The block's cap in words ("At most 60 words", "3-5 bets").
+    rules: str
+    kind: Literal["text", "lines", "metrics", "timeline"]
+    lines: list[OnePagerLine] = []
+
+
+class OnePagerSectionPatch(BaseModel):
+    key: str
+    heading: str
+    before: str
+    after: str
+
+
+class OnePagerFlow(BaseModel):
+    """A design bundle's flow (S10's), as the API returns it; none yet: null."""
+
+    title: str
+    steps: list[str] = []
+    screen: str | None = None
+
+
+class OnePagerNote(BaseModel):
+    """A margin note beside its line: a change in the working draft or a proposal."""
+
+    change_id: uuid.UUID
+    line_id: str
+    kind: Literal["change", "proposal"]
+    by: uuid.UUID
+    by_name: str
+    at: dt.datetime
+    in_meeting: bool
+    before: str
+    after: str
+    sections: list[OnePagerSectionPatch]
+    can_undo: bool
+    can_decide: bool
+    # The line adds or reshapes a flow or feature (a "What we will build" bet): the note
+    # shows its flow thumbnail, ``flow`` (null: "No flow yet").
+    adds_feature: bool
+    flow: OnePagerFlow | None = None
+
+
+class OnePagerDraft(BaseModel):
+    id: uuid.UUID
+    status: Literal["working", "submitted"]
+    changes: int
+    base_version: int | None
+    # Approved in a meeting by the decider, waiting on required reviewers' approval.
+    decider_approved: bool
+    waiting_on: list[SimplePersonRef]
+    can_submit: bool
+
+
+class OnePagerSource(BaseModel):
+    """A source section of the page's lines, as the reader reads it (the drill-down)."""
+
+    key: str
+    heading: str
+    body: str
+
+
+class OnePagerOut(BaseModel):
+    document: SimpleDocRef
+    version: int
+    published_at: dt.datetime | None
+    owner: SimplePersonRef | None
+    decider: SimplePersonRef | None
+    span_start: dt.date | None
+    span_end: dt.date | None
+    # extract: Oracle's quick read, shown while the one_pager job builds it; oracle: built.
+    built_by: Literal["extract", "oracle"]
+    built_at: dt.datetime
+    blocks: list[OnePagerBlock]
+    # The timeline strip: the PRD's slice of the Simple roadmap (the span is its ends).
+    timeline: list[OnePagerItem]
+    sections: list[OnePagerSource] = []
+    notes: list[OnePagerNote]
+    draft: OnePagerDraft | None
+    # Drafts and proposals the reader may not see (the count only).
+    changes_in_review: int
+    # Owners and the decider change lines directly (Undo); approvers and commenters
+    # propose; viewers read.
+    can_edit: bool
+    can_propose: bool
