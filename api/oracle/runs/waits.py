@@ -26,8 +26,9 @@ WORDS: dict[str, str] = {
 # Ordinary waits: the dependencies are not done, or a checkpoint waits for a person
 # (shown as the checkpoint).
 SILENT = frozenset({"DEPENDENCY_INCOMPLETE", "AWAITING_INPUT"})
-# Capacity and pool waits, whatever SwarmCloud names them.
-_ROOM = re.compile(r"CAPACITY|POOL|CONCURRENCY|SLOTS?\b|NO_ROOM|QUEUE_FULL")
+# Capacity and pool waits, whatever SwarmCloud names them (owner, 2026-10-26: a reason
+# containing any of these; SLOT covers SLOTS).
+_ROOM = re.compile(r"CAPACITY|POOL|CONCURRENCY|SLOT|NO_ROOM|QUEUE_FULL")
 
 NOT_STARTED_SECONDS = 30 * 60
 

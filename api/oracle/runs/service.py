@@ -3322,7 +3322,9 @@ def _record_wait(
     the steps seen started, since when each step waits to start, and the first of the
     segment's own steps (``own``; None: every step) parked for a reason shown in words.
     A moment is kept while the step waits the same way; on the workflow's first read it
-    is its submission (it waited from there)."""
+    is its submission (it waited from there). Nothing is kept for a run that ended."""
+    if run.status != "running":
+        return
     prev = (run.knobs or {}).get("queue_wait") or {}
     first = prev.get("workflow_id") != workflow_id
     if first:
@@ -4433,6 +4435,9 @@ async def _finish(
     if error:
         run.error = error
     _set_knob(run, "post_404", None)
+    # Nothing waits in SwarmCloud's queue once the run ended (the Inbox reads running
+    # runs' waits only).
+    _set_knob(run, "queue_wait", None)
     # A run that ends early stops its workflow; a finished one's ends on its own. A cancel
     # SwarmCloud does not confirm leaves the workflow attached: the tick cancels it again
     # and keeps reading its cost.
@@ -9280,6 +9285,7 @@ async def _end_stopped(
             cp.decided_at = _now()
     _set_knob(run, "stuck_lookup", None)
     _set_knob(run, "post_404", None)
+    _set_knob(run, "queue_wait", None)
     run.status = "cancelled"
     run.finished_at = _now()
     _set_knob(run, "spent_at_end", str(run.spent_usd or 0))
@@ -10757,7 +10763,13 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
                 | Run.knobs.has_key("post_404")
                 | Run.knobs.has_key("searches")
                 | Run.knobs.has_key("overrun_after_end")
-                | Run.knobs.has_key("queue_wait")
+                # A running run's wait, before any agent of its workflow started: the knob
+                # stays while it runs (later steps' holds), never after it ended.
+                | (
+                    Run.knobs.has_key("queue_wait")
+                    & (Run.status == "running")
+                    & Run.knobs["queue_wait"]["started"].astext.is_distinct_from("true")
+                )
                 | live
             )
             .order_by(Run.created_at)
