@@ -276,12 +276,6 @@ export default function SimpleHome() {
       {!walking && (
       <>
 
-      {(roadmap.data?.changes_in_review ?? 0) > 0 && (
-        <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
-          {roadmap.data!.changes_in_review} {roadmap.data!.changes_in_review === 1 ? "change is" : "changes are"} in review. You see the published plan until they are approved.
-        </p>
-      )}
-
       <section aria-label="Goals" data-testid="home-goals">
         <Block q={{ ...goals, data: tiles }} testId="home-goals" skeleton={<GoalBandSkeleton />}>
           {(rows) =>
@@ -472,8 +466,14 @@ export default function SimpleHome() {
 
       <HomeCard id="plan" icon="roadmap" title="The plan this quarter" all="/simple/roadmap">
         <Block q={roadmap} testId="home-plan">
-          {() => (
+          {(r) => (
             <>
+              {/* In the plan's card, filled with it: above the goal band it pushed everything down. */}
+              {r.changes_in_review > 0 && (
+                <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
+                  {r.changes_in_review} {r.changes_in_review === 1 ? "change is" : "changes are"} in review. You see the published plan until they are approved.
+                </p>
+              )}
               {planPrd === undefined ? (
                 <SkeletonRows />
               ) : plan && planPrd ? (
