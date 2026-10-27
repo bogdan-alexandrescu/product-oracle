@@ -30,7 +30,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card visuals-bet-ask: protects = a bet Oracle has not drawn offers its owner (who
  * changes the PRD directly: the API's can_revise for one_pager_line) "Ask Oracle to draw
  * it"; pressing it shows the pending state while the simple_visual job runs, then version
- * 1 of the drawing in the widened card; a commenter or viewer is offered no ask; fails_when
+ * 1 of the drawing in the widened card; so does asking again for a bet whose queued
+ * drawing never came (a visual with no version); a commenter or viewer is offered no ask; fails_when
  * = the owner gets no button, the pending state is missing, the drawing never shows, or a
  * role without the rule is offered the ask; no_claim = the job's queueing and the draft
  * version's lines (api/tests/test_simple_line_visuals_api.py).
@@ -127,6 +128,18 @@ for (const [where, use] of [
         // The bet's thumbnail now shows its flow (no longer "No flow yet") after a reload.
         await page.reload();
         await expect(page.getByRole("button", { name: "Flow for bet 3" })).not.toContainText("No flow yet");
+      });
+
+      test("an owner asks again for a bet whose queued drawing never came: pending, then version 1", async ({ page }) => {
+        await login(page);
+        await page.goto(ONE_PAGER);
+        await page.getByRole("button", { name: "Flow for bet 4" }).click();
+        const wide = page.getByRole("group", { name: "User flow of bet 4" });
+        await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
+        await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
+        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
+        await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
+        await expect(wide.getByTestId("flow-svg")).toBeVisible();
       });
 
       for (const who of ["commenter@example.com", "viewer@example.com"]) {

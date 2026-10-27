@@ -121,6 +121,8 @@ export function seedVisuals(): VisualsDb {
       { n: 3, target: "r2", note: "The checklist region", section_key: "build", requirement: "R1" },
     ],
   }));
+  // A bet Oracle queued with the page whose job drew nothing: a visual with no version yet.
+  add(db, "one_pager_line", betSubject("A sample project created on day one"), "A sample project created on day one");
   const mobile = stableUuid("simple-item/alert-mobile");
   add(db, "feature", mobile, "Mobile alert push", flowOf("feature", mobile, 1, 1, {
     title: "Act on a pushed alert",

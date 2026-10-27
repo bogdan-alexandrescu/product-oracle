@@ -25,6 +25,16 @@ Test cards (protects / fails_when / no_claim):
   a good answer queues one per bet, each with its line's words and the PRD;
   fails_when=a rejected answer queues visuals or a built page queues none;
   no_claim=the drawing (test_simple_visuals_api).
+- test_draft_line_visual_hidden_from_who_reads_the_published_page: protects=a visual
+  drawn for a working draft's bet (its subject is the draft's words) is read only by who
+  sees that bet on the page: a viewer of the PRD who has the subject id reads "nothing
+  drawn" (with or without the PRD), its version 404, a comment 404; the published bet's
+  visual stays readable to the viewer; fails_when=the PRD's readers alone are enough to
+  read a draft bet's drawing; no_claim=publishing (S3b's tests).
+- test_one_pager_job_queues_no_bet_visuals_when_lines_in_use: protects=the one_pager
+  job's good answer rejected as ``built: false`` because a working draft holds the page's
+  lines queues no bet visual; fails_when=the rejected answer's bets are drawn;
+  no_claim=the reworded line's own change visual.
 """
 
 import uuid
@@ -143,21 +153,24 @@ async def test_line_ask_track_owner_without_decider(client):
     assert (await ask(client, ctx, "decider", sid, doc_id)).status_code == 202
 
 
+GOOD = {"blocks": [
+    {"key": "problem", "lines": [{"text": "Admins stall.", "source_keys": ["problem"]}]},
+    {"key": "bets", "lines": [{"text": t, "source_keys": ["build"]}
+                              for t in ("Checklist", "Invites", "Sample")]},
+    {"key": "outcomes", "lines": [
+        {"text": "Invites up", "source_keys": ["outcomes"],
+         "metric": {"name": "Invited", "from": "48%", "to": "65%"}},
+        {"text": "Setup", "source_keys": ["outcomes"],
+         "metric": {"name": "Setup", "from": "30%", "to": "50%"}}]},
+    {"key": "not_doing", "lines": [{"text": "No SSO", "source_keys": ["not-doing"]}]},
+    {"key": "risks", "lines": [{"text": "Calendar", "source_keys": ["risks"]}]},
+]}  # fmt: skip
+
+
 async def test_one_pager_job_queues_bet_visuals_only_when_built(client):
     ctx = await world(client)
     await get(client, ctx, "owner")  # a writer's read queues the one_pager job
-    good = {"blocks": [
-        {"key": "problem", "lines": [{"text": "Admins stall.", "source_keys": ["problem"]}]},
-        {"key": "bets", "lines": [{"text": t, "source_keys": ["build"]}
-                                  for t in ("Checklist", "Invites", "Sample")]},
-        {"key": "outcomes", "lines": [
-            {"text": "Invites up", "source_keys": ["outcomes"],
-             "metric": {"name": "Invited", "from": "48%", "to": "65%"}},
-            {"text": "Setup", "source_keys": ["outcomes"],
-             "metric": {"name": "Setup", "from": "30%", "to": "50%"}}]},
-        {"key": "not_doing", "lines": [{"text": "No SSO", "source_keys": ["not-doing"]}]},
-        {"key": "risks", "lines": [{"text": "Calendar", "source_keys": ["risks"]}]},
-    ]}  # fmt: skip
+    good = GOOD
     missing = {"blocks": [b for b in good["blocks"] if b["key"] != "bets"]}
     async with tenant_session(ctx.tenant_id) as s:
         job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
@@ -188,3 +201,50 @@ async def test_one_pager_job_queues_bet_visuals_only_when_built(client):
         assert {v.subject_id for v in rows} == {
             visuals.line_subject(doc.id, t) for t in ("Checklist", "Invites", "Sample")
         }
+
+
+async def test_draft_line_visual_hidden_from_who_reads_the_published_page(client):
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")
+    doc_id = view["document"]["id"]
+    r = await edit(client, ctx, "decider", view, "bets-1", "A checklist that invites a teammate")
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    sid = line(await get(client, ctx, "decider"), "bets-1")["flow_subject"]
+    published = line(await get(client, ctx, "viewer"), "bets-1")["flow_subject"]
+    assert (await ask(client, ctx, "decider", sid, doc_id)).status_code == 202
+    assert (await ask(client, ctx, "decider", published, doc_id)).status_code == 202
+    await run_visual_jobs(ctx)
+    assert (await panel(client, ctx, "decider", sid, doc_id))["flow"]["version"] == 1
+    # The viewer reads the published page: the draft bet's drawing is not there for them.
+    out = await panel(client, ctx, "viewer", sid, doc_id)
+    assert out["flow"] is None and out["versions"] == [] and out.get("brief") is None
+    r = await client.get(f"{URL}/{sid}", headers=ctx.as_("viewer"))
+    assert r.status_code == 200 and r.json()["flow"] is None, r.text
+    r = await client.get(f"{URL}/{sid}/versions/1", headers=ctx.as_("viewer"))
+    assert r.status_code == 404, r.text
+    r = await client.post(f"{URL}/{sid}/comments", json={"body": "Looks right"},
+                          headers=ctx.as_("commenter"))  # fmt: skip
+    assert r.status_code == 404, r.text
+    # The published bet's drawing is the viewer's to read.
+    assert (await panel(client, ctx, "viewer", published, doc_id))["flow"]["version"] == 1
+
+
+async def test_one_pager_job_queues_no_bet_visuals_when_lines_in_use(client):
+    ctx = await world(client)
+    view = await get(client, ctx, "decider")  # a writer's read queues the one_pager job
+    r = await edit(client, ctx, "decider", view, "bets-1", "A checklist that invites a teammate")
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        before = {v.id for v in await s.scalars(select(SimpleVisual))}
+        job = await s.scalar(select(LlmJob).where(LlmJob.kind == "one_pager"))
+        assert job is not None
+
+        async def built(kind, payload):
+            return GOOD
+
+        out = await one_pager.run_job(s, job, built)
+        assert out["built"] is False and "working draft" in out["reason"], out
+        await s.commit()
+    async with tenant_session(ctx.tenant_id) as s:
+        rows = [v for v in await s.scalars(select(SimpleVisual)) if v.id not in before]
+    assert rows == []
