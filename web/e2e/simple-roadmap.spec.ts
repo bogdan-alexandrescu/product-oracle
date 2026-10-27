@@ -110,7 +110,7 @@ for (const [where, use] of [
         await expect(card.getByTestId("card-reasons")).toContainText("Serves the goal Grow retention.");
         await expect(card.getByTestId("card-decisions")).toContainText("Send the digest weekly or daily?");
         await expect(card.getByTestId("card-flags")).toContainText("it depends on ends");
-        await expect(card.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", "/plan?item=alert-digest");
+        await expect(card.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", /^\/plan\?item=alert-digest&prd=[0-9a-f-]{36}$/);
         await expect(card.getByRole("button", { name: "Ask Oracle" })).toBeVisible();
         if (where === "desktop") {
           const c = (await card.boundingBox())!;
@@ -311,19 +311,63 @@ test("a viewer reads and cannot drag", async ({ page }) => {
 });
 
 /**
- * Card simple-roadmap-flow: protects = a proposal on an item carries a flow thumbnail;
- * clicking it widens the card in place with the "No flow yet" state (no design bundle);
- * fails_when = no thumbnail, or the card does not widen; no_claim = S10's flows.
+ * Card simple-roadmap-flow: protects = only a proposal for a new feature (a draft item,
+ * D15) carries a flow thumbnail, and clicking it widens the card in place with the "No
+ * flow yet" state (no design bundle); a proposal to move a published item's dates carries
+ * none; fails_when = a move_dates proposal on a published item shows a thumbnail, or the
+ * feature's thumbnail does not widen the card; no_claim = S10's flows.
  */
-test("a proposal's flow thumbnail widens its card", async ({ page }) => {
+test("only a new feature's proposal carries a flow thumbnail", async ({ page }) => {
   await open(page, "commenter@example.com");
   await drag(page, "alert-export", 90);
-  await expect(page.getByText(/proposed: it waits for the decider/)).toBeVisible();
+  await expect(page.getByText(/Moved 'Alert history export'.*proposed: it waits for the decider/)).toBeVisible();
   await bar(page, "alert-export").click();
   const card = page.getByTestId("floating-card");
+  await expect(card.getByTestId("card-proposals")).toContainText("Move the dates");
+  await expect(card.getByTestId("flow-thumb")).toHaveCount(0);
+  await card.getByRole("button", { name: "Close" }).click();
+  await drag(page, "setup-ideas", 90);
+  await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for the decider/)).toBeVisible();
+  await bar(page, "setup-ideas").click();
   await card.getByTestId("flow-thumb").click();
   await expect(card).toHaveAttribute("data-wide", "true");
   await expect(card.getByTestId("flow-empty")).toContainText("No flow yet");
+});
+
+/**
+ * Card simple-roadmap-callout-propose: protects = the broken link's callout offers its
+ * one-click fixes to anyone who may change the roadmap, as the card and the tray do (a
+ * commenter's fix is a proposal); fails_when = a commenter's callout has no fixes;
+ * no_claim = the fixes' date arithmetic (the API's tests).
+ */
+test("a commenter proposes a fix from the callout", async ({ page }) => {
+  await open(page, "commenter@example.com");
+  const callout = page.locator('[data-testid="broken-callout"][data-item="alert-digest"]');
+  await callout.getByRole("button", { name: "Move the dependents" }).click();
+  await expect(page.getByText(/Moved what depends on 'Alert rules engine' proposed: it waits for the decider/)).toBeVisible();
+});
+
+/**
+ * Card simple-roadmap-keyboard: protects = a focused bar moves from the keyboard: an arrow
+ * moves it by a week on the timeline, Shift+arrow moves only its end, each through the
+ * change engine; fails_when = the keyboard cannot change a bar's dates; no_claim = the
+ * API's engine.
+ */
+test("the keyboard moves and resizes a bar", async ({ page }) => {
+  await open(page);
+  const b = bar(page, "alert-export");
+  const start = (await b.getAttribute("data-start"))!;
+  const end = (await b.getAttribute("data-end"))!;
+  const plus = (day: string, n: number) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  await b.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible();
+  await expect(b).toHaveAttribute("data-start", plus(start, 7));
+  await expect(b).toHaveAttribute("data-end", plus(end, 7));
+  await b.focus();
+  await page.keyboard.press("Shift+ArrowLeft");
+  await expect(b).toHaveAttribute("data-end", end);
+  await expect(b).toHaveAttribute("data-start", plus(start, 7));
 });
 
 test.describe("phone, long-press", () => {
@@ -341,6 +385,38 @@ test.describe("phone, long-press", () => {
     await expect(page.getByText(/Moved 'Alert history export'/)).toBeVisible();
     await expect(bar(page, "alert-export")).not.toHaveAttribute("data-start", before!);
     await noSidewaysScroll(page);
+  });
+
+  /**
+   * Card simple-roadmap-picked: protects = a long press marks the bar picked up (its cue)
+   * until the finger lifts; fails_when = the bar never shows it; no_claim = the cue's look.
+   */
+  test("a long press shows the bar picked up", async ({ page }) => {
+    await open(page);
+    const box = (await body(page, "alert-export").boundingBox())!;
+    const ev = { pointerId: 9, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1, clientX: box.x + box.width / 2, clientY: box.y + box.height / 2 };
+    await bar(page, "alert-export").dispatchEvent("pointerdown", ev);
+    await expect(bar(page, "alert-export")).toHaveAttribute("data-picked", "true");
+    await page.getByTestId("chart-svg").dispatchEvent("pointerup", { ...ev, buttons: 0 });
+    await expect(bar(page, "alert-export")).not.toHaveAttribute("data-picked", "true");
+  });
+
+  /**
+   * Card simple-roadmap-flow-phone: protects = on a phone, a feature proposal's flow opens
+   * as a full-height sheet; fails_when = the widened sheet stops short of the screen's top;
+   * no_claim = S10's flows.
+   */
+  test("a feature's flow opens full height on a phone", async ({ page }) => {
+    await open(page, "commenter@example.com");
+    await longPressDrag(page, "setup-ideas", 60);
+    await expect(page.getByText(/Moved 'Team invite nudges'.*proposed: it waits for the decider/)).toBeVisible();
+    await page.getByTestId("chart-label").filter({ hasText: "Team invite nudges" }).click();
+    const card = page.getByTestId("floating-card");
+    await card.getByTestId("flow-thumb").click();
+    await expect(card).toHaveAttribute("data-wide", "true");
+    const c = (await card.boundingBox())!;
+    expect(c.y).toBeLessThanOrEqual(1);
+    expect(c.height).toBeGreaterThanOrEqual(844 - 2);
   });
 });
 
