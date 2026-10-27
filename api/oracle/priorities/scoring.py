@@ -3,7 +3,9 @@
 Methods (O3):
 
 - ``goal_weighted`` (default): sum over confirmed goals of goal weight x the
-  ``supports`` contribution (0-3), times confidence, divided by effort.
+  ``supports`` contribution (0-3), times confidence, divided by effort. A person's
+  estimate of the goal value (attrs ``goal_value`` > 0, Simple S6's ``estimate_feature``)
+  replaces the sum; the explanation keeps the goals' terms and says what they give.
 - ``rice``: reach x impact x confidence / effort.
 - ``moscow``: must > should > could > won't; ties broken by goal value.
 - ``wsjf``: (business value + time criticality + risk reduction) / job size.
@@ -239,6 +241,12 @@ def goal_value(f: FeatureInput) -> tuple[float, list[dict[str, Any]]]:
     return total, terms
 
 
+def estimated_goal_value(f: FeatureInput) -> float | None:
+    """A person's estimate of the feature's goal value (attrs ``goal_value`` > 0, S6)."""
+    v = _number(f.attrs.get("goal_value"))
+    return v if v is not None and v > 0 else None
+
+
 def _input(f: FeatureInput, *names: str) -> tuple[float | None, str | None]:
     for name in names:
         if name in f.attrs:
@@ -277,12 +285,20 @@ def score_feature(f: FeatureInput, method: str) -> Scored:
         )
     if method == "goal_weighted":
         effort = need("effort", "effort", "effort_weeks", positive=True)
-        inputs["goal_value"] = {"value": _round(value), "terms": terms}
-        steps.append(
-            "goal value = "
-            + (" + ".join(f"{t['weight']}×{t['contribution']} ({t['goal']})" for t in terms) or "0")
-            + f" = {_round(value)}"
-        )
+        goals_give = (
+            " + ".join(f"{t['weight']}×{t['contribution']} ({t['goal']})" for t in terms) or "0"
+        ) + f" = {_round(value)}"
+        estimate = estimated_goal_value(f)
+        if estimate is not None:
+            # S6: a person's estimate of the goal value replaces the goals' sum.
+            inputs["goal_value"] = {"value": _round(estimate), "terms": terms, "estimated": True}
+            steps.append(
+                f"goal value = {estimate:g} (a person's estimate; the goals give {_round(value):g})"
+            )
+            value = estimate
+        else:
+            inputs["goal_value"] = {"value": _round(value), "terms": terms}
+            steps.append(f"goal value = {goals_give}")
         if effort is not None:
             score = value * confidence / effort
             steps.append(

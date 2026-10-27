@@ -25,6 +25,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
+import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import { canDecideItem, canEditRoadmap, deciderIds, draftChanges, roadmapOut, seesDraft, type MockDraft, type SimpleDb } from "./simple-roadmap";
 
 type Change = Schemas["SimpleChangeOut"];
@@ -55,6 +56,8 @@ const FIELDS: Record<string, string[]> = {
   edit_title: ["title"],
   edit_outcome: ["outcome"],
   accept_risk: ["risk"],
+  // S6: a draft item confirmed (changes.py confirm_item).
+  confirm_item: ["draft"],
 };
 const FIXES = ["shift_dependents", "move_dependency"];
 /** S3b: non-versioned ops (api/oracle/simple/targets.py) and the target id each creates. */
@@ -68,6 +71,8 @@ const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   add_launch_task: { id: "task_id", adds: true },
   set_launch_task_status: { id: "task_id" },
   override_priority: { id: "item_id" },
+  // S6: a person's goal value or effort for the item's feature (targets.py estimate_feature).
+  estimate_feature: { id: "item_id" },
 };
 
 const iso = (ms: number): string => new Date(ms).toISOString();
@@ -116,6 +121,7 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
     else if (f === "cut") out[f] = s.status === "cut";
     else if (f === "title") out[f] = s.title;
     else if (f === "outcome") out[f] = s.outcome ?? null;
+    else if (f === "draft") out[f] = !!s.draft;
     else if (f === "risk") out[f] = (s.risks ?? []).find((r) => r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)) ?? null;
   }
   return out;
@@ -131,6 +137,7 @@ function write(db: SimpleDb, key: string, values: Values, target: Values): void 
   if ("position" in values) s.position = values.position as number;
   if ("cut" in values) s.status = values.cut ? "cut" : "planned";
   if ("title" in values) s.title = String(values.title);
+  if ("draft" in values) s.draft = !!values.draft;
   if ("outcome" in values) s.outcome = (values.outcome as string | null) ?? null;
   if ("risk" in values) {
     const kept = (s.risks ?? []).filter((r) => !(r.flag === target.flag && (r.subject ?? null) === (target.subject ?? null)));
@@ -299,15 +306,21 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const target: Values = { ...body.target };
   if (target.item_id && !keyOf(db, target.item_id)) return json(404, { detail: "No such roadmap item" });
   const applies = decides(db, ctx, target.item_id);
-  if (body.op === "override_priority" && !String((body.after ?? {}).reason ?? "").trim()) return json(422, { detail: "after.reason: one line, 1 to 500 characters" });
   if (spec.adds) target[spec.id] = crypto.randomUUID();
   const id = String(target[spec.id] ?? "");
   const stored = (db.targets ??= {})[id] ?? {};
-  const before: Values = spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
-  if (!spec.adds && !same(before, body.before)) return conflict(db, ctx, before, [id], "Changed since you saw it");
+  // S6 (./simple-priorities.ts): a pin and an estimate are compared and stored as targets.py does.
+  const ranking = body.op === "override_priority" || body.op === "estimate_feature";
+  const after = ranking ? priorityAfter(body.op, body.after ?? {}) : { ...body.after };
+  if (typeof after === "string") return json(422, { detail: after });
+  const before: Values = ranking
+    ? priorityBefore(db, keyOf(db, target.item_id)!, body.op, id)
+    : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
+  const seen = ranking ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
+  if (!spec.adds && !same(before, seen)) return conflict(db, ctx, before, [id], "Changed since you saw it");
   const change: Change = {
     id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: target.item_id ? stableUuid(`simple-doc/${seed(db, keyOf(db, target.item_id)!).roadmap}`) : null,
-    draft_ids: [], op: body.op, target, before, after: { ...body.after }, status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now,
+    draft_ids: [], op: body.op, target, before, after, status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now,
     decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
   };
   if (!applies) change.routed_to = route(db, ctx, change);
@@ -437,6 +450,10 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       after = { horizon: a.horizon };
     } else if (body.op === "reorder") after = { position: Number(a.position) };
     else if (body.op === "cut" || body.op === "restore") after = { cut: body.op === "cut" };
+    else if (body.op === "confirm_item") {
+      if (!seed(db, key).draft) return json(422, { detail: "Only a draft item is confirmed" });
+      after = { draft: false };
+    }
     else if (body.op === "edit_title") {
       const title = String(a.title ?? "").trim();
       if (!title) return json(422, { detail: "after.title: 1 to 200 characters" });
@@ -478,8 +495,12 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
 
 /** /v1/simple/sessions and /v1/simple/changes (api/oracle/simple/changes_router.py). */
 export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
-  if (p[1] !== "simple" || !["sessions", "changes", "drafts", "roadmap"].includes(p[2] ?? "")) return null;
+  if (p[1] !== "simple" || !["sessions", "changes", "drafts", "roadmap", "priorities"].includes(p[2] ?? "")) return null;
   const m = req.method;
+  if (p[2] === "priorities") {
+    if (m !== "GET" || p[3]) return null;
+    return json(200, prioritiesOut(db, ctx, (c) => route(db, ctx, c), (itemId) => decides(db, ctx, itemId)));
+  }
   const now = iso(mockNowMs());
   const accepting = p[2] === "roadmap" && p[3] === "date-suggestions" && m === "POST" && ["accept", "edit"].includes(p[5] ?? "");
   if (p[2] === "roadmap" && !accepting) return null;
