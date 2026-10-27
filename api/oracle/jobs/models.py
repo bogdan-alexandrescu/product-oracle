@@ -47,6 +47,7 @@ JOB_KINDS = (
     "refinement_batch",
     "public_text",
     "one_pager",
+    "meeting_minutes",
 )
 # Jobs on a product intake (CR-03, migration 0014_intake): light extraction from a brief
 # and its pinned sources. They have no document; ``intake_id`` says whose they are.

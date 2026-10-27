@@ -288,3 +288,82 @@ class SimpleOnePager(TenantScoped, Base):
     built_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+MEETING_ORIGINS = ("one_pager", "roadmap", "ritual")
+MEETING_STATUSES = ("live", "ended")
+CHANGE_MODES = ("everyone", "presenter", "named")
+MINUTES_STATES = ("drafting", "ready", "sent")
+
+
+class SimpleMeeting(TenantScoped, Base):
+    """Simple S8: a review meeting of one PRD (oracle.simple.meetings): a titled session
+    (``kind = 'meeting'``) joining the shared working drafts; its attendees, the
+    presenter's change mode, its length, and, once ended, its minutes and their delivery.
+    ``minutes``: {summary, open_questions, action_items, waits, written_by}; ``delivery``:
+    SimpleDelivery's fields."""
+
+    __tablename__ = "simple_meetings"
+    __table_args__ = (
+        CheckConstraint(_in("origin", MEETING_ORIGINS), name="origin"),
+        CheckConstraint(_in("status", MEETING_STATUSES), name="status"),
+        CheckConstraint(_in("change_mode", CHANGE_MODES), name="change_mode"),
+        CheckConstraint(
+            "minutes_state IS NULL OR " + _in("minutes_state", MINUTES_STATES),
+            name="minutes_state",
+        ),
+        CheckConstraint("length_min BETWEEN 5 AND 240", name="length_min"),
+        Index("ix_simple_meetings_started", "started_at"),
+    )
+
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    prd_document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    origin: Mapped[str] = mapped_column(Text, nullable=False)
+    occurrence_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("ritual_occurrences.id", ondelete="SET NULL")
+    )
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_sessions.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    presenter_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    attendee_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    absent_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    change_mode: Mapped[str] = mapped_column(Text, nullable=False, server_default="everyone")
+    change_people: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    length_min: Mapped[int] = mapped_column(Integer, nullable=False, server_default="60")
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="live")
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    ended_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    minutes: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    minutes_state: Mapped[str | None] = mapped_column(Text)
+    minutes_job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    delivery: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SimpleMeetingDecision(TenantScoped, Base):
+    """Simple S8: a decision taken in a meeting (a ``decisions`` row, origin ``meeting``)
+    and the Simple changes it made."""
+
+    __tablename__ = "simple_meeting_decisions"
+    __table_args__ = (UniqueConstraint("decision_id"),)
+
+    meeting_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_meetings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    decision_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("decisions.id", ondelete="CASCADE"), nullable=False
+    )
+    change_ids: Mapped[list[uuid.UUID]] = mapped_column(
+        ARRAY(Uuid), nullable=False, server_default="{}"
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

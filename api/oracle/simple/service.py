@@ -540,6 +540,7 @@ def item_out(
     names: dict | None = None,
     owners: list | None = None,
     decisions: dict[uuid.UUID, list[SimpleOpenDecision]] | None = None,
+    decided: dict[uuid.UUID, list[SimpleOpenDecision]] | None = None,
 ) -> SimpleRoadmapItem:
     row, r = e.row, e.resolved
     names = names or {}
@@ -589,7 +590,39 @@ def item_out(
         deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
         reasons=_reasons(e),
         open_decisions=(decisions or {}).get(row.id, []),
+        decided_in=(decided or {}).get(row.id, []),
     )
+
+
+async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
+    """S8: the decided decisions naming each item, in any version of its roadmap (an
+    approved draft is a new version: its rows are new, its keys are the same)."""
+    from oracle.simple import meetings
+
+    if not shown:
+        return {}
+    keyed = {(e.row.roadmap_document_id, e.row.item_key): e.row.id for e in shown}
+    alias: dict[uuid.UUID, uuid.UUID] = {}
+    for rid, doc, key in (
+        await db.execute(
+            select(RoadmapItem.id, RoadmapItem.roadmap_document_id, RoadmapItem.item_key).where(
+                RoadmapItem.roadmap_document_id.in_({d for d, _ in keyed}),
+                RoadmapItem.item_key.in_({k for _, k in keyed}),
+            )
+        )
+    ).all():
+        if (doc, key) in keyed:
+            alias[rid] = keyed[(doc, key)]
+    found = await meetings.decided_in(db, [{"kind": "roadmap_item", "id": str(i)} for i in alias])
+    out: dict[uuid.UUID, list] = defaultdict(list)
+    for (_, sid, _), lst in found.items():
+        target = alias.get(uuid.UUID(sid))
+        for d in lst:
+            if target is not None and all(x.id != d.id for x in out[target]):
+                out[target].append(d)
+    for lst in out.values():
+        lst.sort(key=lambda d: -d.number)
+    return out
 
 
 def _metric(goal: Entity) -> str | None:
@@ -661,6 +694,7 @@ async def build(
         for u in await db.scalars(select(User).where(User.id.in_(people)))
     }
     decisions = await _open_decisions(db, {e.row.id for e in shown})
+    decided = await _decided(db, shown)
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
@@ -671,7 +705,9 @@ async def build(
             **{h: SimpleWindow(start=w[h][0], end=w[h][1]) for h in ("now", "next", "later")}
         ),
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
-        items=[item_out(e, principal, read.deciders, names, owners, decisions) for e in shown],
+        items=[
+            item_out(e, principal, read.deciders, names, owners, decisions, decided) for e in shown
+        ],
         milestones=[
             SimpleMilestone(
                 id=m.id,

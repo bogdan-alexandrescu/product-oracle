@@ -70,6 +70,8 @@ from oracle.simple.schemas import (
 )
 
 IDLE = timedelta(minutes=30)
+# S8: a meeting's session closes when the meeting ends; idle this long, it closes anyway.
+MEETING_IDLE = timedelta(hours=4)
 DONE_DAYS = 30
 TITLE_MAX = 200
 OUTCOME_MAX = 1000
@@ -117,7 +119,9 @@ def _me(principal: Any) -> uuid.UUID:
 
 
 def _idle(s: SimpleSession, now: datetime) -> bool:
-    return (s.last_change_at or s.started_at) <= now - IDLE
+    return (s.last_change_at or s.started_at) <= now - (
+        MEETING_IDLE if s.kind == "meeting" else IDLE
+    )
 
 
 def session_out(s: SimpleSession) -> SimpleSessionOut:
@@ -128,16 +132,20 @@ def session_out(s: SimpleSession) -> SimpleSessionOut:
 async def close_idle(db: AsyncSession) -> int:
     """Close the sessions idle 30 minutes (the caller commits); how many."""
     now = company_time.now()
-    res = await db.execute(
-        update(SimpleSession)
-        .where(
-            SimpleSession.closed_at.is_(None),
-            (SimpleSession.last_change_at.is_(None) & (SimpleSession.started_at <= now - IDLE))
-            | (SimpleSession.last_change_at <= now - IDLE),
+    n = 0
+    for kind, idle in (("editing", IDLE), ("meeting", MEETING_IDLE)):
+        res = await db.execute(
+            update(SimpleSession)
+            .where(
+                SimpleSession.kind == kind,
+                SimpleSession.closed_at.is_(None),
+                (SimpleSession.last_change_at.is_(None) & (SimpleSession.started_at <= now - idle))
+                | (SimpleSession.last_change_at <= now - idle),
+            )
+            .values(closed_at=now)
         )
-        .values(closed_at=now)
-    )
-    return res.rowcount or 0
+        n += res.rowcount or 0
+    return n
 
 
 async def _open_editing(db: AsyncSession, me: uuid.UUID, now: datetime) -> SimpleSession | None:
@@ -208,8 +216,18 @@ async def _session_for_change(
             await db.flush()
         return s
     s = await db.get(SimpleSession, session_id, with_for_update=True)
-    if s is None or s.started_by != me:
+    if s is None:
         raise ChangeError(404, "No such session of yours")
+    if s.started_by != me:
+        # S8: a meeting's session takes the changes of those its presenter lets change
+        # things (oracle.simple.meetings.MeetingRules); their own rights still decide.
+        from oracle.simple import meetings
+
+        rules = await meetings.rules_for_session(db, s.id) if s.kind == "meeting" else None
+        if rules is None:
+            raise ChangeError(404, "No such session of yours")
+        if not rules.may_change(me):
+            raise ChangeError(403, "The presenter has not let you change things in this meeting")
     if s.closed_at is not None or _idle(s, now):
         if s.closed_at is None:
             s.closed_at = now
@@ -711,7 +729,12 @@ async def _get(db: AsyncSession, change_id: uuid.UUID) -> SimpleChange:
 
 
 async def decide(
-    db: AsyncSession, principal: Any, change_id: uuid.UUID, action: str, reason: str | None
+    db: AsyncSession,
+    principal: Any,
+    change_id: uuid.UUID,
+    action: str,
+    reason: str | None,
+    session_id: uuid.UUID | None = None,
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
     from oracle.simple import one_pager, targets
@@ -721,7 +744,7 @@ async def decide(
     if c.op in targets.OPS:
         return await targets.decide(db, principal, c, action, reason)
     if c.op in one_pager.OPS:
-        return await one_pager.decide(db, principal, c, action, reason)
+        return await one_pager.decide(db, principal, c, action, reason, session_id)
     read_ = await service.load(db, await drafts.overlays_for(db, principal))
     entry = read_.by_id().get(uuid.UUID(c.target["item_id"]))
     if entry is None:
@@ -738,8 +761,8 @@ async def decide(
         current = await _current(db, c, c.before)
         if current != c.before:
             raise await _conflict(db, current, _touched(c), "outdated")
-        # Into the decider's working draft (their editing session's).
-        session = await _session_for_change(db, me, None, True, now)
+        # Into the decider's working draft (their editing session's, or S8's meeting's).
+        session = await _session_for_change(db, me, session_id, True, now)
         await _apply(db, c, c.after, principal, session)  # type: ignore[arg-type]
         session.last_change_at = now  # type: ignore[union-attr]
     c.status = "accepted" if action == "accept" else "declined"

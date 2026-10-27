@@ -150,6 +150,15 @@ async def settle_company(
         log.exception("tick: member follow-ups failed for company %s", tenant_id)
         await db.rollback()
         out.errors.append(exc)
+    # S8: meeting minutes emails still queued.
+    from oracle.simple import meetings as simple_meetings
+
+    try:
+        await simple_meetings.send_queued_emails(db)
+    except Exception as exc:
+        log.exception("tick: minutes emails failed for company %s", tenant_id)
+        await db.rollback()
+        out.errors.append(exc)
     # Invite emails a lost process left queued (#242).
     from oracle.members import delivery
 

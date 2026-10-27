@@ -63,6 +63,20 @@ async def _run(db, coro):
         raise HTTPException(e.status, e.detail) from e
 
 
+async def _in_meeting(
+    db, principal: Principal, out: SimpleChangeResult, session_id, verb: str | None = None
+) -> None:
+    """S8: a change made, decided or undone through a meeting's session is a meeting
+    decision (oracle.simple.meetings)."""
+    from oracle.simple import meetings
+
+    try:
+        await meetings.after_change(db, principal, out.change.id, session_id, verb)
+    except meetings.MeetingError as e:
+        await db.rollback()
+        raise HTTPException(e.status, e.detail) from e
+
+
 @router.post("/sessions", response_model=SimpleSessionOut, name="create_simple_session")
 async def create_simple_session(
     body: SimpleSessionIn, principal: Commenter, db: TenantDB
@@ -103,7 +117,9 @@ async def create_simple_change(
     (with no decider, its owner), proposed to them for approvers and commenters. 409 when
     ``before`` no longer matches the stored values (nothing is written). Returns the
     constraint flags of the touched items (a proposal's as if applied)."""
-    return await _run(db, changes.create(db, principal, body))
+    out = await _run(db, changes.create(db, principal, body))
+    await _in_meeting(db, principal, out, body.session_id)
+    return out
 
 
 @router.post("/changes/{change_id}/undo", response_model=SimpleChangeResult,
@@ -114,7 +130,9 @@ async def undo_simple_change(
 ) -> SimpleChangeResult:
     """Undo one of the caller's applied changes, in its open session, while the target
     still holds its ``after``: writes an ``undone`` row (history is kept)."""
-    return await _run(db, changes.undo(db, principal, change_id))
+    out = await _run(db, changes.undo(db, principal, change_id))
+    await _in_meeting(db, principal, out, out.change.session_id, "Undone")
+    return out
 
 
 @router.post("/changes/{change_id}/accept", response_model=SimpleChangeResult,
@@ -123,8 +141,10 @@ async def accept_simple_change(
     change_id: uuid.UUID, principal: Commenter, db: TenantDB, body: SimpleDecisionIn | None = None
 ) -> SimpleChangeResult:
     """Accept a proposal: it applies, unless the item changed since (409 "outdated")."""
-    reason = body.reason if body else None
-    return await _run(db, changes.decide(db, principal, change_id, "accept", reason))
+    reason, sid = (body.reason, body.session_id) if body else (None, None)
+    out = await _run(db, changes.decide(db, principal, change_id, "accept", reason, sid))
+    await _in_meeting(db, principal, out, sid, "Accepted")
+    return out
 
 
 @router.post("/changes/{change_id}/decline", response_model=SimpleChangeResult,
@@ -133,8 +153,10 @@ async def decline_simple_change(
     change_id: uuid.UUID, principal: Commenter, db: TenantDB, body: SimpleDecisionIn | None = None
 ) -> SimpleChangeResult:
     """Decline a proposal, with an optional reason: nothing changes."""
-    reason = body.reason if body else None
-    return await _run(db, changes.decide(db, principal, change_id, "decline", reason))
+    reason, sid = (body.reason, body.session_id) if body else (None, None)
+    out = await _run(db, changes.decide(db, principal, change_id, "decline", reason, sid))
+    await _in_meeting(db, principal, out, sid, "Declined")
+    return out
 
 
 @router.get("/changes", response_model=list[SimpleChangeOut], name="list_simple_changes")
