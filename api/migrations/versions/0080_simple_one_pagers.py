@@ -7,8 +7,8 @@
 
 The downgrade deletes the ``one_pager`` jobs and drops the table.
 
-Revision ID: 0079_simple_one_pagers
-Revises: 0078_simple_drafts
+Revision ID: 0080_simple_one_pagers
+Revises: 0079_simple_drafts
 """
 
 from collections.abc import Sequence
@@ -19,8 +19,8 @@ from sqlalchemy.dialects import postgresql
 
 from oracle.migration_checks import add_check_values, remove_check_values
 
-revision: str = "0079_simple_one_pagers"
-down_revision: str | None = "0078_simple_drafts"
+revision: str = "0080_simple_one_pagers"
+down_revision: str | None = "0079_simple_drafts"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

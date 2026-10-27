@@ -1,4 +1,4 @@
-"""Migration 0076_simple_roadmap_dates (Simple S2, #723).
+"""Migration 0077_simple_roadmap_dates (Simple S2, #723).
 
 Card: protects=roadmap_items' start_date, end_date, date_source (checked), accepted_risks
 ('[]') and draft (false) and the roadmap_date_suggestions table (one open suggestion per
@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0076_simple_roadmap_dates"
+REVISION = "0077_simple_roadmap_dates"
 PREVIOUS = "0075_live_tokens"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
@@ -75,7 +75,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0079_simple_one_pagers"]
+    assert script.get_heads() == ["0080_simple_one_pagers"]
 
 
 def _seed_item() -> tuple[uuid.UUID, uuid.UUID]:

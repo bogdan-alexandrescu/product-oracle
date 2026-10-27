@@ -1,8 +1,8 @@
-"""Migration 0078_simple_drafts (Simple S3b, #723).
+"""Migration 0079_simple_drafts (Simple S3b, #723).
 
 Card: protects=simple_drafts (one working draft per document), simple_session_drafts,
 roadmap_item_tasks, simple_action_items and simple_changes.draft_ids ('{}') come and go
-with the revision, chained on 0077_simple_changes as the single head; fails_when=a table,
+with the revision, chained on 0078_simple_changes as the single head; fails_when=a table,
 the column or the one-working-draft index is missing, or the downgrade leaves any of them;
 no_claim=the routes' use (tests/test_simple_drafts_api.py, tests/test_simple_targets_api.py).
 
@@ -19,8 +19,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0078_simple_drafts"
-PREVIOUS = "0077_simple_changes"
+REVISION = "0079_simple_drafts"
+PREVIOUS = "0078_simple_changes"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_simple_drafts")
@@ -71,7 +71,7 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0079_simple_one_pagers"]
+    assert script.get_heads() == ["0080_simple_one_pagers"]
 
 
 def test_up_down_up(scratch_db):

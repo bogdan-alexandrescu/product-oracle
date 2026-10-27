@@ -12,7 +12,7 @@ Live-safe: nullable columns and columns with constant defaults (no rewrite), one
 The downgrade drops the table, the columns (typed and accepted dates are lost) and the
 internal ``simple_date_suggestions`` setting (the last day the suggestions ran).
 
-Revision ID: 0076_simple_roadmap_dates
+Revision ID: 0077_simple_roadmap_dates
 Revises: 0075_live_tokens
 """
 
@@ -22,8 +22,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0076_simple_roadmap_dates"
-down_revision: str | None = "0075_live_tokens"
+revision: str = "0077_simple_roadmap_dates"
+down_revision: str | None = "0076_board_wide_tables"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

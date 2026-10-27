@@ -52,7 +52,7 @@ def scratch_db():
 def test_0015_specs_chains_after_main_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision("0015_specs").down_revision == "0020_feedback_author"
-    assert script.get_heads() == ["0079_simple_one_pagers"]
+    assert script.get_heads() == ["0080_simple_one_pagers"]
 
 
 def _doc(t, kind: str) -> uuid.UUID:

@@ -12,8 +12,8 @@ Live-safe: new tables and an array column with a constant default (no rewrite).
 
 The downgrade drops them (working drafts, item tasks and action items are lost).
 
-Revision ID: 0078_simple_drafts
-Revises: 0077_simple_changes
+Revision ID: 0079_simple_drafts
+Revises: 0078_simple_changes
 """
 
 from collections.abc import Sequence
@@ -22,8 +22,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0078_simple_drafts"
-down_revision: str | None = "0077_simple_changes"
+revision: str = "0079_simple_drafts"
+down_revision: str | None = "0078_simple_changes"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

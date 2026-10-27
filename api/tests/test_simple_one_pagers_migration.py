@@ -1,7 +1,7 @@
-"""Migration 0079_simple_one_pagers (Simple S5, #723).
+"""Migration 0080_simple_one_pagers (Simple S5, #723).
 
 Card: protects=simple_one_pagers and the llm_jobs kind one_pager come and go with the
-revision, chained on 0078_simple_drafts as the single head; fails_when=the table or the
+revision, chained on 0079_simple_drafts as the single head; fails_when=the table or the
 kind is missing, or the downgrade leaves either; no_claim=the routes' use
 (tests/test_simple_one_pager_api.py).
 
@@ -18,8 +18,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0079_simple_one_pagers"
-PREVIOUS = "0078_simple_drafts"
+REVISION = "0080_simple_one_pagers"
+PREVIOUS = "0079_simple_drafts"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_simple_one_pagers")

@@ -75,7 +75,7 @@ def scratch_db():
 def test_chains_on_mains_head_and_is_the_only_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0079_simple_one_pagers"]
+    assert script.get_heads() == ["0080_simple_one_pagers"]
 
 
 def _posthog(t: uuid.UUID, by: uuid.UUID) -> None:
