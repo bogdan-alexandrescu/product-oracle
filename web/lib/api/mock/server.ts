@@ -5016,7 +5016,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   };
   // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
   // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
-  if (p[1] === "simple" && (p[2] === "meetings" || p[2] === "decisions" || db.simple_meetings)) {
+  // A meeting's chat (/simple/meetings/{id}/chat...) is S9's, below: its invented meeting lives in its own db.
+  if (p[1] === "simple" && p[4] !== "chat" && (p[2] === "meetings" || p[2] === "decisions" || db.simple_meetings)) {
     const meetingsCtx: MeetingsCtx = {
       me: { id: me.id, role: me.role },
       members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
