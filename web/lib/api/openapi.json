@@ -43098,7 +43098,8 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/meetings/options": {
@@ -43457,7 +43458,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/meetings/{meeting_id}/end": {
@@ -43509,7 +43511,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/meetings/{meeting_id}/minutes": {
@@ -43571,7 +43574,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/meetings/{meeting_id}/send": {
@@ -43634,7 +43638,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/decisions": {

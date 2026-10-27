@@ -277,20 +277,16 @@ test("Simple's rail has its six destinations and none of Detailed's", async ({ p
   }
 });
 
-test("each placeholder names what arrives and links its Detailed page", async ({ page }) => {
+test("every Simple destination shows its own screen, no placeholder left (S8)", async ({ page }) => {
   await signIn(page, EMAILS.owner);
-  for (const [path, detailed] of [
-    ["/simple/roadmap", "/plan"],
-    ["/simple/priorities", "/priorities"],
-    ["/simple/meetings", "/company/rituals"],
-    ["/simple/decisions", "/company/decisions"],
+  for (const [path, heading] of [
+    ["/simple/meetings", "Meetings"],
+    ["/simple/decisions", "Decisions"],
   ]) {
     await page.goto(path);
     await expectSimple(page, path);
-    const placeholder = page.getByTestId("simple-placeholder");
-    await expect(placeholder).toContainText("Arrives");
-    await placeholder.getByRole("link", { name: "Open the detailed view", exact: true }).click();
-    await expectDetailed(page, detailed);
+    await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeAttached();
+    await expect(page.getByTestId("simple-placeholder")).toHaveCount(0);
   }
 });
 

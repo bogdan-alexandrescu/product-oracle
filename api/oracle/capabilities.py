@@ -165,6 +165,7 @@ PER_ITEM: dict[str, Role | None] = {
     "answer_with_discussion_change": "approver",
     "apply_discussion_change": "approver",
     "approve_feasibility_scope": "owner",
+    "approve_in_simple_meeting": "owner",
     # Simple S3b: an owner, else the roadmap's decider (with none, its owner); required
     # reviewers approve too; the author or the decider resumes (oracle.simple.drafts).
     "approve_simple_draft": "owner",
@@ -201,6 +202,8 @@ PER_ITEM: dict[str, Role | None] = {
     # H10: a request's replies are its filer's, an approver's or an owner's.
     "draft_request_replies": "approver",
     "edit_document_section": "approver",
+    "edit_simple_meeting_minutes": "owner",
+    "end_simple_meeting": "owner",
     "enhance_scope_requirement": "approver",
     # #482: an approver, or the document's decider (per item, oracle.trash.router).
     "estimate_regeneration": "approver",
@@ -252,6 +255,7 @@ PER_ITEM: dict[str, Role | None] = {
     "revoke_interview": "approver",
     "revoke_share_link": "owner",
     "rotate_share_link_passcode": "owner",
+    "send_simple_meeting_minutes": "owner",
     "set_blocker_status": "owner",
     "set_checkpoint_note": "owner",
     "set_connection_endpoint": "owner",
@@ -262,6 +266,7 @@ PER_ITEM: dict[str, Role | None] = {
     "start_draft": "owner",
     "start_intake_run": "approver",
     "start_regeneration": "approver",
+    "start_simple_meeting": "owner",
     "stop_cancelling_run": "owner",
     "stop_slack_mirror": "approver",
     "submit_simple_draft": "owner",
