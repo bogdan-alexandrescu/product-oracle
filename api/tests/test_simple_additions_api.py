@@ -97,9 +97,9 @@ class World:
                                 track_id=track.id, depends_on=["import-a"])  # fmt: skip
             if decider:
                 # The approver reviews it, so sees its working draft (and proposes in it).
-                s.add(DocumentReviewPolicy(document_id=rm.id,
-                                           decider_id=self.ctx.users["decider"].id,
-                                           mandatory_reviewer_ids=[self.ctx.users["approver"].id]))  # fmt: skip
+                u = self.ctx.users
+                s.add(DocumentReviewPolicy(document_id=rm.id, decider_id=u["decider"].id,
+                                           mandatory_reviewer_ids=[u["approver"].id]))  # fmt: skip
             await s.commit()
             self.ids = {"import-a": str(a.id), "import-b": str(b.id)}
             self.goals = {"grow": str(grow.id), "quiet": str(quiet.id)}

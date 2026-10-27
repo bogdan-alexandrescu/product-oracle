@@ -66,7 +66,8 @@ def scratch_db():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == [REVISION]
+    # S7's 0081_simple_additions chains on it.
+    assert script.get_heads() == ["0081_simple_additions"]
 
 
 def test_up_down_up(scratch_db):
