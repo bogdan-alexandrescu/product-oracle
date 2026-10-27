@@ -1,4 +1,4 @@
-import { login } from "./helpers";
+import { login, signOut } from "./helpers";
 import {
   expect,
   test,
@@ -12,8 +12,9 @@ import {
  * highlight"). Each mark shows a short code that never changes with rank (the feature's code,
  * F-12 for setup-import in the mock, else initials of the item's key: AS for alert-sso); the
  * ranked side list shows the same code beside the rank; the item just moved stays highlighted
- * on the chart and in the list with "moved #a → #b" until the next move. Every action is
- * driven through the UI (a mouse or finger drag, the arrow keys).
+ * on the chart and in the list with "moved #a → #b" until the next move (an accepted proposal
+ * included). Every action is driven through the UI (a mouse drag, a finger's touch drag, the
+ * arrow keys, the Accept button).
  */
 
 const PHONE = { width: 390, height: 844 };
@@ -51,6 +52,39 @@ async function dragLeft(tab: Page, code: string, weeks: number): Promise<void> {
     { steps: 10 },
   );
   await tab.mouse.up();
+}
+
+/**
+ * Drags a mark `weeks` to the left with a finger: real touch input (Chrome's touch events), so
+ * the chart sees pointerType "touch", as on a phone.
+ */
+async function fingerLeft(
+  tab: Page,
+  code: string,
+  weeks: number,
+): Promise<void> {
+  const mark = point(tab, code);
+  await mark.evaluate((e) => e.scrollIntoView({ block: "center" }));
+  const plot = (await tab.getByTestId("vxe-plot").boundingBox())!;
+  const at = (await mark.boundingBox())!;
+  const x = at.x + at.width / 2;
+  const y = at.y + at.height / 2;
+  const dx = (plot.width * 0.92 * weeks) / 5;
+  const cdp = await tab.context().newCDPSession(tab);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x, y }],
+  });
+  for (let i = 1; i <= 10; i++)
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: x - (dx * i) / 10, y: y + (3 * i) / 10 }],
+    });
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await cdp.detach();
 }
 
 /** Every mark's code, by item. */
@@ -235,23 +269,89 @@ test.describe("desktop", () => {
       "Codes stay with the item; ranks are in the list.",
     );
   });
+
+  /**
+   * Card simple-priorities-codes-accept: protects = accepting a proposal that moves an item is
+   * the next move: the highlight leaves the item moved before (setup-import) and goes to the
+   * accepted one (alert-mobile) with its own "moved #a → #b"; fails_when = the old item keeps
+   * its tag (with a "→ #b" it was never moved to) or the accepted item is not highlighted;
+   * no_claim = who may accept (simple-priorities.spec.ts).
+   */
+  test("accepting a proposal moves the highlight to the accepted item", async ({
+    page,
+  }) => {
+    const cory = await open(page, "commenter@example.com");
+    await point(cory, "alert-mobile").focus();
+    await cory.keyboard.press("ArrowLeft");
+    await expect(
+      cory.getByText("Proposed: waiting for the decider"),
+    ).toBeVisible();
+    await signOut(cory);
+
+    const admin = await open(page, "admin@example.com");
+    await dragLeft(admin, "setup-import", 2);
+    await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
+      "moved #5 → #2",
+    );
+    await expect(
+      side(admin, "alert-mobile").getByTestId("side-rank"),
+    ).toHaveText("5");
+    await admin.getByRole("tab", { name: "Ranked list" }).click();
+    const ranked = (code: string) =>
+      admin.locator(`[data-testid="prio-row"][data-code="${code}"]`);
+    await ranked("alert-mobile")
+      .getByTestId("prio-proposal")
+      .getByRole("button", { name: "Accept" })
+      .click();
+    await expect(
+      admin.getByText("Accepted alert-mobile's proposal"),
+    ).toBeVisible();
+    await expect(ranked("alert-mobile").getByTestId("prio-rank")).toHaveText(
+      "4",
+    );
+    await expect(ranked("alert-mobile").getByTestId("moved")).toHaveText(
+      "moved #5 → #4",
+    );
+    await expect(ranked("setup-import").getByTestId("moved")).toHaveCount(0);
+    await admin.getByRole("tab", { name: "Value / effort" }).click();
+    await expect(point(admin, "alert-mobile")).toHaveAttribute(
+      "data-moved",
+      "true",
+    );
+    await expect(admin.locator('[data-moved="true"]')).toHaveCount(2);
+  });
 });
 
 test.describe("phone", () => {
-  test.use({ viewport: PHONE });
+  test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
 
   /**
    * Card simple-priorities-codes-phone: protects = on a phone, in dark, a finger's drag of a
-   * mark keeps its code and the side list (under the chart) shows "moved #5 → #2" beside the
-   * same code; fails_when = the phone shows ranks on the marks or loses the highlight;
-   * no_claim = touch hardware gestures (Playwright drives pointer events).
+   * mark (touch input: the chart sees pointerType "touch") keeps its code and the side list
+   * (under the chart) shows "moved #5 → #2" beside the same code; fails_when = a touch drag
+   * does not move the mark, the phone shows ranks on the marks or loses the highlight;
+   * no_claim = multi-finger gestures.
    */
   test("drag a mark on a phone, dark: code kept, moved #5 → #2", async ({
     page,
   }) => {
     await dark(page.context());
     const admin = await open(page, "admin@example.com");
-    await dragLeft(admin, "setup-import", 2);
+    await admin.evaluate(() => {
+      const w = window as unknown as { pointerTypes: string[] };
+      w.pointerTypes = [];
+      document.addEventListener(
+        "pointerdown",
+        (e) => w.pointerTypes.push(e.pointerType),
+        true,
+      );
+    });
+    await fingerLeft(admin, "setup-import", 2);
+    expect(
+      await admin.evaluate(
+        () => (window as unknown as { pointerTypes: string[] }).pointerTypes,
+      ),
+    ).toEqual(["touch"]);
     await expect(side(admin, "setup-import").getByTestId("moved")).toHaveText(
       "moved #5 → #2",
     );
