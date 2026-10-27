@@ -16140,6 +16140,17 @@ export interface components {
             per_item: {
                 [key: string]: ("viewer" | "commenter" | "approver" | "owner") | null;
             };
+            /**
+             * Simple Mode
+             * @default false
+             */
+            simple_mode: boolean;
+            /**
+             * Default Experience
+             * @default detailed
+             * @enum {string}
+             */
+            default_experience: "simple" | "detailed";
         };
         /** CatalogModuleDetail */
         CatalogModuleDetail: {
@@ -29505,7 +29516,8 @@ export interface components {
          *     documents open on; brief unless they switched to the full document. ``setup_hidden``:
          *     they hid Home's Set up checklist (A1); a header chip shows it again.
          *     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
-         *     ``slack_pings``: the Slack pings they get (My account).
+         *     ``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they
+         *     last switched to (#723); unset, they land by role (viewers and commenters in Simple).
          */
         Preferences: {
             /**
@@ -29534,6 +29546,8 @@ export interface components {
              *     }
              */
             slack_pings: components["schemas"]["SlackPings"];
+            /** Experience */
+            experience?: ("simple" | "detailed") | null;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -29544,6 +29558,8 @@ export interface components {
             /** Welcome Dismissed */
             welcome_dismissed?: boolean | null;
             slack_pings?: components["schemas"]["SlackPingsUpdate"] | null;
+            /** Experience */
+            experience?: ("simple" | "detailed") | null;
         };
         /**
          * PreviousAttempt
@@ -36070,6 +36086,16 @@ export interface components {
             needed_by: string[];
             /** Flags */
             flags: components["schemas"]["SimpleFlag"][];
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            /**
+             * Deciders
+             * @default []
+             */
+            deciders: string[];
         };
         /** SimpleRoadmapOut */
         SimpleRoadmapOut: {

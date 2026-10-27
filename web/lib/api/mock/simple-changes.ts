@@ -25,7 +25,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
-import { canDecideItem, canEditRoadmap, deciderIds, draftChanges, roadmapOut, seesDraft, type MockDraft, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, canEditRoadmap, deciderIds, draftChanges, roadmapOut, seesDraft, storedDates, type MockDraft, type SimpleDb } from "./simple-roadmap";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -108,9 +108,10 @@ function read(db: SimpleDb, key: string, fields: string[], target: Values): Valu
   const own = db.own[key];
   const out: Values = {};
   for (const f of fields) {
-    if (f === "start_date") out[f] = own?.start ?? null;
-    else if (f === "end_date") out[f] = own?.end ?? null;
-    else if (f === "date_source") out[f] = own ? (own.source ?? "accepted") : null;
+    // The API's stored dates: typed or accepted ones (storedDates), never estimates.
+    if (f === "start_date") out[f] = storedDates(db, key).start;
+    else if (f === "end_date") out[f] = storedDates(db, key).end;
+    else if (f === "date_source") out[f] = own ? (own.source ?? "accepted") : s.source === "typed" || s.source === "accepted" ? s.source : null;
     else if (f === "horizon") out[f] = s.horizon;
     else if (f === "position") out[f] = s.position ?? db.items.indexOf(s);
     else if (f === "cut") out[f] = s.status === "cut";
@@ -561,6 +562,29 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   }
   Object.assign(c, { status: p[4] === "accept" ? "accepted" : "declined", decided_by: ctx.id, decided_at: now, decision_reason: body.reason ?? null });
   return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] ? [] : flagsFor(db, touched(c)) });
+}
+
+/**
+ * A proposal made before the page opened (S1 Home's "simple-home" scenario): `by` proposes
+ * `op` on `itemKey`, routed as the engine routes it.
+ */
+export function seedSimpleProposal(
+  db: SimpleDb,
+  who: Pick<SimpleChangesCtx, "owners" | "roles"> & { id: string; name: string },
+  op: Change["op"],
+  itemKey: string,
+  before: Values,
+  after: Values,
+  at: string,
+  reason: string | null = null,
+): void {
+  const c: Change = {
+    id: stableUuid(`simple-proposal/${itemKey}/${op}/${who.id}`), session_id: null, document_id: stableUuid(`simple-doc/${seed(db, itemKey).roadmap}`), draft_ids: [],
+    op, target: { item_id: db.ids[itemKey] }, before, after, status: "proposed", by: who.id, by_name: who.name, at,
+    decided_by: null, decided_at: null, reason, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  c.routed_to = route(db, who, c);
+  (db.changes ??= []).push(c);
 }
 
 /** Inbox rows (changes.inbox_rows): proposals waiting for me, decisions on mine. */

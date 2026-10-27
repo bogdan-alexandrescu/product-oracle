@@ -31,6 +31,7 @@ from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.baseline.models import Edge, Entity
 from oracle.docs.models import Document, DocumentVersion
+from oracle.members.names import display_name
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import (
     ProductTrack,
@@ -484,8 +485,11 @@ def suggestion_out(s: RoadmapDateSuggestion, row: RoadmapItem, may: bool) -> Dat
     )
 
 
-def item_out(e: Entry, principal: Any, deciders: dict) -> SimpleRoadmapItem:
+def item_out(
+    e: Entry, principal: Any, deciders: dict, names: dict | None = None, owners: list | None = None
+) -> SimpleRoadmapItem:
     row, r = e.row, e.resolved
+    names = names or {}
     return SimpleRoadmapItem(
         id=row.id,
         key=row.item_key,
@@ -524,6 +528,8 @@ def item_out(e: Entry, principal: Any, deciders: dict) -> SimpleRoadmapItem:
             )  # fmt: skip
             for f in e.flags
         ],
+        can_decide=can_decide(principal, e, deciders),
+        deciders=[names[i] for i in decider_ids(e, deciders) or owners or [] if i in names],
     )
 
 
@@ -576,6 +582,18 @@ async def build(
         key, title, sort = _group_of(e, group)
         groups.setdefault(key, (sort, title, []))[2].append(e.row.id)
     ordered = sorted(groups.items(), key=lambda kv: kv[1][0])
+    owners = list(
+        await db.scalars(
+            select(User.id)
+            .where(User.role == "owner", User.disabled_at.is_(None))
+            .order_by(User.created_at, User.id)
+        )
+    )
+    people = set(owners) | {i for e in shown for i in decider_ids(e, read.deciders)}
+    names = {
+        u.id: display_name(u.email, u.name)
+        for u in await db.scalars(select(User).where(User.id.in_(people)))
+    }
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
@@ -586,7 +604,7 @@ async def build(
             **{h: SimpleWindow(start=w[h][0], end=w[h][1]) for h in ("now", "next", "later")}
         ),
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
-        items=[item_out(e, principal, read.deciders) for e in shown],
+        items=[item_out(e, principal, read.deciders, names, owners) for e in shown],
         milestones=[
             SimpleMilestone(
                 id=m.id,

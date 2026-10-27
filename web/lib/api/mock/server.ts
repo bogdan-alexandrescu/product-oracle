@@ -10,7 +10,7 @@ import { citationHref } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
-import { mockUuid, seeded } from "./ids";
+import { mockUuid, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
@@ -151,7 +151,7 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
-import { routeSimpleChanges, simpleInboxRows } from "./simple-changes";
+import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -522,9 +522,16 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "read-only-credential" where My account is read through an oracle:read personal token
  * (AC1: it changes nothing, the name included);
  * "simple-deciders" as the default company plus a decider of Simple's pricing roadmap and
- * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a).
+ * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a);
+ * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
+ * pricing roadmap's decider (#723 S1 Home review).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+/**
+ * #723: Simple mode is on in the mock (the API's ORACLE_SIMPLE_MODE); tests set this
+ * localStorage key to "off" to see the app without it (no switch, everyone in Detailed).
+ */
+export const MOCK_SIMPLE_MODE_KEY = "po-mock-simple-mode";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
 export const STORED_REFUSALS_SCENARIO = "stored-refusals";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -832,6 +839,47 @@ function seedSimpleDecidersScenario(): Db {
     commenter: join("cory.hale@example.com", "Cory Hale", "commenter", 2),
     viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
   });
+  return db;
+}
+
+/**
+ * #723 S1 Home's "simple-home" scenario: the default company whose confirmed goals are those
+ * Simple's roadmap items serve (Grow retention, Faster activation) plus a guardrail goal, each
+ * with a weight and a metric path; two proposals the commenter made (routed to the owners);
+ * the approver's decision on usage caps waits as in every company. Invented data.
+ */
+function seedSimpleHomeScenario(): Db {
+  const db = seed();
+  db.simple_roadmap = seedSimpleRoadmap();
+  const template = db.baseline.entities.find((e) => e.type === "goal")!;
+  for (const e of db.baseline.entities) if (e.type === "goal" && e.status === "confirmed") e.status = "proposed";
+  const goal = (key: string, title: string, attrs: Record<string, unknown>) =>
+    db.baseline.entities.push({ ...template, id: stableUuid(`simple-goal/${key}`), key, title, body: null, attrs, status: "confirmed", locked: false, locked_by: null, locked_at: null });
+  goal("grow-retention", "G-R Grow retention", { metric: "teams with weekly alerts on", unit: "teams", comparison: "at_least", start: 50, current: 100, current_as_of: "2026-10-01", target: 200, weight: 3, horizon: "medium" });
+  goal("faster-activation", "G-A Faster activation", { metric: "new teams set up in a day", unit: "%", comparison: "at_least", start: 30, target: 60, weight: 2, horizon: "short" });
+  goal("quiet-alerts", "G-Q Keep alerts quiet", { metric: "teams muting alerts", unit: "teams", comparison: "at_most", start: 12, target: 10, weight: 1, horizon: "short", guardrail: true });
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? "Commenter", owners, roles };
+  seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
+  seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
+  seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * #723 S1 Home review "simple-home-deciders" scenario: "simple-deciders" (Dana Decider decides
+ * the pricing roadmap, Avery Lane, an approver, owns the alerts track) plus the commenter's
+ * proposal to retitle New plan tiers, which waits on Dana. Invented data.
+ */
+function seedSimpleHomeDecidersScenario(): Db {
+  const db = seedSimpleDecidersScenario();
+  const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
+  const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
+  const commenter = db.members.find((m) => m.email === "commenter@example.com")!;
+  const who = { id: commenter.id, name: commenter.name ?? "Commenter", owners, roles };
+  seedSimpleProposal(db.simple_roadmap!, who, "edit_title", "price-tiers", { title: "New plan tiers" }, { title: "New plan tiers, yearly" }, "2026-10-26T15:00:00Z");
   return db;
 }
 
@@ -2485,6 +2533,10 @@ function load(): Db {
                 ? seedManyPeople
               : scenario === "simple-deciders"
                 ? seedSimpleDecidersScenario
+              : scenario === "simple-home"
+                ? seedSimpleHomeScenario
+              : scenario === "simple-home-deciders"
+                ? seedSimpleHomeDecidersScenario
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
                   : scenario === "strategy-plan"
@@ -4214,7 +4266,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (p[1] === "me" && p[2] === "capabilities" && m === "GET") {
     const caps = await capabilitiesOut(me.role, !!me.engineering_lead, engineeringLeads(db).length > 0);
     for (const op of (localStorage.getItem(MOCK_DENY_KEY) ?? "").split(",")) if (op.trim()) caps.operations[op.trim()] = false;
-    return json(200, caps);
+    return json(200, { ...caps, simple_mode: localStorage.getItem(MOCK_SIMPLE_MODE_KEY) !== "off" });
   }
   if (p[1] === "me" && p[2] === "preferences") {
     db.preferences ??= {};
@@ -4223,15 +4275,19 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (m === "PATCH") {
       const patch = await body<Schemas["PreferencesUpdate"]>();
       if (patch.document_view && !["brief", "full"].includes(patch.document_view)) return json(422, { detail: "document_view" });
+      if (patch.experience && !["simple", "detailed"].includes(patch.experience)) return json(422, { detail: "experience" });
       const pings = patch.slack_pings ?? {};
       if (Object.keys(pings).some((k) => !(k in SLACK_PINGS))) return json(422, { detail: "slack_pings" });
       if (patch.document_view) mine.document_view = patch.document_view;
+      if (patch.experience) mine.experience = patch.experience;
       if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
       if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
       for (const [k, v] of Object.entries(pings)) if (typeof v === "boolean") mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
     }
     mine.setup_hidden ??= false; // saved before A1
     mine.welcome_dismissed ??= false; // saved before the A1 welcome
+    mine.experience ??= null; // unset until the person switches (#723)
+    if ((mine.experience as string) === "studio") mine.experience = "detailed"; // its name before #723's rename, as the API reads it
     return json(200, mine);
   }
   if (p[1] === "setup" && !p[2] && m === "GET") return json(200, setupOut(db, me));
@@ -4838,7 +4894,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   db.simple_roadmap ??= seedSimpleRoadmap();
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
-  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles }, req, p, q);
+  const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
+  const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
+  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, req, p, q);
   if (simpleRes) return simpleRes;
   const simpleChanges = await routeSimpleChanges(
     db.simple_roadmap,
