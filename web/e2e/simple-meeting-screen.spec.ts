@@ -21,8 +21,9 @@ import { expect, test, type Page } from "./test";
  * the old wording; no_claim = the change engine's own rules (simple-roadmap specs).
  *
  * Card meeting-approve: protects = the presenter marks the required reviewer absent, the
- * owner approves, and the screen reads "Approved in Review: Guided setup · publishes when
- * Approver approves", as does the one-pager's draft bar; a commenter gets no Approve, no
+ * owner approves, and the screen reads "Approved in Review: Guided setup · not yet
+ * published: Waiting on Approver's approval" (the one-pager's draft bar: "publishes when
+ * Approver approves"); a commenter gets no Approve, no
  * End and no presence or change-mode control; fails_when = the waiting text is missing or
  * someone without `can` gets the controls; no_claim = the Inbox request to the reviewer.
  */
@@ -114,8 +115,8 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Save" }).click();
         await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup");
         await page.getByRole("button", { name: "Approve", exact: true }).click();
-        await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toContainText("publishes when Approver approves");
-        await expect(allDecisions(page)).toContainText("Approved Guided setup (publishes when Approver approves)");
+        await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toContainText("not yet published: Waiting on Approver's approval");
+        await expect(allDecisions(page)).toContainText("Approved Guided setup (not yet published: waiting on Approver's approval)");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText("Approved in Review: Guided setup · publishes when Approver approves");
         const url = page.url();
         await page.goto("/simple/meetings");
