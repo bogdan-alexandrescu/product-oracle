@@ -293,3 +293,29 @@ for (const [where, use] of [
     });
   }
 }
+
+for (const scheme of ["light", "dark"] as const) {
+  test.describe(`phone, ${scheme}, a real touch`, () => {
+    test.use({ ...PHONE, colorScheme: scheme });
+
+    /**
+     * Card roadmap-plus-phone-touch-clear: protects = on a phone a bar scrolled into view
+     * sits above the fixed tab bar (the page's scroll padding), so a real finger's long
+     * press on the timeline reaches the bar, picks it up and the drag is exactly one change
+     * in the working draft; fails_when = the tab bar covers the bar (the touch lands on a
+     * tab and the bar is never picked up) or the drag sends more than one change; no_claim =
+     * native scrolling and the tab bar's look.
+     */
+    test("a long press on the timeline reaches a bar the tab bar would cover: one change", async ({ page }) => {
+      await openRoadmap(page, "timeline");
+      const start = (await bar(page, "alert-rules").getAttribute("data-start"))!;
+      await longPressDrag(page, "alert-rules", 40);
+      await expect(page.getByText(/Moved 'Alert rules engine' to .* in your working draft/)).toBeVisible();
+      await expect(page.getByTestId("draft-count")).toHaveText("1");
+      await expect(bar(page, "alert-rules")).not.toHaveAttribute("data-start", start);
+      const tabs = (await page.getByTestId("simple-tab-bar").boundingBox())!;
+      const b = (await body(page, "alert-rules").boundingBox())!;
+      expect(b.y + b.height).toBeLessThanOrEqual(tabs.y);
+    });
+  });
+}
