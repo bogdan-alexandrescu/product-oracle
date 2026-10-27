@@ -90217,6 +90217,17 @@
             "type": "string",
             "title": "Text"
           },
+          "full": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full"
+          },
           "source_keys": {
             "items": {
               "type": "string"

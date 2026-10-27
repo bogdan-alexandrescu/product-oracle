@@ -29442,6 +29442,8 @@ export interface components {
             id: string;
             /** Text */
             text: string;
+            /** Full */
+            full?: string | null;
             /** Source Keys */
             source_keys: string[];
             metric?: components["schemas"]["OnePagerMetric"] | null;

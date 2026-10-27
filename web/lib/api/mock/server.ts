@@ -154,7 +154,7 @@ import {
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { routeOnePager, seedOnePager, type OnePagerDb } from "./simple-one-pager";
+import { routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { routeSimpleChat, seedSimpleChat, type ChatDb } from "./simple-chat";
 import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
@@ -893,6 +893,35 @@ function seedSimpleHomeOnePrdScenario(): Db {
     else Object.assign(i, { start: i.start + 180, end: i.end + 180 });
     if (i.milestone) i.milestone.day += 180;
   }
+  return db;
+}
+
+/**
+ * CLD's production walk (#723, 2026-10-27), the "simple-walk" scenario: "simple-home-one-prd"
+ * whose Guided setup items carry milestone texts with their notes appended, as real roadmaps
+ * do ("M1 · Measure it, make it safe (baseline needs the export); ..."), its one-pager's slice
+ * alike with a long problem line, and Checkout redesign started from an empty skeleton (the
+ * template's guidance only). Invented data.
+ */
+function seedSimpleWalkScenario(): Db {
+  const db = seedSimpleHomeOnePrdScenario();
+  const rm = db.simple_roadmap!;
+  const M1 = "M1 · Measure it, make it safe";
+  const M2 = "M2 · Ship to beta";
+  const noted: [string, string, number, number, string, number][] = [
+    ["walk-export", "Baseline export", 5, 40, `${M1} (baseline needs the export); Alert digest in ${M2}`, 45],
+    ["walk-dry-run", "Dry run", 10, 45, `${M1} (owner asks for a dry run)`, 45],
+    ["walk-audit", "Setup audit", 15, 35, `${M1}; follow-up in M3`, 45],
+    ["walk-invites", "Beta invites", 45, 70, `${M2} (two teams first)`, 75],
+    ["walk-feedback", "Beta feedback form", 50, 65, M2, 75],
+  ];
+  for (const [key, title, start, end, name, day] of noted) {
+    rm.items.push({ key, title, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start, end, source: "typed", milestone: { name, day } });
+    rm.ids[key] = stableUuid(`simple-item/${key}`);
+  }
+  db.simple_one_pager = seedWalkOnePager();
+  const skeleton = db.documents.find((d) => d.kind === "prd" && d.slug === "checkout-redesign");
+  if (skeleton) db.simple_one_pagers = { [skeleton.id]: seedSkeletonOnePager({ id: skeleton.id, slug: skeleton.slug, title: skeleton.title }) };
   return db;
 }
 
@@ -2595,6 +2624,8 @@ function load(): Db {
                 ? seedSimpleHomeMilestonesScenario
               : scenario === "simple-home-one-prd"
                 ? seedSimpleHomeOnePrdScenario
+              : scenario === "simple-walk"
+                ? seedSimpleWalkScenario
               : scenario === "simple-chat"
                 ? () => {
                     const db = seedSimpleHomeScenario();

@@ -135,20 +135,46 @@ const maxOf = (xs: string[]) => xs.reduce((a, b) => (b > a ? b : a));
 /** Strings in code point order, as Python sorts them (the API's strip). */
 const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
+const MILESTONE_CODE = /^(M\d+)(?!\w)\s*[·:\-–—]?\s*(.*)$/i;
+
+/**
+ * A milestone text's group key and its row label, as the API's plan_strip.milestone_of
+ * (CLD's production walk, 2026-10-27: real texts carry notes): its code (M1, M2, ...), else
+ * the text before the first " (" or ";". "M1 · Measure it (a note); more" -> ["M1", "M1 ·
+ * Measure it"]; empty -> "Milestone".
+ */
+export function milestoneOf(text: string | null): [string, string] {
+  const head = (text ?? "").trim().split(" (")[0].split(";")[0].split(/\s+/).filter(Boolean).join(" ");
+  const m = MILESTONE_CODE.exec(head);
+  if (m) {
+    const code = m[1].toUpperCase();
+    const name = m[2].trim();
+    return [code, name ? `${code} · ${name}` : code];
+  }
+  return head ? [head, head] : ["Milestone", "Milestone"];
+}
+
 export function planByMonth(items: PlanInput[], today: string): PlanStrip | null {
   if (items.length === 0) return null;
-  const groups = new Map<string, { name: string; date: string | null; of: PlanInput[] }>();
+  // One row per milestone (its code, else its text before any note), not per text.
+  const keyed = new Map<string, { label: string; i: PlanInput }[]>();
   const loose: PlanInput[] = [];
   for (const i of items) {
     if (!i.milestone && !i.milestoneDate) {
       loose.push(i);
       continue;
     }
-    const name = i.milestone || "Milestone";
-    const key = `${name}|${i.milestoneDate ?? ""}`;
-    const g = groups.get(key) ?? { name, date: i.milestoneDate, of: [] };
-    g.of.push(i);
-    groups.set(key, g);
+    const [key, label] = milestoneOf(i.milestone);
+    keyed.set(key, [...(keyed.get(key) ?? []), { label, i }]);
+  }
+  const groups = new Map<string, { name: string; date: string | null; of: PlanInput[] }>();
+  for (const of of keyed.values()) {
+    const counts = new Map<string, number>();
+    for (const x of of) counts.set(x.label, (counts.get(x.label) ?? 0) + 1);
+    const name = [...counts].sort((a, b) => b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
+    const dates = of.flatMap((x) => (x.i.milestoneDate ? [x.i.milestoneDate] : []));
+    const date = dates.length ? maxOf(dates) : null;
+    groups.set(`${name}|${date ?? ""}`, { name, date, of: of.map((x) => x.i) });
   }
   const dated = [...groups.values()].flatMap((g) => (g.date ? [g.date] : []));
   const committed = items.filter((i) => !i.estimated).map((i) => i.end);
