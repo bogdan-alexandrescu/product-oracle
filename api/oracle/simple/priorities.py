@@ -4,9 +4,12 @@ token is refused (oracle.simple.router._people).
 The live goal-weighted ranking (oracle.priorities.service.compute, people's overrides
 applied; each row keeps Oracle's rank as ``oracle_rank``) joined with the roadmap items the
 reader sees (oracle.simple.service.load over the working drafts they see): a feature's row
-takes its item in the earliest horizon (now, next, later), then the lowest key; a feature
-with no visible item is still a row (no item, not reorderable). Besides the rows: the open
-``override_priority`` and ``estimate_feature`` proposals the caller may see, the visible
+takes its item in the earliest horizon (now, next, later), then the lowest key, never a
+draft item (drafts are not ranked yet: they sit among the drafts); a feature with no visible
+non-draft item is still a row (no item, not reorderable, no weeks in a bucket). Besides the
+rows: the open ``override_priority`` and ``estimate_feature`` proposals the caller may see
+(each with its item's feature, so one on a feature's other item shows under its row) and
+the ``confirm_item`` and ``cut`` (Merge) proposals on draft items, the visible
 draft items with the items they may merge into, and this quarter's engineer-weeks per goal.
 
 Changes go through the change engine (``/v1/simple/changes``): ``override_priority`` (with
@@ -47,6 +50,8 @@ router = APIRouter(prefix="/v1/simple", tags=["simple"])
 
 METHOD = "goal_weighted"
 PROPOSED_OPS = ("override_priority", "estimate_feature")
+# Confirm and Merge of a draft item, shown under the draft.
+DRAFT_OPS = ("confirm_item", "cut")
 MERGE_MAX = 8
 NONE = "none"
 
@@ -61,7 +66,8 @@ def quarter(today: date) -> SimpleQuarter:
 
 
 def _items(read_: service.Read) -> dict[str, service.Entry]:
-    """Feature id -> its item: the earliest horizon, then the lowest key (cut items never)."""
+    """Feature id -> its item: the earliest horizon, then the lowest key (cut and draft items
+    never: a draft is not ranked yet)."""
     out: dict[str, service.Entry] = {}
 
     def key(e: service.Entry) -> tuple:
@@ -69,7 +75,7 @@ def _items(read_: service.Read) -> dict[str, service.Entry]:
         return (HORIZONS.index(h) if h in HORIZONS else len(HORIZONS), e.row.item_key)
 
     for e in read_.entries:
-        if e.row.feature_id is None or e.status == "cut":
+        if e.row.feature_id is None or e.status == "cut" or e.row.draft:
             continue
         fid = str(e.row.feature_id)
         if fid not in out or key(e) < key(out[fid]):
@@ -117,7 +123,10 @@ async def _proposals(
     rows = list(
         await db.scalars(
             select(SimpleChange)
-            .where(SimpleChange.status == "proposed", SimpleChange.op.in_(PROPOSED_OPS))
+            .where(
+                SimpleChange.status == "proposed",
+                SimpleChange.op.in_(PROPOSED_OPS + DRAFT_OPS),
+            )
             .order_by(SimpleChange.at, SimpleChange.id)
         )
     )
@@ -130,7 +139,7 @@ async def _proposals(
             e = by_id.get(uuid.UUID(str(c.target.get("item_id"))))
         except ValueError:
             e = None
-        if e is not None and v.sees(c):
+        if e is not None and (c.op in PROPOSED_OPS or e.row.draft) and v.sees(c):
             shown.append((c, e))
     names = await changes._names(db, {c.by for c, _ in shown} | {
         p for c, _ in shown for p in v.route(c)
@@ -140,6 +149,7 @@ async def _proposals(
             change_id=c.id,
             op=c.op,
             item_id=e.row.id,
+            feature_id=str(e.row.feature_id) if e.row.feature_id is not None else None,
             code=e.row.item_key,  # type: ignore[arg-type]
             title=e.row.title,
             by_name=names.get(c.by, "someone"),

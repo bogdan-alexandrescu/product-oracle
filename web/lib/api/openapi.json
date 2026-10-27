@@ -109071,7 +109071,9 @@
             "type": "string",
             "enum": [
               "override_priority",
-              "estimate_feature"
+              "estimate_feature",
+              "confirm_item",
+              "cut"
             ],
             "title": "Op"
           },
@@ -109079,6 +109081,17 @@
             "type": "string",
             "format": "uuid",
             "title": "Item Id"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
           },
           "code": {
             "type": "string",

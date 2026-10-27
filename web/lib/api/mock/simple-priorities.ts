@@ -155,6 +155,8 @@ export function prioritiesOut(
   // is a row with no item, never reorderable (priorities.py).
   const seen = new Set(read.items.map((i) => i.id));
   const all = roadmapOut(db, "owner", new URLSearchParams())!.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
+  // A draft item is never ranked (priorities.py `_items`): it sits under "Not ranked yet", with no
+  // row and no bucket weeks. Here each item stands for its own feature, so a draft has no row at all.
   const ranked = all.filter((i) => !i.draft);
   const byId = new Map(ranked.map((i) => [i.id, i]));
   const keyOf = (i: Item) => i.key;
@@ -216,12 +218,14 @@ export function prioritiesOut(
   });
   const codes = new Map(read.items.map((i) => [i.id, i]));
   const proposals: Schemas["SimplePriorityProposal"][] = (db.changes ?? [])
-    .filter((c) => c.status === "proposed" && (c.op === "override_priority" || c.op === "estimate_feature") && codes.has(String(c.target.item_id)))
+    // Ranking proposals, and a draft's Confirm or Merge (a cut), as priorities.py.
+    .filter((c) => c.status === "proposed" && codes.has(String(c.target.item_id)))
+    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut") && codes.get(String(c.target.item_id))!.draft))
     .filter((c) => ctx.role === "owner" || c.by === ctx.id || route(c).includes(ctx.id))
     .map((c) => {
       const i = codes.get(String(c.target.item_id))!;
       return {
-        change_id: c.id, op: c.op as "override_priority", item_id: i.id, code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
+        change_id: c.id, op: c.op as Schemas["SimplePriorityProposal"]["op"], item_id: i.id, feature_id: featureId(i.id), code: i.key, title: i.title, by_name: c.by_name, at: c.at, reason: c.reason,
         after: c.after, waiting_for: route(c).map((p) => ctx.names[p] ?? "someone"), can_decide: decides(i.id), flow: FLOWS[i.key] ?? null,
       };
     });

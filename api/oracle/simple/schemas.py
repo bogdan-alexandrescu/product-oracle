@@ -483,8 +483,10 @@ class SimpleFlow(BaseModel):
 
 class SimplePriorityProposal(BaseModel):
     change_id: uuid.UUID
-    op: Literal["override_priority", "estimate_feature"]
+    op: Literal["override_priority", "estimate_feature", "confirm_item", "cut"]
     item_id: uuid.UUID
+    # The item's baseline feature (the row it shows under); None for a draft with none.
+    feature_id: str | None = None
     code: str
     title: str
     by_name: str

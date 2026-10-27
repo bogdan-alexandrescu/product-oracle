@@ -45,15 +45,19 @@ const fmt = (n: number | null | undefined, digits = 1): string => (n == null ? "
 type Sent = { ok: true; change: Schemas["SimpleChangeOut"] } | { ok: false; status: number; message: string; pushback: boolean };
 
 /** POST /v1/simple/changes; a refusal comes back with its words (409 Oracle's pushback included). */
+/** The API's reason for a refusal: its detail, or its detail's message. */
+function detailMessage(error: unknown, response: Response): string {
+  const detail = (error as { detail?: unknown } | undefined)?.detail;
+  return typeof detail === "string" ? detail : detail && typeof detail === "object" && "message" in detail ? String((detail as { message: unknown }).message) : response.statusText;
+}
+
 async function send(body: ChangeIn): Promise<Sent> {
   try {
     const { data, error, response } = await api.POST("/v1/simple/changes", { body });
     if (response.ok && data) return { ok: true, change: data.change };
     const detail = (error as { detail?: unknown } | undefined)?.detail;
-    const message =
-      typeof detail === "string" ? detail : detail && typeof detail === "object" && "message" in detail ? String((detail as { message: unknown }).message) : response.statusText;
     const pushback = !!detail && typeof detail === "object" && "pushback" in detail;
-    return { ok: false, status: response.status, message, pushback };
+    return { ok: false, status: response.status, message: detailMessage(error, response), pushback };
   } catch (e) {
     return { ok: false, status: 0, message: errorMessage(e), pushback: false };
   }
@@ -98,36 +102,36 @@ export function Priorities() {
   const shapes = goalShapes(data?.rows ?? []);
 
   return (
-    <div className="simple-mode mx-auto w-full max-w-6xl px-4 py-6 text-text" data-testid="simple-priorities">
+    <div data-mode="simple" className="mx-auto w-full max-w-6xl px-4 py-6 text-[length:var(--simple-text)] leading-[var(--simple-leading)] text-text" data-testid="simple-priorities">
       <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[28px] font-semibold leading-tight">Priorities</h1>
+          <h1 className="text-[length:var(--simple-h1)] font-semibold leading-[var(--simple-h1-leading)]">Priorities</h1>
           <p className="text-text2" data-testid="prio-subtitle">
             By score, in dependency order: a feature never ranks above one it depends on.
             {data ? ` ${data.quarter.label}.` : ""}
           </p>
         </div>
-        <Link href="/priorities" className="text-[16px] font-medium text-accent-ink underline">
+        <Link href="/priorities" className="text-[length:var(--simple-small)] font-medium text-accent-ink underline">
           Open the detailed view
         </Link>
       </header>
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div role="tablist" aria-label="Priorities views" className="flex max-w-full gap-1 overflow-x-auto rounded-[var(--simple-radius)] border border-line bg-surface p-1">
+        <div role="tablist" aria-label="Priorities views" className="flex max-w-full gap-1 overflow-x-auto rounded-[var(--simple-card-radius)] border border-line bg-surface p-1">
           {TABS.map((t) => (
             <button
               key={t.key}
               role="tab"
               aria-selected={tab === t.key}
               onClick={() => setParams({ tab: t.key === "ranked" ? null : t.key })}
-              className={`whitespace-nowrap rounded-[10px] px-2.5 py-1.5 text-[16px] font-medium sm:px-3 ${tab === t.key ? "bg-accent text-on-accent" : "text-text2 hover:bg-surface2"}`}
+              className={`whitespace-nowrap rounded-[10px] px-2.5 py-1.5 text-[length:var(--simple-small)] font-medium sm:px-3 ${tab === t.key ? "bg-accent text-on-accent" : "text-text2 hover:bg-surface2"}`}
             >
               {t.label}
             </button>
           ))}
         </div>
         {tab === "ranked" && (
-          <label className="flex cursor-pointer items-center gap-2 text-[16px]">
+          <label className="flex cursor-pointer items-center gap-2 text-[length:var(--simple-small)]">
             <button
               role="switch"
               aria-checked={compare}
@@ -171,9 +175,9 @@ function Ranked({ data, phone, compare, mayChange, changed }: { data: Out; phone
   return (
     <>
       {compare && phone && (
-        <div role="radiogroup" aria-label="Which order" className="mb-3 flex gap-1 rounded-[var(--simple-radius)] border border-line bg-surface p-1">
+        <div role="radiogroup" aria-label="Which order" className="mb-3 flex gap-1 rounded-[var(--simple-card-radius)] border border-line bg-surface p-1">
           {(["yours", "oracle"] as const).map((s) => (
-            <button key={s} role="radio" aria-checked={side === s} onClick={() => setSide(s)} className={`flex-1 rounded-[10px] px-3 py-1.5 text-[16px] ${side === s ? "bg-accent text-on-accent" : "text-text2"}`}>
+            <button key={s} role="radio" aria-checked={side === s} onClick={() => setSide(s)} className={`flex-1 rounded-[10px] px-3 py-1.5 text-[length:var(--simple-small)] ${side === s ? "bg-accent text-on-accent" : "text-text2"}`}>
               {s === "yours" ? "Yours" : "Oracle's"}
             </button>
           ))}
@@ -182,7 +186,7 @@ function Ranked({ data, phone, compare, mayChange, changed }: { data: Out; phone
       {compare && !phone ? (
         <div className="grid grid-cols-2 gap-4">
           <section aria-label="Your order">
-            <h2 className="mb-2 text-[20px] font-semibold">Your order</h2>
+            <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Your order</h2>
             {list}
           </section>
           <OracleOrder rows={data.rows} />
@@ -192,7 +196,7 @@ function Ranked({ data, phone, compare, mayChange, changed }: { data: Out; phone
       ) : (
         list
       )}
-      {data.drafts.length > 0 && <Drafts drafts={data.drafts} mayChange={mayChange} changed={changed} />}
+      {data.drafts.length > 0 && <Drafts drafts={data.drafts} proposals={data.proposals} mayChange={mayChange} changed={changed} />}
       {move && (
         <MoveDialog
           move={move}
@@ -249,7 +253,8 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
   return (
     <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
       {rows.map((r, i) => {
-        const proposals = data.proposals.filter((p) => p.item_id === r.item_id);
+        // Any of the feature's items (a proposal on its later item shows here too).
+        const proposals = data.proposals.filter((p) => p.feature_id === r.feature_id && (p.op === "override_priority" || p.op === "estimate_feature"));
         const target = drag && drag.to === i && drag.from !== i;
         return (
           <li
@@ -259,14 +264,14 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
             }}
             data-testid="prio-row"
             data-code={r.code}
-            className={`rounded-[var(--simple-radius)] border bg-surface p-3 ${target ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
+            className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${target ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {mayChange && r.can_reorder && (
                 <button
                   aria-label={`Drag ${r.code} to reorder`}
                   title="Drag to reorder (or use the arrow keys)"
-                  className="cursor-grab touch-none rounded-md px-1 text-[20px] leading-none text-text2 hover:bg-surface2"
+                  className="cursor-grab touch-none rounded-md px-1 text-[length:var(--simple-h2)] leading-none text-text2 hover:bg-surface2"
                   onPointerDown={(e) => start(e, i)}
                   onPointerMove={(e) => drag && setDrag({ ...drag, to: targetIndex(e.clientY) })}
                   onPointerUp={end}
@@ -278,21 +283,21 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
                   </svg>
                 </button>
               )}
-              <span className="w-8 text-right text-[22px] font-semibold tabular-nums" data-testid="prio-rank">
+              <span className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums" data-testid="prio-rank">
                 {r.rank}
               </span>
               {r.oracle_rank != null && r.oracle_rank !== r.rank && (
                 <span
                   data-testid="prio-ghost"
                   title="Oracle's rank"
-                  className="rounded-full border border-dashed border-[var(--simple-ghost)] px-2 text-[14px] text-text2"
+                  className="rounded-full border border-dashed border-[var(--simple-ghost)] px-2 text-[length:var(--simple-small)] text-text2"
                 >
                   Oracle #{r.oracle_rank}
                 </span>
               )}
-              <span className="rounded-md bg-surface2 px-1.5 font-mono text-[14px]">{r.code}</span>
+              <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{r.code}</span>
               <span className="min-w-[12rem] flex-1 font-medium">{r.title}</span>
-              <span className="ml-auto flex flex-wrap items-center gap-x-3 text-[15px] text-text2">
+              <span className="ml-auto flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
                 {r.no_goal ? (
                   <span className="rounded-full bg-warn-bg px-2 text-warn">No goal</span>
                 ) : (
@@ -312,12 +317,12 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
               </span>
             </div>
             {r.after && (
-              <p className="mt-1 pl-12 text-[15px] text-text2" data-testid="prio-after">
+              <p className="mt-1 pl-12 text-[length:var(--simple-small)] text-text2" data-testid="prio-after">
                 After {r.after.code}, which it needs.
               </p>
             )}
             {r.override && (
-              <p className="mt-1 pl-12 text-[15px] text-text2" data-testid="prio-override">
+              <p className="mt-1 pl-12 text-[length:var(--simple-small)] text-text2" data-testid="prio-override">
                 Moved by {r.override.by_name}: “{r.override.reason}”
               </p>
             )}
@@ -335,18 +340,18 @@ function OracleOrder({ rows }: { rows: Row[] }) {
   const sorted = [...rows].sort((a, b) => (a.oracle_rank ?? 1e9) - (b.oracle_rank ?? 1e9));
   return (
     <section aria-label="Oracle's order">
-      <h2 className="mb-2 text-[20px] font-semibold">Oracle&apos;s order</h2>
+      <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Oracle&apos;s order</h2>
       <ol className="flex flex-col gap-[var(--simple-gap)]">
         {sorted.map((r) => (
-          <li key={r.feature_id} data-testid="oracle-row" data-code={r.code} className="rounded-[var(--simple-radius)] border border-dashed border-line-strong bg-surface p-3">
+          <li key={r.feature_id} data-testid="oracle-row" data-code={r.code} className="rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-3">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="w-8 text-right text-[22px] font-semibold tabular-nums">{r.oracle_rank ?? "–"}</span>
-              <span className="rounded-md bg-surface2 px-1.5 font-mono text-[14px]">{r.code}</span>
+              <span className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums">{r.oracle_rank ?? "–"}</span>
+              <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{r.code}</span>
               <span className="flex-1 font-medium">{r.title}</span>
-              <span className="text-[15px] text-text2">score {fmt(r.score, 2)}</span>
+              <span className="text-[length:var(--simple-small)] text-text2">score {fmt(r.score, 2)}</span>
             </div>
             {r.oracle_rank !== r.rank && (
-              <p className="mt-1 pl-12 text-[15px] text-text2" data-testid="oracle-why">
+              <p className="mt-1 pl-12 text-[length:var(--simple-small)] text-text2" data-testid="oracle-why">
                 {r.override
                   ? `Yours: #${r.rank}. ${r.override.by_name} moved it: “${r.override.reason}”`
                   : `Yours: #${r.rank}, moved by other people's moves.`}
@@ -390,13 +395,13 @@ function MoveDialog({ move, onClose, changed }: { move: { row: Row; position: nu
         role="dialog"
         aria-modal="true"
         aria-label={`Why move ${row.code}`}
-        className="w-full max-w-md rounded-[var(--simple-radius)] border border-line bg-surface p-4 shadow-lg"
+        className="w-full max-w-md rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 shadow-lg"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-[20px] font-semibold">
+        <h2 className="text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">
           {verb} {row.code} to rank {position}
         </h2>
-        <p className="mb-2 text-[15px] text-text2">
+        <p className="mb-2 text-[length:var(--simple-small)] text-text2">
           Oracle ranks it #{row.oracle_rank ?? row.rank}. A manual move is an override: say why in one line{row.applies ? "" : "; the decider accepts or declines it"}.
         </p>
         <form
@@ -405,7 +410,7 @@ function MoveDialog({ move, onClose, changed }: { move: { row: Row; position: nu
             void submit();
           }}
         >
-          <label className="block text-[15px] font-medium" htmlFor="prio-reason">
+          <label className="block text-[length:var(--simple-small)] font-medium" htmlFor="prio-reason">
             Reason
           </label>
           <input
@@ -414,10 +419,10 @@ function MoveDialog({ move, onClose, changed }: { move: { row: Row; position: nu
             maxLength={500}
             value={reason}
             onChange={(e) => setReason(e.target.value.replace(/[\r\n]/g, " "))}
-            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2 text-[16px]"
+            className="mt-1 w-full rounded-lg border border-line bg-bg px-3 py-2 text-[length:var(--simple-small)]"
           />
           {pushback && (
-            <div role="alert" className="mt-3 rounded-lg bg-warn-bg p-2 text-[15px] text-warn">
+            <div role="alert" className="mt-3 rounded-lg bg-warn-bg p-2 text-[length:var(--simple-small)] text-warn">
               Oracle disagrees: {pushback}
               <div className="mt-2">
                 <Button type="button" onClick={() => void submit(true)} disabled={busy}>
@@ -427,7 +432,7 @@ function MoveDialog({ move, onClose, changed }: { move: { row: Row; position: nu
             </div>
           )}
           {error && (
-            <p role="alert" className="mt-2 text-[15px] text-crit">
+            <p role="alert" className="mt-2 text-[length:var(--simple-small)] text-crit">
               {error}
             </p>
           )}
@@ -451,6 +456,8 @@ function proposalWords(p: Proposal): string {
     const o = (a.override ?? a) as { position?: number; reason?: string };
     return `${p.by_name} proposes rank ${o.position}: “${o.reason ?? p.reason ?? ""}”`;
   }
+  if (p.op === "confirm_item") return `${p.by_name} proposes confirming it`;
+  if (p.op === "cut") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
   const parts = [a.goal_value != null ? `goal value ${a.goal_value}` : null, a.effort != null ? `effort ${a.effort} wk` : null].filter(Boolean);
   return `${p.by_name} proposes ${parts.join(" and ")}`;
 }
@@ -466,7 +473,9 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
     const r = await api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: p.change_id } }, body: {} });
     setBusy(false);
     await changed(
-      r.response.ok && r.data ? { ok: true, change: { ...r.data.change, status: "applied", can_undo: false } } : { ok: false, status: r.response.status, message: "Could not decide", pushback: false },
+      r.response.ok && r.data
+        ? { ok: true, change: { ...r.data.change, status: "applied", can_undo: false } }
+        : { ok: false, status: r.response.status, message: `Could not decide: ${detailMessage(r.error, r.response)}`, pushback: false },
       action === "accept" ? `Accepted ${p.code}'s proposal` : `Declined ${p.code}'s proposal`,
       "",
     );
@@ -477,7 +486,7 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
     <div
       data-testid="prio-proposal"
       data-wide={open && !phone ? "true" : "false"}
-      className={`mt-2 rounded-[var(--simple-radius)] border border-dashed border-accent bg-accent-soft p-3 text-[15px] transition-all ${open && !phone ? "ml-0" : "ml-12 max-w-xl"}`}
+      className={`mt-2 rounded-[var(--simple-card-radius)] border border-dashed border-accent bg-accent-soft p-3 text-[length:var(--simple-small)] transition-all ${open && !phone ? "ml-0" : "ml-12 max-w-xl"}`}
     >
       <div className="flex flex-wrap items-center gap-3">
         {p.flow ? (
@@ -541,7 +550,7 @@ function FlowDetail({ flow }: { flow: Schemas["SimpleFlow"] }) {
         <h3 className="font-semibold">Screen: {flow.screen.title}</h3>
         <div className="mt-1 flex flex-col gap-1 rounded-lg border border-line-strong bg-surface p-2">
           {flow.screen.regions.map((r) => (
-            <div key={r} className="rounded border border-dashed border-line-strong px-2 py-1 text-[14px] text-text2">
+            <div key={r} className="rounded border border-dashed border-line-strong px-2 py-1 text-[length:var(--simple-small)] text-text2">
               {r}
             </div>
           ))}
@@ -551,20 +560,20 @@ function FlowDetail({ flow }: { flow: Schemas["SimpleFlow"] }) {
   );
 }
 
-function Drafts({ drafts, mayChange, changed }: { drafts: Draft[]; mayChange: boolean; changed: Changed }) {
+function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
   const [merging, setMerging] = useState<string | null>(null);
   const [into, setInto] = useState("");
   return (
     <section aria-label="Not ranked yet" className="mt-6">
-      <h2 className="mb-2 text-[20px] font-semibold">Not ranked yet</h2>
+      <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Not ranked yet</h2>
       <ul className="flex flex-col gap-[var(--simple-gap)]">
         {drafts.map((d) => (
-          <li key={d.item_id} data-testid="prio-draft" data-code={d.code} className="rounded-[var(--simple-radius)] border border-dashed border-line-strong bg-surface p-3">
+          <li key={d.item_id} data-testid="prio-draft" data-code={d.code} className="rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-3">
             <div className="flex flex-wrap items-center gap-3">
-              <span className="rounded-full bg-na-bg px-2 text-[14px] text-na">Draft</span>
-              <span className="rounded-md bg-surface2 px-1.5 font-mono text-[14px]">{d.code}</span>
+              <span className="rounded-full bg-na-bg px-2 text-[length:var(--simple-small)] text-na">Draft</span>
+              <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{d.code}</span>
               <span className="flex-1 font-medium">{d.title}</span>
-              <span className="text-[15px] text-text2">{d.goal?.title ?? "No goal"}</span>
+              <span className="text-[length:var(--simple-small)] text-text2">{d.goal?.title ?? "No goal"}</span>
               {mayChange && (
                 <span className="flex gap-2">
                   <Button
@@ -595,10 +604,10 @@ function Drafts({ drafts, mayChange, changed }: { drafts: Draft[]; mayChange: bo
                   );
                 }}
               >
-                <label htmlFor={`merge-${d.item_id}`} className="text-[15px]">
+                <label htmlFor={`merge-${d.item_id}`} className="text-[length:var(--simple-small)]">
                   Merge into
                 </label>
-                <select id={`merge-${d.item_id}`} value={into} onChange={(e) => setInto(e.target.value)} className="rounded-lg border border-line bg-bg px-2 py-1 text-[16px]">
+                <select id={`merge-${d.item_id}`} value={into} onChange={(e) => setInto(e.target.value)} className="rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]">
                   <option value="">Choose an item…</option>
                   {d.merge_into.map((m) => (
                     <option key={m.item_id} value={m.item_id}>
@@ -611,6 +620,12 @@ function Drafts({ drafts, mayChange, changed }: { drafts: Draft[]; mayChange: bo
                 </Button>
               </form>
             )}
+            {/* A Confirm or Merge waiting for the decider. */}
+            {proposals
+              .filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut"))
+              .map((p) => (
+                <ProposalCard key={p.change_id} p={p} changed={changed} />
+              ))}
           </li>
         ))}
       </ul>
@@ -698,10 +713,10 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
       <section aria-label="Value / effort">
         <div className="flex">
           <div className="flex w-6 items-center justify-center">
-            <span className="-rotate-90 whitespace-nowrap text-[14px] text-text2">Goal value ↑</span>
+            <span className="-rotate-90 whitespace-nowrap text-[length:var(--simple-small)] text-text2">Goal value ↑</span>
           </div>
-          <div ref={box} data-testid="vxe-plot" className="relative aspect-[4/3] flex-1 touch-none rounded-[var(--simple-radius)] border border-line bg-surface">
-            <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2 text-[14px] text-text-faint">
+          <div ref={box} data-testid="vxe-plot" className="relative aspect-[4/3] flex-1 touch-none rounded-[var(--simple-card-radius)] border border-line bg-surface">
+            <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2 text-[length:var(--simple-small)] text-text-faint">
               <span className="border-b border-r border-dashed border-line p-2">Quick wins</span>
               <span className="border-b border-dashed border-line p-2 text-right">Big bets</span>
               <span className="border-r border-dashed border-line p-2">Fill-ins</span>
@@ -738,8 +753,8 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
             })}
           </div>
         </div>
-        <p className="mt-1 pl-6 text-center text-[14px] text-text2">Effort (weeks) →</p>
-        <ul className="mt-2 flex flex-wrap gap-4 pl-6 text-[15px] text-text2" aria-label="Legend">
+        <p className="mt-1 pl-6 text-center text-[length:var(--simple-small)] text-text2">Effort (weeks) →</p>
+        <ul className="mt-2 flex flex-wrap gap-4 pl-6 text-[length:var(--simple-small)] text-text2" aria-label="Legend">
           {[...shapes.entries()].map(([k, s]) => (
             <li key={k} className="flex items-center gap-1">
               <ShapeMark shape={s} hollow={false} />
@@ -754,15 +769,15 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
           )}
           <li>Numbers are ranks; hollow is below the line (not this quarter).</li>
         </ul>
-        {mayChange && <p className="mt-1 pl-6 text-[14px] text-text-faint">Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys).</p>}
+        {mayChange && <p className="mt-1 pl-6 text-[length:var(--simple-small)] text-text-faint">Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys).</p>}
       </section>
       <section aria-label="Ranked side list">
-        <h2 className="mb-2 text-[18px] font-semibold">Ranked</h2>
+        <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Ranked</h2>
         <ol className="flex flex-col gap-1">
           {rows.map((r) => (
-            <li key={r.feature_id} data-testid="side-row" data-code={r.code} className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1 text-[15px]">
+            <li key={r.feature_id} data-testid="side-row" data-code={r.code} className="flex items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1 text-[length:var(--simple-small)]">
               <span className="w-6 text-right font-semibold tabular-nums">{r.rank}</span>
-              <span className="font-mono text-[13px]">{r.code}</span>
+              <span className="font-mono text-[length:var(--simple-small)]">{r.code}</span>
               <span className="min-w-0 flex-1 truncate">{r.title}</span>
               <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
             </li>
@@ -782,18 +797,18 @@ function Buckets({ data }: { data: Out }) {
       <p className="mb-3 text-text2">
         Share of {data.quarter.label}&apos;s plan per confirmed goal, by engineer-weeks ({fmt(data.weeks_total)} wk in all).
       </p>
-      <div className="hidden overflow-hidden rounded-[var(--simple-radius)] border border-line sm:flex" data-testid="bucket-bar" aria-hidden>
+      <div className="hidden overflow-hidden rounded-[var(--simple-card-radius)] border border-line sm:flex" data-testid="bucket-bar" aria-hidden>
         {buckets
           .filter((b) => b.weeks > 0)
           .map((b) => (
-            <div key={b.key} style={{ width: `${b.share * 100}%` }} className={`min-h-12 border-r border-surface p-2 text-[14px] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}>
+            <div key={b.key} style={{ width: `${b.share * 100}%` }} className={`min-h-12 border-r border-surface p-2 text-[length:var(--simple-small)] ${b.no_goal ? "bg-warn-bg text-warn" : "bg-accent-soft text-accent-ink"}`}>
               {b.title}
             </div>
           ))}
       </div>
       <ul className="mt-3 grid gap-[var(--simple-gap)] sm:grid-cols-2">
         {buckets.map((b) => (
-          <li key={b.key} data-testid="goal-bucket" data-key={b.key} className={`rounded-[var(--simple-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
+          <li key={b.key} data-testid="goal-bucket" data-key={b.key} className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${b.no_goal ? "border-warn" : "border-line"}`}>
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="font-semibold">{b.title}</h3>
               <span className="tabular-nums">
@@ -803,8 +818,8 @@ function Buckets({ data }: { data: Out }) {
             <div className="mt-2 h-3 overflow-hidden rounded-full bg-surface2">
               <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
             </div>
-            {b.no_goal && <p className="mt-1 text-[15px] text-warn">⚠ Serves no confirmed goal</p>}
-            <p className="mt-1 text-[15px] text-text2">{b.codes.length ? b.codes.join(", ") : "Nothing this quarter"}</p>
+            {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
+            <p className="mt-1 text-[length:var(--simple-small)] text-text2">{b.codes.length ? b.codes.join(", ") : "Nothing this quarter"}</p>
           </li>
         ))}
       </ul>

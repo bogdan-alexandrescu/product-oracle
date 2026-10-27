@@ -137,22 +137,36 @@
 }
 
 /*
- * Simple mode's look (#723): Oracle's tokens plus these, light and dark (S1 owns them; S6
- * priorities adds what it reads if S1 has not landed). 18 px body type.
+ * #723 Simple: its look is S1's --simple-* tokens (swarm/task_134ca905863f4109b08b, the type
+ * and card scale, copied unchanged so the two merge as one set), scoped to [data-mode="simple"].
+ * S6 priorities adds only what S1 lacks: --simple-ghost, the colour of Oracle's-rank ghosts.
  */
-:root {
-  --simple-body: 18px;
-  --simple-line: 1.55;
-  --simple-radius: 14px;
-  --simple-gap: 12px;
+[data-mode="simple"] {
+  --simple-text: 18px;
+  --simple-leading: 28px;
+  --simple-h1: 34px;
+  --simple-h1-leading: 42px;
+  --simple-h2: 21px;
+  --simple-h2-leading: 28px;
+  --simple-small: 15px;
+  --simple-space: 36px;
+  --simple-gap: 16px;
+  --simple-card-pad: 24px;
+  --simple-card-radius: 18px;
+  --simple-lead: 22px;
   --simple-ghost: #7d8ea3;
 }
-:root[data-theme="dark"] {
+:root[data-theme="dark"] [data-mode="simple"],
+:root[data-theme="dark"][data-mode="simple"] {
   --simple-ghost: #828d9b;
 }
-.simple-mode {
-  font-size: var(--simple-body);
-  line-height: var(--simple-line);
+@media (max-width: 600px) {
+  [data-mode="simple"] {
+    --simple-h1: 28px;
+    --simple-h1-leading: 34px;
+    --simple-space: 28px;
+    --simple-card-pad: 18px;
+  }
 }
 
 @theme inline {

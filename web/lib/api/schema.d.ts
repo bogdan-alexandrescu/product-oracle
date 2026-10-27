@@ -36171,12 +36171,14 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "override_priority" | "estimate_feature";
+            op: "override_priority" | "estimate_feature" | "confirm_item" | "cut";
             /**
              * Item Id
              * Format: uuid
              */
             item_id: string;
+            /** Feature Id */
+            feature_id?: string | null;
             /** Code */
             code: string;
             /** Title */
