@@ -863,14 +863,14 @@ function seedSimpleDecidersScenario(): Db {
 
 /**
  * The plan strip's "+N more" (#723 polish): "simple-home" plus ten invented items on the
- * alerts roadmap, each carrying its own milestone, so the PRD in play has eleven milestones.
+ * onboarding roadmap (Guided setup, the top PRD by priority), each with its own milestone.
  */
 function seedSimpleHomeMilestonesScenario(): Db {
   const db = seedSimpleHomeScenario();
   const rm = db.simple_roadmap!;
   for (let i = 1; i <= 10; i++) {
-    const key = `alert-step-${i}`;
-    rm.items.push({ key, title: `Alert step ${i}`, horizon: "now", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", start: 5 * i, end: 5 * i + 20, source: "typed", milestone: { name: `Step ${i}`, day: 5 * i + 20 } });
+    const key = `setup-step-${i}`;
+    rm.items.push({ key, title: `Setup step ${i}`, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 5 * i, end: 5 * i + 20, source: "typed", milestone: { name: `Step ${i}`, day: 5 * i + 20 } });
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   }
   return db;

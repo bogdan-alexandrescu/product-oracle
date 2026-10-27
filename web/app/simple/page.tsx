@@ -9,6 +9,7 @@ import { toast } from "@/components/ds/Toast";
 import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { SimplePage } from "@/components/simple/SimplePage";
+import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -115,7 +116,12 @@ export default function SimpleHome() {
   const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems]);
   // The plan this quarter: the PRD in play (the top PRD by priority when several) by month.
   const priorities = useQuery(k("priorities"), () => unwrap(api.GET("/v1/simple/priorities")), { keepPrevious: true });
-  const planPrd = useMemo(() => prdInPlay(roadmap.data, (priorities.data?.rows ?? []).map((r) => r.item_id)), [roadmap.data, priorities.data]);
+  // Chosen once the ranking answered (or failed), so the strip never switches PRDs under the reader.
+  const ranked = priorities.data !== undefined || !!priorities.error;
+  const planPrd = useMemo(
+    () => (ranked ? prdInPlay(roadmap.data, (priorities.data?.rows ?? []).map((r) => r.item_id)) : null),
+    [ranked, roadmap.data, priorities.data],
+  );
   const plan = useMemo(
     () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").map(planInput), roadmap.data.today) : null),
     [roadmap.data, planPrd],
@@ -462,7 +468,9 @@ export default function SimpleHome() {
         <Block q={roadmap} testId="home-plan">
           {() => (
             <>
-              {plan && planPrd ? (
+              {!ranked ? (
+                <Loading />
+              ) : plan && planPrd ? (
                 <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" />
               ) : (
                 <p className="simple-small" data-testid="home-plan-empty">
