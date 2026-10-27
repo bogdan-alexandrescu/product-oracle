@@ -308,9 +308,16 @@ export function SimpleRoadmap() {
     for (const k of ["prd", "goal", "track", "from", "to"] as const) if (f[k]) q[k] = f[k];
     return q;
   }, [f]);
+  // The items as last fetched, set when the call returns (before React draws them): a
+  // burst whose earlier change failed takes its `before` from the reload that followed.
+  const fetched = useRef<Map<string, Item> | null>(null);
   const roadmap = useQuery(
     `simple-roadmap:${JSON.stringify(qs)}`,
-    () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: qs as never } })),
+    () =>
+      unwrap(api.GET("/v1/simple/roadmap", { params: { query: qs as never } })).then((d) => {
+        fetched.current = new Map(d.items.map((i) => [i.id, i]));
+        return d;
+      }),
     { keepPrevious: true },
   );
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
@@ -371,13 +378,18 @@ export function SimpleRoadmap() {
     const item = latest.current.get(id);
     if (!item) return null;
     const r = await run(`Moved '${item.title}' to ${shortDay(after.start_date!)} – ${shortDay(after.end_date!)}`, { op: "move_dates", target: { item_id: id }, before, after });
-    return r ? (r.change.status === "applied" ? after : before) : null;
+    if (!r) {
+      const now = fetched.current?.get(id);
+      return now ? storedDates(now) : null;
+    }
+    return r.change.status === "applied" ? after : before;
   }, sameDates);
   const horizons = useKeyBurst<Horizon>(async (id, before, after) => {
     const item = latest.current.get(id);
     if (!item) return null;
     const r = await run(`Moved '${item.title}' to ${HORIZONS.find((h) => h.key === after)!.label}`, { op: "change_horizon", target: { item_id: id }, before: { horizon: before }, after: { horizon: after } });
-    return r ? (r.change.status === "applied" ? after : before) : null;
+    if (!r) return fetched.current?.get(id)?.horizon ?? null;
+    return r.change.status === "applied" ? after : before;
   }, sameHorizon);
   const moved = useMemo(() => Object.fromEntries(Object.entries(dates.pending).map(([id, d]) => [id, [d.start_date!, d.end_date!] as [string, string]])), [dates.pending]);
 

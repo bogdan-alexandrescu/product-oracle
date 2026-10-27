@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import {
   addDays,
@@ -299,6 +299,23 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     if (resize && end < s) return;
     onKeyMove(it, resize ? s : addDays(s, n), end);
   };
+  // The bars' handlers are the same functions on every render, calling this render's: a
+  // press redraws only the bar whose own props changed (memo(Bar)).
+  const handlers = useRef({ onDown, keyOpen, keyMove, onKeyEnd, onKeyCancel, onSuggestion });
+  useLayoutEffect(() => {
+    handlers.current = { onDown, keyOpen, keyMove, onKeyEnd, onKeyCancel, onSuggestion };
+  });
+  const bars = useMemo(
+    () => ({
+      onDown: (e: ReactPointerEvent<SVGGElement>, it: Item) => handlers.current.onDown(e, it),
+      onKeyOpen: (it: Item) => handlers.current.keyOpen(it),
+      onKeyMove: (it: Item, dir: 1 | -1, resize: boolean) => handlers.current.keyMove(it, dir, resize),
+      onKeyEnd: (it: Item) => handlers.current.onKeyEnd(it),
+      onKeyCancel: (it: Item) => handlers.current.onKeyCancel(it),
+      onSuggestion: (it: Item, anchor: { x: number; y: number }) => handlers.current.onSuggestion(it, anchor),
+    }),
+    [],
+  );
   const today = sc.x(data.today);
   const chartW = sc.width;
   return (
@@ -396,7 +413,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 </g>
               ))}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
-            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} onDown={onDown} onKeyOpen={keyOpen} onKeyMove={keyMove} onKeyEnd={onKeyEnd} onKeyCancel={onKeyCancel} onSuggestion={onSuggestion} /> : null))}
+            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} {...bars} /> : null))}
             <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" />
             <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600}>
               Today

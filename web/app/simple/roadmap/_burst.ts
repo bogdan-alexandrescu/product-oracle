@@ -22,7 +22,8 @@ type Open<T> = {
  * builds on that change's result, never a stale `before`. `cancel` (Escape) drops it.
  *
  * `send` makes the change and returns what is stored once it returns (its `after` when it
- * applied, its `before` when it is a proposal), or null when that is unknown (it failed).
+ * applied, its `before` when it is a proposal, what the reload after it shows when it
+ * failed), or null when that is unknown.
  */
 export function useKeyBurst<T>(send: (id: string, before: T, after: T) => Promise<T | null>, same: (a: T, b: T) => boolean) {
   const open = useRef(new Map<string, Open<T>>());
@@ -60,7 +61,9 @@ export function useKeyBurst<T>(send: (id: string, before: T, after: T) => Promis
       });
       inflight.current.set(id, p);
       void p.then(() => {
-        if (inflight.current.get(id) === p) inflight.current.delete(id);
+        // A later burst's change still on its way keeps the item at its pending value.
+        if (inflight.current.get(id) !== p) return;
+        inflight.current.delete(id);
         // The roadmap reloaded with the change: the item draws from its data again.
         if (!open.current.has(id)) show(id, null);
       });
