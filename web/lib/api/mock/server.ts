@@ -877,6 +877,21 @@ function seedSimpleHomeMilestonesScenario(): Db {
 }
 
 /**
+ * One PRD in play (#723 polish review): "simple-home" with every item but the onboarding
+ * roadmap's (Guided setup) moved half a year out, so Home's plan needs no ranking.
+ */
+function seedSimpleHomeOnePrdScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  for (const i of db.simple_roadmap!.items) {
+    if (i.roadmap === "onboarding-roadmap") continue;
+    if (i.start != null) i.start += 180;
+    if (i.end != null) i.end += 180;
+    if (i.milestone) i.milestone.day += 180;
+  }
+  return db;
+}
+
+/**
  * #723 S1 Home's "simple-home" scenario: the default company whose confirmed goals are those
  * Simple's roadmap items serve (Grow retention, Faster activation) plus a guardrail goal, each
  * with a weight and a metric path; two proposals the commenter made (routed to the owners);
@@ -2573,6 +2588,8 @@ function load(): Db {
                 ? seedSimpleHomeDecidersScenario
               : scenario === "simple-home-milestones"
                 ? seedSimpleHomeMilestonesScenario
+              : scenario === "simple-home-one-prd"
+                ? seedSimpleHomeOnePrdScenario
               : scenario === "simple-chat"
                 ? () => {
                     const db = seedSimpleHomeScenario();

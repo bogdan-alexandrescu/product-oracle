@@ -1,4 +1,4 @@
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -24,6 +24,10 @@ import { expect, test, type Page } from "./test";
  * filtered to the PRD, and the goal band's money grouped by the locale ("$30,000 -> $50,000");
  * fails_when = Home lists every item, shows a 9th row, or prints "$50000"; no_claim = which
  * PRD the API ranks first (the mock's priorities).
+ *
+ * Card plan-strip-home-one-prd (#723 polish review): protects = with one PRD in play, Home's
+ * strip draws as soon as the roadmap answers, without waiting on the ranking; fails_when =
+ * Home shows its spinner until /v1/simple/priorities answers; no_claim = the ranking's order.
  */
 
 const EMAILS = { owner: ADMIN.email, viewer: "viewer@example.com" } as const;
@@ -97,6 +101,20 @@ for (const phone of [false, true]) {
           await expect(page.getByLabel("PRD")).toHaveValue(prd.split("=")[1]);
         });
       }
+
+      test(`with one PRD in play, Home's strip does not wait on the ranking (${where})`, async ({ page }) => {
+        await setUp(page, "simple-home-one-prd", scheme);
+        await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SLOW_KEY, "/v1/simple/priorities"] as const);
+        await login(page, EMAILS.viewer);
+        // The page's timers wait on this test from here: only the roadmap's latency may pass.
+        await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
+        await page.goto("/simple");
+        await page.clock.runFor(MOCK_SLOW_MS / 3);
+        const plan = page.getByTestId("home-plan");
+        await expect(plan.getByTestId("home-strip-row").first()).toBeVisible();
+        await expect(plan.getByTestId("home-strip-row").first()).toHaveAttribute("href", "/simple/roadmap?prd=guided-setup");
+        await page.clock.resume();
+      });
 
       test(`Home shows at most 8 milestone rows, then "+N more on the roadmap" (${where})`, async ({ page }) => {
         await setUp(page, "simple-home-milestones", scheme);
