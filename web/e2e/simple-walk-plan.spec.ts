@@ -30,6 +30,16 @@ import { expect, test, type Page } from "./test";
  * "<Risk>: <mitigation>" placeholder, no bare "→") and each empty block reads "Not written
  * yet"; fails_when = a template's guidance shows as a line or an empty block reads "—";
  * no_claim = the job's answer (the API's pytest).
+ *
+ * Card walk-milestone-record (walk-plan review): protects = items a track milestone record
+ * links share its row ("Beta launch · 3 items") on Home and on the one-pager, whatever their
+ * own milestone texts say ("Beta launch, two teams first", "Beta launch - after legal") and
+ * with none; fails_when = the texts split into rows or the linked item with no text of its
+ * own counts under "No milestone"; no_claim = which record wins when two link an item.
+ *
+ * Card walk-edit-whole-line (walk-plan review): protects = editing a shortened line starts
+ * from its whole text, so saving it keeps the rest; fails_when = the editor holds the "…"
+ * text; no_claim = the save itself (simple-one-pager.spec.ts).
  */
 
 const EMAILS = { owner: ADMIN.email, viewer: "viewer@example.com" } as const;
@@ -61,6 +71,8 @@ for (const phone of [false, true]) {
           await expect(labels.first()).toBeVisible();
           const texts = await labels.allTextContents();
           expect(texts.slice(0, 2)).toEqual(["M1 · Measure it, make it safe · 3 items", "M2 · Ship to beta · 2 items"]);
+          expect(texts).toContain("Beta launch · 3 items");
+          for (const t of texts) expect(t).not.toMatch(/two teams first|after legal/);
           expect(texts.at(-1)).toMatch(/^No milestone · \d+ items?$/);
           expect(new Set(texts).size).toBe(texts.length);
           for (const t of texts) expect(t).not.toMatch(/[(;]/);
@@ -72,7 +84,7 @@ for (const phone of [false, true]) {
           await setUp(page, scheme, EMAILS[role]);
           await page.goto("/simple/prds/guided-setup");
           const strip = page.getByLabel("Timeline strip");
-          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["M1 · Measure it, make it safe · 3 items", "M2 · Ship to beta · 2 items", "No milestone · 1 item"]);
+          await expect(strip.getByTestId("plan-strip-label")).toHaveText(["M1 · Measure it, make it safe · 3 items", "M2 · Ship to beta · 2 items", "Beta launch · 3 items", "No milestone · 1 item"]);
           await expect(strip).not.toContainText("dry run");
 
           const problem = page.getByRole("region", { name: "Problem and who has it" });
@@ -84,6 +96,12 @@ for (const phone of [false, true]) {
           await expect(line).not.toContainText("…");
           await problem.getByRole("button", { name: "Show less of line 1" }).click();
           await expect(line).toHaveText(/miss for…$/);
+          if (role === "owner") {
+            // The editor starts from the whole line, not its "…" text.
+            await problem.getByRole("button", { name: "Edit line 1" }).click();
+            await expect(problem.getByLabel("Line 1")).toHaveValue(/after a weekend signup$/);
+            await problem.getByRole("button", { name: "Cancel" }).click();
+          }
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);
           else expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 

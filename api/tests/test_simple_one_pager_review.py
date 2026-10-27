@@ -12,16 +12,29 @@ Test cards (protects / fails_when / no_claim):
 - test_plan_strip_cases: protects=the API's strip on the cases shared with the web's mirror
   (api/tests/fixtures/plan_strip_cases.json, run there by web/e2e/simple-plan-strip-rules
   .spec.ts); fails_when=the rules change on one side only; no_claim=drawing.
+- test_items_carry_their_linked_milestone_record: protects=an item a track milestone names
+  carries that record (id and name) on the roadmap read and into the one-pager's strip,
+  with or without milestone text of its own; fails_when=the record is dropped, so items
+  whose texts differ split into rows or a linked item falls into "No milestone";
+  no_claim=which record wins when two name the item (the first, as before).
+- test_legacy_shortened_line_shows_its_own_fact: protects="Show all" of a line an older
+  build stored shortened (no whole text kept) is that line's own source fact, not all its
+  sections' facts joined; fails_when=the expanded line reads every bullet of the section;
+  no_claim=a line whose fact has changed since (no whole text then).
+- test_legacy_long_whole_line_keeps_its_last_word: protects=an older build's stored line of
+  LINE_MAX characters or more that is its source fact whole reads whole; fails_when=its last
+  word is dropped for "…"; no_claim=a long line with no source fact (still read as cut).
 """
 
 import json
+import uuid
 from datetime import date
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from oracle.simple import one_pager, plan_strip
+from oracle.simple import one_pager, plan_strip, service
 
 CASES = json.loads((Path(__file__).parent / "fixtures" / "plan_strip_cases.json").read_text())
 
@@ -58,6 +71,8 @@ def test_plan_strip_cases(case):
             i["estimated"],
             i["milestone"],
             date.fromisoformat(i["milestoneDate"]) if i["milestoneDate"] else None,
+            (i.get("record") or {}).get("id"),
+            (i.get("record") or {}).get("name"),
         )
         for i in case["items"]
     ]
@@ -150,3 +165,55 @@ def test_problem_line_is_cut_at_a_word_with_its_whole_text():
         "Admins stall in setup.",
         None,
     )
+
+
+def test_items_carry_their_linked_milestone_record():
+    track = SimpleNamespace(id=uuid.uuid4())
+    beta = SimpleNamespace(id=uuid.uuid4(), name="Beta launch", target_date=None)
+    links = {(track.id, "invites"): beta, (track.id, "form"): beta}
+    noted = SimpleNamespace(
+        item_key="invites", milestone={"name": "Beta launch, two teams first", "date": "2026-12-10"}
+    )
+    bare = SimpleNamespace(item_key="form", milestone=None)
+    own = service._milestone(noted, track, links)
+    assert (own.source, own.name, own.record_id, own.record_name) == (
+        "item",
+        "Beta launch, two teams first",
+        beta.id,
+        "Beta launch",
+    )
+    linked = service._milestone(bare, track, links)
+    assert (linked.name, linked.record_id, linked.record_name) == (
+        "Beta launch",
+        beta.id,
+        "Beta launch",
+    )
+    # The one-pager's strip keys both by the record: one row.
+    day = SimpleNamespace(date=date(2026, 11, 2))
+    items = [
+        SimpleNamespace(start=day, end=day, estimated=False, status="planned", milestone=m)
+        for m in (own, linked)
+    ]
+    plan = plan_strip.strip(one_pager.plan_items(items), date(2026, 10, 27))
+    assert [(r.name, r.items) for r in plan.rows] == [("Beta launch", 2)]
+
+
+SETUP = (
+    "- Spend alerts warn at 80% of the cap and again when the cap is reached for the team\n"
+    "- Digest goes out weekly to team leads with the alerts they missed"
+)
+
+
+def test_legacy_shortened_line_shows_its_own_fact():
+    stored = "Spend alerts warn at 80% of the…"
+    text, full = one_pager._tidy(stored, 6, None, [sec("bets", SETUP)])
+    assert text.endswith("…")
+    assert (
+        full == "Spend alerts warn at 80% of the cap and again when the cap is reached for the team"
+    )
+
+
+def test_legacy_long_whole_line_keeps_its_last_word():
+    whole = " ".join(["word"] * 59) + " " + "x" * (one_pager.LINE_MAX - 59 * 5)
+    assert len(whole) == one_pager.LINE_MAX and not whole.endswith("…")
+    assert one_pager._tidy(whole, 60, None, [sec("problem", whole)]) == (whole, None)

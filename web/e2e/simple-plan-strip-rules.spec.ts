@@ -10,7 +10,8 @@ import { expect, test } from "./test";
  * as the API does (api/tests/fixtures/plan_strip_cases.json, run there by
  * tests/test_simple_one_pager_review.py): names compared by code point, an empty milestone
  * name read as "Milestone", milestone texts carrying notes grouped by their code (M1) or
- * their text before " (" or ";", one row each; fails_when = the two copies of the rules drift; no_claim =
+ * their text before " (" or ";", one row each, items linking one milestone record in its row
+ * whatever their texts, "M1.5"/"M2026" read as texts, a named label before a bare code; fails_when = the two copies of the rules drift; no_claim =
  * drawing (simple-plan-strip.spec.ts drives it). No page: pure rules.
  */
 

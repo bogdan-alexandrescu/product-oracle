@@ -472,5 +472,221 @@
    ],
    "past_edge": 0
   }
+ },
+ {
+  "name": "items linking one milestone record share its row, whatever their texts say",
+  "today": "2026-10-27",
+  "items": [
+   {
+    "start": "2026-10-05",
+    "end": "2026-11-18",
+    "estimated": false,
+    "milestone": "Beta launch, two teams first",
+    "milestoneDate": "2026-12-10",
+    "record": {
+     "id": "beta-launch",
+     "name": "Beta launch"
+    }
+   },
+   {
+    "start": "2026-10-12",
+    "end": "2026-11-20",
+    "estimated": true,
+    "milestone": "Beta launch - after legal",
+    "milestoneDate": null,
+    "record": {
+     "id": "beta-launch",
+     "name": "Beta launch"
+    }
+   },
+   {
+    "start": "2026-11-02",
+    "end": "2026-12-01",
+    "estimated": false,
+    "milestone": null,
+    "milestoneDate": null,
+    "record": {
+     "id": "beta-launch",
+     "name": "Beta launch"
+    }
+   },
+   {
+    "start": "2026-10-19",
+    "end": "2026-11-13",
+    "estimated": false,
+    "milestone": "M1 · Measure it",
+    "milestoneDate": "2026-11-20"
+   },
+   {
+    "start": "2026-11-10",
+    "end": "2026-12-20",
+    "estimated": false,
+    "milestone": null,
+    "milestoneDate": null
+   }
+  ],
+  "expected": {
+   "start": "2026-10-01",
+   "end": "2026-12-31",
+   "months": [
+    "2026-10-01",
+    "2026-11-01",
+    "2026-12-01"
+   ],
+   "today": "2026-10-27",
+   "rows": [
+    {
+     "name": "M1 · Measure it",
+     "date": "2026-11-20",
+     "items": 1,
+     "start": "2026-10-19",
+     "end": "2026-11-13",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "Beta launch",
+     "date": "2026-12-10",
+     "items": 3,
+     "start": "2026-10-05",
+     "end": "2026-12-01",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "No milestone",
+     "date": null,
+     "items": 1,
+     "start": "2026-11-10",
+     "end": "2026-12-20",
+     "estimated": false,
+     "milestone": false,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 0
+  }
+ },
+ {
+  "name": "M1.5 and M2026 are texts, not the codes M1 and M20",
+  "today": "2026-10-27",
+  "items": [
+   {
+    "start": "2026-10-05",
+    "end": "2026-11-18",
+    "estimated": false,
+    "milestone": "M1 · Measure it",
+    "milestoneDate": "2026-11-20"
+   },
+   {
+    "start": "2026-10-12",
+    "end": "2026-11-20",
+    "estimated": false,
+    "milestone": "M1.5 · Polish (the setup page)",
+    "milestoneDate": "2026-11-27"
+   },
+   {
+    "start": "2026-11-02",
+    "end": "2026-12-01",
+    "estimated": false,
+    "milestone": "M2026 roadmap; spring",
+    "milestoneDate": "2026-12-04"
+   }
+  ],
+  "expected": {
+   "start": "2026-10-01",
+   "end": "2026-12-31",
+   "months": [
+    "2026-10-01",
+    "2026-11-01",
+    "2026-12-01"
+   ],
+   "today": "2026-10-27",
+   "rows": [
+    {
+     "name": "M1 · Measure it",
+     "date": "2026-11-20",
+     "items": 1,
+     "start": "2026-10-05",
+     "end": "2026-11-18",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "M1.5 · Polish",
+     "date": "2026-11-27",
+     "items": 1,
+     "start": "2026-10-12",
+     "end": "2026-11-20",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "M2026 roadmap",
+     "date": "2026-12-04",
+     "items": 1,
+     "start": "2026-11-02",
+     "end": "2026-12-01",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 0
+  }
+ },
+ {
+  "name": "a named label wins over a bare code more items carry",
+  "today": "2026-10-27",
+  "items": [
+   {
+    "start": "2026-10-05",
+    "end": "2026-11-18",
+    "estimated": false,
+    "milestone": "M4",
+    "milestoneDate": "2026-12-11"
+   },
+   {
+    "start": "2026-10-12",
+    "end": "2026-11-20",
+    "estimated": false,
+    "milestone": "M4 (a note)",
+    "milestoneDate": "2026-12-11"
+   },
+   {
+    "start": "2026-11-02",
+    "end": "2026-12-01",
+    "estimated": false,
+    "milestone": "M4 · Rollout; rest later",
+    "milestoneDate": "2026-12-11"
+   }
+  ],
+  "expected": {
+   "start": "2026-10-01",
+   "end": "2026-12-31",
+   "months": [
+    "2026-10-01",
+    "2026-11-01",
+    "2026-12-01"
+   ],
+   "today": "2026-10-27",
+   "rows": [
+    {
+     "name": "M4 · Rollout",
+     "date": "2026-12-11",
+     "items": 3,
+     "start": "2026-10-05",
+     "end": "2026-12-01",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 0
+  }
  }
 ]
