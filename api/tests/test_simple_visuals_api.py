@@ -237,7 +237,7 @@ async def test_sanitising_refuses_script(client):
             await s.commit()
     (out,) = await run_visual_jobs(ctx)
     assert out["drawn"] is True
-    flow = (await visual(client, ctx, "viewer", "suggestion", sid))["flow"]
+    flow = (await visual(client, ctx, "owner", "suggestion", sid))["flow"]
     for content in (flow["svg"], flow["wireframe"]):
         low = content.lower()
         assert "<script" not in low and "onclick" not in low and "javascript:" not in low

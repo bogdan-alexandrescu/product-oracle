@@ -23,6 +23,7 @@ S3b, working drafts (oracle.simple.drafts):
 """
 
 import asyncio
+import logging
 import uuid
 from typing import Annotated
 
@@ -45,6 +46,8 @@ from oracle.simple.schemas import (
     SimpleSessionIn,
     SimpleSessionOut,
 )
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/v1/simple", tags=["simple"])
 
@@ -119,7 +122,8 @@ async def _with_visual(db, principal, change) -> None:
         async with db.begin_nested():
             await visuals.on_change(db, principal, change)
         await db.commit()
-    except visuals.VisualError:
+    except Exception:  # the change is saved; its visual is best effort
+        log.warning("simple: queueing the visual of change %s failed", change.id, exc_info=True)
         await db.rollback()
 
 

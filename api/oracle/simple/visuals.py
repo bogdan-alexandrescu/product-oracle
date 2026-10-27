@@ -68,6 +68,10 @@ BRIEF_MAX = 2000
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 # The ops whose proposals add or change a feature or a flow (they come with a visual).
 FEATURE_OPS = ("confirm_item", "edit_outcome")
+# Subjects Simple cannot look up (other lanes' or a one-pager line): drawn with their
+# proposal through request_visual, never asked for by id over /request.
+LOOSE_KINDS = ("suggestion", "chat_card")
+UNASKABLE_KINDS = (*LOOSE_KINDS, "one_pager_line")
 
 
 class VisualError(Exception):
@@ -163,12 +167,12 @@ async def may_read(db: AsyncSession, principal: Any, v: SimpleVisual) -> bool:
     if v.subject_kind == "change":
         c = await db.get(SimpleChange, v.subject_id)
         if c is not None and c.status == "proposed":
-            me = _me(principal)
-            return (
-                has_role(principal.role, "owner")
-                or me == c.by
-                or me in (c.routed_to or [])
-                or (v.document_id is not None and await _edits(db, principal, v.document_id))
+            # Who the change engine shows the proposal to (its people, the session's, the
+            # document's owners, decider and reviewers), or who changes it directly.
+            from oracle.simple import changes
+
+            return (await changes._view(db, principal, [c])).sees(c) or (
+                v.document_id is not None and await _edits(db, principal, v.document_id)
             )
         if c is not None and c.status == "applied" and c.draft_ids:
             # A change in a working draft not yet published: who sees the draft.
@@ -180,6 +184,12 @@ async def may_read(db: AsyncSession, principal: Any, v: SimpleVisual) -> bool:
             if open_:
                 w = await drafts.who(db, {d.document_id for d in open_})
                 return any(drafts.sees(principal, d, w) for d in open_)
+    if v.document_id is None and v.subject_kind in LOOSE_KINDS:
+        # Another lane's subject asked for with no document: until its lane names the
+        # document, its requester and the company's owners only (never any reader who
+        # has the id).
+        me = _me(principal)
+        return me is not None and (has_role(principal.role, "owner") or me == v.requested_by)
     return True
 
 
@@ -329,7 +339,8 @@ async def read(
             comments=[],
             pending=False,
             can_comment=False,
-            can_revise=await may_revise(db, principal, probe),
+            can_revise=subject_kind not in UNASKABLE_KINDS
+            and await may_revise(db, principal, probe),
         )
     if not await may_read(db, principal, v):
         raise VisualError(404, "No such visual")
@@ -477,7 +488,10 @@ async def request_visual(
 async def ask_for(
     db: AsyncSession, principal: Any, subject_kind: str, subject_id: uuid.UUID, brief: str
 ) -> SimpleVisualOut:
-    """The route's "Ask Oracle to draw it" for a subject with no visual yet (who revises)."""
+    """The route's "Ask Oracle to draw it" for a subject with no visual yet (who revises).
+    Only subjects Simple can look up: the others are drawn with their proposal."""
+    if subject_kind in UNASKABLE_KINDS:
+        raise VisualError(422, "Oracle draws this visual with its proposal; it is not asked for")
     subject = await _subject(db, subject_kind, subject_id)
     probe = SimpleVisual(subject_kind=subject_kind, subject_id=subject_id,
                          document_id=subject.document_id, brief="")  # fmt: skip
@@ -559,7 +573,8 @@ async def on_change(db: AsyncSession, principal: Any, change: Any) -> None:
     op, target, after = change.op, change.target or {}, change.after or {}
     if op == "edit_line" and str(target.get("line_id") or "").startswith("bets-"):
         brief = f"A bet of the PRD's one-pager, reworded to: {after.get('line') or ''}"
-    elif op in FEATURE_OPS:
+    elif op in FEATURE_OPS and change.status == "proposed":
+        # A direct edit is no proposal: the feature's own visual is asked for and revised.
         words = after.get("outcome") or after.get("title") or ""
         brief = f"{op.replace('_', ' ').capitalize()}: {words}".strip(": ")
     else:

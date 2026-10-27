@@ -34,6 +34,8 @@ interface Ctx {
   names: Record<string, string>;
 }
 
+/** Subjects drawn with their proposal, never asked for by id (the API's UNASKABLE_KINDS). */
+const UNASKABLE = ["suggestion", "chat_card", "one_pager_line"];
 const RANK: Record<string, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 const at = "2026-10-26T15:00:00Z";
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -150,7 +152,7 @@ export function requestVisual(db: VisualsDb | undefined, kind: string, id: strin
 
 function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx): Schemas["SimpleVisualOut"] {
   const owner = (RANK[ctx.role] ?? 0) >= RANK.owner;
-  if (!v) return { subject_kind: kind, subject_id: id, flow: null, versions: [], comments: [], pending: false, can_comment: false, can_revise: owner };
+  if (!v) return { subject_kind: kind, subject_id: id, flow: null, versions: [], comments: [], pending: false, can_comment: false, can_revise: owner && !UNASKABLE.includes(kind) };
   const n = v.versions.length;
   return {
     subject_kind: kind,
@@ -207,6 +209,7 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
     return json(202, out(v, kind, id, ctx));
   }
   if (p[5] === "request") {
+    if (UNASKABLE.includes(kind)) return json(422, { detail: "Oracle draws this visual with its proposal; it is not asked for" });
     if ((RANK[ctx.role] ?? 0) < RANK.owner) return json(403, { detail: "Only who changes this directly asks Oracle for its visual" });
     requestVisual(db, kind, id, String(b.brief ?? "") || "The new flow");
     return json(202, out(db.visuals[key], kind, id, ctx));

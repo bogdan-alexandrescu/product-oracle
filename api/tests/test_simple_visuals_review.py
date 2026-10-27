@@ -154,7 +154,8 @@ async def test_direct_outcome_edit_queues_no_visual(client):
     r = await client.post(CHANGES, json=body, headers=ctx.as_("owner"))
     assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
     assert await jobs(ctx) == []
-    body["before"], body["after"] = body["after"], {"outcome": "Admins invite two teammates"}
+    # The owner's edit is in the working draft; a commenter proposes over the published one.
+    body["after"] = {"outcome": "Admins invite two teammates"}
     r = await client.post(CHANGES, json=body, headers=ctx.as_("commenter"))
     assert r.status_code == 201 and r.json()["change"]["status"] == "proposed", r.text
     assert len(await jobs(ctx)) == 1
