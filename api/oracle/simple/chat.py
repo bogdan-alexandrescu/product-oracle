@@ -144,21 +144,64 @@ def parse_day(text: str, today: date) -> date | None:
         return None
 
 
-def quarter(n: int, today: date) -> tuple[date, date]:
-    """Qn: the next one on or after today's quarter."""
+def _months(year: int, month: int, n: int) -> tuple[date, date]:
+    """The n months from the first of ``month`` (it may run past December)."""
+    year, month = year + (month - 1) // 12, (month - 1) % 12 + 1
+    after = month - 1 + n
+    end = date(year + after // 12, after % 12 + 1, 1) - timedelta(days=1)
+    return date(year, month, 1), end
+
+
+def quarter(n: int, today: date, year: int | None = None) -> tuple[date, date]:
+    """Qn of ``year``, else the next one on or after today's quarter."""
     current = (today.month - 1) // 3 + 1
-    year = today.year if n >= current else today.year + 1
-    start = date(year, 3 * (n - 1) + 1, 1)
-    end = (date(year + 1, 1, 1) if n == 4 else date(year, 3 * n + 1, 1)) - timedelta(days=1)
-    return start, end
+    if year is None:
+        year = today.year if n >= current else today.year + 1
+    return _months(year, 3 * (n - 1) + 1, 3)
+
+
+def parse_period(text: str, today: date) -> tuple[date, date] | None:
+    """A period in words, from ``today`` (the company's day): "this quarter", "next
+    quarter", "the quarter after [next]", "next month", "<month> [year]" (the next one on
+    or after this month), "Qn [year]" and "Hn [year]" (the next on or after today's)."""
+    t = " ".join(text.lower().split()).removeprefix("the ")
+    q = (today.month - 1) // 3  # this quarter, from 0
+    steps = {"this quarter": 0, "current quarter": 0, "next quarter": 1,
+             "quarter after": 2, "quarter after next": 2}  # fmt: skip
+    if t in steps:
+        return _months(today.year, 3 * (q + steps[t]) + 1, 3)
+    if t == "this month":
+        return _months(today.year, today.month, 1)
+    if t == "next month":
+        return _months(today.year, today.month + 1, 1)
+    if m := re.fullmatch(r"q([1-4])(?: (\d{4}))?", t):
+        return quarter(int(m[1]), today, int(m[2]) if m[2] else None)
+    if m := re.fullmatch(r"h([12])(?: (\d{4}))?", t):
+        n = int(m[1])
+        year = int(m[2]) if m[2] else today.year + (n < (1 if today.month <= 6 else 2))
+        return _months(year, 6 * (n - 1) + 1, 6)
+    if m := re.fullmatch(r"([a-z]+)(?: (\d{4}))?", t):
+        month = MONTHS.get(m[1]) or next(
+            (n for k, n in MONTHS.items() if len(m[1]) >= 3 and k.startswith(m[1])), None
+        )
+        if month is None:
+            return None
+        year = int(m[2]) if m[2] else today.year + (month < today.month)
+        return _months(year, month, 1)
+    return None
 
 
 # --------------------------------------------------------------------------- Oracle's reply
 
 
 class Reply:
-    def __init__(self, kind: str, body: str, cards: list[dict[str, Any]] | None = None) -> None:
+    """``understood``: the line is one Oracle's reader knows (the Ask panel's one box sends
+    any other line to Oracle's Ask); ``missing``: no item has the name it gave."""
+
+    def __init__(self, kind: str, body: str, cards: list[dict[str, Any]] | None = None,
+                 understood: bool = True, missing: bool = False) -> None:  # fmt: skip
         self.kind, self.body, self.cards = kind, body, cards or []
+        self.understood, self.missing = understood, missing
 
 
 class Ctx:
@@ -200,7 +243,8 @@ class Ctx:
                 titles = [f"{e.row.title} ({e.roadmap.title})" for e in hits[:5]]
             return Reply("question", f"Which one: {_or(titles)}?")
         missing = _unquote(text)
-        return Reply("question", f"I could not find “{missing}” on the roadmap. Which item?")
+        return Reply("question", f"I could not find “{missing}” on the roadmap. Which item?",
+                     missing=True)  # fmt: skip
 
     def person(self, text: str) -> User | Reply:
         x = _unquote(text).lower()
@@ -258,14 +302,21 @@ def parse(c: Ctx, text: str) -> Reply:
     def found(x: str):
         return c.find(x)
 
+    def asked(x: str):
+        # A question about something not on the roadmap is Ask's (the page, the company).
+        e = c.find(x)
+        if isinstance(e, Reply) and e.missing:
+            e.understood = False
+        return e
+
     if m := re.fullmatch(r"who (owns|decides)\s+(.+?)\??", t, re.I):
-        e = found(m[2])
+        e = asked(m[2])
         if isinstance(e, Reply):
             return e
         owns = m[1].lower() == "owns"
         return Reply("answer", _owner_words(c, e) if owns else _decider_words(c, e))
     if m := re.fullmatch(r"when is\s+(.+?)\??", t, re.I):
-        e = found(m[1])
+        e = asked(m[1])
         if isinstance(e, Reply):
             return e
         r = e.resolved
@@ -273,7 +324,7 @@ def parse(c: Ctx, text: str) -> Reply:
         return Reply("answer", f"{e.row.title}: {_day_words(r.start.date)} – "
                                f"{_day_words(r.end.date, True)}{est}.")  # fmt: skip
     if m := re.fullmatch(r"(?:what is the )?status of\s+(.+?)\??", t, re.I):
-        e = found(m[1])
+        e = asked(m[1])
         if isinstance(e, Reply):
             return e
         return Reply("answer", f"{e.row.title} is {e.status.replace('_', ' ')} ({e.row.horizon}).")
@@ -295,21 +346,31 @@ def parse(c: Ctx, text: str) -> Reply:
                          {"kind": "horizon", "item_id": str(e.row.id), "horizon": h})  # fmt: skip
 
         return change(horizon)
-    q = re.fullmatch(r"move (.+) to q([1-4])(?: \d{4})?\.?", t, re.I)
-    d = re.fullmatch(rf"move (.+) to {DAY}\.?", t, re.I)
-    if q or (d and parse_day(d[2], c.today)):
+    period = day = None
+    if m := re.fullmatch(r"move (.+) to (.+?)\.?", t, re.I):
+        # The item's name may hold " to ": try each split, the shortest time first.
+        cuts = [x.start() for x in re.finditer(r" to ", t, re.I)]
+        for at in reversed(cuts):
+            what, when = t[5:at], re.sub(r"\.$", "", t[at + 4 :])
+            if p := parse_period(when, c.today):
+                period = (what, p)
+            elif re.fullmatch(DAY, when, re.I) and (d := parse_day(when, c.today)):
+                day = (what, d)
+            if period or day:
+                break
+    if period or day:
 
         def move() -> Reply:
-            e = found((q or d)[1])  # type: ignore[index]
+            e = found((period or day)[0])  # type: ignore[index]
             if isinstance(e, Reply):
                 return e
             r = e.resolved
             length = (r.end.date - r.start.date).days
-            if q:
-                start, last = quarter(int(q[2]), c.today)
+            if period:
+                start, last = period[1]
                 end = last if r.undated else start + timedelta(days=length)
             else:
-                start = parse_day(d[2], c.today)  # type: ignore[index,assignment]
+                start = day[1]  # type: ignore[index]
                 end = start + timedelta(days=29 if r.undated else length)
             s, en = start.isoformat(), end.isoformat()
             return _card(f"Move {e.row.title} to {_day_words(start)} – {_day_words(end, True)}",
@@ -435,7 +496,7 @@ def parse(c: Ctx, text: str) -> Reply:
                          {"kind": "cut", "item_id": str(e.row.id)})  # fmt: skip
 
         return change(cut)
-    return Reply("question", f"I did not understand that. {EXAMPLES}")
+    return Reply("question", f"I did not understand that. {EXAMPLES}", understood=False)
 
 
 # --------------------------------------------------------------------------- meetings
@@ -603,9 +664,15 @@ async def thread(
 
 
 async def post(
-    db: AsyncSession, principal: Any, text: str, meeting_id: uuid.UUID | None = None
+    db: AsyncSession,
+    principal: Any,
+    text: str,
+    meeting_id: uuid.UUID | None = None,
+    only_understood: bool = False,
 ) -> ChatThreadOut:
-    """The person's line and Oracle's reply, in one go."""
+    """The person's line and Oracle's reply, in one go. ``only_understood`` (the Ask
+    panel's one box): a line Oracle's reader does not know writes nothing and answers
+    ``understood=False``, for the panel to send it to Oracle's Ask."""
     me = _me(principal)
     rules = None
     if meeting_id is not None:
@@ -614,6 +681,10 @@ async def post(
             raise ChatError(403, "Only the meeting's attendees use its chat")
     ctx = await Ctx(db, principal, rules).load()
     reply = parse(ctx, text)
+    if only_understood and not reply.understood:
+        out = await thread(db, principal, meeting_id)
+        out.understood = False
+        return out
     d = await _thread(db, principal, meeting_id, create=True)
     assert d is not None
     # Real time orders the lines (the company clock may stand still in tests).
@@ -636,7 +707,9 @@ async def post(
         if card.op in FLOW_OPS:
             await _request_visual(db, principal, card)
     await db.commit()
-    return await thread(db, principal, meeting_id)
+    out = await thread(db, principal, meeting_id)
+    out.understood = reply.understood
+    return out
 
 
 # --------------------------------------------------------------------------- cards
