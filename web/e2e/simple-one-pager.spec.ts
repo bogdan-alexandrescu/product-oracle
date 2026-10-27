@@ -129,7 +129,7 @@ for (const phone of [false, true]) {
         await page.goto(URL);
         await page.getByRole("button", { name: "Propose wording for line 3" }).click();
         await page.getByLabel("Line 3").fill("Invite suggestions from shared contacts");
-        await page.getByRole("button", { name: "Propose" }).click();
+        await page.getByRole("button", { name: "Propose", exact: true }).click();
         await expect(page.locator('[data-line="bets-2"]')).toHaveAttribute("data-state", "proposal");
         const mine = notes(page).filter({ hasText: "proposes new wording for line 3" }).filter({ visible: true });
         await expect(mine).toBeVisible();

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Fragment, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -43,6 +43,14 @@ export function OnePager({ doc }: { doc: string }) {
   const [wide, setWide] = useState<string | null>(null);
   const [presenting, setPresenting] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
+  // Desktop margin: each note sits beside its line (placeNotes).
+  const margin = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const on = () => placeNotes(margin.current);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  useLayoutEffect(() => placeNotes(margin.current));
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) return <div className="px-6 py-8"><ErrorNote>{q.error ?? "Not found"}</ErrorNote></div>;
@@ -201,7 +209,15 @@ export function OnePager({ doc }: { doc: string }) {
                         )}
                         {open === l.id && (
                           <div role="dialog" aria-label={`Sources of line ${numbers.get(l.id)}`} className="simple-noprint mt-2 rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-3 text-base shadow-md">
-                            <p className="text-sm text-text-faint">From {l.source_keys.join(", ")}</p>
+                            {l.source_keys.map((k) => {
+                              const sec = v.sections.find((x) => x.key === k);
+                              return (
+                                <div key={k} className="mb-2">
+                                  <p className="text-sm font-semibold">{sec?.heading ?? k}</p>
+                                  {sec && <p className="whitespace-pre-wrap text-sm text-text-faint">{sec.body}</p>}
+                                </div>
+                              );
+                            })}
                             <Link className="underline" href={`/documents/${v.document.slug}#${l.source_keys[0]}`}>Open the detailed view</Link>
                           </div>
                         )}
@@ -216,17 +232,31 @@ export function OnePager({ doc }: { doc: string }) {
             </section>
           ))}
         </article>
-        <aside aria-label="Margin" className="simple-noprint hidden space-y-3 md:block">
-          {v.notes.map((n) => (
-            <Fragment key={n.change_id}>
+        <aside ref={margin} aria-label="Margin" className="simple-noprint relative hidden md:block">
+          {[...v.notes].sort((a, b) => (numbers.get(a.line_id) ?? 0) - (numbers.get(b.line_id) ?? 0)).map((n) => (
+            <div key={n.change_id} data-note-for={n.line_id} data-change={n.change_id} className="absolute inset-x-0">
               <MarginNote {...{ n, no: numbers.get(n.line_id) ?? 0, busy, diff, setDiff, wide, setWide, undo, decide }} />
-            </Fragment>
+            </div>
           ))}
           {v.notes.length === 0 && <p className="text-base text-text-faint">No changes yet.</p>}
         </aside>
       </div>
     </div>
   );
+}
+
+/** Each margin note's top at its line's top, pushed below the note above it. */
+function placeNotes(el: HTMLElement | null) {
+  if (!el) return;
+  const base = el.getBoundingClientRect().top;
+  let floor = 0;
+  for (const card of Array.from(el.querySelectorAll<HTMLElement>("[data-note-for]"))) {
+    const line = document.querySelector(`[data-line="${card.dataset.noteFor}"]`);
+    const top = Math.max(line ? line.getBoundingClientRect().top - base : floor, floor);
+    card.style.top = `${Math.round(top)}px`;
+    floor = top + card.offsetHeight + 12;
+  }
+  el.style.minHeight = `${Math.round(floor)}px`;
 }
 
 function MarginNote({

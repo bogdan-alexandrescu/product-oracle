@@ -114,13 +114,35 @@ function lineNow(db: OnePagerDb, id: string): string | undefined {
   return db.draft?.lines[id] ?? seedLine(db, id)?.text;
 }
 
-function sectionNow(db: OnePagerDb, key: string): string {
-  return db.draft?.sections[key] ?? db.sections.find((s) => s.key === key)!.body;
+function sectionNow(db: OnePagerDb, key: string, sees = true): string {
+  return (sees ? db.draft?.sections[key] : undefined) ?? db.sections.find((s) => s.key === key)!.body;
 }
 
-/** As the API's one_pager.patch: the old words replaced, else the new line added. */
-function patch(body: string, old: string, next: string): string {
-  return body.includes(old) ? body.replace(old, next) : `${body}\n- ${next}`;
+/** As the API's one_pager.patch_all: the facts (bullets, else sentences) the old line says
+ * are replaced by the new line in its first section and dropped from the others; null when
+ * a section holds none of them (the edit is refused, never appended). */
+function plain(s: string): string {
+  return s.split(/\s+/).filter(Boolean).join(" ");
+}
+function patch(body: string, old: string, next: string, first: boolean): string | null {
+  const bullets = body.split("\n").map((l) => /^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$/.exec(l)?.[1]).filter((x): x is string => !!x);
+  const spans = bullets.length ? bullets : body.trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+  const o = plain(old).replace(/…$/, "");
+  const hits = spans.filter((r) => plain(r) && (o.includes(plain(r)) || (o.split(" ").length > 2 && plain(r).includes(o))));
+  if (!hits.length) return null;
+  let out = body;
+  hits.forEach((raw, i) => {
+    if (first && i === 0) out = out.replace(raw, next);
+    else if (bullets.length) out = out.split("\n").filter((l) => !(l.includes(raw) && /^\s*(?:[-*+]|\d+[.)])\s/.test(l))).join("\n");
+    else out = out.replace(new RegExp(raw.replace(/[.*+?^$()|[\]\\{}]/g, "\\$&") + "\\s*"), "");
+  });
+  return out;
+}
+
+/** As the API's metric_of: "name from X to Y". */
+function metricOf(text: string): Line["metric"] {
+  const m = /^(.*?)[:\s,-]*\s(?:from\s+)?(\S+)\s*(?:→|->|\bto\b)\s*(\S+)/i.exec(text);
+  return m ? { name: m[1].trim() || text, from: m[2], to: m[3] } : null;
 }
 
 function write(db: OnePagerDb, ctx: OnePagerCtx, lineId: string, values: Record<string, unknown>) {
@@ -188,8 +210,9 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       key: b.key, title: b.title, rules: b.rules, kind: b.kind,
       lines: b.lines.map((l): Line => {
         const edited = sees && db.draft?.lines[l.id] !== undefined;
+        const text = edited ? db.draft!.lines[l.id] : l.text;
         return {
-          id: l.id, text: edited ? db.draft!.lines[l.id] : l.text, source_keys: l.keys, metric: l.metric ?? null,
+          id: l.id, text, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
         };
       }),
@@ -199,6 +222,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       { id: stableUuid("op-item-2"), title: "Calendar invites", horizon: "next", start: "2026-11-30", end: "2027-01-29", estimated: true },
       { id: stableUuid("op-item-3"), title: "Sample project", horizon: "later", start: "2027-01-04", end: "2027-02-26", estimated: true },
     ],
+    sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
     notes,
     draft: sees && db.draft
       ? { id: db.draft.id, status: "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: false, waiting_on: [], can_submit: decides(ctx) }
@@ -232,7 +256,9 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (b.op !== "edit_line") return null;
     const target = (b.target ?? {}) as Record<string, string>;
     const lineId = String(target.line_id ?? "");
-    const cur = lineNow(db, lineId);
+    // Who cannot see the draft proposes against the published line and sections.
+    const sees = seesDraft(db, ctx);
+    const cur = sees ? lineNow(db, lineId) : seedLine(db, lineId)?.text;
     if (cur === undefined) return json(404, { detail: "No such line on this one-pager" });
     if (RANK[ctx.role] < RANK.commenter) return json(403, { detail: "Viewers read the one-pager" });
     const old = String(((b.before ?? {}) as Record<string, unknown>).line ?? "");
@@ -241,8 +267,10 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
     if (old !== cur) return json(409, { detail: { message: "This line changed since you read it", current: { line: cur }, changed_by: null, changed_at: null } });
     const keys = seedLine(db, lineId)!.keys;
     const heads = Object.fromEntries(db.sections.map((s) => [s.key, s.heading]));
-    const before = { line: cur, sections: Object.fromEntries(keys.map((k) => [k, { heading: heads[k], body: sectionNow(db, k) }])) };
-    const after = { line: next, sections: Object.fromEntries(keys.map((k) => [k, { heading: heads[k], body: patch(sectionNow(db, k), cur, next) }])) };
+    const patched = keys.map((k, i) => patch(sectionNow(db, k, sees), cur, next, i === 0));
+    if (patched.some((x) => x === null)) return json(409, { detail: "Oracle could not find this line's words in its sections; open the detailed view to edit them" });
+    const before = { line: cur, sections: Object.fromEntries(keys.map((k) => [k, { heading: heads[k], body: sectionNow(db, k, sees) }])) };
+    const after = { line: next, sections: Object.fromEntries(keys.map((k, i) => [k, { heading: heads[k], body: patched[i]! }])) };
     const applies = decides(ctx);
     const c = {
       id: stableUuid(`op-change-${db.changes.length}-${mockNowMs()}`), session_id: applies ? stableUuid(`op-session-${ctx.id}`) : null,
