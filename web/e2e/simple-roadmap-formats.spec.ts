@@ -210,7 +210,7 @@ test("a commenter's board move is a proposal the owner accepts", async ({ page }
   await dragTo(page, "alert-export", "now");
   await expect(page.getByText("Moved 'Alert history export' to Now proposed: it waits for the decider")).toBeVisible();
   await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
-  await expect(card(page, "alert-export").getByTestId("board-pending")).toContainText("Proposed: move to now");
+  await expect(card(page, "alert-export").getByTestId("board-pending")).toContainText("Proposed: move to Now");
   await page.goto("/home");
   await signOut(page);
   await open(page, "board");
@@ -249,8 +249,122 @@ test("the keyboard moves a board card between horizons", async ({ page }) => {
   await expect(column(page, "later").locator('[data-item="alert-export"]')).toBeVisible();
 });
 
+/**
+ * Card simple-board-keyboard-desktop (#723 review): protects = on a desktop only the left
+ * and right arrows move a focused card (up and down still scroll the page), and the card
+ * keeps the focus in its new column so the next arrow moves it again; fails_when = ArrowDown
+ * moves a card on a desktop, or the focus is lost after a move; no_claim = the engine.
+ */
+test("on a desktop the up and down arrows do not move a card, and it keeps the focus", async ({ page }) => {
+  await open(page, "board");
+  await card(page, "alert-export").focus();
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowUp");
+  await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(page.getByTestId("draft-banner")).toHaveCount(0);
+  await page.keyboard.press("ArrowRight");
+  await expect(column(page, "later").locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(card(page, "alert-export")).toBeFocused();
+  await page.keyboard.press("ArrowLeft");
+  await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
+});
+
+/**
+ * Card simple-waterfall-phase-inside (#723 review): protects = a phase a gate dates after
+ * the item's end is drawn inside the bar's outline (its dates stay in its title); fails_when
+ * = a phase's rectangle reaches past the bar; no_claim = the API's split.
+ */
+test("a phase dated after the bar's end stays inside the bar", async ({ page }) => {
+  await open(page, "waterfall");
+  await expect(phase(page, "setup-import", "beta")).toHaveAttribute("data-estimated", "false");
+  const bar = page.locator('g[data-testid="bar"][data-item="setup-import"]');
+  const body = (await bar.locator("rect[data-body]").boundingBox())!;
+  for (const p of ["discover", "build", "beta", "launch"]) {
+    const r = (await phase(page, "setup-import", p).boundingBox())!;
+    expect(r.x).toBeGreaterThanOrEqual(body.x - 1);
+    expect(r.x + r.width).toBeLessThanOrEqual(body.x + body.width + 1);
+  }
+});
+
 test.describe("phone", () => {
   test.use(PHONE);
+
+  /**
+   * Card simple-board-touch-cancel (#723 review): protects = a touch drag the system
+   * cancels (pointercancel) moves nothing, even after the card was dragged over another
+   * column; fails_when = a cancelled drag writes a change; no_claim = the browser's gestures.
+   */
+  test("a cancelled touch drag moves nothing", async ({ page }) => {
+    await open(page, "board");
+    const from = (await card(page, "alert-export").boundingBox())!;
+    const target = (await column(page, "now").locator("header").boundingBox())!;
+    const x = from.x + from.width / 2;
+    const y = from.y + from.height / 2;
+    const ev = { pointerId: 12, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
+    await card(page, "alert-export").dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
+    await expect(card(page, "alert-export")).toHaveAttribute("data-picked", "true");
+    for (let n = 1; n <= 6; n++) await card(page, "alert-export").dispatchEvent("pointermove", { ...ev, clientX: x, clientY: y + ((target.y + 10 - y) * n) / 6 });
+    await expect(column(page, "now")).toHaveAttribute("data-drop-target", "true");
+    await card(page, "alert-export").dispatchEvent("pointercancel", { ...ev, buttons: 0, clientX: x, clientY: target.y + 10 });
+    await expect(column(page, "now")).not.toHaveAttribute("data-drop-target", "true");
+    await page.waitForTimeout(300);
+    await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
+    await expect(page.getByTestId("draft-banner")).toHaveCount(0);
+  });
+
+  /**
+   * Card simple-board-phone-reach (#723 review): protects = on a phone a picked-up card
+   * held at the screen's edge scrolls the page, so a column off the screen can be reached,
+   * and the floating card moves an item to another horizon without dragging; fails_when =
+   * the page stays put under a held card, or the card has no horizon control; no_claim =
+   * the scrolling speed.
+   */
+  test("a held card scrolls the page, and the card moves a horizon", async ({ page }) => {
+    await open(page, "board");
+    await card(page, "setup-video").scrollIntoViewIfNeeded();
+    await expect(column(page, "now").locator("header")).not.toBeInViewport();
+    const from = (await card(page, "setup-video").boundingBox())!;
+    const x = from.x + from.width / 2;
+    const y = from.y + from.height / 2;
+    const ev = { pointerId: 13, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1 };
+    await card(page, "setup-video").dispatchEvent("pointerdown", { ...ev, clientX: x, clientY: y });
+    await expect(card(page, "setup-video")).toHaveAttribute("data-picked", "true");
+    for (let n = 1; n <= 6; n++) await card(page, "setup-video").dispatchEvent("pointermove", { ...ev, clientX: x, clientY: y + ((8 - y) * n) / 6 });
+    await expect(column(page, "now").locator("header")).toBeInViewport();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    const target = (await column(page, "now").locator("header").boundingBox())!;
+    await card(page, "setup-video").dispatchEvent("pointermove", { ...ev, clientX: x, clientY: target.y + target.height / 2 });
+    await card(page, "setup-video").dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x, clientY: target.y + target.height / 2 });
+    await expect(page.getByText("Moved 'Welcome video' to Now in your working draft")).toBeVisible();
+    await expect(column(page, "now").locator('[data-item="setup-video"]')).toBeVisible();
+
+    await card(page, "alert-export").tap();
+    const sheet = page.getByTestId("floating-card");
+    await expect(sheet.getByTestId("card-horizon")).toBeVisible();
+    await sheet.getByTestId("card-horizon").getByRole("button", { name: "Later" }).tap();
+    await expect(page.getByText("Moved 'Alert history export' to Later in your working draft")).toBeVisible();
+    await expect(column(page, "later").locator('[data-item="alert-export"]')).toBeVisible();
+    await noSidewaysScroll(page);
+  });
+
+  /**
+   * Card simple-roadmap-narrow-switch (#723 review): protects = on a 320 px phone the
+   * format switch shows all four formats without scrolling sideways; fails_when = a format
+   * is cut off or the switch scrolls; no_claim = its look.
+   */
+  test("the format switch fits a 320 px phone", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await open(page, "timeline");
+    const group = page.getByTestId("format-switch").getByRole("group");
+    const { sw, cw } = await group.evaluate((el) => ({ sw: el.scrollWidth, cw: el.clientWidth }));
+    expect(sw).toBeLessThanOrEqual(cw);
+    for (const f of FORMATS) {
+      const b = (await page.getByTestId(`format-${f}`).boundingBox())!;
+      expect(b.x).toBeGreaterThanOrEqual(0);
+      expect(b.x + b.width).toBeLessThanOrEqual(320);
+    }
+    await noSidewaysScroll(page);
+  });
 
   /**
    * Card simple-board-long-press: protects = on a phone a long press picks a board card
