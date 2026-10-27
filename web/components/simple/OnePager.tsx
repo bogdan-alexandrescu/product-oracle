@@ -17,6 +17,15 @@ function day(d: string | null | undefined): string {
   return d ? calendarDay(d.slice(0, 10), { month: "short", day: "numeric", year: "numeric" }) : "";
 }
 
+/** "2h ago": how long since `at` (Remind's "Reminded 2h ago"). */
+export function ago(at: string, now = Date.now()): string {
+  const minutes = Math.max(0, Math.floor((now - Date.parse(at)) / 60000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)}h ago`;
+  return `${Math.floor(minutes / (24 * 60))}d ago`;
+}
+
 const TINT: Record<Line["state"], string> = {
   published: "",
   edited: "bg-[var(--simple-edited)]",
@@ -80,6 +89,11 @@ export function OnePager({ doc }: { doc: string }) {
     });
   const decide = (n: Note, action: "accept" | "decline") =>
     act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: {} })));
+  const submit = () =>
+    act(() => unwrap(api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: v.draft!.id } } })));
+  // Remind (owner, 2026-10-26): each waiting reviewer gets an Inbox nudge, once a day at most.
+  const remind = () =>
+    act(() => unwrap(api.POST("/v1/simple/one-pagers/{doc}/remind", { params: { path: { doc } } })));
   const undo = (n: Note) =>
     act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })));
 
@@ -132,6 +146,22 @@ export function OnePager({ doc }: { doc: string }) {
           <span>· published v{v.draft.base_version ?? v.version} stays live until approved</span>
           {v.draft.decider_approved && v.draft.waiting_on.length > 0 && (
             <span>· Approved in the meeting · publishes when {v.draft.waiting_on.map((p) => p.name).join(", ")} approves</span>
+          )}
+          {v.draft.status === "submitted" && !v.draft.decider_approved && v.draft.waiting_on.length > 0 && (
+            <span data-testid="draft-waits-on">· Submitted · waiting on review from {v.draft.waiting_on.map((p) => p.name).join(", ")}</span>
+          )}
+          {v.draft.can_submit && (
+            <Button disabled={busy} onClick={() => void submit()}>Submit for review</Button>
+          )}
+          {v.draft.status === "submitted" && v.draft.waiting_on.length > 0 && (v.draft.can_remind || v.draft.reminded_at) && (
+            <span className="flex items-center gap-2">
+              {v.draft.can_remind && (
+                <Button disabled={busy} onClick={() => void remind()} title="Send each reviewer it waits on an Inbox reminder (once a day at most)">
+                  Remind
+                </Button>
+              )}
+              {v.draft.reminded_at && <span data-testid="reminded-at">Reminded {ago(v.draft.reminded_at)}</span>}
+            </span>
           )}
         </div>
       )}

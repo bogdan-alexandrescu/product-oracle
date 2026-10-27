@@ -12435,6 +12435,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/one-pagers/{doc}/remind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remind Simple One Pager Reviewers
+         * @description Remind: each reviewer the PRD's submitted draft waits on gets an Inbox nudge "<name>
+         *     is waiting for your review of <PRD>", at most once a day per reviewer (409 when none
+         *     is due, or no submitted draft waits); the PRD's owners and its decider only (403).
+         */
+        post: operations["remind_simple_one_pager_reviewers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/one-pagers/{doc}/pdf": {
         parameters: {
             query?: never;
@@ -28323,7 +28345,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "comment" | "reply" | "assignment" | "rereview_requested" | "campaign" | "patch_proposed" | "published" | "webhook_paused" | "webhook_url_changed";
+            kind: "comment" | "reply" | "assignment" | "rereview_requested" | "campaign" | "patch_proposed" | "published" | "webhook_paused" | "webhook_url_changed" | "review_reminder";
             /** Title */
             title: string;
             /** Document Id */
@@ -28566,6 +28588,13 @@ export interface components {
             waiting_on: components["schemas"]["SimplePersonRef"][];
             /** Can Submit */
             can_submit: boolean;
+            /** Reminded At */
+            reminded_at?: string | null;
+            /**
+             * Can Remind
+             * @default false
+             */
+            can_remind: boolean;
         };
         /**
          * OnePagerFlow
@@ -28726,6 +28755,19 @@ export interface components {
             can_edit: boolean;
             /** Can Propose */
             can_propose: boolean;
+        };
+        /**
+         * OnePagerRemindOut
+         * @description Remind's answer: the reviewers nudged now (each gets an Inbox nudge).
+         */
+        OnePagerRemindOut: {
+            /** Reminded */
+            reminded: components["schemas"]["SimplePersonRef"][];
+            /**
+             * Reminded At
+             * Format: date-time
+             */
+            reminded_at: string;
         };
         /** OnePagerSectionPatch */
         OnePagerSectionPatch: {
@@ -66206,6 +66248,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OnePagerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remind_simple_one_pager_reviewers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnePagerRemindOut"];
                 };
             };
             /** @description Validation Error */
