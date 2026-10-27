@@ -78,7 +78,7 @@ for (const phone of [false, true]) {
 
       test("a scheduled review, a one-pager and the roadmap open the start sheet", async ({ page }) => {
         await meetings(page);
-        await page.getByRole("region", { name: "Upcoming" }).getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("region", { name: "Upcoming" }).getByRole("button", { name: "Start review" }).first().click();
         await expect(sheet(page).getByTestId("start-occurrence")).toContainText(/Weekly goals check-in|Monthly roadmap refresh|Quarterly goals review/);
         // The ritual's attendees (the owners and approvers) are checked.
         await expect(sheet(page).getByRole("checkbox", { name: "Approver" })).toBeChecked();
