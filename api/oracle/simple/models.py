@@ -288,3 +288,44 @@ class SimpleOnePager(TenantScoped, Base):
     built_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+CARD_STATUSES = ("open", "applied", "proposed", "discarded", "undone")
+
+
+class SimpleChatCard(TenantScoped, Base):
+    """Simple S9: one change card Oracle answered a chat request with (oracle.simple.chat):
+    the exact change-engine op it would make. Nothing is written until an allowed person
+    applies it (``change_id``: the change it became, applied or proposed); a discarded
+    card wrote nothing. ``discussion_id``/``message_id``: the thread line (Oracle's
+    discussions) it belongs to; ``meeting_id``: S8's meeting, when asked in one;
+    ``owner_id``: the person whose Ask panel or walk it is (outside meetings)."""
+
+    __tablename__ = "simple_chat_cards"
+    __table_args__ = (
+        CheckConstraint(_in("status", CARD_STATUSES), name="status"),
+        Index("ix_simple_chat_cards_message", "message_id"),
+    )
+
+    discussion_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussions.id", ondelete="CASCADE"), index=True
+    )
+    message_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussion_messages.id", ondelete="CASCADE")
+    )
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, index=True)
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    op: Mapped[str] = mapped_column(Text, nullable=False)
+    target: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    before: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    after: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    item_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    preview: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")
+    change_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("simple_changes.id", ondelete="SET NULL")
+    )
+    decision_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

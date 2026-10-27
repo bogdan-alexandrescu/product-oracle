@@ -35,6 +35,8 @@ Ops and the fields they write (``before`` must name the key fields):
   draft is a ``cut`` with the reason "Merged into <code>".
 - ``change_horizon``: horizon. ``reorder``: position. ``cut`` / ``restore``: cut.
 - ``edit_title``: title. ``edit_outcome``: outcome.
+- ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
+  date_source: "typed"}}`` (date optional), or null to clear it.
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
   ``{"risk": {"note"}}``; ``before`` ``{"risk": null}`` when none is.
 - ``shift_dependents``: the flagged item (``target.item_id``) starts the day after its
@@ -87,6 +89,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "edit_outcome": ("outcome",),
     "accept_risk": ("risk",),
     "confirm_item": ("draft",),
+    "set_milestone": ("milestone",),
 }
 FIXES = ("shift_dependents", "move_dependency")
 FLAG_KINDS = (
@@ -525,6 +528,17 @@ async def _plan(
         if not title or len(title) > TITLE_MAX:
             raise ChangeError(422, f"after.title: 1 to {TITLE_MAX} characters")
         after = {"title": title}
+    elif op == "set_milestone":
+        m = a.get("milestone")
+        if m is None:
+            after = {"milestone": None}
+        else:
+            name = " ".join(str((m or {}).get("name") or "").split()) if isinstance(m, dict) else ""
+            if not name or len(name) > TITLE_MAX:
+                raise ChangeError(422, f"after.milestone.name: 1 to {TITLE_MAX} characters")
+            day = _day(m.get("date"), "after.milestone.date")
+            after = {"milestone": {"name": name, "date": _iso(day),
+                                   "date_source": "typed" if day else None}}  # fmt: skip
     elif op == "edit_outcome":
         outcome = a.get("outcome")
         outcome = str(outcome).strip() if outcome is not None else None

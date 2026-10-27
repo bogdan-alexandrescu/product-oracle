@@ -89,6 +89,8 @@ FIELDS = (
     "accepted_risks",
     # S6: confirm_item.
     "draft",
+    # S9: set_milestone.
+    "milestone",
 )
 DATES = ("start_date", "end_date")
 # Blockers of review_problems that the approval itself resolves.
