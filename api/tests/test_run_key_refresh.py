@@ -11,7 +11,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
-from oracle.runs import workflow
+from oracle.runs import service, workflow
 from oracle.runs.models import Run, RunSegment
 from oracle.runtokens import RunToken, verify_run_token
 from oracle.swarm import FakeRuntime, Outcome, Parked, RuntimeUnavailable, WorkflowSpec, set_runtime
@@ -278,6 +278,10 @@ async def test_the_token_never_shows_in_logs_knobs_notes_or_the_run_api(client, 
     await tick(client, auth)
     await tick(client, auth)
     token = restored(swarm)["value"]
+    # It was minted for the run and sent, in the PUT's body, and nowhere else.
+    assert await verify_run_token(token) is not None
+    [put] = [r for r in swarm.requests if r.method == "PUT"]
+    assert put.url.path == "/v1/workflows/wf_1/mcp-credentials" and token in put.content.decode()
     assert token not in caplog.text
     body = (await client.get(f"/v1/runs/{run['id']}", headers=auth)).text
     assert token not in body and RENEWED in body
@@ -318,3 +322,178 @@ async def test_the_local_runtime_parks_and_restores_too():
     with pytest.raises(RuntimeUnavailable) as caught:
         await runtime.store_mcp_credentials(wid, "oracle", "ort_Secret123456", 600)
     assert caught.value.status == 409 and runtime.stored == []
+
+
+# ------------------------------------------------------------------- review follow-ups
+
+
+def on_swarm_clock(monkeypatch, swarm: FakeSwarmCloud) -> None:
+    """Oracle's clock is SwarmCloud's (one clock, as in production): expiries compare."""
+    monkeypatch.setattr(service, "_now", lambda: swarm.now)
+
+
+def repark(swarm: FakeSwarmCloud, after: float = 120) -> None:
+    """SwarmCloud reports the step parked again, with a new parked_at but the same
+    expiry it parked for at first (a child task the sweep promotes, or a re-report)."""
+    swarm.tick(after)
+    step = swarm.workflows["wf_1"].step(FIRST)
+    step.state, step.park_reason, step.parked_at = "PARKED", "CREDENTIAL_MISSING", swarm.now
+
+
+def fail_step(swarm: FakeSwarmCloud) -> None:
+    step = swarm.workflows["wf_1"].step(FIRST)
+    step.state, step.park_reason, step.parked_at = "FAILED", None, None
+    step.error_code = "mcp_credential_expired"
+    step.last_error = "mcp_credential_expired: the workflow's credential expired"
+
+
+async def test_a_repark_older_than_the_renewed_key_does_not_renew_again(client, owner, monkeypatch):
+    """protects=a stored key newer than a park's expiry is not replaced: the renewed token
+    the promoted steps use stays valid; fails_when=a re-park (new parked_at) whose
+    expired_at is before the renewal revokes the renewed token and re-stores another;
+    no_claim=a park whose key expired after the renewal (renewed again)."""
+    tenant_id, auth = owner
+    swarm = parking()
+    swarm.promote_on_restore = False
+    on_swarm_clock(monkeypatch, swarm)
+    run = await parked_run(client, auth, swarm)
+    await tick(client, auth)
+    assert len(swarm.restores) == 1
+    renewed = restored(swarm)["value"]
+    repark(swarm)
+    await tick(client, auth)
+    await tick(client, auth)
+    assert len(swarm.restores) == 1
+    assert await verify_run_token(renewed) is not None
+    assert len(await tokens(tenant_id, run["id"])) == 2
+
+
+async def test_a_new_park_after_a_refusal_shows_no_second_advice(client, owner, monkeypatch):
+    """protects=a 403/422 refusal is reported once per workflow, not once per park;
+    fails_when=a later park of the same workflow mints and re-stores again or shows the
+    advice twice; no_claim=a new workflow of the run (a fresh key at its submission)."""
+    _, auth = owner
+    swarm = parking()
+    swarm.fail_restores = [_err(403, "forbidden", "not yours")]
+    on_swarm_clock(monkeypatch, swarm)
+    run = await parked_run(client, auth, swarm)
+    assert len(await raw_tick(client, auth)) == 1
+    repark(swarm)
+    assert await raw_tick(client, auth) == []
+    assert await raw_tick(client, auth) == []
+    assert len(swarm.restores) == 1
+    run = await get(client, auth, run["id"])
+    assert run["notes"].count(workflow.ADVICE["key_refresh_forbidden"]) == 1
+
+
+@pytest.mark.parametrize(
+    "refusal", [_err(403, "forbidden", "not yours"), _err(422, "mcp_credential_shape", "x")]
+)
+async def test_a_refused_restore_revokes_the_key_it_minted(client, owner, refusal):
+    """protects=a key SwarmCloud refused is not left valid; fails_when=the token minted
+    for a refused re-store is still unrevoked; no_claim=a 5xx (tried again)."""
+    tenant_id, auth = owner
+    swarm = parking()
+    swarm.fail_restores = [refusal]
+    run = await parked_run(client, auth, swarm)
+    await raw_tick(client, auth)
+    assert len(swarm.restores) == 1
+    assert await verify_run_token(restored(swarm)["value"]) is None
+    assert [r.revoked_at is None for r in await tokens(tenant_id, run["id"])] == [False, False]
+
+
+@pytest.mark.parametrize(
+    "detail,advice",
+    [
+        ({"credential": "mcp", "code": "mcp_credential_missing", "server": "oracle"},
+         "key_missing"),
+        ({"credential": "mcp", "code": "mcp_credential_expired", "server": None},
+         "key_expired_unnamed"),
+    ],
+)  # fmt: skip
+async def test_a_key_park_that_cannot_be_renewed_says_why(client, owner, detail, advice):
+    """protects=a CREDENTIAL_MISSING park for a missing key, or an expired one without a
+    server to name, gets its own advice; fails_when=it shows the 'connection switched off'
+    advice, gets none, or Oracle tries a re-store; no_claim=SwarmCloud's other codes."""
+    _, auth = owner
+    swarm = parking()
+    run = await started(client, auth)
+    swarm.servers["oracle"]["enabled"] = False
+    swarm.forged[FIRST] = {
+        "blocked_by": [{"reason": "CREDENTIAL_MISSING", "expired_at": None, **detail}]
+    }
+    await tick(client, auth)
+    await tick(client, auth)
+    assert swarm.restores == []
+    run = await get(client, auth, run["id"])
+    assert workflow.ADVICE["CREDENTIAL_MISSING"] not in run["notes"]
+    assert run["notes"].count(workflow.ADVICE[advice]) == 1
+
+
+async def test_steps_still_to_run_are_sized_by_the_submitted_waits(client, owner):
+    """protects=the renewed key's lifetime counts waits as at submission (StepSpec.waits,
+    kept on the workflow); fails_when=it counts a segment's review keys instead, which
+    differ from the wait step ids; no_claim=the length of a step or a wait."""
+    _, auth = owner
+    swarm = parking()
+    swarm.promote_on_restore = False
+    run = await parked_run(client, auth, swarm)
+    await tick(client, auth)
+    status = await swarm.runtime().status("wf_1")
+    async with tenant_session(owner[0]) as s:
+        row = await s.get(Run, run["id"])
+        wf = dict(row.knobs["workflow"])
+        waits = wf["waits"]
+        assert waits and set(waits) <= {st.step_id for st in status.steps}
+        wf.pop("key_refresh", None)
+        wf["segments"] = [{**e, "reviews": ["not-a-step"]} for e in wf.get("segments") or []]
+        status = await swarm.runtime().status("wf_1")
+        park = Parked(FIRST, "t", "CREDENTIAL_MISSING", credential="mcp",
+                      code="mcp_credential_expired", server="oracle",
+                      parked_at=datetime.now(UTC))  # fmt: skip
+        marked = service._mark_key_refresh(row, wf, status, [park])
+        await s.rollback()
+    left = [st for st in status.steps if st.state not in service._FINISHED_STEPS]
+    agents = sum(1 for st in left if st.step_id not in waits)
+    want = workflow.credential_seconds(agents, len(left) - agents, get_runtime_settings())
+    assert marked["key_refresh"]["seconds"] == want
+
+
+async def test_a_renewed_park_then_a_failed_step_acts_once(client, owner, monkeypatch):
+    """protects=finding 1's guard: after the park path renewed, a step SwarmCloud then
+    fails mcp_credential_expired is not renewed again and not resubmitted alongside it
+    (at most one of renewal or restart acts); fails_when=a second re-store or a second
+    submission follows; no_claim=the restart-once fallback (lane #732), which is not on
+    this branch's base: this test is its merge guard."""
+    _, auth = owner
+    swarm = parking()
+    swarm.promote_on_restore = False
+    on_swarm_clock(monkeypatch, swarm)
+    run = await parked_run(client, auth, swarm)
+    await tick(client, auth)
+    assert len(swarm.restores) == 1
+    swarm.tick(120)
+    fail_step(swarm)
+    for _ in range(3):
+        await raw_tick(client, auth)
+    assert len(swarm.restores) == 1 and len(swarm.submissions()) == 1
+    run = await get(client, auth, run["id"])
+    assert run["status"] == "failed"
+
+
+async def test_a_refused_park_then_a_failed_step_acts_at_most_once(client, owner, monkeypatch):
+    """protects=finding 1's guard: a refused renewal followed by the step failing
+    mcp_credential_expired is acted on at most once (no second re-store, at most one
+    resubmission); fails_when=a renewal is tried again or the run resubmits more than once;
+    no_claim=the restart-once fallback (lane #732): this test is its merge guard."""
+    _, auth = owner
+    swarm = parking()
+    swarm.fail_restores = [_err(422, "mcp_server_unregistered", "oracle")]
+    on_swarm_clock(monkeypatch, swarm)
+    await parked_run(client, auth, swarm)
+    await raw_tick(client, auth)
+    swarm.tick(120)
+    fail_step(swarm)
+    for _ in range(3):
+        await raw_tick(client, auth)
+    assert len(swarm.restores) == 1 and len(swarm.submissions()) <= 2
