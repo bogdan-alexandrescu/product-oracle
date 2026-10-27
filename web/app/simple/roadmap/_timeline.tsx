@@ -207,13 +207,15 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     const edge = Math.min(10, r.width / 4);
     const mode = !canDrag || item.status === "cut" ? "move" : e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
     const touch = e.pointerType === "touch";
+    // React clears currentTarget once the handler returns: keep the bar for the timeout.
+    const target = e.currentTarget;
     const d: Drag = { id: item.id, mode, x0: e.clientX, start, end, dx: 0, moved: false, frame: null, pointer: e.pointerId, touch, armed: !touch, timer: null };
     drag.current = d;
     if (touch && canDrag && item.status !== "cut") {
       // Phone: a long press picks the bar up; moving first scrolls.
       d.timer = window.setTimeout(() => {
         begin(d);
-        e.currentTarget?.setAttribute?.("data-picked", "true");
+        target.setAttribute("data-picked", "true");
         navigator.vibrate?.(10);
       }, LONG_PRESS_MS);
     } else if (!touch) begin(d);
@@ -273,6 +275,16 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   };
 
   const keyOpen = (it: Item) => onOpen(it, { x: sc.x((moved[it.id] ?? barSpan(it))[0]), y: (l.y.get(it.id) ?? 0) + l.rowH });
+  // The keyboard's drag: an arrow moves a focused bar by a day (the Gantt's day scale) or a
+  // week; Shift+arrow moves only its end.
+  const keyMove = (it: Item, dir: 1 | -1, resize: boolean) => {
+    if (!canDrag || it.status === "cut") return;
+    const [s, e] = moved[it.id] ?? barSpan(it);
+    const n = dir * (format === "gantt" && unit === "day" ? 1 : 7);
+    const end = addDays(e, n);
+    if (resize && end < s) return;
+    onMove(it, resize ? s : addDays(s, n), end);
+  };
   const today = sc.x(data.today);
   const chartW = sc.width;
   return (
@@ -363,7 +375,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 </g>
               ))}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
-            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} onDown={onDown} onKeyOpen={keyOpen} onSuggestion={onSuggestion} /> : null))}
+            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} onDown={onDown} onKeyOpen={keyOpen} onKeyMove={keyMove} onSuggestion={onSuggestion} /> : null))}
             <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" />
             <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600}>
               Today
@@ -448,10 +460,11 @@ type BarProps = {
   canDrag: boolean;
   onDown: (e: ReactPointerEvent<SVGGElement>, item: Item) => void;
   onKeyOpen: (item: Item) => void;
+  onKeyMove: (item: Item, dir: 1 | -1, resize: boolean) => void;
   onSuggestion: (item: Item, anchor: { x: number; y: number }) => void;
 };
 
-const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, onDown, onKeyOpen, onSuggestion }: BarProps) {
+const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, onDown, onKeyOpen, onKeyMove, onSuggestion }: BarProps) {
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
   const red = broken(item).length > 0;
@@ -465,7 +478,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, onDown, onK
   // The suggestion's handle sits left of the bar (a broken link's callout is on its right).
   const left = Math.min(x, s ? sc.x(s.start_date) : x) - 14;
   const mark = left >= 10 ? left : Math.max(sc.x(s?.end_date ?? end), x + w) + sc.px + 12;
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${red ? ", a broken link" : ""}`;
+  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${red ? ", a broken link" : ""}${canDrag && item.status !== "cut" ? ". Arrows move it, Shift+arrows its end" : ""}`;
   return (
     <g>
       <g
@@ -480,13 +493,16 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, onDown, onK
         role="button"
         tabIndex={0}
         aria-label={label}
-        className={canDrag && item.status !== "cut" ? "cursor-grab" : "cursor-pointer"}
+        className={`${canDrag && item.status !== "cut" ? "cursor-grab" : "cursor-pointer"} data-[picked=true]:[filter:drop-shadow(0_3px_6px_rgb(0_0_0/0.35))]`}
         style={{ touchAction: canDrag ? "none" : "auto" }}
         onPointerDown={(e) => onDown(e, item)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             onKeyOpen(item);
+          } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
+            e.preventDefault();
+            onKeyMove(item, e.key === "ArrowRight" ? 1 : -1, e.shiftKey);
           }
         }}
       >

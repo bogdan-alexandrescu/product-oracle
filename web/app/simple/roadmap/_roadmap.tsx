@@ -518,7 +518,7 @@ export function SimpleRoadmap() {
                 const f0 = broken(i).find((x) => x.kind === "dependency_order");
                 if (!f0) return [];
                 const [, end] = moved[i.id] ?? [i.start.date, i.end.date];
-                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange && i.can_decide} x={sc.x(end) + sc.px + 14} y={y} h={l.rowH} compact={phone} />];
+                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} y={y} h={l.rowH} compact={phone} />];
               })
             }
           />

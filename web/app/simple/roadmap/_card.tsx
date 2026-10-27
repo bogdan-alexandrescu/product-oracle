@@ -200,6 +200,10 @@ const OP_WORDS: Record<string, string> = {
 
 export const opWords = (op: string): string => OP_WORDS[op] ?? op.replace(/_/g, " ");
 
+/** Whether a proposal is for a new flow or feature (a draft item, D15's): only those carry
+ * a flow thumbnail. */
+export const featureProposal = (c: Change, items: Map<string, Item>): boolean => !!items.get(String(c.target.item_id))?.draft;
+
 /** A proposal's flow thumbnail (S10 draws the flows): opens the flow by widening the card. */
 function FlowThumb({ onOpen }: { onOpen: () => void }) {
   return (
@@ -252,8 +256,11 @@ export function FloatingCard({
   const dates = item.estimated
     ? `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · estimated (the ${item.horizon} window)`
     : `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · ${sourceWord(item.source)}`;
+  // A phone's widened card (the flow) is a full-height sheet.
   const place = phone
-    ? "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl"
+    ? wide
+      ? "fixed inset-0 z-50 h-dvh"
+      : "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl"
     : `absolute z-40 rounded-xl ${wide ? "w-[760px]" : "w-[380px]"}`;
   return (
     <div
@@ -336,7 +343,7 @@ export function FloatingCard({
               <ul className="mt-1 space-y-2" data-testid="card-proposals">
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2 text-[15px]">
-                    <FlowThumb onOpen={() => setWide(wide?.id === c.id ? null : c)} />
+                    {featureProposal(c, items) && <FlowThumb onOpen={() => setWide(wide?.id === c.id ? null : c)} />}
                     <span className="min-w-0 flex-1">
                       {opWords(c.op)} · <span className="text-text2">{c.by_name}</span>
                     </span>
@@ -369,7 +376,7 @@ export function FloatingCard({
         )}
       </div>
       <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
-        <Link href={`/plan?item=${encodeURIComponent(item.key)}`} className="inline-flex h-8 items-center rounded-lg border border-line-strong px-3 text-sm font-semibold hover:bg-surface2">
+        <Link href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}`} className="inline-flex h-8 items-center rounded-lg border border-line-strong px-3 text-sm font-semibold hover:bg-surface2">
           Open the detailed view
         </Link>
         <Button variant="ghost" onClick={() => setPanelOpen(true)}>
