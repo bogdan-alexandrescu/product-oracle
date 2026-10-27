@@ -35,6 +35,9 @@ interface SeedItem {
   status?: Item["status"];
   draft?: boolean;
   milestone?: { name: string; day: number };
+  /** The roadmap item's validation gates (days from the window's start); one naming a
+   * phase ends that phase on its day (oracle.simple.dates.named_phases). */
+  gates?: { phase: string; day: number }[];
   risks?: { flag: Flag["kind"]; note: string; subject?: string | null }[];
   /** Simple S3a's change engine (./simple-changes.ts) edits these. */
   outcome?: string | null;
@@ -93,12 +96,12 @@ const METRICS: Record<string, string> = { "grow-retention": "Teams active after 
 const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
 
 const SEED: SeedItem[] = [
-  { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", why: "Admins asked for it most this quarter.", section: "bets" },
+  { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
   { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 } },
   { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"] },
   { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
-  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed" },
+  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", gates: [{ phase: "Beta", day: 40 }] },
   { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", depends: ["setup-checklist"], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
   { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut" },
   { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
@@ -200,15 +203,23 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
 
 const PHASES = [["discover", 0.15], ["build", 0.55], ["beta", 0.2], ["launch", 0.1]] as const;
 
-function phases(start: string, end: string): Schemas["SimplePhase"][] {
+/** oracle.simple.dates.phases: the milestone and gates naming a phase end it on their date;
+ * every other phase keeps the 15/55/20/10 split of the bar, estimated. */
+function phases(start: string, end: string, s: SeedItem, w: [string, string]): Schemas["SimplePhase"][] {
+  const named = new Map<string, string>();
+  for (const e of [...(s.milestone ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
+    const word = e.phase.trim().toLowerCase();
+    if (PHASES.some(([k]) => k === word)) named.set(word, addDays(w[0], e.day));
+  }
   const total = span(start, end);
   let cursor = start;
   let share = 0;
   return PHASES.map(([key, part], i) => {
     share += part;
-    let day = i === PHASES.length - 1 ? end : addDays(start, Math.round(total * share) - 1);
+    const own = named.get(key);
+    let day = own ?? (i === PHASES.length - 1 ? end : addDays(start, Math.round(total * share) - 1));
     if (day < cursor) day = cursor;
-    const out = { key, start: cursor, end: day, estimated: true };
+    const out = { key, start: cursor, end: day, estimated: !own };
     cursor = addDays(day, 1);
     return out;
   });
@@ -396,7 +407,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { 
       estimated: r.start.estimated && r.end.estimated,
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
       milestone: s.milestone ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item" } : null,
-      phases: phases(r.start.date, r.end.date),
+      phases: phases(r.start.date, r.end.date, s, w[s.horizon]),
       depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),

@@ -4,13 +4,15 @@ import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "re
 
 import { Button, Notice, SegmentedControl, toast } from "@/components/ds";
 import { Loading } from "@/components/ui";
+import { getBranding, logoDataUrl } from "@/lib/api/branding";
 import { api, unwrap } from "@/lib/api/client";
 import { shownDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+import { Board, boardColumns, HORIZONS, type Horizon } from "./_board";
 import { Callout, FlagLine, FixButtons, FloatingCard, opWords, SuggestionPopover, type Act } from "./_card";
-import { exportView } from "./_export";
+import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import {
   broken,
   ChangeFailed,
@@ -29,7 +31,23 @@ import {
   type Item,
   type Roadmap,
 } from "./_lib";
-import { Chart } from "./_timeline";
+import { Chart, PHASES } from "./_timeline";
+
+const FORMAT_WORDS: Record<Format, string> = { timeline: "Timeline", gantt: "Gantt", board: "Now / Next / Later", waterfall: "Waterfall" };
+
+/** The company's branding for an export (its logo for the theme on screen); none when it
+ * cannot be read. */
+async function brandOf(): Promise<Brand | null> {
+  try {
+    const b = await getBranding();
+    const root = document.documentElement.dataset.theme;
+    const dark = root === "dark" || (root !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const logo = (dark && b.logo_dark) || b.logo;
+    return { name: b.display_name, logo: logo ? await logoDataUrl(logo).catch(() => null) : null, accent: b.accent, disclaimer: b.public_disclaimer, mark: b.oracle_mark };
+  } catch {
+    return null;
+  }
+}
 
 type Group = Roadmap["group"];
 type Filters = { group: Group; prd: string; goal: string; track: string; from: string; to: string };
@@ -196,15 +214,17 @@ function DecisionTray({
       role="dialog"
       aria-label="Needs a decision"
       data-testid="decision-tray"
-      className={`${phone ? "fixed inset-0 z-50" : "fixed top-0 right-0 bottom-0 z-50 w-[440px] border-l border-line"} overflow-y-auto bg-surface p-4 shadow-tip`}
+      data-sheet={phone ? "bottom" : "side"}
+      className={`${phone ? "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl border-t border-line" : "fixed top-0 right-0 bottom-0 z-50 w-[440px] border-l border-line"} overflow-y-auto bg-surface p-4 shadow-tip`}
     >
+      {phone && <div aria-hidden className="mx-auto -mt-1 mb-2 h-1 w-10 rounded-full bg-line-strong" />}
       <div className="flex items-center gap-2">
         <h2 className="flex-1 text-lg font-semibold">Needs a decision</h2>
         <button type="button" aria-label="Close" onClick={onClose} className="h-8 w-8 rounded text-text2 hover:bg-surface2">
           ×
         </button>
       </div>
-      <ul className="mt-3 grid grid-cols-4 gap-2" data-testid="tray-counters">
+      <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
         {counters.map(([label, n]) => (
           <li key={label} className="rounded-lg border border-line px-2 py-1.5 text-center">
             <b className="tnum block text-xl">{n}</b>
@@ -341,8 +361,21 @@ export function SimpleRoadmap() {
     [act],
   );
 
+  const onHorizon = useCallback(
+    (item: Item, horizon: Horizon) => {
+      setCard(null);
+      void act(`Moved '${item.title}' to ${HORIZONS.find((h) => h.key === horizon)!.label}`, {
+        op: "change_horizon",
+        target: { item_id: item.id },
+        before: { horizon: item.horizon },
+        after: { horizon },
+      });
+    },
+    [act],
+  );
+
   const anchorOf = (id: string): { left: number; top: number } => {
-    const el = wrap.current?.querySelector(`g[data-bar-id="${id}"]`);
+    const el = wrap.current?.querySelector(`[data-bar-id="${id}"]`);
     const box = wrap.current?.getBoundingClientRect();
     const r = el?.getBoundingClientRect();
     if (!r || !box) return { left: 0, top: 0 };
@@ -378,12 +411,29 @@ export function SimpleRoadmap() {
     [reload],
   );
 
+  /** The filters in words, for the export's header. */
+  const filterWords = (): string => {
+    const named = (list: [string, string][], v: string) => list.find(([k]) => k === v)?.[1] ?? v;
+    const qName = (v: string) => (data ? quarters(data.windows.now.start, data.windows.later.end).find((q) => q.start === v || q.end === v)?.label : null) ?? shortDay(v);
+    const parts = [`Grouped by ${f.group === "prd" ? "PRD" : f.group}`];
+    if (f.prd) parts.push(`PRD: ${named(seen.prd, f.prd)}`);
+    if (f.goal) parts.push(`Goal: ${named(seen.goal, f.goal)}`);
+    if (f.track) parts.push(`Track: ${named(seen.track, f.track)}`);
+    if (f.from) parts.push(`From ${qName(f.from)}`);
+    if (f.to) parts.push(`To ${qName(f.to)}`);
+    if (!f.prd && !f.goal && !f.track && !f.from && !f.to) parts.push("every roadmap");
+    return parts.join(" · ");
+  };
+
   const doExport = async (kind: "png" | "pdf") => {
-    if (!svg.current) return;
+    if (!data) return;
+    const labels = wrap.current?.querySelector<HTMLElement>('[data-testid="chart-labels"]') ?? null;
+    if (format !== "board" && !svg.current) return;
     setExporting(true);
     try {
-      const labels = wrap.current?.querySelector<HTMLElement>('[data-testid="chart-labels"]') ?? null;
-      await exportView(kind, svg.current, labels, `Roadmap · ${format === "gantt" ? `Gantt (${unit})` : "Timeline"}`, `roadmap-${format}`);
+      const pic = format === "board" ? boardPicture(boardColumns(data)) : chartPicture(svg.current!, labels);
+      const title = `Roadmap · ${FORMAT_WORDS[format]}${format === "gantt" ? ` (${unit})` : ""}`;
+      await exportView(kind, pic, { title, filters: filterWords(), brand: await brandOf() }, data.today, `roadmap-${format}`);
     } catch {
       toast({ message: "The view could not be exported" });
     } finally {
@@ -406,28 +456,34 @@ export function SimpleRoadmap() {
     <div className="simple-mode space-y-3 px-4 py-4 min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
       <header className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Roadmap</h1>
-        <SegmentedControl<Format>
-          label="Format"
-          size="sm"
-          value={format}
-          onChange={setFormat}
-          items={[
-            { value: "timeline", label: "Timeline", testId: "format-timeline" },
-            { value: "gantt", label: "Gantt", testId: "format-gantt" },
-            { value: "board", label: "Now / Next / Later", testId: "format-board" },
-            { value: "waterfall", label: "Waterfall", testId: "format-waterfall" },
-          ]}
-        />
+        <div className={phone ? "order-last w-full" : ""} data-testid="format-switch">
+          <SegmentedControl<Format>
+            label="Format"
+            size="sm"
+            value={format}
+            onChange={(v) => {
+              setCard(null);
+              setPop(null);
+              setFormat(v);
+            }}
+            items={[
+              { value: "timeline", label: "Timeline", testId: "format-timeline" },
+              { value: "gantt", label: "Gantt", testId: "format-gantt" },
+              { value: "board", label: phone ? "Now/Next/Later" : "Now / Next / Later", testId: "format-board" },
+              { value: "waterfall", label: "Waterfall", testId: "format-waterfall" },
+            ]}
+          />
+        </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
           {decides && (
             <Button data-testid="needs-decision" onClick={() => setTray(true)} className={waiting ? "border-warn" : ""}>
               Needs a decision · {waiting}
             </Button>
           )}
-          <Button disabled={exporting || format === "board" || format === "waterfall"} onClick={() => void doExport("png")}>
+          <Button disabled={exporting} onClick={() => void doExport("png")}>
             Export PNG
           </Button>
-          <Button disabled={exporting || format === "board" || format === "waterfall"} onClick={() => void doExport("pdf")}>
+          <Button disabled={exporting} onClick={() => void doExport("pdf")}>
             Export PDF
           </Button>
         </div>
@@ -485,18 +541,27 @@ export function SimpleRoadmap() {
           />
         )}
       </div>
-      {format === "board" || format === "waterfall" ? (
-        <section data-testid="format-later" className="rounded-xl border border-dashed border-line-strong p-8 text-center text-text2">
-          {format === "board" ? "The Now / Next / Later board" : "The waterfall phases"} come with the roadmap&rsquo;s second part.
-        </section>
-      ) : (
-        <div ref={wrap} className="relative">
+      <div ref={wrap} className="relative">
+        {format === "board" ? (
+          <Board
+            data={data}
+            phone={phone}
+            canDrag={canChange}
+            proposals={allProposals}
+            open={card?.id ?? null}
+            onOpen={(item) => {
+              setPop(null);
+              setCard({ id: item.id, ...anchorOf(item.id) });
+            }}
+            onMove={onHorizon}
+          />
+        ) : (
           <Chart
             data={data}
             format={format}
             unit={unit}
             compact={phone}
-            canDrag={canChange}
+            canDrag={canChange && format !== "waterfall"}
             moved={moved}
             open={card?.id ?? null}
             chartRef={(el) => {
@@ -522,37 +587,53 @@ export function SimpleRoadmap() {
               })
             }
           />
-          {cardItem && card && (
-            <FloatingCard
-              key={cardItem.id}
-              item={cardItem}
-              items={byId}
-              proposals={allProposals.filter((c) => c.target.item_id === cardItem.id)}
-              phone={phone}
-              style={{ left: card.left, top: card.top }}
-              act={act}
-              canChange={canChange}
-              onDecide={(c, how) => void onDecide(c, how)}
-              onClose={() => setCard(null)}
-            />
-          )}
-          {popItem?.suggestion && pop && (
-            <SuggestionPopover
-              key={popItem.suggestion.id}
-              item={popItem}
-              canAct={can("accept_date_suggestion")}
-              style={{ left: pop.left, top: pop.top }}
-              onAccept={() => void onSuggestion(popItem, "accept")}
-              onEdit={(s, e) => void onSuggestion(popItem, "edit", { start_date: s, end_date: e })}
-              onDismiss={() => void onSuggestion(popItem, "dismiss")}
-              onClose={() => setPop(null)}
-            />
-          )}
-        </div>
+        )}
+        {cardItem && card && (
+          <FloatingCard
+            key={cardItem.id}
+            item={cardItem}
+            items={byId}
+            proposals={allProposals.filter((c) => c.target.item_id === cardItem.id)}
+            phone={phone}
+            style={{ left: card.left, top: card.top }}
+            act={act}
+            canChange={canChange}
+            onDecide={(c, how) => void onDecide(c, how)}
+            onClose={() => setCard(null)}
+          />
+        )}
+        {popItem?.suggestion && pop && (
+          <SuggestionPopover
+            key={popItem.suggestion.id}
+            item={popItem}
+            canAct={can("accept_date_suggestion")}
+            style={{ left: pop.left, top: pop.top }}
+            onAccept={() => void onSuggestion(popItem, "accept")}
+            onEdit={(s, e) => void onSuggestion(popItem, "edit", { start_date: s, end_date: e })}
+            onDismiss={() => void onSuggestion(popItem, "dismiss")}
+            onClose={() => setPop(null)}
+          />
+        )}
+      </div>
+      {format === "waterfall" ? (
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2" data-testid="legend">
+          {PHASES.map((p) => (
+            <span key={p.key} className="inline-flex items-center gap-1.5" data-testid="phase-key">
+              <span aria-hidden className="inline-block h-3 w-5 rounded-sm" style={{ background: p.ink }} />
+              {p.label}
+            </span>
+          ))}
+          <span>· solid: a milestone or validation gate dates the phase · hatched: estimated from the bar&rsquo;s span · the Timeline and Gantt move dates</span>
+        </p>
+      ) : format === "board" ? (
+        <p className="text-sm text-text2" data-testid="legend">
+          Drag a card to another column{phone ? " (press and hold first)" : ""} to change its horizon · hatched dates: estimated (the horizon&rsquo;s window) · dashed: draft · red: a broken link
+        </p>
+      ) : (
+        <p className="text-sm text-text2" data-testid="legend">
+          Solid: dated · hatched: estimated (the horizon&rsquo;s window) · dashed: draft · dotted outline: Oracle&rsquo;s date suggestion (? opens it) · diamond: a milestone · red: a broken link
+        </p>
       )}
-      <p className="text-sm text-text2" data-testid="legend">
-        Solid: dated · hatched: estimated (the horizon&rsquo;s window) · dashed: draft · dotted outline: Oracle&rsquo;s date suggestion (? opens it) · diamond: a milestone · red: a broken link
-      </p>
       {tray && (
         <DecisionTray
           items={data.items}

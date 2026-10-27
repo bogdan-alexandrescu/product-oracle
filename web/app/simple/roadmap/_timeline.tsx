@@ -61,14 +61,23 @@ export function layout(data: Roadmap, compact: boolean): Layout {
   return { rows, rowH, labelW: compact ? 116 : 248, top: AXIS_H, height: AXIS_H + rows.length * rowH + 8, y };
 }
 
-/** The chart's span and pixels per day: the timeline fits its quarters to the width; the
- * Gantt is a day or week scale around the items, scrolling sideways. */
+/** The waterfall's phases in order, each with its colour (solid: a milestone or gate dates
+ * it; hatched: estimated from the bar's split). */
+export const PHASES: { key: Item["phases"][number]["key"]; label: string; ink: string; soft: string }[] = [
+  { key: "discover", label: "Discover", ink: "var(--na)", soft: "var(--na-bg)" },
+  { key: "build", label: "Build", ink: "var(--accent)", soft: "var(--accent-soft)" },
+  { key: "beta", label: "Beta", ink: "var(--warn)", soft: "var(--warn-bg)" },
+  { key: "launch", label: "Launch", ink: "var(--pass)", soft: "var(--pass-bg)" },
+];
+
+/** The chart's span and pixels per day: the timeline and the waterfall fit their quarters to
+ * the width; the Gantt is a day or week scale around the items, scrolling sideways. */
 export function chartScale(data: Roadmap, format: Format, unit: GanttUnit, width: number): { scale: Scale; ticks: { day: string; label: string; major: boolean }[] } {
   const starts = data.items.map((i) => i.start.date).concat(data.today);
   const ends = data.items.map((i) => i.end.date).concat(data.today);
   const lo = starts.reduce((a, b) => (a < b ? a : b));
   const hi = ends.reduce((a, b) => (a > b ? a : b));
-  if (format === "timeline") {
+  if (format !== "gantt") {
     const qs = quarters(lo < data.windows.now.start ? lo : data.windows.now.start, hi);
     const s = qs[0].start;
     const e = qs[qs.length - 1].end;
@@ -349,6 +358,13 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 <rect width="8" height="8" fill="var(--accent-soft)" />
                 <line x1="0" y1="0" x2="0" y2="8" stroke="var(--accent-mid)" strokeWidth="4" />
               </pattern>
+              {format === "waterfall" &&
+                PHASES.map((p) => (
+                  <pattern key={p.key} id={`simple-hatch-${p.key}`} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                    <rect width="8" height="8" fill={p.soft} />
+                    <line x1="0" y1="0" x2="0" y2="8" stroke={p.ink} strokeWidth="2.5" opacity="0.7" />
+                  </pattern>
+                ))}
               <marker id="simple-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
                 <path d="M0,0 L8,4 L0,8 z" fill="var(--line-strong)" />
               </marker>
@@ -375,7 +391,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 </g>
               ))}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
-            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} onDown={onDown} onKeyOpen={keyOpen} onKeyMove={keyMove} onSuggestion={onSuggestion} /> : null))}
+            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} onDown={onDown} onKeyOpen={keyOpen} onKeyMove={keyMove} onSuggestion={onSuggestion} /> : null))}
             <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" />
             <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600}>
               Today
@@ -397,11 +413,11 @@ function Axis({ ticks, sc, height, format }: { ticks: { day: string; label: stri
         const next = ticks[n + 1] ? sc.x(ticks[n + 1].day) : sc.width;
         return (
           <g key={t.day}>
-            {format === "timeline" && n % 2 === 1 && <rect x={x} y={0} width={next - x} height={height} fill="var(--bg)" opacity={0.5} />}
+            {format !== "gantt" && n % 2 === 1 && <rect x={x} y={0} width={next - x} height={height} fill="var(--bg)" opacity={0.5} />}
             <line x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={t.major ? 1 : 0.5} />
-            {(format === "timeline" || t.major || sc.px >= 20) && (
-              <text x={x + 4} y={24} fontSize={format === "timeline" ? 13 : 11} fontWeight={format === "timeline" ? 600 : 400} fill="var(--text2)" data-testid="axis-tick">
-                {format === "timeline" && next - x < 64 ? t.label.split(" ")[0] : t.label}
+            {(format !== "gantt" || t.major || sc.px >= 20) && (
+              <text x={x + 4} y={24} fontSize={format !== "gantt" ? 13 : 11} fontWeight={format !== "gantt" ? 600 : 400} fill="var(--text2)" data-testid="axis-tick">
+                {format !== "gantt" && next - x < 64 ? t.label.split(" ")[0] : t.label}
               </text>
             )}
           </g>
@@ -458,13 +474,15 @@ type BarProps = {
   span?: [string, string];
   open: boolean;
   canDrag: boolean;
+  /** The waterfall: the bar drawn as its four phases. */
+  phased: boolean;
   onDown: (e: ReactPointerEvent<SVGGElement>, item: Item) => void;
   onKeyOpen: (item: Item) => void;
   onKeyMove: (item: Item, dir: 1 | -1, resize: boolean) => void;
   onSuggestion: (item: Item, anchor: { x: number; y: number }) => void;
 };
 
-const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, onDown, onKeyOpen, onKeyMove, onSuggestion }: BarProps) {
+const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onDown, onKeyOpen, onKeyMove, onSuggestion }: BarProps) {
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
   const red = broken(item).length > 0;
@@ -478,7 +496,8 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, onDown, onK
   // The suggestion's handle sits left of the bar (a broken link's callout is on its right).
   const left = Math.min(x, s ? sc.x(s.start_date) : x) - 14;
   const mark = left >= 10 ? left : Math.max(sc.x(s?.end_date ?? end), x + w) + sc.px + 12;
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${red ? ", a broken link" : ""}${canDrag && item.status !== "cut" ? ". Arrows move it, Shift+arrows its end" : ""}`;
+  const phaseWords = phased ? `, ${item.phases.map((p) => `${p.key} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
+  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${canDrag && item.status !== "cut" ? ". Arrows move it, Shift+arrows its end" : ""}`;
   return (
     <g>
       <g
@@ -490,6 +509,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, onDown, onK
         data-start={start}
         data-end={end}
         data-open={open ? "true" : undefined}
+        data-phased={phased ? "true" : undefined}
         role="button"
         tabIndex={0}
         aria-label={label}
@@ -506,6 +526,29 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, onDown, onK
           }
         }}
       >
+        {phased &&
+          item.phases.map((p) => {
+            const tone = PHASES.find((t) => t.key === p.key)!;
+            const px = sc.x(p.start);
+            return (
+              <rect
+                key={p.key}
+                data-testid="phase"
+                data-phase={p.key}
+                data-estimated={p.estimated ? "true" : "false"}
+                data-start={p.start}
+                data-end={p.end}
+                x={px}
+                y={y + pad}
+                width={Math.max(1, sc.x(p.end) - px + sc.px)}
+                height={h - 2 * pad}
+                fill={p.estimated ? `url(#simple-hatch-${p.key})` : tone.ink}
+                opacity={item.status === "cut" ? 0.4 : 1}
+              >
+                <title>{`${tone.label}: ${shortDay(p.start)} – ${shortDay(p.end)}${p.estimated ? ", estimated" : ""}`}</title>
+              </rect>
+            );
+          })}
         <rect
           data-body
           x={x}
@@ -513,7 +556,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, onDown, onK
           width={w}
           height={h - 2 * pad}
           rx={5}
-          fill={fill}
+          fill={phased ? "transparent" : fill}
           stroke={stroke}
           strokeWidth={red || amber || open ? 2.5 : 1.25}
           strokeDasharray={kind === "draft" ? "6 4" : undefined}
