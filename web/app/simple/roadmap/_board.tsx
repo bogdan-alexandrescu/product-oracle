@@ -13,6 +13,9 @@ export const HORIZONS: { key: Horizon; label: string }[] = [
 ];
 
 const LONG_PRESS_MS = 450;
+/** A held card this close to the screen's top or bottom scrolls the page (px), this far a frame. */
+const EDGE = 64;
+const EDGE_STEP = 12;
 
 /** A column's sections: its items by the roadmap's groups (goal by default), the cut ones
  * below the line. */
@@ -49,6 +52,11 @@ type Drag = {
   timer: number | null;
   el: HTMLElement;
   over: Horizon | null;
+  /** The page's scroll when the drag began, and the pointer's last point (for the edge scroll). */
+  sy0: number;
+  x: number;
+  y: number;
+  scroll: number | null;
 };
 
 export interface BoardProps {
@@ -66,12 +74,25 @@ export interface BoardProps {
 /**
  * D3's Now / Next / Later board: the same items as the timeline, by horizon then group.
  * A card dragged to another column (a phone: after a long press) changes its horizon
- * through the change engine; the arrow keys do the same for a focused card.
+ * through the change engine; the arrow keys do the same for a focused card (left and right;
+ * on a phone, where the columns stack, up and down too). A held card at the screen's edge
+ * scrolls the page; a cancelled touch moves nothing.
  */
 export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }: BoardProps) {
   const drag = useRef<Drag | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  // A card the keyboard moved: it gets the focus back once it is drawn in its new column.
+  const refocus = useRef<{ id: string; horizon: Horizon } | null>(null);
   const cols = boardColumns(data);
+
+  useEffect(() => {
+    const f = refocus.current;
+    const el = f && root.current?.querySelector<HTMLElement>(`[data-testid="board-card"][data-bar-id="${f.id}"]`);
+    if (f && el && el.dataset.horizon === f.horizon) {
+      refocus.current = null;
+      el.focus();
+    }
+  }, [data]);
 
   // A picked-up card on a touch screen: the page does not scroll under the finger.
   useEffect(() => {
@@ -98,6 +119,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
   };
   const reset = (d: Drag) => {
     if (d.timer) clearTimeout(d.timer);
+    if (d.scroll) cancelAnimationFrame(d.scroll);
+    d.scroll = null;
     d.el.style.transform = "";
     d.el.style.zIndex = "";
     d.el.removeAttribute("data-picked");
@@ -119,6 +142,10 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
       timer: null,
       el,
       over: null,
+      sy0: window.scrollY,
+      x: e.clientX,
+      y: e.clientY,
+      scroll: null,
     };
     drag.current = d;
     const capture = () => {
@@ -154,10 +181,39 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
     if (!d.moved && Math.hypot(dx, dy) < 4) return;
     e.preventDefault();
     d.moved = true;
-    d.el.style.transform = `translate(${dx}px, ${dy}px)`;
+    d.x = e.clientX;
+    d.y = e.clientY;
+    follow(d);
+    // Held at the screen's top or bottom: the page scrolls until the finger moves away.
+    if (!d.scroll && edgeStep(d.y)) d.scroll = requestAnimationFrame(() => edgeScroll(d));
+  };
+
+  /** The card under the pointer (the page may have scrolled since the drag began) and the column it is over. */
+  const follow = (d: Drag) => {
+    d.el.style.transform = `translate(${d.x - d.x0}px, ${d.y - d.y0 + window.scrollY - d.sy0}px)`;
     d.el.style.zIndex = "30";
-    d.over = columnAt(e.clientX, e.clientY);
+    d.over = columnAt(d.x, d.y);
     mark(d.over);
+  };
+  const edgeStep = (y: number): number => (y < EDGE ? -EDGE_STEP : y > window.innerHeight - EDGE ? EDGE_STEP : 0);
+  const edgeScroll = (d: Drag) => {
+    const step = edgeStep(d.y);
+    const before = window.scrollY;
+    if (step) window.scrollBy(0, step);
+    if (drag.current !== d || !step || window.scrollY === before) {
+      d.scroll = null;
+      return;
+    }
+    follow(d);
+    d.scroll = requestAnimationFrame(() => edgeScroll(d));
+  };
+
+  // The system took the touch back (a call, a gesture): the card drops where it was.
+  const onCancel = (e: ReactPointerEvent<HTMLElement>) => {
+    const d = drag.current;
+    if (!d || e.pointerId !== d.pointer) return;
+    drag.current = null;
+    reset(d);
   };
 
   const onUp = (e: ReactPointerEvent<HTMLElement>, item: Item) => {
@@ -179,12 +235,16 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
       onOpen(item);
       return;
     }
-    // Arrows move a card to the column beside it (on a phone the columns stack: up and down too).
-    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    // Arrows move a card to the column beside it (on a phone the columns stack: up and down
+    // too; on a desktop they scroll the page).
+    const step = e.key === "ArrowRight" || (phone && e.key === "ArrowDown") ? 1 : e.key === "ArrowLeft" || (phone && e.key === "ArrowUp") ? -1 : 0;
     if (!step || !canDrag || item.status === "cut") return;
     e.preventDefault();
     const at = HORIZONS.findIndex((h) => h.key === item.horizon) + step;
-    if (at >= 0 && at < HORIZONS.length) onMove(item, HORIZONS[at].key);
+    if (at >= 0 && at < HORIZONS.length) {
+      refocus.current = { id: item.id, horizon: HORIZONS[at].key };
+      onMove(item, HORIZONS[at].key);
+    }
   };
 
   const card = (item: Item) => {
@@ -209,7 +269,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
           onPointerDown={(e) => onDown(e, item)}
           onPointerMove={onPointerMove}
           onPointerUp={(e) => onUp(e, item)}
-          onPointerCancel={(e) => onUp(e, item)}
+          onPointerCancel={onCancel}
           onKeyDown={(e) => onKey(e, item)}
           className={`relative block w-full rounded-xl border bg-surface px-3 py-2 text-left shadow-[var(--shadow)] select-none data-[open=true]:ring-2 data-[open=true]:ring-accent data-[picked=true]:shadow-tip ${
             red ? "border-crit" : kind === "draft" ? "border-dashed border-line-strong" : "border-line"
@@ -235,7 +295,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
           )}
           {pending && (
             <p className="mt-1 text-sm text-accent-ink" data-testid="board-pending">
-              Proposed: move to {String(pending.after.horizon)} · {pending.by_name}
+              Proposed: move to {HORIZONS.find((h) => h.key === pending.after.horizon)?.label ?? String(pending.after.horizon)} · {pending.by_name}
             </p>
           )}
         </div>

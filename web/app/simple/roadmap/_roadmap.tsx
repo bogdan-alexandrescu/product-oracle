@@ -460,6 +460,7 @@ export function SimpleRoadmap() {
           <SegmentedControl<Format>
             label="Format"
             size="sm"
+            fill={phone}
             value={format}
             onChange={(v) => {
               setCard(null);
@@ -600,6 +601,7 @@ export function SimpleRoadmap() {
             canChange={canChange}
             onDecide={(c, how) => void onDecide(c, how)}
             onClose={() => setCard(null)}
+            onHorizon={format === "board" && canChange && cardItem.status !== "cut" ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}
         {popItem?.suggestion && pop && (

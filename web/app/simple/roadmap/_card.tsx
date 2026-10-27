@@ -3,10 +3,11 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, SegmentedControl } from "@/components/ds";
 import { setPanelOpen } from "@/components/hop/open-state";
 import { useScreenSubject } from "@/lib/screen-subject";
 
+import { HORIZONS, type Horizon } from "./_board";
 import { shortDay, sourceWord, storedDates, type Change, type Flag, type Item } from "./_lib";
 
 /** What a change asks the engine, built by the page and sent through `act`. */
@@ -233,6 +234,7 @@ export function FloatingCard({
   canChange,
   onDecide,
   onClose,
+  onHorizon,
 }: {
   item: Item;
   items: Map<string, Item>;
@@ -243,6 +245,8 @@ export function FloatingCard({
   canChange: boolean;
   onDecide: (c: Change, how: "accept" | "decline") => void;
   onClose: () => void;
+  /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
+  onHorizon?: (h: Horizon) => void;
 }) {
   const [wide, setWide] = useState<Change | null>(null);
   const ref = useRef<HTMLDivElement>(null);
@@ -288,6 +292,20 @@ export function FloatingCard({
           <dd data-testid="card-owner">{item.owner?.name ?? <span className="text-text2">No owner yet</span>}</dd>
           <dt className="text-text2">Dates</dt>
           <dd data-testid="card-dates">{dates}</dd>
+          {onHorizon && (
+            <>
+              <dt className="self-center text-text2">Horizon</dt>
+              <dd data-testid="card-horizon">
+                <SegmentedControl<Horizon>
+                  label="Horizon"
+                  size="sm"
+                  value={item.horizon}
+                  onChange={(h) => h !== item.horizon && onHorizon(h)}
+                  items={HORIZONS.map((h) => ({ value: h.key, label: h.label }))}
+                />
+              </dd>
+            </>
+          )}
           <dt className="text-text2">Status</dt>
           <dd data-testid="card-status">{item.status.replace("_", " ")}</dd>
           <dt className="text-text2">Confidence</dt>

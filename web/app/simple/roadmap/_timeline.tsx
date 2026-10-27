@@ -529,7 +529,9 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
         {phased &&
           item.phases.map((p) => {
             const tone = PHASES.find((t) => t.key === p.key)!;
-            const px = sc.x(p.start);
+            // A phase a gate dates past the item's end is drawn inside the bar (its title keeps the dates).
+            const px = Math.min(Math.max(sc.x(p.start), x), x + w - 1);
+            const right = Math.min(sc.x(p.end) + sc.px, x + w);
             return (
               <rect
                 key={p.key}
@@ -540,7 +542,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
                 data-end={p.end}
                 x={px}
                 y={y + pad}
-                width={Math.max(1, sc.x(p.end) - px + sc.px)}
+                width={Math.max(1, right - px)}
                 height={h - 2 * pad}
                 fill={p.estimated ? `url(#simple-hatch-${p.key})` : tone.ink}
                 opacity={item.status === "cut" ? 0.4 : 1}

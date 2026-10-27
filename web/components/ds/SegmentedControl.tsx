@@ -26,6 +26,7 @@ export function SegmentedControl<V extends string>({
   value,
   onChange,
   size = "md",
+  fill = false,
 }: {
   /** Accessible name of the group. */
   label: string;
@@ -33,6 +34,8 @@ export function SegmentedControl<V extends string>({
   value: V | null | undefined;
   onChange?: (v: V) => void;
   size?: "sm" | "md";
+  /** Spread over the row's width, the segments sharing it (a narrow phone's switch). */
+  fill?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const onKey = (e: KeyboardEvent) => {
@@ -43,14 +46,14 @@ export function SegmentedControl<V extends string>({
     e.preventDefault();
     els[(at + (e.key === "ArrowRight" ? 1 : -1) + els.length) % els.length]?.focus();
   };
-  const h = size === "sm" ? "h-8 px-3 text-sm" : "h-9 px-3.5 text-[15px]";
+  const h = `${size === "sm" ? "h-8 text-sm" : "h-9 text-[15px]"} ${fill ? "min-w-0 flex-auto justify-center px-1.5" : size === "sm" ? "px-3" : "px-3.5"}`;
   return (
     <div
       ref={ref}
       role="group"
       aria-label={label}
       onKeyDown={onKey}
-      className="inline-flex max-w-full flex-none overflow-x-auto rounded-button border border-line-strong bg-surface"
+      className={`${fill ? "flex w-full" : "inline-flex max-w-full flex-none"} overflow-x-auto rounded-button border border-line-strong bg-surface`}
     >
       {items.map((it) => {
         const on = it.value === value;
