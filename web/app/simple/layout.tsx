@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { useSimpleShown } from "@/components/simple/SimpleShell";
 import { SIMPLE_HOME } from "@/lib/experience";
@@ -12,6 +12,15 @@ import { SIMPLE_HOME } from "@/lib/experience";
  * (#723 production walk: no blank first paint).
  */
 export default function SimpleLayout({ children }: { children: ReactNode }) {
+  // The pathname is read on the client only (a prerender draws nothing, as before).
+  return (
+    <Suspense fallback={null}>
+      <Gate>{children}</Gate>
+    </Suspense>
+  );
+}
+
+function Gate({ children }: { children: ReactNode }) {
   const shown = useSimpleShown();
   const home = usePathname() === SIMPLE_HOME;
   return shown || home ? children : null;
