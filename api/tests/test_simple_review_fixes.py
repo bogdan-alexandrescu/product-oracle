@@ -65,6 +65,11 @@ Test cards (protects / fails_when / no_claim):
   failing with 403; fails_when=the call fails whole; no_claim=the meeting screen (S8).
 - test_draft_lists_its_changes: protects=D-d, the draft lists each change's author, time
   and whether it was made in a meeting; fails_when=a field is missing; no_claim=the web.
+- test_roadmap_items_say_who_decides (commenter, approver track owner): protects=#723 S1
+  Home review, each roadmap item says whether the caller decides it and names its deciders
+  (the decider, else the deciding track owner, else the company's owners); fails_when=an
+  approver decider is told someone else decides or a commenter's row names nobody;
+  no_claim=the web (web/e2e/simple-home.spec.ts).
 """
 
 import asyncio
@@ -76,6 +81,7 @@ from sqlalchemy import select
 
 from oracle.auth.models import User
 from oracle.docs.models import DocumentVersion, Section
+from oracle.members.names import display_name
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import items as items_mod
 from oracle.roadmap.models import RoadmapItem
@@ -594,3 +600,32 @@ async def test_draft_lists_its_changes(client):
     assert log["edit_title"]["session_kind"] == "meeting"
     assert log["move_dates"]["in_meeting"] is False and log["move_dates"]["at"]
     assert log["move_dates"]["by"] == str(w.ctx.users["owner"].id)
+
+
+@pytest.mark.parametrize("owner_role", ["commenter", "approver"])
+async def test_roadmap_items_say_who_decides(client, owner_role):
+    """#723 S1 Home review: each item of the roadmap read says whether the caller decides it
+    (service.can_decide) and the deciders' names (the decider, else the deciding track
+    owner, else the company's owners), so Simple's Home applies or proposes the broken-link
+    fixes and names who decides."""
+    ctx = await make_people()
+    async with tenant_session(ctx.tenant_id) as s:
+        u = User(email="trackowner@example.com", name="Tao Owner", password_hash="x",
+                 role=owner_role)  # fmt: skip
+        s.add(u)
+        await s.commit()
+        ctx.users["trackowner"] = u
+    w = await World(ctx).build(decider=False, track_owner="trackowner", ops=["edit_title"])
+    owners = [display_name(ctx.users["owner"].email, ctx.users["owner"].name)]
+    named = ["Tao Owner"] if owner_role == "approver" else owners
+    for who, decides in [("trackowner", owner_role == "approver"), ("commenter", False),
+                         ("owner", True)]:  # fmt: skip
+        item = by_key(await roadmap(client, w, who))["edit_title-a"]
+        assert (item["can_decide"], item["deciders"]) == (decides, named), who
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(DocumentReviewPolicy(document_id=uuid.UUID(w.roadmap_id),
+                                   decider_id=ctx.users["decider"].id))  # fmt: skip
+        await s.commit()
+    for who, decides in [("decider", True), ("trackowner", False), ("commenter", False)]:
+        item = by_key(await roadmap(client, w, who))["edit_title-a"]
+        assert (item["can_decide"], item["deciders"]) == (decides, ["Dee Cider"]), who

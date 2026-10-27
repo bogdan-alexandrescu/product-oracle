@@ -526,8 +526,8 @@ code .date-mark {
  * rail (Simple's rail and the phone bars read the same --rail-* tokens Detailed's do).
  */
 [data-mode="simple"] {
-  --simple-text: 17px;
-  --simple-leading: 26px;
+  --simple-text: 18px;
+  --simple-leading: 28px;
   --simple-h1: 34px;
   --simple-h1-leading: 42px;
   --simple-h2: 21px;
@@ -544,6 +544,15 @@ code .date-mark {
   --simple-card-border: 0 solid transparent;
   --simple-card-shadow: var(--shadow);
   --simple-rail-border: 1px solid var(--line);
+  /* S1 restyle (the owner's picks, 2026-10-26): the light 232 px rail, its 18 px labels and the
+     yellow counts shown only where something waits on the signed-in person. */
+  --simple-rail-width: 232px;
+  --simple-rail-label: 18px;
+  --simple-count-bg: #f6c344;
+  --simple-count-text: #3d2c00;
+  --simple-lead: 22px;
+  --simple-bar: var(--accent-soft);
+  --simple-bar-text: var(--accent-ink);
   --rail: var(--surface);
   --rail-top: var(--surface);
   --rail-foot: var(--surface);
@@ -553,6 +562,16 @@ code .date-mark {
   --rail-active-text: var(--accent-ink);
   --rail-bar: var(--accent);
   --rail-sep: var(--line);
+}
+:root[data-theme="dark"][data-mode="simple"] {
+  --simple-count-bg: #e0b23a;
+  --simple-count-text: #1f1600;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-mode="simple"] {
+    --simple-count-bg: #e0b23a;
+    --simple-count-text: #1f1600;
+  }
 }
 @media (max-width: 600px) {
   [data-mode="simple"] {
@@ -600,4 +619,161 @@ code .date-mark {
   background: var(--simple-card-bg);
   box-shadow: var(--simple-card-shadow);
   padding: var(--simple-card-pad);
+}
+
+/* Simple's Home (#723 S1, "Brief as cards"): the goal band, the rows with one actions column, the strip. */
+.simple-lead {
+  font-family: var(--font-display);
+  font-size: var(--simple-lead);
+  line-height: 1.35;
+  font-weight: 600;
+}
+.simple-count {
+  display: inline-grid;
+  min-width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 13px;
+  padding: 0 8px;
+  background: var(--simple-count-bg);
+  color: var(--simple-count-text);
+  font-size: 15px;
+  font-weight: 700;
+}
+.simple-number {
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 38px;
+  font-weight: 700;
+}
+.simple-button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  padding: 0 14px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: var(--simple-small);
+  font-weight: 600;
+  white-space: nowrap;
+}
+.simple-button:hover {
+  background: var(--surface2);
+}
+.simple-button-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.simple-button-primary:hover {
+  background: var(--accent-ink);
+}
+.simple-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(180px, auto);
+  align-items: start;
+  gap: 14px;
+  border-top: 1px solid var(--line);
+  padding: 14px 0;
+}
+.simple-row:first-child {
+  border-top: 0;
+}
+.simple-row:not(:has(.simple-actions)) {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.simple-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+@media (max-width: 600px) {
+  .simple-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .simple-actions {
+    grid-column: 1 / -1;
+  }
+}
+.simple-goal-band {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--simple-gap);
+}
+.simple-goal {
+  display: flex;
+  min-height: 150px;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: var(--simple-card-radius);
+  background: var(--simple-card-bg);
+  box-shadow: var(--simple-card-shadow);
+  padding: 18px;
+}
+.simple-code {
+  border-radius: 6px;
+  background: var(--surface2);
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+}
+.simple-tag {
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0 8px;
+  color: var(--text2);
+  font-size: 13px;
+}
+.simple-status {
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.simple-status-risk {
+  background: var(--crit-bg);
+  color: var(--crit);
+}
+.simple-status-quiet {
+  background: var(--surface2);
+  color: var(--text2);
+}
+.simple-status-ok {
+  background: var(--pass-bg);
+  color: var(--pass);
+}
+.simple-date-tile {
+  display: flex;
+  width: 56px;
+  flex-direction: column;
+  align-items: center;
+  border-radius: 12px;
+  background: var(--accent-soft);
+  padding: 6px 0;
+  color: var(--accent-ink);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+.simple-date-tile strong {
+  font-size: 22px;
+  line-height: 26px;
+}
+.simple-bar {
+  background: var(--simple-bar);
+  color: var(--simple-bar-text);
+}
+.simple-bar-estimated {
+  background: repeating-linear-gradient(135deg, var(--simple-bar) 0 6px, transparent 6px 12px);
+  outline: 1px dashed var(--accent);
+  outline-offset: -1px;
+}
+.simple-bar-broken {
+  outline: 2px solid var(--crit);
+  outline-offset: -2px;
+  color: var(--crit);
 }

@@ -109003,6 +109003,19 @@
             },
             "type": "array",
             "title": "Flags"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "deciders": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Deciders",
+            "default": []
           }
         },
         "type": "object",

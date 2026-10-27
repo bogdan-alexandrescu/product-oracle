@@ -126,6 +126,10 @@ class SimpleRoadmapItem(BaseModel):
     depends_on: list[uuid.UUID]
     needed_by: list[uuid.UUID]
     flags: list[SimpleFlag]
+    # Whether the caller applies changes to this item (service.can_decide), and the names of
+    # who decides it (D-a: the decider, else the deciding track owner, else the owners).
+    can_decide: bool = False
+    deciders: list[str] = []
 
 
 class SimpleGroup(BaseModel):

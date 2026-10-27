@@ -65,6 +65,9 @@ export interface Who {
   id: string;
   role: Role;
   roles?: Record<string, Role>;
+  /** The company's owners (who decide an item with no decider) and every member's display name. */
+  owners?: string[];
+  names?: Record<string, string>;
 }
 
 /** A working draft of one roadmap (oracle.simple.drafts): the items in `db.items` are the
@@ -141,6 +144,19 @@ export function seedSimpleRoadmap(): SimpleDb {
     own: {},
     suggestions: [],
   }));
+}
+
+/**
+ * The dates an item stores (its start_date/end_date columns in the API): a typed or accepted
+ * seed's dates, or those Simple set; null for engineering, tracker and estimated dates.
+ */
+export function storedDates(db: SimpleDb, key: string): { start: string | null; end: string | null } {
+  const own = db.own[key];
+  if (own) return { start: own.start, end: own.end };
+  const s = db.items.find((x) => x.key === key)!;
+  if (s.source !== "typed" && s.source !== "accepted") return { start: null, end: null };
+  const w = simpleWindows(iso(mockNowMs()))[s.horizon];
+  return { start: s.start !== undefined ? addDays(w[0], s.start) : null, end: s.end !== undefined ? addDays(w[0], s.end) : null };
 }
 
 function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated; end: Dated } {
@@ -320,8 +336,12 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
   return { db: { ...db, items, own }, hidden, visible };
 }
 
-export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { id: string; role: Role }): Schemas["SimpleRoadmapOut"] | null {
+export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
   const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
+  const deciders = (s: SeedItem) => {
+    const ids = deciderIds(db, s, me?.roles);
+    return (ids.length ? ids : (me?.owners ?? [])).map((id) => me?.names?.[id]).filter((n): n is string => !!n);
+  };
   const reader = me ? readerView(db, me) : { db, hidden: 0, visible: [] };
   db = reader.db;
   const today = iso(mockNowMs());
@@ -352,6 +372,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { 
       depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
+      can_decide: decides(s),
+      deciders: deciders(s),
     };
   });
   const prd = q.get("prd");
