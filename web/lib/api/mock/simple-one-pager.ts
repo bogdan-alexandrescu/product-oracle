@@ -18,6 +18,7 @@
  * for your review of <PRD>", at most once a day per reviewer (409 when none is due).
  */
 import type { Schemas } from "@/lib/api/client";
+import { planByMonth } from "@/lib/simple-home";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
@@ -67,13 +68,15 @@ export interface OnePagerDb {
   visuals?: VisualsDb;
   /** S8: decided decisions that changed each line (by line id), newest first (./simple-meetings.ts). */
   decisions?: Record<string, { id: string; number: number; title: string }[]>;
+  /** Imported by a service token: the PRD has no owner yet. */
+  ownerless?: boolean;
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
   approval?: { approved_in: string; waiting_on: { id: string; name: string }[] } | null;
 }
 
 const DOC_ID = stableUuid("simple-one-pager-doc");
 
-export function seedOnePager(): OnePagerDb {
+export function seedOnePager(ownerless = false): OnePagerDb {
   const sections: Sec[] = [
     { key: "problem", heading: "Problem", body: "New workspace admins stall during setup and never invite a teammate in the first week." },
     { key: "who", heading: "Who has it", body: "Admins of new teams with fewer than ten people." },
@@ -111,8 +114,21 @@ export function seedOnePager(): OnePagerDb {
     ],
     draft: null,
     changes: [],
+    ownerless,
   };
 }
+
+/**
+ * The PRD's roadmap slice (invented): 12 items carry M1, 5 carry M2, 3 carry M3, 2 have no
+ * milestone; one of those is committed past M3's month (the strip's edge).
+ */
+const SLICE: { title: string; horizon: "now" | "next" | "later"; start: string; end: string; estimated: boolean; milestone: [string, string] | null }[] = [
+  ...Array.from({ length: 12 }, (_, i) => ({ title: `Setup step ${i + 1}`, horizon: "now" as const, start: "2026-10-05", end: "2026-11-20", estimated: false, milestone: ["M1", "2026-11-20"] as [string, string] })),
+  ...Array.from({ length: 5 }, (_, i) => ({ title: `Calendar invites ${i + 1}`, horizon: "next" as const, start: "2026-11-23", end: "2026-12-18", estimated: i > 2, milestone: ["M2", "2026-12-18"] as [string, string] })),
+  ...Array.from({ length: 3 }, (_, i) => ({ title: `Sample project ${i + 1}`, horizon: "later" as const, start: "2026-12-21", end: "2027-01-29", estimated: true, milestone: ["M3", "2027-01-29"] as [string, string] })),
+  { title: "Setup help center", horizon: "now", start: "2026-10-12", end: "2026-12-11", estimated: false, milestone: null },
+  { title: "Setup analytics", horizon: "later", start: "2026-11-02", end: "2027-03-12", estimated: false, milestone: null },
+];
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -236,7 +252,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const notes = [...live.map((c) => note(c, "change")), ...shown.map((c) => note(c, "proposal"))];
   const proposed = new Set(notes.filter((n) => n.kind === "proposal").map((n) => n.line_id));
   const hiddenDraft = !sees && db.draft ? Object.keys(db.draft.lines).length : 0;
-  const owner = ctx.owners[0];
+  const owner = db.ownerless ? undefined : ctx.owners[0];
   return {
     document: db.doc,
     version: db.version,
@@ -244,7 +260,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     owner: owner ? { id: owner, name: ctx.names[owner] ?? "Owner" } : null,
     decider: null,
     span_start: "2026-10-05",
-    span_end: "2027-02-26",
+    span_end: "2027-03-12",
     built_by: "oracle",
     built_at: "2026-10-20T15:05:00Z",
     blocks: db.blocks.map((b) => ({
@@ -261,11 +277,11 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
         };
       }),
     })),
-    timeline: [
-      { id: stableUuid("op-item-1"), title: "Setup checklist", horizon: "now", start: "2026-10-05", end: "2026-11-27", estimated: false },
-      { id: stableUuid("op-item-2"), title: "Calendar invites", horizon: "next", start: "2026-11-30", end: "2027-01-29", estimated: true },
-      { id: stableUuid("op-item-3"), title: "Sample project", horizon: "later", start: "2027-01-04", end: "2027-02-26", estimated: true },
-    ],
+    timeline: SLICE.map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
+    plan: planByMonth(
+      SLICE.map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null })),
+      new Date(mockNowMs()).toISOString().slice(0, 10),
+    ),
     sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
     notes,
     draft: sees && db.draft

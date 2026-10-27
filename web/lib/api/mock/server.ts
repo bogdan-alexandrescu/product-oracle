@@ -862,6 +862,21 @@ function seedSimpleDecidersScenario(): Db {
 }
 
 /**
+ * The plan strip's "+N more" (#723 polish): "simple-home" plus ten invented items on the
+ * alerts roadmap, each carrying its own milestone, so the PRD in play has eleven milestones.
+ */
+function seedSimpleHomeMilestonesScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const rm = db.simple_roadmap!;
+  for (let i = 1; i <= 10; i++) {
+    const key = `alert-step-${i}`;
+    rm.items.push({ key, title: `Alert step ${i}`, horizon: "now", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", start: 5 * i, end: 5 * i + 20, source: "typed", milestone: { name: `Step ${i}`, day: 5 * i + 20 } });
+    rm.ids[key] = stableUuid(`simple-item/${key}`);
+  }
+  return db;
+}
+
+/**
  * #723 S1 Home's "simple-home" scenario: the default company whose confirmed goals are those
  * Simple's roadmap items serve (Grow retention, Faster activation) plus a guardrail goal, each
  * with a weight and a metric path; two proposals the commenter made (routed to the owners);
@@ -875,7 +890,7 @@ function seedSimpleHomeScenario(): Db {
   const goal = (key: string, title: string, attrs: Record<string, unknown>) =>
     db.baseline.entities.push({ ...template, id: stableUuid(`simple-goal/${key}`), key, title, body: null, attrs, status: "confirmed", locked: false, locked_by: null, locked_at: null });
   goal("grow-retention", "G-R Grow retention", { metric: "teams with weekly alerts on", unit: "teams", comparison: "at_least", start: 50, current: 100, current_as_of: "2026-10-01", target: 200, weight: 3, horizon: "medium" });
-  goal("faster-activation", "G-A Faster activation", { metric: "new teams set up in a day", unit: "%", comparison: "at_least", start: 30, target: 60, weight: 2, horizon: "short" });
+  goal("faster-activation", "G-A Faster activation", { metric: "monthly revenue from teams set up in a day", unit: "USD", comparison: "at_least", start: 30000, target: 50000, weight: 2, horizon: "short" });
   goal("quiet-alerts", "G-Q Keep alerts quiet", { metric: "teams muting alerts", unit: "teams", comparison: "at_most", start: 12, target: 10, weight: 1, horizon: "short", guardrail: true });
   const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
   const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
@@ -2556,6 +2571,8 @@ function load(): Db {
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
+              : scenario === "simple-home-milestones"
+                ? seedSimpleHomeMilestonesScenario
               : scenario === "simple-chat"
                 ? () => {
                     const db = seedSimpleHomeScenario();
@@ -4974,7 +4991,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (roadmapRes) return roadmapRes;
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   // Simple S5: one-pagers and their line edits (edit_line) through the change engine.
-  db.simple_one_pager ??= seedOnePager();
+  // "one-pager-no-owner": the PRD was imported by a service token (no owner yet).
+  db.simple_one_pager ??= seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;

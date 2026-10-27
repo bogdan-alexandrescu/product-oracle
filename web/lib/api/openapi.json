@@ -43025,7 +43025,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/one-pagers/{doc}/pdf": {
@@ -43205,7 +43206,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "commenter"
       }
     },
     "/v1/simple/goal-suggestions/{suggestion_id}/accept": {
@@ -43275,7 +43277,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "commenter"
       }
     },
     "/v1/simple/goal-suggestions/{suggestion_id}/reject": {
@@ -43345,7 +43348,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": "approver"
       }
     },
     "/v1/simple/chat": {
@@ -43376,7 +43380,8 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/simple/chat/messages": {
@@ -43427,7 +43432,8 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/simple/meetings/{meeting_id}/chat": {
@@ -43480,7 +43486,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/simple/meetings/{meeting_id}/chat/messages": {
@@ -43543,7 +43550,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/simple/meetings/{meeting_id}/chat/mode": {
@@ -43606,7 +43614,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/chat/cards/{card_id}/apply": {
@@ -43690,7 +43699,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/chat/cards/{card_id}/discard": {
@@ -43743,7 +43753,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/chat/cards/{card_id}/undo": {
@@ -43796,7 +43807,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/walk": {
@@ -44807,7 +44819,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/visuals/{kind}/{subject_id}/revise": {
@@ -44886,7 +44899,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/visuals/{kind}/{subject_id}/request": {
@@ -44965,7 +44979,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/strategy/stack": {
@@ -90486,6 +90501,16 @@
             "type": "array",
             "title": "Timeline"
           },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePlanStrip"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "sections": {
             "items": {
               "$ref": "#/components/schemas/OnePagerSource"
@@ -114167,6 +114192,119 @@
           "estimated"
         ],
         "title": "SimplePhase"
+      },
+      "SimplePlanRow": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "items": {
+            "type": "integer",
+            "title": "Items"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated"
+          },
+          "milestone": {
+            "type": "boolean",
+            "title": "Milestone"
+          },
+          "past_edge": {
+            "type": "boolean",
+            "title": "Past Edge",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "items",
+          "start",
+          "end",
+          "estimated",
+          "milestone"
+        ],
+        "title": "SimplePlanRow",
+        "description": "One row of the plan strip: a milestone (its name, date and how many of the PRD's\nitems carry it), or the items with no milestone summed in one row."
+      },
+      "SimplePlanStrip": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "months": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Months"
+          },
+          "today": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Today"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "past_edge": {
+            "type": "integer",
+            "title": "Past Edge",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "months",
+          "rows"
+        ],
+        "title": "SimplePlanStrip",
+        "description": "The plan strip (the owner's pick for Home and the one-pager): the PRD's span by\nmonth with its milestones, today's line and how many commitments end past the edge."
       },
       "SimplePrioritiesOut": {
         "properties": {

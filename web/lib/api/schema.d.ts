@@ -29544,6 +29544,7 @@ export interface components {
             blocks: components["schemas"]["OnePagerBlock"][];
             /** Timeline */
             timeline: components["schemas"]["OnePagerItem"][];
+            plan?: components["schemas"]["SimplePlanStrip"] | null;
             /**
              * Sections
              * @default []
@@ -37946,6 +37947,66 @@ export interface components {
             end: string;
             /** Estimated */
             estimated: boolean;
+        };
+        /**
+         * SimplePlanRow
+         * @description One row of the plan strip: a milestone (its name, date and how many of the PRD's
+         *     items carry it), or the items with no milestone summed in one row.
+         */
+        SimplePlanRow: {
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /** Items */
+            items: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Estimated */
+            estimated: boolean;
+            /** Milestone */
+            milestone: boolean;
+            /**
+             * Past Edge
+             * @default false
+             */
+            past_edge: boolean;
+        };
+        /**
+         * SimplePlanStrip
+         * @description The plan strip (the owner's pick for Home and the one-pager): the PRD's span by
+         *     month with its milestones, today's line and how many commitments end past the edge.
+         */
+        SimplePlanStrip: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Months */
+            months: string[];
+            /** Today */
+            today?: string | null;
+            /** Rows */
+            rows: components["schemas"]["SimplePlanRow"][];
+            /**
+             * Past Edge
+             * @default 0
+             */
+            past_edge: number;
         };
         /** SimplePrioritiesOut */
         SimplePrioritiesOut: {
