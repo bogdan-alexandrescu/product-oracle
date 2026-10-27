@@ -170,6 +170,16 @@ async def may_read(db: AsyncSession, principal: Any, v: SimpleVisual) -> bool:
                 or me in (c.routed_to or [])
                 or (v.document_id is not None and await _edits(db, principal, v.document_id))
             )
+        if c is not None and c.status == "applied" and c.draft_ids:
+            # A change in a working draft not yet published: who sees the draft.
+            from oracle.simple import drafts
+            from oracle.simple.models import SimpleDraft
+
+            rows = await db.scalars(select(SimpleDraft).where(SimpleDraft.id.in_(c.draft_ids)))
+            open_ = [d for d in rows if d.status in ("working", "submitted")]
+            if open_:
+                w = await drafts.who(db, {d.document_id for d in open_})
+                return any(drafts.sees(principal, d, w) for d in open_)
     return True
 
 
