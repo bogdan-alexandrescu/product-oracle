@@ -30,7 +30,7 @@ import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { seedSimpleProposal } from "./simple-changes";
 import { nextOccurrence, type RitualsDb } from "./rituals";
-import type { OnePagerDb } from "./simple-one-pager";
+import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
@@ -664,6 +664,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const wait = waiting.map((i) => nameOf(ctx, i)).join(", ");
     record(db, ctx, m, `Approved ${prd.title} (${waiting.length ? `publishes when ${wait} approves` : "published"})`, [{ kind: "document", id: prd.id }], []);
     if (prd.slug === ctx.onePager.doc.slug && waiting.length) ctx.onePager.approval = { approved_in: m.title, waiting_on: waiting.map((i) => ref(ctx, i)) };
+    else if (prd.slug === ctx.onePager.doc.slug) publishOnePager(ctx.onePager);
     return ok();
   }
   if (p[4] === "end" && method === "POST") {
