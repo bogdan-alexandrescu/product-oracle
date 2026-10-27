@@ -1042,6 +1042,105 @@ async def _reviewer_approves(
             )
 
 
+async def _sections_approve(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    document: Document,
+    version: DocumentVersion,
+    decider: Principal,
+    present: list[uuid.UUID],
+) -> None:
+    """The sections the review policy wants approved, with the decider's Approve (#723,
+    production): a section with an assigned reviewer (its owner or reviewers) is approved
+    by the one present (the decider if assigned), never over their heads; a section with
+    nobody assigned (a PRD started from an empty skeleton) by the decider, as any approver
+    may in Studio. What stays unapproved is named by :func:`_blocker_words`."""
+    from oracle.review.service import review_section
+    from oracle.review.state import section_states
+
+    states = await section_states(db, document, version)
+    for s in states.sections:
+        if not s.approval_required or s.status == "approved":
+            continue
+        assigned = [i for i in dict.fromkeys([s.owner_id, *s.reviewer_ids]) if i is not None]
+        if not assigned:
+            by = decider
+        elif decider.user_id in assigned:
+            by = decider
+        else:
+            here = next((i for i in assigned if i in present), None)
+            if here is None:
+                continue
+            try:
+                by = await principal_for(db, tenant_id, here)
+            except DraftError:
+                continue
+        try:
+            await _review_error(
+                review_section(
+                    db, by, document.slug, version.number, s.section_key, "approved", SECTION_NOTE
+                )  # fmt: skip
+            )
+        except DraftError:
+            # Not theirs to approve (a role the document's kind does not take): it stays
+            # in blocked_by, named.
+            continue
+
+
+def _people(names: list[str]) -> str:
+    return names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+
+
+async def _blocker_words(db: AsyncSession, blockers: list, states: Any) -> list[str]:
+    """The review policy's blockers in a person's words: a section that still needs an
+    approval names its reviewers ("Sections Scope need Rae's approval") or says it has
+    none ("Sections Scope need a reviewer"); others keep the policy's message."""
+    by_key = {s.section_key: s for s in states.sections}
+    out = []
+    for b in blockers:
+        if b.code != "missing_approval":
+            out.append(b.message)
+            continue
+        groups: dict[tuple, list[str]] = {}
+        for k in b.section_keys or []:
+            s = by_key.get(k)
+            who_ids = (
+                tuple(i for i in dict.fromkeys([s.owner_id, *s.reviewer_ids]) if i is not None)
+                if s
+                else ()
+            )
+            groups.setdefault(who_ids, []).append(s.heading if s else k)
+        ids = {i for g in groups for i in g}
+        names = (
+            dict((await db.execute(select(User.id, User.name).where(User.id.in_(ids)))).all())
+            if ids
+            else {}
+        )
+        for who_ids, headings in groups.items():
+            what = ", ".join(headings)
+            if not who_ids:
+                out.append(f"Sections {what} need a reviewer")
+            else:
+                people = _people([names.get(i) or "someone" for i in who_ids])
+                out.append(f"Sections {what} need {people}'s approval")
+    return out
+
+
+async def holds(db: AsyncSession, d: SimpleDraft) -> list[str]:
+    """What, besides its required reviewers (``waiting_on``), holds a submitted draft's
+    version back, in :func:`_blocker_words`' words (a meeting's banner reads it)."""
+    from oracle.review.publish import review_problems
+    from oracle.review.state import section_states
+
+    if d.status != "submitted" or d.version_id is None:
+        return []
+    document = await db.get(Document, d.document_id)
+    version = await db.get(DocumentVersion, d.version_id)
+    states = await section_states(db, document, version)
+    blockers, _, _, _ = await review_problems(db, document, version, states)
+    return await _blocker_words(db, [b for b in blockers if b.code not in APPROVAL_CODES], states)
+
+
 async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> list[str]:
     """Who is still to approve; the version's approval once the decider's is in and
     nothing else blocks it. Returns what else holds it back."""
@@ -1060,7 +1159,7 @@ async def _settle(db: AsyncSession, d: SimpleDraft, tenant_id: uuid.UUID) -> lis
     d.waiting_on = list(
         dict.fromkeys(i for b in blockers if b.code == "mandatory_reviewer_pending" for i in b.ids)
     )
-    other = [b.message for b in blockers if b.code not in APPROVAL_CODES]
+    other = await _blocker_words(db, [b for b in blockers if b.code not in APPROVAL_CODES], states)
     if d.decider_approval is not None and not d.waiting_on and not other:
         dp = await principal_for(db, tenant_id, uuid.UUID(d.decider_approval["by"]))
         await _review_error(approve_version(db, dp, document.slug, version.number))
@@ -1105,6 +1204,7 @@ async def _approve(
             rp = actor if r == actor.user_id else await principal_for(db, tenant_id, r)
             await _reviewer_approves(db, rp, document, version)
     if is_approver:
+        await _sections_approve(db, tenant_id, document, version, actor, present)
         d.decider_approval = {
             "by": str(actor.user_id),
             "at": company_time.now().isoformat(),
