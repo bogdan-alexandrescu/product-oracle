@@ -1,3 +1,4 @@
+import { MOCK_SLOW_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -29,6 +30,45 @@ async function board(page: Page, email?: string) {
   await open(page, email);
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("board")).toBeVisible();
+}
+
+/** The change engine's answers come late (MOCK_SLOW_MS): a change is on its way while the person goes on. */
+const slowChanges = (page: Page) => page.evaluate((k) => localStorage.setItem(k, "POST /v1/simple/changes"), MOCK_SLOW_KEY);
+
+/**
+ * Counts each bar's renders by its item's key (window.__poBarRenders): a React DevTools
+ * hook sees every commit, and a bar rendered again holds a new props object.
+ */
+function countBarRenders(page: Page) {
+  return page.addInitScript(() => {
+    type Fiber = { child: Fiber | null; sibling: Fiber | null; memoizedProps: unknown };
+    const w = window as unknown as { __poBarRenders: Record<string, number>; __REACT_DEVTOOLS_GLOBAL_HOOK__: unknown };
+    const renders: Record<string, number> = (w.__poBarRenders = {});
+    const seen = new Map<string, unknown>();
+    w.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+      isDisabled: false,
+      supportsFiber: true,
+      renderers: new Map(),
+      inject: () => 1,
+      checkDCE: () => undefined,
+      onScheduleFiberRoot: () => undefined,
+      onCommitFiberUnmount: () => undefined,
+      onPostCommitFiberRoot: () => undefined,
+      onCommitFiberRoot: (_id: number, root: { current: Fiber }) => {
+        const stack: Fiber[] = [root.current];
+        while (stack.length) {
+          const f = stack.pop()!;
+          const p = f.memoizedProps as { item?: { key: string }; onKeyCancel?: unknown; phased?: unknown } | null;
+          if (p && typeof p === "object" && p.item && "onKeyCancel" in p && "phased" in p && seen.get(p.item.key) !== p) {
+            seen.set(p.item.key, p);
+            renders[p.item.key] = (renders[p.item.key] ?? 0) + 1;
+          }
+          if (f.sibling) stack.push(f.sibling);
+          if (f.child) stack.push(f.child);
+        }
+      },
+    };
+  });
 }
 
 /** The 409's words: a burst never meets its own earlier move. */
@@ -71,15 +111,12 @@ for (const [where, use] of [
         await b.focus();
         await page.keyboard.press("ArrowRight");
         await page.keyboard.press("ArrowRight");
-        await expect(b).toHaveAttribute("data-start", plus(start, 14));
-        await expect(page.getByTestId("key-pending")).toContainText("Alert history export");
-        await expect(page.getByTestId("key-pending")).toContainText("not sent yet");
-        await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible();
-        await expect(page.getByTestId("draft-count")).toHaveText("1");
         await page.waitForTimeout(1200);
         await expect(conflict(page)).toHaveCount(0);
         await expect(b).toHaveAttribute("data-start", plus(start, 14));
         await expect(b).toHaveAttribute("data-end", plus(end, 14));
+        await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible();
+        await expect(page.getByTestId("draft-count")).toHaveText("1");
         // A second burst builds on the first one's result.
         await b.focus();
         await page.keyboard.press("ArrowRight");
@@ -87,6 +124,20 @@ for (const [where, use] of [
         await page.waitForTimeout(800);
         await expect(conflict(page)).toHaveCount(0);
         await expect(b).toHaveAttribute("data-start", plus(start, 21));
+      });
+
+      /**
+       * Card simple-keys-pending-words: protects = while a burst waits, the screen reader
+       * hears the bar's pending dates and that they are not sent yet; fails_when = the
+       * presses are silent until the change returns; no_claim = the toast's words.
+       */
+      test("the screen reader hears the pending dates", async ({ page }) => {
+        await open(page);
+        const b = bar(page, "alert-export");
+        await b.focus();
+        await page.keyboard.press("ArrowRight");
+        await expect(page.getByTestId("key-pending")).toContainText("Alert history export");
+        await expect(page.getByTestId("key-pending")).toContainText("not sent yet");
       });
 
       /**
@@ -155,8 +206,9 @@ for (const [where, use] of [
 
       /**
        * Card simple-keys-blur: protects = moving the focus away ends the burst at once (the
-       * change is sent without waiting for the pause); fails_when = a blurred burst is lost
-       * or never sent; no_claim = the pause's exact length.
+       * change is sent without waiting for the pause: its toast shows well inside the
+       * pause's 600 ms); fails_when = a blurred burst waits for the pause, is lost or never
+       * sent, or each press sends at once; no_claim = the pause's exact length.
        */
       test("leaving the bar sends the burst", async ({ page }) => {
         await open(page);
@@ -164,10 +216,97 @@ for (const [where, use] of [
         const start = (await b.getAttribute("data-start"))!;
         await b.focus();
         await page.keyboard.press("ArrowRight");
+        await expect(page.getByTestId("key-pending")).toContainText("not sent yet");
+        await expect(page.getByTestId("draft-banner")).toHaveCount(0);
         await page.getByTestId("format-switch").getByTestId("format-timeline").focus();
-        await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible();
+        await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible({ timeout: 400 });
         await expect(page.getByTestId("draft-count")).toHaveText("1");
         await expect(b).toHaveAttribute("data-start", plus(start, 7));
+      });
+
+      /**
+       * Card simple-keys-overlap: protects = on a slow network, a burst sent while the
+       * previous one's change is still on its way keeps the bar at its own pending dates when
+       * that earlier change returns (no transient snap back to the earlier burst's dates),
+       * then lands as the second change; fails_when = the earlier change's return clears the
+       * pending dates and the bar falls back until the later one returns; no_claim = how
+       * late the network is.
+       */
+      test("a burst sent while the last is on its way does not snap back", async ({ page }) => {
+        await open(page);
+        await slowChanges(page);
+        const b = bar(page, "alert-export");
+        const start = (await b.getAttribute("data-start"))!;
+        const away = page.getByTestId("format-switch").getByTestId("format-timeline");
+        await b.focus();
+        await page.keyboard.press("ArrowRight");
+        await away.focus();
+        await b.focus();
+        await page.keyboard.press("ArrowRight");
+        await away.focus();
+        await expect(b).toHaveAttribute("data-start", plus(start, 14));
+        // The first burst's change returns (its toast); the second is still on its way.
+        await expect(page.getByText(/Moved 'Alert history export'/).first()).toBeVisible({ timeout: 4000 });
+        for (let n = 0; n < 6; n++) {
+          expect(await b.getAttribute("data-start")).toBe(plus(start, 14));
+          await page.waitForTimeout(100);
+        }
+        await expect(page.getByTestId("draft-count")).toHaveText("2", { timeout: 5000 });
+        await expect(conflict(page)).toHaveCount(0);
+        await expect(b).toHaveAttribute("data-start", plus(start, 14));
+      });
+
+      /**
+       * Card simple-keys-failed-chain: protects = when the change on its way fails (here: the
+       * bar was moved in another tab, so it meets a 409), a burst begun meanwhile takes its
+       * `before` from the reload that followed, not from what was stored at its press, and
+       * lands; fails_when = the second burst sends the dates from before the reload and 409s
+       * too (the bar ends at the other tab's dates); no_claim = the first change's 409.
+       */
+      test("a burst after a failed change starts from the reload", async ({ page, context }) => {
+        await open(page);
+        const other = await context.newPage();
+        await other.goto(URL);
+        await expect(bar(other, "alert-export")).toBeVisible();
+        const start = (await bar(page, "alert-export").getAttribute("data-start"))!;
+        // The other tab moves the bar a week earlier; this tab has not reloaded.
+        await bar(other, "alert-export").focus();
+        await other.keyboard.press("ArrowLeft");
+        await other.getByTestId("format-switch").getByTestId("format-timeline").focus();
+        await expect(other.getByText(/Moved 'Alert history export'/)).toBeVisible();
+        await other.close();
+        await slowChanges(page);
+        const b = bar(page, "alert-export");
+        const away = page.getByTestId("format-switch").getByTestId("format-timeline");
+        await b.focus();
+        await page.keyboard.press("ArrowRight");
+        await away.focus();
+        await b.focus();
+        await page.keyboard.press("ArrowRight");
+        await away.focus();
+        await expect(conflict(page)).toBeVisible({ timeout: 4000 });
+        await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible({ timeout: 5000 });
+        await expect(b).toHaveAttribute("data-start", plus(start, 14));
+      });
+
+      /**
+       * Card simple-keys-renders: protects = an arrow press redraws only the pressed bar (the
+       * other bars' handlers stay the same, so memo(Bar) keeps them); fails_when = every bar
+       * renders again on each press (inline handlers); no_claim = the drag's frames
+       * (simple-roadmap-perf).
+       */
+      test("a press redraws only the pressed bar", async ({ page }) => {
+        await countBarRenders(page);
+        await open(page);
+        await page.waitForTimeout(300);
+        const before = await page.evaluate(() => ({ ...(window as unknown as { __poBarRenders: Record<string, number> }).__poBarRenders }));
+        expect(Object.keys(before).length).toBeGreaterThan(1);
+        await bar(page, "alert-export").focus();
+        await page.keyboard.press("ArrowRight");
+        await expect(page.getByTestId("key-pending")).toContainText("not sent yet");
+        const after = await page.evaluate(() => ({ ...(window as unknown as { __poBarRenders: Record<string, number> }).__poBarRenders }));
+        expect(after["alert-export"]).toBeGreaterThan(before["alert-export"]);
+        expect(Object.keys(after).filter((k) => k !== "alert-export" && after[k] !== before[k])).toEqual([]);
       });
 
       /**

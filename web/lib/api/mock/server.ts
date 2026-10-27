@@ -545,7 +545,7 @@ export const STORED_REFUSALS_SCENARIO = "stored-refusals";
 export const MOCK_FAIL_KEY = "po-mock-fail";
 /** Tests set this localStorage key to "METHOD /path" to make that call's next request fail once with a 500. */
 export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
-/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later. */
+/** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). */
 export const MOCK_SLOW_KEY = "po-mock-slow";
 export const MOCK_SLOW_MS = 1500;
 /**
@@ -5573,7 +5573,8 @@ export async function mockFetch(req: Request): Promise<Response> {
     return res;
   });
   queue = next.catch(() => undefined);
-  if (req.method === "GET" && url.pathname === localStorage.getItem(MOCK_SLOW_KEY)) {
+  const slow = localStorage.getItem(MOCK_SLOW_KEY);
+  if ((req.method === "GET" && url.pathname === slow) || slow === `${req.method} ${url.pathname}`) {
     return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), MOCK_SLOW_MS)));
   }
   return next;
