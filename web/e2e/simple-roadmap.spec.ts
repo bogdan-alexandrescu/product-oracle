@@ -76,7 +76,7 @@ for (const [where, use] of [
         await expect(bar(page, "alert-digest")).toHaveAttribute("data-broken", "true");
         await expect(page.locator('[data-testid="dep-arrow"][data-from="alert-rules"][data-to="alert-digest"]')).toHaveAttribute("data-state", "red");
         await expect(page.locator('[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]')).toHaveAttribute("data-state", "amber");
-        await expect(page.locator('[data-testid="broken-callout"][data-item="alert-digest"]')).toContainText("it depends on ends");
+        await expect(page.locator('[data-testid="broken-callout"][data-item="alert-digest"]')).toContainText("which it depends on, ends");
         await expect(page.getByTestId("item-milestone").first()).toBeAttached();
         await expect(page.getByTestId("track-milestone")).toHaveCount(1);
         await expect(page.getByTestId("today-line")).toBeAttached();
@@ -109,7 +109,7 @@ for (const [where, use] of [
         await expect(card.getByTestId("card-depends")).toHaveText("Alert rules engine");
         await expect(card.getByTestId("card-reasons")).toContainText("Serves the goal Grow retention.");
         await expect(card.getByTestId("card-decisions")).toContainText("Send the digest weekly or daily?");
-        await expect(card.getByTestId("card-flags")).toContainText("it depends on ends");
+        await expect(card.getByTestId("card-flags")).toContainText("which it depends on, ends");
         await expect(card.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", /^\/plan\?item=alert-digest&prd=[0-9a-f-]{36}$/);
         await expect(card.getByRole("button", { name: "Ask Oracle" })).toBeVisible();
         if (where === "desktop") {
