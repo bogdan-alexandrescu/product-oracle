@@ -102,6 +102,8 @@ async def test_defaults_and_unknown_keys(client, owner):
             "oracle_mark": True,
             "revision": 0,
         },
+        # Code maps (owner, 2026-10-26): a stale map refreshes at most daily.
+        "code_map_refresh": "daily",
     }
     assert all(s["is_default"] for s in listed)
     assert (await client.get("/v1/settings/nope", headers=owner.headers)).status_code == 404
