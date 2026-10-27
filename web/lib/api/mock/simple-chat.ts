@@ -218,7 +218,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
 
   // Questions: answers from Oracle's data, no cards; one about something not on the roadmap is Ask's.
   const asked = (x: string): Item | Reply => {
-    const i = asked(x);
+    const i = findItem(items, x);
     return !isItem(i) && i.missing ? { ...i, understood: false } : i;
   };
   if ((m = /^who (owns|decides) (.+)$/i.exec(t))) {
