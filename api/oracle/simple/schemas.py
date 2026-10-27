@@ -675,6 +675,8 @@ class SimpleVisualReviseIn(BaseModel):
 
 class SimpleVisualRequestIn(BaseModel):
     brief: str = Field(default="", max_length=2000)
+    # A one-pager bet line's PRD (its subject is a bet of that page).
+    document_id: uuid.UUID | None = None
 
 
 class SimplePriorityProposal(BaseModel):
