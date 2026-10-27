@@ -23,6 +23,11 @@ Test cards (protects / fails_when / no_claim):
   the occurrence, links the meeting to it and moves the ritual on; fails_when=Upcoming
   says no review while a ritual is due, or a start from it makes two occurrences;
   no_claim=the pre-read (oracle.rituals' tests).
+- test_approve_in_meeting_publishes_the_one_pager: protects=a line edited through the
+  meeting and the decider's Approve there publish the one-pager (version 2, no working
+  draft, the edited line), what the meeting screen reads again after Approve;
+  fails_when=Approve leaves the PRD's draft working or the page on version 1;
+  no_claim=absent reviewers (test_simple_meetings_api's approve test).
 """
 
 import uuid
@@ -161,3 +166,30 @@ async def test_upcoming_lists_ritual_next_review(client):
     assert listed[0]["occurrence_id"] == m["occurrence_id"]
     assert listed[0]["meeting_id"] == m["id"]
     assert listed[1]["occurrence_id"] is None and listed[1]["due_at"] > listed[0]["due_at"]
+
+
+async def test_approve_in_meeting_publishes_the_one_pager(client):
+    from tests import test_simple_one_pager_api as op
+
+    ctx = await op.world(client)
+    r = await client.post(MEETINGS, json={"prd": "guided-setup", "title": "Setup review"},
+                          headers=ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    m = r.json()
+    view = await op.get(client, ctx, "decider")
+    assert view["version"] == 1
+    r = await client.post("/v1/simple/changes", json={
+        "op": "edit_line", "session_id": m["session_id"],
+        "target": {"document_id": view["document"]["id"], "line_id": "bets-1"},
+        "before": {"line": op.line(view, "bets-1")["text"]},
+        "after": {"line": "A checklist with two steps"},
+    }, headers=ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 201, r.text
+    mine = await op.get(client, ctx, "decider")
+    assert mine["draft"] and mine["draft"]["changes"] == 1
+    r = await client.post(f"{MEETINGS}/{m['id']}/approve", headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert r.json()["not_approved"] == [], r.json()["not_approved"]
+    after = await op.get(client, ctx, "decider")
+    assert after["version"] == 2 and after["draft"] is None, (after["version"], after["draft"])
+    assert op.line(after, "bets-1")["text"] == "A checklist with two steps"

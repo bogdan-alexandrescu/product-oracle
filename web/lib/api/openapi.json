@@ -44401,6 +44401,59 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/meetings/{meeting_id}/minutes/redraft": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Redraft Simple Meeting Minutes",
+        "description": "Draft again: the presenter, the PRD's decider or an owner requeues a failed minutes\njob (409 unless it failed).",
+        "operationId": "redraft_simple_meeting_minutes",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/simple/meetings/{meeting_id}/send": {
       "post": {
         "tags": [
@@ -113384,6 +113437,11 @@
           "end": {
             "type": "boolean",
             "title": "End"
+          },
+          "redraft": {
+            "type": "boolean",
+            "title": "Redraft",
+            "default": false
           }
         },
         "type": "object",
@@ -113554,6 +113612,18 @@
               }
             ],
             "title": "Occurrence Id"
+          },
+          "ritual_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ritual Id"
           },
           "attendee_ids": {
             "items": {
@@ -113774,6 +113844,22 @@
                 "type": "null"
               }
             ]
+          },
+          "minutes_job": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "drafting",
+                  "slow",
+                  "failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes Job"
           },
           "delivery": {
             "anyOf": [
@@ -115541,9 +115627,21 @@
       "SimpleUpcomingMeeting": {
         "properties": {
           "occurrence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Id"
+          },
+          "ritual_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Occurrence Id"
+            "title": "Ritual Id"
           },
           "ritual_title": {
             "type": "string",
@@ -115585,7 +115683,7 @@
         },
         "type": "object",
         "required": [
-          "occurrence_id",
+          "ritual_id",
           "ritual_title",
           "due_at",
           "ends_at",
@@ -115593,7 +115691,7 @@
           "attendees"
         ],
         "title": "SimpleUpcomingMeeting",
-        "description": "A scheduled ritual occurrence: a review to start from."
+        "description": "A scheduled review to start from: a ritual occurrence, or an active ritual's next\ndue time before its occurrence is made (``occurrence_id`` None; starting it makes it)."
       },
       "SimpleVisualCommentIn": {
         "properties": {
