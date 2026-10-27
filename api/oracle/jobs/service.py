@@ -50,6 +50,7 @@ SWITCH_LABELS = {
     "decision_options": "Decision options",
     "public_text": "Draft public texts",
     "one_pager": "One-pager",
+    "simple_visual": "Draw visuals",
 }
 #: Kinds that share another kind's per-document switch: the next-draft batch is
 #: refinement, so turning refinement off turns it off too.

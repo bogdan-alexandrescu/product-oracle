@@ -531,6 +531,16 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     row.blocks, row.built_by, row.job_id = blocks, "oracle", job.id
     row.built_at = company_time.now()
     await s.flush()
+    # S10: Oracle drafts each bet's visual with the page (once per bet's words).
+    from oracle.simple import visuals
+
+    for b in blocks:
+        for line in b["lines"] if b["key"] == "bets" else []:
+            sid = visuals.line_subject(document.id, line["text"])
+            await visuals.request_visual(
+                s, None, "one_pager_line", sid, line["text"], document_id=document.id
+            )
+    await s.flush()
     return {"built": True, "sections_hash": h}
 
 
@@ -780,6 +790,9 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         u.id: u.name or u.email for u in await db.scalars(select(User).where(User.id.in_(ids)))
     }
     now = company_time.now()
+    from oracle.simple import visuals
+
+    note_flows = await visuals.flows_for(db, "change", [c.id for c in live + shown])
 
     def note(c: SimpleChange, kind: str) -> OnePagerNote:
         s = sessions.get(c.session_id) if c.session_id else None
@@ -810,6 +823,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             and (s.last_change_at or s.started_at) > now - IDLE,
             can_decide=kind == "proposal" and may_decide(principal, c),
             adds_feature=line_id.startswith("bets-"),
+            flow=visuals.one_pager_flow(note_flows.get(c.id)),
         )
 
     notes = [note(c, "change") for c in live] + [note(c, "proposal") for c in shown]
@@ -842,6 +856,13 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                 key=spec.key, title=spec.title, rules=spec.rules, kind=spec.kind, lines=lines
             )
         )  # type: ignore[arg-type]
+    # S10: each bet ("What we will build") carries its visual.
+    bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
+    for x in bets:
+        x.flow_subject = visuals.line_subject(document.id, x.text)
+    line_flows = await visuals.flows_for(db, "one_pager_line", [x.flow_subject for x in bets])
+    for x in bets:
+        x.flow = visuals.one_pager_flow(line_flows.get(x.flow_subject))
     slice_ = await service.build(db, principal, prd=str(document.id))
     items = [
         OnePagerItem(

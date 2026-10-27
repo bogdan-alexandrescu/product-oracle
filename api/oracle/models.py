@@ -123,7 +123,12 @@ from oracle.runs.models import Checkpoint, CheckpointAction, Run, RunSegment  # 
 from oracle.runs.scope_models import PrdScope, PrdScopeItem  # noqa: E402
 from oracle.runtokens import RunToken  # noqa: E402
 from oracle.shares.models import ShareLink, ShareLinkView  # noqa: E402
-from oracle.simple.models import RoadmapDateSuggestion  # noqa: E402
+from oracle.simple.models import (  # noqa: E402
+    RoadmapDateSuggestion,
+    SimpleVisual,
+    SimpleVisualComment,
+    SimpleVisualVersion,
+)
 from oracle.slack.models import (  # noqa: E402
     DiscussionSlackLink,
     SlackEventSeen,
@@ -170,6 +175,9 @@ from oracle.webhooks.models import Webhook, WebhookDelivery, WebhookEvent  # noq
 
 __all__ = [
     "RoadmapDateSuggestion",
+    "SimpleVisual",
+    "SimpleVisualComment",
+    "SimpleVisualVersion",
     "Webhook",
     "WebhookDelivery",
     "WebhookEvent",

@@ -56,6 +56,8 @@ MAX_TOKENS = {
     "public_text": 6000,
     # Simple S5: one PRD version's one-pager blocks and lines.
     "one_pager": 4000,
+    # Simple S10: one proposal's user flow and wireframe (steps, regions, annotations).
+    "simple_visual": 3000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -1043,6 +1045,13 @@ async def one_pager(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     return await op.run_job(s, job, ask)
 
 
+async def simple_visual(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Draws or revises a proposal's visual (oracle.simple.visuals)."""
+    from oracle.simple import visuals
+
+    return await visuals.run_job(s, job, ask)
+
+
 # Run when a job of the kind fails for good, in the transaction that records it.
 ON_FAILURE: dict[str, Callable[[AsyncSession, LlmJob], Awaitable[None]]] = {
     "why_not_reply": why_not_reply_failed,
@@ -1063,6 +1072,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "why_not_reply": why_not_reply,
     "public_text": public_text,
     "one_pager": one_pager,
+    "simple_visual": simple_visual,
 }
 
 

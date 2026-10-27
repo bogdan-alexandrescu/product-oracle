@@ -29,6 +29,7 @@ AnyJobKind = Literal[
     "decision_options",
     "scope_enhance",
     "why_not_reply",
+    "simple_visual",
 ]
 JobStatus = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 Classification = Literal["question", "change_request", "factual_correction", "approval", "other"]
@@ -54,6 +55,8 @@ class LlmJobOut(ORM):
     scope_id: uuid.UUID | None = None
     # A declined request's why-not replies (H10) have request_id instead.
     request_id: uuid.UUID | None = None
+    # A proposal's visual (Simple S10) has visual_id instead.
+    visual_id: uuid.UUID | None = None
     version_number: int | None = None
     section_key: str | None = None
     status: JobStatus

@@ -288,3 +288,86 @@ class SimpleOnePager(TenantScoped, Base):
     built_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+
+VISUAL_SUBJECT_KINDS = (
+    "suggestion",
+    "draft_item",
+    "change",
+    "chat_card",
+    "one_pager_line",
+    "feature",
+)
+
+
+class SimpleVisual(TenantScoped, Base):
+    """Simple S10: the visual of one proposal (oracle.simple.visuals), held against its
+    subject (``subject_kind``, ``subject_id``). Its versions are the drawings; its comments
+    are what a person asked to change. ``document_id``: the roadmap or PRD the subject
+    belongs to (who reads it and who revises it follow that document), null when none."""
+
+    __tablename__ = "simple_visuals"
+    __table_args__ = (
+        CheckConstraint(_in("subject_kind", VISUAL_SUBJECT_KINDS), name="subject_kind"),
+        UniqueConstraint("tenant_id", "subject_kind", "subject_id"),
+    )
+
+    subject_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    subject_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), index=True
+    )
+    # What the proposal adds or changes, in words (the drafting job's brief).
+    brief: Mapped[str] = mapped_column(Text, nullable=False)
+    requested_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class SimpleVisualVersion(TenantScoped, Base):
+    """One drawing of a visual: the user flow (its steps as data and as sanitised SVG), the
+    low-fi wireframe of the screen it touches (sanitised HTML, none when it touches no
+    screen) and the numbered annotations tying parts to PRD sections and requirements.
+    Version 1 is the draft; each revise adds the next."""
+
+    __tablename__ = "simple_visual_versions"
+    __table_args__ = (UniqueConstraint("visual_id", "number"),)
+
+    visual_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_visuals.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    goal: Mapped[str | None] = mapped_column(Text)
+    # [{"id", "label", "kind": step|decision, "feature", "change": new|changed|same,
+    #   "section_key"}]
+    steps: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    # {"title", "regions": [...]}; null: the proposal touches no screen.
+    screen: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    flow_svg: Mapped[str] = mapped_column(Text, nullable=False)
+    wireframe_html: Mapped[str | None] = mapped_column(Text)
+    annotations: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    # Harmless markup the sanitiser dropped (reported, as the design check does).
+    removed: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default="[]")
+    job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # Who asked for this drawing (the proposal's author, or the reviser); null: Oracle.
+    made_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+
+
+class SimpleVisualComment(TenantScoped, Base):
+    """A comment on a visual's version (optionally on one numbered annotation); a revise
+    addresses every open one (``addressed_in``: the version that did)."""
+
+    __tablename__ = "simple_visual_comments"
+
+    visual_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("simple_visuals.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    annotation: Mapped[int | None] = mapped_column(Integer)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    author_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    addressed_in: Mapped[int | None] = mapped_column(Integer)

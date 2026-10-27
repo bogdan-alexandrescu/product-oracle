@@ -664,6 +664,12 @@ async def build(
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
+    from oracle.simple import visuals
+
+    flows = await visuals.flows_for(db, "feature", [e.row.id for e in shown])
+    items = [item_out(e, principal, read.deciders, names, owners, decisions) for e in shown]
+    for it in items:
+        it.flow = flows.get(it.id)
     return SimpleRoadmapOut(
         today=read.today,
         group=group,  # type: ignore[arg-type]
@@ -671,7 +677,7 @@ async def build(
             **{h: SimpleWindow(start=w[h][0], end=w[h][1]) for h in ("now", "next", "later")}
         ),
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
-        items=[item_out(e, principal, read.deciders, names, owners, decisions) for e in shown],
+        items=items,
         milestones=[
             SimpleMilestone(
                 id=m.id,

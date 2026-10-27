@@ -102,8 +102,25 @@ async def create_simple_change(
     """Make a change to a roadmap item: applied for an owner and the roadmap's decider
     (with no decider, its owner), proposed to them for approvers and commenters. 409 when
     ``before`` no longer matches the stored values (nothing is written). Returns the
-    constraint flags of the touched items (a proposal's as if applied)."""
-    return await _run(db, changes.create(db, principal, body))
+    constraint flags of the touched items (a proposal's as if applied). A change that adds
+    or reshapes a feature or flow comes with its visual: Oracle drafts it (S10)."""
+    result = await _run(db, changes.create(db, principal, body))
+    await _with_visual(db, principal, result.change)
+    return result
+
+
+async def _with_visual(db, principal, change) -> None:
+    """S10: queue the change's visual; a refusal never fails the change."""
+    try:
+        from oracle.simple import visuals
+    except ImportError:  # pragma: no cover - the visuals lane is absent
+        return
+    try:
+        async with db.begin_nested():
+            await visuals.on_change(db, principal, change)
+        await db.commit()
+    except visuals.VisualError:
+        await db.rollback()
 
 
 @router.post("/changes/{change_id}/undo", response_model=SimpleChangeResult,

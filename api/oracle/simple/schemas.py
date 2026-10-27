@@ -150,6 +150,8 @@ class SimpleRoadmapItem(BaseModel):
     deciders: list[str] = []
     reasons: list[str] = []
     open_decisions: list[SimpleOpenDecision] = []
+    # S10: the item's feature visual (its user flow and wireframe); null: "No flow yet".
+    flow: "SimpleFlow | None" = None
 
 
 class SimpleGroup(BaseModel):
@@ -502,10 +504,99 @@ class SimpleFlowScreen(BaseModel):
     regions: list[str]
 
 
+class SimpleFlowStep(BaseModel):
+    """A step of a user flow (S10): a decision point or a step, the feature that enables
+    it and what changes versus today."""
+
+    id: str
+    label: str
+    kind: Literal["step", "decision"] = "step"
+    feature: str | None = None
+    change: Literal["new", "changed", "same"] = "same"
+    section_key: str | None = None
+
+
+class SimpleFlowNote(BaseModel):
+    """A numbered annotation: the part of the drawing it is on (an element id of the flow
+    or a region of the wireframe), the PRD section and requirement it ties to."""
+
+    n: int
+    target: str
+    note: str
+    section_key: str | None = None
+    requirement: str | None = None
+
+
 class SimpleFlow(BaseModel):
+    """A proposal's visual (S10, oracle.simple.visuals): its newest drawing."""
+
     title: str
     steps: list[str]
     screen: SimpleFlowScreen
+    subject_kind: str | None = None
+    subject_id: uuid.UUID | None = None
+    version: int = 1
+    versions: int = 1
+    goal: str | None = None
+    nodes: list[SimpleFlowStep] = []
+    # The user flow as sanitised SVG (static, offline); the screen's low-fi wireframe as
+    # sanitised HTML, null when the proposal touches no screen.
+    svg: str | None = None
+    wireframe: str | None = None
+    touches_screen: bool = True
+    annotations: list[SimpleFlowNote] = []
+    made_at: dt.datetime | None = None
+
+
+class SimpleVisualVersionOut(BaseModel):
+    number: int
+    title: str
+    made_at: dt.datetime
+    made_by_name: str | None = None
+    # How many comments this version addressed.
+    addressed: int = 0
+
+
+class SimpleVisualCommentOut(BaseModel):
+    id: uuid.UUID
+    version: int
+    annotation: int | None = None
+    body: str
+    by_name: str
+    at: dt.datetime
+    # The version that addressed it (a revise); null: open.
+    addressed_in: int | None = None
+
+
+class SimpleVisualOut(BaseModel):
+    subject_kind: str
+    subject_id: uuid.UUID
+    brief: str | None = None
+    # The newest drawing; null: none yet ("No flow yet").
+    flow: SimpleFlow | None
+    # Newest first.
+    versions: list[SimpleVisualVersionOut]
+    comments: list[SimpleVisualCommentOut]
+    # Oracle is drawing it (a queued or running job).
+    pending: bool
+    # Commenters and up comment on a drawn visual; who changes the subject directly asks
+    # for a drawing and revises.
+    can_comment: bool
+    can_revise: bool
+
+
+class SimpleVisualCommentIn(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    # The numbered annotation the comment is on.
+    annotation: int | None = Field(default=None, ge=1)
+
+
+class SimpleVisualReviseIn(BaseModel):
+    note: str | None = Field(default=None, max_length=2000)
+
+
+class SimpleVisualRequestIn(BaseModel):
+    brief: str = Field(default="", max_length=2000)
 
 
 class SimplePriorityProposal(BaseModel):
@@ -570,6 +661,7 @@ class SimplePrioritiesOut(BaseModel):
     can_change: bool
 
 
+SimpleRoadmapItem.model_rebuild()
 SimpleRoadmapOut.model_rebuild()
 
 
@@ -596,6 +688,9 @@ class OnePagerLine(BaseModel):
     # published: as the version has it; edited: the working draft's (the reader sees it);
     # proposal: someone proposes new wording (the margin note says who).
     state: Literal["published", "edited", "proposal"] = "published"
+    # S10: a bet's ("What we will build") visual subject and its newest drawing.
+    flow_subject: uuid.UUID | None = None
+    flow: "OnePagerFlow | None" = None
 
 
 class OnePagerItem(BaseModel):
@@ -631,6 +726,10 @@ class OnePagerFlow(BaseModel):
     title: str
     steps: list[str] = []
     screen: str | None = None
+    # S10: the visual it is (for the widened card's comments, versions and Revise).
+    subject_kind: str | None = None
+    subject_id: uuid.UUID | None = None
+    version: int | None = None
 
 
 class OnePagerNote(BaseModel):
@@ -696,3 +795,6 @@ class OnePagerOut(BaseModel):
     # propose; viewers read.
     can_edit: bool
     can_propose: bool
+
+
+OnePagerOut.model_rebuild()
