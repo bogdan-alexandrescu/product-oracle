@@ -151,6 +151,8 @@ verdict on the same section supersedes the earlier item.
 | `GET .../versions/{n}/export?format=html\|pdf\|md\|pptx&layer=full\|brief\|deck` | export with version banner: Full (html, pdf, md), Brief (html, pdf), Deck (pdf, pptx) |
 | `GET .../versions/{n}/deck` | the brief as slides for Present mode (theme CSS, notes, expandable detail) |
 | `GET /v1/me/preferences`, `PATCH /v1/me/preferences` | per-user choices: `document_view` (`brief`/`full`), `experience` (`simple`/`detailed`, #723: the mode the person last switched to; unset, they land in `GET /v1/me/capabilities` `default_experience`: Simple for viewers and commenters, Detailed for approvers and owners) |
+| `POST /v1/simple/one-pagers/{doc}/remind` | #723 Remind (behind `ORACLE_SIMPLE_MODE`): the PRD's owners and its decider nudge each reviewer its submitted draft waits on (an Inbox notification, kind `review_reminder`: "<name> is waiting for your review of <PRD>"), at most once a day per reviewer (409 when none is due); audited `simple_draft.reminded`. The one-pager's `draft` carries `reminded_at` and `can_remind` |
+| `GET/PUT /v1/settings/code_map_refresh` | owners: how often the ticker refreshes a stale code map: `hourly`, `every_6_hours`, `daily` (default), `weekly`, `on_demand` (never automatically; Map the code refreshes at once). Settings › Sources |
 | `GET /healthz` | liveness + DB check |
 
 Agent track uses `Authorization: Bearer <api token>`; the UI uses the session cookie.
