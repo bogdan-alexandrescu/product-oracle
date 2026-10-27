@@ -23,6 +23,8 @@ Test cards (protects / fails_when / no_claim):
 import time
 from datetime import UTC, datetime
 
+import pytest
+
 from oracle.auth.models import User
 from oracle.decisions.models import Decision
 from oracle.tenancy import tenant_session
@@ -118,6 +120,7 @@ async def test_can_decide_per_role(client):
     assert seen["viewer"] == {"owned": False, "unowned": False}
 
 
+@pytest.mark.timing
 async def test_card_fields_keep_the_read_bulk(client):
     ctx = await make_ctx()
     await seed_many(ctx)
