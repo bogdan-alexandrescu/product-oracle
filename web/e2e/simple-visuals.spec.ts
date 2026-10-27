@@ -27,6 +27,11 @@ import { expect, test, type Locator, type Page } from "./test";
  * fails_when = a role sees a control its rule does not give; no_claim = the API's 403s
  * (its role tests).
  *
+ * Card visuals-bet-no-ask: protects = a bet Oracle has not drawn offers its owner no "Ask
+ * Oracle to draw it" (a bet is drawn with the one-pager; the API refuses /request for it);
+ * fails_when = the owner is offered a button the API answers 422; no_claim = the
+ * one-pager job (the API's tests).
+ *
  * Card visuals-roadmap-item: protects = a roadmap item's floating card (a bottom sheet on a
  * phone) shows its flow's title; "Open the item's flow" widens the card in place to the
  * user flow and wireframe (full height on a phone); an item with none says "No flow yet"
@@ -102,6 +107,15 @@ for (const [where, use] of [
         await wide.getByLabel("Version").selectOption("1");
         await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 2 (an older version)");
         await expect(wide.getByRole("heading", { name: "User flow: Finish setup from the checklist" })).toBeVisible();
+      });
+
+      test("an owner is not offered Ask on a bet Oracle has not drawn", async ({ page }) => {
+        await login(page);
+        await page.goto(ONE_PAGER);
+        await page.getByRole("button", { name: "Flow for bet 3" }).click();
+        const wide = page.getByRole("group", { name: "User flow of bet 3" });
+        await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
+        await expect(wide.getByRole("button", { name: "Ask Oracle to draw it" })).toHaveCount(0);
       });
 
       test("a commenter comments but cannot revise", async ({ page }) => {
