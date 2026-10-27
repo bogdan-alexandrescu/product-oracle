@@ -133,8 +133,12 @@ test.describe("desktop, dark", () => {
     await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
     await page.goto("/home");
     // The panel's open state carries over from Simple; open it only if it is closed.
-    if (!(await page.getByTestId("hop-panel").filter({ visible: true }).count())) await tap(page.getByTestId("hop-strip"));
-    await expect(page.getByTestId("hop-panel").filter({ visible: true })).toBeVisible();
+    // The open state may settle after the first paint: retry until the panel shows.
+    const strip = page.getByTestId("hop-strip");
+    await expect(async () => {
+      if ((await strip.getAttribute("aria-expanded")) !== "true") await strip.click({ timeout: 2000 });
+      await expect(page.getByTestId("hop-panel").filter({ visible: true })).toBeVisible({ timeout: 2000 });
+    }).toPass();
     await expect(page.getByTestId("ask-chat")).toHaveCount(0);
   });
 });
