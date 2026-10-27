@@ -618,6 +618,8 @@ async def test_document_view_is_remembered_per_user(client, tenant_id):
         "experience": None,
         # #723 roadmap-plus: where Simple's priorities draw the line; unset, this quarter.
         "priorities_line": None,
+        # #723 Roadmap filter: the Simple roadmap's pick; unset, all roadmaps.
+        "simple_roadmap": None,
     }  # fmt: skip
     resp = await client.patch("/v1/me/preferences", json={"document_view": "full"}, headers=viewer)
     assert resp.status_code == 200 and resp.json()["document_view"] == "full"
