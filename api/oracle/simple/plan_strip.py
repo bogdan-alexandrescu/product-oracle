@@ -10,8 +10,16 @@ The span: from the month of the earliest item start (or milestone date) to the m
 latest milestone date (with no dated milestone, the latest committed end; with none
 committed, the latest end), at most :data:`MAX_MONTHS` months (a longer span starts the
 month before today's, when that is later).
+
+Rows group by the milestone itself, not its text (CLD's production walk, 2026-10-27): real
+items carry notes after the milestone ("M1 · Measure it (needs the export); Digest in M2"),
+so the key is the milestone's code (M1, M2, ...), else the text before the first " (" or
+";". A row reads "<code> · <milestone name>" (the name most of its items give), dated by
+the latest of its items' milestone dates.
 """
 
+import re
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -30,6 +38,23 @@ class PlanItem:
     milestone_date: date | None = None
 
 
+_CODE = re.compile(r"^(M\d+)(?![\w])\s*[·:\-–—]?\s*(.*)$", re.IGNORECASE)
+
+
+def milestone_of(text: str | None) -> tuple[str, str]:
+    """A milestone text's group key and its label: "M1 · Measure it (a note); more" ->
+    ("M1", "M1 · Measure it"); "Beta (two teams)" -> ("Beta", "Beta"); empty -> Milestone."""
+    head = (text or "").strip()
+    for sep in (" (", ";"):
+        head = head.split(sep, 1)[0]
+    head = " ".join(head.split())
+    m = _CODE.match(head)
+    if m:
+        code, name = m.group(1).upper(), m.group(2).strip()
+        return code, f"{code} · {name}" if name else code
+    return (head, head) if head else ("Milestone", "Milestone")
+
+
 def _month(d: date) -> date:
     return d.replace(day=1)
 
@@ -43,13 +68,20 @@ def strip(items: list[PlanItem], today: date) -> SimplePlanStrip | None:
     """The strip of a PRD's (uncut) items; None with none."""
     if not items:
         return None
-    groups: dict[tuple[str, date | None], list[PlanItem]] = {}
+    keyed: dict[str, list[tuple[str, PlanItem]]] = {}
     loose: list[PlanItem] = []
     for i in items:
         if i.milestone or i.milestone_date:
-            groups.setdefault((i.milestone or "Milestone", i.milestone_date), []).append(i)
+            key, label = milestone_of(i.milestone)
+            keyed.setdefault(key, []).append((label, i))
         else:
             loose.append(i)
+    groups: dict[tuple[str, date | None], list[PlanItem]] = {}
+    for of in keyed.values():
+        labels = Counter(label for label, _ in of)
+        name = min(labels, key=lambda x: (-labels[x], x))
+        when = max((i.milestone_date for _, i in of if i.milestone_date), default=None)
+        groups[(name, when)] = [i for _, i in of]
     dated = [d for _, d in groups if d is not None]
     committed = [i.end for i in items if not i.estimated]
     first = min([i.start for i in items] + dated)

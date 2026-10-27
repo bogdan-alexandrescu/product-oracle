@@ -769,6 +769,9 @@ class OnePagerLine(BaseModel):
     # Stable within a version's one-pager: "<block>-<n>".
     id: str
     text: str
+    # The whole text when ``text`` is shortened (cut at a word boundary with "…"): the page
+    # offers it in place ("Show all").
+    full: str | None = None
     # The PRD sections the line rests on: a click opens the drill-down, "Open the
     # detailed view" lands on the first.
     source_keys: list[str]

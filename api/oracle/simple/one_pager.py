@@ -74,6 +74,8 @@ from oracle.simple.schemas import (
 OPS: frozenset[str] = frozenset({"edit_line"})
 LINE_MAX = 300
 PROBLEM_WORDS = 60
+# A shortened line keeps its whole text (at most this long) for "Show all".
+FULL_MAX = 2000
 
 
 @dataclass(frozen=True)
@@ -193,6 +195,11 @@ _METRIC = re.compile(
 _MD = re.compile(r"[*_`]+|\[([^\]]*)\]\([^)]*\)|\[\^?[\w-]+\]")
 # A markdown table's separator row ("|---|:---:|", GFM's "|-|-|" too); its header is the row
 # above it.
+# A template's guidance (CLD's production walk, 2026-10-27): HTML comments, and lines that are
+# only placeholders ("<Milestone>: <Feature>") or arrows ("→") are never a one-pager line.
+_COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.S)
+_PLACEHOLDER = re.compile(r"<[^<>\n]*>")
+_WORDY = re.compile(r"[^\W_]")
 _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$")
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
 
@@ -296,6 +303,44 @@ def _words(text: str, n: int) -> str:
     return text if len(w) <= n else " ".join(w[:n]).rstrip(",;:") + "…"
 
 
+def _uncomment(text: str) -> str:
+    return _COMMENT.sub(" ", text)
+
+
+def template_only(text: str) -> bool:
+    """Only a template's placeholders, arrows or punctuation: no words of the PRD's own."""
+    return not _WORDY.search(_PLACEHOLDER.sub("", _uncomment(text)))
+
+
+def clip(text: str, words: int, chars: int = LINE_MAX) -> tuple[str, str | None]:
+    """A line held to its words and characters, cut at a word boundary with "…", and the
+    whole text when it was cut (else None)."""
+    text = " ".join(text.split())
+    shown = _words(text, words)
+    if len(shown) > chars:
+        head = shown[: chars - 1]
+        head = head.rsplit(" ", 1)[0] if " " in head else head
+        shown = head.rstrip(",;: …") + "…"
+    return shown, (text[:FULL_MAX] if shown != text else None)
+
+
+def _tidy(
+    text: str, words: int, full: str | None, sources: list[Section]
+) -> tuple[str, str | None]:
+    """A stored line as it reads: comments out, cut at a word boundary (a line cut mid-word
+    by an older build loses its broken word), and its whole text when it is shortened (as
+    stored, else its source sections' facts)."""
+    text = " ".join(_uncomment(text).split())
+    if len(text) >= LINE_MAX and not text.endswith("…"):
+        text = (text.rsplit(" ", 1)[0] if " " in text else text).rstrip(",;:") + "…"
+    shown, cut = clip(text, words)
+    if not shown.endswith("…"):
+        return shown, None
+    whole = full or (cut if cut and not cut.endswith("…") else None)
+    whole = whole or " ".join(f for sec in sources for f in _facts(sec))[:FULL_MAX] or None
+    return shown, (whole if whole and whole != shown else None)
+
+
 def _cells(row: str) -> list[str]:
     """A table row's cells, without the outer pipes."""
     r = row.strip()
@@ -340,14 +385,20 @@ def _unpiped(text: str) -> str:
 
 def _facts(sec: Section) -> list[str]:
     """A section's bullets and its tables' body rows (one line each), else its sentences."""
-    rows, rest = _tables(sec.body_md)
+    rows, rest = _tables(_uncomment(sec.body_md or ""))
     bullets = [_plain(m.group(1)) for line in rest if (m := _BULLET.match(line))]
-    facts = [b for b in (_unpiped(x) for x in bullets) if b]
-    facts += [x for x in (_row_line(c) for _, c in rows) if x]
+    facts = [b for b in (_unpiped(x) for x in bullets) if b and not template_only(b)]
+    facts += [x for x in (_row_line(c) for _, c in rows) if x and not template_only(x)]
     if facts:
         return facts
-    prose = _plain("\n".join(rest)) if rows else sec.body_text or ""
-    return [s for s in (_unpiped(_plain(x)) for x in _SENTENCE.split(prose)) if s]
+    prose = _plain("\n".join(rest)) if rows else _uncomment(sec.body_text or "")
+    # A skeleton's bare lines ("→", "<Risk>: <mitigation>") are not sentences of the PRD.
+    prose = "\n".join(x for x in prose.splitlines() if not template_only(x))
+    return [
+        s
+        for s in (_unpiped(_plain(x)) for x in _SENTENCE.split(prose))
+        if s and not template_only(s)
+    ]
 
 
 def metric_of(text: str) -> OnePagerMetric | None:
@@ -368,22 +419,30 @@ def extract(specs: tuple[Spec, ...], mapped: dict[str, list[Section]]) -> list[d
         secs = mapped.get(spec.key, [])
         lines: list[dict[str, Any]] = []
         if spec.whole_block:
-            text, keys = "", []
+            text, whole, keys = "", "", []
             for sec in secs:
                 for fact in _facts(sec):
+                    whole = f"{whole} {fact}".strip()
                     if len(text.split()) >= spec.max_words:
-                        break
+                        continue
                     text = f"{text} {fact}".strip()
                     if sec.section_key not in keys:
                         keys.append(sec.section_key)
             if text:
-                lines.append({"text": _words(text, spec.max_words), "source_keys": keys})
+                shown = clip(text, spec.max_words)[0]
+                line = {"text": shown, "source_keys": keys}
+                if shown != whole:
+                    line["full"] = whole[:FULL_MAX]
+                lines.append(line)
         else:
             facts = [(f, sec.section_key) for sec in secs for f in _facts(sec)]
             if spec.kind == "metrics":
                 facts = sorted(facts, key=lambda f: metric_of(f[0]) is None)
             for fact, key in facts[: spec.max_lines]:
-                line: dict[str, Any] = {"text": _words(fact, spec.max_words), "source_keys": [key]}
+                shown, cut = clip(fact, spec.max_words)
+                line: dict[str, Any] = {"text": shown, "source_keys": [key]}
+                if cut:
+                    line["full"] = cut
                 if spec.kind == "metrics" and (m := metric_of(fact)):
                     line["metric"] = m.model_dump(by_alias=True)
                 lines.append(line)
@@ -411,11 +470,14 @@ def clean_answer(
         for raw in (given.get(spec.key) or {}).get("lines") or []:
             if not isinstance(raw, dict):
                 continue
-            text = _unpiped(" ".join(str(raw.get("text") or "").split()))[:LINE_MAX]
+            text = _unpiped(" ".join(_uncomment(str(raw.get("text") or "")).split()))
             keys = [str(k) for k in raw.get("source_keys") or [] if str(k) in allowed]
-            if not text or not keys:
+            if not text or not keys or template_only(text):
                 continue
-            line: dict[str, Any] = {"text": _words(text, spec.max_words), "source_keys": keys}
+            shown, cut = clip(text, spec.max_words)
+            line: dict[str, Any] = {"text": shown, "source_keys": keys}
+            if cut:
+                line["full"] = cut
             m = raw.get("metric")
             if spec.kind == "metrics" and isinstance(m, dict) and m.get("name") and m.get("to"):
                 line["metric"] = {
@@ -561,7 +623,11 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
                 "max_words": sp.max_words,
                 "whole_block": sp.whole_block,
                 "sections": [
-                    {"key": x.section_key, "heading": x.heading, "text": x.body_text}
+                    {
+                        "key": x.section_key,
+                        "heading": x.heading,
+                        "text": " ".join(_uncomment(x.body_text or "").split()),
+                    }
                     for x in mapped.get(sp.key, [])
                 ],
             }
@@ -965,7 +1031,12 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         lines = []
         for line in raw["lines"]:
             edited = line["id"] in line_text
-            text = line_text.get(line["id"], line["text"])
+            text, full = line_text.get(line["id"], line["text"]), None
+            if not edited:
+                if template_only(line["text"]):
+                    continue  # a template's guidance in a one-pager built before this rule
+                srcs = [x for x in b.sections if x.section_key in line["source_keys"]]
+                text, full = _tidy(text, spec.max_words, line.get("full"), srcs)
             metric = OnePagerMetric.model_validate(line["metric"]) if line.get("metric") else None
             if edited and spec.kind == "metrics":
                 metric = metric_of(text)  # the edited words' numbers, never the published
@@ -973,6 +1044,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                 OnePagerLine(
                     id=line["id"],
                     text=text,
+                    full=full,
                     source_keys=line["source_keys"],
                     metric=metric,
                     state="edited"
@@ -1450,6 +1522,7 @@ ul { margin: 0; padding-left: 16px; } li { margin: 1px 0; }
 
 # The plan strip shows this many rows; the rest are "+N more on the roadmap".
 PLAN_ROWS = 8
+NOT_WRITTEN = "Not written yet"
 
 
 def _plan_html(plan: Any) -> str:
@@ -1527,14 +1600,18 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
         items = []
         for line in blk.lines:
             pub = published_lines.get(line.id)
-            text = escape(pub["text"] if pub else line.text)
+            if pub and line.state != "published":
+                pub_text = _tidy(pub["text"], LINE_MAX, None, [])[0]
+            else:
+                pub_text = line.text
+            text = escape(pub_text)
             m = OnePagerMetric.model_validate(pub["metric"]) if pub and pub.get("metric") else None
             m = m if pub else line.metric
             if m:
                 span = f"{escape(m.from_ or '—')} → {escape(m.to)}"
                 text = f"<span class='metric'>{escape(m.name)}: <b>{span}</b></span>"
             items.append(f"<li>{text}</li>")
-        parts.append(f"<ul>{''.join(items)}</ul>" if items else "<p>—</p>")
+        parts.append(f"<ul>{''.join(items)}</ul>" if items else f"<p>{NOT_WRITTEN}</p>")
     parts.append("</body></html>")
     return "".join(parts), f"{out.document.slug}-v{out.version}-one-pager"
 
