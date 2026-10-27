@@ -55,18 +55,21 @@ async function mouseDrag(page: Page, key: string, dx: number) {
   await page.mouse.up();
 }
 
-/** A phone's long press on a bar, then a drag by `dx` (a touch pointer's events). */
+/** A phone's long press on a bar, then a drag by `dx`: real touch input through Chromium's
+ * DevTools protocol (the browser makes the pointer events, as it does for a finger). */
 async function longPressDrag(page: Page, key: string, dx: number) {
   await body(page, key).scrollIntoViewIfNeeded();
   const box = (await body(page, key).boundingBox())!;
   const x = box.x + Math.min(box.width / 2, 20);
   const y = box.y + box.height / 2;
-  const ev = { pointerId: 9, pointerType: "touch", isPrimary: true, bubbles: true, button: 0, buttons: 1, clientY: y };
-  await bar(page, key).dispatchEvent("pointerdown", { ...ev, clientX: x });
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", at: number) =>
+    cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x: at, y, id: 1 }] });
+  await touch("touchStart", x);
   await expect(bar(page, key)).toHaveAttribute("data-picked", "true");
-  const svg = page.getByTestId("chart-svg");
-  for (let n = 1; n <= 8; n++) await svg.dispatchEvent("pointermove", { ...ev, clientX: x + (dx * n) / 8 });
-  await svg.dispatchEvent("pointerup", { ...ev, buttons: 0, clientX: x + dx });
+  for (let n = 1; n <= 8; n++) await touch("touchMove", x + (dx * n) / 8);
+  await touch("touchEnd", x + dx);
+  await cdp.detach();
 }
 
 const days = (a: string, b: string): number => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
@@ -214,7 +217,9 @@ for (const [where, use] of [
       test("a commenter proposes a key date, the owner accepts; a viewer reads", async ({ page }) => {
         await openRoadmap(page, "gantt", COMMENTER);
         await page.getByTestId("key-dates-open").click();
-        await expect(page.getByTestId("key-dates-hint")).toContainText("proposals");
+        await expect(page.getByTestId("key-dates-hint")).toHaveText(
+          "Owners and the roadmap's decider change key dates; yours are proposals they accept or decline.",
+        );
         await editor(page).getByLabel("Roadmap", { exact: true }).selectOption({ label: "Onboarding roadmap" });
         await editor(page).getByLabel("New key date's name").fill("Product launch");
         await editor(page).getByLabel("New key date's day").fill("2026-12-08");

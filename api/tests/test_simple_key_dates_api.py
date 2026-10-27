@@ -231,6 +231,46 @@ async def test_malformed_and_unknown(client):
     assert r.status_code == 404, r.text
 
 
+async def test_key_date_edits_skip_the_full_roadmap_read(client, monkeypatch):
+    """protects=a key-date create, its proposal's accept and an applied change find the
+    roadmap and its shown version without the whole roadmap read (service.load: every
+    roadmap's items, records and constraints), so a large tenant does not pay for it per
+    edit; the draft still opens on the shown version; fails_when=a key-date edit calls
+    service.load; no_claim=the roadmap read itself (GET /v1/simple/roadmap)."""
+    from oracle.simple import service
+
+    w = await world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        version = await s.scalar(
+            select(RoadmapItem.roadmap_version_id).where(
+                RoadmapItem.roadmap_document_id == uuid.UUID(w.roadmap_id)
+            )
+        )
+
+    async def no_full_read(*a, **k):
+        raise AssertionError("a key-date edit read the whole roadmap")
+
+    monkeypatch.setattr(service, "load", no_full_read)
+    r = await post(client, w, "decider", "add_key_date", None, LAUNCH)
+    assert r.status_code == 201 and r.json()["change"]["status"] == "applied", r.text
+    p = await post(client, w, "commenter", "add_key_date", None, {**LAUNCH, "name": "Summit"})
+    assert p.status_code == 201 and p.json()["change"]["status"] == "proposed", p.text
+    a = await client.post(f"{CHANGES}/{p.json()['change']['id']}/accept",
+                          headers=w.ctx.as_("decider"))  # fmt: skip
+    assert a.status_code == 200 and a.json()["change"]["status"] == "accepted", a.text
+    body = {"op": "add_key_date", "target": {"document_id": str(uuid.uuid4())},
+            "before": {"key_date": None}, "after": LAUNCH}  # fmt: skip
+    r = await client.post(CHANGES, json=body, headers=w.ctx.as_("decider"))
+    assert r.status_code == 404, r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        d = await s.scalar(select(SimpleDraft))
+        assert d is not None and d.base_version_id == version
+        assert sorted(v["name"] for v in d.overlay["key_dates"].values()) == [
+            "Spring launch",
+            "Summit",
+        ]
+
+
 async def test_waterfall_move_reworks_estimated_phases_and_keeps_gates(client):
     """protects=the waterfall's drag: move_dates on a phased item moves the whole item; its
     estimated phases are worked out again over the new span while a phase a dated validation
