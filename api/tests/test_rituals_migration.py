@@ -74,7 +74,7 @@ def test_chains_on_b5s_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
     # H3's 0038_outcome_tracking chains on it; one head.
-    assert script.get_heads() == ["0080_simple_one_pagers"]
+    assert script.get_heads() == ["0081_simple_visuals"]
     assert script.get_revision("0038_outcome_tracking").down_revision == REVISION
 
 
