@@ -6,7 +6,7 @@
 
 The downgrade drops the table.
 
-Revision ID: 0081_simple_chat_cards
+Revision ID: 0085_simple_chat_cards
 Revises: 0080_simple_one_pagers
 """
 
@@ -16,8 +16,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0081_simple_chat_cards"
-down_revision: str | None = "0080_simple_one_pagers"
+revision: str = "0085_simple_chat_cards"
+down_revision: str | None = "0084_simple_visuals"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

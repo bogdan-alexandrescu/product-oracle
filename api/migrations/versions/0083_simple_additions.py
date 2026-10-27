@@ -12,7 +12,7 @@
 
 The downgrade deletes the added items, the two jobs' rows and the tables.
 
-Revision ID: 0081_simple_additions
+Revision ID: 0083_simple_additions
 Revises: 0080_simple_one_pagers
 """
 
@@ -24,8 +24,8 @@ from sqlalchemy.dialects import postgresql
 
 from oracle.migration_checks import add_check_values, remove_check_values
 
-revision: str = "0081_simple_additions"
-down_revision: str | None = "0080_simple_one_pagers"
+revision: str = "0083_simple_additions"
+down_revision: str | None = "0082_roadmap_key_dates"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

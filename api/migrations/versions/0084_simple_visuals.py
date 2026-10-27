@@ -11,7 +11,7 @@
 
 The downgrade deletes the ``simple_visual`` jobs and drops the tables.
 
-Revision ID: 0081_simple_visuals
+Revision ID: 0084_simple_visuals
 Revises: 0080_simple_one_pagers
 """
 
@@ -23,8 +23,8 @@ from sqlalchemy.dialects import postgresql
 
 from oracle.migration_checks import add_check_values, remove_check_values
 
-revision: str = "0081_simple_visuals"
-down_revision: str | None = "0080_simple_one_pagers"
+revision: str = "0084_simple_visuals"
+down_revision: str | None = "0083_simple_additions"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

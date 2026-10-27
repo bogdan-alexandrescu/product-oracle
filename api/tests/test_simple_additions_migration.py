@@ -1,8 +1,8 @@
-"""Migration 0081_simple_additions (Simple S7, #723).
+"""Migration 0083_simple_additions (Simple S7, #723).
 
 Card: protects=simple_goal_suggestions, simple_goal_autos, the llm_jobs kinds item_draft and
 goal_suggestions and roadmap_items' S7 columns come and go with the revision, chained on
-0080_simple_one_pagers as the single head, and the widened one_owner check lets an item
+0082_roadmap_key_dates as the single head, and the widened one_owner check lets an item
 added in Simple live on no version; fails_when=a table, kind or column is missing, or the
 downgrade leaves one; no_claim=the routes' use (tests/test_simple_additions_api.py).
 
@@ -19,8 +19,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0081_simple_additions"
-PREVIOUS = "0080_simple_one_pagers"
+REVISION = "0083_simple_additions"
+PREVIOUS = "0082_roadmap_key_dates"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_simple_additions")

@@ -1,7 +1,7 @@
-"""Migration 0081_simple_chat_cards (Simple S9, #723).
+"""Migration 0085_simple_chat_cards (Simple S9, #723).
 
 Card: protects=simple_chat_cards comes and goes with the revision, chained on
-0080_simple_one_pagers as the single head; fails_when=the table is missing or the
+0084_simple_visuals as the single head; fails_when=the table is missing or the
 downgrade leaves it; no_claim=the routes' use (tests/test_simple_chat_api.py).
 
 Sync on purpose (Alembic runs its own event loop); its own scratch database."""
@@ -17,8 +17,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0081_simple_chat_cards"
-PREVIOUS = "0080_simple_one_pagers"
+REVISION = "0085_simple_chat_cards"
+PREVIOUS = "0084_simple_visuals"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_simple_chat_cards")

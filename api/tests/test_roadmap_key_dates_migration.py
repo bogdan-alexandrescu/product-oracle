@@ -1,7 +1,7 @@
-"""Migration 0081_roadmap_key_dates (Simple roadmap-plus, #723).
+"""Migration 0082_roadmap_key_dates (Simple roadmap-plus, #723).
 
 Card: protects=roadmap_key_dates (a roadmap's published key dates: name, day, optional note)
-comes and goes with the revision, chained on 0080_simple_one_pagers as the single head;
+comes and goes with the revision, chained on 0081_simple_review_reminders as the single head;
 fails_when=the table or a column is missing, or the downgrade leaves it; no_claim=the
 change engine's use (tests/test_simple_key_dates_api.py).
 
@@ -18,8 +18,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0081_roadmap_key_dates"
-PREVIOUS = "0080_simple_one_pagers"
+REVISION = "0082_roadmap_key_dates"
+PREVIOUS = "0081_simple_review_reminders"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_key_dates")

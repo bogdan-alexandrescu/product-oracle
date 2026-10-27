@@ -10,7 +10,7 @@ Live-safe: a new table.
 
 The downgrade drops it (the key dates are lost).
 
-Revision ID: 0081_roadmap_key_dates
+Revision ID: 0082_roadmap_key_dates
 Revises: 0080_simple_one_pagers
 """
 
@@ -19,8 +19,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0081_roadmap_key_dates"
-down_revision: str | None = "0080_simple_one_pagers"
+revision: str = "0082_roadmap_key_dates"
+down_revision: str | None = "0081_simple_review_reminders"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

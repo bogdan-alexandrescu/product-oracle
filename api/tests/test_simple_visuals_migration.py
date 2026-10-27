@@ -1,8 +1,8 @@
-"""Migration 0081_simple_visuals (Simple S10, #723).
+"""Migration 0084_simple_visuals (Simple S10, #723).
 
 Card: protects=simple_visuals, its versions and comments, llm_jobs.visual_id (a job's
 subject) and the simple_visual kind come and go with the revision, chained on
-0080_simple_one_pagers as the single head; fails_when=a table, the column or the kind is
+0083_simple_additions as the single head; fails_when=a table, the column or the kind is
 missing, or the downgrade leaves any; no_claim=the routes' use
 (tests/test_simple_visuals_api.py).
 
@@ -19,8 +19,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0081_simple_visuals"
-PREVIOUS = "0080_simple_one_pagers"
+REVISION = "0084_simple_visuals"
+PREVIOUS = "0083_simple_additions"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_simple_visuals")
