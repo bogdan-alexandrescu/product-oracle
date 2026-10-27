@@ -190,6 +190,9 @@ class VersionSummary(ORM):
 
 class DocumentOut(DocumentSummary):
     versions: list[VersionSummary] = []
+    # Simple S3b (#723): changes waiting in the document's working draft and its open
+    # Simple proposals, as a count (the "changes in review" banner; no details).
+    changes_in_review: int = 0
 
 
 class CitationOut(ORM):

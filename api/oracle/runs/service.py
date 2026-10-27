@@ -10601,6 +10601,16 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     intake_reads = await intake_read_rows(db, principal) if has_intake_reads else []
     counted += len(intake_reads)
+    # Simple S3a: proposals waiting for me, and the decisions on mine.
+    from oracle.simple.changes import inbox_rows as simple_rows
+
+    simple_proposals, simple_decisions = await simple_rows(db, principal, seen)
+    counted += len(simple_proposals)
+    # Simple S3b: versions from Simple drafts waiting for my approval as a required reviewer.
+    from oracle.simple.drafts import inbox_rows as simple_approval_rows
+
+    simple_approvals = await simple_approval_rows(db, principal, seen)
+    counted += len(simple_approvals)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -10665,6 +10675,9 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         discussions=discussions,
         requests=request_inbox,
         intake_reads=intake_reads,
+        simple_proposals=simple_proposals,
+        simple_decisions=simple_decisions,
+        simple_approvals=simple_approvals,
     )
 
 
