@@ -169,6 +169,7 @@ class SimpleRoadmapItem(BaseModel):
     # S8: the decided decisions that changed the item (newest first; the Decisions page).
     decided_in: list[SimpleOpenDecision] = []
 
+
 class SimpleMatch(BaseModel):
     kind: Literal["item", "feature"]
     id: str
@@ -860,6 +861,7 @@ class OnePagerDraft(BaseModel):
 
     # S8: the meeting the decider approved it in ("Approved in <meeting title>").
     approved_in: str | None = None
+
 
 class OnePagerRemindOut(BaseModel):
     """Remind's answer: the reviewers nudged now (each gets an Inbox nudge)."""
