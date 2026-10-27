@@ -161,3 +161,48 @@ async def test_the_pick_is_remembered_per_person(client):
     r = await client.patch(PREFS, json={"simple_roadmap": "growth;drop"},
                            headers=w.ctx.as_("viewer"))  # fmt: skip
     assert r.status_code == 422, r.text
+
+
+async def test_all_roadmaps_carries_every_readable_roadmaps_key_dates(client):
+    """protects=with no roadmap chosen the read carries the key dates of every roadmap the
+    reader may read (``key_date_roadmaps`` lists them all), so a key date added to a roadmap
+    whose items the other filters hide is still listed in the Key dates editor;
+    fails_when=only the roadmaps of the items shown are listed (review minor 1);
+    no_claim=the web's grouping (the Playwright spec)."""
+    w = await world()
+    rm = await more_roadmaps(w)
+    r = await client.post(CHANGES, headers=w.ctx.as_("owner"), json={
+        "op": "add_key_date", "target": {"roadmap_id": rm["growth"]},
+        "before": {"key_date": None}, "after": LAUNCH})  # fmt: skip
+    assert r.status_code == 201, r.text
+    out = await read(client, w, "owner", track=w.roadmap_id)
+    assert out["items"] == []
+    assert {r["roadmap"]["slug"] for r in out["key_date_roadmaps"]} == {
+        "payments",
+        "growth",
+        "board",
+    }
+    assert [(k["name"], k["roadmap"]["id"]) for k in out["key_dates"]] == [
+        ("Spring launch", rm["growth"])
+    ]
+    viewer = await read(client, w, "viewer", track=w.roadmap_id)
+    assert {r["roadmap"]["slug"] for r in viewer["key_date_roadmaps"]} == {"payments", "growth"}
+
+
+async def test_prd_goal_and_track_are_remembered_per_person(client):
+    """protects=``simple_filters`` (the Simple roadmap's PRD, Goal and Track picks) is kept
+    per person like ``simple_roadmap``, an empty pick clears it, and junk is 422;
+    fails_when=only the Roadmap filter is remembered (review minor 4), one person's picks
+    show for another, or junk is stored; no_claim=that the web applies them (the spec)."""
+    w = await world()
+    picks = {"prd": "payments-prd", "goal": "G1", "track": w.roadmap_id}
+    r = await client.patch(PREFS, json={"simple_filters": picks}, headers=w.ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    assert r.json()["simple_filters"] == picks
+    assert (await client.get(PREFS, headers=w.ctx.as_("owner"))).json()["simple_filters"] is None
+    r = await client.patch(PREFS, json={"simple_filters": {"prd": "", "goal": "G1", "track": ""}},
+                           headers=w.ctx.as_("viewer"))  # fmt: skip
+    assert r.json()["simple_filters"] == {"prd": "", "goal": "G1", "track": ""}
+    for junk in ({"prd": "x" * 300}, {"group": "goal"}, {"goal": "G1;drop"}):
+        r = await client.patch(PREFS, json={"simple_filters": junk}, headers=w.ctx.as_("viewer"))
+        assert r.status_code == 422, (junk, r.text)
