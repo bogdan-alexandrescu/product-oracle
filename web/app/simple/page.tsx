@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Avatar, Block, HomeCard, HomeRow, RowIcon, Top } from "@/app/simple/_home/cards";
+import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
+import { HomeSkeleton } from "@/app/simple/_home/skeleton";
 import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
 import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
+import { useSimpleShown } from "@/components/simple/SimpleShell";
 import { SimplePage } from "@/components/simple/SimplePage";
-import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -51,6 +52,8 @@ const STATUS_TONE: Record<GoalTile["status"], string> = {
  */
 export default function SimpleHome() {
   const { me, can } = useMe();
+  // Home's queries start at once; until Simple is known to be on, the frame and its skeleton.
+  const shown = useSimpleShown();
   const zone = useCompanyZone();
   const [stamp, setStamp] = useState(0);
   // S9: "Walk me through it" turns Home into a guided pass; Done returns here.
@@ -241,6 +244,8 @@ export default function SimpleHome() {
     );
   }
 
+  if (!shown) return <HomeSkeleton />;
+
   return (
     <SimplePage title="Home">
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
@@ -278,7 +283,7 @@ export default function SimpleHome() {
       )}
 
       <section aria-label="Goals" data-testid="home-goals">
-        <Block q={{ ...goals, data: tiles }} testId="home-goals">
+        <Block q={{ ...goals, data: tiles }} testId="home-goals" skeleton={<GoalBandSkeleton />}>
           {(rows) =>
             rows.length === 0 ? (
               <p className="simple-small" data-testid="home-goals-empty">
@@ -411,7 +416,7 @@ export default function SimpleHome() {
       )}
 
       <HomeCard id="meeting" icon="clock" title="Next review meeting" all="/simple/meetings">
-        <Block q={meeting} testId="home-meeting">
+        <Block q={meeting} testId="home-meeting" skeleton={<SkeletonRows n={1} />}>
           {({ next }) =>
             !next ? (
               <p className="simple-small" data-testid="home-meeting-empty">
@@ -470,7 +475,7 @@ export default function SimpleHome() {
           {() => (
             <>
               {planPrd === undefined ? (
-                <Loading />
+                <SkeletonRows />
               ) : plan && planPrd ? (
                 <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" />
               ) : (
