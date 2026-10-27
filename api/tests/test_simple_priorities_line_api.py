@@ -109,3 +109,18 @@ async def test_the_pick_is_remembered_per_person(client):
     r = await client.patch(pref, json={"priorities_line": "DROP TABLE"},
                            headers=w.ctx.as_("viewer"))  # fmt: skip
     assert r.status_code == 422, r.text
+
+
+def test_docs_and_preferences_say_the_same_default_line():
+    """protects=docs/mvp-app.md and the Preferences schema name one default for an unset
+    ``priorities_line`` (u-followups review); fails_when=either words it differently (one
+    said `now`, the other this quarter); no_claim=the default itself
+    (test_default_line_is_this_quarter)."""
+    from pathlib import Path
+
+    from oracle.preferences.router import Preferences
+
+    said = "unset, this quarter (`now`)"
+    docs = (Path(__file__).resolve().parents[2] / "docs" / "mvp-app.md").read_text()
+    assert said in docs
+    assert said in " ".join((Preferences.__doc__ or "").split()).replace("``", "`")

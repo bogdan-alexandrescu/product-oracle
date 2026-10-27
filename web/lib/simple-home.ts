@@ -1,6 +1,5 @@
 import { goalViews } from "@/app/home/_goals";
 import type { Schemas } from "@/lib/api/client";
-import { calendarDay } from "@/lib/dates";
 
 /**
  * Simple's Home (#723 S1, the owner's "Brief as cards" pick): what the goal band, the summary
@@ -33,7 +32,13 @@ export type GoalTile = {
 const COUNTED = /^[a-z][a-z -]{0,23}$/;
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
-function figure(v: number, unit: string): string {
+/** A number with the reader's locale grouping ("50,000"). */
+export function grouped(v: number, locale?: string): string {
+  return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(v);
+}
+
+export function figure(value: number, unit: string, locale?: string): string {
+  const v = grouped(value, locale);
   if (unit === "%") return `${v}%`;
   if (unit === "USD") return `$${v}`;
   if (unit === "EUR") return `€${v}`;
@@ -103,67 +108,119 @@ export function brokenLinks(roadmap: Roadmap | undefined): BrokenLink[] {
 }
 
 const DAY = 86_400_000;
-const ms = (day: string) => Date.parse(`${day}T00:00:00Z`);
 
-export type StripMonth = { label: string; left: number; width: number };
-export type StripBar = { item: Item; left: number; width: number; estimated: boolean; past: boolean; broken: boolean };
-export type Strip = {
-  months: StripMonth[];
-  bars: StripBar[];
-  milestones: { name: string; left: number }[];
-  today: number | null;
-  /** Commitments that end after the strip's last day. */
-  pastEdge: number;
-};
+export type PlanStrip = Schemas["SimplePlanStrip"];
+export type PlanInput = { start: string; end: string; estimated: boolean; milestone: string | null; milestoneDate: string | null };
+
+/** The plan strip shows this many rows; the rest are "+N more on the roadmap". */
+export const PLAN_ROWS = 8;
+const PLAN_MONTHS = 6;
+const monthOf = (day: string) => `${day.slice(0, 7)}-01`;
+function addMonths(first: string, n: number): string {
+  const d = new Date(`${first}T00:00:00Z`);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1)).toISOString().slice(0, 10);
+}
+const monthsBetween = (a: string, b: string) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + Number(b.slice(5, 7)) - Number(a.slice(5, 7)) + 1;
+const minOf = (xs: string[]) => xs.reduce((a, b) => (b < a ? b : a));
+const maxOf = (xs: string[]) => xs.reduce((a, b) => (b > a ? b : a));
 
 /**
- * The plan this quarter as a strip: the items of the quarter's window (the "now" horizon) by
- * month, estimated (undated) bars hatched, milestones marked, today's line, and how many
- * commitments end past the edge. Positions are percentages of the window.
+ * The plan strip (the owner's pick after CLD's production walk, 2026-10-27): a PRD's span by
+ * month with its milestones, today's line and how many commitments end past the edge; one
+ * row per milestone, the items with no milestone summed in one row. The same rules as the
+ * API's oracle.simple.plan_strip.strip (the one-pager and its PDF): from the month of the
+ * earliest start (or milestone) to the month of the latest milestone (with none dated, the
+ * latest committed end, else the latest end), at most 6 months.
  */
-export function planStrip(roadmap: Roadmap | undefined): Strip | null {
+/** Strings in code point order, as Python sorts them (the API's strip). */
+const byCodePoint = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+export function planByMonth(items: PlanInput[], today: string): PlanStrip | null {
+  if (items.length === 0) return null;
+  const groups = new Map<string, { name: string; date: string | null; of: PlanInput[] }>();
+  const loose: PlanInput[] = [];
+  for (const i of items) {
+    if (!i.milestone && !i.milestoneDate) {
+      loose.push(i);
+      continue;
+    }
+    const name = i.milestone || "Milestone";
+    const key = `${name}|${i.milestoneDate ?? ""}`;
+    const g = groups.get(key) ?? { name, date: i.milestoneDate, of: [] };
+    g.of.push(i);
+    groups.set(key, g);
+  }
+  const dated = [...groups.values()].flatMap((g) => (g.date ? [g.date] : []));
+  const committed = items.filter((i) => !i.estimated).map((i) => i.end);
+  const first = minOf([...items.map((i) => i.start), ...dated]);
+  const last = dated.length ? maxOf(dated) : maxOf(committed.length ? committed : items.map((i) => i.end));
+  let start = monthOf(first);
+  const lastMonth = monthOf(last > first ? last : first);
+  let n = monthsBetween(start, lastMonth);
+  if (n > PLAN_MONTHS) {
+    const anchor = minOf([addMonths(monthOf(today), -1), addMonths(lastMonth, 1 - PLAN_MONTHS)]);
+    start = anchor > start ? anchor : start;
+    n = Math.min(PLAN_MONTHS, monthsBetween(start, lastMonth));
+  }
+  const months = Array.from({ length: n }, (_, k) => addMonths(start, k));
+  const end = new Date(Date.parse(`${addMonths(months.at(-1)!, 1)}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
+  const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean): PlanStrip["rows"][number] => ({
+    name,
+    date,
+    items: of.length,
+    start: minOf(of.map((i) => i.start)),
+    end: maxOf(of.map((i) => i.end)),
+    estimated: of.every((i) => i.estimated),
+    milestone,
+    past_edge: !!date && date > end,
+  });
+  const rows = [...groups.values()]
+    .sort((a, b) => (a.date === null) !== (b.date === null) ? (a.date === null ? 1 : -1) : byCodePoint(a.date ?? "", b.date ?? "") || byCodePoint(a.name, b.name))
+    .map((g) => row(g.name, g.date, g.of, true));
+  if (loose.length) rows.push(row("No milestone", null, loose, false));
+  return {
+    start,
+    end,
+    months,
+    today: today >= start && today <= end ? today : null,
+    rows,
+    past_edge: items.filter((i) => !i.estimated && i.end > end).length,
+  };
+}
+
+/** A roadmap item as the plan strip reads it. */
+export const planInput = (i: Item): PlanInput => ({
+  start: i.start.date,
+  end: i.end.date,
+  estimated: i.estimated,
+  milestone: i.milestone ? i.milestone.name || "Milestone" : null,
+  milestoneDate: i.milestone?.date ?? null,
+});
+
+/**
+ * Home's plan: the PRD in play (the only PRD with items this quarter), or the top PRD by
+ * priority when several (its best-ranked item), else the one with most items this quarter.
+ * With several and the ranking not read yet (`ranked` null), undefined: Home waits for it.
+ */
+export function prdInPlay(roadmap: Roadmap | undefined, ranked: (string | null | undefined)[] | null = []): Schemas["SimpleDocRef"] | null | undefined {
   if (!roadmap) return null;
   const { start, end } = roadmap.windows.now;
-  const from = ms(start);
-  const to = ms(end) + DAY;
-  const pct = (day: string) => Math.max(0, Math.min(100, ((ms(day) - from) / (to - from)) * 100));
-  const months: StripMonth[] = [];
-  for (let d = new Date(from); d.getTime() < to; d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1))) {
-    const next = Math.min(to, Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1));
-    months.push({
-      label: calendarDay(d.toISOString(), { month: "short" }),
-      left: ((d.getTime() - from) / (to - from)) * 100,
-      width: ((next - d.getTime()) / (to - from)) * 100,
-    });
+  const now = roadmap.items.filter((i) => i.prd && i.status !== "cut" && i.start.date <= end && i.end.date >= start);
+  const prds = new Map<string, { prd: Schemas["SimpleDocRef"]; n: number }>();
+  for (const i of now) {
+    const p = prds.get(i.prd!.id) ?? { prd: i.prd!, n: 0 };
+    p.n += 1;
+    prds.set(i.prd!.id, p);
   }
-  const items = roadmap.items.filter((i) => i.status !== "cut" && i.start.date <= end && i.end.date >= start);
-  const bars = items.map((item) => {
-    const left = pct(item.start.date);
-    return {
-      item,
-      left,
-      width: Math.max(2, pct(item.end.date) - left),
-      estimated: item.estimated || item.start.estimated,
-      past: item.end.date > end,
-      broken: item.flags.some((f) => f.state === "red" && f.kind === "dependency_order"),
-    };
-  });
-  const milestones = roadmap.milestones
-    .filter((m) => m.date && m.date >= start && m.date <= end)
-    .map((m) => ({ name: m.name, left: pct(m.date!) }));
-  for (const i of items) {
-    if (i.milestone?.date && i.milestone.source === "item" && i.milestone.date >= start && i.milestone.date <= end && !milestones.some((m) => m.name === i.milestone!.name)) {
-      milestones.push({ name: i.milestone.name ?? "Milestone", left: pct(i.milestone.date) });
-    }
+  if (prds.size <= 1) return [...prds.values()][0]?.prd ?? null;
+  // Several: the ranking picks; with none yet (null), undefined: wait for it.
+  if (ranked === null) return undefined;
+  const byItem = new Map(roadmap.items.map((i) => [i.id, i]));
+  for (const id of ranked) {
+    const prd = id ? byItem.get(id)?.prd : null;
+    if (prd && prds.has(prd.id)) return prd;
   }
-  const t = roadmap.today;
-  return {
-    months,
-    bars,
-    milestones,
-    today: t >= start && t <= end ? pct(t) : null,
-    pastEdge: bars.filter((b) => b.past && !b.estimated).length,
-  };
+  return [...prds.values()].sort((a, b) => b.n - a.n || a.prd.title.localeCompare(b.prd.title))[0].prd;
 }
 
 /** "Good morning" by the hour of the Company's day. */

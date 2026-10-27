@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
 import { FlowMini, FlowPanel } from "@/components/simple/FlowVisual";
+import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -132,11 +133,10 @@ export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId
   const meta = [
     `Version ${v.version}`,
     v.published_at ? `published ${day(v.published_at)}` : null,
-    v.owner ? `Owner ${v.owner.name}` : null,
+    v.owner ? `Owner ${v.owner.name}` : "No owner yet",
     v.decider ? `Decider ${v.decider.name}` : null,
     v.span_start && v.span_end ? `${day(v.span_start)} – ${day(v.span_end)}` : null,
   ].filter(Boolean);
-  const spanMs = v.span_start && v.span_end ? Date.parse(v.span_end) - Date.parse(v.span_start) : 0;
 
   return (
     <div
@@ -198,24 +198,8 @@ export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId
             <section key={b.key} aria-label={b.title} className="mt-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
               {b.kind === "timeline" ? (
-                <div className="mt-2 space-y-1" aria-label="Timeline strip">
-                  {v.timeline.length === 0 && <p className="text-base text-text-faint">No roadmap items yet</p>}
-                  {v.timeline.map((i) => {
-                    const left = spanMs ? ((Date.parse(i.start) - Date.parse(v.span_start!)) / spanMs) * 100 : 0;
-                    const width = spanMs ? Math.max(4, ((Date.parse(i.end) - Date.parse(i.start)) / spanMs) * 100) : 100;
-                    return (
-                      <div key={i.id} className="relative h-7">
-                        <div
-                          title={`${i.title}: ${day(i.start)} – ${day(i.end)}${i.estimated ? " (estimated)" : ""}`}
-                          data-estimated={i.estimated ? "true" : undefined}
-                          className={`absolute top-0 h-7 truncate rounded px-2 text-sm leading-7 ${i.estimated ? "border border-dashed border-text-faint bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,var(--simple-rule)_4px,var(--simple-rule)_8px)]" : "bg-accent text-white"}`}
-                          style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
-                        >
-                          {i.title}{i.estimated ? " · estimated" : ""}
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div className="mt-2" aria-label="Timeline strip">
+                  {v.plan ? <PlanByMonth plan={v.plan} prd={v.document} /> : <p className="text-base text-text-faint">No roadmap items yet</p>}
                 </div>
               ) : (
                 <ul className="mt-1 space-y-1">

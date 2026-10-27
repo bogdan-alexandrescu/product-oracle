@@ -359,7 +359,7 @@ function Navs() {
       <nav
         aria-label="Oracle"
         data-testid="tab-bar"
-        className="fixed inset-x-0 bottom-0 z-40 hidden h-[68px] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] pt-1.5 pb-2 max-[600px]:grid"
+        className="fixed inset-x-0 bottom-0 z-40 hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] pt-1.5 pb-2 max-[600px]:grid"
       >
         {tabDests.map((d) => {
           const active = isActive(pathname, d, home) && !more;
@@ -398,7 +398,7 @@ function Navs() {
           id="more-sheet"
           role="dialog"
           aria-label="More"
-          className="fixed inset-x-0 bottom-[68px] z-40 hidden rounded-t-inspector border-t border-line bg-surface p-3 shadow-tip max-[600px]:block"
+          className="fixed inset-x-0 bottom-[var(--phone-tab-bar)] z-40 hidden rounded-t-inspector border-t border-line bg-surface p-3 shadow-tip max-[600px]:block"
         >
           <ModeSwitch placement="sheet" documentHome={home} />
           <ul className="mb-2 grid grid-cols-3 gap-1">
@@ -488,7 +488,7 @@ function PhoneHeader() {
   return (
     <header
       data-testid="phone-header"
-      className="sticky top-0 z-30 hidden h-[calc(44px+env(safe-area-inset-top))] items-center gap-2.5 bg-rail-top pt-[env(safe-area-inset-top)] pr-2.5 pl-3 [--focus-ring:var(--rail-bar)] max-[600px]:flex"
+      className="sticky top-0 z-30 hidden h-[var(--phone-top-bar)] items-center gap-2.5 bg-rail-top pt-[env(safe-area-inset-top)] pr-2.5 pl-3 [--focus-ring:var(--rail-bar)] max-[600px]:flex"
     >
       <Link href={homeOf(modeOf(pathname))} aria-label="Product Oracle" data-testid="phone-brand" className="flex-none rounded-md">
         <Mark size={22} tone="sky" className="block" />

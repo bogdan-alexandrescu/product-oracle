@@ -12674,7 +12674,9 @@ export interface paths {
          * Apply Simple Chat Card
          * @description Apply the card (or ``fix``: one of its fixes) through the change engine: applied
          *     for an owner or the decider, proposed for others; 403 with the reason when the
-         *     meeting's change mode leaves the caller out.
+         *     meeting's change mode leaves the caller out. In a meeting the change and its meeting
+         *     decision commit together (S8's one commit): a refusal or failure between them keeps
+         *     neither.
          */
         post: operations["apply_simple_chat_card"];
         delete?: never;
@@ -29544,6 +29546,7 @@ export interface components {
             blocks: components["schemas"]["OnePagerBlock"][];
             /** Timeline */
             timeline: components["schemas"]["OnePagerItem"][];
+            plan?: components["schemas"]["SimplePlanStrip"] | null;
             /**
              * Sections
              * @default []
@@ -30657,7 +30660,7 @@ export interface components {
          *     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
          *     ``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they
          *     last switched to (#723); unset, they land by role (viewers and commenters in Simple).
-         *     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter.
+         *     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).
          */
         Preferences: {
             /**
@@ -37946,6 +37949,66 @@ export interface components {
             end: string;
             /** Estimated */
             estimated: boolean;
+        };
+        /**
+         * SimplePlanRow
+         * @description One row of the plan strip: a milestone (its name, date and how many of the PRD's
+         *     items carry it), or the items with no milestone summed in one row.
+         */
+        SimplePlanRow: {
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /** Items */
+            items: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Estimated */
+            estimated: boolean;
+            /** Milestone */
+            milestone: boolean;
+            /**
+             * Past Edge
+             * @default false
+             */
+            past_edge: boolean;
+        };
+        /**
+         * SimplePlanStrip
+         * @description The plan strip (the owner's pick for Home and the one-pager): the PRD's span by
+         *     month with its milestones, today's line and how many commitments end past the edge.
+         */
+        SimplePlanStrip: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Months */
+            months: string[];
+            /** Today */
+            today?: string | null;
+            /** Rows */
+            rows: components["schemas"]["SimplePlanRow"][];
+            /**
+             * Past Edge
+             * @default 0
+             */
+            past_edge: number;
         };
         /** SimplePrioritiesOut */
         SimplePrioritiesOut: {

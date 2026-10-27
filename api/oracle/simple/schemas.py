@@ -878,6 +878,36 @@ class OnePagerSource(BaseModel):
     body: str
 
 
+class SimplePlanRow(BaseModel):
+    """One row of the plan strip: a milestone (its name, date and how many of the PRD's
+    items carry it), or the items with no milestone summed in one row."""
+
+    name: str
+    date: dt.date | None = None
+    items: int
+    # The span of its items (the row's bar), and whether every one of them is estimated.
+    start: dt.date
+    end: dt.date
+    estimated: bool
+    milestone: bool
+    # Its date falls after the strip's last month.
+    past_edge: bool = False
+
+
+class SimplePlanStrip(BaseModel):
+    """The plan strip (the owner's pick for Home and the one-pager): the PRD's span by
+    month with its milestones, today's line and how many commitments end past the edge."""
+
+    start: dt.date
+    end: dt.date
+    # The first day of each month across the strip.
+    months: list[dt.date]
+    today: dt.date | None = None
+    rows: list[SimplePlanRow]
+    # Committed (not estimated) items that end after the strip's last day.
+    past_edge: int = 0
+
+
 class OnePagerOut(BaseModel):
     document: SimpleDocRef
     version: int
@@ -892,6 +922,9 @@ class OnePagerOut(BaseModel):
     blocks: list[OnePagerBlock]
     # The timeline strip: the PRD's slice of the Simple roadmap (the span is its ends).
     timeline: list[OnePagerItem]
+    # The Timeline block's strip: the PRD's span by month and its milestones (no per-item
+    # bars); None with no roadmap items.
+    plan: SimplePlanStrip | None = None
     sections: list[OnePagerSource] = []
     notes: list[OnePagerNote]
     draft: OnePagerDraft | None

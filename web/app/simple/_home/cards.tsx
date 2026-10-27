@@ -5,12 +5,11 @@ import { useState, type ReactNode } from "react";
 
 import { Icon, type IconName } from "@/components/ds/Icon";
 import { Loading } from "@/components/ui";
-import type { Strip } from "@/lib/simple-home";
 
 /**
  * The parts of Simple's Home (#723 S1, "Brief as cards"): a section card with its header row
  * (icon, title, count chip, "All ->"), the rows that share one layout with their actions in
- * one right-hand column, a block's loading and failed states, and the plan strip.
+ * one right-hand column, and a block's loading and failed states.
  */
 
 /** A section card: header row, then its rows (or its state). */
@@ -165,55 +164,5 @@ export function Top<T>({ rows, max = 3, more, children }: { rows: T[]; max?: num
         </Link>
       )}
     </>
-  );
-}
-
-/** The plan this quarter as a strip: months, bars (estimated ones hatched), milestones, today, past-the-edge marker. */
-export function PlanStrip({ strip }: { strip: Strip }) {
-  return (
-    <div data-testid="home-strip" className="flex flex-col gap-2">
-      <div className="relative h-6 text-[13px] text-text2">
-        {strip.months.map((m) => (
-          <span key={m.label} className="absolute top-0 border-l border-line pl-1.5" style={{ left: `${m.left}%`, width: `${m.width}%` }}>
-            {m.label}
-          </span>
-        ))}
-      </div>
-      <div className="relative flex flex-col gap-1.5 py-1">
-        {strip.bars.map((b) => (
-          <div key={b.item.id} className="relative h-7">
-            <div
-              data-testid="home-strip-bar"
-              data-estimated={b.estimated ? "true" : undefined}
-              data-broken={b.broken ? "true" : undefined}
-              title={b.estimated ? `${b.item.title} (estimated)` : b.item.title}
-              className={`simple-bar absolute inset-y-0 flex items-center overflow-hidden rounded-md px-2 text-[13px] font-medium whitespace-nowrap ${b.estimated ? "simple-bar-estimated" : ""} ${b.broken ? "simple-bar-broken" : ""}`}
-              style={{ left: `${b.left}%`, width: `${b.width}%` }}
-            >
-              {b.item.title}
-              {b.estimated && <span className="sr-only"> (estimated)</span>}
-            </div>
-          </div>
-        ))}
-        {strip.milestones.map((m) => (
-          <span
-            key={m.name}
-            data-testid="home-strip-milestone"
-            title={m.name}
-            aria-label={`Milestone ${m.name}`}
-            className="absolute inset-y-0 w-0 border-l-2 border-dashed border-accent"
-            style={{ left: `${m.left}%` }}
-          />
-        ))}
-        {strip.today != null && (
-          <span data-testid="home-strip-today" aria-label="Today" className="absolute inset-y-0 w-0 border-l-2 border-crit" style={{ left: `${strip.today}%` }} />
-        )}
-      </div>
-      {strip.pastEdge > 0 && (
-        <p data-testid="home-strip-edge" className="simple-small text-right">
-          {strip.pastEdge} {strip.pastEdge === 1 ? "commitment ends" : "commitments end"} past this quarter →
-        </p>
-      )}
-    </div>
   );
 }

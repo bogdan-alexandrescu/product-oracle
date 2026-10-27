@@ -1,0 +1,294 @@
+[
+ {
+  "name": "milestones by date, loose items summed, a commitment past the edge",
+  "today": "2026-10-27",
+  "items": [
+   {
+    "start": "2026-10-05",
+    "end": "2026-11-18",
+    "estimated": false,
+    "milestone": "M1",
+    "milestoneDate": "2026-11-20"
+   },
+   {
+    "start": "2026-10-12",
+    "end": "2026-11-20",
+    "estimated": true,
+    "milestone": "M1",
+    "milestoneDate": "2026-11-20"
+   },
+   {
+    "start": "2026-11-02",
+    "end": "2027-01-29",
+    "estimated": false,
+    "milestone": "M3",
+    "milestoneDate": "2027-01-29"
+   },
+   {
+    "start": "2026-12-01",
+    "end": "2026-12-20",
+    "estimated": false,
+    "milestone": "M2",
+    "milestoneDate": "2026-12-18"
+   },
+   {
+    "start": "2026-11-10",
+    "end": "2027-03-01",
+    "estimated": false,
+    "milestone": null,
+    "milestoneDate": null
+   },
+   {
+    "start": "2026-11-15",
+    "end": "2026-12-01",
+    "estimated": true,
+    "milestone": null,
+    "milestoneDate": null
+   }
+  ],
+  "expected": {
+   "start": "2026-10-01",
+   "end": "2027-01-31",
+   "months": [
+    "2026-10-01",
+    "2026-11-01",
+    "2026-12-01",
+    "2027-01-01"
+   ],
+   "today": "2026-10-27",
+   "rows": [
+    {
+     "name": "M1",
+     "date": "2026-11-20",
+     "items": 2,
+     "start": "2026-10-05",
+     "end": "2026-11-20",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "M2",
+     "date": "2026-12-18",
+     "items": 1,
+     "start": "2026-12-01",
+     "end": "2026-12-20",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "M3",
+     "date": "2027-01-29",
+     "items": 1,
+     "start": "2026-11-02",
+     "end": "2027-01-29",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "No milestone",
+     "date": null,
+     "items": 2,
+     "start": "2026-11-10",
+     "end": "2027-03-01",
+     "estimated": false,
+     "milestone": false,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 1
+  }
+ },
+ {
+  "name": "names compare by code point, as Python sorts them (Beta before alpha)",
+  "today": "2026-10-27",
+  "items": [
+   {
+    "start": "2026-11-01",
+    "end": "2026-12-01",
+    "estimated": true,
+    "milestone": "alpha",
+    "milestoneDate": "2026-12-01"
+   },
+   {
+    "start": "2026-11-01",
+    "end": "2026-12-01",
+    "estimated": true,
+    "milestone": "Beta",
+    "milestoneDate": "2026-12-01"
+   },
+   {
+    "start": "2026-11-01",
+    "end": "2026-12-01",
+    "estimated": true,
+    "milestone": "beta",
+    "milestoneDate": null
+   },
+   {
+    "start": "2026-11-01",
+    "end": "2026-12-01",
+    "estimated": true,
+    "milestone": "Zed",
+    "milestoneDate": null
+   }
+  ],
+  "expected": {
+   "start": "2026-11-01",
+   "end": "2026-12-31",
+   "months": [
+    "2026-11-01",
+    "2026-12-01"
+   ],
+   "today": null,
+   "rows": [
+    {
+     "name": "Beta",
+     "date": "2026-12-01",
+     "items": 1,
+     "start": "2026-11-01",
+     "end": "2026-12-01",
+     "estimated": true,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "alpha",
+     "date": "2026-12-01",
+     "items": 1,
+     "start": "2026-11-01",
+     "end": "2026-12-01",
+     "estimated": true,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "Zed",
+     "date": null,
+     "items": 1,
+     "start": "2026-11-01",
+     "end": "2026-12-01",
+     "estimated": true,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "beta",
+     "date": null,
+     "items": 1,
+     "start": "2026-11-01",
+     "end": "2026-12-01",
+     "estimated": true,
+     "milestone": true,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 0
+  }
+ },
+ {
+  "name": "a milestone with an empty name reads Milestone",
+  "today": "2026-10-27",
+  "items": [
+   {
+    "start": "2026-11-01",
+    "end": "2026-12-01",
+    "estimated": false,
+    "milestone": "",
+    "milestoneDate": "2026-12-10"
+   },
+   {
+    "start": "2026-11-03",
+    "end": "2026-12-05",
+    "estimated": false,
+    "milestone": "",
+    "milestoneDate": "2026-12-10"
+   }
+  ],
+  "expected": {
+   "start": "2026-11-01",
+   "end": "2026-12-31",
+   "months": [
+    "2026-11-01",
+    "2026-12-01"
+   ],
+   "today": null,
+   "rows": [
+    {
+     "name": "Milestone",
+     "date": "2026-12-10",
+     "items": 2,
+     "start": "2026-11-01",
+     "end": "2026-12-05",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 0
+  }
+ },
+ {
+  "name": "a long span shows six months from the month before today's",
+  "today": "2026-11-02",
+  "items": [
+   {
+    "start": "2026-01-05",
+    "end": "2027-06-01",
+    "estimated": false,
+    "milestone": "GA",
+    "milestoneDate": "2027-06-01"
+   },
+   {
+    "start": "2026-02-05",
+    "end": "2027-08-01",
+    "estimated": false,
+    "milestone": null,
+    "milestoneDate": null
+   }
+  ],
+  "expected": {
+   "start": "2026-10-01",
+   "end": "2027-03-31",
+   "months": [
+    "2026-10-01",
+    "2026-11-01",
+    "2026-12-01",
+    "2027-01-01",
+    "2027-02-01",
+    "2027-03-01"
+   ],
+   "today": "2026-11-02",
+   "rows": [
+    {
+     "name": "GA",
+     "date": "2027-06-01",
+     "items": 1,
+     "start": "2026-01-05",
+     "end": "2027-06-01",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": true
+    },
+    {
+     "name": "No milestone",
+     "date": null,
+     "items": 1,
+     "start": "2026-02-05",
+     "end": "2027-08-01",
+     "estimated": false,
+     "milestone": false,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 2
+  }
+ },
+ {
+  "name": "no items: no strip",
+  "today": "2026-10-27",
+  "items": [],
+  "expected": null
+ }
+]

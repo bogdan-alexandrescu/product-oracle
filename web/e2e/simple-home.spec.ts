@@ -96,11 +96,11 @@ for (const phone of [false, true]) {
         const quiet = goals.filter({ hasText: "Keep alerts quiet" });
         await expect(quiet.getByTestId("home-goal-status")).toHaveText("Not counted yet");
         await expect(quiet).toContainText("guardrail");
-        // The plan strip: today's line, estimated bars hatched, a broken link drawn red.
+        // The plan strip: the PRD in play by month, its rows with their item counts (no per-item bars), today's line.
         await expect(card(page, "plan").getByTestId("home-strip-today")).toHaveCount(1);
-        await expect(card(page, "plan").locator('[data-testid="home-strip-bar"][data-estimated="true"]').first()).toBeVisible();
-        await expect(card(page, "plan").locator('[data-testid="home-strip-bar"][data-broken="true"]').first()).toBeVisible();
-        await expect(card(page, "plan").getByTestId("home-strip-milestone").first()).toBeAttached();
+        await expect(card(page, "plan").getByTestId("home-strip-label").first()).toHaveText(/ · \d+ items?$/);
+        await expect(card(page, "plan").getByTestId("home-strip-bar")).toHaveCount(0);
+        await expect(card(page, "plan").getByTestId("home-strip-month").first()).toBeVisible();
       });
 
       test(`an owner accepts and declines proposals, fixes a broken link with Undo, and sees the draft (${where})`, async ({ page }) => {

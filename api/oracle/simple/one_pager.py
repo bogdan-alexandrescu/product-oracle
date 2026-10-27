@@ -50,7 +50,7 @@ from oracle.docs import visibility
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack
-from oracle.simple import drafts
+from oracle.simple import drafts, plan_strip
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
 from oracle.simple.models import SimpleChange, SimpleDraft, SimpleOnePager, SimpleSession
 from oracle.simple.schemas import (
@@ -191,6 +191,10 @@ _METRIC = re.compile(
     re.IGNORECASE,
 )
 _MD = re.compile(r"[*_`]+|\[([^\]]*)\]\([^)]*\)|\[\^?[\w-]+\]")
+# A markdown table's separator row ("|---|:---:|", GFM's "|-|-|" too); its header is the row
+# above it.
+_TABLE_SEP = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$")
+_CELL_SPLIT = re.compile(r"(?<!\\)\|")
 
 
 # --------------------------------------------------------------------------- blocks
@@ -292,14 +296,58 @@ def _words(text: str, n: int) -> str:
     return text if len(w) <= n else " ".join(w[:n]).rstrip(",;:") + "…"
 
 
+def _cells(row: str) -> list[str]:
+    """A table row's cells, without the outer pipes."""
+    r = row.strip()
+    r = r[1:] if r.startswith("|") else r
+    r = r[:-1] if r.endswith("|") and not r.endswith("\\|") else r
+    return [c.strip() for c in _CELL_SPLIT.split(r)]
+
+
+def _tables(md: str) -> tuple[list[tuple[str, list[str]]], list[str]]:
+    """A section's table body rows (each raw line and its cells) and its other lines. A
+    table's header and separator rows are neither: they are never a line."""
+    lines = md.splitlines()
+    rows: list[tuple[str, list[str]]] = []
+    rest: list[str] = []
+    i = 0
+    while i < len(lines):
+        if "|" in lines[i] and i + 1 < len(lines) and _TABLE_SEP.match(lines[i + 1]):
+            i += 2
+            while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                rows.append((lines[i], _cells(lines[i])))
+                i += 1
+            continue
+        rest.append(lines[i])
+        i += 1
+    return rows, rest
+
+
+def _row_line(cells: list[str]) -> str:
+    """A table body row as one readable line: "<first cell>: <the next non-empty cell>"."""
+    vals = [v for v in (_plain(c.replace("\\|", "/")).strip(" |") for c in cells) if v]
+    return ": ".join(vals[:2])
+
+
+def _unpiped(text: str) -> str:
+    """A line never starts or ends with a pipe: a table row's words read as one line. Pipes
+    inside prose ("p50 | p95 | p99") stay as written."""
+    t = text.strip()
+    if t.startswith("|") or t.endswith("|"):
+        t = _row_line(_cells(t)) if "|" in t.strip("| ") else t.strip(" |")
+    return t.strip(" |")
+
+
 def _facts(sec: Section) -> list[str]:
-    """A section's bullets, else its sentences."""
-    bullets = [
-        _plain(m.group(1)) for line in sec.body_md.splitlines() if (m := _BULLET.match(line))
-    ]
-    if bullets:
-        return [b for b in bullets if b]
-    return [s for s in (_plain(x) for x in _SENTENCE.split(sec.body_text or "")) if s]
+    """A section's bullets and its tables' body rows (one line each), else its sentences."""
+    rows, rest = _tables(sec.body_md)
+    bullets = [_plain(m.group(1)) for line in rest if (m := _BULLET.match(line))]
+    facts = [b for b in (_unpiped(x) for x in bullets) if b]
+    facts += [x for x in (_row_line(c) for _, c in rows) if x]
+    if facts:
+        return facts
+    prose = _plain("\n".join(rest)) if rows else sec.body_text or ""
+    return [s for s in (_unpiped(_plain(x)) for x in _SENTENCE.split(prose)) if s]
 
 
 def metric_of(text: str) -> OnePagerMetric | None:
@@ -363,7 +411,7 @@ def clean_answer(
         for raw in (given.get(spec.key) or {}).get("lines") or []:
             if not isinstance(raw, dict):
                 continue
-            text = " ".join(str(raw.get("text") or "").split())[:LINE_MAX]
+            text = _unpiped(" ".join(str(raw.get("text") or "").split()))[:LINE_MAX]
             keys = [str(k) for k in raw.get("source_keys") or [] if str(k) in allowed]
             if not text or not keys:
                 continue
@@ -611,6 +659,18 @@ async def who(db: AsyncSession, document: Document) -> Who:
     )
 
 
+async def _person_of(db: AsyncSession, imported_by: uuid.UUID | None) -> uuid.UUID | None:
+    """Who imported a version: its user, or the user an API token acts for (a service
+    token is no one: None)."""
+    from oracle.auth.models import ApiToken
+
+    if imported_by is None:
+        return None
+    if await db.scalar(select(User.id).where(User.id == imported_by)) is not None:
+        return imported_by
+    return await db.scalar(select(ApiToken.user_id).where(ApiToken.id == imported_by))
+
+
 def _me(principal: Any) -> uuid.UUID | None:
     if principal is None or getattr(principal, "run_id", None) is not None:
         return None
@@ -746,11 +806,33 @@ def _drop(body: str, raw: str, bullets: bool) -> str:
     return re.sub(re.escape(raw) + r"[ \t]*", "", body, count=1)
 
 
+def _row_with(cells: list[str], new: str) -> str:
+    """A table row saying the new line: "A: B" writes its first two non-empty cells, other
+    words the second (the row's other cells stay)."""
+    out = list(cells)
+    filled = [i for i, c in enumerate(cells) if _plain(c).strip(" |")] or [0]
+    head, sep, tail = new.partition(": ")
+    put = lambda i, v: out.__setitem__(i, v.strip().replace("|", "\\|"))  # noqa: E731
+    if len(filled) >= 2 and sep:
+        put(filled[0], head)
+        put(filled[1], tail)
+    else:
+        put(filled[1] if len(filled) >= 2 else filled[0], new)
+    return "| " + " | ".join(out) + " |"
+
+
 def patch(body: str, old: str, new: str, *, first: bool = True) -> str | None:
     """The section with the line's new words: the fact(s) the old line says replaced by
     the new line (``first``), or dropped (a later section of a line resting on several,
     which the new words now speak for). None when the section holds nothing the line says:
     the edit is refused rather than a new claim added beside the old one."""
+    o = _plain(old).rstrip("…").strip()
+    for raw, cells in _tables(body)[0]:
+        said = _row_line(cells)
+        if said and o and (said == o or (said.startswith(o) and len(o.split()) > 2)):
+            if not first:
+                return re.sub(re.escape(raw) + r"[ \t]*(?:\n|$)", "", body, count=1)
+            return body.replace(raw, _row_with(cells, new), 1)
     spans, bullets = _spans(body)
     hits = _hits(spans, old)
     if not hits:
@@ -819,7 +901,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     ids = {c.by for c in live + shown} | ({w.decider} if w.decider else set()) | set(w.track_owners)
     if d is not None:
         ids |= set(d.waiting_on or [])
-    owner_id = next(iter(w.track_owners), None) or b.version.imported_by
+    owner_id = next(iter(w.track_owners), None) or await _person_of(db, b.version.imported_by)
     if owner_id:
         ids.add(owner_id)
     names = {
@@ -926,6 +1008,20 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         for i in slice_.items
         if i.status != "cut"
     ]
+    plan = plan_strip.strip(
+        [
+            plan_strip.PlanItem(
+                i.start.date,
+                i.end.date,
+                i.estimated,
+                (i.milestone.name or "Milestone") if i.milestone else None,
+                i.milestone.date if i.milestone else None,
+            )
+            for i in slice_.items
+            if i.status != "cut"
+        ],
+        slice_.today,
+    )
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )
@@ -964,14 +1060,15 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         document=SimpleDocRef(id=document.id, slug=document.slug, title=document.title),
         version=b.version.number,
         published_at=b.version.approved_at,
-        owner=person(owner_id),
-        decider=person(w.decider),
+        owner=person(owner_id) if owner_id in names else None,
+        decider=person(w.decider) if w.decider in names else None,
         span_start=min((i.start for i in items), default=None),
         span_end=max((i.end for i in items), default=None),
         built_by=b.row.built_by,
         built_at=b.row.built_at,  # type: ignore[arg-type]
         blocks=[*blocks, timeline.model_copy(update={"lines": []})],
         timeline=items,
+        plan=plan,
         sections=sources,
         notes=notes,
         draft=draft,
@@ -1337,10 +1434,63 @@ h2 { font-size: 9pt; text-transform: uppercase; letter-spacing: .06em; color: #5
   margin: 10px 0 3px; border-top: 1px solid #e3e5e9; padding-top: 6px; }
 ul { margin: 0; padding-left: 16px; } li { margin: 1px 0; }
 .metric b { font-variant-numeric: tabular-nums; }
-.strip { display: flex; gap: 4px; flex-wrap: wrap; }
-.bar { border: 1px solid #c9ced6; border-radius: 3px; padding: 1px 5px; font-size: 8pt; }
-.bar.est { border-style: dashed; color: #5b6270; }
+.plan { font-size: 8pt; }
+.plan .r { display: flex; align-items: center; height: 15px; }
+.plan .n { width: 34%; overflow: hidden; white-space: nowrap; padding-right: 6px; }
+.plan .t { position: relative; flex: 1; height: 15px; border-left: 1px solid #e3e5e9; }
+.plan .m { position: absolute; top: 0; color: #5b6270; border-left: 1px solid #e3e5e9;
+  padding-left: 3px; }
+.plan .b { position: absolute; top: 4px; height: 7px; border-radius: 2px; background: #c9ced6; }
+.plan .b.est { background: none; border: 1px dashed #9aa1ad; }
+.plan .d { position: absolute; top: 2px; width: 9px; height: 9px; margin-left: -5px;
+  background: #1c1f24; transform: rotate(45deg); }
+.plan .now { position: absolute; top: 0; bottom: 0; border-left: 1.5px solid #c0392b; }
+.plan .more { color: #5b6270; margin-top: 3px; }
 """
+
+# The plan strip shows this many rows; the rest are "+N more on the roadmap".
+PLAN_ROWS = 8
+
+
+def _plan_html(plan: Any) -> str:
+    """The plan strip for the PDF: months across, one row per milestone, today's line."""
+    if plan is None:
+        return "<p>No roadmap items yet</p>"
+    span = (plan.end - plan.start).days + 1
+
+    def pct(d: Any) -> float:
+        return max(0.0, min(100.0, (d - plan.start).days / span * 100))
+
+    now = f"<span class='now' style='left:{pct(plan.today):.1f}%'></span>" if plan.today else ""
+    months = "".join(
+        f"<span class='m' style='left:{pct(m):.1f}%'>{m.strftime('%b')}</span>" for m in plan.months
+    )
+    out = [
+        "<div class='plan'><div class='r'><span class='n'></span>"
+        f"<span class='t'>{months}{now}</span></div>"
+    ]
+    for r in plan.rows[:PLAN_ROWS]:
+        n = f"{r.items} item{'' if r.items == 1 else 's'}"
+        when = f" · {r.date.strftime('%b')} {r.date.day}" if r.date else ""
+        left = pct(r.start)
+        bar = (
+            f"<span class='b{' est' if r.estimated else ''}' "
+            f"style='left:{left:.1f}%;width:{max(1.0, pct(r.end) - left):.1f}%'></span>"
+        )
+        mark = f"<span class='d' style='left:{pct(r.date):.1f}%'></span>" if r.date else ""
+        out.append(
+            f"<div class='r'><span class='n'>{escape(r.name)} · {n}{when}</span>"
+            f"<span class='t'>{bar}{mark}{now}</span></div>"
+        )
+    extra = []
+    if len(plan.rows) > PLAN_ROWS:
+        extra.append(f"+{len(plan.rows) - PLAN_ROWS} more on the roadmap")
+    if plan.past_edge:
+        word = "commitment ends" if plan.past_edge == 1 else "commitments end"
+        extra.append(f"{plan.past_edge} {word} past {plan.end.strftime('%b')} →")
+    if extra:
+        out.append(f"<div class='more'>{' · '.join(extra)}</div>")
+    return "".join(out) + "</div>"
 
 
 async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str]:
@@ -1362,8 +1512,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     if out.published_at:
         zone = await company_time.company_time_zone(db)
         meta.append(f"published {company_time.day_in_words(out.published_at, zone)}")
-    if out.owner:
-        meta.append(f"owner {escape(out.owner.name)}")
+    meta.append(f"owner {escape(out.owner.name)}" if out.owner else "No owner yet")
     if out.decider:
         meta.append(f"decider {escape(out.decider.name)}")
     if out.span_start and out.span_end:
@@ -1373,12 +1522,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     for blk in out.blocks:
         parts.append(f"<h2>{escape(blk.title)}</h2>")
         if blk.kind == "timeline":
-            bars = "".join(
-                f"<span class='bar{' est' if i.estimated else ''}'>{escape(i.title)} · "
-                f"{i.start.isoformat()} – {i.end.isoformat()}</span>"
-                for i in out.timeline
-            )
-            parts.append(f"<div class='strip'>{bars or 'No roadmap items yet'}</div>")
+            parts.append(_plan_html(out.plan))
             continue
         items = []
         for line in blk.lines:
