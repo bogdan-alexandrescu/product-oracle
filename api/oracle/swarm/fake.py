@@ -14,6 +14,7 @@ flow); tests of v2 drive :class:`oracle.swarm.SwarmCloudRuntime` against a fake
 SwarmCloud API instead (``tests/swarmcloud_fake.py``).
 """
 
+import hashlib
 import json
 import re
 import secrets
@@ -25,7 +26,10 @@ from typing import Any
 from oracle.swarm.runtime import (
     Answer,
     Features,
+    Parked,
     RecordedAnswer,
+    RuntimeUnavailable,
+    StoredCredentials,
     WorkflowSpec,
     WorkflowState,
     WorkflowStatus,
@@ -77,6 +81,11 @@ class Outcome:
     # How many status polls answer "running" (with half the cost) before the end.
     polls: int = 0
     error: str | None = None
+    # Steps parked while the workflow runs (CREDENTIAL_MISSING with an expired MCP
+    # credential, say): served until a re-store of their server promotes them.
+    parked: tuple[Parked, ...] = ()
+    # What a re-store of the workflow's MCP credential answers instead of storing it.
+    restore_refusal: RuntimeUnavailable | None = None
 
 
 @dataclass
@@ -88,6 +97,7 @@ class _Record:
     polls_left: int
     spec: WorkflowSpec | None = None
     cancelled: bool = False
+    parked: tuple[Parked, ...] = ()
 
 
 # The PRD a step's prompt names ("PRD document '<slug>'", oracle.runs.flows.step_prompt).
@@ -389,6 +399,8 @@ class FakeRuntime:
     cancelled: list[str] = field(default_factory=list)
     # None: run tokens are accepted from any address (no runtime egress to check).
     egress: frozenset[str] | None = None
+    # Each re-store: (workflow id, server, expires_in, sha256 of the value); never the value.
+    stored: list[tuple[str, str, int, str]] = field(default_factory=list)
     _records: dict[str, _Record] = field(default_factory=dict)
 
     @property
@@ -468,6 +480,7 @@ class FakeRuntime:
             outcome=outcome,
             polls_left=outcome.polls,
             spec=spec,
+            parked=outcome.parked,
         )
         self.submitted.append(spec)
         return workflow_id
@@ -476,11 +489,26 @@ class FakeRuntime:
         record = self._record(workflow_id)
         if record.cancelled:
             return WorkflowStatus("cancelled", self._cost(record) / 2)
+        if record.parked:
+            return WorkflowStatus("running", self._cost(record) / 2, parked=record.parked)
         if record.polls_left > 0:
             record.polls_left -= 1
             return WorkflowStatus("running", self._cost(record) / 2)
         o = record.outcome
         return WorkflowStatus(o.state, self._cost(record), o.error)
+
+    async def store_mcp_credentials(
+        self, workflow_id: str, server: str, value: str, expires_in: int
+    ) -> StoredCredentials:
+        record = self._record(workflow_id)
+        if record.outcome.restore_refusal is not None:
+            raise record.outcome.restore_refusal
+        self.stored.append(
+            (workflow_id, server, expires_in, hashlib.sha256(value.encode()).hexdigest())
+        )
+        promoted = [p for p in record.parked if p.server == server]
+        record.parked = tuple(p for p in record.parked if p.server != server)
+        return StoredCredentials(stored=((server, None),), promoted=len(promoted))
 
     async def cost(self, workflow_id: str) -> Decimal:
         record = self._record(workflow_id)

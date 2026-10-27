@@ -233,11 +233,12 @@ from oracle.runs.schemas import (
     TickOut,
 )
 from oracle.runs.scope_models import PrdScope
-from oracle.runtokens import mint_run_token, revoke_run_tokens
+from oracle.runtokens import RunToken, mint_run_token, revoke_run_tokens
 from oracle.sources.models import Snapshot
 from oracle.swarm import (
     AgentRuntime,
     McpAccess,
+    Parked,
     RecordedAnswer,
     RuntimeUnavailable,
     StepSpec,
@@ -247,8 +248,12 @@ from oracle.swarm import (
     load_learned,
     redact,
 )
-from oracle.swarm.runtime import MERGE, NOT_YET, WORKING, not_reached
-from oracle.swarm.settings import get_runtime_settings
+from oracle.swarm.runtime import MCP_SERVER, MERGE, NOT_YET, WORKING, not_reached
+from oracle.swarm.settings import (
+    MAX_CREDENTIAL_SECONDS,
+    MIN_CREDENTIAL_SECONDS,
+    get_runtime_settings,
+)
 from oracle.templates import service as templates_service
 from oracle.templates.builtins import (
     DEFAULT_TEMPLATE_FOR_KIND,
@@ -6605,8 +6610,13 @@ async def _tick_workflow(
     start = _take_cost(run, wf, status, segments)
     current = next((s for s in segments if s.status == "running"), None)
     _record_running(wf, status, segments)
+    expired = [p for p in status.parked if p.mcp_expired]
+    if expired:
+        # Its key expired while the step waited in SwarmCloud's queue: renewed after this
+        # pass commits (:func:`refresh_key`), once per park.
+        wf = _mark_key_refresh(run, wf, status, expired)
     for parked in status.parked:
-        if parked.reason == "CREDENTIAL_MISSING":
+        if parked.reason == "CREDENTIAL_MISSING" and not parked.mcp_expired:
             _note(current or start or segments[0], workflow.ADVICE["CREDENTIAL_MISSING"])
     if run.status == "paused_overrun":
         await _pause_workflow(db, run, wf, status, segments)
@@ -6706,6 +6716,154 @@ async def _tick_workflow(
             current.finished_at = _now()
         await _finish(db, run, "failed", f"{current.name if current else 'workflow'}: {error}")
         await audit.record(db, None, "run.failed", "run", run.id, {"workflow": wf["id"]})
+
+
+# --------------------------------------------------------------- the run's key renewed
+#
+# SwarmCloud #2498: a step that starts after the workflow's MCP credential expired (it
+# waited in SwarmCloud's queue past the run token's lifetime) is parked CREDENTIAL_MISSING
+# with code mcp_credential_expired, not failed. The tick marks the park on the run's
+# workflow (``key_refresh``); after the pass commits, :func:`refresh_key` revokes the run's
+# token, mints one with the same scopes and a lifetime sized for the steps still to run,
+# and re-stores it (``PUT /v1/workflows/{id}/mcp-credentials``), which returns the parked
+# steps to READY. Once per park, and never twice within KEY_REFRESH_SECONDS. A SwarmCloud
+# that fails the step instead of parking it fails the run as before (``mcp_credential_
+# expired``'s advice): the two paths never both act on one step, since a parked step has
+# not failed and a failed one is never parked again.
+
+# The least time between two renewals of a run's key.
+KEY_REFRESH_SECONDS = 60
+# The parks remembered as handled (the newest).
+_KEY_REFRESH_PARKS = 20
+_FINISHED_STEPS = frozenset({"SUCCEEDED", "SKIPPED", "FAILED", "CANCELLED", "DEAD_LETTERED"})
+
+
+def _park_key(parked: Parked) -> str:
+    at = parked.parked_at or parked.expired_at
+    return f"{parked.task_id or parked.step_id}@{at.isoformat() if at else ''}"
+
+
+def _mark_key_refresh(
+    run: Run, wf: dict[str, Any], status: WorkflowStatus, parks: list[Parked]
+) -> dict[str, Any]:
+    """Mark the run's workflow for a key renewal when a park not handled yet is seen; the
+    lifetime is sized as at submission, for the steps still to run. Returns the workflow
+    as marked (unchanged when every park was handled)."""
+    refresh = dict(wf.get("key_refresh") or {})
+    handled = list(refresh.get("parks") or [])
+    new = [k for k in (_park_key(p) for p in parks) if k not in handled]
+    if not new:
+        return wf
+    waits = {r for e in wf.get("segments") or [] for r in e.get("reviews") or []}
+    left = [s for s in status.steps if s.state not in _FINISHED_STEPS]
+    agents = sum(1 for s in left if s.step_id not in waits)
+    ttl = workflow.credential_seconds(agents, len(left) - agents, get_runtime_settings())
+    refresh.update(
+        parks=(handled + new)[-_KEY_REFRESH_PARKS:],
+        park=new[-1],
+        server=parks[0].server,
+        seconds=ttl,
+        state="due",
+        seen_at=_now().isoformat(),
+    )
+    wf = {**wf, "key_refresh": refresh}
+    _set_knob(run, "workflow", wf)
+    return wf
+
+
+def _renewed_note(at: datetime) -> str:
+    return (
+        f"Key renewed at {at.strftime('%Y-%m-%d %H:%M')} UTC: the step started after its key "
+        "expired while it waited in SwarmCloud's queue"
+    )
+
+
+async def refresh_key(
+    db: AsyncSession, run_id: uuid.UUID, *, deadline: float | None = None
+) -> str | None:
+    """Renew the run's key for a park :func:`_mark_key_refresh` marked (nothing when none
+    is due): commits the new token before the call, so no lock is held across it, then
+    records what SwarmCloud answered. The token goes only in the call's body. Returns an
+    error to report once (a 403 or a 422), else None. Commits."""
+    run = await db.scalar(select(Run).where(Run.id == run_id).with_for_update(skip_locked=True))
+    wf = _drivable(run) if run is not None else None
+    refresh = dict((wf or {}).get("key_refresh") or {})
+    if (
+        run is None
+        or wf is None
+        or run.status not in ("running", "awaiting_checkpoint")
+        or refresh.get("state") not in ("due", "retry", "storing")
+    ):
+        await db.rollback()
+        return None
+    minted = _parse_at(refresh.get("minted_at"))
+    if minted is not None and (_now() - minted).total_seconds() < KEY_REFRESH_SECONDS:
+        await db.rollback()
+        return None
+    # The same scopes as the run's token (its newest): never wider.
+    scopes = await db.scalar(
+        select(RunToken.scopes)
+        .where(RunToken.run_id == run.id)
+        .order_by(RunToken.created_at.desc())
+        .limit(1)
+    )
+    if not scopes:
+        _set_knob(run, "workflow", {**wf, "key_refresh": {**refresh, "state": "ended"}})
+        await db.commit()
+        return None
+    seconds = int(refresh.get("seconds") or 0) or int(wf.get("credential_seconds") or 0)
+    seconds = max(MIN_CREDENTIAL_SECONDS, min(MAX_CREDENTIAL_SECONDS, seconds))
+    await revoke_run_tokens(db, run.id)
+    token = await mint_run_token(db, run.id, scopes, seconds)
+    workflow_id, server = wf["id"], str(refresh.get("server") or MCP_SERVER)
+    refresh.update(state="storing", minted_at=_now().isoformat())
+    _set_knob(run, "workflow", {**wf, "key_refresh": refresh})
+    await db.commit()
+    refused: RuntimeUnavailable | None = None
+    try:
+        await _within(
+            get_runtime().store_mcp_credentials(workflow_id, server, token, seconds), deadline
+        )
+    except RuntimeUnavailable as exc:
+        refused = exc
+    run, segments = await _locked(db, run_id)
+    wf = _live(run) if run is not None else None
+    if run is None or wf is None or wf["id"] != workflow_id:
+        await db.commit()
+        return None
+    refresh = dict(wf.get("key_refresh") or {})
+    target = next(
+        (s for s in segments if s.status == "running"),
+        next((s for s in reversed(segments) if s.swarm_workflow_id == workflow_id), segments[0]),
+    )
+    status = refused.status if refused is not None else 200
+    error: str | None = None
+    if refused is None:
+        refresh["state"] = "stored"
+        _note(target, _renewed_note(_now()))
+        await audit.record(
+            db, None, "run.key_renewed", "run", run.id,
+            {"workflow_id": workflow_id, "server": server, "expires_in": seconds},
+        )  # fmt: skip
+        log.info("run %s: key renewed for workflow %s (%s s)", run.id, workflow_id, seconds)
+    elif status in (404, 409):
+        # The workflow finished, or SwarmCloud does not know it: the run's own end
+        # handling follows on the next read.
+        refresh["state"] = "ended"
+        log.info("run %s: key renewal not needed (HTTP %s)", run.id, status)
+    elif status in (403, 422):
+        refresh["state"] = "refused"
+        code = "key_refresh_forbidden" if status == 403 else "key_refresh_refused"
+        _note(target, workflow.ADVICE[code])
+        error = f"run {run_id}: SwarmCloud refused the run's key renewal (HTTP {status})"
+        log.warning("run %s: key renewal refused: %s", run.id, refused)
+    else:
+        # Not answered, or SwarmCloud unavailable: tried again after KEY_REFRESH_SECONDS.
+        refresh["state"] = "retry"
+        log.warning("run %s: key renewal not confirmed: %s", run.id, refused)
+    _set_knob(run, "workflow", {**wf, "key_refresh": refresh})
+    await db.commit()
+    return error
 
 
 async def _pause_workflow(
@@ -7374,6 +7532,8 @@ async def tick(db: AsyncSession, principal: Principal | None = None) -> TickOut:
                     if owed is None:
                         continue
                     stats.checked += 1  # counted once: by its pass when that ran
+                if (refused := await refresh_key(db, run_id, deadline=deadline)) is not None:
+                    errors.append(refused)
                 if await _has_waiting(db, run_id):
                     await submit_queued(db, run_id, deadline=deadline)
         except safe_yaml.ParseBusy as exc:

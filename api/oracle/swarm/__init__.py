@@ -18,6 +18,7 @@ from oracle.swarm.runtime import (
     RuntimeUnavailable,
     StepSpec,
     StepStatus,
+    StoredCredentials,
     WorkflowSpec,
     WorkflowStatus,
 )
@@ -36,6 +37,7 @@ __all__ = [
     "RuntimeUnavailable",
     "StepSpec",
     "StepStatus",
+    "StoredCredentials",
     "SwarmCloudRuntime",
     "UnconfiguredSwarmCloud",
     "WorkflowSpec",

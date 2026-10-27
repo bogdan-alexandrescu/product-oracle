@@ -353,6 +353,16 @@ ADVICE: dict[str, str] = {
     "(mcp_server_withheld; its result_summary.mcp_check gives the cause). Check that "
     "ORACLE_PUBLIC_URL/mcp answers over public https and that Oracle's MCP server is "
     "enabled in SwarmCloud, then start the run again.",
+    "key_refresh_forbidden": "A step waits in SwarmCloud because the run's key expired "
+    "while it was queued, and SwarmCloud did not let Oracle renew it: Oracle's service "
+    "account is no longer the workflow's submitter or an admin of its workspace. Whoever "
+    "runs Oracle's SwarmCloud setup checks that account; meanwhile cancel the run and start "
+    "it again.",
+    "key_refresh_refused": "A step waits in SwarmCloud because the run's key expired while "
+    "it was queued, and SwarmCloud refused the renewed key Oracle sent (its server is "
+    "disabled or not registered there, no step names it, or the key's shape or lifetime "
+    "was refused). Cancel the run and start it again; if it happens again, report it with "
+    "the run's id.",
     # #481: these two are read by a person; the operator detail is in ADVICE_REFS.
     "CREDENTIAL_MISSING": "A step is waiting: Oracle's connection to SwarmCloud is switched "
     "off there, so its agents cannot read Oracle's data. Whoever runs Oracle's SwarmCloud "
