@@ -518,3 +518,34 @@ code .date-mark {
   margin: 0;
   background: transparent;
 }
+
+/* Simple (#723, owner amendment 2026-10-26): Oracle's tokens plus these, 18 px body type,
+   light and dark. S5's one-pager ("A · Paper") reads them. */
+:root {
+  --simple-body: 18px;
+  --simple-paper: #ffffff;
+  --simple-desk: #f3f1ec;
+  --simple-rule: #e3e0d8;
+  --simple-edited: #fff4cc;
+  --simple-proposal: #e6f0ff;
+  --simple-margin: 280px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --simple-paper: #141b26;
+    --simple-desk: #0b1119;
+    --simple-rule: #283244;
+    --simple-edited: #3a3214;
+    --simple-proposal: #142a4a;
+  }
+}
+:root[data-theme="dark"] {
+  --simple-paper: #141b26;
+  --simple-desk: #0b1119;
+  --simple-rule: #283244;
+  --simple-edited: #3a3214;
+  --simple-proposal: #142a4a;
+}
+@media print {
+  .simple-noprint { display: none !important; }
+}

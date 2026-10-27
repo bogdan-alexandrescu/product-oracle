@@ -1,0 +1,301 @@
+"use client";
+
+import Link from "next/link";
+import { Fragment, useState } from "react";
+
+import { Button } from "@/components/ds";
+import { ErrorNote, Loading } from "@/components/ui";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
+import { errorMessage, useQuery } from "@/lib/use-query";
+
+type View = Schemas["OnePagerOut"];
+type Line = Schemas["OnePagerLine"];
+type Note = Schemas["OnePagerNote"];
+
+function day(d: string | null | undefined): string {
+  return d ? calendarDay(d.slice(0, 10), { month: "short", day: "numeric", year: "numeric" }) : "";
+}
+
+const TINT: Record<Line["state"], string> = {
+  published: "",
+  edited: "bg-[var(--simple-edited)]",
+  proposal: "bg-[var(--simple-proposal)]",
+};
+
+/**
+ * Simple S5 (#723), the owner's pick "A · Paper": one printed-page column, the same page the
+ * one-page PDF prints. Changes and proposals sit in a right margin beside their line (under
+ * it on a phone); a line edit is the change engine's `edit_line`, a section patch of every
+ * source section into the PRD's shared working draft. What a reader may do comes from the
+ * API's can_* fields.
+ */
+export function OnePager({ doc }: { doc: string }) {
+  const q = useQuery(`simple-one-pager|${doc}`, () =>
+    unwrap(api.GET("/v1/simple/one-pagers/{doc}", { params: { path: { doc } } })),
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draftText, setDraftText] = useState("");
+  const [open, setOpen] = useState<string | null>(null);
+  const [diff, setDiff] = useState<string | null>(null);
+  const [wide, setWide] = useState<string | null>(null);
+  const [presenting, setPresenting] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+
+  if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
+  if (q.error || !q.data) return <div className="px-6 py-8"><ErrorNote>{q.error ?? "Not found"}</ErrorNote></div>;
+  const v: View = q.data;
+  const numbers = new Map<string, number>();
+  v.blocks.flatMap((b) => b.lines).forEach((l, i) => numbers.set(l.id, i + 1));
+
+  async function act(run: () => Promise<unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      await run();
+      await q.reload();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const save = (line: Line) =>
+    act(async () => {
+      await unwrap(api.POST("/v1/simple/changes", {
+        body: { op: "edit_line", target: { document_id: v.document.id, line_id: line.id }, before: { line: line.text }, after: { line: draftText } },
+      }));
+      setEditing(null);
+    });
+  const decide = (n: Note, action: "accept" | "decline") =>
+    act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: {} })));
+  const undo = (n: Note) =>
+    act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })));
+
+  async function exportPdf() {
+    setError(null);
+    try {
+      const blob = await unwrap(api.GET("/v1/simple/one-pagers/{doc}/pdf", { params: { path: { doc } }, parseAs: "blob" })) as Blob;
+      const name = `${v.document.slug}-v${v.version}-one-pager.pdf`;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setSaved(name);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  }
+
+  async function present() {
+    setPresenting(true);
+    await document.documentElement.requestFullscreen?.().catch(() => undefined);
+  }
+  async function stopPresenting() {
+    setPresenting(false);
+    if (document.fullscreenElement) await document.exitFullscreen().catch(() => undefined);
+  }
+
+  const notesFor = (id: string) => v.notes.filter((n) => n.line_id === id);
+  const meta = [
+    `Version ${v.version}`,
+    v.published_at ? `published ${day(v.published_at)}` : null,
+    v.owner ? `Owner ${v.owner.name}` : null,
+    v.decider ? `Decider ${v.decider.name}` : null,
+    v.span_start && v.span_end ? `${day(v.span_start)} – ${day(v.span_end)}` : null,
+  ].filter(Boolean);
+  const spanMs = v.span_start && v.span_end ? Date.parse(v.span_end) - Date.parse(v.span_start) : 0;
+
+  return (
+    <div
+      className={`min-h-screen bg-[var(--simple-desk)] text-[length:var(--simple-body)] text-text ${presenting ? "fixed inset-0 z-50 overflow-auto" : ""}`}
+      data-testid="one-pager"
+      data-presenting={presenting ? "true" : undefined}
+    >
+      {v.draft && (
+        <div role="status" aria-label="Working draft" className="simple-noprint flex flex-wrap items-center gap-3 border-b border-[var(--simple-rule)] bg-[var(--simple-edited)] px-4 py-2 text-base">
+          <strong>Working draft</strong>
+          <span>· {v.draft.changes} {v.draft.changes === 1 ? "change" : "changes"}</span>
+          <span>· published v{v.draft.base_version ?? v.version} stays live until approved</span>
+          {v.draft.decider_approved && v.draft.waiting_on.length > 0 && (
+            <span>· Approved in the meeting · publishes when {v.draft.waiting_on.map((p) => p.name).join(", ")} approves</span>
+          )}
+        </div>
+      )}
+      {!v.draft && v.changes_in_review > 0 && (
+        <div role="status" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
+          {v.changes_in_review} {v.changes_in_review === 1 ? "change" : "changes"} in review · you read the published version
+        </div>
+      )}
+      <div className="simple-noprint mx-auto flex max-w-[1180px] flex-wrap items-center justify-end gap-2 px-4 pt-4">
+        {presenting ? (
+          <Button onClick={stopPresenting}>Stop presenting</Button>
+        ) : (
+          <Button onClick={present}>Present</Button>
+        )}
+        <Button onClick={exportPdf}>Export PDF</Button>
+        <Link className="underline" href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
+      </div>
+      {saved && <p role="status" className="simple-noprint mx-auto max-w-[1180px] px-4 text-right text-base">Saved {saved}</p>}
+      {error && <div className="mx-auto max-w-[1180px] px-4"><ErrorNote>{error}</ErrorNote></div>}
+      <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-6 md:grid-cols-[minmax(0,820px)_var(--simple-margin)]">
+        <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
+          <header className="mb-4 border-b border-[var(--simple-rule)] pb-3">
+            <h1 className="text-3xl font-semibold">{v.document.title}</h1>
+            <p className="mt-1 text-base text-text-faint" data-testid="one-pager-meta">{meta.join(" · ")}</p>
+          </header>
+          {v.blocks.map((b) => (
+            <section key={b.key} aria-label={b.title} className="mt-5">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
+              {b.kind === "timeline" ? (
+                <div className="mt-2 space-y-1" aria-label="Timeline strip">
+                  {v.timeline.length === 0 && <p className="text-base text-text-faint">No roadmap items yet</p>}
+                  {v.timeline.map((i) => {
+                    const left = spanMs ? ((Date.parse(i.start) - Date.parse(v.span_start!)) / spanMs) * 100 : 0;
+                    const width = spanMs ? Math.max(4, ((Date.parse(i.end) - Date.parse(i.start)) / spanMs) * 100) : 100;
+                    return (
+                      <div key={i.id} className="relative h-7">
+                        <div
+                          title={`${i.title}: ${day(i.start)} – ${day(i.end)}${i.estimated ? " (estimated)" : ""}`}
+                          data-estimated={i.estimated ? "true" : undefined}
+                          className={`absolute top-0 h-7 truncate rounded px-2 text-sm leading-7 ${i.estimated ? "border border-dashed border-text-faint bg-[repeating-linear-gradient(45deg,transparent,transparent_4px,var(--simple-rule)_4px,var(--simple-rule)_8px)]" : "bg-accent text-white"}`}
+                          style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
+                        >
+                          {i.title}{i.estimated ? " · estimated" : ""}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <ul className="mt-1 space-y-1">
+                  {b.lines.map((l) => (
+                    <li key={l.id} data-line={l.id} data-state={l.state} className="list-none">
+                      <div className={`rounded px-2 py-1 ${TINT[l.state]}`}>
+                        {editing === l.id ? (
+                          <form onSubmit={(e) => { e.preventDefault(); void save(l); }} className="space-y-2">
+                            <label className="sr-only" htmlFor={`edit-${l.id}`}>Line {numbers.get(l.id)}</label>
+                            <textarea id={`edit-${l.id}`} value={draftText} onChange={(e) => setDraftText(e.target.value)} rows={2} className="w-full rounded border border-[var(--simple-rule)] bg-transparent p-2" />
+                            <div className="flex gap-2">
+                              <Button type="submit" variant="primary" disabled={busy || !draftText.trim()}>{v.can_edit ? "Save" : "Propose"}</Button>
+                              <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
+                            </div>
+                          </form>
+                        ) : (
+                          <div className="flex items-start gap-2">
+                            <button type="button" className="flex-1 text-left" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)}>
+                              {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
+                              {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.text}
+                            </button>
+                            {(v.can_edit || v.can_propose) && (
+                              <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.text); }}>
+                                {v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {open === l.id && (
+                          <div role="dialog" aria-label={`Sources of line ${numbers.get(l.id)}`} className="simple-noprint mt-2 rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-3 text-base shadow-md">
+                            <p className="text-sm text-text-faint">From {l.source_keys.join(", ")}</p>
+                            <Link className="underline" href={`/documents/${v.document.slug}#${l.source_keys[0]}`}>Open the detailed view</Link>
+                          </div>
+                        )}
+                      </div>
+                      {/* Phone: the margin notes move under their line. */}
+                      <div className="md:hidden">{notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, no: numbers.get(l.id)!, busy, diff, setDiff, wide, setWide, undo, decide }} />)}</div>
+                    </li>
+                  ))}
+                  {b.lines.length === 0 && <li className="list-none text-base text-text-faint">—</li>}
+                </ul>
+              )}
+            </section>
+          ))}
+        </article>
+        <aside aria-label="Margin" className="simple-noprint hidden space-y-3 md:block">
+          {v.notes.map((n) => (
+            <Fragment key={n.change_id}>
+              <MarginNote {...{ n, no: numbers.get(n.line_id) ?? 0, busy, diff, setDiff, wide, setWide, undo, decide }} />
+            </Fragment>
+          ))}
+          {v.notes.length === 0 && <p className="text-base text-text-faint">No changes yet.</p>}
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function MarginNote({
+  n, no, busy, diff, setDiff, wide, setWide, undo, decide,
+}: {
+  n: Note;
+  no: number;
+  busy: boolean;
+  diff: string | null;
+  setDiff: (id: string | null) => void;
+  wide: string | null;
+  setWide: (id: string | null) => void;
+  undo: (n: Note) => void;
+  decide: (n: Note, a: "accept" | "decline") => void;
+}) {
+  const zone = useCompanyZone();
+  const widened = wide === n.change_id;
+  return (
+    <div
+      role="note"
+      aria-label={n.kind === "change" ? `Change to line ${no}` : `Proposal for line ${no}`}
+      data-widened={widened ? "true" : undefined}
+      className={`rounded-md border border-[var(--simple-rule)] p-3 text-base ${n.kind === "change" ? "bg-[var(--simple-edited)]" : "bg-[var(--simple-proposal)]"} ${widened ? "fixed inset-x-0 bottom-0 top-0 z-40 overflow-auto md:static md:w-[min(640px,90vw)]" : ""}`}
+    >
+      <p>
+        {n.kind === "change"
+          ? `${n.can_undo ? "You" : n.by_name} changed line ${no} · ${formatInZone(n.at, zone, { hour: "numeric", minute: "2-digit" })}${n.in_meeting ? ", in the meeting" : ""}`
+          : `${n.by_name} proposes new wording for line ${no}`}
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {n.can_undo && <Button disabled={busy} onClick={() => undo(n)}>Undo</Button>}
+        {n.can_decide && <Button variant="primary" disabled={busy} onClick={() => decide(n, "accept")}>Accept</Button>}
+        {n.can_decide && <Button disabled={busy} onClick={() => decide(n, "decline")}>Decline</Button>}
+        <button type="button" className="text-sm underline" aria-expanded={diff === n.change_id} onClick={() => setDiff(diff === n.change_id ? null : n.change_id)}>See before/after</button>
+        {n.adds_feature && (
+          <button type="button" aria-label={`Flow for line ${no}`} className="h-8 w-12 rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] text-xs" onClick={() => setWide(widened ? null : n.change_id)}>
+            {n.flow ? "Flow" : "⋯"}
+          </button>
+        )}
+      </div>
+      {diff === n.change_id && (
+        <div className="mt-2 space-y-2 text-sm" aria-label="Before and after">
+          <p><span className="font-semibold">Line before:</span> <del>{n.before}</del></p>
+          <p><span className="font-semibold">Line after:</span> <ins>{n.after}</ins></p>
+          {n.sections.map((s) => (
+            <div key={s.key} className="rounded border border-[var(--simple-rule)] p-2">
+              <p className="font-semibold">Section “{s.heading}”</p>
+              <pre className="whitespace-pre-wrap"><del>{s.before}</del></pre>
+              <pre className="whitespace-pre-wrap"><ins>{s.after}</ins></pre>
+            </div>
+          ))}
+        </div>
+      )}
+      {widened && (
+        <div className="mt-3" aria-label="User flow">
+          {n.flow ? (
+            <>
+              <p className="font-semibold">{n.flow.title}</p>
+              <ol className="list-decimal pl-5">{n.flow.steps.map((s) => <li key={s}>{s}</li>)}</ol>
+              {n.flow.screen && <div className="mt-2 rounded border border-dashed p-6 text-center">{n.flow.screen}</div>}
+            </>
+          ) : (
+            <p>No flow yet</p>
+          )}
+          <Button className="mt-2" onClick={() => setWide(null)}>Close</Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+

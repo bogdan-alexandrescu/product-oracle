@@ -12009,6 +12009,452 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/roadmap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Roadmap
+         * @description Every roadmap's items the caller may read on one timeline, grouped by goal, track or
+         *     PRD: each with its resolved dates (source, estimated), open date suggestion,
+         *     milestone, waterfall phases, dependencies both ways and constraint flags; plus the
+         *     tracks' milestones, the horizon windows and the company's today. Filters: ``prd``
+         *     (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).
+         */
+        get: operations["get_simple_roadmap"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Date Suggestions
+         * @description Oracle's date suggestions for the items the caller may read, newest first.
+         */
+        get: operations["list_date_suggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh Date Suggestions
+         * @description Regenerate the suggestions now (the minute tick does it once a day).
+         */
+        post: operations["refresh_date_suggestions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Date Suggestion
+         * @description Accept: an ``accept_date_suggestion`` change (D-b). Who decides puts the suggested
+         *     dates into the roadmap's working draft (``date_source`` accepted, undoable); others
+         *     propose it. 409 ``outdated`` when the item has dates now.
+         */
+        post: operations["accept_date_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit Date Suggestion
+         * @description Edit: the same change with these dates instead (the suggestion becomes edited).
+         */
+        post: operations["edit_date_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/roadmap/date-suggestions/{suggestion_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dismiss Date Suggestion
+         * @description Dismiss: the item stays undated.
+         */
+        post: operations["dismiss_date_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Simple Session
+         * @description Start a session: the caller's open editing session is reused (one per person); a
+         *     meeting session is always new. A session closes after 30 minutes without a change.
+         */
+        post: operations["create_simple_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/sessions/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Current Simple Session
+         * @description The caller's open editing session, or null.
+         */
+        get: operations["get_current_simple_session"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/sessions/{session_id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close Simple Session
+         * @description Close a session the caller started: its changes no longer undo.
+         */
+        post: operations["close_simple_session"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple Changes
+         * @description Changes newest first: those the caller made, decides or reviews, or whose session
+         *     they started (owners: all); everyone else sees none (the published version only).
+         */
+        get: operations["list_simple_changes"];
+        put?: never;
+        /**
+         * Create Simple Change
+         * @description Make a change to a roadmap item: applied for an owner and the roadmap's decider
+         *     (with no decider, its owner), proposed to them for approvers and commenters. 409 when
+         *     ``before`` no longer matches the stored values (nothing is written). Returns the
+         *     constraint flags of the touched items (a proposal's as if applied).
+         */
+        post: operations["create_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/changes/{change_id}/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Undo Simple Change
+         * @description Undo one of the caller's applied changes, in its open session, while the target
+         *     still holds its ``after``: writes an ``undone`` row (history is kept).
+         */
+        post: operations["undo_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/changes/{change_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Simple Change
+         * @description Accept a proposal: it applies, unless the item changed since (409 "outdated").
+         */
+        post: operations["accept_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/changes/{change_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decline Simple Change
+         * @description Decline a proposal, with an optional reason: nothing changes.
+         */
+        post: operations["decline_simple_change"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple Drafts
+         * @description The open working and submitted drafts the caller may see: their participants, the
+         *     company's owners, the roadmap's decider, required reviewers and owners.
+         */
+        get: operations["list_simple_drafts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Draft
+         * @description One draft the caller may see (404 otherwise).
+         */
+        get: operations["get_simple_draft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Simple Draft
+         * @description Submit the draft: it is imported as the roadmap's next version and goes through the
+         *     document's review policy; readers keep the published version until it is approved.
+         */
+        post: operations["submit_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Simple Draft
+         * @description Approve a submitted draft: the decider's approval waits for every required
+         *     reviewer's; a required reviewer's approves every section of the version. The version
+         *     is approved (published to readers) when all are in.
+         */
+        post: operations["approve_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Withdraw Simple Draft
+         * @description Withdraw a submitted draft from review: it is a working draft again, its changes
+         *     kept and undoable in their session; the version it imported is marked withdrawn and
+         *     can't be approved. Its author or the roadmap's decider.
+         */
+        post: operations["withdraw_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/drafts/{draft_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Simple Draft
+         * @description Open a session on a working draft whose session closed: its author or the decider.
+         */
+        post: operations["resume_simple_draft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/one-pagers/{doc}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple One Pager
+         * @description A PRD's one-pager (slug or id): its published version's blocks, each line with its
+         *     source sections, built by the ``one_pager`` job and cached per version and section
+         *     hashes; to those who see the PRD's working draft, its edited lines and the margin
+         *     notes (changes, proposals). Lines change through POST /v1/simple/changes
+         *     (``edit_line``).
+         */
+        get: operations["get_simple_one_pager"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/one-pagers/{doc}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Simple One Pager
+         * @description The one-pager as a branded one-page PDF (its published lines).
+         */
+        get: operations["export_simple_one_pager"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/strategy/stack": {
         parameters: {
             query?: never;
@@ -18058,6 +18504,67 @@ export interface components {
             /** Lead Named */
             lead_named: boolean;
         };
+        /** DateSuggestionEdit */
+        DateSuggestionEdit: {
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+        };
+        /** DateSuggestionOut */
+        DateSuggestionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Item Key */
+            item_key: string;
+            /** Item Title */
+            item_title: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Basis */
+            basis: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "accepted" | "edited" | "dismissed";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Decided By */
+            decided_by?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+        };
         /**
          * DealOutcomeIn
          * @description One deal's result and its main reason. ``reason: other`` needs ``reason_note``;
@@ -19742,6 +20249,11 @@ export interface components {
              * @default []
              */
             versions: components["schemas"]["VersionSummary"][];
+            /**
+             * Changes In Review
+             * @default 0
+             */
+            changes_in_review: number;
         };
         /** DocumentRef */
         DocumentRef: {
@@ -23532,6 +24044,21 @@ export interface components {
              * @default []
              */
             intake_reads: components["schemas"]["InboxIntakeRead"][];
+            /**
+             * Simple Proposals
+             * @default []
+             */
+            simple_proposals: components["schemas"]["InboxSimpleChange"][];
+            /**
+             * Simple Decisions
+             * @default []
+             */
+            simple_decisions: components["schemas"]["InboxSimpleChange"][];
+            /**
+             * Simple Approvals
+             * @default []
+             */
+            simple_approvals: components["schemas"]["InboxSimpleApproval"][];
         };
         /**
          * InboxOutcome
@@ -23811,6 +24338,85 @@ export interface components {
              * Format: uuid
              */
             publication_id: string;
+        };
+        /**
+         * InboxSimpleApproval
+         * @description A roadmap version from a Simple draft waiting for my approval as a required
+         *     reviewer (``simple_approvals``, counted in ``total``).
+         */
+        InboxSimpleApproval: {
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            document: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version: number | null;
+            /** Submitted By */
+            submitted_by: string | null;
+            /** Submitted At */
+            submitted_at: string | null;
+            /** Decider Approved */
+            decider_approved: boolean;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
+        };
+        /**
+         * InboxSimpleChange
+         * @description A proposal waiting for me (``simple_proposals``) or a decision on my proposal
+         *     (``simple_decisions``).
+         */
+        InboxSimpleChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "edit_line";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "applied" | "proposed" | "accepted" | "declined" | "undone";
+            /** Item Id */
+            item_id: string | null;
+            /** Item Title */
+            item_title: string | null;
+            /** Document Id */
+            document_id: string | null;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Decided By */
+            decided_by: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Reason */
+            reason: string | null;
+            /** Decision Reason */
+            decision_reason: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open" | "done";
         };
         /** InboxSource */
         InboxSource: {
@@ -26070,7 +26676,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -27882,6 +28488,214 @@ export interface components {
              * @enum {string}
              */
             status: "scheduled" | "ready" | "held" | "skipped" | "missed" | "failed";
+        };
+        /** OnePagerBlock */
+        OnePagerBlock: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Rules */
+            rules: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "text" | "lines" | "metrics" | "timeline";
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["OnePagerLine"][];
+        };
+        /** OnePagerDraft */
+        OnePagerDraft: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "submitted";
+            /** Changes */
+            changes: number;
+            /** Base Version */
+            base_version: number | null;
+            /** Decider Approved */
+            decider_approved: boolean;
+            /** Waiting On */
+            waiting_on: components["schemas"]["SimplePersonRef"][];
+            /** Can Submit */
+            can_submit: boolean;
+        };
+        /**
+         * OnePagerFlow
+         * @description A design bundle's flow (S10's), as the API returns it; none yet: null.
+         */
+        OnePagerFlow: {
+            /** Title */
+            title: string;
+            /**
+             * Steps
+             * @default []
+             */
+            steps: string[];
+            /** Screen */
+            screen?: string | null;
+        };
+        /**
+         * OnePagerItem
+         * @description The timeline strip: the PRD's slice of the Simple roadmap.
+         */
+        OnePagerItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Estimated */
+            estimated: boolean;
+        };
+        /** OnePagerLine */
+        OnePagerLine: {
+            /** Id */
+            id: string;
+            /** Text */
+            text: string;
+            /** Source Keys */
+            source_keys: string[];
+            metric?: components["schemas"]["OnePagerMetric"] | null;
+            /**
+             * State
+             * @default published
+             * @enum {string}
+             */
+            state: "published" | "edited" | "proposal";
+        };
+        /** OnePagerMetric */
+        OnePagerMetric: {
+            /** Name */
+            name: string;
+            /**
+             * From
+             * @default
+             */
+            from: string;
+            /** To */
+            to: string;
+        };
+        /**
+         * OnePagerNote
+         * @description A margin note beside its line: a change in the working draft or a proposal.
+         */
+        OnePagerNote: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            /** Line Id */
+            line_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "change" | "proposal";
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** In Meeting */
+            in_meeting: boolean;
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
+            /** Sections */
+            sections: components["schemas"]["OnePagerSectionPatch"][];
+            /** Can Undo */
+            can_undo: boolean;
+            /** Can Decide */
+            can_decide: boolean;
+            /** Adds Feature */
+            adds_feature: boolean;
+            flow?: components["schemas"]["OnePagerFlow"] | null;
+        };
+        /** OnePagerOut */
+        OnePagerOut: {
+            document: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version: number;
+            /** Published At */
+            published_at: string | null;
+            owner: components["schemas"]["SimplePersonRef"] | null;
+            decider: components["schemas"]["SimplePersonRef"] | null;
+            /** Span Start */
+            span_start: string | null;
+            /** Span End */
+            span_end: string | null;
+            /**
+             * Built By
+             * @enum {string}
+             */
+            built_by: "extract" | "oracle";
+            /**
+             * Built At
+             * Format: date-time
+             */
+            built_at: string;
+            /** Blocks */
+            blocks: components["schemas"]["OnePagerBlock"][];
+            /** Timeline */
+            timeline: components["schemas"]["OnePagerItem"][];
+            /** Notes */
+            notes: components["schemas"]["OnePagerNote"][];
+            draft: components["schemas"]["OnePagerDraft"] | null;
+            /** Changes In Review */
+            changes_in_review: number;
+            /** Can Edit */
+            can_edit: boolean;
+            /** Can Propose */
+            can_propose: boolean;
+        };
+        /** OnePagerSectionPatch */
+        OnePagerSectionPatch: {
+            /** Key */
+            key: string;
+            /** Heading */
+            heading: string;
+            /** Before */
+            before: string;
+            /** After */
+            after: string;
         };
         /**
          * OracleAsker
@@ -30530,11 +31344,6 @@ export interface components {
             body_md: string;
             /** Words */
             words: components["schemas"]["WordOp"][];
-        };
-        /** RefreshOut */
-        RefreshOut: {
-            refresh: components["schemas"]["RefreshResult"];
-            account: components["schemas"]["AccountOut"];
         };
         /** RefreshResult */
         RefreshResult: {
@@ -35057,6 +35866,558 @@ export interface components {
              */
             runs_tokens_revoked: number;
         };
+        /**
+         * SimpleChangeConflict
+         * @description The 409 detail: what the target holds now and who changed it last (null: not
+         *     through Simple). Nothing was written.
+         */
+        SimpleChangeConflict: {
+            /** Message */
+            message: string;
+            /** Current */
+            current: {
+                [key: string]: unknown;
+            };
+            changed_by: components["schemas"]["SimplePersonRef"] | null;
+            /** Changed At */
+            changed_at: string | null;
+        };
+        /** SimpleChangeIn */
+        SimpleChangeIn: {
+            /** Session Id */
+            session_id?: string | null;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "edit_line";
+            /** Target */
+            target: {
+                [key: string]: unknown;
+            };
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            };
+            /** After */
+            after?: {
+                [key: string]: unknown;
+            };
+            /** Reason */
+            reason?: string | null;
+        };
+        /** SimpleChangeOut */
+        SimpleChangeOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Session Id */
+            session_id: string | null;
+            /** Document Id */
+            document_id: string | null;
+            /**
+             * Draft Ids
+             * @default []
+             */
+            draft_ids: string[];
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "edit_line";
+            /** Target */
+            target: {
+                [key: string]: unknown;
+            };
+            /** Before */
+            before: {
+                [key: string]: unknown;
+            };
+            /** After */
+            after: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "applied" | "proposed" | "accepted" | "declined" | "undone";
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Decided By */
+            decided_by: string | null;
+            /** Decided At */
+            decided_at: string | null;
+            /** Reason */
+            reason: string | null;
+            /** Decision Reason */
+            decision_reason: string | null;
+            /** Routed To */
+            routed_to: string[];
+            /** Undoes Id */
+            undoes_id: string | null;
+            /**
+             * Undone
+             * @default false
+             */
+            undone: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            /**
+             * Can Undo
+             * @default false
+             */
+            can_undo: boolean;
+        };
+        /** SimpleChangeResult */
+        SimpleChangeResult: {
+            change: components["schemas"]["SimpleChangeOut"];
+            /** Flags */
+            flags: components["schemas"]["SimpleItemFlags"][];
+        };
+        /** SimpleDate */
+        SimpleDate: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "typed" | "accepted" | "engineering" | "tracker" | "estimated";
+            /** Estimated */
+            estimated: boolean;
+        };
+        /** SimpleDecisionIn */
+        SimpleDecisionIn: {
+            /** Reason */
+            reason?: string | null;
+        };
+        /** SimpleDocRef */
+        SimpleDocRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleDraftBrief */
+        SimpleDraftBrief: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Document Id
+             * Format: uuid
+             */
+            document_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "submitted" | "approved" | "discarded";
+            /** Changes */
+            changes: number;
+        };
+        /**
+         * SimpleDraftChange
+         * @description One change a draft holds (D-d): what an approval covers, by whom, when, and whether
+         *     it was made in a meeting.
+         */
+        SimpleDraftChange: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Op */
+            op: string;
+            /** Item Id */
+            item_id: string | null;
+            /**
+             * By
+             * Format: uuid
+             */
+            by: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Session Kind */
+            session_kind: ("editing" | "meeting") | null;
+            /** In Meeting */
+            in_meeting: boolean;
+        };
+        /**
+         * SimpleDraftOut
+         * @description A working draft of one roadmap (S3b): its changes until submitted, then the version
+         *     in review and who it waits on.
+         */
+        SimpleDraftOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            document: components["schemas"]["SimpleDocRef"];
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "working" | "submitted" | "approved" | "discarded";
+            /** Base Version */
+            base_version: number | null;
+            /** Version */
+            version: number | null;
+            /**
+             * Created By
+             * Format: uuid
+             */
+            created_by: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Participant Ids */
+            participant_ids: string[];
+            /** Changes */
+            changes: number;
+            /** Submitted At */
+            submitted_at: string | null;
+            /** Submitted By */
+            submitted_by: string | null;
+            /** Decider Approved */
+            decider_approved: boolean;
+            /** Waiting On */
+            waiting_on: string[];
+            /** Approved At */
+            approved_at: string | null;
+            /**
+             * Blocked By
+             * @default []
+             */
+            blocked_by: string[];
+            /** Can Submit */
+            can_submit: boolean;
+            /** Can Resume */
+            can_resume: boolean;
+            /** Can Approve */
+            can_approve: boolean;
+            /**
+             * Change Log
+             * @default []
+             */
+            change_log: components["schemas"]["SimpleDraftChange"][];
+            /**
+             * Can Withdraw
+             * @default false
+             */
+            can_withdraw: boolean;
+        };
+        /** SimpleFlag */
+        SimpleFlag: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "dependency_order" | "blocker_date" | "outside_milestone" | "cut_with_dependents" | "draft_without_owner";
+            /** Reason */
+            reason: string;
+            /** Fixes */
+            fixes: ("shift_dependents" | "move_dependency" | "accept_risk")[];
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "red" | "amber";
+            /** Subject */
+            subject?: string | null;
+            /** Risk Note */
+            risk_note?: string | null;
+        };
+        /** SimpleGoalRef */
+        SimpleGoalRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleGroup */
+        SimpleGroup: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Item Ids */
+            item_ids: string[];
+        };
+        /** SimpleItemFlags */
+        SimpleItemFlags: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Flags */
+            flags: components["schemas"]["SimpleFlag"][];
+        };
+        /** SimpleItemMilestone */
+        SimpleItemMilestone: {
+            /** Name */
+            name?: string | null;
+            /** Date */
+            date?: string | null;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "item" | "track";
+        };
+        /** SimpleMilestone */
+        SimpleMilestone: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Track Id
+             * Format: uuid
+             */
+            track_id: string;
+            /** Name */
+            name: string;
+            /** Date */
+            date?: string | null;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "planned" | "done" | "dropped";
+            /** Item Ids */
+            item_ids: string[];
+        };
+        /** SimplePersonRef */
+        SimplePersonRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** SimplePhase */
+        SimplePhase: {
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "discover" | "build" | "beta" | "launch";
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Estimated */
+            estimated: boolean;
+        };
+        /** SimpleResumeOut */
+        SimpleResumeOut: {
+            session: components["schemas"]["SimpleSessionOut"];
+            draft: components["schemas"]["SimpleDraftOut"];
+        };
+        /** SimpleRoadmapItem */
+        SimpleRoadmapItem: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome?: string | null;
+            /**
+             * Horizon
+             * @enum {string}
+             */
+            horizon: "now" | "next" | "later";
+            roadmap: components["schemas"]["SimpleDocRef"];
+            prd?: components["schemas"]["SimpleDocRef"] | null;
+            goal?: components["schemas"]["SimpleGoalRef"] | null;
+            track?: components["schemas"]["SimpleTrackRef"] | null;
+            /** Confidence */
+            confidence?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "planned" | "in_progress" | "done" | "cut" | "draft";
+            /**
+             * Draft
+             * @default false
+             */
+            draft: boolean;
+            start: components["schemas"]["SimpleDate"];
+            end: components["schemas"]["SimpleDate"];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "typed" | "accepted" | "engineering" | "tracker" | "estimated";
+            /** Estimated */
+            estimated: boolean;
+            suggestion?: components["schemas"]["DateSuggestionOut"] | null;
+            milestone?: components["schemas"]["SimpleItemMilestone"] | null;
+            /** Phases */
+            phases: components["schemas"]["SimplePhase"][];
+            /** Depends On */
+            depends_on: string[];
+            /** Needed By */
+            needed_by: string[];
+            /** Flags */
+            flags: components["schemas"]["SimpleFlag"][];
+        };
+        /** SimpleRoadmapOut */
+        SimpleRoadmapOut: {
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            /**
+             * Group
+             * @enum {string}
+             */
+            group: "goal" | "track" | "prd";
+            windows: components["schemas"]["SimpleWindows"];
+            /** Groups */
+            groups: components["schemas"]["SimpleGroup"][];
+            /** Items */
+            items: components["schemas"]["SimpleRoadmapItem"][];
+            /** Milestones */
+            milestones: components["schemas"]["SimpleMilestone"][];
+            /**
+             * Changes In Review
+             * @default 0
+             */
+            changes_in_review: number;
+            /**
+             * Drafts
+             * @default []
+             */
+            drafts: components["schemas"]["SimpleDraftBrief"][];
+        };
+        /** SimpleSessionIn */
+        SimpleSessionIn: {
+            /**
+             * Kind
+             * @default editing
+             * @enum {string}
+             */
+            kind: "editing" | "meeting";
+        };
+        /** SimpleSessionOut */
+        SimpleSessionOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "editing" | "meeting";
+            /**
+             * Started By
+             * Format: uuid
+             */
+            started_by: string;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Last Change At */
+            last_change_at: string | null;
+            /** Closed At */
+            closed_at: string | null;
+        };
+        /** SimpleTrackRef */
+        SimpleTrackRef: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleWindow */
+        SimpleWindow: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+        };
+        /** SimpleWindows */
+        SimpleWindows: {
+            now: components["schemas"]["SimpleWindow"];
+            next: components["schemas"]["SimpleWindow"];
+            later: components["schemas"]["SimpleWindow"];
+        };
         /** SkipIn */
         SkipIn: {
             /** Reason */
@@ -39549,6 +40910,11 @@ export interface components {
             /** Expires In Seconds */
             expires_in_seconds: number;
         };
+        /** RefreshOut */
+        oracle__claude_accounts__router__RefreshOut: {
+            refresh: components["schemas"]["RefreshResult"];
+            account: components["schemas"]["AccountOut"];
+        };
         /** AuthorizeOut */
         oracle__connections__router__AuthorizeOut: {
             /** Url */
@@ -39620,6 +40986,14 @@ export interface components {
              * Format: uuid
              */
             into_id: string;
+        };
+        /** RefreshOut */
+        oracle__simple__schemas__RefreshOut: {
+            /**
+             * Open
+             * @description Open suggestions after the refresh
+             */
+            open: number;
         };
         /** RegenerateIn */
         oracle__specs__schemas__RegenerateIn: {
@@ -47954,7 +49328,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RefreshOut"];
+                    "application/json": components["schemas"]["oracle__claude_accounts__router__RefreshOut"];
                 };
             };
             /** @description Validation Error */
@@ -63788,6 +65162,710 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ItemHistoryOut"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_roadmap: {
+        parameters: {
+            query?: {
+                group?: "goal" | "track" | "prd";
+                prd?: string | null;
+                goal?: string | null;
+                track?: string | null;
+                from?: string | null;
+                to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleRoadmapOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_date_suggestions: {
+        parameters: {
+            query?: {
+                status?: "open" | "accepted" | "edited" | "dismissed";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateSuggestionOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_date_suggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["oracle__simple__schemas__RefreshOut"];
+                };
+            };
+        };
+    };
+    accept_date_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_date_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DateSuggestionEdit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_date_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DateSuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_simple_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleSessionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_current_simple_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleSessionOut"] | null;
+                };
+            };
+        };
+    };
+    close_simple_session: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleSessionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_changes: {
+        parameters: {
+            query?: {
+                session?: string | null;
+                document?: string | null;
+                status?: ("applied" | "proposed" | "accepted" | "declined" | "undone") | null;
+                mine?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleChangeIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Stale: nothing written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["SimpleChangeConflict"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Stale: nothing written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["SimpleChangeConflict"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SimpleDecisionIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Stale: nothing written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["SimpleChangeConflict"];
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decline_simple_change: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                change_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SimpleDecisionIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleChangeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_drafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"][];
+                };
+            };
+        };
+    };
+    get_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    withdraw_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDraftOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resume_simple_draft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draft_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleResumeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_one_pager: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnePagerOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_simple_one_pager: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doc: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

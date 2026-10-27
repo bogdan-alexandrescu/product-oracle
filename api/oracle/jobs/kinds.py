@@ -54,6 +54,8 @@ MAX_TOKENS = {
     "why_not_reply": 4000,
     # O5: one roadmap's public item texts, 80 + 280 characters each.
     "public_text": 6000,
+    # Simple S5: one PRD version's one-pager blocks and lines.
+    "one_pager": 4000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -1034,6 +1036,13 @@ async def public_text(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
     return await public.run_job(s, job, ask)
 
 
+async def one_pager(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Builds a PRD version's one-pager from its mapped sections (oracle.simple.one_pager)."""
+    from oracle.simple import one_pager as op
+
+    return await op.run_job(s, job, ask)
+
+
 # Run when a job of the kind fails for good, in the transaction that records it.
 ON_FAILURE: dict[str, Callable[[AsyncSession, LlmJob], Awaitable[None]]] = {
     "why_not_reply": why_not_reply_failed,
@@ -1053,6 +1062,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "scope_enhance": scope_enhance,
     "why_not_reply": why_not_reply,
     "public_text": public_text,
+    "one_pager": one_pager,
 }
 
 

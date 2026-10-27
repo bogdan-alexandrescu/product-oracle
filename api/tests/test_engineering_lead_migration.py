@@ -78,7 +78,7 @@ def test_the_chain_ends_here_after_feedback_agent_staging():
     # protects=one alembic head; fails_when=a second head or a fixed down_revision drifts;
     # no_claim=the columns (below).
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0075_live_tokens"]
+    assert script.get_heads() == ["0079_simple_one_pagers"]
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 

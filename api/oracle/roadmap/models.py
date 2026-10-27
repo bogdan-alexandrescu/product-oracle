@@ -22,6 +22,7 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -32,6 +33,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    false,
     func,
     text,
 )
@@ -63,6 +65,8 @@ ALERT_KINDS = ("date_slip", "overdue", "cancelled", "ahead", "unplanned", "block
                "prd_moved")  # fmt: skip
 ALERT_STATES = ("open", "kept", "resolved")
 RECORD_FIELDS = ("state", "target_date", "estimate", "raw_status")
+# Simple S2 (#723): where an item's own start and end dates came from (null: none).
+DATE_SOURCES = ("typed", "accepted", "engineering", "tracker")
 
 
 class ProductTrack(TenantScoped, Base):
@@ -272,6 +276,9 @@ class RoadmapItem(TenantScoped, Base):
         CheckConstraint(
             "(roadmap_version_id IS NULL) <> (draft_roadmap_id IS NULL)", name="one_owner"
         ),
+        CheckConstraint(
+            f"date_source IS NULL OR {_in('date_source', DATE_SOURCES)}", name="date_source"
+        ),
         Index("ix_roadmap_items_prd_section", "prd_version_id", "prd_section_key"),
         Index(
             "uq_roadmap_items_draft_key",
@@ -325,6 +332,19 @@ class RoadmapItem(TenantScoped, Base):
     reconciled_version_id: Mapped[uuid.UUID | None] = _fk("document_versions", "SET NULL")
     reconciled_section_hash: Mapped[str | None] = mapped_column(Text)
     note: Mapped[str | None] = mapped_column(Text)
+    # Simple S2 (#723, oracle.simple.dates): the item's own dates and where they came
+    # from; the risks accepted on its constraint flags ([{"flag", "subject", "note", "by",
+    # "at"}], oracle.simple.constraints); "draft" while an item added in Simple waits for
+    # an owner's confirmation.
+    start_date: Mapped[date | None] = mapped_column(Date)
+    end_date: Mapped[date | None] = mapped_column(Date)
+    date_source: Mapped[str | None] = mapped_column(Text)
+    accepted_risks: Mapped[list[dict[str, Any]]] = _json("[]")
+    draft: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                        server_default=false())  # fmt: skip
+    # Simple S3a: cut in Simple (oracle.simple.changes); restore clears it.
+    cut: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False,
+                                      server_default=false())  # fmt: skip
     updated_at: Mapped[datetime] = _updated_at()
 
 
