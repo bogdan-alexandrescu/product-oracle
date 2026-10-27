@@ -206,9 +206,10 @@ for (const [where, use] of [
 
       /**
        * Card simple-keys-blur: protects = moving the focus away ends the burst at once (the
-       * change is sent without waiting for the pause: its toast shows well inside the
-       * pause's 600 ms); fails_when = a blurred burst waits for the pause, is lost or never
-       * sent, or each press sends at once; no_claim = the pause's exact length.
+       * change is sent without waiting for the pause: a press right after coming back,
+       * well inside the pause, is a second change, not part of the first burst);
+       * fails_when = a blurred burst waits for the pause, is lost or never sent, or each
+       * press sends at once; no_claim = the pause's exact length.
        */
       test("leaving the bar sends the burst", async ({ page }) => {
         await open(page);
@@ -219,9 +220,11 @@ for (const [where, use] of [
         await expect(page.getByTestId("key-pending")).toContainText("not sent yet");
         await expect(page.getByTestId("draft-banner")).toHaveCount(0);
         await page.getByTestId("format-switch").getByTestId("format-timeline").focus();
-        await expect(page.getByText(/Moved 'Alert history export'.*in your working draft/)).toBeVisible({ timeout: 400 });
-        await expect(page.getByTestId("draft-count")).toHaveText("1");
-        await expect(b).toHaveAttribute("data-start", plus(start, 7));
+        await b.focus();
+        await page.keyboard.press("ArrowRight");
+        await expect(page.getByTestId("draft-count")).toHaveText("2");
+        await expect(conflict(page)).toHaveCount(0);
+        await expect(b).toHaveAttribute("data-start", plus(start, 14));
       });
 
       /**
