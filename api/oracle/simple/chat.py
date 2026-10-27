@@ -817,15 +817,27 @@ async def apply(
     if rules is not None and me == rules.presenter_id and getattr(rules, "session_id", None):
         session_id = rules.session_id
     body.session_id = session_id
+
+    async def make() -> SimpleChangeResult:
+        # The card is taken in the change's own transaction (the engine commits both): two
+        # Apply clicks at once make one change.
+        if fix is None:
+            c = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
+            if c is None or c.status != "open":
+                raise ChatError(409, f"This card is {c.status if c else 'gone'} already")
+            c.status = "applied"
+            await db.flush()
+        return await changes.create(db, principal, body)
+
     try:
-        result = await changes.create(db, principal, body)
+        result = await make()
     except ChangeError as e:
         if body.session_id is None or e.status not in (404, 409):
             raise
         # The meeting's session is closed or not a change session: the presenter's own.
         await db.rollback()
         body.session_id = None
-        result = await changes.create(db, principal, body)
+        result = await make()
     card = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
     assert card is not None
     status = result.change.status
