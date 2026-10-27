@@ -363,6 +363,12 @@ ADVICE: dict[str, str] = {
     "disabled or not registered there, no step names it, or the key's shape or lifetime "
     "was refused). Cancel the run and start it again; if it happens again, report it with "
     "the run's id.",
+    "key_missing": "A step waits in SwarmCloud: it found no key for Oracle's MCP server "
+    "in the workflow (mcp_credential_missing), so Oracle has nothing to renew. Cancel the "
+    "run and start it again; report it with the run id.",
+    "key_expired_unnamed": "A step waits in SwarmCloud because the run's key expired while "
+    "it was queued, and SwarmCloud did not say which server's key to renew. Cancel the run "
+    "and start it again; report it with the run id.",
     # #481: these two are read by a person; the operator detail is in ADVICE_REFS.
     "CREDENTIAL_MISSING": "A step is waiting: Oracle's connection to SwarmCloud is switched "
     "off there, so its agents cannot read Oracle's data. Whoever runs Oracle's SwarmCloud "

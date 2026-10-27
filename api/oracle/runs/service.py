@@ -3692,6 +3692,8 @@ async def _submit_now(
             "credential_seconds": ttl if mode.attach else None,
             "expires_at": workflow.expires_at(submitted_at, ttl).isoformat(),
             "segments": plan.segments if plan else None,
+            # The wait steps, as the lifetime was sized: a renewal sizes the rest the same.
+            "waits": [s.key for s in steps if s.waits],
             "start_seq": segment.seq,
         }
         spec = WorkflowSpec(
@@ -3849,6 +3851,7 @@ def _accepted(
                 "expires_at": info.get("expires_at"),
                 "credential_seconds": info.get("credential_seconds"),
                 "segments": info.get("segments") or [],
+                "waits": info.get("waits") or [],
             },
         )
     else:
@@ -6617,7 +6620,7 @@ async def _tick_workflow(
         wf = _mark_key_refresh(run, wf, status, expired)
     for parked in status.parked:
         if parked.reason == "CREDENTIAL_MISSING" and not parked.mcp_expired:
-            _note(current or start or segments[0], workflow.ADVICE["CREDENTIAL_MISSING"])
+            _note(current or start or segments[0], workflow.ADVICE[_key_park_advice(parked)])
     if run.status == "paused_overrun":
         await _pause_workflow(db, run, wf, status, segments)
         return
@@ -6738,6 +6741,16 @@ _KEY_REFRESH_PARKS = 20
 _FINISHED_STEPS = frozenset({"SUCCEEDED", "SKIPPED", "FAILED", "CANCELLED", "DEAD_LETTERED"})
 
 
+def _key_park_advice(parked: Parked) -> str:
+    """The advice for a CREDENTIAL_MISSING park Oracle does not renew: a missing key, an
+    expired one without a server to name, else (no detail) a switched-off server."""
+    if parked.credential == "mcp" and parked.code == "mcp_credential_missing":
+        return "key_missing"
+    if parked.credential == "mcp" and parked.code == "mcp_credential_expired":
+        return "key_expired_unnamed"
+    return "CREDENTIAL_MISSING"
+
+
 def _park_key(parked: Parked) -> str:
     at = parked.parked_at or parked.expired_at
     return f"{parked.task_id or parked.step_id}@{at.isoformat() if at else ''}"
@@ -6748,13 +6761,24 @@ def _mark_key_refresh(
 ) -> dict[str, Any]:
     """Mark the run's workflow for a key renewal when a park not handled yet is seen; the
     lifetime is sized as at submission, for the steps still to run. Returns the workflow
-    as marked (unchanged when every park was handled)."""
+    as marked (unchanged when every park was handled, when SwarmCloud refused a renewal
+    of this workflow already, or when the key stored last is newer than the park's
+    expiry: the steps it promoted use it)."""
     refresh = dict(wf.get("key_refresh") or {})
+    if refresh.get("state") == "refused":
+        return wf
+    minted = _parse_at(refresh.get("minted_at")) if refresh.get("state") == "stored" else None
+    if minted is not None:
+        parks = [p for p in parks if p.expired_at is None or p.expired_at > minted]
     handled = list(refresh.get("parks") or [])
     new = [k for k in (_park_key(p) for p in parks) if k not in handled]
     if not new:
         return wf
-    waits = {r for e in wf.get("segments") or [] for r in e.get("reviews") or []}
+    waits = (
+        set(wf["waits"])
+        if "waits" in wf
+        else {r for e in wf.get("segments") or [] for r in e.get("reviews") or []}
+    )
     left = [s for s in status.steps if s.state not in _FINISHED_STEPS]
     agents = sum(1 for s in left if s.step_id not in waits)
     ttl = workflow.credential_seconds(agents, len(left) - agents, get_runtime_settings())
@@ -6856,6 +6880,8 @@ async def refresh_key(
         log.info("run %s: key renewal not needed (HTTP %s)", run.id, status)
     elif status in (403, 422):
         refresh["state"] = "refused"
+        # The key SwarmCloud refused was sent nowhere else: it is not left valid.
+        await revoke_run_tokens(db, run.id)
         code = "key_refresh_forbidden" if status == 403 else "key_refresh_refused"
         _note(target, workflow.ADVICE[code])
         error = f"run {run_id}: SwarmCloud refused the run's key renewal (HTTP {status})"
