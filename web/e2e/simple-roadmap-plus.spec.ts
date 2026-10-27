@@ -1,4 +1,4 @@
-import { login, signOut } from "./helpers";
+import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -29,9 +29,12 @@ const editor = (page: Page): Locator => page.getByTestId("key-dates-editor");
 
 async function openRoadmap(page: Page, format: "timeline" | "gantt" | "waterfall", email?: string, again = false) {
   if (again) {
-    // Another person in the same browser (the mock's data stays): sign out first.
+    // Another person in the same browser (the mock's data stays): sign out first, from the
+    // rail's account menu on a desktop, the top bar's on a phone.
     await page.goto("/home");
-    await signOut(page);
+    await page.getByTestId("user-menu").or(page.getByTestId("phone-user-menu")).filter({ visible: true }).first().click();
+    await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+    await expect(page).toHaveURL(/\/login/);
   }
   await login(page, email);
   await page.goto(ROADMAP);
