@@ -151,6 +151,10 @@ verdict on the same section supersedes the earlier item.
 | `GET .../versions/{n}/export?format=html\|pdf\|md\|pptx&layer=full\|brief\|deck` | export with version banner: Full (html, pdf, md), Brief (html, pdf), Deck (pdf, pptx) |
 | `GET .../versions/{n}/deck` | the brief as slides for Present mode (theme CSS, notes, expandable detail) |
 | `GET /v1/me/preferences`, `PATCH /v1/me/preferences` | per-user choices: `document_view` (`brief`/`full`), `experience` (`simple`/`detailed`, #723: the mode the person last switched to; unset, they land in `GET /v1/me/capabilities` `default_experience`: Simple for viewers and commenters, Detailed for approvers and owners) |
+| `GET /v1/simple/chat`, `POST /v1/simple/chat/messages` | Simple S9 (#723, D22d): the person's Ask-panel thread; a request in plain words gets change cards (the exact change-engine ops with their constraint check and fixes), one question when ambiguous, or an answer from Oracle's data; nothing applies until Apply |
+| `GET /v1/simple/meetings/{id}/chat`, `POST .../chat/messages`, `PUT .../chat/mode` | Simple S9 (D22, D22a): a meeting's one shared chat thread (attendees; viewers only ask), and the presenter's change mode (everyone / presenter / presenter + named people) |
+| `POST /v1/simple/chat/cards/{id}/apply\|discard\|undo` | Simple S9 (D22c): apply a card (or one of its fixes) through the change engine with the caller's rights (an applied card in a meeting is a meeting decision), discard it (nothing written), undo its change |
+| `GET /v1/simple/walk` | Simple S9: Home's "Walk me through it": the broken links the person decides, then the decisions waiting on them, then the proposals waiting on them |
 | `GET /healthz` | liveness + DB check |
 
 Agent track uses `Authorization: Bearer <api token>`; the UI uses the session cookie.
