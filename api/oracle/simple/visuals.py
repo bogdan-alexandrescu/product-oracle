@@ -21,7 +21,8 @@ answer brings none.
 Who: viewers read (a visual of a document they cannot see is not there); commenters and up
 comment; who changes the subject's document directly (an owner, its decider, with none its
 track owner: oracle.simple.drafts.can_edit; with no document, the company's owners) asks
-for a drawing and revises. A change's visual is read by whoever may read the change.
+for a drawing and revises. A change's visual is read by whoever may read the change; a
+one-pager bet's by who reads that bet on the page (a working draft's bet: who sees the draft).
 """
 
 import html
@@ -221,6 +222,10 @@ async def may_read(db: AsyncSession, principal: Any, v: SimpleVisual) -> bool:
         # has the id).
         me = _me(principal)
         return me is not None and (has_role(principal.role, "owner") or me == v.requested_by)
+    if v.subject_kind == "one_pager_line" and v.document_id is not None:
+        # A bet's subject is its words: who has the PRD but not the page the bet is on (a
+        # working draft's) does not read its drawing.
+        return await bet_line(db, principal, v.document_id, v.subject_id) is not None
     return True
 
 
@@ -355,6 +360,11 @@ async def read(
     if subject_kind not in SUBJECT_KINDS:
         raise VisualError(422, f"subject_kind must be one of {', '.join(SUBJECT_KINDS)}")
     v = await _visual(db, subject_kind, subject_id)
+    if v is not None and not await may_read(db, principal, v):
+        if subject_kind != "one_pager_line":
+            raise VisualError(404, "No such visual")
+        # A bet not on the caller's page reads as one with nothing drawn.
+        v = None
     if v is None:
         # Nothing drawn or asked for yet: who may ask is who would revise it.
         try:
@@ -369,7 +379,8 @@ async def read(
             subject_kind=subject_kind, subject_id=subject_id,
             document_id=subject.document_id, brief="",
         )  # fmt: skip
-        if not await may_read(db, principal, probe):
+        # A bet found on the caller's page is theirs to read.
+        if subject_kind != "one_pager_line" and not await may_read(db, principal, probe):
             raise VisualError(404, "No such visual")
         return SimpleVisualOut(
             subject_kind=subject_kind,
@@ -383,8 +394,6 @@ async def read(
             and (subject_kind != "one_pager_line" or bet is not None)
             and await may_revise(db, principal, probe),
         )
-    if not await may_read(db, principal, v):
-        raise VisualError(404, "No such visual")
     vers = await _versions(db, v)
     comments = list(
         await db.scalars(

@@ -240,7 +240,9 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
     if (kind === "one_pager_line") {
       const doc = b.document_id ? String(b.document_id) : null;
       if (!doc) return json(422, { detail: "A one-pager line's visual is asked for with its PRD" });
-      if (!v) add(db, kind, id, String(b.brief ?? "") || "A bet of the one-pager").pending = true;
+      // Queued once: a visual with no drawing (its job drew nothing) is drawn again.
+      const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "A bet of the one-pager");
+      if (!cur.versions.length) cur.pending = true;
       return json(202, out(db.visuals[key], kind, id, ctx, doc));
     }
     requestVisual(db, kind, id, String(b.brief ?? "") || "The new flow");
