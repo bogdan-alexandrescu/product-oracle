@@ -25,7 +25,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
-import { canDecideItem, canEditRoadmap, deciderIds, draftChanges, roadmapOut, seesDraft, type MockDraft, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, canEditRoadmap, deciderIds, draftChanges, ownDates, roadmapOut, seesDraft, type MockDraft, type SimpleDb } from "./simple-roadmap";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -105,7 +105,7 @@ function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c:
 /** The stored values of one item's fields (the API's changes.read). */
 function read(db: SimpleDb, key: string, fields: string[], target: Values): Values {
   const s = seed(db, key);
-  const own = db.own[key];
+  const own = ownDates(db, s);
   const out: Values = {};
   for (const f of fields) {
     if (f === "start_date") out[f] = own?.start ?? null;

@@ -108503,6 +108503,17 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
           }
         },
         "type": "object",
@@ -108667,6 +108678,50 @@
           "item_ids"
         ],
         "title": "SimpleMilestone"
+      },
+      "SimpleOpenDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title"
+        ],
+        "title": "SimpleOpenDecision",
+        "description": "S4: a proposed decision naming the item as a subject (the floating card's)."
+      },
+      "SimpleOwnerRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SimpleOwnerRef"
       },
       "SimplePersonRef": {
         "properties": {
@@ -108904,6 +108959,37 @@
             },
             "type": "array",
             "title": "Flags"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleOwnerRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons",
+            "default": []
+          },
+          "open_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOpenDecision"
+            },
+            "type": "array",
+            "title": "Open Decisions",
+            "default": []
           }
         },
         "type": "object",

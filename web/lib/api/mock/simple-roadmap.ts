@@ -35,10 +35,16 @@ interface SeedItem {
   status?: Item["status"];
   draft?: boolean;
   milestone?: { name: string; day: number };
+  /** The roadmap item's validation gates (days from the window's start); one naming a
+   * phase ends that phase on its day (oracle.simple.dates.named_phases). */
+  gates?: { phase: string; day: number }[];
   risks?: { flag: Flag["kind"]; note: string; subject?: string | null }[];
   /** Simple S3a's change engine (./simple-changes.ts) edits these. */
   outcome?: string | null;
   position?: number;
+  /** S4 (the floating card): the priority's rationale and the PRD section it came from. */
+  why?: string;
+  section?: string;
 }
 
 interface SimpleDb {
@@ -58,6 +64,10 @@ interface SimpleDb {
   deciders?: Record<string, string>;
   /** D-a: each track's owner (track key -> person id); their role (Who.roles) says whether they decide. */
   track_owners?: Record<string, string>;
+  /** S4: people's display names (person id -> name), for the items' owners. */
+  people?: Record<string, string>;
+  /** S4: proposed decisions naming an item (item key -> decisions). */
+  decisions?: Record<string, { number: number; title: string }[]>;
 }
 
 /** A reader, with every member's role (D-a: a track owner decides only as an approver or owner). */
@@ -81,16 +91,18 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
   "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes" },
 };
 const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation" };
+/** S4: each goal's metric (the goal counters' line). */
+const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert" };
 const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
 
 const SEED: SeedItem[] = [
-  { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress" },
+  { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
   { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 } },
   { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"] },
   { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
-  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed" },
-  { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", depends: ["setup-checklist"], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
+  { key: "setup-checklist", title: "Setup checklist", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "high", start: 10, end: 45, source: "typed", gates: [{ phase: "Beta", day: 40 }] },
+  { key: "setup-import", title: "Sample data import", horizon: "now", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", confidence: "medium", start: 20, end: 60, source: "typed", depends: ["setup-checklist"], gates: [{ phase: "beta", day: 75 }], risks: [{ flag: "dependency_order", note: "The checklist's last step is not needed" }] },
   { key: "setup-tour", title: "In-app tour", horizon: "later", roadmap: "onboarding-roadmap", goal: "faster-activation", track: "onboarding", status: "cut" },
   { key: "setup-video", title: "Welcome video", horizon: "later", roadmap: "onboarding-roadmap", track: "onboarding", depends: ["setup-tour"] },
   { key: "setup-ideas", title: "Team invite nudges", horizon: "next", roadmap: "onboarding-roadmap", goal: "faster-activation", draft: true },
@@ -140,7 +152,40 @@ export function seedSimpleRoadmap(): SimpleDb {
     ids: Object.fromEntries(SEED.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])),
     own: {},
     suggestions: [],
+    decisions: { "alert-digest": [{ number: 7, title: "Send the digest weekly or daily?" }] },
   }));
+}
+
+/**
+ * The "simple-500" scenario (S4: first paint and drag speed): 500 invented items over the
+ * three roadmaps, both goals and the three tracks, dated and undated, with chains of
+ * dependencies.
+ */
+export function seedSimpleMany(n = 500): SimpleDb {
+  const roadmaps = ["alerts-roadmap", "onboarding-roadmap", "pricing-roadmap"];
+  const goals = [...Object.keys(GOALS), undefined];
+  const tracks = Object.keys(TRACKS);
+  const horizons: Horizon[] = ["now", "next", "later"];
+  const items: SeedItem[] = Array.from({ length: n }, (_, i) => {
+    const dated = i % 3 !== 2;
+    const start = (i * 7) % 60;
+    return {
+      key: `item-${i}`, title: `Planned item ${i + 1}`, horizon: horizons[i % 3], roadmap: roadmaps[i % 2],
+      goal: goals[i % 3], track: tracks[i % 3], confidence: (["low", "medium", "high"] as const)[i % 3],
+      ...(dated ? { start, end: start + 20 + (i % 30), source: "typed" as const } : {}),
+      ...(i % 10 === 5 ? { depends: [`item-${i - 1}`] } : {}),
+    };
+  });
+  return { items, ids: Object.fromEntries(items.map((s) => [s.key, stableUuid(`simple-item/${s.key}`)])), own: {}, suggestions: [] };
+}
+
+/** The item's stored dates (the API's start_date, end_date, date_source columns): moved or
+ * accepted in Simple, else the seed's typed or accepted dates; undefined when none. */
+export function ownDates(db: SimpleDb, s: SeedItem): SimpleDb["own"][string] | undefined {
+  if (db.own[s.key]) return db.own[s.key];
+  if ((s.source !== "typed" && s.source !== "accepted") || s.start === undefined || s.end === undefined) return undefined;
+  const w = simpleWindows(iso(mockNowMs()))[s.horizon];
+  return { start: addDays(w[0], s.start), end: addDays(w[0], s.end), source: s.source };
 }
 
 function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated; end: Dated } {
@@ -158,15 +203,23 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
 
 const PHASES = [["discover", 0.15], ["build", 0.55], ["beta", 0.2], ["launch", 0.1]] as const;
 
-function phases(start: string, end: string): Schemas["SimplePhase"][] {
+/** oracle.simple.dates.phases: the milestone and gates naming a phase end it on their date;
+ * every other phase keeps the 15/55/20/10 split of the bar, estimated. */
+function phases(start: string, end: string, s: SeedItem, w: [string, string]): Schemas["SimplePhase"][] {
+  const named = new Map<string, string>();
+  for (const e of [...(s.milestone ? [{ phase: s.milestone.name, day: s.milestone.day }] : []), ...(s.gates ?? [])]) {
+    const word = e.phase.trim().toLowerCase();
+    if (PHASES.some(([k]) => k === word)) named.set(word, addDays(w[0], e.day));
+  }
   const total = span(start, end);
   let cursor = start;
   let share = 0;
   return PHASES.map(([key, part], i) => {
     share += part;
-    let day = i === PHASES.length - 1 ? end : addDays(start, Math.round(total * share) - 1);
+    const own = named.get(key);
+    let day = own ?? (i === PHASES.length - 1 ? end : addDays(start, Math.round(total * share) - 1));
     if (day < cursor) day = cursor;
-    const out = { key, start: cursor, end: day, estimated: true };
+    const out = { key, start: cursor, end: day, estimated: !own };
     cursor = addDays(day, 1);
     return out;
   });
@@ -199,6 +252,12 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   }
   if (s.draft && !s.track) flag("draft_without_owner", "Draft with no owner to confirm it", []);
   return out;
+}
+
+/** S4: the item's track owner, by name (service: an enabled track owner). */
+function ownerOf(db: SimpleDb, s: SeedItem): Item["owner"] {
+  const id = s.track ? db.track_owners?.[s.track] : undefined;
+  return id ? { id, name: db.people?.[id] ?? "Track owner" } : null;
 }
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
@@ -338,7 +397,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { 
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: { id: stableUuid(`simple-prd/${s.roadmap}`), slug: rm.prd.toLowerCase().replace(/ /g, "-"), title: rm.prd },
-      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] } : null,
+      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.draft ? "draft" : (s.status ?? "planned"),
@@ -348,10 +407,18 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { 
       estimated: r.start.estimated && r.end.estimated,
       suggestion: suggestion ? { ...suggestion, can_decide: decides(s) } : null,
       milestone: s.milestone ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item" } : null,
-      phases: phases(r.start.date, r.end.date),
+      phases: phases(r.start.date, r.end.date, s, w[s.horizon]),
       depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
+      owner: ownerOf(db, s),
+      can_decide: decides(s),
+      reasons: [
+        ...(s.why ? [s.why] : []),
+        ...(s.goal ? [`Serves the goal ${GOALS[s.goal]}.`] : []),
+        ...(s.section ? [`From ${rm.prd}, section ${s.section}.`] : []),
+      ].slice(0, 3),
+      open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
     };
   });
   const prd = q.get("prd");

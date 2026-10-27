@@ -152,7 +152,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, simpleInboxRows } from "./simple-changes";
-import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
+import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -522,7 +522,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "read-only-credential" where My account is read through an oracle:read personal token
  * (AC1: it changes nothing, the name included);
  * "simple-deciders" as the default company plus a decider of Simple's pricing roadmap and
- * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a).
+ * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a);
+ * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
@@ -832,6 +833,7 @@ function seedSimpleDecidersScenario(): Db {
     commenter: join("cory.hale@example.com", "Cory Hale", "commenter", 2),
     viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
   });
+  db.simple_roadmap.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
   return db;
 }
 
@@ -2485,6 +2487,8 @@ function load(): Db {
                 ? seedManyPeople
               : scenario === "simple-deciders"
                 ? seedSimpleDecidersScenario
+              : scenario === "simple-500"
+                ? () => ({ ...seed(), simple_roadmap: seedSimpleMany() })
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
                   : scenario === "strategy-plan"
