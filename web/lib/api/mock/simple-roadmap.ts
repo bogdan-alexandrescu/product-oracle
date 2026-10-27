@@ -53,7 +53,8 @@ interface SeedItem {
   /** S7: the key of the item this draft was merged into (the draft is closed). */
   merged_into?: string;
   /** S7: the baseline feature (with no item) this draft was linked to by a merge. */
-  merged_feature?: { id: string; code: string; title: string };
+  // A draft merged with a baseline feature that has no item: linked to it (still a draft).
+  linked_feature?: string;
   /** S7: Oracle's drafting job runs until this mock time (ms); the item is "drafting" until then. */
   drafting_until?: number;
   /** S7: a draft quick-added on a quarter: Oracle's date suggestion falls in it. */
@@ -143,7 +144,7 @@ export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
 export const ROADMAP_SLUGS = (): string[] => Object.keys(ROADMAPS);
 /** S7: an item closed for the plan (cut, or a draft merged into another). */
-export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged_into || !!s.merged_feature;
+export const closed = (s: SeedItem): boolean => s.status === "cut" || !!s.merged_into;
 const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
 
 const SEED: SeedItem[] = [
@@ -468,7 +469,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
-      status: s.merged_into || s.merged_feature ? "merged" : s.draft ? "draft" : (s.status ?? "planned"),
+      status: s.merged_into ? "merged" : s.draft ? "draft" : (s.status ?? "planned"),
       draft: !!s.draft,
       start: r.start, end: r.end,
       source: r.end.estimated ? r.start.source : r.end.source,
@@ -490,7 +491,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],
-      merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : (s.merged_feature ?? null),
+      merged_into: s.merged_into ? { id: db.ids[s.merged_into], code: s.merged_into, title: db.items.find((x) => x.key === s.merged_into)?.title ?? s.merged_into } : null,
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : null,
       goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),

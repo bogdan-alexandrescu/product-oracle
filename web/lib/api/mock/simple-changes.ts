@@ -751,7 +751,7 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     roadmap ??= (goal ? db.items.find((x) => x.goal === goal && !closed(x) && visible.includes(x.roadmap))?.roadmap : undefined) ?? visible.find((r) => canEditRoadmap(db, r, ctx)) ?? visible[0];
     target.roadmap_id = roadmapId(roadmap);
     target.item_id = crypto.randomUUID();
-    const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : [], ...(quarter ? { start: quarter.start, end: quarter.end } : {}) };
+    const after: Values = { title, horizon, goal_ids: goal ? [goalId(goal)] : [], ...(quarter ? { quarter } : {}) };
     if (typeof a.outcome === "string" && a.outcome.trim()) after.outcome = a.outcome.trim();
     return { target, before: {}, after, roadmap, applies: canEditRoadmap(db, roadmap, ctx) };
   }
@@ -771,9 +771,8 @@ function planS7(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChange
     return { target, before: { status: "draft" }, after: { status: "merged", merged_into: { id: target.into_id, code: kept.key, title: kept.title } }, roadmap: s.roadmap, applies };
   }
   if (typeof target.feature_id === "string" && target.feature_id) {
-    const code = typeof target.code === "string" ? target.code : "feature";
-    const title = typeof target.title === "string" ? target.title : "A baseline feature";
-    return { target, before: { status: "draft" }, after: { status: "merged", merged_into: { id: target.feature_id, code, title } }, roadmap: s.roadmap, applies };
+    // As the API: the draft becomes the feature's item (linked, kept beside look-alikes), still a draft.
+    return { target, before: { [String(target.item_id)]: { feature_id: null, kept_both: !!s.kept_both } }, after: { [String(target.item_id)]: { feature_id: target.feature_id, kept_both: true } }, roadmap: s.roadmap, applies };
   }
   return json(422, { detail: "target: into_id or feature_id" });
 }
@@ -829,7 +828,7 @@ function holdsS7(db: SimpleDb, c: Change): boolean {
   if (!s) return false;
   if (c.op === "add_item") return !!s.draft && !closed(s);
   if (c.op === "keep_both") return !!s.kept_both;
-  return !!s.merged_into || !!s.merged_feature;
+  return !!s.merged_into || !!s.linked_feature;
 }
 
 function reopenSuggestion(db: SimpleDb, c: Change): void {
@@ -857,7 +856,7 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
     db.items.push({
       key, title: String(a.title), horizon: a.horizon as SeedItem["horizon"], roadmap, goal: goalKey,
       track: db.items.find((x) => x.roadmap === roadmap && x.track)?.track, draft: true, outcome: typeof a.outcome === "string" ? a.outcome : null,
-      drafting_until: mockNowMs() + DRAFTING_MS, quarter: a.start ? { start: String(a.start), end: String(a.end) } : undefined,
+      drafting_until: mockNowMs() + DRAFTING_MS, quarter: (a.quarter as { start: string; end: string } | undefined) ?? undefined,
       looks_like: lookalikes(db, String(a.title), roadmap),
     });
     return;
@@ -878,7 +877,8 @@ function applyS7(db: SimpleDb, c: Change, undo = false): void {
   const dependents = db.items.filter((x) => x.depends?.includes(s.key));
   snaps[c.id] = structuredClone([s, ...(intoKey ? [seed(db, intoKey)] : []), ...dependents.filter((x) => x.key !== intoKey)]);
   if (!intoKey) {
-    s.merged_feature = c.after.merged_into as { id: string; code: string; title: string };
+    s.linked_feature = String(c.target.feature_id);
+    s.kept_both = true;
     return;
   }
   const kept = seed(db, intoKey);

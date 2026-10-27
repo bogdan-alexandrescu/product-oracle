@@ -9,7 +9,8 @@ draft item (drafts are not ranked yet: they sit among the drafts); a feature wit
 non-draft item is still a row (no item, not reorderable, no weeks in a bucket). Besides the
 rows: the open ``override_priority`` and ``estimate_feature`` proposals the caller may see
 (each with its item's feature, so one on a feature's other item shows under its row) and
-the ``confirm_item`` and ``cut`` (Merge) proposals on draft items, the visible
+the ``confirm_item``, ``merge_item`` (S7's Merge; train T's was a ``cut`` with a note) and
+``cut`` proposals on draft items, the visible
 draft items with the items they may merge into, and this quarter's engineer-weeks per goal.
 
 Changes go through the change engine (``/v1/simple/changes``): ``override_priority`` (with
@@ -51,7 +52,7 @@ router = APIRouter(prefix="/v1/simple", tags=["simple"])
 METHOD = "goal_weighted"
 PROPOSED_OPS = ("override_priority", "estimate_feature")
 # Confirm and Merge of a draft item, shown under the draft.
-DRAFT_OPS = ("confirm_item", "cut")
+DRAFT_OPS = ("confirm_item", "cut", "merge_item")
 MERGE_MAX = 8
 NONE = "none"
 
@@ -166,7 +167,7 @@ async def _proposals(
 
 def _drafts(read_: service.Read, principal: Any) -> list[SimplePriorityDraft]:
     out = []
-    live = [e for e in read_.entries if e.status != "cut"]
+    live = [e for e in read_.entries if e.status not in ("cut", "merged")]
     for e in live:
         if not e.row.draft:
             continue
