@@ -47,6 +47,13 @@ window, with their dates). A meeting listed whose transcript Fireflies does not 
 yet is counted in ``missing`` and the position stays before it, so the next sync asks
 again; after ``MISSING_TRIES`` asks it is skipped.
 
+Fireflies writes a meeting's summary some time after its transcript and has no "updated"
+field, so each sync, after the new meetings, reads again the stored meetings of the last
+``REREAD_WINDOW`` (seven days) whose content has no summary yet (the engine's ``lacking``)
+and stores the record when it now has one (owner 2026-10-26). A meeting stored with a
+summary is not read again: a later title or speaker change is not picked up. A
+meeting's participants are the people who spoke and the invitees (:func:`people`).
+
 ``selection`` is a fingerprint of what the config selects (``labels`` aside), so a
 change of labels alone keeps the position (:meth:`FirefliesConnector.rescope_cursor`).
 
@@ -112,6 +119,12 @@ OAUTH = None
 PAGE_SIZE = 50  # the most Fireflies returns per transcripts query
 # Fireflies can finish a transcript days after the meeting: each sync reads back this far.
 OVERLAP = timedelta(days=3)
+# Fireflies writes a meeting's summary some time after its transcript: each sync reads
+# again the stored meetings of this many last days whose content has no summary yet
+# (one stored with a summary is not read again: a later rename is not picked up).
+REREAD_WINDOW = timedelta(days=7)
+# How a stored transcript's content starts when it has a summary (see _content).
+SUMMARY_MARK = "## Overview\n\n"
 # A meeting Fireflies lists but answers without a transcript is asked for again on this
 # many syncs (the position waits for it), then skipped.
 MISSING_TRIES = 3
@@ -173,9 +186,10 @@ query Transcript($id: String!) {
     organizer_email
     participants
     calendar_id
+    speakers { id name }
     meeting_attendees { displayName email }
     sentences { index speaker_name text }
-    summary { overview action_items keywords }
+    summary { overview short_summary action_items keywords }
   }
 }
 """
@@ -487,7 +501,7 @@ def _meeting(entry: dict[str, Any]) -> Meeting:
         date=_fireflies_date(entry.get("date")),
         duration=float(duration) if isinstance(duration, int | float) else None,
         organizer=_text(entry.get("organizer_email")),
-        attendee_count=len(_participants(entry)),
+        attendee_count=len(people(entry)),
         series_key=series_key(entry),
         series_title=series_title(entry.get("title")),
     )
@@ -540,8 +554,9 @@ def _lines(value: Any) -> list[str]:
 def _content(transcript: dict[str, Any]) -> str:
     summary = transcript.get("summary") or {}
     parts = []
-    if summary.get("overview"):
-        parts.append(f"## Overview\n\n{str(summary['overview']).strip()}")
+    overview = summary.get("overview") or summary.get("short_summary")
+    if overview:
+        parts.append(f"{SUMMARY_MARK}{str(overview).strip()}")
     actions = _lines(summary.get("action_items"))
     if actions:
         # Fireflies groups action items under bold speaker names.
@@ -572,19 +587,29 @@ def _content(transcript: dict[str, Any]) -> str:
     return "\n\n".join(parts)
 
 
-def _participants(transcript: dict[str, Any]) -> list[str]:
-    people = [p for p in transcript.get("participants") or [] if p]
-    for attendee in transcript.get("meeting_attendees") or []:
-        email = (attendee or {}).get("email")
-        if email:
-            people.append(email)
-    seen: dict[str, None] = {}
-    for person in people:
-        # Fireflies sometimes packs several addresses into one comma-separated entry.
-        for part in str(person).split(","):
-            if part.strip():
-                seen.setdefault(part.strip().lower(), None)
-    return list(seen)
+def people(meeting: dict[str, Any]) -> list[str]:
+    """A meeting's participants: the people who spoke, then the invitees, each once (case
+    aside), in order. The archive's answer has ``speakers`` and ``attendees`` (strings);
+    Fireflies' GraphQL ``speakers`` ({id, name}), ``participants`` (addresses) and
+    ``meeting_attendees`` ({displayName, email}). Addresses are kept in lower case."""
+    found: list[str] = []
+    for key in ("speakers", "attendees", "participants", "meeting_attendees"):
+        value = meeting.get(key)
+        for person in value if isinstance(value, list) else []:
+            if isinstance(person, dict):
+                person = person.get("email" if key == "meeting_attendees" else "name")
+            if not isinstance(person, str):
+                continue
+            if "@" not in person:
+                found.append(person.strip())
+                continue
+            # Fireflies sometimes packs several addresses into one comma-separated entry.
+            found.extend(part.strip().lower() for part in person.split(","))
+    seen: dict[str, str] = {}
+    for person in found:
+        if person:
+            seen.setdefault(person.casefold(), person)
+    return list(seen.values())
 
 
 class FirefliesForbidden(ConnectorForbidden):
@@ -876,8 +901,9 @@ def _without_selection(cursor: dict[str, Any] | None) -> dict[str, Any] | None:
 
 class FirefliesConnector:
     kind = "fireflies"
-    # sync takes ``known``: see oracle.sources.base.Connector.
+    # sync takes ``known`` and ``lacking``: see oracle.sources.base.Connector.
     prunes = True
+    rereads = True
 
     def __init__(self, client: httpx.AsyncClient | None = None):
         self._client = client
@@ -960,6 +986,7 @@ class FirefliesConnector:
         credential: dict[str, Any] | None,
         cursor: dict[str, Any] | None,
         known: Callable[[], Awaitable[set[str]]] | None = None,
+        lacking: Callable[[datetime, str], Awaitable[list[str]]] | None = None,
     ) -> AsyncIterator[SyncEvent]:
         picked = selection(config)
         selected = fingerprint(config)
@@ -984,6 +1011,9 @@ class FirefliesConnector:
             stop = picked.date_from
         # A full pass (no position) knows the whole selection, so it can prune.
         stored = await known() if known is not None and position is None else None
+        # Stored meetings of the last REREAD_WINDOW still without a summary, read as the
+        # sync starts: they are read again after the new meetings (see _reread).
+        unsummarised = await lacking(now - REREAD_WINDOW, SUMMARY_MARK) if lacking else []
 
         async with self._session(credential) as fireflies:
             variables: dict[str, Any] = {}
@@ -1086,6 +1116,30 @@ class FirefliesConnector:
             if _without_selection(final) != _without_selection(written):
                 yield CursorCheckpoint(final)
 
+            # Last, so they never starve new meetings: under the same limits, a rate limit
+            # here ends the sync with everything above saved.
+            fetched = {entry["id"] for _, entry, fetch in pending if fetch}
+            for external_id in unsummarised:
+                if external_id in fetched:
+                    continue
+                item = await self._reread(fireflies, external_id)
+                if item is not None:
+                    yield item
+                    yield CursorCheckpoint(final)
+
+    async def _reread(self, fireflies: _Fireflies, external_id: str) -> ItemUpsert | None:
+        """A stored meeting read again: its item when Fireflies now has its summary
+        (with the rest of the record read with it), else None."""
+        data = await fireflies.query(DETAIL_QUERY, id=external_id)
+        transcript = data.get("transcript")
+        if not _well_formed(transcript) or transcript["id"] != external_id:
+            return None
+        summary = transcript.get("summary")
+        summary = summary if isinstance(summary, dict) else {}
+        if not (_text(summary.get("overview")) or _text(summary.get("short_summary"))):
+            return None
+        return self._item(transcript)
+
     async def browse_meetings(
         self,
         credential: dict[str, Any] | None,
@@ -1172,7 +1226,7 @@ class FirefliesConnector:
 
     def _item(self, transcript: dict[str, Any]) -> ItemUpsert:
         when = _fireflies_date(transcript.get("date"))
-        participants = _participants(transcript)
+        participants = people(transcript)
         return ItemUpsert(
             external_id=transcript["id"],
             kind="transcript",

@@ -54,6 +54,8 @@ query LiveTranscripts(
     date
     duration
     participants
+    speakers { id name }
+    meeting_attendees { email }
   }
 }
 """
@@ -65,6 +67,8 @@ query LiveTranscript($id: String!) {
     date
     duration
     participants
+    speakers { id name }
+    meeting_attendees { email }
     sentences { index speaker_name text start_time }
     summary { overview short_summary }
   }
@@ -167,15 +171,6 @@ def _duration(entry: dict[str, Any], minutes: bool) -> float | None:
     return in_minutes * 60 if in_minutes is not None else None
 
 
-def _participants(value: Any) -> list[str]:
-    out: list[str] = []
-    for p in value if isinstance(value, list) else []:
-        name = p.get("name") if isinstance(p, dict) else p
-        if isinstance(name, str) and name:
-            out.append(name)
-    return out
-
-
 def _id(value: Any) -> str | None:
     if isinstance(value, bool):
         return None
@@ -185,8 +180,9 @@ def _id(value: Any) -> str | None:
 
 
 def read_meeting(entry: Any, *, minutes: bool = False) -> dict[str, Any] | None:
-    """A meeting's id, title, date, duration_s and participants; None without an id or
-    a title."""
+    """A meeting's id, title, date, duration_s and participants (who spoke, then who was
+    invited: :func:`oracle.sources.connectors.fireflies.people`); None without an id or a
+    title."""
     if not isinstance(entry, dict):
         return None
     meeting_id, title = _id(entry.get("id")), entry.get("title")
@@ -197,7 +193,7 @@ def read_meeting(entry: Any, *, minutes: bool = False) -> dict[str, Any] | None:
         "title": title,
         "date": _date(entry.get("date")),
         "duration_s": _duration(entry, minutes),
-        "participants": _participants(entry.get("participants")),
+        "participants": fireflies.people(entry),
     }
 
 
@@ -403,20 +399,21 @@ class ArchiveBackend:
                 "max_lines": args["max_lines"],
             },
         )
-        if isinstance(answer.get("meeting"), dict):
-            answer = answer["meeting"]
+        # The answer is flat (no "meeting" wrapper); the summary is ``overview`` (there
+        # is no ``summary`` key), null until Fireflies writes it.
         meeting = read_meeting(answer)
         if meeting is None:
             raise Malformed("no meeting")
-        summary = answer.get("summary")
-        out = {**meeting, "summary": summary if isinstance(summary, str) else None}
+        overview = answer.get("overview")
+        out = {**meeting, "summary": overview if isinstance(overview, str) and overview else None}
         out.update(lines=None, truncated=False, skipped=0)
         if args["part"] == "all":
             lines, skipped = _read_all(answer.get("lines", []), read_line)
             cap = args["max_lines"]
+            # next_offset: get_lines continues from there, so more lines remain.
             out.update(
                 lines=lines[:cap],
-                truncated=bool(answer.get("truncated")) or len(lines) > cap,
+                truncated=_total(answer.get("next_offset")) is not None or len(lines) > cap,
                 skipped=skipped,
             )
         return out

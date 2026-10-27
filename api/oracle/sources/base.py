@@ -38,6 +38,11 @@ A connector whose class sets ``prunes = True`` also receives ``known``, an async
 returning the external ids of the source's stored (not deleted) items, so a full pass
 can delete what its config no longer selects and skip what is already stored.
 
+A connector whose class sets ``rereads = True`` also receives ``lacking(since, mark)``,
+an async callable returning the external ids of the source's stored items dated since
+``since`` whose current content does not start with ``mark``, newest first (Fireflies:
+recent meetings stored before their summary was written, read again).
+
 Connectors never yield direct messages (S3 Visibility); ``acl`` records who can see an
 item in the source.
 
