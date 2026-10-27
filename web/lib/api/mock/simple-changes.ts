@@ -309,7 +309,8 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   const spec = TARGETS[body.op];
   const target: Values = { ...body.target };
   if (target.item_id && !keyOf(db, target.item_id)) return json(404, { detail: "No such roadmap item" });
-  const applies = decides(db, ctx, target.item_id);
+  // A feature ask is filed directly by every commenter and up (targets.py _who).
+  const applies = body.op === "add_feature_ask" || decides(db, ctx, target.item_id);
   if (spec.adds) target[spec.id] = crypto.randomUUID();
   const id = String(target[spec.id] ?? "");
   const stored = (db.targets ??= {})[id] ?? {};

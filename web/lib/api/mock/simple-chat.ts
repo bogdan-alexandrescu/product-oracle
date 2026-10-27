@@ -390,7 +390,8 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
   if (bar) return { may: null, why_not: bar };
   const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
-  const decides = c.item_id ? !!item?.can_decide : ctx.role === "owner";
+  // Filing a feature ask is every commenter's right (Requests); else the item's rule.
+  const decides = c.op === "add_feature_ask" ? true : c.item_id ? !!item?.can_decide : ctx.role === "owner";
   return { may: decides ? "apply" : "propose", why_not: null };
 }
 
