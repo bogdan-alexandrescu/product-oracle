@@ -745,7 +745,9 @@ async def submit(db: AsyncSession, principal: Principal, draft_id: uuid.UUID) ->
     titles = {str(r.id): r.title for r in base_rows}
     lines = [f"Changed in Simple on version {base.number}:", ""]
     for c in live:
-        kd = c.after.get("key_date") or c.before.get("key_date") if "key_date" in c.after else None
+        kd = None
+        if "key_date" in c.after:
+            kd = c.after.get("key_date") or c.before.get("key_date")
         what = (
             f"'{kd['name']}'"
             if isinstance(kd, dict)

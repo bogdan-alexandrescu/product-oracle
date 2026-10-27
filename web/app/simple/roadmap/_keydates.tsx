@@ -97,7 +97,7 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
           ? "Owners and the roadmap's decider change key dates; you read them."
           : current?.applies
             ? "Your changes go into the roadmap's working draft (Undo in the message)."
-            : "Your changes are proposals: the decider accepts or declines them."}
+            : "Owners and the roadmap's decider change key dates; yours are proposals they accept or decline."}
       </p>
       <ul className="mt-3 space-y-2" aria-label="This roadmap's key dates">
         {list.length === 0 && <li className="text-sm text-text2">No key dates yet.</li>}

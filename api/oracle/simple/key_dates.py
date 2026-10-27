@@ -39,7 +39,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
-from oracle.docs.models import Document
+from oracle.docs.models import Document, DocumentVersion
+from oracle.roadmap.models import RoadmapItem
 from oracle.simple import drafts
 from oracle.simple.models import RoadmapKeyDate, SimpleChange, SimpleDraft, SimpleSession
 from oracle.simple.schemas import (
@@ -166,15 +167,42 @@ def may_decide(principal: Any, c: SimpleChange, view: Any) -> bool:
 # --------------------------------------------------------------------------- reading
 
 
-async def _readable(db: AsyncSession) -> dict[uuid.UUID, Any]:
-    """The roadmaps the session's principal reads (those with items it sees): id -> an
-    item of the shown version (its draft opens on that version)."""
+async def _readable(db: AsyncSession, doc: uuid.UUID) -> RoadmapItem | None:
+    """An item of the roadmap's shown version when the session's principal reads it (its
+    draft opens on that version), else None: the one roadmap's rows, not the whole read."""
     from oracle.simple import service
 
-    out: dict[uuid.UUID, Any] = {}
-    for e in (await service.load(db)).entries:
-        out.setdefault(e.roadmap.id, e)
-    return out
+    if (
+        await db.scalar(select(Document.id).where(Document.id == doc, Document.kind == "roadmap"))
+        is None
+    ):
+        return None
+    versions = (
+        await db.execute(
+            select(
+                DocumentVersion.id,
+                DocumentVersion.document_id,
+                DocumentVersion.number,
+                DocumentVersion.approved_at,
+            ).where(DocumentVersion.document_id == doc)
+        )
+    ).all()
+    with_items = set(
+        await db.scalars(
+            select(RoadmapItem.roadmap_version_id)
+            .where(RoadmapItem.roadmap_document_id == doc)
+            .distinct()
+        )
+    )
+    shown = service._versions(versions, with_items, await drafts.submitted_versions(db)).get(doc)
+    if shown is None:
+        return None
+    return await db.scalar(
+        select(RoadmapItem)
+        .where(RoadmapItem.roadmap_version_id == shown)
+        .order_by(RoadmapItem.position, RoadmapItem.item_key)
+        .limit(1)
+    )
 
 
 async def _open_draft(db: AsyncSession, doc: uuid.UUID, lock: bool = False) -> SimpleDraft | None:
@@ -238,9 +266,9 @@ async def _current(
 # --------------------------------------------------------------------------- writing
 
 
-async def _ensure(db: AsyncSession, session: SimpleSession, entry: Any) -> SimpleDraft:
+async def _ensure(db: AsyncSession, session: SimpleSession, row: RoadmapItem) -> SimpleDraft:
     try:
-        return await drafts.ensure(db, session, entry.row, session.started_by)
+        return await drafts.ensure(db, session, row, session.started_by)
     except drafts.DraftError as e:
         raise _error(e.status, e.detail) from e
 
@@ -256,10 +284,10 @@ async def _apply(
             raise _error(409, "Its draft was submitted: undo works only inside a working draft")
         await drafts.link(db, session, d)
     else:
-        entry = (await _readable(db)).get(doc)
-        if entry is None:
+        row = await _readable(db, doc)
+        if row is None:
             raise _error(404, "No such roadmap")
-        d = await _ensure(db, session, entry)
+        d = await _ensure(db, session, row)
     kd_id = str(c.target["key_date_id"])
     pub = (await published(db, {doc}))[doc].get(kd_id)
     kd = dict((d.overlay or {}).get(KEY) or {})
@@ -306,7 +334,7 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     me, now = changes._me(principal), company_time.now()
     doc = changes._uuid(body.target.get("document_id"), "document_id")
     await db.execute(select(Document.id).where(Document.id == doc).with_for_update())
-    if doc not in await _readable(db):
+    if await _readable(db, doc) is None:
         raise _error(404, "No such roadmap")
     target: dict[str, Any] = {"document_id": str(doc)}
     if "key_date" not in body.before:
