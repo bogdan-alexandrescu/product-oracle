@@ -30659,7 +30659,7 @@ export interface components {
          *     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
          *     ``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they
          *     last switched to (#723); unset, they land by role (viewers and commenters in Simple).
-         *     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter.
+         *     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).
          */
         Preferences: {
             /**

@@ -113,8 +113,9 @@ async def test_the_pick_is_remembered_per_person(client):
 
 def test_docs_and_preferences_say_the_same_default_line():
     """protects=docs/mvp-app.md and the Preferences schema name one default for an unset
-    ``priorities_line`` (u-followups review); fails_when=either words it differently (one said
-    `now`, the other this quarter); no_claim=the default itself (test_default_line_is_this_quarter)."""
+    ``priorities_line`` (u-followups review); fails_when=either words it differently (one
+    said `now`, the other this quarter); no_claim=the default itself
+    (test_default_line_is_this_quarter)."""
     from pathlib import Path
 
     from oracle.preferences.router import Preferences

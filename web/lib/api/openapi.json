@@ -44164,7 +44164,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/meetings/{meeting_id}/comments": {
@@ -44226,7 +44227,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/meetings/{meeting_id}/approve": {
@@ -93894,7 +93896,7 @@
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``)."
       },
       "PreferencesUpdate": {
         "properties": {

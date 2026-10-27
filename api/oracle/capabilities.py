@@ -183,6 +183,8 @@ PER_ITEM: dict[str, Role | None] = {
     "cancel_again_run": "owner",
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
+    # S8: attendees, or whom the meeting's change mode lets change (oracle.simple.meetings).
+    "comment_in_simple_meeting": None,
     "comment_simple_visual": "commenter",
     # A Fireflies endpoint is an owner's to set (on connect, or on its own route); below
     # that, connecting without one (the input decides).
@@ -279,6 +281,8 @@ PER_ITEM: dict[str, Role | None] = {
     "set_connection_endpoint": "owner",
     "set_document_visibility": "owner",
     "set_simple_meeting_chat_mode": None,
+    # S8: the meeting's presenter alone (oracle.simple.meetings.set_rules).
+    "set_simple_meeting_rules": None,
     "skip_request_reply": "approver",
     "stage_checkpoint_action": "owner",
     "stage_discussion_change": "approver",
