@@ -151,6 +151,8 @@ import {
   type PricingContext,
   type PricingDb,
 } from "./pricing";
+import { routeSimpleChanges, simpleInboxRows } from "./simple-changes";
+import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -255,6 +257,8 @@ export interface Db {
   draft_roadmaps?: DraftRoadmapDb;
   /** Roadmap items, product tracks, schedule bases and tracker records (./roadmap.ts, CR-11). */
   roadmap?: RoadmapDb;
+  /** Simple S2 (#723): the company-wide roadmap's items and date suggestions (./simple-roadmap.ts). */
+  simple_roadmap?: SimpleDb;
   /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
   sharing_items?: RoadmapDb["items"];
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
@@ -516,7 +520,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
  * tick retries it);
  * "read-only-credential" where My account is read through an oracle:read personal token
- * (AC1: it changes nothing, the name included).
+ * (AC1: it changes nothing, the name included);
+ * "simple-deciders" as the default company plus a decider of Simple's pricing roadmap and
+ * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
@@ -804,6 +810,31 @@ function seedPrivateFinding(): Db {
 
 /** "questions" in a company of 25 members: zoe.zimmer@example.com sorts last, past the
  * people picker's first page of 20. */
+/**
+ * #734 review "simple-deciders" scenario (D-a): the default company plus four invented
+ * people: Dana Decider (an approver), the pricing roadmap's decider; Avery Lane (an
+ * approver), Cory Hale (a commenter) and Vic Moss (a viewer), the owners of the alerts,
+ * onboarding and welcome tracks of Simple's roadmap (./simple-roadmap.ts).
+ */
+function seedSimpleDecidersScenario(): Db {
+  const db = seed();
+  const join = (email: string, name: string, role: "approver" | "commenter" | "viewer", i: number) => {
+    const m = {
+      email, name, role, engineering_lead: false, created_at: `2026-09-${String(10 + i).padStart(2, "0")}T09:00:00Z`,
+      id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
+    };
+    db.members.push(m);
+    return m.id;
+  };
+  db.simple_roadmap = seedSimpleDeciders({
+    decider: join("dana.decider@example.com", "Dana Decider", "approver", 0),
+    approver: join("avery.lane@example.com", "Avery Lane", "approver", 1),
+    commenter: join("cory.hale@example.com", "Cory Hale", "commenter", 2),
+    viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
+  });
+  return db;
+}
+
 function seedManyPeople(): Db {
   const db = seedQuestions();
   const join = (email: string, i: number) => ({
@@ -2452,6 +2483,8 @@ function load(): Db {
               ? seedPrivateFinding
               : scenario === "many-people"
                 ? seedManyPeople
+              : scenario === "simple-deciders"
+                ? seedSimpleDecidersScenario
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
                   : scenario === "strategy-plan"
@@ -4728,10 +4761,11 @@ async function route(db: Db, req: Request): Promise<Response> {
   // the decision log (./decisions.ts): commenters propose, edit and withdraw.
   // A decision checks who decides itself (A3: an engineering lead below the approver role).
   // So do F3's schedule bases (./roadmap.ts date rights): a named engineering lead below the
-  // approver role records, verifies, rejects and withdraws them.
+  // approver role records, verifies, rejects and withdraws them. So do Simple's routes
+  // (./simple-changes.ts: commenters propose, D-a track owners decide as approvers).
   const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
   const need: Role | null =
-    m === "GET" || draftWrite || p[1] === "decisions" || p[1] === "schedule-bases"
+    m === "GET" || draftWrite || p[1] === "decisions" || p[1] === "schedule-bases" || p[1] === "simple"
       ? null
       : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
           // As the API: commenters propose a blocker's solution options.
@@ -4801,6 +4835,25 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (editsRes) return editsRes;
   const roadmapRes = await routeRoadmap(roadmapCtx, db.roadmap, req, p, q);
   if (roadmapRes) return roadmapRes;
+  // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
+  db.simple_roadmap ??= seedSimpleRoadmap();
+  const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
+  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles }, req, p, q);
+  if (simpleRes) return simpleRes;
+  const simpleChanges = await routeSimpleChanges(
+    db.simple_roadmap,
+    {
+      id: me.id,
+      role: me.role,
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+      roles: simpleRoles,
+    },
+    req,
+    p,
+    q,
+  );
+  if (simpleChanges) return simpleChanges;
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
   const goals = db.baseline.entities.filter((e) => e.type === "goal").map((e) => ({ id: e.id, key: e.key }));
   const drift = (key: string, origin: "approved" | "draft") => planDrift(db.strategy, me.role, key, origin);
@@ -4878,6 +4931,14 @@ async function route(db: Db, req: Request): Promise<Response> {
     const launchRows = launchInboxRows(launchesContext(db, me), ensureLaunches(db));
     inbox.launches = launchRows;
     inbox.total += launchRows.filter((r) => r.counted).length;
+    // Simple S3a: proposals waiting for me count; decisions on mine are shown.
+    const simpleRows = simpleInboxRows(db.simple_roadmap, me.id, seenBefore, {
+      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+      roles: Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role])),
+    });
+    Object.assign(inbox, simpleRows);
+    inbox.total += simpleRows.simple_proposals.length;
+    inbox.needs_me = (inbox.needs_me ?? 0) + simpleRows.simple_proposals.length;
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
     const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;

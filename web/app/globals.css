@@ -136,6 +136,25 @@
   color-scheme: dark;
 }
 
+/*
+ * Simple mode's look (#723): Oracle's tokens plus these, light and dark (S1 owns them; S6
+ * priorities adds what it reads if S1 has not landed). 18 px body type.
+ */
+:root {
+  --simple-body: 18px;
+  --simple-line: 1.55;
+  --simple-radius: 14px;
+  --simple-gap: 12px;
+  --simple-ghost: #7d8ea3;
+}
+:root[data-theme="dark"] {
+  --simple-ghost: #828d9b;
+}
+.simple-mode {
+  font-size: var(--simple-body);
+  line-height: var(--simple-line);
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
