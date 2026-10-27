@@ -4,12 +4,10 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
-import { HomeSkeleton } from "@/app/simple/_home/skeleton";
 import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
 import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
-import { useSimpleShown } from "@/components/simple/SimpleShell";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
@@ -52,8 +50,6 @@ const STATUS_TONE: Record<GoalTile["status"], string> = {
  */
 export default function SimpleHome() {
   const { me, can } = useMe();
-  // Home's queries start at once; until Simple is known to be on, the frame and its skeleton.
-  const shown = useSimpleShown();
   const zone = useCompanyZone();
   const [stamp, setStamp] = useState(0);
   // S9: "Walk me through it" turns Home into a guided pass; Done returns here.
@@ -244,8 +240,6 @@ export default function SimpleHome() {
     );
   }
 
-  if (!shown) return <HomeSkeleton />;
-
   return (
     <SimplePage title="Home">
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
@@ -260,6 +254,12 @@ export default function SimpleHome() {
             <button type="button" className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
               Walk me through it
             </button>
+          </div>
+        )}
+        {/* A reader has no walk: its slot keeps its height so nothing below moves from the skeleton. */}
+        {!walking && reads && (
+          <div aria-hidden data-testid="home-walk-slot" className="invisible">
+            <span className="simple-button">Walk me through it</span>
           </div>
         )}
       </header>

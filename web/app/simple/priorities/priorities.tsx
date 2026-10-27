@@ -778,7 +778,7 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
       </section>
       <section aria-label="Ranked side list">
         <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Ranked</h2>
-        <LineCaption data={data} />
+        <LineCaption data={data} compact />
         <ol className="flex flex-col gap-1">
           {rows.flatMap((r, i) => [
             ...(i === split ? [<LineDivider key="the-line" data={data} compact />] : []),
@@ -854,15 +854,19 @@ function lineSplit(rows: Row[]): number {
   return first >= 0 && rows.slice(first).every((r) => !r.above_line) ? first : -1;
 }
 
-/** Above the list: "N of M miss <line>" and the names of those that miss it. */
-function LineCaption({ data }: { data: Out }) {
-  const misses = data.rows.filter((r) => !r.above_line);
+/**
+ * Above the list: "N of M miss <line>" and the names of those that miss it. Compact (Value/effort's
+ * 320 px side list): three names and "and N more", every name in its title.
+ */
+function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }) {
+  const misses = data.rows.filter((r) => !r.above_line).map((r) => r.title);
+  const cut = compact && misses.length > 3;
   return (
-    <p data-testid="line-caption" className="mb-2 text-[length:var(--simple-small)] text-text2">
+    <p data-testid="line-caption" title={cut ? misses.join(", ") : undefined} className="mb-2 text-[length:var(--simple-small)] text-text2">
       <span className="font-medium text-accent-ink">
         {misses.length} of {data.rows.length} miss {lineLabel(data)}
       </span>
-      {misses.length > 0 && `: ${misses.map((r) => r.title).join(", ")}`}
+      {misses.length > 0 && `: ${cut ? `${misses.slice(0, 3).join(", ")} and ${misses.length - 3} more` : misses.join(", ")}`}
     </p>
   );
 }

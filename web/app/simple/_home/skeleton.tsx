@@ -1,12 +1,13 @@
 "use client";
 
-import { Bar, GoalBandSkeleton, HomeCard, SkeletonRows } from "@/app/simple/_home/cards";
+import { Bar, GoalBandSkeleton, HomeCardSkeleton } from "@/app/simple/_home/cards";
 import { SimplePage } from "@/components/simple/SimplePage";
 
 /**
  * Simple's Home before the person and their permissions are known (#723 production walk: the
  * first paint was seconds of a blank page): the page frame at once, the greeting, the goal band
- * and the cards as placeholders the size of the real ones, so nothing jumps as they fill.
+ * and the cards as placeholders the size of the real ones, so nothing jumps as they fill. The
+ * cards carry no titles: which cards show depends on the permissions still on their way.
  */
 export function HomeSkeleton() {
   return (
@@ -18,7 +19,7 @@ export function HomeSkeleton() {
         <p className="simple-lead max-[600px]:min-h-[2lh]">
           <Bar className="w-80 max-w-full" />
         </p>
-        {/* Where "Walk me through it" lands for everyone who acts on the plan. */}
+        {/* Where "Walk me through it" lands (a reader's Home keeps the slot empty). */}
         <div aria-hidden>
           <span className="simple-button animate-pulse text-transparent">Walk me through it</span>
         </div>
@@ -26,12 +27,9 @@ export function HomeSkeleton() {
       <section aria-label="Goals" data-testid="home-goals">
         <GoalBandSkeleton />
       </section>
-      <HomeCard id="meeting" icon="clock" title="Next review meeting">
-        <SkeletonRows n={1} />
-      </HomeCard>
-      <HomeCard id="plan" icon="roadmap" title="The plan this quarter">
-        <SkeletonRows />
-      </HomeCard>
+      {/* Untitled: an owner's first card is the summary, a viewer's the next meeting. */}
+      <HomeCardSkeleton n={1} />
+      <HomeCardSkeleton />
     </SimplePage>
   );
 }

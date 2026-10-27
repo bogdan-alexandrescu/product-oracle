@@ -98,6 +98,24 @@ export function SkeletonRows({ n = 2 }: { n?: number }) {
   );
 }
 
+/**
+ * A card before the person's permissions are known: the header row and rows the size of a real
+ * card's, but no title, since which card lands here depends on what the person may do.
+ */
+export function HomeCardSkeleton({ n = 2 }: { n?: number }) {
+  return (
+    <section data-testid="home-card-skeleton" className="simple-card">
+      <header aria-hidden className="flex items-center gap-3">
+        <span className="size-9 flex-none animate-pulse rounded-full bg-surface2" />
+        <span className="simple-h2 min-w-0 flex-1">
+          <Bar className="w-48 max-w-full" />
+        </span>
+      </header>
+      <SkeletonRows n={n} />
+    </section>
+  );
+}
+
 /** The goal band while the goals load: three tiles the size of real ones. */
 export function GoalBandSkeleton() {
   return (
