@@ -53,7 +53,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -63,7 +63,13 @@ from oracle.authz import has_role
 from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem
-from oracle.simple.models import SimpleChange, SimpleDraft, SimpleSession, SimpleSessionDraft
+from oracle.simple.models import (
+    RoadmapDateSuggestion,
+    SimpleChange,
+    SimpleDraft,
+    SimpleSession,
+    SimpleSessionDraft,
+)
 from oracle.simple.schemas import (
     InboxSimpleApproval,
     SimpleDocRef,
@@ -186,7 +192,30 @@ async def added_rows(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]]
 
 
 async def drop_added(db: AsyncSession, d: SimpleDraft) -> None:
-    """S7: an approved draft's added items live on in its version: their draft rows go."""
+    """S7: an approved draft's added items live on in its version: their draft rows go,
+    their date suggestions move to the published copies (same key, the draft's version)."""
+    added = {
+        r.item_key: r.id
+        for r in await db.scalars(
+            select(RoadmapItem).where(
+                RoadmapItem.simple_draft_id == d.id, RoadmapItem.roadmap_version_id.is_(None)
+            )
+        )
+    }
+    if added and d.version_id is not None:
+        for key, copy in (
+            await db.execute(
+                select(RoadmapItem.item_key, RoadmapItem.id).where(
+                    RoadmapItem.roadmap_version_id == d.version_id,
+                    RoadmapItem.item_key.in_(list(added)),
+                )
+            )
+        ).all():
+            await db.execute(
+                update(RoadmapDateSuggestion)
+                .where(RoadmapDateSuggestion.item_id == added[key])
+                .values(item_id=copy)
+            )
     await db.execute(
         delete(RoadmapItem).where(
             RoadmapItem.simple_draft_id == d.id, RoadmapItem.roadmap_version_id.is_(None)

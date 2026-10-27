@@ -478,15 +478,18 @@ async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChang
     d = await db.get(SimpleDraft, row.simple_draft_id, with_for_update=True) if row else None
     if row is None or row.roadmap_version_id is not None or d is None or d.status != "working":
         raise ChangeError(409, "Its draft was submitted: undo works only inside a working draft")
+    # Any live change that touches it: one naming it, a merge that kept it (into_id), or
+    # a keyed change (a fix, merge_item) writing it.
     later = [
         x
         for x in await db.scalars(
             select(SimpleChange).where(
                 SimpleChange.id != c.id,
+                SimpleChange.document_id == c.document_id,
                 SimpleChange.status.in_(("applied", "accepted")),
-                SimpleChange.target["item_id"].astext == item_id,
             )
         )
+        if item_id in changes._touched(x) or (x.target or {}).get("into_id") == item_id
     ]
     undone = set(
         await db.scalars(
@@ -827,6 +830,13 @@ async def suggest_for_empty_goals(db: AsyncSession) -> int:
     goal ever (the caller commits); how many."""
     read_ = await service.load(db)
     live = _live_goals(read_)
+    # Items added in a working draft serve their goals too, published or not.
+    for ids in await db.scalars(
+        select(RoadmapItem.goal_ids)
+        .join(SimpleDraft, SimpleDraft.id == RoadmapItem.simple_draft_id)
+        .where(SimpleDraft.status.in_(drafts.OPEN), RoadmapItem.roadmap_version_id.is_(None))
+    ):
+        live.update(ids or [])
     done = set(await db.scalars(select(SimpleGoalAuto.goal_id)))
     n = 0
     for g in await _goals(db):

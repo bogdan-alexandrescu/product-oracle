@@ -47,8 +47,12 @@ def _tenant(t: str) -> list:
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
-        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"],
-                                name=op.f(f"fk_{t}_tenant_id_tenants"), ondelete="CASCADE"),  # fmt: skip
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["tenants.id"],
+            name=op.f(f"fk_{t}_tenant_id_tenants"),
+            ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f(f"pk_{t}")),
     ]
 
@@ -86,16 +90,28 @@ def upgrade() -> None:
         sa.Column("item_id", sa.Uuid(), nullable=True),
         sa.Column("decided_by", sa.Uuid(), nullable=True),
         sa.Column("decided_at", sa.DateTime(timezone=True), nullable=True),
-        sa.CheckConstraint("status IN ('open', 'accepted', 'rejected')",
-                           name=op.f(f"ck_{t}_status")),  # fmt: skip
+        sa.CheckConstraint(
+            "status IN ('open', 'accepted', 'rejected')", name=op.f(f"ck_{t}_status")
+        ),
         sa.CheckConstraint("origin IN ('auto', 'on_demand')", name=op.f(f"ck_{t}_origin")),
-        sa.ForeignKeyConstraint(["goal_id"], ["entities.id"],
-                                name=op.f(f"fk_{t}_goal_id_entities"), ondelete="CASCADE"),  # fmt: skip
-        sa.ForeignKeyConstraint(["job_id"], ["llm_jobs.id"],
-                                name=op.f(f"fk_{t}_job_id_llm_jobs"), ondelete="SET NULL"),  # fmt: skip
-        sa.ForeignKeyConstraint(["change_id"], ["simple_changes.id"],
-                                name=op.f(f"fk_{t}_change_id_simple_changes"),
-                                ondelete="SET NULL"),  # fmt: skip
+        sa.ForeignKeyConstraint(
+            ["goal_id"],
+            ["entities.id"],
+            name=op.f(f"fk_{t}_goal_id_entities"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["job_id"],
+            ["llm_jobs.id"],
+            name=op.f(f"fk_{t}_job_id_llm_jobs"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["change_id"],
+            ["simple_changes.id"],
+            name=op.f(f"fk_{t}_change_id_simple_changes"),
+            ondelete="SET NULL",
+        ),
     )
     op.create_index(op.f(f"ix_{t}_tenant_id"), t, ["tenant_id"])
     op.create_index("ix_simple_goal_suggestions_goal_status", t, ["goal_id", "status"])
@@ -106,10 +122,18 @@ def upgrade() -> None:
         *_tenant(t),
         sa.Column("goal_id", sa.Uuid(), nullable=False),
         sa.Column("job_id", sa.Uuid(), nullable=True),
-        sa.ForeignKeyConstraint(["goal_id"], ["entities.id"],
-                                name=op.f(f"fk_{t}_goal_id_entities"), ondelete="CASCADE"),  # fmt: skip
-        sa.ForeignKeyConstraint(["job_id"], ["llm_jobs.id"],
-                                name=op.f(f"fk_{t}_job_id_llm_jobs"), ondelete="SET NULL"),  # fmt: skip
+        sa.ForeignKeyConstraint(
+            ["goal_id"],
+            ["entities.id"],
+            name=op.f(f"fk_{t}_goal_id_entities"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["job_id"],
+            ["llm_jobs.id"],
+            name=op.f(f"fk_{t}_job_id_llm_jobs"),
+            ondelete="SET NULL",
+        ),
         sa.UniqueConstraint("goal_id", name=op.f(f"uq_{t}_goal_id")),
     )
     op.create_index(op.f(f"ix_{t}_tenant_id"), t, ["tenant_id"])

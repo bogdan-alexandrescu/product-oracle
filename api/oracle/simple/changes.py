@@ -585,7 +585,7 @@ async def _merge_plan(
         kept = by_id.get(into)
         if kept is None:
             raise ChangeError(404, "No such roadmap item to merge into")
-        if kept is entry or kept.roadmap.id != entry.roadmap.id or kept.status == "merged":
+        if kept is entry or kept.roadmap.id != entry.roadmap.id or kept.status in ("merged", "cut"):
             raise ChangeError(422, "target.into_id: another open item of the same roadmap")
         target["into_id"], target["code"], target["title"] = (
             str(into), kept.row.item_key, kept.row.title
