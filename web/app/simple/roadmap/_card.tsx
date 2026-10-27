@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
 import { setPanelOpen } from "@/components/hop/open-state";
+import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -197,7 +198,48 @@ const OP_WORDS: Record<string, string> = {
   accept_risk: "Accept a risk",
   shift_dependents: "Move the dependents",
   move_dependency: "Move the dependency",
+  add_item: "Add an item",
+  merge_item: "Merge a duplicate",
+  keep_both: "Keep both",
+  confirm_item: "Confirm the draft",
 };
+
+/** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
+ * (merge_item, keep_both through the change engine: editors apply, others propose). */
+export function LooksLike({ item, act, canChange }: { item: Item; act: Act; canChange: boolean }) {
+  if (!item.looks_like.length) return null;
+  return (
+    <div className="mt-2 space-y-1.5" data-testid="looks-like">
+      {item.looks_like.map((m) => (
+        <div key={m.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-warn-bg px-2 py-1.5 text-sm text-warn" data-testid="looks-like-match">
+          <span className="min-w-0 flex-1">
+            Looks like <b>{m.code}</b> {m.title}
+          </span>
+          {canChange && (
+            <Button
+              className="!h-7"
+              onClick={() =>
+                void act(`Merged '${item.title}' into ${m.code}`, {
+                  op: "merge_item",
+                  target: m.kind === "item" ? { item_id: item.id, into_id: m.id } : { item_id: item.id, feature_id: m.id },
+                  before: {},
+                  after: {},
+                })
+              }
+            >
+              Merge
+            </Button>
+          )}
+        </div>
+      ))}
+      {canChange && (
+        <Button className="!h-7" variant="ghost" onClick={() => void act(`Kept '${item.title}' and ${item.looks_like.map((m) => m.code).join(", ")}`, { op: "keep_both", target: { item_id: item.id }, before: { kept_both: false }, after: {} })}>
+          Keep both
+        </Button>
+      )}
+    </div>
+  );
+}
 
 export const opWords = (op: string): string => OP_WORDS[op] ?? op.replace(/_/g, " ");
 
@@ -248,7 +290,7 @@ export function FloatingCard({
   /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
   onHorizon?: (h: Horizon) => void;
 }) {
-  const [wide, setWide] = useState<Change | null>(null);
+  const [wide, setWide] = useState<Change | "item" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useScreenSubject({ kind: "roadmap_item", subject: { item_id: item.id, key: item.key } }, item.title);
   useEffect(() => {
@@ -279,11 +321,43 @@ export function FloatingCard({
       className={`${place} max-w-[calc(100vw-16px)] overflow-y-auto border border-line bg-surface p-4 shadow-tip outline-none`}
     >
       <div className="flex items-start gap-2">
-        <h2 className="flex-1 text-lg leading-snug font-semibold">{item.title}</h2>
+        <h2 className="flex-1 text-lg leading-snug font-semibold">
+          {item.title}
+          {item.draft && item.status !== "merged" && (
+            <span className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na" data-testid="draft-tag">
+              Draft
+            </span>
+          )}
+        </h2>
         <button type="button" aria-label="Close" onClick={onClose} className="h-7 w-7 flex-none rounded text-text2 hover:bg-surface2">
           ×
         </button>
       </div>
+      {item.drafting && (
+        <p className="mt-1 text-sm text-accent-ink" role="status" data-testid="item-drafting">
+          Oracle is drafting…
+        </p>
+      )}
+      {item.merged_into && (
+        <p className="mt-1 text-sm text-text2" data-testid="item-merged">
+          Merged into {item.merged_into.code} {item.merged_into.title}
+        </p>
+      )}
+      <LooksLike item={item} act={act} canChange={canChange} />
+      {item.draft && item.status !== "merged" && (
+        <div className="mt-2 flex items-center gap-2 text-sm">
+          <span className="text-text2">Flow</span>
+          {item.flow ? (
+            <button type="button" data-testid="item-flow-thumb" aria-label="Open the flow" onClick={() => setWide(wide === "item" ? null : "item")} className="rounded-md border border-line bg-surface p-1">
+              <FlowPicture flow={item.flow} />
+            </button>
+          ) : (
+            <span className="rounded-md border border-dashed border-line px-2 py-0.5 text-text2" data-testid="item-flow-none">
+              No flow yet
+            </span>
+          )}
+        </div>
+      )}
       <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[15px]">
           <dt className="text-text2">Outcome</dt>
@@ -361,7 +435,7 @@ export function FloatingCard({
               <ul className="mt-1 space-y-2" data-testid="card-proposals">
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2 text-[15px]">
-                    {featureProposal(c, items) && <FlowThumb onOpen={() => setWide(wide?.id === c.id ? null : c)} />}
+                    {featureProposal(c, items) && <FlowThumb onOpen={() => setWide(wide !== "item" && wide?.id === c.id ? null : c)} />}
                     <span className="min-w-0 flex-1">
                       {opWords(c.op)} · <span className="text-text2">{c.by_name}</span>
                     </span>
@@ -384,9 +458,13 @@ export function FloatingCard({
         {wide && (
           <section data-testid="flow-view" className={`mt-3 rounded-lg border border-dashed border-line-strong p-4 ${phone ? "" : "col-span-2"}`}>
             <h3 className="font-semibold">The flow and the screen it touches</h3>
-            <p className="mt-1 text-sm text-text2" data-testid="flow-empty">
-              No flow yet: Oracle has not drawn a user flow or a wireframe for this proposal.
-            </p>
+            {item.flow ? (
+              <FlowDetail flow={item.flow} />
+            ) : (
+              <p className="mt-1 text-sm text-text2" data-testid="flow-empty">
+                No flow yet: Oracle has not drawn a user flow or a wireframe for this proposal.
+              </p>
+            )}
             <Button variant="ghost" className="mt-2" onClick={() => setWide(null)}>
               Close the flow
             </Button>

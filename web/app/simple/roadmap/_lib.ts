@@ -180,3 +180,16 @@ export async function suggestion(id: string, how: "accept" | "edit" | "dismiss",
 export function resultWords(r: ChangeResult, what: string): string {
   return r.change.status === "applied" ? `${what} in your working draft` : `${what} proposed: it waits for the decider`;
 }
+
+/** S7: an item closed for the plan (cut, or a draft merged into another): drawn below the line. */
+export const closedItem = (i: Item): boolean => i.status === "cut" || i.status === "merged";
+
+/** S7: a quarter as the change engine names it ("2026-Q4"). */
+export function quarterValue(start: string): string {
+  const d = new Date(ms(start));
+  return `${d.getUTCFullYear()}-Q${Math.floor(d.getUTCMonth() / 3) + 1}`;
+}
+
+/** S7: where a quick-added item goes: a quarter, a horizon or a goal (data-add-where="kind:value"). */
+export type Where = { kind: "quarter" | "horizon" | "goal"; value: string; label: string };
+export const whereAttr = (kind: Where["kind"], value: string): string => `${kind}:${value}`;

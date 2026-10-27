@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Notice, SegmentedControl, toast } from "@/components/ds";
+import { GoalPanel, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
 import { api, unwrap } from "@/lib/api/client";
@@ -10,15 +11,18 @@ import { shownDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+import { QuickAdd } from "./_add";
 import { Board, boardColumns, HORIZONS, type Horizon } from "./_board";
-import { Callout, FlagLine, FixButtons, FloatingCard, opWords, SuggestionPopover, type Act } from "./_card";
+import { Callout, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import {
   broken,
   ChangeFailed,
+  closedItem,
   decide,
   propose,
   quarters,
+  quarterValue,
   resultWords,
   shortDay,
   storedDates,
@@ -30,6 +34,7 @@ import {
   type GanttUnit,
   type Item,
   type Roadmap,
+  type Where,
 } from "./_lib";
 import { Chart, PHASES } from "./_timeline";
 
@@ -68,8 +73,12 @@ function usePhone(): boolean {
 
 const time = (at: string) => shownDay(at, { hour: "numeric", minute: "2-digit" });
 
-/** The goal counters (each goal's metric line): items, and how many need a decision. */
-function GoalCounters({ items }: { items: Item[] }) {
+/** The goal counters (each goal's metric line): items, and how many need a decision. S7:
+ * each goal's suggested features open its panel; a goal with no items yet has its own tile. */
+function GoalCounters({ items, suggestions, onGoal }: { items: Item[]; suggestions: GoalSuggestionsApi; onGoal: (g: GoalBrief) => void }) {
+  const count = (id: string) => (suggestions.data?.suggestions ?? []).filter((s) => s.goal.id === id).length;
+  const known = (id: string) => suggestions.data?.goals.find((g) => g.goal.id === id)?.goal;
+  const empty = (suggestions.data?.goals ?? []).filter((g) => g.empty && !items.some((i) => i.goal?.id === g.goal.id));
   const goals = new Map<string, { title: string; metric: string | null; items: number; broken: number }>();
   for (const i of items) {
     if (!i.goal) continue;
@@ -78,7 +87,16 @@ function GoalCounters({ items }: { items: Item[] }) {
     if (broken(i).length) g.broken += 1;
     goals.set(i.goal.id, g);
   }
-  if (!goals.size) return null;
+  if (!goals.size && !empty.length) return null;
+  const open = (id: string, title: string) => {
+    const g = known(id);
+    return g ? (
+      <button type="button" data-testid="goal-counter-suggestions" onClick={() => onGoal(g)} className="mt-1 text-sm font-semibold text-accent-ink hover:underline">
+        ✦ {count(id)} suggested {count(id) === 1 ? "feature" : "features"}
+        <span className="sr-only"> for {title}</span>
+      </button>
+    ) : null;
+  };
   return (
     <ul className="grid grid-cols-2 gap-2 min-[900px]:grid-cols-4" data-testid="goal-counters">
       {[...goals.entries()].slice(0, 4).map(([id, g]) => (
@@ -94,6 +112,14 @@ function GoalCounters({ items }: { items: Item[] }) {
               </span>
             )}
           </p>
+          {open(id, g.title)}
+        </li>
+      ))}
+      {empty.map((g) => (
+        <li key={g.goal.id} data-testid="goal-counter-empty" className="rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2">
+          <p className="truncate text-[15px] font-semibold">{g.goal.title}</p>
+          <p className="truncate text-sm text-text2">No items yet</p>
+          {open(g.goal.id, g.goal.title)}
         </li>
       ))}
     </ul>
@@ -175,6 +201,7 @@ function DecisionTray({
   onSuggestion,
   onClose,
   phone,
+  suggestions,
 }: {
   items: Item[];
   byId: Map<string, Item>;
@@ -185,7 +212,10 @@ function DecisionTray({
   onSuggestion: (i: Item, how: "accept" | "dismiss") => void;
   onClose: () => void;
   phone: boolean;
+  suggestions: GoalSuggestionsApi;
 }) {
+  const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
+  const suggested = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject);
   const brokenItems = items.filter((i) => i.can_decide && broken(i).length);
   const dates = items.filter((i) => i.suggestion?.can_decide);
   const mine = proposals.filter((c) => c.can_decide);
@@ -197,7 +227,7 @@ function DecisionTray({
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
   ];
-  const title = (c: Change) => byId.get(String(c.target.item_id))?.title ?? "An item";
+  const title = (c: Change) => byId.get(String(c.target.item_id))?.title ?? (typeof c.after.title === "string" ? c.after.title : "An item");
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
@@ -280,6 +310,38 @@ function DecisionTray({
         <h3 className="font-semibold">Pulled in, pending a decision</h3>
         {pulled.length ? <ul>{pulled.map(row)}</ul> : <p className="text-sm text-text2">None.</p>}
       </section>
+      <section className="mt-4" data-testid="tray-twins">
+        <h3 className="font-semibold">Drafts that look like an item</h3>
+        {twins.length ? (
+          <ul>
+            {twins.map((i) => (
+              <li key={i.id} className="border-b border-line py-2" data-testid="tray-twin">
+                <p className="text-[15px] font-medium">{i.title}</p>
+                <LooksLike item={i} act={act} canChange={canChange} />
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-text2">None.</p>
+        )}
+      </section>
+      <section className="mt-4" data-testid="tray-suggested">
+        <h3 className="font-semibold">Suggested features</h3>
+        {(suggestions.data?.goals ?? []).some((g) => g.pending) && (
+          <p role="status" className="text-sm text-accent-ink" data-testid="suggest-pending">
+            Oracle is suggesting features…
+          </p>
+        )}
+        {suggested.length ? (
+          <ul className="mt-2 flex flex-col gap-2">
+            {suggested.map((s) => (
+              <SuggestionCard key={s.id} s={s} api={suggestions} />
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-text2">None waiting.</p>
+        )}
+      </section>
     </aside>
   );
 }
@@ -313,6 +375,17 @@ export function SimpleRoadmap() {
   const reload = useCallback(async () => {
     await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
   }, [roadmap, proposals, drafts]);
+  // S7: Oracle's suggested features by goal; an accept (or its undo) changes the roadmap.
+  const suggestions = useGoalSuggestions(reload);
+  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+  // S7: while Oracle drafts a quick-added item, the roadmap reads again until it is done.
+  const drafting = !!roadmap.data?.items.some((i) => i.drafting);
+  const { reload: reloadRoadmap } = roadmap;
+  useEffect(() => {
+    if (!drafting) return;
+    const t = window.setTimeout(() => void reloadRoadmap(), 800);
+    return () => window.clearTimeout(t);
+  }, [drafting, roadmap.data, reloadRoadmap]);
 
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
   const data = roadmap.data;
@@ -452,6 +525,57 @@ export function SimpleRoadmap() {
     data.items.filter((i) => i.can_decide && broken(i).length).length + data.items.filter((i) => i.suggestion?.can_decide).length + allProposals.filter((c) => c.can_decide).length;
   const qList = quarters(data.windows.now.start, data.windows.later.end);
 
+  // S7 quick add: where an item may go, and whether the caller's add applies there (an item
+  // of that roadmap the caller decides) or is proposed.
+  const goalsKnown = new Map<string, string>();
+  for (const i of data.items) if (i.goal) goalsKnown.set(i.goal.id, i.goal.title);
+  for (const g of suggestions.data?.goals ?? []) goalsKnown.set(g.goal.id, g.goal.title);
+  const addOptions: Where[] = [
+    ...qList.filter((q) => q.end >= data.today).map((q) => ({ kind: "quarter" as const, value: quarterValue(q.start), label: q.label })),
+    ...HORIZONS.map((h) => ({ kind: "horizon" as const, value: h.key, label: h.label })),
+    ...[...goalsKnown].map(([id, title]) => ({ kind: "goal" as const, value: id, label: title })),
+  ];
+  const roadmapFor = (w: Where): string | undefined =>
+    (w.kind === "goal" ? data.items.find((i) => i.goal_ids.includes(w.value) || i.goal?.id === w.value)?.roadmap.id : undefined) ??
+    data.items.find((i) => i.can_decide)?.roadmap.id ??
+    data.items[0]?.roadmap.id;
+  const addVerb = (w: Where): "Add" | "Propose" => {
+    const rm = roadmapFor(w);
+    return data.items.some((i) => i.roadmap.id === rm && i.can_decide) ? "Add" : "Propose";
+  };
+  const onAdd = async (title: string, w: Where): Promise<boolean> => {
+    try {
+      const r = await propose({ op: "add_item", target: { roadmap_id: null, where: { kind: w.kind, value: w.value } }, before: {}, after: { title } });
+      const c = r.change;
+      if (c.status === "applied")
+        toast({
+          message: `Added ${title} as a draft`,
+          action: c.can_undo
+            ? {
+                label: "Undo",
+                onClick: () =>
+                  void undo(c.id).then(
+                    () => {
+                      toast({ message: "Undone" });
+                      return reload();
+                    },
+                    (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
+                  ),
+              }
+            : undefined,
+        });
+      else toast({ message: `Proposed ${title} (${w.label}): it waits for the decider` });
+      await reload();
+      return true;
+    } catch (e) {
+      toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not add it" });
+      return false;
+    }
+  };
+  const goalCounts = new Map<string, number>();
+  for (const s of suggestions.data?.suggestions ?? []) goalCounts.set(s.goal.id, (goalCounts.get(s.goal.id) ?? 0) + 1);
+  const openGoal = (id: string, title: string) => setGoalPanel(suggestions.data?.goals.find((g) => g.goal.id === id)?.goal ?? { id, key: id, title });
+
   return (
     <div className="simple-mode space-y-3 px-4 py-4 min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
       <header className="flex flex-wrap items-center gap-3">
@@ -476,6 +600,7 @@ export function SimpleRoadmap() {
           />
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          {phone && canChange && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} />}
           {decides && (
             <Button data-testid="needs-decision" onClick={() => setTray(true)} className={waiting ? "border-warn" : ""}>
               Needs a decision · {waiting}
@@ -489,7 +614,8 @@ export function SimpleRoadmap() {
           </Button>
         </div>
       </header>
-      <GoalCounters items={data.items} />
+      {!phone && canChange && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} />}
+      <GoalCounters items={data.items} suggestions={suggestions} onGoal={setGoalPanel} />
       <DraftBanner
         drafts={drafts.data ?? []}
         inReview={data.changes_in_review ?? 0}
@@ -555,6 +681,9 @@ export function SimpleRoadmap() {
               setCard({ id: item.id, ...anchorOf(item.id) });
             }}
             onMove={onHorizon}
+            dropTargets={canChange}
+            goalSuggestions={goalCounts}
+            onGoal={openGoal}
           />
         ) : (
           <Chart
@@ -568,6 +697,9 @@ export function SimpleRoadmap() {
             chartRef={(el) => {
               svg.current = el;
             }}
+            dropTargets={canChange}
+            goalSuggestions={goalCounts}
+            onGoal={openGoal}
             onOpen={(item) => {
               setPop(null);
               setCard({ id: item.id, ...anchorOf(item.id) });
@@ -580,7 +712,7 @@ export function SimpleRoadmap() {
             overlay={(l, sc) =>
               data.items.flatMap((i) => {
                 const y = l.y.get(i.id);
-                if (y == null || i.status === "cut") return [];
+                if (y == null || closedItem(i)) return [];
                 const f0 = broken(i).find((x) => x.kind === "dependency_order");
                 if (!f0) return [];
                 const [, end] = moved[i.id] ?? [i.start.date, i.end.date];
@@ -601,7 +733,7 @@ export function SimpleRoadmap() {
             canChange={canChange}
             onDecide={(c, how) => void onDecide(c, how)}
             onClose={() => setCard(null)}
-            onHorizon={format === "board" && canChange && cardItem.status !== "cut" ? (h) => onHorizon(cardItem, h) : undefined}
+            onHorizon={format === "board" && canChange && !closedItem(cardItem) ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}
         {popItem?.suggestion && pop && (
@@ -647,8 +779,10 @@ export function SimpleRoadmap() {
           onSuggestion={(i, how) => void onSuggestion(i, how)}
           onClose={() => setTray(false)}
           phone={phone}
+          suggestions={suggestions}
         />
       )}
+      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
     </div>
   );
 }

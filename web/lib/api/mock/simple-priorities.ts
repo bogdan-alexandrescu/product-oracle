@@ -11,7 +11,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
-import { roadmapOut, type SimpleDb } from "./simple-roadmap";
+import { closed, roadmapOut, type SimpleDb } from "./simple-roadmap";
 
 type Row = Schemas["SimplePriorityRow"];
 type Item = Schemas["SimpleRoadmapItem"];
@@ -149,7 +149,8 @@ export function prioritiesOut(
   const today = new Date(mockNowMs()).toISOString().slice(0, 10);
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
   // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).
-  const cut = new Set(db.items.filter((s) => s.status === "cut").map((s) => s.key));
+  // S7: a draft merged into another is closed too.
+  const cut = new Set(db.items.filter((s) => closed(s)).map((s) => s.key));
   const live = read.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
   // Every feature ranks (the baseline is company-wide); one whose item the reader may not see
   // is a row with no item, never reorderable (priorities.py).
@@ -218,9 +219,9 @@ export function prioritiesOut(
   });
   const codes = new Map(read.items.map((i) => [i.id, i]));
   const proposals: Schemas["SimplePriorityProposal"][] = (db.changes ?? [])
-    // Ranking proposals, and a draft's Confirm or Merge (a cut), as priorities.py.
+    // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py.
     .filter((c) => c.status === "proposed" && codes.has(String(c.target.item_id)))
-    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut") && codes.get(String(c.target.item_id))!.draft))
+    .filter((c) => c.op === "override_priority" || c.op === "estimate_feature" || ((c.op === "confirm_item" || c.op === "cut" || c.op === "merge_item") && codes.get(String(c.target.item_id))!.draft))
     .filter((c) => ctx.role === "owner" || c.by === ctx.id || route(c).includes(ctx.id))
     .map((c) => {
       const i = codes.get(String(c.target.item_id))!;

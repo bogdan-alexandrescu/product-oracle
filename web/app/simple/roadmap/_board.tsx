@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
-import { barKind, broken, spanWords, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, closedItem, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -34,10 +34,10 @@ export function boardColumns(data: Roadmap): BoardColumn[] {
       .map((g) => ({
         key: g.key,
         title: g.title,
-        items: g.item_ids.map((id) => byId.get(id)).filter((i): i is Item => !!i && i.horizon === h.key && i.status !== "cut"),
+        items: g.item_ids.map((id) => byId.get(id)).filter((i): i is Item => !!i && i.horizon === h.key && !closedItem(i)),
       }))
       .filter((g) => g.items.length);
-    const below = data.items.filter((i) => i.horizon === h.key && i.status === "cut");
+    const below = data.items.filter((i) => i.horizon === h.key && closedItem(i));
     return { ...h, window: data.windows[h.key], groups, below };
   });
 }
@@ -69,6 +69,10 @@ export interface BoardProps {
   open: string | null;
   onOpen: (item: Item) => void;
   onMove: (item: Item, horizon: Horizon) => void;
+  /** S7: quick add's drop targets (the columns and the goal headers). */
+  dropTargets?: boolean;
+  goalSuggestions?: Map<string, number>;
+  onGoal?: (goalId: string, title: string) => void;
 }
 
 /**
@@ -78,7 +82,7 @@ export interface BoardProps {
  * on a phone, where the columns stack, up and down too). A held card at the screen's edge
  * scrolls the page; a cancelled touch moves nothing.
  */
-export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }: BoardProps) {
+export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, dropTargets, goalSuggestions, onGoal }: BoardProps) {
   const drag = useRef<Drag | null>(null);
   const root = useRef<HTMLDivElement>(null);
   // A card the keyboard moved: it gets the focus back once it is drawn in its new column.
@@ -129,7 +133,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
 
   const onDown = (e: ReactPointerEvent<HTMLElement>, item: Item) => {
     if (e.button !== 0) return;
-    const movable = canDrag && item.status !== "cut";
+    const movable = canDrag && !closedItem(item);
     const touch = e.pointerType === "touch";
     const el = e.currentTarget;
     const d: Drag = {
@@ -238,7 +242,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
     // Arrows move a card to the column beside it (on a phone the columns stack: up and down
     // too; on a desktop they scroll the page).
     const step = e.key === "ArrowRight" || (phone && e.key === "ArrowDown") ? 1 : e.key === "ArrowLeft" || (phone && e.key === "ArrowUp") ? -1 : 0;
-    if (!step || !canDrag || item.status === "cut") return;
+    if (!step || !canDrag || closedItem(item)) return;
     e.preventDefault();
     const at = HORIZONS.findIndex((h) => h.key === item.horizon) + step;
     if (at >= 0 && at < HORIZONS.length) {
@@ -248,10 +252,10 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
   };
 
   const card = (item: Item) => {
-    const kind = item.status === "cut" ? "cut" : barKind(item);
+    const kind = closedItem(item) ? "cut" : barKind(item);
     const red = broken(item).length > 0;
     const pending = proposals.find((c) => c.op === "change_horizon" && c.target.item_id === item.id);
-    const movable = canDrag && item.status !== "cut";
+    const movable = canDrag && !closedItem(item);
     return (
       <li key={item.id}>
         <div
@@ -284,10 +288,29 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
               {spanWords(item.start.date, item.end.date, data.today)}
               {kind === "estimated" && " · estimated"}
             </span>
-            {kind === "draft" && <span>draft</span>}
+            {kind === "draft" && (
+              <span className="rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">
+                Draft
+              </span>
+            )}
             {item.confidence && <span>{item.confidence} confidence</span>}
             {item.owner && <span>{item.owner.name}</span>}
           </p>
+          {item.drafting && (
+            <p className="mt-1 text-sm text-accent-ink" data-testid="item-drafting">
+              Oracle is drafting…
+            </p>
+          )}
+          {item.merged_into && (
+            <p className="mt-1 text-sm text-text2" data-testid="item-merged">
+              Merged into {item.merged_into.code}
+            </p>
+          )}
+          {item.looks_like.length > 0 && (
+            <p className="mt-1 text-sm text-warn" data-testid="board-looks-like">
+              Looks like {item.looks_like[0].code} {item.looks_like[0].title}
+            </p>
+          )}
           {red && (
             <p className="mt-1 text-sm text-crit" data-testid="board-broken">
               {broken(item)[0].reason}
@@ -310,6 +333,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
           key={c.key}
           data-testid="board-column"
           data-horizon-column={c.key}
+          data-add-where={dropTargets ? whereAttr("horizon", c.key) : undefined}
+          data-add-label={c.label}
           aria-label={c.label}
           className="min-w-0 rounded-[var(--simple-radius)] border border-line bg-surface2 p-2.5 data-[drop-target=true]:border-accent data-[drop-target=true]:bg-accent-soft"
         >
@@ -324,7 +349,25 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
           </header>
           {c.groups.map((g) => (
             <div key={g.key} className="mb-2" data-testid="board-group">
-              <h3 className="truncate px-1 pb-1 text-sm font-semibold text-text2">{g.title}</h3>
+              <h3
+                className="flex items-center gap-1 truncate px-1 pb-1 text-sm font-semibold text-text2"
+                data-add-where={dropTargets && data.group === "goal" && g.key !== "none" ? whereAttr("goal", g.key) : undefined}
+                data-add-label={g.title}
+              >
+                <span className="min-w-0 flex-1 truncate">{g.title}</span>
+                {onGoal && data.group === "goal" && g.key !== "none" && (
+                  <button
+                    type="button"
+                    data-testid="goal-suggestions-open"
+                    aria-label={`Suggested features for ${g.title}`}
+                    title="Suggested features"
+                    onClick={() => onGoal(g.key, g.title)}
+                    className="flex h-6 flex-none items-center gap-0.5 rounded-full border border-accent-mid bg-surface px-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-soft"
+                  >
+                    ✦<span className="tnum">{goalSuggestions?.get(g.key) ?? 0}</span>
+                  </button>
+                )}
+              </h3>
               <ul className="space-y-1.5">{g.items.map((i) => card(i))}</ul>
             </div>
           ))}

@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
+import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
+import { GoalSuggestionList, useGoalSuggestions, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
@@ -74,6 +76,8 @@ export function Priorities() {
   const data = q.data;
   // Roles through can() and the rows' own fields: the API says who applies and who proposes.
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
+  // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
+  const suggestions = useGoalSuggestions(() => q.reload());
 
   async function changed(r: Sent, done: string, proposedTo: string): Promise<void> {
     if (!r.ok) {
@@ -152,7 +156,7 @@ export function Priorities() {
         <Ranked data={data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} />
       )}
       {data && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} />}
-      {data && tab === "buckets" && <Buckets data={data} />}
+      {data && tab === "buckets" && <Buckets data={data} suggestions={suggestions} />}
     </div>
   );
 }
@@ -457,7 +461,8 @@ function proposalWords(p: Proposal): string {
     return `${p.by_name} proposes rank ${o.position}: “${o.reason ?? p.reason ?? ""}”`;
   }
   if (p.op === "confirm_item") return `${p.by_name} proposes confirming it`;
-  if (p.op === "cut") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
+  // S7: a Merge is a merge_item change (train T's was a cut with this note).
+  if (p.op === "cut" || p.op === "merge_item") return `${p.by_name} proposes merging it: “${p.reason ?? ""}”`;
   const parts = [a.goal_value != null ? `goal value ${a.goal_value}` : null, a.effort != null ? `effort ${a.effort} wk` : null].filter(Boolean);
   return `${p.by_name} proposes ${parts.join(" and ")}`;
 }
@@ -522,44 +527,6 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
   );
 }
 
-function FlowThumb({ flow }: { flow: Schemas["SimpleFlow"] }) {
-  return (
-    <svg width="64" height="40" viewBox="0 0 64 40" aria-hidden className="text-text2">
-      {flow.steps.slice(0, 4).map((_, i) => (
-        <g key={i}>
-          <rect x={2 + i * 16} y={12} width={11} height={16} rx={2} fill="none" stroke="currentColor" />
-          {i > 0 && <line x1={i * 16 - 3} y1={20} x2={i * 16 + 2} y2={20} stroke="currentColor" />}
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function FlowDetail({ flow }: { flow: Schemas["SimpleFlow"] }) {
-  return (
-    <div className="mt-3 grid gap-4 sm:grid-cols-2" data-testid="flow-detail">
-      <div>
-        <h3 className="font-semibold">User flow: {flow.title}</h3>
-        <ol className="mt-1 list-decimal pl-5">
-          {flow.steps.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ol>
-      </div>
-      <div aria-label={`Wireframe of ${flow.screen.title}`} role="img">
-        <h3 className="font-semibold">Screen: {flow.screen.title}</h3>
-        <div className="mt-1 flex flex-col gap-1 rounded-lg border border-line-strong bg-surface p-2">
-          {flow.screen.regions.map((r) => (
-            <div key={r} className="rounded border border-dashed border-line-strong px-2 py-1 text-[length:var(--simple-small)] text-text2">
-              {r}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
   const [merging, setMerging] = useState<string | null>(null);
   const [into, setInto] = useState("");
@@ -598,7 +565,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
                   if (!target) return;
                   setMerging(null);
                   await changed(
-                    await send({ op: "cut", target: { item_id: d.item_id }, before: { cut: false }, after: { cut: true }, reason: `Merged into ${target.code}` }),
+                    await send({ op: "merge_item", target: { item_id: d.item_id, into_id: target.item_id }, before: {}, after: {}, reason: `Merged into ${target.code}` }),
                     `Merged ${d.code} into ${target.code}`,
                     "the decider",
                   );
@@ -622,7 +589,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
             )}
             {/* A Confirm or Merge waiting for the decider. */}
             {proposals
-              .filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut"))
+              .filter((p) => p.item_id === d.item_id && (p.op === "confirm_item" || p.op === "cut" || p.op === "merge_item"))
               .map((p) => (
                 <ProposalCard key={p.change_id} p={p} changed={changed} />
               ))}
@@ -790,7 +757,7 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
 
 // --------------------------------------------------------------------------- goal buckets
 
-function Buckets({ data }: { data: Out }) {
+function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
   const buckets: Bucket[] = data.buckets;
   return (
     <section aria-label="Goal buckets">
@@ -820,6 +787,11 @@ function Buckets({ data }: { data: Out }) {
             </div>
             {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
             <p className="mt-1 text-[length:var(--simple-small)] text-text2">{b.codes.length ? b.codes.join(", ") : "Nothing this quarter"}</p>
+            {!b.no_goal && (
+              <div className="mt-3 border-t border-line pt-3">
+                <GoalSuggestionList goal={{ id: "", key: b.key, title: b.title }} api={suggestions} />
+              </div>
+            )}
           </li>
         ))}
       </ul>

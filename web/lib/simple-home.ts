@@ -194,6 +194,9 @@ export const OP_WORDS: Record<string, string> = {
   shift_dependents: "Move dependents",
   move_dependency: "Move dependency",
   override_priority: "Change the priority",
+  add_item: "Add an item",
+  merge_item: "Merge a duplicate",
+  keep_both: "Keep both",
   add_item_task: "Add a task",
   edit_item_task: "Change a task",
   set_item_task_status: "Set a task's status",
@@ -218,4 +221,4 @@ export function beforeAfter(c: Pick<Schemas["SimpleChangeOut"], "before" | "afte
 }
 
 /** A proposal that adds a new flow or feature (S10's visuals): an added item, task or launch task. */
-export const NEW_FLOW_OPS = new Set(["add_item_task", "add_launch_task", "add_action_item"]);
+export const NEW_FLOW_OPS = new Set(["add_item_task", "add_launch_task", "add_action_item", "add_item"]);
