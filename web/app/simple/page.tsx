@@ -68,10 +68,20 @@ export default function SimpleHome() {
     { keepPrevious: true },
   );
   const meeting = useQuery(k("meeting"), async () => {
-    const [rituals, people] = await Promise.all([unwrap(api.GET("/v1/rituals")), unwrap(api.GET("/v1/decisions/people")).catch(() => [])]);
+    const rituals = await unwrap(api.GET("/v1/rituals"));
     const next = rituals.filter((r) => r.status === "active" && r.next_due_at).sort((a, b) => a.next_due_at!.localeCompare(b.next_due_at!))[0];
-    return { next: next ?? null, people };
+    return { next: next ?? null };
   });
+  const personIds = useMemo(() => {
+    const ids = new Set<string>([...(meeting.data?.next?.attendee_ids.slice(0, 4) ?? []), ...(drafts.data ?? []).flatMap((d) => d.waiting_on)]);
+    for (const c of changes.data ?? []) if (c.status === "proposed") c.routed_to.forEach((id) => ids.add(id));
+    return [...ids].sort();
+  }, [meeting.data, drafts.data, changes.data]);
+  const people = useQuery(k(`people|${personIds.join(",")}`), () =>
+    personIds.length ? unwrap(api.GET("/v1/people", { params: { query: { ids: personIds } } })) : Promise.resolve([] as Schemas["PersonOut"][]),
+  );
+  /** A person by their display name (GET /v1/people), never by an email's local part. */
+  const nameOf = (id: string, fallback: string) => people.data?.find((p) => p.user_id === id)?.name ?? fallback;
   const decidedLately = useQuery(k("decided"), () => unwrap(api.GET("/v1/decisions", { params: { query: { status: "decided" } } })));
   const onePagers = useQuery(k("one-pagers"), () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
 
@@ -86,14 +96,16 @@ export default function SimpleHome() {
   const waitingItems = useMemo(() => {
     const ids = new Set<string>();
     for (const c of toDecide) if (typeof c.target.item_id === "string") ids.add(c.target.item_id);
-    if (proposes) for (const b of broken) ids.add(b.item.id);
+    for (const b of broken) if (b.item.can_decide) ids.add(b.item.id);
     return ids;
-  }, [toDecide, broken, proposes]);
+  }, [toDecide, broken]);
   const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems]);
   const strip = useMemo(() => planStrip(roadmap.data), [roadmap.data]);
   const draft = (drafts.data ?? []).find((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
   const proposalRows = toDecide.length > 0 || decidesAll ? toDecide : mine;
   const proposalTitle = toDecide.length > 0 || decidesAll ? "Proposals on your items" : "Your proposals waiting";
+  // A decider's own proposals on items others decide wait too: their own card.
+  const mineApart = proposalRows === toDecide ? mine : [];
   const itemTitle = (id: unknown) => roadmap.data?.items.find((i) => i.id === id)?.title ?? "An item";
 
   const now = new Date();
@@ -105,8 +117,42 @@ export default function SimpleHome() {
     : waitSentence([
         [decisionCount, "decision", "decisions"],
         [proposalRows === toDecide ? toDecide.length : 0, "proposal", "proposals"],
-        [decidesAll ? broken.length : 0, "broken link", "broken links"],
+        [broken.filter((b) => b.item.can_decide).length, "broken link", "broken links"],
       ]);
+
+  const proposalRow = (c: Change) => (
+    <HomeRow
+      key={c.id}
+      testId="home-proposal"
+      lead={<Avatar name={c.by_name} />}
+      title={`${OP_WORDS[c.op] ?? c.op}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
+      meta={`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
+      change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
+      thumb={NEW_FLOW_OPS.has(c.op)}
+      actions={
+        c.can_decide ? (
+          <>
+            <button
+              type="button"
+              className="simple-button simple-button-primary"
+              onClick={() => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), "Accepted")}
+            >
+              Accept
+            </button>
+            <button
+              type="button"
+              className="simple-button"
+              onClick={() => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/decline", { params: { path: { change_id: c.id } } })), "Declined")}
+            >
+              Decline
+            </button>
+          </>
+        ) : (
+          <span className="simple-small">Waiting for {c.routed_to.length ? c.routed_to.map((id) => nameOf(id, "the decider")).join(", ") : "the decider"}</span>
+        )
+      }
+    />
+  );
 
   async function act(run: () => Promise<unknown>, done: string) {
     try {
@@ -121,7 +167,7 @@ export default function SimpleHome() {
   function changeResult(r: { change: Change }, applied: string) {
     const c = r.change;
     if (c.status === "proposed") {
-      const who = c.routed_to.map((id) => meeting.data?.people.find((p) => p.id === id)?.email.split("@")[0] ?? "the decider");
+      const who = c.routed_to.map((id) => nameOf(id, "the decider"));
       return `Proposed: ${who.length ? who.join(", ") : "the decider"} ${who.length > 1 ? "decide" : "decides"}`;
     }
     return applied;
@@ -244,7 +290,7 @@ export default function SimpleHome() {
                 Your working draft of <strong>{draft.document.title}</strong> has {draft.changes} {draft.changes === 1 ? "change" : "changes"}. It publishes as v
                 {(draft.base_version ?? 0) + 1} when{" "}
                 {draft.waiting_on.length
-                  ? draft.waiting_on.map((id) => meeting.data?.people.find((p) => p.id === id)?.email.split("@")[0] ?? "a reviewer").join(", ")
+                  ? draft.waiting_on.map((id) => nameOf(id, "a reviewer")).join(", ")
                   : "its decider"}{" "}
                 {draft.waiting_on.length > 1 ? "approve" : "approves"}.
               </span>
@@ -284,39 +330,7 @@ export default function SimpleHome() {
                 </p>
               ) : (
                 <Top rows={proposalRows} more="/simple/roadmap">
-                  {(c) => (
-                    <HomeRow
-                      key={c.id}
-                      testId="home-proposal"
-                      lead={<Avatar name={c.by_name} />}
-                      title={`${OP_WORDS[c.op] ?? c.op}: ${itemTitle(c.target.item_id)}${typeof c.after.title === "string" && NEW_FLOW_OPS.has(c.op) ? ` · ${c.after.title}` : ""}`}
-                      meta={`${c.by === myId ? "You" : c.by_name} · ${formatInZone(c.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}${c.reason ? ` · ${c.reason}` : ""}`}
-                      change={NEW_FLOW_OPS.has(c.op) ? null : beforeAfter(c)}
-                      thumb={NEW_FLOW_OPS.has(c.op)}
-                      actions={
-                        c.can_decide ? (
-                          <>
-                            <button
-                              type="button"
-                              className="simple-button simple-button-primary"
-                              onClick={() => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/accept", { params: { path: { change_id: c.id } } })), "Accepted")}
-                            >
-                              Accept
-                            </button>
-                            <button
-                              type="button"
-                              className="simple-button"
-                              onClick={() => void act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/decline", { params: { path: { change_id: c.id } } })), "Declined")}
-                            >
-                              Decline
-                            </button>
-                          </>
-                        ) : (
-                          <span className="simple-small">Waiting for the decider</span>
-                        )
-                      }
-                    />
-                  )}
+                  {proposalRow}
                 </Top>
               )
             }
@@ -324,9 +338,21 @@ export default function SimpleHome() {
         </HomeCard>
       )}
 
+      {!reads && mineApart.length > 0 && (
+        <HomeCard id="my-proposals" icon="comment" title="Your proposals waiting" count={mineApart.length} all="/simple/roadmap">
+          <Block q={changes} testId="home-my-proposals">
+            {() => (
+              <Top rows={mineApart} more="/simple/roadmap">
+                {proposalRow}
+              </Top>
+            )}
+          </Block>
+        </HomeCard>
+      )}
+
       <HomeCard id="meeting" icon="clock" title="Next review meeting" all="/simple/meetings">
         <Block q={meeting} testId="home-meeting">
-          {({ next, people }) =>
+          {({ next }) =>
             !next ? (
               <p className="simple-small" data-testid="home-meeting-empty">
                 No review meeting scheduled.
@@ -352,19 +378,19 @@ export default function SimpleHome() {
                       {next.attendee_ids.length > 0 &&
                         `: ${next.attendee_ids
                           .slice(0, 4)
-                          .map((id) => people.find((p) => p.id === id)?.email.split("@")[0] ?? "someone")
+                          .map((id) => nameOf(id, "someone"))
                           .join(", ")}`}
                     </>
                   }
                   actions={
                     <>
                       {(next.owner_id === myId || can("update_ritual")) && (
-                        <Link href={`/simple/meetings?start=${next.id}`} className="simple-button simple-button-primary">
+                        <Link href={`/simple/meetings/${next.id}?start=1`} className="simple-button simple-button-primary">
                           Start meeting
                         </Link>
                       )}
                       {next.last_pre_read ? (
-                        <Link href={`/company/rituals/${next.last_pre_read.id}`} className="simple-button">
+                        <Link href={`/simple/meetings/${next.id}?pre_read=${next.last_pre_read.id}`} className="simple-button">
                           Open pre-read
                         </Link>
                       ) : (
@@ -394,7 +420,7 @@ export default function SimpleHome() {
                 <div id="broken-links" className="scroll-mt-6">
                   <Top rows={broken} more="/simple/roadmap">
                     {(b) => (
-                      <BrokenRow key={`${b.item.id}-${b.flag.subject}`} b={b} reads={reads} applies={decidesAll} onFix={fix} />
+                      <BrokenRow key={`${b.item.id}-${b.flag.subject}`} b={b} reads={reads} onFix={fix} />
                     )}
                   </Top>
                 </div>
@@ -549,16 +575,17 @@ function DecisionRow({ d, onDecide }: { d: Decision; onDecide: (d: Decision, key
 function BrokenRow({
   b,
   reads,
-  applies,
   onFix,
 }: {
   b: BrokenLink;
   reads: boolean;
-  applies: boolean;
   onFix: (b: BrokenLink, op: "shift_dependents" | "move_dependency" | "accept_risk", note?: string) => Promise<void>;
 }) {
   const [noting, setNoting] = useState(false);
   const [note, setNote] = useState("");
+  // The item says whether I decide it and who does (D-a), as a change's can_decide.
+  const applies = b.item.can_decide;
+  const deciders = b.item.deciders.length ? b.item.deciders.join(", ") : "The decider";
   const label = (text: string) => (applies ? text : `Propose: ${text}`);
   return (
     <HomeRow
@@ -594,7 +621,7 @@ function BrokenRow({
       actions={
         reads ? undefined : (
           <>
-            {!applies && <span className="simple-small">The decider decides</span>}
+            {!applies && <span className="simple-small">{`${deciders} ${b.item.deciders.length > 1 ? "decide" : "decides"}`}</span>}
             {b.flag.fixes.includes("shift_dependents") && (
               <button type="button" className="simple-button" onClick={() => void onFix(b, "shift_dependents")}>
                 {label("Move dependents")}

@@ -150,7 +150,7 @@ verdict on the same section supersedes the earlier item.
 | `POST .../versions/{n}/approve` | approve version; document -> `approved` |
 | `GET .../versions/{n}/export?format=html\|pdf\|md\|pptx&layer=full\|brief\|deck` | export with version banner: Full (html, pdf, md), Brief (html, pdf), Deck (pdf, pptx) |
 | `GET .../versions/{n}/deck` | the brief as slides for Present mode (theme CSS, notes, expandable detail) |
-| `GET /v1/me/preferences`, `PATCH /v1/me/preferences` | per-user choices: `document_view` (`brief`/`full`), `experience` (`simple`/`detailed`, #723: the mode the person last switched to; unset, they land in `GET /v1/me/capabilities` `default_experience`: Simple for viewers and commenters, Studio for approvers and owners) |
+| `GET /v1/me/preferences`, `PATCH /v1/me/preferences` | per-user choices: `document_view` (`brief`/`full`), `experience` (`simple`/`detailed`, #723: the mode the person last switched to; unset, they land in `GET /v1/me/capabilities` `default_experience`: Simple for viewers and commenters, Detailed for approvers and owners) |
 | `GET /healthz` | liveness + DB check |
 
 Agent track uses `Authorization: Bearer <api token>`; the UI uses the session cookie.

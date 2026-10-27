@@ -36086,6 +36086,16 @@ export interface components {
             needed_by: string[];
             /** Flags */
             flags: components["schemas"]["SimpleFlag"][];
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            /**
+             * Deciders
+             * @default []
+             */
+            deciders: string[];
         };
         /** SimpleRoadmapOut */
         SimpleRoadmapOut: {

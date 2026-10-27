@@ -4894,7 +4894,9 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   db.simple_roadmap ??= seedSimpleRoadmap();
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
-  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles }, req, p, q);
+  const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
+  const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
+  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, req, p, q);
   if (simpleRes) return simpleRes;
   const simpleChanges = await routeSimpleChanges(
     db.simple_roadmap,

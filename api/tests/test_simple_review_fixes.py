@@ -81,6 +81,7 @@ from sqlalchemy import select
 
 from oracle.auth.models import User
 from oracle.docs.models import DocumentVersion, Section
+from oracle.members.names import display_name
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap import items as items_mod
 from oracle.roadmap.models import RoadmapItem
@@ -615,7 +616,7 @@ async def test_roadmap_items_say_who_decides(client, owner_role):
         await s.commit()
         ctx.users["trackowner"] = u
     w = await World(ctx).build(decider=False, track_owner="trackowner", ops=["edit_title"])
-    owners = [ctx.users["owner"].name or ctx.users["owner"].email]
+    owners = [display_name(ctx.users["owner"].email, ctx.users["owner"].name)]
     named = ["Tao Owner"] if owner_role == "approver" else owners
     for who, decides in [("trackowner", owner_role == "approver"), ("commenter", False),
                          ("owner", True)]:  # fmt: skip

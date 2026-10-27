@@ -65,6 +65,9 @@ export interface Who {
   id: string;
   role: Role;
   roles?: Record<string, Role>;
+  /** The company's owners (who decide an item with no decider) and every member's display name. */
+  owners?: string[];
+  names?: Record<string, string>;
 }
 
 /** A working draft of one roadmap (oracle.simple.drafts): the items in `db.items` are the
@@ -333,8 +336,12 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
   return { db: { ...db, items, own }, hidden, visible };
 }
 
-export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { id: string; role: Role }): Schemas["SimpleRoadmapOut"] | null {
+export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
   const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
+  const deciders = (s: SeedItem) => {
+    const ids = deciderIds(db, s, me?.roles);
+    return (ids.length ? ids : (me?.owners ?? [])).map((id) => me?.names?.[id]).filter((n): n is string => !!n);
+  };
   const reader = me ? readerView(db, me) : { db, hidden: 0, visible: [] };
   db = reader.db;
   const today = iso(mockNowMs());
@@ -365,6 +372,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: { 
       depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
+      can_decide: decides(s),
+      deciders: deciders(s),
     };
   });
   const prd = q.get("prd");
