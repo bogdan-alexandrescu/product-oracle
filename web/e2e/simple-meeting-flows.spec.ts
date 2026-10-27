@@ -53,6 +53,10 @@ for (const phone of [false, true]) {
       await expect(detail.getByTestId("flow-detail")).toContainText("User flow: Invite your team");
       await expect(detail.getByRole("img", { name: "Wireframe of Invite step" })).toBeVisible();
       if (!phone) await expect(row).toHaveAttribute("data-wide", "true");
+      else {
+        await page.keyboard.press("Escape");
+        await expect(page.getByTestId("flow-sheet")).toBeHidden();
+      }
 
       await page.getByRole("region", { name: "Delivery" }).getByRole("button", { name: "Send" }).click();
       await page.getByRole("link", { name: "Open the Decisions page" }).click();
