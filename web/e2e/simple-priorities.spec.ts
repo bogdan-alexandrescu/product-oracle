@@ -205,6 +205,74 @@ test.describe("desktop", () => {
   });
 
   /**
+   * Card simple-priorities-draft-proposals (review minor): protects = a commenter's Confirm
+   * and Merge on a draft not yet ranked show inline under that draft, waiting for the
+   * decider, and the decider accepts from there; fails_when = the draft's proposals are
+   * nowhere on the page; no_claim = the real API's routing (pytest).
+   */
+  test("a commenter's Confirm and Merge on a draft wait inline for the decider", async ({ page }) => {
+    const cory = await as(page, "commenter@example.com");
+    const draft = cory.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
+    await draft.getByRole("button", { name: "Confirm" }).click();
+    await expect(cory.getByText("Proposed: waiting for the decider")).toBeVisible();
+    await draft.getByRole("button", { name: "Merge" }).click();
+    await draft.getByLabel("Merge into").selectOption({ label: "setup-checklist · Setup checklist" });
+    await draft.getByRole("button", { name: "Merge" }).last().click();
+    const cards = draft.getByTestId("prio-proposal");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.nth(0)).toContainText("Commenter proposes confirming it · waiting for Admin");
+    await expect(cards.nth(1)).toContainText("Commenter proposes merging it: “Merged into setup-checklist” · waiting for Admin");
+    await expect(cards.nth(0).getByRole("button", { name: "Accept" })).toHaveCount(0);
+
+    const admin = await as(page, "admin@example.com");
+    const theirs = admin.locator('[data-testid="prio-draft"][data-code="setup-ideas"]').getByTestId("prio-proposal");
+    await theirs.nth(0).getByRole("button", { name: "Accept" }).click();
+    await expect(admin.getByText("Accepted setup-ideas's proposal")).toBeVisible();
+    await expect(row(admin, "setup-ideas")).toContainText("Team invite nudges");
+  });
+
+  /**
+   * Card simple-priorities-decide-fails (review minor): protects = a decision the API refuses
+   * (here the proposal was declined in another tab) says the API's reason, not a bare "Could
+   * not decide"; fails_when = the reason is dropped; no_claim = the API's wording (its own).
+   */
+  test("accepting a proposal another tab already declined says why", async ({ page }) => {
+    const cory = await as(page, "commenter@example.com");
+    await cory.getByRole("button", { name: "Drag alert-mobile to reorder" }).focus();
+    await cory.keyboard.press("ArrowUp");
+    await giveReason(cory, "alert-mobile", "Push is what the beta users asked for", "Propose");
+    await expect(cory.getByText("Proposed: waiting for the decider")).toBeVisible();
+    const stale = await as(page, "admin@example.com");
+    const fresh = await page.context().newPage();
+    await fresh.goto("/simple/priorities");
+    await row(fresh, "alert-mobile").getByTestId("prio-proposal").getByRole("button", { name: "Decline" }).click();
+    await expect(fresh.getByText("Declined alert-mobile's proposal")).toBeVisible();
+    await row(stale, "alert-mobile").getByTestId("prio-proposal").getByRole("button", { name: "Accept" }).click();
+    await expect(stale.getByText("This change is declined already")).toBeVisible();
+  });
+
+  /**
+   * Card simple-priorities-tokens (review major): protects = the screen's type follows S1's
+   * shared --simple-* scale (body --simple-text, heading --simple-h1, small --simple-small),
+   * not sizes of its own; fails_when = a size is hard-coded or the tokens are a second set;
+   * no_claim = S1's values (S1's own spec).
+   */
+  test("the screen's type follows the shared --simple-* tokens", async ({ page }) => {
+    const admin = await as(page, "admin@example.com");
+    const sizes = await admin.getByTestId("simple-priorities").evaluate((root) => {
+      const v = (n: string) => getComputedStyle(root).getPropertyValue(n).trim();
+      const px = (e: Element | null) => (e ? getComputedStyle(e).fontSize : "missing");
+      return {
+        text: [v("--simple-text"), getComputedStyle(root).fontSize],
+        h1: [v("--simple-h1"), px(root.querySelector("h1"))],
+        small: [v("--simple-small"), px(root.querySelector('[data-testid="prio-after"]'))],
+        radius: [v("--simple-card-radius"), getComputedStyle(root.querySelector('[data-testid="prio-row"]')!).borderTopLeftRadius],
+      };
+    });
+    expect(sizes).toEqual({ text: ["18px", "18px"], h1: ["34px", "34px"], small: ["15px", "15px"], radius: ["18px", "18px"] });
+  });
+
+  /**
    * Card simple-priorities-buckets: protects = one bucket per goal sized by this quarter's
    * engineer-weeks with its share, "No goal" flagged; fails_when = weeks or shares are wrong
    * or No goal is not flagged; no_claim = capacity (the API serves effort, not headcount).

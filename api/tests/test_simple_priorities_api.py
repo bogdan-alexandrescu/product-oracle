@@ -9,7 +9,7 @@ five features and two confirmed goals (growth weight 2, retention weight 1):
 - ``sync`` (effort 8, growth): ``pay-2`` (next);
 - ``exports`` (effort 1, retention, depends on sync): ``pay-3`` (now, milestone Beta);
 - ``insights`` (effort 2, retention): no item;
-- ``widgets`` (no effort, retention): ``pay-5``, a draft (now);
+- ``widgets`` (no effort, retention): ``pay-5``, a draft (now), so its row has no item;
 - ``chatbot`` (effort 2, no goal): ``pay-4`` (later);
 - ``pay-6``: no feature (later).
 
@@ -113,7 +113,7 @@ async def test_read_order_and_rows(client):
     ctx = await make_people()
     w = await World(ctx).build()
     out = await w.read(client)
-    assert [r["code"] for r in out["rows"]] == ["pay-1", "pay-2", "pay-3", "insights", "pay-5",
+    assert [r["code"] for r in out["rows"]] == ["pay-1", "pay-2", "pay-3", "insights", "widgets",
                                                  "pay-4"]  # fmt: skip
     assert [r["rank"] for r in out["rows"]] == [1, 2, 3, 4, 5, 6]
     assert out["method"] == "goal_weighted" and out["formula"]
@@ -137,14 +137,18 @@ async def test_read_order_and_rows(client):
     assert (ins["item_id"], ins["horizon"], ins["can_reorder"]) == (None, None, False)
     assert ins["goal"] == {"key": "retention", "title": "Retention"}
     assert rows["pay-4"]["no_goal"] is True and rows["pay-4"]["goal"] is None
-    assert rows["pay-5"]["effort"] is None and rows["pay-5"]["score"] is None
+    widgets = rows["widgets"]
+    assert (widgets["effort"], widgets["score"]) == (None, None)
+    # A draft item is not yet ranked: it sits under the drafts, never as its feature's row.
+    assert (widgets["item_id"], widgets["horizon"], widgets["can_reorder"]) == (None, None, False)
 
 
 async def test_buckets_and_drafts(client):
     """protects=the goal buckets sum this quarter's (horizon now) engineer-weeks per goal with
     their codes in rank order, a bucket per confirmed goal with a ranked row and "No goal"
-    when a row has none, shares of the total; the drafts list the visible draft items with
-    merge candidates of the same roadmap, same goal first, never drafts;
+    when a row has none, shares of the total, a draft item (pay-5) never counted; the drafts
+    list the visible draft items with merge candidates of the same roadmap, same goal first,
+    never drafts;
     fails_when=a bucket or a candidate is missing, mis-summed or mis-ordered;
     no_claim=the merge itself (a cut, web only)."""
     ctx = await make_people()
@@ -154,7 +158,7 @@ async def test_buckets_and_drafts(client):
     assert [b["key"] for b in out["buckets"]] == ["growth", "retention", "none"]
     assert (buckets["growth"]["weeks"], buckets["growth"]["codes"]) == (1, ["pay-1"])
     retention = buckets["retention"]
-    assert (retention["weeks"], retention["codes"]) == (1, ["pay-3", "pay-5"])
+    assert (retention["weeks"], retention["codes"]) == (1, ["pay-3"])
     none = buckets["none"]
     assert (none["title"], none["no_goal"], none["weeks"], none["codes"]) == ("No goal", True, 0,
                                                                                [])  # fmt: skip
@@ -220,6 +224,34 @@ async def test_proposals_wait_for_the_decider(client):
     theirs = (await w.read(client, "decider"))["proposals"]
     assert all(p["can_decide"] for p in theirs) and len(theirs) == 2
     assert (await w.read(client, "viewer"))["proposals"] == []
+
+
+async def test_draft_and_second_item_proposals(client):
+    """protects=a commenter's Confirm (confirm_item) and Merge (a cut of a draft item) are
+    listed among the proposals waiting for the decider, and every proposal carries its
+    feature_id so one on a feature's second item (pay-7, ledger's later item) shows under the
+    feature's row; fails_when=a draft's proposal is dropped or a proposal can't be placed;
+    no_claim=a cut of a ranked item (the roadmap's)."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    r = await w.change(client, "commenter", "confirm_item", "pay-5", {"draft": True}, {})
+    assert r.status_code == 201, r.text
+    r = await w.change(client, "commenter", "cut", "pay-5", {"cut": False}, {"cut": True},
+                       reason="Merged into pay-3")  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await w.change(client, "commenter", "estimate_feature", "pay-7",
+                       {"goal_value": None, "effort": 1}, {"goal_value": 6})  # fmt: skip
+    assert r.status_code == 201, r.text
+    out = await w.read(client, "commenter")
+    by_op = {p["op"]: p for p in out["proposals"]}
+    assert sorted(by_op) == ["confirm_item", "cut", "estimate_feature"]
+    for op in ("confirm_item", "cut"):
+        assert (by_op[op]["code"], by_op[op]["feature_id"]) == ("pay-5", w.ids["widgets"])
+        assert by_op[op]["waiting_for"] == ["Dee Cider"]
+    assert by_op["cut"]["reason"] == "Merged into pay-3"
+    est = by_op["estimate_feature"]
+    assert (est["code"], est["feature_id"]) == ("pay-7", w.ids["ledger"])
+    assert rows_by_code(out)["pay-1"]["feature_id"] == w.ids["ledger"]
 
 
 async def test_viewer_reads_and_runs_are_refused(client):
