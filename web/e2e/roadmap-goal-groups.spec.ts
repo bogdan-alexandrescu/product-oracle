@@ -53,11 +53,12 @@ test("Board groups its rows by goal and still leaves out the item that serves no
   await expect(board.getByText("1 item serves no confirmed goal and is left out.")).toBeVisible();
   await expect(board.getByRole("heading", { name: G1 })).toHaveCount(2);
   expect(await horizonOutline(board)).toEqual(["Now", G1, G2, "Next", G1, G2]);
-  await expect(board.getByText(/\| Falcon alerts rework \|/)).toBeVisible();
+  const falcon = board.getByRole("row").filter({ hasText: "Falcon alerts rework" });
+  await expect(falcon).toHaveCount(1);
   // Its Goal column names the group's goal (G1), not its best goal (G2).
-  await expect(board.getByText(/\| Falcon alerts rework \|.*\| Cut monthly churn to 2% \|/)).toBeVisible();
-  await expect(board.getByText(/\| Falcon alerts rework \|.*Grow self-serve sign-ups/)).toHaveCount(0);
-  await expect(board.getByText(/\| Partner API beta \|/)).toBeVisible();
+  await expect(falcon.getByRole("cell").last()).toHaveText(G1);
+  await expect(falcon).not.toContainText(G2);
+  await expect(board.getByRole("row").filter({ hasText: "Partner API beta" })).toBeVisible();
   await expect(board.getByText("Ops console cleanup")).toHaveCount(0);
   await expect(board.getByRole("heading", { name: "No goal" })).toHaveCount(0);
 });

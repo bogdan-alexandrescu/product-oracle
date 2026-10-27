@@ -945,6 +945,8 @@ class ThemedSection:
     heading: Markup
     body: Markup
     flagged: bool = False
+    # A goal group (Board's table, Team's heading) spans a card board's row.
+    wide: bool = False
     children: list["ThemedSection"] = field(default_factory=list)
 
 
@@ -991,6 +993,8 @@ def themed_stylesheet() -> str:
 
 
 def build_themed_context(ev: ExportVersion) -> dict:
+    from oracle.roadmap import variants
+
     theme = ev.theme
     assert theme is not None
     # O5: the brand's accent replaces the theme's (checked when an owner saves it).
@@ -1052,6 +1056,7 @@ def build_themed_context(ev: ExportVersion) -> dict:
             flagged=ev.document.kind == "roadmap"
             and s.level == 3
             and NO_GOAL_PHRASE in layers.strip_comments(s.body_md or "").lower(),
+            wide=ev.audience is not None and variants.spans_row(s.section_key),
         )
 
     def _body_md(s: Section, strip: bool) -> str:

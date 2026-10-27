@@ -155,7 +155,7 @@ import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections,
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
 import { emptyV2, routeV2, seedV2, type V2Db } from "./v2";
-import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, type BoardItem } from "./audience";
+import { AUDIENCES, audienceLabel, audienceRefusal, audienceSections, isAudience, spansRow, type BoardItem } from "./audience";
 import {
   draftPublicTexts,
   emptyShares,
@@ -3137,16 +3137,63 @@ function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
 }
 
 /** Every HTML export starts with the company's brand header (O5 lane 4); never "Made with Product Oracle". */
-function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding(), audience?: string | null): string {
-  const sections = v.sections
-    .map((s) => {
-      const tag = `h${Math.min(s.level, 3)}`;
-      const paras = s.body_text
-        .split(/\n\n+/)
-        .map((p) => `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
-        .join("");
-      return `<section id="${s.section_key}"><${tag}>${escapeHtml(s.heading)}</${tag}>${paras}</section>`;
+/** A GFM table block's rows of cells (outer pipes dropped, `\\|` kept as a pipe), or null for any other block. */
+function tableRows(block: string): string[][] | null {
+  const lines = block.split("\n");
+  if (lines.length < 2 || !lines.every((l) => l.trim().startsWith("|")) || !/^\|[-:| ]+\|\s*$/.test(lines[1].trim())) return null;
+  const cells = (l: string) =>
+    l
+      .trim()
+      .replace(/^\||(?<!\\)\|$/g, "")
+      .split(/(?<!\\)\|/)
+      .map((c) => c.trim().replace(/\\\|/g, "|"));
+  return [cells(lines[0]), ...lines.slice(2).map(cells)];
+}
+
+function bodyHtml(text: string, tables: boolean): string {
+  return text
+    .split(/\n\n+/)
+    .map((p) => {
+      const rows = tables ? tableRows(p) : null;
+      if (!rows) return `<p>${escapeHtml(p).replace(/\n/g, "<br>")}</p>`;
+      const [head, ...body] = rows;
+      const tr = (r: string[], tag: string) => `<tr>${head.map((_, n) => `<${tag}>${escapeHtml(r[n] ?? "")}</${tag}>`).join("")}</tr>`;
+      return `<table><thead>${tr(head, "th")}</thead><tbody>${body.map((r) => tr(r, "td")).join("")}</tbody></table>`;
     })
+    .join("");
+}
+
+// As the API's themed export with the roadmap-board theme (a roadmap's default): the sections under a
+// horizon laid out as a three-column board of cards; a goal group (section-wide: Board's table, Team's
+// heading) spans the row.
+const BOARD_THEME_CSS = `<style>
+.section-group > .group-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+.section-group > .group-body > .prd-section { margin: 0; padding: 0.45rem 0.6rem; border: 1px solid #d0d5dd; border-top: 3px solid #1d4ed8; border-radius: 4px; }
+.section-group > .group-body > .section-wide { grid-column: 1 / span 3; padding: 0.45rem 0 0; border: none; border-top: 3px solid #1d4ed8; border-radius: 0; }
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid #d0d5dd; padding: 0.3rem 0.5rem; text-align: left; vertical-align: top; }
+</style>`;
+
+function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBranding(), audience?: string | null): string {
+  // A roadmap rendered for an audience: the theme's card board, and its markdown tables as tables.
+  const board = doc.kind === "roadmap" && !!audience;
+  const section = (s: VersionRow["sections"][number]) => {
+    const tag = `h${Math.min(s.level, 3)}`;
+    const attrs = board ? ` class="prd-section level-${s.level}${spansRow(s.section_key) ? " section-wide" : ""}" data-section-key="${s.section_key}"` : "";
+    return `<section id="${s.section_key}"${attrs}><${tag}>${escapeHtml(s.heading)}</${tag}>${bodyHtml(s.body_text, board)}</section>`;
+  };
+  const groups: { head: VersionRow["sections"][number]; children: VersionRow["sections"] }[] = [];
+  for (const s of v.sections) {
+    const last = groups[groups.length - 1];
+    if (board && s.level >= 3 && last && last.head.level === 2) last.children.push(s);
+    else groups.push({ head: s, children: [] });
+  }
+  const sections = groups
+    .map((g) =>
+      g.children.length
+        ? `<div class="section-group" data-group="${g.head.section_key}">${section(g.head)}<div class="group-body">${g.children.map(section).join("")}</div></div>`
+        : section(g.head),
+    )
     .join("\n");
   const notes = v.citations
     // As the API's export: an "oracle" citation's ref names a baseline item, not a link, and
@@ -3159,7 +3206,7 @@ function exportHtml(doc: DocumentRow, v: VersionRow, brand: BrandingDb = emptyBr
           : `<li>${escapeHtml(c.title ?? c.ref)} <span>${escapeHtml(c.ref)}</span> (${c.source})</li>`,
     )
     .join("");
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v, audience))} · mock export</p>${audience ? `<span class="banner-audience">Audience ${escapeHtml(audience)}</span>` : ""}${sections}<ol class="citations">${notes}</ol></body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)} v${v.number}</title>${brandStyleHtml(brand)}${board ? BOARD_THEME_CSS : ""}</head><body>${brandHeaderHtml(brand)}<p class="banner">${escapeHtml(banner(doc, v, audience))} · mock export</p>${audience ? `<span class="banner-audience">Audience ${escapeHtml(audience)}</span>` : ""}${sections}<ol class="citations">${notes}</ol></body></html>`;
 }
 
 /** A tiny single-page PDF (Helvetica, ASCII only) so the download flow can be exercised. */

@@ -78,7 +78,7 @@ def _goal(tenant: uuid.UUID, key: str) -> uuid.UUID:
 # or a gap in the chain; no_claim=what the column does.
 def test_the_chain_ends_here():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0075_live_tokens"]
+    assert script.get_heads() == ["0076_board_wide_tables"]
     assert script.get_revision("0042_members_access").down_revision == REVISION
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
