@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
-import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
+import { FlowThumb } from "@/components/simple/Flow";
 import { GoalSuggestionList, useGoalSuggestions, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { api, unwrap, type Schemas } from "@/lib/api/client";

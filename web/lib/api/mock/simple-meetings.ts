@@ -323,7 +323,6 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
     }));
 }
 
-/** An invented bundle S10 would draw for Team invite nudges (the "flow" flag). */
 /** The invented bundle S10 would draw for mobile alerts (was ./simple-priorities' FLOWS). */
 const FLOWS: Record<string, Schemas["SimpleFlow"]> = {
   "alert-mobile": plainFlow({
@@ -333,6 +332,7 @@ const FLOWS: Record<string, Schemas["SimpleFlow"]> = {
   }),
 };
 
+/** An invented bundle S10 would draw for Team invite nudges (the "flow" flag). */
 const INVITE_FLOW: Schemas["SimpleFlow"] = plainFlow({
   title: "Invite your team",
   steps: ["Finish setup", "See the nudge", "Pick teammates", "Send the invites"],

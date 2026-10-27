@@ -266,6 +266,8 @@ export interface Db {
   simple_roadmap?: SimpleDb;
   /** Simple S5 (#723): one PRD's one-pager, its working draft and line changes (./simple-one-pager.ts). */
   simple_one_pager?: OnePagerDb;
+  /** Every other mock PRD's own one-pager (the same invented page), by document id. */
+  simple_one_pagers?: Record<string, OnePagerDb>;
   /** Simple S10 (#723): proposals' visuals, their versions and comments (./simple-visuals.ts). */
   simple_visuals?: VisualsDb;
   /** Simple S9: change-by-chat threads, their cards and the invented meeting (./simple-chat.ts). */
@@ -4228,6 +4230,34 @@ function startPricing(db: Db, me: MemberRow, input: Schemas["StartDraftIn"]): Re
   return json(201, { document_id: doc.id, slug, title, kind: "pricing", template: PRICING_TEMPLATE, template_version: 1, theme: doc.theme ?? null, version: 1 } satisfies Schemas["StartDraftOut"]);
 }
 
+/**
+ * Simple S5: the one-pager a request is about. The seeded PRD has the seeded one; every other
+ * mock PRD (matched by slug or document id) gets its own copy of the invented page, so a line
+ * edit, a draft or Remind on one PRD never lands on another's. Drafts and changes are found by
+ * their id, a new line edit by its target's document id.
+ */
+async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb> {
+  const seeded = db.simple_one_pager!;
+  const others = (db.simple_one_pagers ??= {});
+  const all = [seeded, ...Object.values(others)];
+  const forDoc = (ref: unknown): OnePagerDb | undefined => {
+    const known = all.find((o) => o.doc.id === ref || o.doc.slug === ref);
+    if (known) return known;
+    const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
+    if (!d) return undefined;
+    return (others[d.id] = { ...seedOnePager(), doc: { id: d.id, slug: d.slug, title: d.title }, visuals: db.simple_visuals });
+  };
+  if (p[1] !== "simple") return seeded;
+  if (p[2] === "one-pagers") return forDoc(p[3]) ?? seeded;
+  if (p[2] === "drafts") return all.find((o) => o.draft?.id === p[3]) ?? seeded;
+  if (p[2] === "changes" && p[3]) return all.find((o) => o.changes.some((c) => c.id === p[3])) ?? seeded;
+  if (p[2] === "changes" && req.method === "POST") {
+    const b = ((await req.clone().json().catch(() => ({}))) ?? {}) as { op?: string; target?: { document_id?: unknown } };
+    if (b.op === "edit_line") return forDoc(b.target?.document_id) ?? seeded;
+  }
+  return seeded;
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -4992,9 +5022,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
   const simpleRoute = async (r: Request): Promise<Response | null> => {
     // Every mock PRD has a one-pager (Definition of Done 2): another PRD than the seeded one is
-    // served the same invented page under its own slug and title.
-    const asked = p[1] === "simple" && p[2] === "one-pagers" ? db.documents.find((d) => d.slug === p[3] && d.kind === "prd") : undefined;
-    const onePagerDb = asked && asked.slug !== db.simple_one_pager!.doc.slug ? { ...db.simple_one_pager!, doc: { id: asked.id, slug: asked.slug, title: asked.title } } : db.simple_one_pager!;
+    // served the same invented page under its own slug and title, with its own draft and changes.
+    const onePagerDb = await onePagerOf(db, r, p);
     const onePagerRes = await routeOnePager(
       onePagerDb,
       {
@@ -5006,7 +5035,7 @@ async function route(db: Db, req: Request): Promise<Response> {
         reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
         notify: (user_id, kind, title, data, version) =>
           ensureReviewV2(db).notifications.push({
-            id: uuid(), user_id, kind, title, document_id: db.simple_one_pager!.doc.id, version_number: version, section_key: null,
+            id: uuid(), user_id, kind, title, document_id: onePagerDb.doc.id, version_number: version, section_key: null,
             comment_id: null, campaign_id: null, actor: `user:${me.id}`, data, read_at: null, created_at: now(),
           }),
       },
