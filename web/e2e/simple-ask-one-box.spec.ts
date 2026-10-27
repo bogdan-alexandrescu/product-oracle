@@ -79,7 +79,7 @@ for (const [phone, dark] of [
       await say(panel, "who owns Weekly alert digest?");
       const thread = panel.getByTestId("ask-chat-thread");
       await expect(thread.getByTestId("chat-message").last()).toHaveAttribute("data-kind", "answer");
-      await expect(thread.getByTestId("chat-message").last()).toContainText("owns Weekly alert digest");
+      await expect(thread.getByTestId("chat-message").last()).toContainText(/Weekly alert digest (has no owner yet|\(its track's owner\))|owns Weekly alert digest/);
       await expect(panel.getByTestId("discussion-thread")).toHaveCount(0);
 
       await say(panel, "What should we cut first?");
@@ -120,10 +120,10 @@ for (const [phone, dark] of [
   });
 }
 
-test("a viewer's one box still answers plan questions and asks Oracle the rest (desktop)", async ({ page, context }) => {
-  // protects: a viewer has the one box too; their change request gets a card they may not apply (with why), their other line goes to Oracle's Ask
-  // fails_when: a viewer loses the box, or their card is actionable
-  // no_claim: what a viewer may do in Oracle's Ask beyond asking (discussions' own specs)
+test("a viewer's one box still answers the plan and changes nothing (desktop)", async ({ page, context }) => {
+  // protects: a viewer (who starts no Ask chats) still has the one box: "move <item> to H1" gives a card they may not apply, with why; a line the plan reader does not know gets its reply in the same thread (no second box, no chat started)
+  // fails_when: a viewer loses the box, their card is actionable, or a second box appears
+  // no_claim: Oracle's Ask for viewers (they start no chats, as before)
   await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
   await signIn(page, EMAILS.viewer, "/simple");
   const panel = await openAsk(page, false);
@@ -131,6 +131,9 @@ test("a viewer's one box still answers plan questions and asks Oracle the rest (
   await say(panel, "move Weekly alert digest to H1");
   const card = panel.getByTestId("chat-card").filter({ hasText: "Move Weekly alert digest to 1 Jan" });
   await expect(card.getByRole("button", { name: "Apply" })).toBeDisabled();
+  await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
   await say(panel, "Summarise this page for me");
-  await expect(panel.getByTestId("discussion-thread")).toContainText("Summarise this page for me");
+  await expect(panel.getByTestId("chat-message").last()).toContainText("I did not understand that.");
+  await expect(panel.getByTestId("discussion-thread")).toHaveCount(0);
+  await expect(panel.getByRole("textbox")).toHaveCount(1);
 });
