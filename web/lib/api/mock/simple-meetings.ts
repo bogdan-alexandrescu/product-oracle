@@ -21,11 +21,11 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from "@/lib/api/client";
+import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { seedSimpleProposal } from "./simple-changes";
 import type { OnePagerDb } from "./simple-one-pager";
-import { FLOWS } from "./simple-priorities";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
@@ -324,11 +324,20 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
 }
 
 /** An invented bundle S10 would draw for Team invite nudges (the "flow" flag). */
-const INVITE_FLOW: Schemas["SimpleFlow"] = {
+/** The invented bundle S10 would draw for mobile alerts (was ./simple-priorities' FLOWS). */
+const FLOWS: Record<string, Schemas["SimpleFlow"]> = {
+  "alert-mobile": plainFlow({
+    title: "Act on a pushed alert",
+    steps: ["Get the push", "Open the alert", "See what crossed the line", "Snooze or assign it"],
+    screen: { title: "Alert on a phone", regions: ["Header: rule and time", "What crossed the line", "Chart of the last day", "Snooze and Assign buttons"] },
+  }),
+};
+
+const INVITE_FLOW: Schemas["SimpleFlow"] = plainFlow({
   title: "Invite your team",
   steps: ["Finish setup", "See the nudge", "Pick teammates", "Send the invites"],
   screen: { title: "Invite step", regions: ["Header: invite your team", "Teammate emails", "Send invites button"] },
-};
+});
 
 /** A meeting decision on a new flow or feature (a draft item): that item and its flow. */
 function decidedFlow(ctx: MeetingsCtx, d: Decision): Schemas["SimpleDecidedFlow"] | null {

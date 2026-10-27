@@ -125,14 +125,6 @@ function roadmapOfDoc(db: SimpleDb, docId: unknown): string | undefined {
   return [...new Set(db.items.map((s) => s.roadmap))].find((r) => stableUuid(`simple-doc/${r}`) === docId);
 }
 
-/** Whether the caller decides a change: a key date's by the roadmap's rule (drafts.can_edit), else the item's. */
-function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target" | "routed_to">): boolean {
-  if (KEY_DATE_OPS.includes(c.op)) {
-    const rm = roadmapOfDoc(db, c.target.document_id);
-    return ctx.role === "owner" || c.routed_to.includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
-  }
-  return decides(db, ctx, c.target.item_id);
-}
 
 /** Whether the caller applies a change to this item (service.can_decide); no item: owners. */
 function decides(db: SimpleDb, ctx: SimpleChangesCtx, itemId: unknown): boolean {
@@ -143,8 +135,13 @@ function decides(db: SimpleDb, ctx: SimpleChangesCtx, itemId: unknown): boolean 
 /** S7: the roadmap (slug) an add_item change writes. */
 const slugOf = (id: unknown): string | undefined => ROADMAP_SLUGS().find((r) => roadmapId(r) === id);
 
-/** Whether the caller applies (or accepts) this change: an add_item's roadmap's editors, else the item's deciders. */
-function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target">): boolean {
+/** Whether the caller applies (or accepts) this change: a key date's by the roadmap's rule
+ * (drafts.can_edit), an add_item's by its roadmap's editors, else the item's deciders. */
+function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target"> & Partial<Pick<Change, "routed_to">>): boolean {
+  if (KEY_DATE_OPS.includes(c.op)) {
+    const rm = roadmapOfDoc(db, c.target.document_id);
+    return ctx.role === "owner" || (c.routed_to ?? []).includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
+  }
   if (c.op === "add_item" && !keyOf(db, c.target.item_id)) return canEditRoadmap(db, slugOf(c.target.roadmap_id) ?? "", ctx);
   return decides(db, ctx, c.target.item_id);
 }

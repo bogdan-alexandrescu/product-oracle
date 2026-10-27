@@ -134,6 +134,16 @@ function add(db: VisualsDb, kind: string, id: string, brief: string, first?: Flo
 }
 
 /** The newest drawing of a subject's visual (train T's `flow` fields); null: "No flow yet". */
+/** A plain bundle (title, steps, screen) as the API serves it: version 1 of 1, no drawing yet. */
+export const plainFlow = (f: Pick<Flow, "title" | "steps" | "screen"> & Partial<Flow>): Flow => ({
+  version: 1,
+  versions: 1,
+  nodes: [],
+  touches_screen: true,
+  annotations: [],
+  ...f,
+});
+
 export function flowFor(db: VisualsDb | undefined, kind: string, id: string): Flow | null {
   const v = db?.visuals[`${kind}:${id}`];
   return v?.versions.at(-1) ?? null;

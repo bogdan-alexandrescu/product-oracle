@@ -9,6 +9,7 @@
  * horizons are the defaults (short 1 quarter, medium 2, long 12-24 months).
  */
 import type { Schemas } from "@/lib/api/client";
+import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { seeded, stableUuid } from "./ids";
 import { flowFor, type VisualsDb } from "./simple-visuals";
@@ -625,11 +626,11 @@ export function settleDrafting(db: SimpleDb): void {
     if (!s.drafting_until || s.drafting_until > now) continue;
     delete s.drafting_until;
     s.outcome ??= `Teams get ${s.title.toLowerCase()} without asking support`;
-    s.flow = {
+    s.flow = plainFlow({
       title: s.title,
       steps: ["Open the alerts page", `Find ${s.title.toLowerCase()}`, "Set it up in one step", "See it working"],
       screen: { title: `${s.title} settings`, regions: ["Header: what it does", "The one setting", "A preview", "Save and Cancel buttons"] },
-    };
+    });
     const dep = db.items.find((x) => x.key !== s.key && x.goal && x.goal === s.goal && !closed(x) && !x.draft && x.roadmap === s.roadmap);
     if (dep && !(s.depends ?? []).includes(dep.key)) s.depends = [...(s.depends ?? []), dep.key];
     const [start, end] = s.quarter ? [s.quarter.start < iso(now) ? iso(now) : s.quarter.start, s.quarter.end] : w[s.horizon];

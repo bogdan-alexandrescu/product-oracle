@@ -11,6 +11,7 @@
  * approvers and owners.
  */
 import type { Schemas } from "@/lib/api/client";
+import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { closed, GOALS, goalId, lookalikes, matchesOf, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
@@ -54,11 +55,11 @@ const POOL: Record<string, Idea[]> = {
   ],
 };
 
-const FLOW = (title: string): Schemas["SimpleFlow"] => ({
+const FLOW = (title: string): Schemas["SimpleFlow"] => (plainFlow({
   title,
   steps: ["Open the alert settings", `Choose ${title.toLowerCase()}`, "Confirm in one step", "See the change on the next alert"],
   screen: { title: `${title} settings`, regions: ["Header: what it does", "The setting", "A preview of the next alert", "Save and Cancel buttons"] },
-});
+}));
 
 function row(goal: string, idea: Idea, origin: GoalSuggestionRow["origin"], at: string, seed: string): GoalSuggestionRow {
   return {

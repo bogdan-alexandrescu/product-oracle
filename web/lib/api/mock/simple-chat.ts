@@ -16,6 +16,7 @@
  * on its agenda.
  */
 import type { Schemas } from "@/lib/api/client";
+import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
@@ -262,11 +263,11 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
       const requester = from ? unquote(from) : null;
       const kind = requester ? (names.some((n) => n.toLowerCase() === requester.toLowerCase()) ? "person" : "customer") : "person";
       const clean = unquote(title);
-      const flow: Schemas["SimpleFlow"] = {
+      const flow: Schemas["SimpleFlow"] = plainFlow({
         title: clean,
         steps: ["Open the alert", `Choose “${clean}”`, "Confirm", "See it saved"],
         screen: { title: "Alert detail", regions: ["Header with the alert's name", `${clean} panel`, "Save and cancel"] },
-      };
+      });
       return card(`New feature ask${requester ? ` from ${requester}` : ""}: ${clean}`, "add_feature_ask", null, {}, {}, { title: clean, requester_name: requester ?? ctx.names[ctx.id] ?? null, requester_kind: kind }, null, flow);
     });
   }
