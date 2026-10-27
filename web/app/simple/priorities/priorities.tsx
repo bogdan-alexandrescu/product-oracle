@@ -280,6 +280,7 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
             data-testid="prio-row"
             data-code={r.code}
             data-above={r.above_line ? "true" : "false"}
+            data-end={r.end_date ?? ""}
             className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${target ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
