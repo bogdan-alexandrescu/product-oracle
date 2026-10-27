@@ -73,8 +73,8 @@ for (const [phone, dark] of [
       const panel = await openAsk(page, phone);
       await expect(panel.getByRole("textbox")).toHaveCount(1);
       await expect(panel.getByRole("button", { name: "Send" })).toHaveCount(1);
-      await expect(panel.getByRole("radio", { name: "This page" })).toBeVisible();
-      await expect(panel.getByRole("radio", { name: "General" })).toBeVisible();
+      await expect(panel.getByRole("button", { name: "This page" })).toBeVisible();
+      await expect(panel.getByRole("button", { name: "General" })).toBeVisible();
 
       await say(panel, "who owns Weekly alert digest?");
       const thread = panel.getByTestId("ask-chat-thread");

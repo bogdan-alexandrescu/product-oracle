@@ -62,7 +62,8 @@ export type ChatRules = {
   ended: boolean;
 };
 
-export type ChatThread = { id: string | null; meeting_id: string | null; messages: ChatMessage[]; rules: ChatRules | null };
+/** `understood`: false when Oracle's plan reader did not know the last line (with only_understood, nothing was written). */
+export type ChatThread = { id: string | null; meeting_id: string | null; messages: ChatMessage[]; rules: ChatRules | null; understood?: boolean };
 export type ChatApply = { card: ChatCard; result: Schemas["SimpleChangeResult"] };
 
 export type WalkStep = {
@@ -88,9 +89,15 @@ export function askThread(): Promise<ChatThread> {
   return unwrap(loose.GET("/v1/simple/chat")) as Promise<ChatThread>;
 }
 
-/** POST /v1/simple/chat/messages: the person's line and Oracle's reply. */
-export function askSay(text: string, page?: string): Promise<ChatThread> {
-  return unwrap(loose.POST("/v1/simple/chat/messages", { body: { text, ...(page ? { page } : {}) } })) as Promise<ChatThread>;
+/**
+ * POST /v1/simple/chat/messages: the person's line and Oracle's reply. `onlyUnderstood` (the
+ * Ask panel's one box): a line the plan reader does not know writes nothing and comes back
+ * `understood: false`, for the panel to ask Oracle's Ask instead.
+ */
+export function askSay(text: string, page?: string, onlyUnderstood = false): Promise<ChatThread> {
+  return unwrap(
+    loose.POST("/v1/simple/chat/messages", { body: { text, ...(page ? { page } : {}), ...(onlyUnderstood ? { only_understood: true } : {}) } }),
+  ) as Promise<ChatThread>;
 }
 
 /** GET /v1/simple/meetings/{meeting_id}/chat. */

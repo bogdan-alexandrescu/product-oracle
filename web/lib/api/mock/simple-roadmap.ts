@@ -324,6 +324,13 @@ function phases(start: string, end: string, s: SeedItem, w: [string, string]): S
 
 const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…`);
 
+/** A dependency_order line, naming the item and its dependency (constraints.check), with the years when they differ. */
+function dependencyLine(title: string, start: string, depTitle: string, end: string): string {
+  const years = start.slice(0, 4) !== end.slice(0, 4);
+  const day = (d: string) => `${word(d)}${years ? ` ${d.slice(0, 4)}` : ""}`;
+  return `'${short(title)}' starts ${day(start)}, but '${short(depTitle)}', which it depends on, ends ${day(end)}`;
+}
+
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
   const out: Flag[] = [];
   const flag = (kind: Flag["kind"], reason: string, fixes: Flag["fixes"], subject: string | null = null): void => {
@@ -334,7 +341,7 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
     const dep = all.get(key);
     if (!dep || closed(dep.s) || (dep.r.end.estimated && r.start.estimated)) continue;
     if (dep.r.end.date >= r.start.date)
-      flag("dependency_order", `Starts ${word(r.start.date)}, but '${short(dep.s.title)}' it depends on ends ${word(dep.r.end.date)}`, ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
+      flag("dependency_order", dependencyLine(s.title, r.start.date, dep.s.title, dep.r.end.date), ["shift_dependents", "move_dependency", "accept_risk"], stableUuid(`simple-item/${key}`));
   }
   if (s.milestone) {
     const day = addDays(w[0], s.milestone.day);

@@ -18,6 +18,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
+import { companyDayIso } from "./connections";
 import { stableUuid } from "./ids";
 import { routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
 import { roadmapOut, storedDates, type SimpleDb } from "./simple-roadmap";
@@ -124,7 +125,8 @@ const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const msOf = (day: string) => Date.parse(`${day}T00:00:00Z`);
 const addDays = (day: string, n: number) => isoDay(msOf(day) + n * DAY);
 const now = () => new Date(mockNowMs()).toISOString();
-const today = () => isoDay(mockNowMs());
+// The company's day (its time zone), as oracle.company_time.company_today.
+const today = () => companyDayIso(new Date(mockNowMs()));
 const dayWords = (day: string, year = false) =>
   new Date(msOf(day)).toLocaleDateString("en-GB", { day: "numeric", month: "short", ...(year ? { year: "numeric" } : {}), timeZone: "UTC" });
 
@@ -145,13 +147,40 @@ function parseDay(text: string): string | null {
   return d;
 }
 
-/** "Q2": the next Q2 on or after today's quarter. */
-function quarter(n: number): [string, string] {
-  const t = today();
-  const y = Number(t.slice(0, 4));
-  const current = Math.floor((Number(t.slice(5, 7)) - 1) / 3) + 1;
-  const year = n >= current ? y : y + 1;
-  return [isoDay(Date.UTC(year, (n - 1) * 3, 1)), isoDay(Date.UTC(year, n * 3, 0))];
+/** The n months from the first of `month` (0-based; it may run past December). */
+const months = (year: number, month: number, n: number): [string, string] => [isoDay(Date.UTC(year, month, 1)), isoDay(Date.UTC(year, month + n, 0))];
+
+/**
+ * A period in words, from the company's today (as chat.parse_period): "this quarter", "next
+ * quarter", "the quarter after [next]", "this month", "next month", "<month> [year]" (the next
+ * on or after this month), "Qn [year]" and "Hn [year]" (the next on or after today's).
+ */
+function parsePeriod(text: string): [string, string] | null {
+  const t = text.toLowerCase().trim().replace(/\s+/g, " ").replace(/^the /, "");
+  const d = today();
+  const y = Number(d.slice(0, 4));
+  const mo = Number(d.slice(5, 7)) - 1;
+  const q = Math.floor(mo / 3);
+  const steps: Record<string, number> = { "this quarter": 0, "current quarter": 0, "next quarter": 1, "quarter after": 2, "quarter after next": 2 };
+  if (t in steps) return months(y, 3 * (q + steps[t]), 3);
+  if (t === "this month") return months(y, mo, 1);
+  if (t === "next month") return months(y, mo + 1, 1);
+  let m: RegExpExecArray | null;
+  if ((m = /^q([1-4])(?: (\d{4}))?$/.exec(t))) {
+    const n = Number(m[1]);
+    return months(m[2] ? Number(m[2]) : n - 1 >= q ? y : y + 1, 3 * (n - 1), 3);
+  }
+  if ((m = /^h([12])(?: (\d{4}))?$/.exec(t))) {
+    const n = Number(m[1]);
+    return months(m[2] ? Number(m[2]) : n - 1 >= Math.floor(mo / 6) ? y : y + 1, 6 * (n - 1), 6);
+  }
+  if ((m = /^([a-z]+)(?: (\d{4}))?$/.exec(t))) {
+    const exact = MONTHS.indexOf(m[1]);
+    const month = exact >= 0 ? exact : m[1].length >= 3 ? MONTHS.findIndex((x) => x.startsWith(m![1])) : -1;
+    if (month < 0) return null;
+    return months(m[2] ? Number(m[2]) : month >= mo ? y : y + 1, month, 1);
+  }
+  return null;
 }
 
 const unquote = (s: string) => s.trim().replace(/^["'“‘]|["'”’]$/g, "").replace(/[?.!]+$/, "").trim();
@@ -161,7 +190,8 @@ const or = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).j
 const EXAMPLES = "Try “move Weekly alert digest to Q2”, “rename Setup checklist to First-run checklist”, “add a task 'Draft the email' to Weekly alert digest” or “who owns Mobile alert push?”.";
 
 type Draft = Omit<StoredCard, "id" | "message_id" | "thread" | "meeting_id" | "status" | "change_id" | "decided_by_name" | "decided_at" | "decision_id">;
-type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[] };
+/** `understood: false`: a line the plan reader does not know (the Ask panel's one box sends it to Oracle's Ask); `missing`: no item has that name. */
+type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[]; understood?: boolean; missing?: boolean };
 
 /** The item X names: one, or Oracle's question. */
 function findItem(items: Item[], text: string): Item | Reply {
@@ -171,7 +201,7 @@ function findItem(items: Item[], text: string): Item | Reply {
   const hits = items.filter((i) => i.title.toLowerCase().includes(x));
   if (hits.length === 1) return hits[0];
   if (hits.length > 1) return { kind: "question", body: `Which one: ${or(hits.slice(0, 5).map((i) => i.title))}?`, cards: [] };
-  return { kind: "question", body: `I could not find “${unquote(text)}” on the roadmap. Which item do you mean?`, cards: [] };
+  return { kind: "question", body: `I could not find “${unquote(text)}” on the roadmap. Which item do you mean?`, cards: [], missing: true };
 }
 
 const isItem = (x: Item | Reply): x is Item => "id" in x;
@@ -186,20 +216,24 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
   const viewerInMeeting = !!meeting && ctx.role === "viewer";
   let m: RegExpExecArray | null;
 
-  // Questions: answers from Oracle's data, no cards.
+  // Questions: answers from Oracle's data, no cards; one about something not on the roadmap is Ask's.
+  const asked = (x: string): Item | Reply => {
+    const i = asked(x);
+    return !isItem(i) && i.missing ? { ...i, understood: false } : i;
+  };
   if ((m = /^who (owns|decides) (.+)$/i.exec(t))) {
-    const i = findItem(items, m[2]);
+    const i = asked(m[2]);
     if (!isItem(i)) return i;
     if (m[1].toLowerCase() === "owns") return { kind: "answer", body: i.owner ? `${i.owner.name} owns ${i.title}.` : `${i.title} has no owner yet.`, cards: [] };
     return { kind: "answer", body: `${i.deciders.length ? or(i.deciders) : "The company's owners"} ${i.deciders.length > 1 ? "decide" : "decides"} ${i.title}.`, cards: [] };
   }
   if ((m = /^when is (.+)$/i.exec(t))) {
-    const i = findItem(items, m[1]);
+    const i = asked(m[1]);
     if (!isItem(i)) return i;
     return { kind: "answer", body: `${i.title}: ${dayWords(i.start.date)} – ${dayWords(i.end.date, true)}${i.estimated ? " (estimated)" : ""}.`, cards: [] };
   }
   if ((m = /^(?:what is the )?status of (.+)$/i.exec(t))) {
-    const i = findItem(items, m[1]);
+    const i = asked(m[1]);
     if (!isItem(i)) return i;
     return { kind: "answer", body: `${i.title} is ${i.status.replace("_", " ")} (${i.horizon}).`, cards: [] };
   }
@@ -230,23 +264,22 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
       return card(`Move ${i.title} to ${horizon[0].toUpperCase()}${horizon.slice(1)}`, "change_horizon", i, { item_id: i.id }, { horizon: i.horizon }, { horizon }, { kind: "horizon", item_id: i.id, horizon });
     });
   }
-  if ((m = /^move (.+) to q([1-4])$/i.exec(t))) {
-    const [, x, q] = m;
-    return change(() => {
-      const i = findItem(items, x);
-      if (!isItem(i)) return i;
-      const [start, last] = quarter(Number(q));
-      return move(i, start, dated(i) ? addDays(start, length(i)) : last);
-    });
-  }
-  if ((m = /^move (.+) to ([a-z]+ \d{1,2})$/i.exec(t)) && parseDay(m[2])) {
-    const [, x, d] = m;
-    return change(() => {
-      const i = findItem(items, x);
-      if (!isItem(i)) return i;
-      const start = parseDay(d)!;
-      return move(i, start, addDays(start, dated(i) ? length(i) : 29));
-    });
+  if (/^move .+ to .+$/i.test(t)) {
+    // The item's name may hold " to ": try each split, the shortest time first.
+    const cuts = [...t.matchAll(/ to /gi)].map((x) => x.index!).reverse();
+    for (const at of cuts) {
+      const x = t.slice(5, at);
+      const when = t.slice(at + 4).replace(/\.$/, "");
+      const period = parsePeriod(when);
+      const day = !period && /^[a-z]+ \d{1,2}$/i.test(when) ? parseDay(when) : null;
+      if (!period && !day) continue;
+      return change(() => {
+        const i = findItem(items, x);
+        if (!isItem(i)) return i;
+        if (period) return move(i, period[0], dated(i) ? addDays(period[0], length(i)) : period[1]);
+        return move(i, day!, addDays(day!, dated(i) ? length(i) : 29));
+      });
+    }
   }
   if ((m = /^add a milestone ["'“‘](.+?)["'”’] to (.+) on ([a-z]+ \d{1,2})$/i.exec(t)) && parseDay(m[3])) {
     const [, name, x, d] = m;
@@ -325,7 +358,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
       return card(`Cut ${i.title}`, "cut", i, { item_id: i.id }, { cut: false }, { cut: true }, { kind: "cut", item_id: i.id });
     });
   }
-  return { kind: "question", body: `I did not understand that. ${EXAMPLES}`, cards: [] };
+  return { kind: "question", body: `I did not understand that. ${EXAMPLES}`, cards: [], understood: false };
 }
 
 /** The roadmap as the reader reads it (and as an owner, for the constraint check). */
@@ -354,18 +387,23 @@ function asIf(db: SimpleDb, c: Pick<StoredCard, "op" | "item_id" | "after">): { 
   if (!me) return { flags: [], fixes: [] };
   const ids = [me.id, ...me.needed_by];
   const flags = ids.map((id) => byId.get(id)).filter((i): i is Item => !!i && i.flags.some((f) => f.state === "red")).map((i) => ({ item_id: i.id, flags: i.flags.filter((f) => f.state === "red") }));
+  // One-click fixes of each red dependency link, the item's and its dependents' (chat._fixes).
   const fixes: Fix[] = [];
-  if (c.op === "move_dates") {
-    const late = me.flags.find((f) => f.kind === "dependency_order" && f.state === "red" && f.subject);
-    const dep = late?.subject ? byId.get(late.subject) : undefined;
-    if (dep) {
-      const len = Math.round((msOf(String(a.end_date)) - msOf(String(a.start_date))) / DAY);
-      const start = addDays(dep.end.date, 1);
-      const sd = storedDates(db, key);
-      fixes.push({
-        label: `Start after ${dep.title} ends (${dayWords(start)})`, op: "move_dates", target: { item_id: me.id },
-        before: { start_date: sd.start, end_date: sd.end }, after: { start_date: start, end_date: addDays(start, len) },
-      });
+  const sd = (it: Item) => {
+    const k = storedDates(db, it.key);
+    return { start_date: k.start, end_date: k.end };
+  };
+  for (const e of ids.map((id) => byId.get(id)).filter((i): i is Item => !!i)) {
+    for (const f of e.flags) {
+      const dep = f.state === "red" && f.kind === "dependency_order" && f.subject ? byId.get(f.subject) : undefined;
+      if (!dep) continue;
+      const before = { [e.id]: sd(e), [dep.id]: sd(dep) };
+      const target = { item_id: e.id, subject: dep.id };
+      fixes.push(
+        { label: `Start ${e.title} after ${dep.title} ends`, op: "shift_dependents", target, before, after: {} },
+        { label: `End ${dep.title} before ${e.title} starts`, op: "move_dependency", target, before, after: {} },
+        { label: "Accept as a risk", op: "accept_risk", target: { item_id: e.id, flag: f.kind, subject: dep.id }, before: { risk: null }, after: { risk: { note: "Accepted in the chat" } } },
+      );
     }
   }
   return { flags, fixes };
@@ -415,6 +453,7 @@ function rulesOut(m: Meeting, ctx: ChatCtx) {
 
 function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, meeting: Meeting | null) {
   return {
+    understood: true,
     id: t?.id ?? null,
     meeting_id: meeting?.id ?? null,
     messages: (t?.messages ?? []).map(({ card_ids, ...msg }) => ({ ...msg, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) })),
@@ -422,11 +461,14 @@ function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, m
   };
 }
 
-function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string): void {
+/** The line and Oracle's reply; with `onlyUnderstood` a line the reader does not know writes nothing. Whether it understood. */
+function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string, onlyUnderstood = false): boolean {
+  const reply = parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names));
+  const understood = reply.understood !== false;
+  if (onlyUnderstood && !understood) return false;
   const t = (chat.threads[key] ??= { id: crypto.randomUUID(), meeting_id: meeting?.id ?? null, owner_id: meeting ? null : ctx.id, messages: [] });
   const at = now();
   t.messages.push({ id: crypto.randomUUID(), author_kind: "person", author_id: ctx.id, author_name: ctx.names[ctx.id] ?? "someone", body: text, at, kind: "request", card_ids: [] });
-  const reply = parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names));
   const id = crypto.randomUUID();
   const ids = reply.cards.map((d) => {
     const c: StoredCard = { ...d, id: crypto.randomUUID(), message_id: id, thread: key, meeting_id: meeting?.id ?? null, status: "open", change_id: null, decided_by_name: null, decided_at: null, decision_id: null };
@@ -435,6 +477,7 @@ function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, c
     return c.id;
   });
   t.messages.push({ id, author_kind: "oracle", author_id: null, author_name: "Oracle", body: reply.body, at, kind: reply.kind, card_ids: ids });
+  return understood;
 }
 
 /** Whether the reader sees the card: their own Ask thread's, or a meeting they attend. */
@@ -508,10 +551,11 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
 
   if (p[2] === "chat" && !p[3] && m === "GET") return json(200, threadOut(db, chat, chat.threads[`ask:${ctx.id}`] ?? null, ctx, null));
   if (p[2] === "chat" && p[3] === "messages" && !p[4] && m === "POST") {
-    const text = String((await body()).text ?? "").trim();
+    const b = await body();
+    const text = String(b.text ?? "").trim();
     if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
-    say(db, chat, `ask:${ctx.id}`, null, ctx, text);
-    return json(200, threadOut(db, chat, chat.threads[`ask:${ctx.id}`], ctx, null));
+    const understood = say(db, chat, `ask:${ctx.id}`, null, ctx, text, b.only_understood === true);
+    return json(200, { ...threadOut(db, chat, chat.threads[`ask:${ctx.id}`] ?? null, ctx, null), understood });
   }
 
   if (p[2] === "meetings" && p[3] && p[4] === "chat") {
@@ -523,8 +567,8 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (p[5] === "messages" && m === "POST") {
       const text = String((await body()).text ?? "").trim();
       if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
-      say(db, chat, key, meeting, ctx, text);
-      return json(200, threadOut(db, chat, chat.threads[key], ctx, meeting));
+      const understood = say(db, chat, key, meeting, ctx, text);
+      return json(200, { ...threadOut(db, chat, chat.threads[key], ctx, meeting), understood });
     }
     if (p[5] === "mode" && m === "PUT") {
       if (ctx.id !== meeting.presenter_id) return json(403, { detail: "Only the presenter changes who may apply" });

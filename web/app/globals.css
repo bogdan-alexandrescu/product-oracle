@@ -724,6 +724,15 @@ code .date-mark {
 .simple-button:hover {
   background: var(--surface2);
 }
+/* A button with a long label (a change card's fixes): wraps inside its container. */
+.simple-button-wrap {
+  max-width: 100%;
+  justify-content: flex-start;
+  padding-block: 8px;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .simple-button-primary {
   border-color: var(--accent);
   background: var(--accent);
