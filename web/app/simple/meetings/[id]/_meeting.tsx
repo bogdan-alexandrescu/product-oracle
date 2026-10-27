@@ -29,6 +29,18 @@ function clock(ms: number): string {
 /** How often a live meeting's screen reads the meeting again (other screens' Approve, Undo, changes). */
 const LIVE_POLL_MS = 5_000;
 
+/** "published" only when the draft's version is; else what still holds it (the API's waiting_on and blocked_by). */
+function publishedWords(d: Meeting["drafts"][number], name: (id: string) => string): string {
+  if (d.status === "approved") return "published";
+  const names = d.waiting_on.map(name);
+  const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  const why = [...(names.length ? [`Waiting on ${who}'s approval`] : []), ...d.blocked_by];
+  return `not yet published: ${why.join(" · ") || "its review is not complete"}`;
+}
+
+/** While Oracle drafts the minutes, how often the end screen reads the meeting again. */
+const MINUTES_POLL_MS = 3_000;
+
 /** Names for ids, from the meeting's attendees. */
 const namer = (m: Meeting) => (id: string) => m.attendees.find((a) => a.id === id)?.name ?? "a reviewer";
 
@@ -162,8 +174,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
         )}
       </div>
       {m.drafts.filter((d) => d.decider_approved).map((d) => (
-        <p key={d.id} role="status" className="border-b border-border bg-[var(--simple-edited)] px-4 py-2 text-base">
-          Approved in {m.title} · {d.waiting_on.length ? `publishes when ${d.waiting_on.map(name).join(", ")} approve${d.waiting_on.length === 1 ? "s" : ""}` : "published"}
+        <p key={d.id} role="status" data-testid="approved-banner" className="border-b border-border bg-[var(--simple-edited)] px-4 py-2 text-base">
+          Approved in {m.title} · {publishedWords(d, name)}
         </p>
       ))}
       {notApproved.map((x) => (
@@ -382,12 +394,24 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
     setQuestions((minutes?.open_questions ?? []).join("\n"));
     setActions((minutes?.action_items ?? []).map((a) => ({ title: a.title, owner_id: a.owner_id ?? "", due_date: a.due_date ?? "" })));
   }
-  // While Oracle drafts, look again now and then: it answers, slows down or fails.
+  // Until the minutes job ends, read again every few seconds and when the tab comes back
+  // (a hidden tab's timers are throttled): it answers (the minutes, Send), slows down or
+  // fails (Draft again), with no reload (production walk: "Drafting…" stayed until one).
+  const drafting = m.minutes_state === "drafting" && m.minutes_job !== "failed";
   useEffect(() => {
-    if (m.minutes_state !== "drafting") return;
-    const t = window.setInterval(() => void reload(), 15_000);
-    return () => window.clearInterval(t);
-  }, [m.minutes_state, reload]);
+    if (!drafting) return;
+    const read = () => {
+      if (document.visibilityState === "visible") void reload();
+    };
+    const t = window.setInterval(read, MINUTES_POLL_MS);
+    document.addEventListener("visibilitychange", read);
+    window.addEventListener("focus", read);
+    return () => {
+      window.clearInterval(t);
+      document.removeEventListener("visibilitychange", read);
+      window.removeEventListener("focus", read);
+    };
+  }, [drafting, reload]);
   const [email, setEmail] = useState(false);
   const [slack, setSlack] = useState(false);
   const path = { params: { path: { meeting_id: m.id } } };
