@@ -559,6 +559,8 @@ export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
 /** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). */
 export const MOCK_SLOW_KEY = "po-mock-slow";
 export const MOCK_SLOW_MS = 1500;
+/** A test may hold the slow call longer (ms, in localStorage). */
+export const MOCK_SLOW_MS_KEY = "po-mock-slow-ms";
 /**
  * D8: tests set this localStorage key to a member's email to have them change a checkpoint's
  * shared draft after the page loaded it: the next decide bumps the draft's revision by one
@@ -884,8 +886,9 @@ function seedSimpleHomeOnePrdScenario(): Db {
   const db = seedSimpleHomeScenario();
   for (const i of db.simple_roadmap!.items) {
     if (i.roadmap === "onboarding-roadmap") continue;
-    if (i.start != null) i.start += 180;
-    if (i.end != null) i.end += 180;
+    // An undated item would be estimated into this quarter: dated after it instead.
+    if (i.start == null || i.end == null) Object.assign(i, { start: 180, end: 220, source: "typed" });
+    else Object.assign(i, { start: i.start + 180, end: i.end + 180 });
     if (i.milestone) i.milestone.day += 180;
   }
   return db;
@@ -5665,7 +5668,8 @@ export async function mockFetch(req: Request): Promise<Response> {
   queue = next.catch(() => undefined);
   const slow = localStorage.getItem(MOCK_SLOW_KEY);
   if ((req.method === "GET" && url.pathname === slow) || slow === `${req.method} ${url.pathname}`) {
-    return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), MOCK_SLOW_MS)));
+    const ms = Number(localStorage.getItem(MOCK_SLOW_MS_KEY)) || MOCK_SLOW_MS;
+    return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), ms)));
   }
   return next;
 }

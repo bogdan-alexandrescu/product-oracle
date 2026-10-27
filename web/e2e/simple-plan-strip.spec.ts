@@ -1,4 +1,4 @@
-import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS } from "../lib/api/mock/server";
+import { MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
 import { ADMIN, login } from "./helpers";
 import { expect, test, type Page } from "./test";
@@ -104,16 +104,20 @@ for (const phone of [false, true]) {
 
       test(`with one PRD in play, Home's strip does not wait on the ranking (${where})`, async ({ page }) => {
         await setUp(page, "simple-home-one-prd", scheme);
-        await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SLOW_KEY, "/v1/simple/priorities"] as const);
+        // The ranking answers 6 s after it is asked.
+        await page.context().addInitScript(
+          ([slow, path, msKey, ms]) => {
+            localStorage.setItem(slow, path);
+            localStorage.setItem(msKey, ms);
+          },
+          [MOCK_SLOW_KEY, "/v1/simple/priorities", MOCK_SLOW_MS_KEY, "6000"] as const,
+        );
         await login(page, EMAILS.viewer);
-        // The page's timers wait on this test from here: only the roadmap's latency may pass.
-        await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000));
-        await page.goto("/simple");
-        await page.clock.runFor(MOCK_SLOW_MS / 3);
-        const plan = page.getByTestId("home-plan");
-        await expect(plan.getByTestId("home-strip-row").first()).toBeVisible();
-        await expect(plan.getByTestId("home-strip-row").first()).toHaveAttribute("href", "/simple/roadmap?prd=guided-setup");
-        await page.clock.resume();
+        // It is asked after the page commits: a strip within 5 s of the commit never waited on it.
+        await page.goto("/simple", { waitUntil: "commit" });
+        const row = page.getByTestId("home-plan").getByTestId("home-strip-row").first();
+        await expect(row).toBeVisible({ timeout: 5000 });
+        await expect(row).toHaveAttribute("href", "/simple/roadmap?prd=guided-setup");
       });
 
       test(`Home shows at most 8 milestone rows, then "+N more on the roadmap" (${where})`, async ({ page }) => {
