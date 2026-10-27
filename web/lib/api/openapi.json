@@ -18098,10 +18098,10 @@
                   "type": "null"
                 }
               ],
-              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, comma-separated",
+              "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated",
               "title": "Origin"
             },
-            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, comma-separated"
+            "description": "one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated"
           },
           {
             "name": "chosen",
@@ -42224,7 +42224,7 @@
           "simple"
         ],
         "summary": "Create Simple Change",
-        "description": "Make a change to a roadmap item: applied for an owner and the roadmap's decider\n(with no decider, its owner), proposed to them for approvers and commenters. 409 when\n``before`` no longer matches the stored values (nothing is written). Returns the\nconstraint flags of the touched items (a proposal's as if applied). A change that adds\nor reshapes a feature or flow comes with its visual: Oracle drafts it (S10).",
+        "description": "Make a change to a roadmap item: applied for an owner and the roadmap's decider\n(with no decider, its owner), proposed to them for approvers and commenters. 409 when\n``before`` no longer matches the stored values (nothing is written). Returns the\nconstraint flags of the touched items (a proposal's as if applied).",
         "operationId": "create_simple_change",
         "security": [
           {
@@ -43021,21 +43021,21 @@
         "x-min-role": "viewer"
       }
     },
-    "/v1/simple/chat": {
+    "/v1/simple/meetings": {
       "get": {
         "tags": [
           "simple"
         ],
-        "summary": "Get Simple Chat",
-        "description": "The caller's Ask-panel thread: their requests, Oracle's replies and cards.",
-        "operationId": "get_simple_chat",
+        "summary": "List Simple Meetings",
+        "description": "Upcoming reviews from the rituals, live meetings and past ones (newest first).",
+        "operationId": "list_simple_meetings",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatThreadOut"
+                  "$ref": "#/components/schemas/SimpleMeetingsOut"
                 }
               }
             }
@@ -43050,33 +43050,31 @@
           }
         ],
         "x-min-role": "viewer"
-      }
-    },
-    "/v1/simple/chat/messages": {
+      },
       "post": {
         "tags": [
           "simple"
         ],
-        "summary": "Post Simple Chat",
-        "description": "Ask Oracle in plain words; a change request gets change cards (nothing applies\nuntil Apply), an ambiguous one a question, a question about the plan an answer.",
-        "operationId": "post_simple_chat",
+        "summary": "Start Simple Meeting",
+        "description": "Start a review meeting: owners and the PRD's decider only.",
+        "operationId": "start_simple_meeting",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ChatIn"
+                "$ref": "#/components/schemas/SimpleMeetingIn"
               }
             }
           },
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatThreadOut"
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
                 }
               }
             }
@@ -43100,17 +43098,94 @@
             "APIKeyCookie": []
           }
         ],
-        "x-min-role": "viewer"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
-    "/v1/simple/meetings/{meeting_id}/chat": {
+    "/v1/simple/meetings/options": {
       "get": {
         "tags": [
           "simple"
         ],
-        "summary": "Get Simple Meeting Chat",
-        "description": "The meeting's one shared thread and who may apply its cards.",
-        "operationId": "get_simple_meeting_chat",
+        "summary": "Get Simple Meeting Options",
+        "description": "The start sheet: the PRDs (each with who may start it and its default attendees),\nthe members, and the scheduled review it starts from.",
+        "operationId": "get_simple_meeting_options",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prd"
+            }
+          },
+          {
+            "name": "occurrence",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Occurrence"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleStartOptions"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Meeting",
+        "operationId": "get_simple_meeting",
         "security": [
           {
             "HTTPBearer": []
@@ -43137,7 +43212,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatThreadOut"
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
                 }
               }
             }
@@ -43156,14 +43231,66 @@
         "x-min-role": "viewer"
       }
     },
-    "/v1/simple/meetings/{meeting_id}/chat/messages": {
+    "/v1/simple/meetings/{meeting_id}/join": {
       "post": {
         "tags": [
           "simple"
         ],
-        "summary": "Post Simple Meeting Chat",
-        "description": "A line in the meeting's thread; a viewer's change request gets a note, no cards.",
-        "operationId": "post_simple_meeting_chat",
+        "summary": "Join Simple Meeting",
+        "operationId": "join_simple_meeting",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/rules": {
+      "patch": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Set Simple Meeting Rules",
+        "description": "The presenter's change mode (everyone, only the presenter, the presenter plus one\nor two named people) and who is absent.",
+        "operationId": "set_simple_meeting_rules",
         "security": [
           {
             "HTTPBearer": []
@@ -43189,7 +43316,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ChatIn"
+                "$ref": "#/components/schemas/SimpleMeetingRulesIn"
               }
             }
           }
@@ -43200,7 +43327,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatThreadOut"
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
                 }
               }
             }
@@ -43216,17 +43343,185 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "commenter"
       }
     },
-    "/v1/simple/meetings/{meeting_id}/chat/mode": {
+    "/v1/simple/meetings/{meeting_id}/comments": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Comment In Simple Meeting",
+        "operationId": "comment_in_simple_meeting",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleMeetingCommentIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/approve": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Approve In Simple Meeting",
+        "description": "The decider's Approve: the present required reviewers approve with them; absent\nones get an Inbox request and the draft publishes when they approve.",
+        "operationId": "approve_in_simple_meeting",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/end": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "End Simple Meeting",
+        "operationId": "end_simple_meeting",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "meeting_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Meeting Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
+      }
+    },
+    "/v1/simple/meetings/{meeting_id}/minutes": {
       "put": {
         "tags": [
           "simple"
         ],
-        "summary": "Set Simple Meeting Chat Mode",
-        "description": "The presenter sets who may apply: everyone, only the presenter, or the presenter\nand one or two named people.",
-        "operationId": "set_simple_meeting_chat_mode",
+        "summary": "Edit Simple Meeting Minutes",
+        "operationId": "edit_simple_meeting_minutes",
         "security": [
           {
             "HTTPBearer": []
@@ -43252,7 +43547,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ChatModeIn"
+                "$ref": "#/components/schemas/SimpleMinutesIn"
               }
             }
           }
@@ -43263,7 +43558,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatRulesOut"
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
                 }
               }
             }
@@ -43279,17 +43574,18 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
-    "/v1/simple/chat/cards/{card_id}/apply": {
+    "/v1/simple/meetings/{meeting_id}/send": {
       "post": {
         "tags": [
           "simple"
         ],
-        "summary": "Apply Simple Chat Card",
-        "description": "Apply the card (or ``fix``: one of its fixes) through the change engine: applied\nfor an owner or the decider, proposed for others; 403 with the reason when the\nmeeting's change mode leaves the caller out.",
-        "operationId": "apply_simple_chat_card",
+        "summary": "Send Simple Meeting Minutes",
+        "description": "Post the minutes to the Decisions page and each attendee's Inbox; email the\nattendees and post to Slack when chosen.",
+        "operationId": "send_simple_meeting_minutes",
         "security": [
           {
             "HTTPBearer": []
@@ -43300,29 +43596,22 @@
         ],
         "parameters": [
           {
-            "name": "card_id",
+            "name": "meeting_id",
             "in": "path",
             "required": true,
             "schema": {
               "type": "string",
               "format": "uuid",
-              "title": "Card Id"
+              "title": "Meeting Id"
             }
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/ChatApplyIn"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Body"
+                "$ref": "#/components/schemas/SimpleSendIn"
               }
             }
           }
@@ -43333,21 +43622,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatApplyOut"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Stale: nothing written",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": {
-                    "$ref": "#/components/schemas/SimpleChangeConflict"
-                  },
-                  "title": "Response 409 Apply Simple Chat Card"
+                  "$ref": "#/components/schemas/SimpleMeetingOut"
                 }
               }
             }
@@ -43363,135 +43638,18 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
-    "/v1/simple/chat/cards/{card_id}/discard": {
-      "post": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Discard Simple Chat Card",
-        "description": "Discard the card: nothing is written.",
-        "operationId": "discard_simple_chat_card",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "card_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Card Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatCardOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "commenter"
-      }
-    },
-    "/v1/simple/chat/cards/{card_id}/undo": {
-      "post": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Undo Simple Chat Card",
-        "description": "Undo the change an applied card made (its author, in its session).",
-        "operationId": "undo_simple_chat_card",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "card_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Card Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ChatCardOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "commenter"
-      }
-    },
-    "/v1/simple/walk": {
+    "/v1/simple/decisions": {
       "get": {
         "tags": [
           "simple"
         ],
-        "summary": "Get Simple Walk",
-        "description": "Walk me through it: the broken links first, then the decisions on the next\nmeeting's agenda, then the proposals waiting on the caller.",
-        "operationId": "get_simple_walk",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/WalkOut"
-                }
-              }
-            }
-          }
-        },
+        "summary": "Get Simple Decisions",
+        "description": "Every decision newest first, grouped under the meeting that took it (beside its\nminutes), then those taken outside meetings; filter by PRD, goal or meeting.",
+        "operationId": "get_simple_decisions",
         "security": [
           {
             "HTTPBearer": []
@@ -43500,6 +43658,81 @@
             "APIKeyCookie": []
           }
         ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Prd"
+            }
+          },
+          {
+            "name": "goal",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Goal"
+            }
+          },
+          {
+            "name": "meeting",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Meeting"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDecisionsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
         "x-min-role": "viewer"
       }
     },
@@ -43532,369 +43765,6 @@
           }
         ],
         "x-min-role": "viewer"
-      }
-    },
-    "/v1/simple/visuals/{kind}/{subject_id}": {
-      "get": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Get Simple Visual",
-        "description": "The subject's visual: its newest drawing (null: none yet), versions newest first,\ncomments, whether Oracle is drawing it, and what the caller may do.",
-        "operationId": "get_simple_visual",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Kind"
-            }
-          },
-          {
-            "name": "subject_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Subject Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleVisualOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      }
-    },
-    "/v1/simple/visuals/{kind}/{subject_id}/versions/{number}": {
-      "get": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Get Simple Visual Version",
-        "description": "One version of the visual (the history).",
-        "operationId": "get_simple_visual_version",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Kind"
-            }
-          },
-          {
-            "name": "subject_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Subject Id"
-            }
-          },
-          {
-            "name": "number",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Number"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleFlow"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "viewer"
-      }
-    },
-    "/v1/simple/visuals/{kind}/{subject_id}/comments": {
-      "post": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Comment Simple Visual",
-        "description": "Comment on the newest drawing, or on one of its numbered annotations.",
-        "operationId": "comment_simple_visual",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Kind"
-            }
-          },
-          {
-            "name": "subject_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Subject Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/SimpleVisualCommentIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleVisualOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "commenter"
-      }
-    },
-    "/v1/simple/visuals/{kind}/{subject_id}/revise": {
-      "post": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Revise Simple Visual",
-        "description": "Revise: Oracle redraws the visual from its open comments (and the note) as the next\nversion (the ``simple_visual`` job). Who changes the subject directly; 409 with no\nopen comment and no note.",
-        "operationId": "revise_simple_visual",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Kind"
-            }
-          },
-          {
-            "name": "subject_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Subject Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/SimpleVisualReviseIn"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleVisualOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "commenter"
-      }
-    },
-    "/v1/simple/visuals/{kind}/{subject_id}/request": {
-      "post": {
-        "tags": [
-          "simple"
-        ],
-        "summary": "Request Simple Visual",
-        "description": "Ask Oracle to draw a subject's visual (a feature on the roadmap that has none).",
-        "operationId": "request_simple_visual",
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "kind",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Kind"
-            }
-          },
-          {
-            "name": "subject_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Subject Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/SimpleVisualRequestIn"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ],
-                "title": "Body"
-              }
-            }
-          }
-        },
-        "responses": {
-          "202": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SimpleVisualOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "x-min-role": "commenter"
       }
     },
     "/v1/strategy/stack": {
@@ -56761,570 +56631,6 @@
         ],
         "title": "ChangesReport"
       },
-      "ChatApplyIn": {
-        "properties": {
-          "fix": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Fix"
-          }
-        },
-        "type": "object",
-        "title": "ChatApplyIn"
-      },
-      "ChatApplyOut": {
-        "properties": {
-          "card": {
-            "$ref": "#/components/schemas/ChatCardOut"
-          },
-          "result": {
-            "$ref": "#/components/schemas/SimpleChangeResult"
-          }
-        },
-        "type": "object",
-        "required": [
-          "card",
-          "result"
-        ],
-        "title": "ChatApplyOut"
-      },
-      "ChatCardOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "message_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Message Id"
-          },
-          "op": {
-            "type": "string",
-            "enum": [
-              "move_dates",
-              "change_horizon",
-              "reorder",
-              "cut",
-              "restore",
-              "edit_title",
-              "edit_outcome",
-              "accept_date_suggestion",
-              "accept_risk",
-              "shift_dependents",
-              "move_dependency",
-              "override_priority",
-              "add_item_task",
-              "edit_item_task",
-              "set_item_task_status",
-              "add_action_item",
-              "edit_action_item",
-              "set_action_item_status",
-              "add_launch_task",
-              "set_launch_task_status",
-              "estimate_feature",
-              "confirm_item",
-              "edit_line",
-              "set_milestone",
-              "add_feature_ask"
-            ],
-            "title": "Op"
-          },
-          "target": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Target"
-          },
-          "before": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Before"
-          },
-          "after": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "After"
-          },
-          "summary": {
-            "type": "string",
-            "title": "Summary"
-          },
-          "item_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Item Id"
-          },
-          "item_title": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Item Title"
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "open",
-              "applied",
-              "proposed",
-              "discarded",
-              "undone"
-            ],
-            "title": "Status"
-          },
-          "may": {
-            "anyOf": [
-              {
-                "type": "string",
-                "enum": [
-                  "apply",
-                  "propose"
-                ]
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "May"
-          },
-          "why_not": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Why Not"
-          },
-          "flags": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleItemFlags"
-            },
-            "type": "array",
-            "title": "Flags"
-          },
-          "fixes": {
-            "items": {
-              "$ref": "#/components/schemas/ChatFix"
-            },
-            "type": "array",
-            "title": "Fixes"
-          },
-          "preview": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Preview"
-          },
-          "flow": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SimpleFlow"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "change_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Change Id"
-          },
-          "decided_by_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decided By Name"
-          },
-          "decided_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decided At"
-          },
-          "decision_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Decision Id"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "message_id",
-          "op",
-          "target",
-          "before",
-          "after",
-          "summary",
-          "item_id",
-          "item_title",
-          "status",
-          "may",
-          "why_not",
-          "flags",
-          "fixes",
-          "preview",
-          "flow",
-          "change_id",
-          "decided_by_name",
-          "decided_at",
-          "decision_id"
-        ],
-        "title": "ChatCardOut"
-      },
-      "ChatFix": {
-        "properties": {
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "op": {
-            "type": "string",
-            "enum": [
-              "move_dates",
-              "change_horizon",
-              "reorder",
-              "cut",
-              "restore",
-              "edit_title",
-              "edit_outcome",
-              "accept_date_suggestion",
-              "accept_risk",
-              "shift_dependents",
-              "move_dependency",
-              "override_priority",
-              "add_item_task",
-              "edit_item_task",
-              "set_item_task_status",
-              "add_action_item",
-              "edit_action_item",
-              "set_action_item_status",
-              "add_launch_task",
-              "set_launch_task_status",
-              "estimate_feature",
-              "confirm_item",
-              "edit_line",
-              "set_milestone",
-              "add_feature_ask"
-            ],
-            "title": "Op"
-          },
-          "target": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Target"
-          },
-          "before": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Before"
-          },
-          "after": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "After"
-          }
-        },
-        "type": "object",
-        "required": [
-          "label",
-          "op",
-          "target",
-          "before"
-        ],
-        "title": "ChatFix",
-        "description": "A one-click fix for a broken link the card would make: its own change-engine op."
-      },
-      "ChatIn": {
-        "properties": {
-          "text": {
-            "type": "string",
-            "maxLength": 1000,
-            "minLength": 1,
-            "title": "Text"
-          },
-          "page": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 300
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Page"
-          }
-        },
-        "type": "object",
-        "required": [
-          "text"
-        ],
-        "title": "ChatIn"
-      },
-      "ChatMessageOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "author_kind": {
-            "type": "string",
-            "enum": [
-              "person",
-              "oracle"
-            ],
-            "title": "Author Kind"
-          },
-          "author_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Author Id"
-          },
-          "author_name": {
-            "type": "string",
-            "title": "Author Name"
-          },
-          "body": {
-            "type": "string",
-            "title": "Body"
-          },
-          "at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "At"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "request",
-              "cards",
-              "question",
-              "answer",
-              "note"
-            ],
-            "title": "Kind"
-          },
-          "cards": {
-            "items": {
-              "$ref": "#/components/schemas/ChatCardOut"
-            },
-            "type": "array",
-            "title": "Cards"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "author_kind",
-          "author_id",
-          "author_name",
-          "body",
-          "at",
-          "kind",
-          "cards"
-        ],
-        "title": "ChatMessageOut"
-      },
-      "ChatModeIn": {
-        "properties": {
-          "change_mode": {
-            "type": "string",
-            "enum": [
-              "everyone",
-              "presenter",
-              "named"
-            ],
-            "title": "Change Mode"
-          },
-          "change_people": {
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "type": "array",
-            "maxItems": 2,
-            "title": "Change People"
-          }
-        },
-        "type": "object",
-        "required": [
-          "change_mode"
-        ],
-        "title": "ChatModeIn"
-      },
-      "ChatRulesOut": {
-        "properties": {
-          "change_mode": {
-            "type": "string",
-            "enum": [
-              "everyone",
-              "presenter",
-              "named"
-            ],
-            "title": "Change Mode"
-          },
-          "change_people": {
-            "items": {
-              "$ref": "#/components/schemas/SimplePersonRef"
-            },
-            "type": "array",
-            "title": "Change People"
-          },
-          "presenter": {
-            "$ref": "#/components/schemas/SimplePersonRef"
-          },
-          "is_presenter": {
-            "type": "boolean",
-            "title": "Is Presenter"
-          },
-          "may_apply": {
-            "type": "boolean",
-            "title": "May Apply"
-          },
-          "ask_only": {
-            "type": "boolean",
-            "title": "Ask Only"
-          },
-          "ended": {
-            "type": "boolean",
-            "title": "Ended"
-          }
-        },
-        "type": "object",
-        "required": [
-          "change_mode",
-          "change_people",
-          "presenter",
-          "is_presenter",
-          "may_apply",
-          "ask_only",
-          "ended"
-        ],
-        "title": "ChatRulesOut"
-      },
-      "ChatThreadOut": {
-        "properties": {
-          "id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "meeting_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Meeting Id"
-          },
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/ChatMessageOut"
-            },
-            "type": "array",
-            "title": "Messages"
-          },
-          "rules": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ChatRulesOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "meeting_id",
-          "messages",
-          "rules"
-        ],
-        "title": "ChatThreadOut"
-      },
       "CheckOut": {
         "properties": {
           "opened": {
@@ -62978,7 +62284,8 @@
               "autonomy",
               "checkpoint",
               "request_decline",
-              "pricing"
+              "pricing",
+              "meeting"
             ],
             "title": "Origin"
           },
@@ -63879,7 +63186,8 @@
               "autonomy",
               "checkpoint",
               "request_decline",
-              "pricing"
+              "pricing",
+              "meeting"
             ],
             "title": "Origin"
           },
@@ -76929,6 +76237,14 @@
             "type": "array",
             "title": "Simple Approvals",
             "default": []
+          },
+          "simple_minutes": {
+            "items": {
+              "$ref": "#/components/schemas/InboxSimpleMinutes"
+            },
+            "type": "array",
+            "title": "Simple Minutes",
+            "default": []
           }
         },
         "type": "object",
@@ -77696,9 +77012,7 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line",
-              "set_milestone",
-              "add_feature_ask"
+              "edit_line"
             ],
             "title": "Op"
           },
@@ -77837,6 +77151,53 @@
         ],
         "title": "InboxSimpleChange",
         "description": "A proposal waiting for me (``simple_proposals``) or a decision on my proposal\n(``simple_decisions``)."
+      },
+      "InboxSimpleMinutes": {
+        "properties": {
+          "meeting_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Meeting Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "decisions": {
+            "type": "integer",
+            "title": "Decisions"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "new",
+              "open"
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meeting_id",
+          "title",
+          "ended_at",
+          "decisions",
+          "state"
+        ],
+        "title": "InboxSimpleMinutes",
+        "description": "A meeting's minutes, sent to each attendee (``simple_minutes``)."
       },
       "InboxSource": {
         "properties": {
@@ -84016,11 +83377,11 @@
               "refinement_batch",
               "public_text",
               "one_pager",
+              "meeting_minutes",
               "intake_analysis",
               "decision_options",
               "scope_enhance",
-              "why_not_reply",
-              "simple_visual"
+              "why_not_reply"
             ],
             "title": "Kind"
           },
@@ -84083,18 +83444,6 @@
               }
             ],
             "title": "Request Id"
-          },
-          "visual_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Visual Id"
           },
           "version_number": {
             "anyOf": [
@@ -88884,6 +88233,17 @@
           "can_submit": {
             "type": "boolean",
             "title": "Can Submit"
+          },
+          "approved_in": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved In"
           }
         },
         "type": "object",
@@ -88922,40 +88282,6 @@
               }
             ],
             "title": "Screen"
-          },
-          "subject_kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subject Kind"
-          },
-          "subject_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subject Id"
-          },
-          "version": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Version"
           }
         },
         "type": "object",
@@ -89049,27 +88375,13 @@
             "title": "State",
             "default": "published"
           },
-          "flow_subject": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Flow Subject"
-          },
-          "flow": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OnePagerFlow"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOpenDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
           }
         },
         "type": "object",
@@ -89162,6 +88474,17 @@
           "can_decide": {
             "type": "boolean",
             "title": "Can Decide"
+          },
+          "meeting_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meeting Title"
           },
           "adds_feature": {
             "type": "boolean",
@@ -109978,6 +109301,133 @@
         "title": "SignedOutEverywhere",
         "description": "Every session signed before ``sessions_valid_after`` is refused, this one too;\nevery personal API token, every MCP client (refresh tokens included) and the run\ntokens of the runs you started that are still going are revoked (AC1)."
       },
+      "SimpleActionItemIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SimpleActionItemIn"
+      },
+      "SimpleActionItemOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "owner_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Id"
+          },
+          "due_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Date"
+          },
+          "owner_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Owner Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SimpleActionItemOut"
+      },
+      "SimpleAttendee": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "roles": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "decider",
+                "reviewer",
+                "owner",
+                "presenter"
+              ]
+            },
+            "type": "array",
+            "title": "Roles",
+            "default": []
+          },
+          "present": {
+            "type": "boolean",
+            "title": "Present",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "SimpleAttendee"
+      },
       "SimpleChangeConflict": {
         "properties": {
           "message": {
@@ -110061,9 +109511,7 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line",
-              "set_milestone",
-              "add_feature_ask"
+              "edit_line"
             ],
             "title": "Op"
           },
@@ -110168,9 +109616,7 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line",
-              "set_milestone",
-              "add_feature_ask"
+              "edit_line"
             ],
             "title": "Op"
           },
@@ -110369,6 +109815,41 @@
         ],
         "title": "SimpleDate"
       },
+      "SimpleDecidedFlow": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "id",
+          "title"
+        ],
+        "title": "SimpleDecidedFlow",
+        "description": "The new flow or feature a meeting decision decided (a draft item) and its flow\n(oracle.simple.visuals, S10); ``flow`` is None until one is drawn (\"No flow yet\")."
+      },
       "SimpleDecisionIn": {
         "properties": {
           "reason": {
@@ -110382,10 +109863,213 @@
               }
             ],
             "title": "Reason"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
           }
         },
         "type": "object",
         "title": "SimpleDecisionIn"
+      },
+      "SimpleDecisionRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "origin": {
+            "type": "string",
+            "title": "Origin"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "approver": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "subjects": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Subjects",
+            "default": []
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDecidedFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title",
+          "origin",
+          "status",
+          "approver",
+          "decided_at",
+          "created_at"
+        ],
+        "title": "SimpleDecisionRow"
+      },
+      "SimpleDecisionsOut": {
+        "properties": {
+          "meetings": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingGroup"
+            },
+            "type": "array",
+            "title": "Meetings"
+          },
+          "other": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDecisionRow"
+            },
+            "type": "array",
+            "title": "Other"
+          },
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFilterOption"
+            },
+            "type": "array",
+            "title": "Prds"
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFilterOption"
+            },
+            "type": "array",
+            "title": "Goals"
+          },
+          "meeting_options": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFilterOption"
+            },
+            "type": "array",
+            "title": "Meeting Options"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meetings",
+          "other",
+          "prds",
+          "goals",
+          "meeting_options"
+        ],
+        "title": "SimpleDecisionsOut",
+        "description": "Simple's Decisions (direction B \"By meeting\"): the meetings' decisions grouped under\nthem, newest first, then the decisions taken outside meetings."
+      },
+      "SimpleDelivery": {
+        "properties": {
+          "decisions": {
+            "type": "boolean",
+            "title": "Decisions",
+            "default": true
+          },
+          "inbox": {
+            "type": "boolean",
+            "title": "Inbox",
+            "default": true
+          },
+          "email": {
+            "type": "boolean",
+            "title": "Email",
+            "default": false
+          },
+          "email_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Status"
+          },
+          "slack": {
+            "type": "boolean",
+            "title": "Slack",
+            "default": false
+          },
+          "slack_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slack Status"
+          },
+          "slack_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slack Channel"
+          }
+        },
+        "type": "object",
+        "title": "SimpleDelivery"
       },
       "SimpleDocRef": {
         "properties": {
@@ -110687,6 +110371,24 @@
         "title": "SimpleDraftOut",
         "description": "A working draft of one roadmap (S3b): its changes until submitted, then the version\nin review and who it waits on."
       },
+      "SimpleFilterOption": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleFilterOption"
+      },
       "SimpleFlag": {
         "properties": {
           "kind": {
@@ -110771,105 +110473,6 @@
           },
           "screen": {
             "$ref": "#/components/schemas/SimpleFlowScreen"
-          },
-          "subject_kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subject Kind"
-          },
-          "subject_id": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Subject Id"
-          },
-          "version": {
-            "type": "integer",
-            "title": "Version",
-            "default": 1
-          },
-          "versions": {
-            "type": "integer",
-            "title": "Versions",
-            "default": 1
-          },
-          "goal": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Goal"
-          },
-          "nodes": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleFlowStep"
-            },
-            "type": "array",
-            "title": "Nodes",
-            "default": []
-          },
-          "svg": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Svg"
-          },
-          "wireframe": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Wireframe"
-          },
-          "touches_screen": {
-            "type": "boolean",
-            "title": "Touches Screen",
-            "default": true
-          },
-          "annotations": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleFlowNote"
-            },
-            "type": "array",
-            "title": "Annotations",
-            "default": []
-          },
-          "made_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Made At"
           }
         },
         "type": "object",
@@ -110878,54 +110481,7 @@
           "steps",
           "screen"
         ],
-        "title": "SimpleFlow",
-        "description": "A proposal's visual (S10, oracle.simple.visuals): its newest drawing."
-      },
-      "SimpleFlowNote": {
-        "properties": {
-          "n": {
-            "type": "integer",
-            "title": "N"
-          },
-          "target": {
-            "type": "string",
-            "title": "Target"
-          },
-          "note": {
-            "type": "string",
-            "title": "Note"
-          },
-          "section_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Section Key"
-          },
-          "requirement": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Requirement"
-          }
-        },
-        "type": "object",
-        "required": [
-          "n",
-          "target",
-          "note"
-        ],
-        "title": "SimpleFlowNote",
-        "description": "A numbered annotation: the part of the drawing it is on (an element id of the flow\nor a region of the wireframe), the PRD section and requirement it ties to."
+        "title": "SimpleFlow"
       },
       "SimpleFlowScreen": {
         "properties": {
@@ -110947,66 +110503,6 @@
           "regions"
         ],
         "title": "SimpleFlowScreen"
-      },
-      "SimpleFlowStep": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "label": {
-            "type": "string",
-            "title": "Label"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "step",
-              "decision"
-            ],
-            "title": "Kind",
-            "default": "step"
-          },
-          "feature": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Feature"
-          },
-          "change": {
-            "type": "string",
-            "enum": [
-              "new",
-              "changed",
-              "same"
-            ],
-            "title": "Change",
-            "default": "same"
-          },
-          "section_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Section Key"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "label"
-        ],
-        "title": "SimpleFlowStep",
-        "description": "A step of a user flow (S10): a decision point or a step, the feature that enables\nit and what changes versus today."
       },
       "SimpleGoalBucket": {
         "properties": {
@@ -111173,6 +110669,659 @@
         ],
         "title": "SimpleItemMilestone"
       },
+      "SimpleMeetingBrief": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "one_pager",
+              "roadmap",
+              "ritual"
+            ],
+            "title": "Origin"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "ended"
+            ],
+            "title": "Status"
+          },
+          "presenter": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "attendees": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAttendee"
+            },
+            "type": "array",
+            "title": "Attendees"
+          },
+          "length_min": {
+            "type": "integer",
+            "title": "Length Min"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "decisions": {
+            "type": "integer",
+            "title": "Decisions"
+          },
+          "minutes_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "drafting",
+                  "ready",
+                  "sent"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes State"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "prd",
+          "origin",
+          "status",
+          "presenter",
+          "attendees",
+          "length_min",
+          "started_at",
+          "ended_at",
+          "decisions"
+        ],
+        "title": "SimpleMeetingBrief"
+      },
+      "SimpleMeetingCan": {
+        "properties": {
+          "change": {
+            "type": "boolean",
+            "title": "Change"
+          },
+          "set_rules": {
+            "type": "boolean",
+            "title": "Set Rules"
+          },
+          "approve": {
+            "type": "boolean",
+            "title": "Approve"
+          },
+          "end": {
+            "type": "boolean",
+            "title": "End"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change",
+          "set_rules",
+          "approve",
+          "end"
+        ],
+        "title": "SimpleMeetingCan"
+      },
+      "SimpleMeetingCommentIn": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "subjects": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "title": "Subjects"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SimpleMeetingCommentIn"
+      },
+      "SimpleMeetingDecision": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "approver": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "subjects": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Subjects",
+            "default": []
+          },
+          "change_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Change Ids",
+            "default": []
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDecidedFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "title",
+          "approver",
+          "at"
+        ],
+        "title": "SimpleMeetingDecision",
+        "description": "A decision taken in a meeting: a ``decisions`` row, origin ``meeting``."
+      },
+      "SimpleMeetingGroup": {
+        "properties": {
+          "meeting": {
+            "$ref": "#/components/schemas/SimpleMeetingBrief"
+          },
+          "minutes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleMinutes"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDecisionRow"
+            },
+            "type": "array",
+            "title": "Decisions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "meeting",
+          "minutes",
+          "decisions"
+        ],
+        "title": "SimpleMeetingGroup"
+      },
+      "SimpleMeetingIn": {
+        "properties": {
+          "prd": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Prd"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "one_pager",
+              "roadmap",
+              "ritual"
+            ],
+            "title": "Origin",
+            "default": "one_pager"
+          },
+          "occurrence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Id"
+          },
+          "attendee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "title": "Attendee Ids"
+          },
+          "change_mode": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "presenter",
+              "named"
+            ],
+            "title": "Change Mode",
+            "default": "everyone"
+          },
+          "change_people": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "maxItems": 2,
+            "title": "Change People"
+          },
+          "length_min": {
+            "type": "integer",
+            "maximum": 240.0,
+            "minimum": 5.0,
+            "title": "Length Min",
+            "default": 60
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd"
+        ],
+        "title": "SimpleMeetingIn"
+      },
+      "SimpleMeetingOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "origin": {
+            "type": "string",
+            "enum": [
+              "one_pager",
+              "roadmap",
+              "ritual"
+            ],
+            "title": "Origin"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "live",
+              "ended"
+            ],
+            "title": "Status"
+          },
+          "presenter": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "attendees": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAttendee"
+            },
+            "type": "array",
+            "title": "Attendees"
+          },
+          "length_min": {
+            "type": "integer",
+            "title": "Length Min"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "ended_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ended At"
+          },
+          "decisions": {
+            "type": "integer",
+            "title": "Decisions"
+          },
+          "minutes_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "drafting",
+                  "ready",
+                  "sent"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minutes State"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Session Id"
+          },
+          "occurrence_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occurrence Id"
+          },
+          "change_mode": {
+            "type": "string",
+            "enum": [
+              "everyone",
+              "presenter",
+              "named"
+            ],
+            "title": "Change Mode"
+          },
+          "change_people": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Change People",
+            "default": []
+          },
+          "roadmap_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Roadmap Ids",
+            "default": []
+          },
+          "meeting_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingDecision"
+            },
+            "type": "array",
+            "title": "Meeting Decisions",
+            "default": []
+          },
+          "open_decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOpenDecision"
+            },
+            "type": "array",
+            "title": "Open Decisions",
+            "default": []
+          },
+          "pending_proposals": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleChangeOut"
+            },
+            "type": "array",
+            "title": "Pending Proposals",
+            "default": []
+          },
+          "drafts": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleDraftOut"
+            },
+            "type": "array",
+            "title": "Drafts",
+            "default": []
+          },
+          "minutes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleMinutes"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delivery": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDelivery"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slack": {
+            "$ref": "#/components/schemas/SimpleSlackState"
+          },
+          "email_available": {
+            "type": "boolean",
+            "title": "Email Available"
+          },
+          "can": {
+            "$ref": "#/components/schemas/SimpleMeetingCan"
+          },
+          "not_approved": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleNotApproved"
+            },
+            "type": "array",
+            "title": "Not Approved",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "prd",
+          "origin",
+          "status",
+          "presenter",
+          "attendees",
+          "length_min",
+          "started_at",
+          "ended_at",
+          "decisions",
+          "session_id",
+          "change_mode",
+          "slack",
+          "email_available",
+          "can"
+        ],
+        "title": "SimpleMeetingOut"
+      },
+      "SimpleMeetingRulesIn": {
+        "properties": {
+          "change_mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "everyone",
+                  "presenter",
+                  "named"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Mode"
+          },
+          "change_people": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array",
+                "maxItems": 2
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change People"
+          },
+          "absent_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absent Ids"
+          }
+        },
+        "type": "object",
+        "title": "SimpleMeetingRulesIn"
+      },
+      "SimpleMeetingsOut": {
+        "properties": {
+          "upcoming": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleUpcomingMeeting"
+            },
+            "type": "array",
+            "title": "Upcoming"
+          },
+          "live": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingBrief"
+            },
+            "type": "array",
+            "title": "Live"
+          },
+          "past": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingBrief"
+            },
+            "type": "array",
+            "title": "Past"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upcoming",
+          "live",
+          "past"
+        ],
+        "title": "SimpleMeetingsOut"
+      },
       "SimpleMilestone": {
         "properties": {
           "id": {
@@ -111238,6 +111387,103 @@
           "item_ids"
         ],
         "title": "SimpleMilestone"
+      },
+      "SimpleMinutes": {
+        "properties": {
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
+          "open_questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Open Questions",
+            "default": []
+          },
+          "action_items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleActionItemOut"
+            },
+            "type": "array",
+            "title": "Action Items",
+            "default": []
+          },
+          "waits": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleWait"
+            },
+            "type": "array",
+            "title": "Waits",
+            "default": []
+          },
+          "written_by": {
+            "type": "string",
+            "enum": [
+              "extract",
+              "oracle",
+              "edited"
+            ],
+            "title": "Written By",
+            "default": "extract"
+          }
+        },
+        "type": "object",
+        "title": "SimpleMinutes"
+      },
+      "SimpleMinutesIn": {
+        "properties": {
+          "summary": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Summary",
+            "default": ""
+          },
+          "open_questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Open Questions"
+          },
+          "action_items": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleActionItemIn"
+            },
+            "type": "array",
+            "maxItems": 30,
+            "title": "Action Items"
+          }
+        },
+        "type": "object",
+        "title": "SimpleMinutesIn"
+      },
+      "SimpleNotApproved": {
+        "properties": {
+          "draft_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Draft Id"
+          },
+          "document": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "draft_id",
+          "document",
+          "reason"
+        ],
+        "title": "SimpleNotApproved",
+        "description": "A roadmap a meeting's session worked on that the caller does not approve."
       },
       "SimpleOpenDecision": {
         "properties": {
@@ -112086,15 +112332,13 @@
             "title": "Open Decisions",
             "default": []
           },
-          "flow": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SimpleFlow"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "decided_in": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleOpenDecision"
+            },
+            "type": "array",
+            "title": "Decided In",
+            "default": []
           }
         },
         "type": "object",
@@ -112181,6 +112425,22 @@
         ],
         "title": "SimpleRoadmapOut"
       },
+      "SimpleSendIn": {
+        "properties": {
+          "email": {
+            "type": "boolean",
+            "title": "Email",
+            "default": false
+          },
+          "slack": {
+            "type": "boolean",
+            "title": "Slack",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SimpleSendIn"
+      },
       "SimpleSessionIn": {
         "properties": {
           "kind": {
@@ -112257,6 +112517,114 @@
         ],
         "title": "SimpleSessionOut"
       },
+      "SimpleSlackState": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected"
+        ],
+        "title": "SimpleSlackState"
+      },
+      "SimpleStartOptions": {
+        "properties": {
+          "prds": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleStartPrd"
+            },
+            "type": "array",
+            "title": "Prds"
+          },
+          "members": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Members"
+          },
+          "length_min": {
+            "type": "integer",
+            "title": "Length Min",
+            "default": 60
+          },
+          "occurrence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleUpcomingMeeting"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "prds",
+          "members"
+        ],
+        "title": "SimpleStartOptions"
+      },
+      "SimpleStartPrd": {
+        "properties": {
+          "document": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_start": {
+            "type": "boolean",
+            "title": "Can Start"
+          },
+          "starters": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Starters"
+          },
+          "default_attendee_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Default Attendee Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "document",
+          "decider",
+          "can_start",
+          "starters",
+          "default_attendee_ids"
+        ],
+        "title": "SimpleStartPrd"
+      },
       "SimpleTrackRef": {
         "properties": {
           "id": {
@@ -112276,231 +112644,84 @@
         ],
         "title": "SimpleTrackRef"
       },
-      "SimpleVisualCommentIn": {
+      "SimpleUpcomingMeeting": {
         "properties": {
-          "body": {
-            "type": "string",
-            "maxLength": 2000,
-            "minLength": 1,
-            "title": "Body"
-          },
-          "annotation": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 1.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Annotation"
-          }
-        },
-        "type": "object",
-        "required": [
-          "body"
-        ],
-        "title": "SimpleVisualCommentIn"
-      },
-      "SimpleVisualCommentOut": {
-        "properties": {
-          "id": {
+          "occurrence_id": {
             "type": "string",
             "format": "uuid",
-            "title": "Id"
+            "title": "Occurrence Id"
           },
-          "version": {
-            "type": "integer",
-            "title": "Version"
-          },
-          "annotation": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Annotation"
-          },
-          "body": {
+          "ritual_title": {
             "type": "string",
-            "title": "Body"
+            "title": "Ritual Title"
           },
-          "by_name": {
-            "type": "string",
-            "title": "By Name"
-          },
-          "at": {
+          "due_at": {
             "type": "string",
             "format": "date-time",
-            "title": "At"
+            "title": "Due At"
           },
-          "addressed_in": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Addressed In"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "version",
-          "body",
-          "by_name",
-          "at"
-        ],
-        "title": "SimpleVisualCommentOut"
-      },
-      "SimpleVisualOut": {
-        "properties": {
-          "subject_kind": {
+          "ends_at": {
             "type": "string",
-            "title": "Subject Kind"
+            "format": "date-time",
+            "title": "Ends At"
           },
-          "subject_id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Subject Id"
+          "length_min": {
+            "type": "integer",
+            "title": "Length Min"
           },
-          "brief": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Brief"
-          },
-          "flow": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SimpleFlow"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "versions": {
+          "attendees": {
             "items": {
-              "$ref": "#/components/schemas/SimpleVisualVersionOut"
+              "$ref": "#/components/schemas/SimplePersonRef"
             },
             "type": "array",
-            "title": "Versions"
+            "title": "Attendees"
           },
-          "comments": {
-            "items": {
-              "$ref": "#/components/schemas/SimpleVisualCommentOut"
-            },
-            "type": "array",
-            "title": "Comments"
-          },
-          "pending": {
-            "type": "boolean",
-            "title": "Pending"
-          },
-          "can_comment": {
-            "type": "boolean",
-            "title": "Can Comment"
-          },
-          "can_revise": {
-            "type": "boolean",
-            "title": "Can Revise"
-          }
-        },
-        "type": "object",
-        "required": [
-          "subject_kind",
-          "subject_id",
-          "flow",
-          "versions",
-          "comments",
-          "pending",
-          "can_comment",
-          "can_revise"
-        ],
-        "title": "SimpleVisualOut"
-      },
-      "SimpleVisualRequestIn": {
-        "properties": {
-          "brief": {
-            "type": "string",
-            "maxLength": 2000,
-            "title": "Brief",
-            "default": ""
-          }
-        },
-        "type": "object",
-        "title": "SimpleVisualRequestIn"
-      },
-      "SimpleVisualReviseIn": {
-        "properties": {
-          "note": {
+          "meeting_id": {
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 2000
+                "format": "uuid"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Note"
-          }
-        },
-        "type": "object",
-        "title": "SimpleVisualReviseIn"
-      },
-      "SimpleVisualVersionOut": {
-        "properties": {
-          "number": {
-            "type": "integer",
-            "title": "Number"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "made_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Made At"
-          },
-          "made_by_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Made By Name"
-          },
-          "addressed": {
-            "type": "integer",
-            "title": "Addressed",
-            "default": 0
+            "title": "Meeting Id"
           }
         },
         "type": "object",
         "required": [
-          "number",
-          "title",
-          "made_at"
+          "occurrence_id",
+          "ritual_title",
+          "due_at",
+          "ends_at",
+          "length_min",
+          "attendees"
         ],
-        "title": "SimpleVisualVersionOut"
+        "title": "SimpleUpcomingMeeting",
+        "description": "A scheduled ritual occurrence: a review to start from."
+      },
+      "SimpleWait": {
+        "properties": {
+          "what": {
+            "type": "string",
+            "title": "What"
+          },
+          "on": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "On",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "what"
+        ],
+        "title": "SimpleWait",
+        "description": "What still waits on whom (an absent required reviewer's approval, a proposal)."
       },
       "SimpleWindow": {
         "properties": {
@@ -124493,109 +124714,6 @@
           "reason"
         ],
         "title": "WaiveIn"
-      },
-      "WalkDecision": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid",
-            "title": "Id"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "url": {
-            "type": "string",
-            "title": "Url"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "title",
-          "url"
-        ],
-        "title": "WalkDecision"
-      },
-      "WalkOut": {
-        "properties": {
-          "steps": {
-            "items": {
-              "$ref": "#/components/schemas/WalkStepOut"
-            },
-            "type": "array",
-            "title": "Steps"
-          }
-        },
-        "type": "object",
-        "required": [
-          "steps"
-        ],
-        "title": "WalkOut"
-      },
-      "WalkStepOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "broken_link",
-              "agenda_decision",
-              "proposal"
-            ],
-            "title": "Kind"
-          },
-          "title": {
-            "type": "string",
-            "title": "Title"
-          },
-          "why": {
-            "type": "string",
-            "title": "Why"
-          },
-          "card": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ChatCardOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "change": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/SimpleChangeOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "decision": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/WalkDecision"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "kind",
-          "title",
-          "why"
-        ],
-        "title": "WalkStepOut"
       },
       "WebFetchIn": {
         "properties": {

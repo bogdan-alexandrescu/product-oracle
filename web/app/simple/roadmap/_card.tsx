@@ -450,6 +450,22 @@ export function FloatingCard({
               <span className="min-w-0 flex-1">{item.flow ? item.flow.title : <span className="text-text2">No flow yet</span>}</span>
             </div>
           </section>)}
+          {item.decided_in.length > 0 && (
+            <section className="mt-3">
+              <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Decided</h3>
+              <ul className="mt-1 text-[15px]" data-testid="card-decided-in">
+                {item.decided_in.map((d) => (
+                  <li key={d.id}>
+                    Decided in{" "}
+                    <Link href={`/simple/decisions#d-${d.number}`} className="text-accent-ink hover:underline">
+                      D-{d.number}
+                    </Link>{" "}
+                    {d.title}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <section className="mt-3">
             <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Proposals on it</h3>
             {proposals.length ? (

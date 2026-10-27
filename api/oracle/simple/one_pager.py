@@ -830,6 +830,18 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
 
     note_flows = await visuals.flows_for(db, "change", [c.id for c in live + shown])
 
+    from oracle.simple import meetings
+
+    approved_sid = ((d.decider_approval or {}).get("session_id") if d is not None else None) or None
+    titles = await meetings.titles_by_session(
+        db, sids | {c.session_id for c in shown if c.session_id}
+        | ({uuid.UUID(approved_sid)} if approved_sid else set())
+    )  # fmt: skip
+    line_ids = [x["id"] for blk in b.row.blocks for x in blk["lines"]]
+    by_line = await meetings.decided_in(
+        db, [{"kind": "section", "id": str(document.id), "ref": f"line:{i}"} for i in line_ids]
+    )
+
     def note(c: SimpleChange, kind: str) -> OnePagerNote:
         s = sessions.get(c.session_id) if c.session_id else None
         line_id = str(c.target.get("line_id"))
@@ -841,6 +853,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             by_name=names.get(c.by, "someone"),
             at=c.at,
             in_meeting=s is not None and s.kind == "meeting",
+            meeting_title=titles.get(c.session_id) if c.session_id else None,
             before=str(c.before.get("line") or ""),
             after=str(c.after.get("line") or ""),
             sections=[
@@ -885,6 +898,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                     else "proposal"
                     if line["id"] in proposed
                     else "published",
+                    decisions=by_line.get(("section", str(document.id), f"line:{line['id']}"), []),
                 )
             )
         blocks.append(
@@ -934,6 +948,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             can_submit=d.status == "working" and decides(principal, w),
             reminded_at=reminded_at(d),
             can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),
+            approved_in=titles.get(uuid.UUID(approved_sid)) if approved_sid else None,
         )
     patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
     used = {k for blk in b.row.blocks for x in blk["lines"] for k in x["source_keys"]}
@@ -1197,7 +1212,7 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     return SimpleChangeResult(change=await changes.one_out(db, principal, c), flags=[])
 
 
-async def decide(db, principal, c: SimpleChange, action: str, reason: str | None):
+async def decide(db, principal, c: SimpleChange, action: str, reason: str | None, session_id=None):
     from oracle.simple import changes
 
     me, now = changes._me(principal), company_time.now()
@@ -1215,7 +1230,7 @@ async def decide(db, principal, c: SimpleChange, action: str, reason: str | None
         was = {k: v["body"] for k, v in (c.before.get("sections") or {}).items()}
         if text != c.before.get("line") or bodies != was:
             raise _conflict("outdated: the line or its sections changed since the proposal", text)
-        session = await _session_for_change(db, me, None, True, now)
+        session = await _session_for_change(db, me, session_id, True, now)
         await _apply(db, principal, c, b, c.after, session)
         session.last_change_at = now  # type: ignore[union-attr]
     c.status = "accepted" if action == "accept" else "declined"

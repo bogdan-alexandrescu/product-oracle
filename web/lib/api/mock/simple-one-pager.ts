@@ -62,9 +62,13 @@ export interface OnePagerDb {
     id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string>;
     status?: "working" | "submitted"; waiting_on?: string[]; reminders?: Record<string, string>;
   };
-  changes: (Change & { session_open: boolean; in_meeting: boolean })[];
+  changes: (Change & { session_open: boolean; in_meeting: boolean; meeting_title?: string | null })[];
   /** S10: the visuals (./simple-visuals.ts), shared with the roadmap's. */
   visuals?: VisualsDb;
+  /** S8: decided decisions that changed each line (by line id), newest first (./simple-meetings.ts). */
+  decisions?: Record<string, { id: string; number: number; title: string }[]>;
+  /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
+  approval?: { approved_in: string; waiting_on: { id: string; name: string }[] } | null;
 }
 
 const DOC_ID = stableUuid("simple-one-pager-doc");
@@ -226,7 +230,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
       can_undo: kind === "change" && c.by === ctx.id && c.session_open,
       can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
-      adds_feature: lineId.startsWith("bets-"), flow: onePagerFlow(flowFor(db.visuals, "change", c.id)),
+      adds_feature: lineId.startsWith("bets-"), flow: onePagerFlow(flowFor(db.visuals, "change", c.id)), meeting_title: c.meeting_title ?? null,
     };
   };
   const notes = [...live.map((c) => note(c, "change")), ...shown.map((c) => note(c, "proposal"))];
@@ -253,6 +257,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
           // S10: each bet carries its visual.
           ...(b.key === "bets" ? { flow_subject: betSubject(text), flow: onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(text))) } : {}),
+          decisions: [...(db.decisions?.[l.id] ?? [])],
         };
       }),
     })),
@@ -265,8 +270,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     notes,
     draft: sees && db.draft
       ? {
-          id: db.draft.id, status: db.draft.status ?? "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: false,
-          waiting_on: (db.draft.waiting_on ?? []).map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })),
+          id: db.draft.id, status: db.draft.status ?? "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: !!db.approval, approved_in: db.approval?.approved_in ?? null,
+          waiting_on: db.approval?.waiting_on ?? (db.draft.waiting_on ?? []).map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })),
           can_submit: (db.draft.status ?? "working") === "working" && decides(ctx) && liveChanges(db).length > 0,
           reminded_at: remindedAt(db), can_remind: mayRemind(ctx) && dueReminders(db).length > 0,
         }

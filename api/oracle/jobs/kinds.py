@@ -61,6 +61,8 @@ MAX_TOKENS = {
     "goal_suggestions": 3000,
     # Simple S10: one proposal's user flow and wireframe (steps, regions, annotations).
     "simple_visual": 3000,
+    # Simple S8: one meeting's minutes.
+    "meeting_minutes": 3000,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -1069,6 +1071,13 @@ async def simple_visual(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any
     return await visuals.run_job(s, job, ask)
 
 
+async def meeting_minutes(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Drafts a review meeting's minutes (oracle.simple.meetings)."""
+    from oracle.simple import meetings
+
+    return await meetings.run_job(s, job, ask)
+
+
 # Run when a job of the kind fails for good, in the transaction that records it.
 ON_FAILURE: dict[str, Callable[[AsyncSession, LlmJob], Awaitable[None]]] = {
     "why_not_reply": why_not_reply_failed,
@@ -1092,6 +1101,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "item_draft": item_draft,
     "goal_suggestions": goal_suggestions,
     "simple_visual": simple_visual,
+    "meeting_minutes": meeting_minutes,
 }
 
 

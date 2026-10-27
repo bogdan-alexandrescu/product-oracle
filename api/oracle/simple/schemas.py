@@ -166,6 +166,8 @@ class SimpleRoadmapItem(BaseModel):
         default=[], description="S7: the goals the item is linked to directly."
     )
 
+    # S8: the decided decisions that changed the item (newest first; the Decisions page).
+    decided_in: list[SimpleOpenDecision] = []
 
 class SimpleMatch(BaseModel):
     kind: Literal["item", "feature"]
@@ -331,6 +333,9 @@ class SimpleChangeIn(BaseModel):
 
 class SimpleDecisionIn(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
+    # S8: a meeting's session: the accepted proposal applies into the meeting's drafts and
+    # the decision is a meeting decision.
+    session_id: uuid.UUID | None = None
 
 
 class SimplePersonRef(BaseModel):
@@ -773,6 +778,8 @@ class OnePagerLine(BaseModel):
     # S10: a bet's ("What we will build") visual subject and its newest drawing.
     flow_subject: uuid.UUID | None = None
     flow: "OnePagerFlow | None" = None
+    # S8: the decisions that changed this line (newest first; the Decisions page).
+    decisions: list[SimpleOpenDecision] = []
 
 
 class OnePagerItem(BaseModel):
@@ -829,6 +836,8 @@ class OnePagerNote(BaseModel):
     sections: list[OnePagerSectionPatch]
     can_undo: bool
     can_decide: bool
+    # S8: the titled meeting the change was made in ("…, in <meeting title>").
+    meeting_title: str | None = None
     # The line adds or reshapes a flow or feature (a "What we will build" bet): the note
     # shows its flow thumbnail, ``flow`` (null: "No flow yet").
     adds_feature: bool
@@ -849,6 +858,8 @@ class OnePagerDraft(BaseModel):
     reminded_at: dt.datetime | None = None
     can_remind: bool = False
 
+    # S8: the meeting the decider approved it in ("Approved in <meeting title>").
+    approved_in: str | None = None
 
 class OnePagerRemindOut(BaseModel):
     """Remind's answer: the reviewers nudged now (each gets an Inbox nudge)."""
@@ -1070,6 +1081,250 @@ class WalkStepOut(BaseModel):
 
 class WalkOut(BaseModel):
     steps: list[WalkStepOut]
+
+
+# --------------------------------------------------------------------------- S8 meetings
+
+ChangeMode = Literal["everyone", "presenter", "named"]
+MeetingOrigin = Literal["one_pager", "roadmap", "ritual"]
+MeetingStatus = Literal["live", "ended"]
+MinutesState = Literal["drafting", "ready", "sent"]
+
+
+class SimpleAttendee(BaseModel):
+    id: uuid.UUID
+    name: str
+    # What the person is to the PRD: decider, required reviewer, owner (its tracks').
+    roles: list[Literal["decider", "reviewer", "owner", "presenter"]] = []
+    present: bool = True
+
+
+class SimpleDecidedFlow(BaseModel):
+    """The new flow or feature a meeting decision decided (a draft item) and its flow
+    (oracle.simple.visuals, S10); ``flow`` is None until one is drawn ("No flow yet")."""
+
+    kind: str
+    id: uuid.UUID
+    title: str
+    flow: SimpleFlow | None = None
+
+
+class SimpleMeetingDecision(BaseModel):
+    """A decision taken in a meeting: a ``decisions`` row, origin ``meeting``."""
+
+    id: uuid.UUID
+    number: int
+    title: str
+    approver: SimplePersonRef
+    at: dt.datetime
+    subjects: list[dict[str, Any]] = []
+    change_ids: list[uuid.UUID] = []
+    flow: SimpleDecidedFlow | None = None
+
+
+class SimpleActionItemIn(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    owner_id: uuid.UUID | None = None
+    due_date: dt.date | None = None
+
+
+class SimpleActionItemOut(SimpleActionItemIn):
+    owner_name: str | None = None
+
+
+class SimpleWait(BaseModel):
+    """What still waits on whom (an absent required reviewer's approval, a proposal)."""
+
+    what: str
+    on: list[SimplePersonRef] = []
+
+
+class SimpleMinutes(BaseModel):
+    summary: str = ""
+    open_questions: list[str] = []
+    action_items: list[SimpleActionItemOut] = []
+    waits: list[SimpleWait] = []
+    # extract: Oracle's quick draft, shown at once; oracle: the minutes job's; edited: a
+    # person's.
+    written_by: Literal["extract", "oracle", "edited"] = "extract"
+
+
+class SimpleMinutesIn(BaseModel):
+    summary: str = Field(default="", max_length=4000)
+    open_questions: list[str] = Field(default_factory=list, max_length=20)
+    action_items: list[SimpleActionItemIn] = Field(default_factory=list, max_length=30)
+
+
+class SimpleDelivery(BaseModel):
+    decisions: bool = True
+    inbox: bool = True
+    # chosen by whoever ended the meeting; status: queued, sent, failed, unavailable.
+    email: bool = False
+    email_status: str | None = None
+    slack: bool = False
+    slack_status: str | None = None
+    slack_channel: str | None = None
+
+
+class SimpleSlackState(BaseModel):
+    # The company's Slack notifications integration is installed and active.
+    connected: bool
+    # The Notifications channel minutes go to (Settings › Notifications), when set.
+    channel: str | None = None
+
+
+class SimpleMeetingBrief(BaseModel):
+    id: uuid.UUID
+    title: str
+    prd: SimpleDocRef
+    origin: MeetingOrigin
+    status: MeetingStatus
+    presenter: SimplePersonRef
+    attendees: list[SimpleAttendee]
+    length_min: int
+    started_at: dt.datetime
+    ended_at: dt.datetime | None
+    decisions: int
+    minutes_state: MinutesState | None = None
+    summary: str | None = None
+
+
+class SimpleMeetingCan(BaseModel):
+    # Change through the meeting (the presenter's change mode; the caller's own rights
+    # decide applied or proposed).
+    change: bool
+    # The presenter: change mode, presence.
+    set_rules: bool
+    # The PRD's decider (or an owner): Approve in the meeting.
+    approve: bool
+    # The presenter, an owner or the decider ends it, edits and sends the minutes.
+    end: bool
+
+
+class SimpleMeetingOut(SimpleMeetingBrief):
+    session_id: uuid.UUID
+    occurrence_id: uuid.UUID | None = None
+    change_mode: ChangeMode
+    change_people: list[SimplePersonRef] = []
+    roadmap_ids: list[uuid.UUID] = []
+    meeting_decisions: list[SimpleMeetingDecision] = []
+    open_decisions: list[SimpleOpenDecision] = []
+    pending_proposals: list[SimpleChangeOut] = []
+    drafts: list[SimpleDraftOut] = []
+    minutes: SimpleMinutes | None = None
+    delivery: SimpleDelivery | None = None
+    slack: SimpleSlackState
+    email_available: bool
+    can: SimpleMeetingCan
+    # Approve's answer: the roadmaps left for their own decider.
+    not_approved: list[SimpleNotApproved] = []
+
+
+class SimpleUpcomingMeeting(BaseModel):
+    """A scheduled ritual occurrence: a review to start from."""
+
+    occurrence_id: uuid.UUID
+    ritual_title: str
+    due_at: dt.datetime
+    ends_at: dt.datetime
+    length_min: int
+    attendees: list[SimplePersonRef]
+    meeting_id: uuid.UUID | None = None
+
+
+class SimpleMeetingsOut(BaseModel):
+    upcoming: list[SimpleUpcomingMeeting]
+    live: list[SimpleMeetingBrief]
+    past: list[SimpleMeetingBrief]
+
+
+class SimpleStartPrd(BaseModel):
+    document: SimpleDocRef
+    decider: SimplePersonRef | None
+    # Owners and the document's decider start a meeting; others see who starts it.
+    can_start: bool
+    starters: list[SimplePersonRef]
+    default_attendee_ids: list[uuid.UUID]
+
+
+class SimpleStartOptions(BaseModel):
+    prds: list[SimpleStartPrd]
+    members: list[SimplePersonRef]
+    length_min: int = 60
+    occurrence: SimpleUpcomingMeeting | None = None
+
+
+class SimpleMeetingIn(BaseModel):
+    prd: str = Field(min_length=1, max_length=200)
+    title: str | None = Field(default=None, max_length=200)
+    origin: MeetingOrigin = "one_pager"
+    occurrence_id: uuid.UUID | None = None
+    attendee_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
+    change_mode: ChangeMode = "everyone"
+    change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)
+    length_min: int = Field(default=60, ge=5, le=240)
+
+
+class SimpleMeetingRulesIn(BaseModel):
+    change_mode: ChangeMode | None = None
+    change_people: list[uuid.UUID] | None = Field(default=None, max_length=2)
+    absent_ids: list[uuid.UUID] | None = None
+
+
+class SimpleMeetingCommentIn(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+    subjects: list[dict[str, Any]] = Field(default_factory=list, max_length=10)
+
+
+class SimpleSendIn(BaseModel):
+    email: bool = False
+    slack: bool = False
+
+
+class SimpleDecisionRow(BaseModel):
+    id: uuid.UUID
+    number: int
+    title: str
+    origin: str
+    status: str
+    approver: SimplePersonRef | None
+    decided_at: dt.datetime | None
+    created_at: dt.datetime
+    subjects: list[dict[str, Any]] = []
+    # A meeting decision on a new flow or feature: that flow.
+    flow: SimpleDecidedFlow | None = None
+
+
+class SimpleMeetingGroup(BaseModel):
+    meeting: SimpleMeetingBrief
+    minutes: SimpleMinutes | None
+    decisions: list[SimpleDecisionRow]
+
+
+class SimpleFilterOption(BaseModel):
+    id: str
+    title: str
+
+
+class SimpleDecisionsOut(BaseModel):
+    """Simple's Decisions (direction B "By meeting"): the meetings' decisions grouped under
+    them, newest first, then the decisions taken outside meetings."""
+
+    meetings: list[SimpleMeetingGroup]
+    other: list[SimpleDecisionRow]
+    prds: list[SimpleFilterOption]
+    goals: list[SimpleFilterOption]
+    meeting_options: list[SimpleFilterOption]
+
+
+class InboxSimpleMinutes(BaseModel):
+    """A meeting's minutes, sent to each attendee (``simple_minutes``)."""
+
+    meeting_id: uuid.UUID
+    title: str
+    ended_at: dt.datetime | None
+    decisions: int
+    state: Literal["new", "open"]
 
 
 SimpleRoadmapItem.model_rebuild()

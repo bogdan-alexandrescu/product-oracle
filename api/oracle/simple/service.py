@@ -556,6 +556,7 @@ def item_out(
     owners: list | None = None,
     decisions: dict[uuid.UUID, list[SimpleOpenDecision]] | None = None,
     extra: dict[uuid.UUID, dict[str, Any]] | None = None,
+    decided: dict[uuid.UUID, list[SimpleOpenDecision]] | None = None,
 ) -> SimpleRoadmapItem:
     row, r = e.row, e.resolved
     names = names or {}
@@ -607,7 +608,39 @@ def item_out(
         open_decisions=(decisions or {}).get(row.id, []),
         goal_ids=[str(g) for g in row.goal_ids or []],
         **(extra or {}).get(row.id, {}),
+        decided_in=(decided or {}).get(row.id, []),
     )
+
+
+async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list]:
+    """S8: the decided decisions naming each item, in any version of its roadmap (an
+    approved draft is a new version: its rows are new, its keys are the same)."""
+    from oracle.simple import meetings
+
+    if not shown:
+        return {}
+    keyed = {(e.row.roadmap_document_id, e.row.item_key): e.row.id for e in shown}
+    alias: dict[uuid.UUID, uuid.UUID] = {}
+    for rid, doc, key in (
+        await db.execute(
+            select(RoadmapItem.id, RoadmapItem.roadmap_document_id, RoadmapItem.item_key).where(
+                RoadmapItem.roadmap_document_id.in_({d for d, _ in keyed}),
+                RoadmapItem.item_key.in_({k for _, k in keyed}),
+            )
+        )
+    ).all():
+        if (doc, key) in keyed:
+            alias[rid] = keyed[(doc, key)]
+    found = await meetings.decided_in(db, [{"kind": "roadmap_item", "id": str(i)} for i in alias])
+    out: dict[uuid.UUID, list] = defaultdict(list)
+    for (_, sid, _), lst in found.items():
+        target = alias.get(uuid.UUID(sid))
+        for d in lst:
+            if target is not None and all(x.id != d.id for x in out[target]):
+                out[target].append(d)
+    for lst in out.values():
+        lst.sort(key=lambda d: -d.number)
+    return out
 
 
 def _metric(goal: Entity) -> str | None:
@@ -682,6 +715,7 @@ async def build(
     from oracle.simple import additions
 
     extra = await additions.item_extras(db, read, shown)
+    decided = await _decided(db, shown)
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
@@ -692,7 +726,8 @@ async def build(
 
     flows = await visuals.flows_for(db, "feature", [e.row.id for e in shown])
     items = [
-        item_out(e, principal, read.deciders, names, owners, decisions, extra) for e in shown
+        item_out(e, principal, read.deciders, names, owners, decisions, extra, decided)
+        for e in shown
     ]
     for it in items:
         # A draft's own visual (S7) first, else its feature's (S10).

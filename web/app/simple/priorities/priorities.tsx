@@ -31,7 +31,7 @@ const SHAPES = ["circle", "square", "triangle", "diamond", "pentagon"] as const;
 type Shape = (typeof SHAPES)[number] | "cross";
 
 /** Whether the screen is a phone's (under 640 px). */
-function usePhone(): boolean {
+export function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
     const q = window.matchMedia("(max-width: 639px)");

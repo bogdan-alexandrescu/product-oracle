@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 
 import { Button, Notice, SegmentedControl, toast } from "@/components/ds";
 import { GoalPanel, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
+import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
 import { api, unwrap } from "@/lib/api/client";
@@ -366,6 +367,7 @@ export function SimpleRoadmap() {
   const [tray, setTray] = useState(false);
   const [keyDates, setKeyDates] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [starting, setStarting] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement | null>(null);
 
@@ -676,6 +678,7 @@ export function SimpleRoadmap() {
           >
             Key dates · {data.key_dates?.length ?? 0}
           </Button>
+          <Button onClick={() => setStarting(true)}>Start review</Button>
           <Button disabled={exporting} onClick={() => void doExport("png")}>
             Export PNG
           </Button>
@@ -690,6 +693,7 @@ export function SimpleRoadmap() {
       </p>
       {!phone && canChange && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} />}
       <GoalCounters items={data.items} suggestions={suggestions} onGoal={setGoalPanel} />
+      <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" />
       <DraftBanner
         drafts={drafts.data ?? []}
         inReview={data.changes_in_review ?? 0}

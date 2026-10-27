@@ -50,6 +50,7 @@ JOB_KINDS = (
     # Simple S7 (oracle.simple.additions): a draft item drafted, a goal's suggestions.
     "item_draft",
     "goal_suggestions",
+    "meeting_minutes",
 )
 # Jobs on a product intake (CR-03, migration 0014_intake): light extraction from a brief
 # and its pinned sources. They have no document; ``intake_id`` says whose they are.

@@ -98,6 +98,8 @@ interface SimpleDb {
   snapshots?: Record<string, SeedItem[]>;
   /** S10: the visuals (./simple-visuals.ts), shared with the one-pager's. */
   visuals?: VisualsDb;
+  /** S8: decided decisions that changed each item (by item id), newest first. */
+  decided_in?: Record<string, { id: string; number: number; title: string }[]>;
 }
 
 /** A roadmap's key date (roadmap_key_dates): invented names and days. */
@@ -526,6 +528,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       drafting: !!s.drafting_until,
       flow: s.draft ? (s.flow ?? null) : flowFor(db.visuals, "feature", db.ids[s.key]),
       goal_ids: [...new Set([...(s.goal ? [s.goal] : []), ...(s.goals ?? [])])].map(goalId),
+      // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
+      decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
     };
   });
   const prd = q.get("prd");

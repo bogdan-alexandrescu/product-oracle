@@ -153,6 +153,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
+import { ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { routeOnePager, seedOnePager, type OnePagerDb } from "./simple-one-pager";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { routeSimpleChat, seedSimpleChat, type ChatDb } from "./simple-chat";
@@ -269,6 +270,8 @@ export interface Db {
   simple_visuals?: VisualsDb;
   /** Simple S9: change-by-chat threads, their cards and the invented meeting (./simple-chat.ts). */
   simple_chat?: ChatDb;
+  /** Simple S8 (#723): review meetings, their decisions and minutes (./simple-meetings.ts). */
+  simple_meetings?: MeetingsDb;
   /** O5 "sharing": the shared roadmap's items by version id, put into `roadmap` when it is seeded (ensureRoadmap). */
   sharing_items?: RoadmapDb["items"];
   /** #346: roadmap change sets and the versions they proposed (./plan-edits.ts). */
@@ -4982,46 +4985,50 @@ async function route(db: Db, req: Request): Promise<Response> {
     p,
   );
   if (visualsRes) return visualsRes;
-  const onePagerRes = await routeOnePager(
-    db.simple_one_pager,
-    {
-      id: me.id,
-      role: me.role,
-      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
-      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
-      // The PRD's required reviewer: the seeded approver.
-      reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
-      notify: (user_id, kind, title, data, version) =>
-        ensureReviewV2(db).notifications.push({
-          id: uuid(), user_id, kind, title, document_id: db.simple_one_pager!.doc.id, version_number: version, section_key: null,
-          comment_id: null, campaign_id: null, actor: `user:${me.id}`, data, read_at: null, created_at: now(),
-        }),
-    },
-    req,
-    p,
-  );
-  if (onePagerRes) return onePagerRes;
   db.simple_roadmap ??= seedSimpleRoadmap();
   db.simple_roadmap.visuals = db.simple_visuals;
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
   const simpleNames = Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)]));
-  const simpleRes = await routeSimpleRoadmap(db.simple_roadmap, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, req, p, q);
+  const simpleRoute = async (r: Request): Promise<Response | null> => {
+    const onePagerRes = await routeOnePager(
+      db.simple_one_pager!,
+      {
+        id: me.id,
+        role: me.role,
+        owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
+        names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+        // The PRD's required reviewer: the seeded approver.
+        reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
+        notify: (user_id, kind, title, data, version) =>
+          ensureReviewV2(db).notifications.push({
+            id: uuid(), user_id, kind, title, document_id: db.simple_one_pager!.doc.id, version_number: version, section_key: null,
+            comment_id: null, campaign_id: null, actor: `user:${me.id}`, data, read_at: null, created_at: now(),
+          }),
+      },
+      r,
+      p,
+    );
+    if (onePagerRes) return onePagerRes;
+    const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
+    if (simpleRes) return simpleRes;
+    return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, r, p, q);
+  };
+  // Simple S8: review meetings, the Decisions page, and changes made through a meeting.
+  // Seeded on the first meetings or Decisions read, so the other Simple screens keep their data.
+  if (p[1] === "simple" && (p[2] === "meetings" || p[2] === "decisions" || db.simple_meetings)) {
+    const meetingsCtx: MeetingsCtx = {
+      me: { id: me.id, role: me.role },
+      members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
+      roadmap: db.simple_roadmap,
+      onePager: db.simple_one_pager,
+    };
+    const meetingsDb = ensureMeetings(db, meetingsCtx);
+    const meetingsRes = (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
+    if (meetingsRes) return meetingsRes;
+  }
+  const simpleRes = await simpleRoute(req);
   if (simpleRes) return simpleRes;
-  const simpleChanges = await routeSimpleChanges(
-    db.simple_roadmap,
-    {
-      id: me.id,
-      role: me.role,
-      owners: db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id),
-      names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
-      roles: simpleRoles,
-    },
-    req,
-    p,
-    q,
-  );
-  if (simpleChanges) return simpleChanges;
   // Simple S9: change by chat and "Walk me through it", through the change engine above.
   if (p[1] === "simple" && ["chat", "meetings", "walk"].includes(p[2] ?? "")) {
     db.simple_chat ??= seedSimpleChat(db.members);
@@ -5113,6 +5120,8 @@ async function route(db: Db, req: Request): Promise<Response> {
     Object.assign(inbox, simpleRows);
     inbox.total += simpleRows.simple_proposals.length;
     inbox.needs_me = (inbox.needs_me ?? 0) + simpleRows.simple_proposals.length;
+    // Simple S8: minutes sent to me as an attendee (shown, not counted).
+    inbox.simple_minutes = meetingInboxRows(db.simple_meetings, me.id, seenBefore);
     // Ritual rows (H2): Pre-read ready until opened, Record notes after the end, failed to prepare.
     const ritualRows = ritualInbox(ritualsCtx, ensureRituals(db, me));
     const ritualCounted = ritualRows.filter((r) => r.counts).length;

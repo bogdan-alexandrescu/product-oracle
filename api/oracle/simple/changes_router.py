@@ -29,6 +29,7 @@ its submitted draft waits on (an Inbox notification), at most once a day each.
 import asyncio
 import logging
 import uuid
+from contextlib import asynccontextmanager
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -67,6 +68,34 @@ async def _run(db, coro):
     try:
         return await coro
     except (changes.ChangeError, drafts.DraftError) as e:
+        await db.rollback()
+        raise HTTPException(e.status, e.detail) from e
+
+
+@asynccontextmanager
+async def _one_commit(db):
+    """S8: a change made through a meeting and its meeting decision commit together. The
+    change engine commits as it goes; inside this, its commits only flush, and the route
+    commits once both are written (a failure between them rolls both back)."""
+    commit = db.commit
+    db.commit = db.flush
+    try:
+        yield
+    finally:
+        db.commit = commit
+    await db.commit()
+
+
+async def _in_meeting(
+    db, principal: Principal, out: SimpleChangeResult, session_id, verb: str | None = None
+) -> None:
+    """S8: a change made, decided or undone through a meeting's session is a meeting
+    decision (oracle.simple.meetings)."""
+    from oracle.simple import meetings
+
+    try:
+        await meetings.after_change(db, principal, out.change.id, session_id, verb)
+    except meetings.MeetingError as e:
         await db.rollback()
         raise HTTPException(e.status, e.detail) from e
 
@@ -112,9 +141,11 @@ async def create_simple_change(
     ``before`` no longer matches the stored values (nothing is written). Returns the
     constraint flags of the touched items (a proposal's as if applied). A change that adds
     or reshapes a feature or flow comes with its visual: Oracle drafts it (S10)."""
-    result = await _run(db, changes.create(db, principal, body))
-    await _with_visual(db, principal, result.change)
-    return result
+    async with _one_commit(db):
+        out = await _run(db, changes.create(db, principal, body))
+        await _in_meeting(db, principal, out, body.session_id)
+    await _with_visual(db, principal, out.change)
+    return out
 
 
 async def _with_visual(db, principal, change) -> None:
@@ -140,7 +171,10 @@ async def undo_simple_change(
 ) -> SimpleChangeResult:
     """Undo one of the caller's applied changes, in its open session, while the target
     still holds its ``after``: writes an ``undone`` row (history is kept)."""
-    return await _run(db, changes.undo(db, principal, change_id))
+    async with _one_commit(db):
+        out = await _run(db, changes.undo(db, principal, change_id))
+        await _in_meeting(db, principal, out, out.change.session_id, "Undone")
+    return out
 
 
 @router.post("/changes/{change_id}/accept", response_model=SimpleChangeResult,
@@ -149,8 +183,11 @@ async def accept_simple_change(
     change_id: uuid.UUID, principal: Commenter, db: TenantDB, body: SimpleDecisionIn | None = None
 ) -> SimpleChangeResult:
     """Accept a proposal: it applies, unless the item changed since (409 "outdated")."""
-    reason = body.reason if body else None
-    return await _run(db, changes.decide(db, principal, change_id, "accept", reason))
+    reason, sid = (body.reason, body.session_id) if body else (None, None)
+    async with _one_commit(db):
+        out = await _run(db, changes.decide(db, principal, change_id, "accept", reason, sid))
+        await _in_meeting(db, principal, out, sid, "Accepted")
+    return out
 
 
 @router.post("/changes/{change_id}/decline", response_model=SimpleChangeResult,
@@ -159,8 +196,11 @@ async def decline_simple_change(
     change_id: uuid.UUID, principal: Commenter, db: TenantDB, body: SimpleDecisionIn | None = None
 ) -> SimpleChangeResult:
     """Decline a proposal, with an optional reason: nothing changes."""
-    reason = body.reason if body else None
-    return await _run(db, changes.decide(db, principal, change_id, "decline", reason))
+    reason, sid = (body.reason, body.session_id) if body else (None, None)
+    async with _one_commit(db):
+        out = await _run(db, changes.decide(db, principal, change_id, "decline", reason, sid))
+        await _in_meeting(db, principal, out, sid, "Declined")
+    return out
 
 
 @router.get("/changes", response_model=list[SimpleChangeOut], name="list_simple_changes")

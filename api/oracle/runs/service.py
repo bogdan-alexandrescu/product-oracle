@@ -11037,6 +11037,10 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
 
     simple_approvals = await simple_approval_rows(db, principal, seen)
     counted += len(simple_approvals)
+    # Simple S8: meeting minutes sent to me as an attendee (nothing to decide: not counted).
+    from oracle.simple.meetings import inbox_rows as simple_minutes_rows
+
+    simple_minutes = await simple_minutes_rows(db, principal, seen)
     if mark_seen:
         await inbox_states.mark_seen(db, principal.id)
         await db.commit()
@@ -11104,6 +11108,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
         simple_proposals=simple_proposals,
         simple_decisions=simple_decisions,
         simple_approvals=simple_approvals,
+        simple_minutes=simple_minutes,
     )
 
 

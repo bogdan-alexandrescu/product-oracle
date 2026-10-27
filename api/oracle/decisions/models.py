@@ -46,6 +46,8 @@ ORIGINS = (
     "request_decline",
     # H9: a pricing memo's Decide: proposed, then decided by the pricing owner.
     "pricing",
+    # Simple S8: a decision taken in a review meeting (oracle.simple.meetings).
+    "meeting",
 )
 # Origins Oracle records on its own: decided as they are captured.
 CAPTURED_ORIGINS = (

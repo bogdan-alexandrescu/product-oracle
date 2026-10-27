@@ -15,6 +15,7 @@ JobKind = Literal[
     "refinement_batch",
     "public_text",
     "one_pager",
+    "meeting_minutes",
 ]
 # Every kind a job row may have: the document kinds and the intake's (oracle.intake.job).
 AnyJobKind = Literal[
@@ -25,6 +26,7 @@ AnyJobKind = Literal[
     "refinement_batch",
     "public_text",
     "one_pager",
+    "meeting_minutes",
     "intake_analysis",
     "decision_options",
     "scope_enhance",
