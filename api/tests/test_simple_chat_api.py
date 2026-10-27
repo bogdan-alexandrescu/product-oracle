@@ -3,8 +3,9 @@
 ``add_feature_ask``. Against Postgres.
 
 S8's oracle.simple.meetings is replaced by a fake module (``meeting_rules``,
-``record_meeting_decision``, ``set_change_mode``) installed in ``sys.modules``: the chat
-imports it lazily, so these tests hold with or without S8's module. People: the four roles
+``record_meeting_decision``, and S8's real ``set_rules``, ``listing`` and ``one`` with their
+own signatures) installed in ``sys.modules``: the chat imports it lazily, so these tests
+hold with or without S8's module. People: the four roles
 of tests.baseline_helpers plus ``decider``, an approver the roadmap's policy names decider.
 
 Test cards (protects / fails_when / no_claim):
@@ -39,6 +40,24 @@ Test cards (protects / fails_when / no_claim):
   one meeting decision with its change id; a proposal records none; an ended meeting
   applies nothing; the presenter changes the mode, others may not; fails_when=a decision is
   missing or recorded for a proposal; no_claim=the minutes (S8).
+- test_undo_of_a_meeting_card_reverses_its_decision: protects=undoing a card applied in a
+  meeting reverses its meeting decision (with a review saying why), so the log and the
+  minutes no longer show it as holding; fails_when=the decision stays decided;
+  no_claim=S8's minutes screen.
+- test_meeting_mode_bars_discard: protects=the change mode that bars someone from applying
+  bars them from discarding too; fails_when=a barred attendee discards; no_claim=the
+  Ask panel (one person's own cards).
+- test_meeting_apply_uses_the_meeting_session: protects=an allowed attendee's Apply goes
+  into the meeting's session (made in the meeting), not only the presenter's;
+  fails_when=a non-presenter's change goes to their own session; no_claim=S8's session
+  rules (its change engine accepts attendees the presenter lets change things).
+- test_meeting_fix_is_a_decision_titled_with_the_fix: protects=a fix applied from a
+  meeting card is a meeting decision titled with the fix's label; fails_when=the decision
+  carries the card's summary; no_claim=the card's own status (open until applied).
+- test_walk_lists_only_the_next_meetings_agenda: protects=the walk's agenda step lists
+  the open decisions of the next (live) meeting the person attends, labelled with that
+  meeting, and none when they attend no meeting; fails_when=a decision on no meeting's
+  agenda is called the next meeting's; no_claim=upcoming ritual occurrences (no PRD yet).
 - test_meeting_chat_without_meetings_module_is_404: protects=without S8's module the
   meeting chat answers 404; fails_when=it errors or opens; no_claim=S8's own routes.
 - test_new_ops_per_role: protects=set_milestone applies for the owner and the decider and
@@ -57,6 +76,7 @@ import types
 import uuid
 from dataclasses import dataclass, field
 from datetime import date
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -64,7 +84,7 @@ from sqlalchemy import func, select
 
 from oracle import company_time
 from oracle.auth.models import User
-from oracle.decisions.models import Decision
+from oracle.decisions.models import Decision, DecisionReview
 from oracle.requests.models import ProductRequest
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
@@ -104,19 +124,47 @@ class FakeMeetings:
         self.module = types.ModuleType("oracle.simple.meetings")
         self.module.meeting_rules = self.meeting_rules  # type: ignore[attr-defined]
         self.module.record_meeting_decision = self.record  # type: ignore[attr-defined]
-        self.module.set_change_mode = self.set_mode  # type: ignore[attr-defined]
+        self.module.set_rules = self.set_rules  # type: ignore[attr-defined]
+        self.module.SimpleMeetingRulesIn = SimpleNamespace  # type: ignore[attr-defined]
+        self.module.listing = self.listing  # type: ignore[attr-defined]
+        self.module.one = self.one  # type: ignore[attr-defined]
+        self.titles: dict[uuid.UUID, str] = {}
+        self.agenda: dict[uuid.UUID, list[Decision]] = {}
 
     async def meeting_rules(self, db, meeting_id):
         return self.rules.get(meeting_id)
 
     async def record(self, db, principal, meeting_id, title, subjects, change_ids):
+        """A decided decisions row, as S8's does (origin 'meeting' there)."""
         self.decisions.append({"meeting_id": meeting_id, "title": title, "by": principal.user_id,
                                "subjects": subjects, "change_ids": change_ids})  # fmt: skip
-        return uuid.uuid4()
+        n = (await db.scalar(select(func.max(Decision.number)))) or 0
+        d = Decision(number=n + 1, title=title, approver_id=principal.user_id, driver="oracle",
+                     origin="manual", status="decided", chosen_option="decided",
+                     rationale="Decided in the meeting", decided_at=NOW,
+                     review_at=NOW.date(), decided_by=principal.user_id)  # fmt: skip
+        db.add(d)
+        await db.flush()
+        return d.id
 
-    async def set_mode(self, db, principal, meeting_id, mode, people):
+    async def set_rules(self, db, principal, meeting_id, body):
+        """S8's ``set_rules(db, principal, meeting_id, SimpleMeetingRulesIn)``."""
         r = self.rules[meeting_id]
-        r.change_mode, r.change_people = mode, list(people)
+        r.change_mode = body.change_mode or r.change_mode
+        r.change_people = list(body.change_people or []) if r.change_mode == "named" else []
+        return r
+
+    async def listing(self, db, principal):
+        live = [SimpleNamespace(id=i, title=self.titles.get(i, "Review"), started_at=NOW,
+                                status="live")
+                for i, r in self.rules.items() if not r.ended]  # fmt: skip
+        return SimpleNamespace(upcoming=[], live=live, past=[])
+
+    async def one(self, db, principal, meeting_id):
+        return SimpleNamespace(open_decisions=[
+            SimpleNamespace(id=d.id, number=d.number, title=d.title)
+            for d in self.agenda.get(meeting_id, [])
+        ])  # fmt: skip
 
 
 @pytest.fixture
@@ -426,6 +474,106 @@ async def test_applied_card_is_a_meeting_decision(client, meetings):
     assert len(meetings.decisions) == 1
 
 
+async def test_undo_of_a_meeting_card_reverses_its_decision(client, meetings):
+    ctx = await make_people()
+    w = await World(ctx).build()
+    mid = _meeting(ctx, meetings, "everyone")
+    card = (await say(client, ctx, "owner", "move Ledger v2 to Q2", mid))["cards"][0]
+    r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    decision_id = uuid.UUID(r.json()["card"]["decision_id"])
+    r = await client.post(f"{CARDS}/{card['id']}/undo", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "undone"
+    assert (await w.item("Ledger v2")).start_date == date(2026, 10, 1)
+    async with tenant_session(ctx.tenant_id) as s:
+        d = await s.get(Decision, decision_id)
+        assert d is not None and d.status == "reversed"
+        review = await s.scalar(select(DecisionReview).where(DecisionReview.decision_id == d.id))
+        assert review is not None and review.verdict == "reversed"
+        assert review.reviewed_by == ctx.users["owner"].id
+
+
+async def test_meeting_mode_bars_discard(client, meetings):
+    ctx = await make_people()
+    await World(ctx).build()
+    mid = _meeting(ctx, meetings, "presenter")
+    card = (await say(client, ctx, "owner", "cut Alert export", mid))["cards"][0]
+    # Presenter only: the commenter may neither apply nor discard.
+    r = await client.post(f"{CARDS}/{card['id']}/discard", headers=ctx.as_("commenter"))
+    assert r.status_code == 403, r.text
+    assert (await card_as(client, ctx, "owner", card["id"], mid))["status"] == "open"
+    r = await client.post(f"{CARDS}/{card['id']}/discard", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+
+
+async def test_meeting_apply_uses_the_meeting_session(client, meetings, monkeypatch):
+    from oracle.simple import changes
+
+    ctx = await make_people()
+    await World(ctx).build()
+    mid = _meeting(ctx, meetings, "everyone")
+    session_id = uuid.uuid4()
+    meetings.rules[mid].session_id = session_id
+    card = (await say(client, ctx, "owner", "cut Alert export", mid))["cards"][0]
+    tried: list[uuid.UUID | None] = []
+    create = changes.create
+
+    async def spy(db, principal, body):
+        tried.append(body.session_id)
+        return await create(db, principal, body)
+
+    monkeypatch.setattr(changes, "create", spy)
+    # The decider is not the presenter: their Apply still goes into the meeting's session
+    # (this branch's engine has no meeting sessions, so it falls back to their own).
+    r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert tried[0] == session_id
+
+
+async def test_meeting_fix_is_a_decision_titled_with_the_fix(client, meetings):
+    ctx = await make_people()
+    await World(ctx).build(overlap=True)
+    mid = _meeting(ctx, meetings, "everyone")
+    card = (await say(client, ctx, "owner", "rename Ledger v2 to Ledger v3", mid))["cards"][0]
+    assert card["fixes"], card
+    label = card["fixes"][0]["label"]
+    r = await client.post(f"{CARDS}/{card['id']}/apply", json={"fix": 0},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert meetings.decisions[-1]["title"] == label
+
+
+async def _proposed_decisions(ctx: Ctx, *titles: str) -> list[Decision]:
+    async with tenant_session(ctx.tenant_id) as s:
+        dee = ctx.users["decider"].id
+        for i, t in enumerate(titles, start=1):
+            s.add(Decision(number=i, title=t, approver_id=dee, driver="oracle",
+                           origin="manual"))  # fmt: skip
+        await s.commit()
+        return list(await s.scalars(select(Decision).order_by(Decision.number)))
+
+
+async def test_walk_lists_only_the_next_meetings_agenda(client, meetings):
+    ctx = await make_people()
+    await World(ctx).build()
+    on, off = await _proposed_decisions(ctx, "Pick the import format", "Name the API")
+    r = await client.get("/v1/simple/walk", headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    assert [s for s in r.json()["steps"] if s["kind"] == "agenda_decision"] == []
+    mid = _meeting(ctx, meetings, "everyone")
+    meetings.titles[mid] = "Payments review"
+    meetings.agenda[mid] = [on]
+    steps = (await client.get("/v1/simple/walk", headers=ctx.as_("decider"))).json()["steps"]
+    agenda = [s for s in steps if s["kind"] == "agenda_decision"]
+    assert [s["decision"]["title"] for s in agenda] == ["Pick the import format"]
+    assert "Payments review" in agenda[0]["why"]
+    # Not an attendee: that meeting's agenda is not theirs.
+    steps = (await client.get("/v1/simple/walk", headers=ctx.as_("approver"))).json()["steps"]
+    assert [s for s in steps if s["kind"] == "agenda_decision"] == []
+    assert off.title == "Name the API"
+
+
 async def test_meeting_chat_without_meetings_module_is_404(client, monkeypatch):
     monkeypatch.setitem(sys.modules, "oracle.simple.meetings", None)
     ctx = await make_people()
@@ -469,14 +617,11 @@ async def test_new_ops_per_role(client, role):
         assert list(await s.scalars(select(ProductRequest))) == []
 
 
-async def test_walk_order_undo_and_fixes(client):
+async def test_walk_order_undo_and_fixes(client, meetings):
     ctx = await make_people()
     w = await World(ctx).build(overlap=True)
-    async with tenant_session(ctx.tenant_id) as s:
-        dee = ctx.users["decider"].id
-        s.add(Decision(number=1, title="Pick the import format", approver_id=dee,
-                       driver="oracle", origin="manual"))  # fmt: skip
-        await s.commit()
+    mid = _meeting(ctx, meetings, "everyone")
+    meetings.agenda[mid] = await _proposed_decisions(ctx, "Pick the import format")
     body = {"op": "edit_title", "target": {"item_id": w.ids["Partner API"]},
             "before": {"title": "Partner API"}, "after": {"title": "Partner API v2"}}  # fmt: skip
     r = await client.post(CHANGES, json=body, headers=ctx.as_("commenter"))

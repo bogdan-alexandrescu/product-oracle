@@ -9,13 +9,14 @@ import { ADMIN, signOut } from "./helpers";
  * Simple S9: change by chat in a meeting, in the "simple-chat" mock scenario: the invented
  * Weekly plan review, presented by the owner (Admin), with the approver, the commenter and
  * the viewer attending. Each person signs in, in a tab of their own of one browser context
- * (each tab keeps its own sign-in), and opens the meeting's page, whose right column is the
- * shared meeting chat. Every test runs on desktop (1366x820) and on a phone (390x844); one
+ * (each tab keeps its own sign-in), and opens the meeting's chat (/simple/meetings/{id}/chat:
+ * this lane's host of MeetingChat; S8's meeting page owns /simple/meetings/{id} and renders
+ * the same MeetingChat in its right column). Every test runs on desktop (1366x820) and on a phone (390x844); one
  * runs in dark.
  */
 
 const EMAILS = { owner: ADMIN.email, approver: "approver@example.com", commenter: "commenter@example.com", viewer: "viewer@example.com" } as const;
-const MEETING = `/simple/meetings/${CHAT_MEETING_ID}`;
+const MEETING = `/simple/meetings/${CHAT_MEETING_ID}/chat`;
 
 /** A tab signed in as `email` on the meeting's page (a later tab signs the earlier person out of itself first). */
 async function attend(page: Page, email: string, first: boolean): Promise<Page> {
