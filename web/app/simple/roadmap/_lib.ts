@@ -11,6 +11,7 @@ export type Flag = Schemas["SimpleFlag"];
 export type Change = Schemas["SimpleChangeOut"];
 export type ChangeResult = Schemas["SimpleChangeResult"];
 export type Draft = Schemas["SimpleDraftOut"];
+export type KeyDate = Schemas["SimpleKeyDate"];
 export type Format = "timeline" | "gantt" | "board" | "waterfall";
 export type GanttUnit = "day" | "week";
 
@@ -179,4 +180,52 @@ export async function suggestion(id: string, how: "accept" | "edit" | "dismiss",
 /** The words a change's result says: applied (undo) or proposed (to whom). */
 export function resultWords(r: ChangeResult, what: string): string {
   return r.change.status === "applied" ? `${what} in your working draft` : `${what} proposed: it waits for the decider`;
+}
+
+const PHASE_SPLIT: [Item["phases"][number]["key"], number][] = [
+  ["discover", 0.15],
+  ["build", 0.55],
+  ["beta", 0.2],
+  ["launch", 0.1],
+];
+
+/**
+ * Roadmap-plus: the item's waterfall phases over a new span, as the API works them out
+ * again after a move (oracle.simple.dates.phases): a phase a dated gate ends stays on the
+ * gate's day; every other phase keeps its share of the bar and ends before the next dated
+ * gate (they may bunch up). Drawn while a bar is dragged and until the change answers.
+ */
+export function rephase(item: Item, start: string, end: string): Item["phases"] {
+  const named = new Map(item.phases.filter((p) => !p.estimated).map((p) => [p.key, p.end]));
+  const total = daysBetween(start, end) + 1;
+  let cursor = start;
+  let share = 0;
+  return PHASE_SPLIT.map(([key, part], i) => {
+    share += part;
+    const own = named.get(key);
+    let day = own ?? (i === PHASE_SPLIT.length - 1 ? end : addDays(start, Math.round(total * share) - 1));
+    if (!own) {
+      const gate = PHASE_SPLIT.slice(i + 1)
+        .map(([k]) => named.get(k))
+        .filter((d): d is string => !!d)
+        .sort()[0];
+      if (gate && day >= gate) day = addDays(gate, -1);
+      if (day < cursor) day = cursor;
+    }
+    const out = { key, start: cursor < day ? cursor : day, end: day, estimated: !own };
+    if (addDays(day, 1) > cursor) cursor = addDays(day, 1);
+    return out;
+  });
+}
+
+/** Roadmap-plus: the key dates of the item's roadmap it ends within 2 weeks of, in words; null when none. */
+export function nearWords(item: Item, keyDates: KeyDate[]): string | null {
+  const near = keyDates
+    .filter((k) => k.roadmap.id === item.roadmap.id && Math.abs(daysBetween(item.end.date, k.date)) <= 14)
+    .map((k) => {
+      const n = daysBetween(item.end.date, k.date);
+      const when = n === 0 ? "ends that day" : n > 0 ? `ends ${n} day${n === 1 ? "" : "s"} before` : `ends ${-n} day${n === -1 ? "" : "s"} after`;
+      return `${k.name} (${shortDay(k.date)}): ${when}`;
+    });
+  return near.length ? near.join(" · ") : null;
 }

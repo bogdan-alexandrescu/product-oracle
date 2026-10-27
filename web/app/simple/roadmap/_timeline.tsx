@@ -11,6 +11,7 @@ import {
   liveBreaks,
   ms,
   quarters,
+  rephase,
   scale,
   shortDay,
   type Format,
@@ -177,6 +178,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     const rect = g.querySelector<SVGRectElement>("rect[data-body]");
     rect?.setAttribute("x", String(x));
     rect?.setAttribute("width", String(w));
+    const it = items.get(d.id);
+    if (format === "waterfall" && it) drawPhases(g, rephase(it, s, e), sc, x, w);
     g.dataset.dragStart = s;
     g.dataset.dragEnd = e;
     const breaks = liveBreaks(items, d.id, s, e);
@@ -214,7 +217,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     const [start, end] = moved[item.id] ?? barSpan(item);
     const r = (e.currentTarget.querySelector("rect[data-body]") as SVGRectElement).getBoundingClientRect();
     const edge = Math.min(10, r.width / 4);
-    const mode = !canDrag || item.status === "cut" ? "move" : e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
+    // The waterfall moves the whole item (its phases follow); the timeline and Gantt also stretch an end.
+    const mode = !canDrag || item.status === "cut" || format === "waterfall" ? "move" : e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
     const touch = e.pointerType === "touch";
     // React clears currentTarget once the handler returns: keep the bar for the timeout.
     const target = e.currentTarget;
@@ -278,8 +282,11 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     else if (g) {
       // Back where it was: redraw it from its dates.
       const rect = g.querySelector<SVGRectElement>("rect[data-body]");
-      rect?.setAttribute("x", String(sc.x(d.start)));
-      rect?.setAttribute("width", String(Math.max(sc.px, sc.x(d.end) - sc.x(d.start) + sc.px)));
+      const x0 = sc.x(d.start);
+      const w0 = Math.max(sc.px, sc.x(d.end) - x0 + sc.px);
+      rect?.setAttribute("x", String(x0));
+      rect?.setAttribute("width", String(w0));
+      if (format === "waterfall") drawPhases(g, moved[item.id] ? rephase(item, d.start, d.end) : item.phases, sc, x0, w0);
     }
   };
 
@@ -289,6 +296,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   const keyMove = (it: Item, dir: 1 | -1, resize: boolean) => {
     if (!canDrag || it.status === "cut") return;
     const [s, e] = moved[it.id] ?? barSpan(it);
+    // The waterfall moves the whole item: Shift+arrow moves it too.
+    if (format === "waterfall") resize = false;
     const n = dir * (format === "gantt" && unit === "day" ? 1 : 7);
     const end = addDays(e, n);
     if (resize && end < s) return;
@@ -390,6 +399,20 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   </text>
                 </g>
               ))}
+            {(data.key_dates ?? []).map((k) => {
+              const kx = sc.x(k.date) + sc.px / 2;
+              if (kx < 0 || kx > chartW) return null;
+              return (
+                <g key={k.id} data-testid="key-date-marker" data-name={k.name} data-date={k.date} data-draft={k.in_draft ? "true" : undefined} pointerEvents="none">
+                  <title>{`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`}</title>
+                  <line x1={kx} x2={kx} y1={14} y2={l.height} stroke="var(--accent-ink)" strokeWidth={1} opacity={0.7} strokeDasharray={k.in_draft ? "3 3" : undefined} />
+                  <rect x={kx - 5} y={3} width={10} height={10} transform={`rotate(45 ${kx} 8)`} fill={k.in_draft ? "var(--surface)" : "var(--accent-ink)"} stroke="var(--accent-ink)" />
+                  <text x={kx + 9} y={12} fontSize={11} fontWeight={600} fill="var(--accent-ink)" data-testid="key-date-label">
+                    {k.name}
+                  </text>
+                </g>
+              );
+            })}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
             {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} onDown={onDown} onKeyOpen={keyOpen} onKeyMove={keyMove} onSuggestion={onSuggestion} /> : null))}
             <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" />
@@ -403,6 +426,27 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       </div>
     </div>
   );
+}
+
+/** A phase's x and width inside its bar: a phase a gate dates past the item's end is drawn
+ * inside the bar (its title keeps the dates). */
+function phaseBox(p: Item["phases"][number], sc: Scale, x: number, w: number): [number, number] {
+  const px = Math.min(Math.max(sc.x(p.start), x), x + w - 1);
+  const right = Math.min(sc.x(p.end) + sc.px, x + w);
+  return [px, Math.max(1, right - px)];
+}
+
+/** Redraws a phased bar's phases by direct DOM writes (the drag paints without React). */
+function drawPhases(g: SVGGElement, phases: Item["phases"], sc: Scale, x: number, w: number) {
+  for (const p of phases) {
+    const r = g.querySelector<SVGRectElement>(`rect[data-phase="${p.key}"]`);
+    if (!r) continue;
+    const [px, pw] = phaseBox(p, sc, x, w);
+    r.setAttribute("x", String(px));
+    r.setAttribute("width", String(pw));
+    r.dataset.start = p.start;
+    r.dataset.end = p.end;
+  }
 }
 
 function Axis({ ticks, sc, height, format }: { ticks: { day: string; label: string; major: boolean }[]; sc: Scale; height: number; format: Format }) {
@@ -496,8 +540,10 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
   // The suggestion's handle sits left of the bar (a broken link's callout is on its right).
   const left = Math.min(x, s ? sc.x(s.start_date) : x) - 14;
   const mark = left >= 10 ? left : Math.max(sc.x(s?.end_date ?? end), x + w) + sc.px + 12;
-  const phaseWords = phased ? `, ${item.phases.map((p) => `${p.key} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${canDrag && item.status !== "cut" ? ". Arrows move it, Shift+arrows its end" : ""}`;
+  // A moved bar's phases as the API will work them out again (dated gates stay).
+  const phases = phased && span ? rephase(item, start, end) : item.phases;
+  const phaseWords = phased ? `, ${phases.map((p) => `${p.key} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
+  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${canDrag && item.status !== "cut" ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") : ""}`;
   return (
     <g>
       <g
@@ -527,11 +573,9 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
         }}
       >
         {phased &&
-          item.phases.map((p) => {
+          phases.map((p) => {
             const tone = PHASES.find((t) => t.key === p.key)!;
-            // A phase a gate dates past the item's end is drawn inside the bar (its title keeps the dates).
-            const px = Math.min(Math.max(sc.x(p.start), x), x + w - 1);
-            const right = Math.min(sc.x(p.end) + sc.px, x + w);
+            const [px, pw] = phaseBox(p, sc, x, w);
             return (
               <rect
                 key={p.key}
@@ -542,7 +586,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
                 data-end={p.end}
                 x={px}
                 y={y + pad}
-                width={Math.max(1, right - px)}
+                width={pw}
                 height={h - 2 * pad}
                 fill={p.estimated ? `url(#simple-hatch-${p.key})` : tone.ink}
                 opacity={item.status === "cut" ? 0.4 : 1}

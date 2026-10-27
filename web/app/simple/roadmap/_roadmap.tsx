@@ -13,10 +13,12 @@ import { useQuery } from "@/lib/use-query";
 import { Board, boardColumns, HORIZONS, type Horizon } from "./_board";
 import { Callout, FlagLine, FixButtons, FloatingCard, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
+import { KeyDatesEditor } from "./_keydates";
 import {
   broken,
   ChangeFailed,
   decide,
+  nearWords,
   propose,
   quarters,
   resultWords,
@@ -197,7 +199,8 @@ function DecisionTray({
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
   ];
-  const title = (c: Change) => byId.get(String(c.target.item_id))?.title ?? "An item";
+  const kd = (c: Change) => (c.after.key_date ?? c.before.key_date) as { name?: string } | null | undefined;
+  const title = (c: Change) => (kd(c)?.name ? `Key date '${kd(c)!.name}'` : (byId.get(String(c.target.item_id))?.title ?? "An item"));
   const row = (c: Change) => (
     <li key={c.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-proposal">
       <span className="min-w-0 flex-1 text-[15px]">
@@ -294,6 +297,7 @@ export function SimpleRoadmap() {
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ id: string; left: number; top: number } | null>(null);
   const [tray, setTray] = useState(false);
+  const [keyDates, setKeyDates] = useState(false);
   const [exporting, setExporting] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement | null>(null);
@@ -454,7 +458,7 @@ export function SimpleRoadmap() {
 
   return (
     <div className="simple-mode space-y-3 px-4 py-4 min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
-      <header className="flex flex-wrap items-center gap-3">
+      <header className="relative flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Roadmap</h1>
         <div className={phone ? "order-last w-full" : ""} data-testid="format-switch">
           <SegmentedControl<Format>
@@ -481,6 +485,17 @@ export function SimpleRoadmap() {
               Needs a decision · {waiting}
             </Button>
           )}
+          <Button
+            data-testid="key-dates-open"
+            aria-expanded={keyDates}
+            onClick={() => {
+              setCard(null);
+              setPop(null);
+              setKeyDates(!keyDates);
+            }}
+          >
+            Key dates · {data.key_dates?.length ?? 0}
+          </Button>
           <Button disabled={exporting} onClick={() => void doExport("png")}>
             Export PNG
           </Button>
@@ -488,6 +503,7 @@ export function SimpleRoadmap() {
             Export PDF
           </Button>
         </div>
+        {keyDates && <KeyDatesEditor data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
       </header>
       <GoalCounters items={data.items} />
       <DraftBanner
@@ -562,7 +578,7 @@ export function SimpleRoadmap() {
             format={format}
             unit={unit}
             compact={phone}
-            canDrag={canChange && format !== "waterfall"}
+            canDrag={canChange}
             moved={moved}
             open={card?.id ?? null}
             chartRef={(el) => {
@@ -601,6 +617,7 @@ export function SimpleRoadmap() {
             canChange={canChange}
             onDecide={(c, how) => void onDecide(c, how)}
             onClose={() => setCard(null)}
+            near={nearWords(cardItem, data.key_dates ?? [])}
             onHorizon={format === "board" && canChange && cardItem.status !== "cut" ? (h) => onHorizon(cardItem, h) : undefined}
           />
         )}
@@ -625,7 +642,13 @@ export function SimpleRoadmap() {
               {p.label}
             </span>
           ))}
-          <span>· solid: a milestone or validation gate dates the phase · hatched: estimated from the bar&rsquo;s span · the Timeline and Gantt move dates</span>
+          <span>
+            · solid: a milestone or validation gate dates the phase · hatched: estimated from the bar&rsquo;s span ·{" "}
+            {canChange
+              ? `drag a bar${phone ? " (press and hold first)" : ""} or use the arrow keys to move the whole item: its estimated phases are worked out again, a dated gate stays on its day (the phases before it may bunch up)`
+              : "a dated gate stays on its day when the item moves"}{" "}
+            · diamond and thin line: a key date
+          </span>
         </p>
       ) : format === "board" ? (
         <p className="text-sm text-text2" data-testid="legend">
@@ -633,7 +656,7 @@ export function SimpleRoadmap() {
         </p>
       ) : (
         <p className="text-sm text-text2" data-testid="legend">
-          Solid: dated · hatched: estimated (the horizon&rsquo;s window) · dashed: draft · dotted outline: Oracle&rsquo;s date suggestion (? opens it) · diamond: a milestone · red: a broken link
+          Solid: dated · hatched: estimated (the horizon&rsquo;s window) · dashed: draft · dotted outline: Oracle&rsquo;s date suggestion (? opens it) · diamond: a milestone · diamond and thin line: a key date · red: a broken link
         </p>
       )}
       {tray && (

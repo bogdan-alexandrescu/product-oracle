@@ -140,14 +140,42 @@ function activeOverride(db: SimpleDb, itemId: string): Schemas["SimpleChangeOut"
     .at(-1);
 }
 
+type Line = Schemas["SimpleLine"];
+const NOW_LINE: Line = { key: "now", kind: "now", label: "This quarter (Now)", date: null };
+
+const lineDay = (d: string): string => new Date(`${d}T00:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+
+/** priorities.lines: Now, each key date and each dated milestone the reader sees. */
+function linesOf(read: Schemas["SimpleRoadmapOut"]): Line[] {
+  const tracks = new Set(read.items.map((i) => i.track?.id).filter(Boolean));
+  return [
+    NOW_LINE,
+    ...(read.key_dates ?? []).map((k): Line => ({ key: `key_date:${k.id}`, kind: "key_date", label: `${k.name} · ${lineDay(k.date)}`, date: k.date })),
+    ...read.milestones.filter((m) => m.date && tracks.has(m.track_id) && m.status !== "dropped").map((m): Line => ({ key: `milestone:${m.id}`, kind: "milestone", label: `${m.name} · ${lineDay(m.date!)}`, date: m.date! })),
+  ];
+}
+
+/** priorities.pick_line: the line named among those offered, or a picked day; else Now. */
+function pickLine(key: string | null, offered: Line[]): Line {
+  if (key?.startsWith("date:")) {
+    const day = key.slice(5);
+    return /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(day)) ? { key, kind: "date", label: `By ${lineDay(day)}`, date: day } : NOW_LINE;
+  }
+  return offered.find((x) => x.key === key) ?? NOW_LINE;
+}
+
 export function prioritiesOut(
   db: SimpleDb,
   ctx: PrioritiesCtx,
   route: (c: Schemas["SimpleChangeOut"]) => string[],
   decides: (itemId: string) => boolean,
+  lineKey: string | null = null,
 ): Schemas["SimplePrioritiesOut"] {
   const today = new Date(mockNowMs()).toISOString().slice(0, 10);
   const read = roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role })!;
+  const lines = linesOf(read);
+  const line = pickLine(lineKey, lines);
+  const readItems = new Map(read.items.map((i) => [i.id, i]));
   // A cut draft reads as "draft" on the roadmap: the seed says it is cut (as the API's cut set).
   const cut = new Set(db.items.filter((s) => s.status === "cut").map((s) => s.key));
   const live = read.items.filter((i) => i.status !== "cut" && !cut.has(i.key));
@@ -209,7 +237,9 @@ export function prioritiesOut(
       depends_on: depsOf(i, byId).map((d) => byId.get(d)!.key),
       after,
       override: o ? { by_name: o.by_name, reason: String((o.after.override as Values).reason), at: o.decided_at ?? o.at } : null,
-      above_line: mine && i.horizon === "now",
+      above_line: mine && (line.date ? readItems.get(i.id)!.end.date <= line.date : i.horizon === "now"),
+      end_date: mine ? readItems.get(i.id)!.end.date : null,
+      end_estimated: mine && readItems.get(i.id)!.end.estimated,
       no_goal: !i.goal,
       can_reorder: can && mine,
       applies: mine && decides(i.id),
@@ -256,6 +286,6 @@ export function prioritiesOut(
   return {
     today, quarter: quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
-    rows, proposals, drafts, buckets, weeks_total: total, can_change: can,
+    rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,
   };
 }

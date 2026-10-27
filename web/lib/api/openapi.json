@@ -41674,7 +41674,7 @@
           "simple"
         ],
         "summary": "Get Simple Roadmap",
-        "description": "Every roadmap's items the caller may read on one timeline, grouped by goal, track or\nPRD: each with its resolved dates (source, estimated), open date suggestion,\nmilestone, waterfall phases, dependencies both ways and constraint flags; plus the\ntracks' milestones, the horizon windows and the company's today. Filters: ``prd``\n(slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).",
+        "description": "Every roadmap's items the caller may read on one timeline, grouped by goal, track or\nPRD: each with its resolved dates (source, estimated), open date suggestion,\nmilestone, waterfall phases, dependencies both ways and constraint flags; plus the\ntracks' milestones, the horizon windows, the company's today and the shown roadmaps' key\ndates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``\n(slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).",
         "operationId": "get_simple_roadmap",
         "security": [
           {
@@ -43027,8 +43027,35 @@
           "simple"
         ],
         "summary": "Get Simple Priorities",
-        "description": "The live goal-weighted ranking in the company's order joined with the roadmap items\nthe caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate\nor the goals'), effort, score, the dependency it waits for, the override that placed it\nand whether the caller's change applies or is proposed; the open priority and estimate\nproposals, the draft items with what they may merge into, and this quarter's\nengineer-weeks per goal.",
+        "description": "The live goal-weighted ranking in the company's order joined with the roadmap items\nthe caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate\nor the goals'), effort, score, the dependency it waits for, the override that placed it\nand whether the caller's change applies or is proposed; the open priority and estimate\nproposals, the draft items with what they may merge into, and this quarter's\nengineer-weeks per goal. ``line``: where the line is drawn (Now, a key date, a dated\nmilestone or a day; see the module).",
         "operationId": "get_simple_priorities",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "line",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 80
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Line"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -43039,16 +43066,18 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
         "x-min-role": "viewer"
       }
     },
@@ -76287,7 +76316,10 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line"
+              "edit_line",
+              "add_key_date",
+              "edit_key_date",
+              "remove_key_date"
             ],
             "title": "Op"
           },
@@ -91164,11 +91196,22 @@
               }
             ],
             "title": "Experience"
+          },
+          "priorities_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priorities Line"
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple)."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -91233,6 +91276,18 @@
               }
             ],
             "title": "Experience"
+          },
+          "priorities_line": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(now|(key_date|milestone):[0-9a-f-]{36}|date:\\d{4}-\\d{2}-\\d{2})$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priorities Line"
           }
         },
         "type": "object",
@@ -108581,7 +108636,10 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line"
+              "edit_line",
+              "add_key_date",
+              "edit_key_date",
+              "remove_key_date"
             ],
             "title": "Op"
           },
@@ -108686,7 +108744,10 @@
               "set_launch_task_status",
               "estimate_feature",
               "confirm_item",
-              "edit_line"
+              "edit_line",
+              "add_key_date",
+              "edit_key_date",
+              "remove_key_date"
             ],
             "title": "Op"
           },
@@ -109483,6 +109544,117 @@
         ],
         "title": "SimpleItemMilestone"
       },
+      "SimpleKeyDate": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "in_draft": {
+            "type": "boolean",
+            "title": "In Draft",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "roadmap",
+          "name",
+          "date"
+        ],
+        "title": "SimpleKeyDate",
+        "description": "Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board\nmeeting), as the reader reads it (the working draft's when they see it)."
+      },
+      "SimpleKeyDateRoadmap": {
+        "properties": {
+          "roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "applies": {
+            "type": "boolean",
+            "title": "Applies",
+            "default": false
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "roadmap"
+        ],
+        "title": "SimpleKeyDateRoadmap",
+        "description": "A roadmap whose key dates the reader reads; ``applies``: their change applies (an\nowner, the decider, with none its owner), ``can_change``: they may change or propose."
+      },
+      "SimpleLine": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "now",
+              "key_date",
+              "milestone",
+              "date"
+            ],
+            "title": "Kind"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "kind",
+          "label"
+        ],
+        "title": "SimpleLine",
+        "description": "Roadmap-plus: where the line on priorities is drawn. ``now``: this quarter's plan\n(the Now horizon); ``key_date:<id>``, ``milestone:<id>``, ``date:<YYYY-MM-DD>``: planned\nto finish by that day."
+      },
       "SimpleMilestone": {
         "properties": {
           "id": {
@@ -109701,6 +109873,24 @@
           "can_change": {
             "type": "boolean",
             "title": "Can Change"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleLine"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleLine"
+            },
+            "type": "array",
+            "title": "Lines",
+            "default": []
           }
         },
         "type": "object",
@@ -110113,6 +110303,23 @@
             "title": "Above Line",
             "default": false
           },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "end_estimated": {
+            "type": "boolean",
+            "title": "End Estimated",
+            "default": false
+          },
           "no_goal": {
             "type": "boolean",
             "title": "No Goal",
@@ -110467,6 +110674,22 @@
             },
             "type": "array",
             "title": "Drafts",
+            "default": []
+          },
+          "key_dates": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleKeyDate"
+            },
+            "type": "array",
+            "title": "Key Dates",
+            "default": []
+          },
+          "key_date_roadmaps": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleKeyDateRoadmap"
+            },
+            "type": "array",
+            "title": "Key Date Roadmaps",
             "default": []
           }
         },

@@ -26,7 +26,7 @@ import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
-import { canDecideItem, canEditRoadmap, deciderIds, draftChanges, roadmapOut, ownDates, seesDraft, storedDates, type MockDraft, type SimpleDb } from "./simple-roadmap";
+import { canDecideItem, canEditRoadmap, deciderIds, draftChanges, roadmapOut, ownDates, seesDraft, storedDates, type MockDraft, type MockKeyDate, type SimpleDb } from "./simple-roadmap";
 
 type Change = Schemas["SimpleChangeOut"];
 type Session = Schemas["SimpleSessionOut"];
@@ -75,6 +75,9 @@ const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   estimate_feature: { id: "item_id" },
 };
 
+/** Roadmap-plus: a roadmap's key dates (api/oracle/simple/key_dates.py), into its working draft. */
+const KEY_DATE_OPS = ["add_key_date", "edit_key_date", "remove_key_date"];
+
 const iso = (ms: number): string => new Date(ms).toISOString();
 const addDays = (day: string, n: number): string => new Date(Date.parse(`${day}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 const days = (a: string, b: string): number => Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY);
@@ -92,6 +95,20 @@ function seed(db: SimpleDb, key: string) {
   return db.items.find((s) => s.key === key)!;
 }
 
+/** The roadmap slug of a key-date change's target document. */
+function roadmapOfDoc(db: SimpleDb, docId: unknown): string | undefined {
+  return [...new Set(db.items.map((s) => s.roadmap))].find((r) => stableUuid(`simple-doc/${r}`) === docId);
+}
+
+/** Whether the caller decides a change: a key date's by the roadmap's rule (drafts.can_edit), else the item's. */
+function decidesChange(db: SimpleDb, ctx: SimpleChangesCtx, c: Pick<Change, "op" | "target" | "routed_to">): boolean {
+  if (KEY_DATE_OPS.includes(c.op)) {
+    const rm = roadmapOfDoc(db, c.target.document_id);
+    return ctx.role === "owner" || c.routed_to.includes(ctx.id) || (!!rm && canEditRoadmap(db, rm, ctx));
+  }
+  return decides(db, ctx, c.target.item_id);
+}
+
 /** Whether the caller applies a change to this item (service.can_decide); no item: owners. */
 function decides(db: SimpleDb, ctx: SimpleChangesCtx, itemId: unknown): boolean {
   const key = itemId ? keyOf(db, itemId) : undefined;
@@ -100,7 +117,7 @@ function decides(db: SimpleDb, ctx: SimpleChangesCtx, itemId: unknown): boolean 
 
 /** changes.current_route: who decides an open proposal now; else its stored route. */
 function route(db: SimpleDb, ctx: Pick<SimpleChangesCtx, "owners" | "roles">, c: Change): string[] {
-  if (c.status !== "proposed") return c.routed_to;
+  if (c.status !== "proposed" || KEY_DATE_OPS.includes(c.op)) return c.routed_to;
   const key = c.target.item_id ? keyOf(db, c.target.item_id) : undefined;
   if (!key) return ctx.owners;
   const ids = deciderIds(db, seed(db, key), ctx.roles);
@@ -193,7 +210,7 @@ function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
     ...c,
     routed_to: route(db, ctx, c),
     undone,
-    can_decide: c.status === "proposed" && decides(db, ctx, c.target.item_id),
+    can_decide: c.status === "proposed" && decidesChange(db, ctx, c),
     can_undo: c.status === "applied" && c.by === ctx.id && !undone && !!s && !s.closed_at && !idle(s),
   };
 }
@@ -208,7 +225,7 @@ function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
  * their published items; for an undo, the change's own drafts while they are working. */
 function intoDrafts(db: SimpleDb, c: Change, session: Session, undo = false): string[] | Response {
   if (TARGETS[c.op]) return [];
-  const roadmaps = [...new Set(touched(c).map((id) => seed(db, keyOf(db, id)!).roadmap))];
+  const roadmaps = KEY_DATE_OPS.includes(c.op) ? [roadmapOfDoc(db, c.target.document_id)!] : [...new Set(touched(c).map((id) => seed(db, keyOf(db, id)!).roadmap))];
   const out: string[] = [];
   for (const rm of roadmaps) {
     const drafts = (db.drafts ??= []);
@@ -222,7 +239,7 @@ function intoDrafts(db: SimpleDb, c: Change, session: Session, undo = false): st
       const keys = new Set(items.map((x) => x.key));
       d = {
         roadmap: rm,
-        published: structuredClone({ items, own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))) }),
+        published: structuredClone({ items, own: Object.fromEntries(Object.entries(db.own).filter(([k]) => keys.has(k))), key_dates: db.key_dates?.[rm] ?? [] }),
         out: {
           id: crypto.randomUUID(), document: { id: stableUuid(`simple-doc/${rm}`), slug: rm, title: rm.replace(/-/g, " ").replace(/^./, (x) => x.toUpperCase()) },
           status: "working", base_version: 1, version: null, created_by: session.started_by, created_at: iso(mockNowMs()), participant_ids: [session.started_by],
@@ -387,8 +404,78 @@ function normal(fields: string[], values: Values): Values {
   return Object.fromEntries(fields.map((f) => [f, values[f] ?? null]));
 }
 
+/** The key date as the caller reads it (the working draft's when they see it). */
+function keyDateNow(db: SimpleDb, ctx: SimpleChangesCtx, rm: string, id: string): MockKeyDate | null {
+  const d = (db.drafts ?? []).find((x) => x.roadmap === rm && ["working", "submitted"].includes(x.out.status));
+  const list = d && !seesDraft(d, ctx, db) ? (d.published.key_dates ?? []) : (db.key_dates?.[rm] ?? []);
+  return list.find((k) => k.id === id) ?? null;
+}
+
+const kdValue = (k: MockKeyDate | null): Values | null => (k ? { name: k.name, date: k.date, note: k.note } : null);
+
+function kdChecked(v: Values): Values | string {
+  const name = String(v.name ?? "").trim().replace(/\s+/g, " ");
+  if (!name || name.length > 120) return "after.name: 1 to 120 characters";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v.date ?? ""))) return "after.date: a day as YYYY-MM-DD";
+  const note = String(v.note ?? "").trim() || null;
+  return { name, date: String(v.date), note };
+}
+
+function writeKeyDate(db: SimpleDb, c: Change, value: unknown): void {
+  const rm = roadmapOfDoc(db, c.target.document_id)!;
+  const id = String(c.target.key_date_id);
+  const list = (db.key_dates ??= {})[rm] ?? [];
+  const v = value as Values | null;
+  db.key_dates[rm] = v ? [...list.filter((k) => k.id !== id), { id, name: String(v.name), date: String(v.date), note: (v.note as string | null) ?? null }] : list.filter((k) => k.id !== id);
+}
+
+/** add_key_date / edit_key_date / remove_key_date (key_dates.create). */
+function createKeyDate(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"], session: Session | undefined, applies: boolean): Response {
+  const now = iso(mockNowMs());
+  const rm = roadmapOfDoc(db, body.target.document_id);
+  if (!rm) return json(404, { detail: "No such roadmap" });
+  if (!("key_date" in body.before)) return json(422, { detail: "before.key_date: the key date as you saw it (or null)" });
+  const target: Values = { document_id: body.target.document_id };
+  let current: Values | null = null;
+  let after: Values | string | null;
+  if (body.op === "add_key_date") {
+    target.key_date_id = crypto.randomUUID();
+    after = kdChecked(body.after ?? {});
+  } else {
+    target.key_date_id = body.target.key_date_id;
+    current = kdValue(keyDateNow(db, ctx, rm, String(body.target.key_date_id)));
+    if (!current) return json(404, { detail: "No such key date on this roadmap" });
+    after = body.op === "edit_key_date" ? kdChecked({ ...current, ...(body.after ?? {}) }) : null;
+  }
+  if (typeof after === "string") return json(422, { detail: after });
+  if (!same(body.before.key_date ?? null, current)) return json(409, { detail: { message: "Changed since you saw it", current: { key_date: current }, changed_by: null, changed_at: null } });
+  const deciders = db.deciders?.[rm];
+  const change: Change = {
+    id: crypto.randomUUID(), session_id: session?.id ?? null, document_id: String(body.target.document_id), draft_ids: [], op: body.op, target,
+    before: { key_date: current }, after: { key_date: after }, status: applies ? "applied" : "proposed", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now,
+    decided_by: null, decided_at: null, reason: body.reason ?? null, decision_reason: null,
+    routed_to: applies ? [] : deciders ? [deciders] : ctx.owners, undoes_id: null, undone: false, can_decide: false, can_undo: false,
+  };
+  if (applies) {
+    const drafts = intoDrafts(db, change, session!);
+    if (drafts instanceof Response) return drafts;
+    change.draft_ids = drafts;
+    writeKeyDate(db, change, after);
+    session!.last_change_at = now;
+  }
+  (db.changes ??= []).push(change);
+  return json(201, { change: view(db, ctx, change), flags: [] });
+}
+
 async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["SimpleChangeIn"]): Promise<Response> {
   const now = iso(mockNowMs());
+  if (KEY_DATE_OPS.includes(body.op)) {
+    const rm = roadmapOfDoc(db, body.target.document_id);
+    const applies = !!rm && canEditRoadmap(db, rm, ctx);
+    let session: Session | undefined;
+    if (applies) session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
+    return createKeyDate(db, ctx, body, session, applies);
+  }
   const target: Values = { ...body.target };
   const key = TARGETS[body.op] ? "" : keyOf(db, target.item_id);
   if (key === undefined) return json(404, { detail: "No such roadmap item" });
@@ -500,7 +587,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
   const m = req.method;
   if (p[2] === "priorities") {
     if (m !== "GET" || p[3]) return null;
-    return json(200, prioritiesOut(db, ctx, (c) => route(db, ctx, c), (itemId) => decides(db, ctx, itemId)));
+    return json(200, prioritiesOut(db, ctx, (c) => route(db, ctx, c), (itemId) => decides(db, ctx, itemId), q.get("line")));
   }
   const now = iso(mockNowMs());
   const accepting = p[2] === "roadmap" && p[3] === "date-suggestions" && m === "POST" && ["accept", "edit"].includes(p[5] ?? "");
@@ -554,7 +641,13 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     const s = (db.sessions ?? []).find((x) => x.id === c.session_id);
     if (!s || s.closed_at || idle(s)) return json(409, { detail: "Its session is closed: undo works only in the change's session" });
     if (TARGETS[c.op]) writeTarget(db, c, c.before, true);
-    else {
+    else if (KEY_DATE_OPS.includes(c.op)) {
+      const rm = roadmapOfDoc(db, c.target.document_id)!;
+      if (!same(kdValue(keyDateNow(db, ctx, rm, String(c.target.key_date_id))), c.after.key_date ?? null)) return json(409, { detail: "Changed since" });
+      const drafts = intoDrafts(db, c, s, true);
+      if (drafts instanceof Response) return drafts;
+      writeKeyDate(db, c, c.before.key_date);
+    } else {
       const now_ = current(db, c, c.after);
       if (!same(now_, c.after)) return conflict(db, ctx, now_, touched(c), "Changed since");
       const drafts = intoDrafts(db, c, s, true);
@@ -564,13 +657,22 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     const u: Change = { ...c, id: crypto.randomUUID(), before: c.after, after: c.before, status: "undone", by: ctx.id, by_name: ctx.names[ctx.id] ?? "someone", at: now, undoes_id: c.id, routed_to: [], decided_by: null, decided_at: null };
     db.changes!.push(u);
     s.last_change_at = now;
-    return json(201, { change: view(db, ctx, u), flags: TARGETS[c.op] ? [] : flagsFor(db, touched(c)) });
+    return json(201, { change: view(db, ctx, u), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });
   }
-  if (!decides(db, ctx, c.target.item_id)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides proposals" });
+  if (!decidesChange(db, ctx, c)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides proposals" });
   if (c.status !== "proposed") return json(409, { detail: `This change is ${c.status} already` });
   const body = (await req.json().catch(() => ({}))) as { reason?: string | null };
   if (p[4] === "accept" && TARGETS[c.op]) writeTarget(db, c, c.after);
-  else if (p[4] === "accept") {
+  else if (p[4] === "accept" && KEY_DATE_OPS.includes(c.op)) {
+    const rm = roadmapOfDoc(db, c.target.document_id)!;
+    if (!same(kdValue(keyDateNow(db, ctx, rm, String(c.target.key_date_id))), c.before.key_date ?? null)) return json(409, { detail: "outdated: the key date changed since the proposal" });
+    const session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");
+    const drafts = intoDrafts(db, c, session);
+    if (drafts instanceof Response) return drafts;
+    c.draft_ids = drafts;
+    session.last_change_at = now;
+    writeKeyDate(db, c, c.after.key_date);
+  } else if (p[4] === "accept") {
     const now_ = current(db, c, c.before);
     if (!same(now_, c.before)) return conflict(db, ctx, now_, touched(c), "outdated");
     // Into the decider's working draft (their editing session's).
@@ -582,7 +684,7 @@ export async function routeSimpleChanges(db: SimpleDb, ctx: SimpleChangesCtx, re
     apply(db, c, c.after);
   }
   Object.assign(c, { status: p[4] === "accept" ? "accepted" : "declined", decided_by: ctx.id, decided_at: now, decision_reason: body.reason ?? null });
-  return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] ? [] : flagsFor(db, touched(c)) });
+  return json(200, { change: view(db, ctx, c), flags: TARGETS[c.op] || KEY_DATE_OPS.includes(c.op) ? [] : flagsFor(db, touched(c)) });
 }
 
 /**

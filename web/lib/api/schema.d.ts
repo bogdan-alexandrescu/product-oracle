@@ -12021,7 +12021,8 @@ export interface paths {
          * @description Every roadmap's items the caller may read on one timeline, grouped by goal, track or
          *     PRD: each with its resolved dates (source, estimated), open date suggestion,
          *     milestone, waterfall phases, dependencies both ways and constraint flags; plus the
-         *     tracks' milestones, the horizon windows and the company's today. Filters: ``prd``
+         *     tracks' milestones, the horizon windows, the company's today and the shown roadmaps' key
+         *     dates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``
          *     (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).
          */
         get: operations["get_simple_roadmap"];
@@ -12469,7 +12470,8 @@ export interface paths {
          *     or the goals'), effort, score, the dependency it waits for, the override that placed it
          *     and whether the caller's change applies or is proposed; the open priority and estimate
          *     proposals, the draft items with what they may merge into, and this quarter's
-         *     engineer-weeks per goal.
+         *     engineer-weeks per goal. ``line``: where the line is drawn (Now, a key date, a dated
+         *     milestone or a day; see the module).
          */
         get: operations["get_simple_priorities"];
         put?: never;
@@ -24416,7 +24418,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date";
             /**
              * Status
              * @enum {string}
@@ -29812,6 +29814,7 @@ export interface components {
          *     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
          *     ``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they
          *     last switched to (#723); unset, they land by role (viewers and commenters in Simple).
+         *     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter.
          */
         Preferences: {
             /**
@@ -29842,6 +29845,8 @@ export interface components {
             slack_pings: components["schemas"]["SlackPings"];
             /** Experience */
             experience?: ("simple" | "detailed") | null;
+            /** Priorities Line */
+            priorities_line?: string | null;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -29854,6 +29859,8 @@ export interface components {
             slack_pings?: components["schemas"]["SlackPingsUpdate"] | null;
             /** Experience */
             experience?: ("simple" | "detailed") | null;
+            /** Priorities Line */
+            priorities_line?: string | null;
         };
         /**
          * PreviousAttempt
@@ -35967,7 +35974,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -36003,7 +36010,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -36317,6 +36324,70 @@ export interface components {
              */
             source: "item" | "track";
         };
+        /**
+         * SimpleKeyDate
+         * @description Roadmap-plus: one of a roadmap's key dates (a conference, a product launch, a board
+         *     meeting), as the reader reads it (the working draft's when they see it).
+         */
+        SimpleKeyDate: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            roadmap: components["schemas"]["SimpleDocRef"];
+            /** Name */
+            name: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Note */
+            note?: string | null;
+            /**
+             * In Draft
+             * @default false
+             */
+            in_draft: boolean;
+        };
+        /**
+         * SimpleKeyDateRoadmap
+         * @description A roadmap whose key dates the reader reads; ``applies``: their change applies (an
+         *     owner, the decider, with none its owner), ``can_change``: they may change or propose.
+         */
+        SimpleKeyDateRoadmap: {
+            roadmap: components["schemas"]["SimpleDocRef"];
+            /**
+             * Applies
+             * @default false
+             */
+            applies: boolean;
+            /**
+             * Can Change
+             * @default false
+             */
+            can_change: boolean;
+        };
+        /**
+         * SimpleLine
+         * @description Roadmap-plus: where the line on priorities is drawn. ``now``: this quarter's plan
+         *     (the Now horizon); ``key_date:<id>``, ``milestone:<id>``, ``date:<YYYY-MM-DD>``: planned
+         *     to finish by that day.
+         */
+        SimpleLine: {
+            /** Key */
+            key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "now" | "key_date" | "milestone" | "date";
+            /** Label */
+            label: string;
+            /** Date */
+            date?: string | null;
+        };
         /** SimpleMilestone */
         SimpleMilestone: {
             /**
@@ -36425,6 +36496,12 @@ export interface components {
             weeks_total: number;
             /** Can Change */
             can_change: boolean;
+            line?: components["schemas"]["SimpleLine"] | null;
+            /**
+             * Lines
+             * @default []
+             */
+            lines: components["schemas"]["SimpleLine"][];
         };
         /**
          * SimplePriorityAfter
@@ -36578,6 +36655,13 @@ export interface components {
              * @default false
              */
             above_line: boolean;
+            /** End Date */
+            end_date?: string | null;
+            /**
+             * End Estimated
+             * @default false
+             */
+            end_estimated: boolean;
             /**
              * No Goal
              * @default false
@@ -36722,6 +36806,16 @@ export interface components {
              * @default []
              */
             drafts: components["schemas"]["SimpleDraftBrief"][];
+            /**
+             * Key Dates
+             * @default []
+             */
+            key_dates: components["schemas"]["SimpleKeyDate"][];
+            /**
+             * Key Date Roadmaps
+             * @default []
+             */
+            key_date_roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
         };
         /** SimpleSessionIn */
         SimpleSessionIn: {
@@ -66250,7 +66344,9 @@ export interface operations {
     };
     get_simple_priorities: {
         parameters: {
-            query?: never;
+            query?: {
+                line?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -66264,6 +66360,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimplePrioritiesOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
