@@ -22,11 +22,6 @@ def migrated_db():
     return None
 
 
-@pytest.fixture
-def _truncate_after_test():
-    return None
-
-
 def world_with_a_mirror() -> SlackWorld:
     world = SlackWorld()
     root, reply = ts("2025-10-06"), ts("2025-10-06", 13)
