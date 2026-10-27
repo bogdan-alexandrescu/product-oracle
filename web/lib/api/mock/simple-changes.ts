@@ -6,8 +6,9 @@
  * Who decides (D-a, #730 review): an owner; the roadmap's decider (`db.deciders`); with none,
  * the item's track owner (`db.track_owners`) while an approver or owner; they apply, and
  * approvers and commenters propose to them, else to the company's owners; viewers are
- * refused. An open proposal is routed to whoever decides now. The seed names no decider and
- * no track owner, so there owners apply every change. A
+ * refused. An open proposal is routed to whoever decides now. The default seed names no
+ * decider and no track owner, so there owners apply every change; the "simple-deciders"
+ * scenario names both (./simple-roadmap.ts seedSimpleDeciders). A
  * change whose `before` differs from the stored values answers 409 with the current values
  * and who changed them last; undo works for its author, in its open session, while the item
  * still holds the change's `after`. Sessions close after 30 minutes without a change.

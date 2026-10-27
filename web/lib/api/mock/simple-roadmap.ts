@@ -81,7 +81,7 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
   "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes" },
 };
 const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation" };
-const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track" };
+const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboarding: "Guided setup track", welcome: "Welcome media track" };
 
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress" },
@@ -119,6 +119,19 @@ export function simpleWindows(today: string): Record<Horizon, [string, string]> 
   const medium = addMonths(q, 3);
   const mediumEnd = addMonths(medium, 6);
   return { now: [q, addDays(medium, -1)], next: [medium, addDays(mediumEnd, -1)], later: [addMonths(today, 12), addMonths(today, 24)] };
+}
+
+/**
+ * The "simple-deciders" scenario (#734 review, D-a): the pricing roadmap names a decider and
+ * each track an owner of another role; the welcome video and tour move to the welcome
+ * track. People are member ids.
+ */
+export function seedSimpleDeciders(people: { decider: string; approver: string; commenter: string; viewer: string }): SimpleDb {
+  const db = seedSimpleRoadmap();
+  for (const s of db.items) if (s.key === "setup-tour" || s.key === "setup-video") s.track = "welcome";
+  db.deciders = { "pricing-roadmap": people.decider };
+  db.track_owners = { alerts: people.approver, onboarding: people.commenter, welcome: people.viewer };
+  return db;
 }
 
 export function seedSimpleRoadmap(): SimpleDb {
@@ -191,8 +204,8 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 
 /** service.decider_ids (D-a): the roadmap's decider, else the item's track owner when an
- * approver or owner; [] when the company's owners decide. The seed names none (set
- * `deciders` and `track_owners` to reach those paths). */
+ * approver or owner; [] when the company's owners decide. The default seed names none;
+ * the "simple-deciders" scenario (seedSimpleDeciders) names both. */
 export function deciderIds(db: SimpleDb, s: SeedItem, roles?: Record<string, Role>): string[] {
   const decider = db.deciders?.[s.roadmap];
   if (decider) return [decider];

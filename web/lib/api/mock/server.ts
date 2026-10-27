@@ -152,7 +152,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, simpleInboxRows } from "./simple-changes";
-import { routeSimpleRoadmap, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
+import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -520,7 +520,9 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
  * tick retries it);
  * "read-only-credential" where My account is read through an oracle:read personal token
- * (AC1: it changes nothing, the name included).
+ * (AC1: it changes nothing, the name included);
+ * "simple-deciders" as the default company plus a decider of Simple's pricing roadmap and
+ * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
@@ -808,6 +810,31 @@ function seedPrivateFinding(): Db {
 
 /** "questions" in a company of 25 members: zoe.zimmer@example.com sorts last, past the
  * people picker's first page of 20. */
+/**
+ * #734 review "simple-deciders" scenario (D-a): the default company plus four invented
+ * people: Dana Decider (an approver), the pricing roadmap's decider; Avery Lane (an
+ * approver), Cory Hale (a commenter) and Vic Moss (a viewer), the owners of the alerts,
+ * onboarding and welcome tracks of Simple's roadmap (./simple-roadmap.ts).
+ */
+function seedSimpleDecidersScenario(): Db {
+  const db = seed();
+  const join = (email: string, name: string, role: "approver" | "commenter" | "viewer", i: number) => {
+    const m = {
+      email, name, role, engineering_lead: false, created_at: `2026-09-${String(10 + i).padStart(2, "0")}T09:00:00Z`,
+      id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
+    };
+    db.members.push(m);
+    return m.id;
+  };
+  db.simple_roadmap = seedSimpleDeciders({
+    decider: join("dana.decider@example.com", "Dana Decider", "approver", 0),
+    approver: join("avery.lane@example.com", "Avery Lane", "approver", 1),
+    commenter: join("cory.hale@example.com", "Cory Hale", "commenter", 2),
+    viewer: join("vic.moss@example.com", "Vic Moss", "viewer", 3),
+  });
+  return db;
+}
+
 function seedManyPeople(): Db {
   const db = seedQuestions();
   const join = (email: string, i: number) => ({
@@ -2456,6 +2483,8 @@ function load(): Db {
               ? seedPrivateFinding
               : scenario === "many-people"
                 ? seedManyPeople
+              : scenario === "simple-deciders"
+                ? seedSimpleDecidersScenario
                 : scenario === "strategy" || scenario === "strategy-no-vision"
                   ? () => seedStrategyScenario(scenario === "strategy")
                   : scenario === "strategy-plan"

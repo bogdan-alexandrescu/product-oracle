@@ -18,7 +18,15 @@ import { expect, test, type Page } from "./test";
  * no_claim = Simple's screens (none yet), the real API (api/tests/test_simple_review_fixes.py).
  */
 
-type Call = { status: number; body: any };
+type Item = { key: string; id: string; title: string; suggestion: { id: string; can_decide: boolean } | null };
+/** The fields this spec reads from Simple's answers (a change, the roadmap, me, the Inbox). */
+type Body = {
+  change: { id: string; status: string; can_undo: boolean; routed_to: string[] };
+  items: Item[];
+  id: string;
+  simple_proposals: { id: string }[];
+};
+type Call = { status: number; body: Body };
 
 async function call(page: Page, method: string, path: string, body?: unknown): Promise<Call> {
   return page.evaluate(
@@ -43,10 +51,10 @@ async function as(page: Page, email: string): Promise<Page> {
   return tab;
 }
 
-async function items(tab: Page): Promise<Record<string, { id: string; title: string; suggestion: { id: string; can_decide: boolean } | null }>> {
+async function items(tab: Page): Promise<Record<string, Item>> {
   const r = await call(tab, "GET", "/v1/simple/roadmap");
   expect(r.status).toBe(200);
-  return Object.fromEntries(r.body.items.map((i: { key: string }) => [i.key, i]));
+  return Object.fromEntries(r.body.items.map((i) => [i.key, i]));
 }
 
 async function retitle(tab: Page, key: string, title: string): Promise<Call> {
@@ -85,7 +93,7 @@ test("a commenter track owner's change is a proposal to the company's owners", a
   expect(r.body.change.routed_to).not.toContain(await meId(cory));
   expect((await items(cory))["setup-checklist"].title).toBe("Setup checklist");
   const inbox = await call(admin, "GET", "/v1/inbox");
-  expect(inbox.body.simple_proposals.map((x: { id: string }) => x.id)).toContain(r.body.change.id);
+  expect(inbox.body.simple_proposals.map((x) => x.id)).toContain(r.body.change.id);
 });
 
 test("a viewer track owner decides nothing", async ({ page }) => {
@@ -110,7 +118,7 @@ test("the named decider applies directly; others' changes go to them", async ({ 
   expect(p.body.change.status).toBe("proposed");
   expect(p.body.change.routed_to).toEqual([await meId(dana)]);
   const inbox = await call(dana, "GET", "/v1/inbox");
-  expect(inbox.body.simple_proposals.map((x: { id: string }) => x.id)).toContain(p.body.change.id);
+  expect(inbox.body.simple_proposals.map((x) => x.id)).toContain(p.body.change.id);
   const r = await retitle(dana, "price-tiers", "New plan tiers 2027");
   expect(r.status).toBe(201);
   expect(r.body.change.status).toBe("applied");
