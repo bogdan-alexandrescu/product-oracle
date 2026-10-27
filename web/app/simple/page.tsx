@@ -77,8 +77,11 @@ export default function SimpleHome() {
     for (const c of changes.data ?? []) if (c.status === "proposed") c.routed_to.forEach((id) => ids.add(id));
     return [...ids].sort();
   }, [meeting.data, drafts.data, changes.data]);
-  const people = useQuery(k(`people|${personIds.join(",")}`), () =>
-    personIds.length ? unwrap(api.GET("/v1/people", { params: { query: { ids: personIds } } })) : Promise.resolve([] as Schemas["PersonOut"][]),
+  // keepPrevious: names already read stay while a new id set loads (a toast never reads a gap).
+  const people = useQuery(
+    k(`people|${personIds.join(",")}`),
+    () => (personIds.length ? unwrap(api.GET("/v1/people", { params: { query: { ids: personIds } } })) : Promise.resolve([] as Schemas["PersonOut"][])),
+    { keepPrevious: true },
   );
   /** A person by their display name (GET /v1/people), never by an email's local part. */
   const nameOf = (id: string, fallback: string) => people.data?.find((p) => p.user_id === id)?.name ?? fallback;
@@ -164,10 +167,13 @@ export default function SimpleHome() {
     reloadAll();
   }
 
-  function changeResult(r: { change: Change }, applied: string) {
+  async function changeResult(r: { change: Change }, applied: string) {
     const c = r.change;
     if (c.status === "proposed") {
-      const who = c.routed_to.map((id) => nameOf(id, "the decider"));
+      // Who it waits on may be someone this page has not named yet: read them first.
+      const unknown = c.routed_to.filter((id) => !people.data?.some((p) => p.user_id === id));
+      const more = unknown.length ? await unwrap(api.GET("/v1/people", { params: { query: { ids: unknown } } })).catch(() => []) : [];
+      const who = c.routed_to.map((id) => more.find((p) => p.user_id === id)?.name ?? nameOf(id, "the decider"));
       return `Proposed: ${who.length ? who.join(", ") : "the decider"} ${who.length > 1 ? "decide" : "decides"}`;
     }
     return applied;
@@ -185,7 +191,7 @@ export default function SimpleHome() {
           };
     try {
       const r = await unwrap(api.POST("/v1/simple/changes", { body }));
-      const message = changeResult(r, `${OP_WORDS[op]}: applied to your working draft`);
+      const message = await changeResult(r, `${OP_WORDS[op]}: applied to your working draft`);
       const id = r.change.status === "applied" && r.change.can_undo ? r.change.id : null;
       toast(
         id
