@@ -630,6 +630,14 @@ code .date-mark {
     --simple-pad-y: 20px;
     --simple-card-pad: 18px;
   }
+  /*
+   * A phone's fixed tab bar (68 px) and sticky top bar: whatever scrolls into view (a
+   * focused bar, a found item) stops clear of them, so a finger's press on it reaches it.
+   */
+  :root[data-mode="simple"] {
+    scroll-padding-top: calc(44px + env(safe-area-inset-top));
+    scroll-padding-bottom: 68px;
+  }
 }
 /* A Simple page and its parts (components/simple/SimplePage.tsx): the tokens above, nothing hard-coded. */
 .simple-page {
