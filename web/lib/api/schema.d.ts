@@ -12411,6 +12411,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/priorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Priorities
+         * @description The live goal-weighted ranking in the company's order joined with the roadmap items
+         *     the caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate
+         *     or the goals'), effort, score, the dependency it waits for, the override that placed it
+         *     and whether the caller's change applies or is proposed; the open priority and estimate
+         *     proposals, the draft items with what they may merge into, and this quarter's
+         *     engineer-weeks per goal.
+         */
+        get: operations["get_simple_priorities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/strategy/stack": {
         parameters: {
             query?: never;
@@ -24347,7 +24372,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item";
             /**
              * Status
              * @enum {string}
@@ -35673,7 +35698,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -35709,7 +35734,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -35945,6 +35970,39 @@ export interface components {
             /** Risk Note */
             risk_note?: string | null;
         };
+        /** SimpleFlow */
+        SimpleFlow: {
+            /** Title */
+            title: string;
+            /** Steps */
+            steps: string[];
+            screen: components["schemas"]["SimpleFlowScreen"];
+        };
+        /** SimpleFlowScreen */
+        SimpleFlowScreen: {
+            /** Title */
+            title: string;
+            /** Regions */
+            regions: string[];
+        };
+        /** SimpleGoalBucket */
+        SimpleGoalBucket: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+            /** Weeks */
+            weeks: number;
+            /** Share */
+            share: number;
+            /** Codes */
+            codes: string[];
+            /**
+             * No Goal
+             * @default false
+             */
+            no_goal: boolean;
+        };
         /** SimpleGoalRef */
         SimpleGoalRef: {
             /**
@@ -36046,6 +36104,218 @@ export interface components {
             end: string;
             /** Estimated */
             estimated: boolean;
+        };
+        /** SimplePrioritiesOut */
+        SimplePrioritiesOut: {
+            /**
+             * Today
+             * Format: date
+             */
+            today: string;
+            quarter: components["schemas"]["SimpleQuarter"];
+            /** Method */
+            method: string;
+            /** Formula */
+            formula: string;
+            /** Rows */
+            rows: components["schemas"]["SimplePriorityRow"][];
+            /** Proposals */
+            proposals: components["schemas"]["SimplePriorityProposal"][];
+            /** Drafts */
+            drafts: components["schemas"]["SimplePriorityDraft"][];
+            /** Buckets */
+            buckets: components["schemas"]["SimpleGoalBucket"][];
+            /** Weeks Total */
+            weeks_total: number;
+            /** Can Change */
+            can_change: boolean;
+        };
+        /**
+         * SimplePriorityAfter
+         * @description The dependency ranked above a higher-scoring row: "after <code>, which it needs".
+         */
+        SimplePriorityAfter: {
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+        };
+        /** SimplePriorityDraft */
+        SimplePriorityDraft: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            roadmap: components["schemas"]["SimpleDocRef"];
+            /**
+             * Applies
+             * @default false
+             */
+            applies: boolean;
+            /**
+             * Merge Into
+             * @default []
+             */
+            merge_into: components["schemas"]["SimplePriorityMerge"][];
+        };
+        /** SimplePriorityGoal */
+        SimplePriorityGoal: {
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /** SimplePriorityMerge */
+        SimplePriorityMerge: {
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * SimplePriorityOverride
+         * @description The active move or pin that placed a row, and who made it.
+         */
+        SimplePriorityOverride: {
+            /** By Name */
+            by_name: string;
+            /** Reason */
+            reason: string;
+            /** At */
+            at?: string | null;
+        };
+        /** SimplePriorityProposal */
+        SimplePriorityProposal: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "override_priority" | "estimate_feature" | "confirm_item" | "cut";
+            /**
+             * Item Id
+             * Format: uuid
+             */
+            item_id: string;
+            /** Feature Id */
+            feature_id?: string | null;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Reason */
+            reason?: string | null;
+            /** After */
+            after: {
+                [key: string]: unknown;
+            };
+            /** Waiting For */
+            waiting_for: string[];
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+            flow?: components["schemas"]["SimpleFlow"] | null;
+        };
+        /** SimplePriorityRow */
+        SimplePriorityRow: {
+            /** Rank */
+            rank: number;
+            /** Oracle Rank */
+            oracle_rank?: number | null;
+            /** Feature Id */
+            feature_id: string;
+            /** Item Id */
+            item_id?: string | null;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            goal?: components["schemas"]["SimplePriorityGoal"] | null;
+            /** Milestone */
+            milestone?: string | null;
+            /** Horizon */
+            horizon?: ("now" | "next" | "later") | null;
+            /** Goal Value */
+            goal_value?: number | null;
+            /** Effort */
+            effort?: number | null;
+            /** Score */
+            score?: number | null;
+            /**
+             * Value Estimated
+             * @default false
+             */
+            value_estimated: boolean;
+            /**
+             * Depends On
+             * @default []
+             */
+            depends_on: string[];
+            after?: components["schemas"]["SimplePriorityAfter"] | null;
+            override?: components["schemas"]["SimplePriorityOverride"] | null;
+            /**
+             * Above Line
+             * @default false
+             */
+            above_line: boolean;
+            /**
+             * No Goal
+             * @default false
+             */
+            no_goal: boolean;
+            /**
+             * Can Reorder
+             * @default false
+             */
+            can_reorder: boolean;
+            /**
+             * Applies
+             * @default false
+             */
+            applies: boolean;
+            /** Before Override */
+            before_override?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** SimpleQuarter */
+        SimpleQuarter: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Label */
+            label: string;
         };
         /** SimpleResumeOut */
         SimpleResumeOut: {
@@ -65607,6 +65877,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_priorities: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimplePrioritiesOut"];
                 };
             };
         };

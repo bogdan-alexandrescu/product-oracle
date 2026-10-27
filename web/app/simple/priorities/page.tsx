@@ -1,10 +1,16 @@
-import { SimplePage, SimplePlaceholder } from "@/components/simple/SimplePage";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
-/** Simple's Priorities (#723 S1): the screen arrives with S6; until then, /priorities in Detailed. */
-export default function SimplePriorities() {
+import { SIMPLE_MODE } from "@/lib/simple-mode";
+
+import { Priorities } from "./priorities";
+
+/** Simple S6 (#723, D9): priorities as a ranked list, a value/effort 2x2 and goal buckets. */
+export default function SimplePrioritiesPage() {
+  if (!SIMPLE_MODE) notFound();
   return (
-    <SimplePage title="Priorities">
-      <SimplePlaceholder arrives="a ranked list you can reorder, a value/effort grid and goal buckets." detailedHref="/priorities" detailedLabel="Priorities" />
-    </SimplePage>
+    <Suspense>
+      <Priorities />
+    </Suspense>
   );
 }

@@ -31,6 +31,8 @@ Ops and the fields they write (``before`` must name the key fields):
   and end_date the person's (the edit variant, D-b); ``date_source`` accepted; the
   suggestion is accepted (edited), reopened by an undo. 409 ``outdated`` when the item has
   dates now (``before`` names the undated item the suggestion was made for).
+- ``confirm_item`` (S6): draft becomes false (422 unless the item is a draft); merging a
+  draft is a ``cut`` with the reason "Merged into <code>".
 - ``change_horizon``: horizon. ``reorder``: position. ``cut`` / ``restore``: cut.
 - ``edit_title``: title. ``edit_outcome``: outcome.
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
@@ -84,6 +86,7 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "edit_title": ("title",),
     "edit_outcome": ("outcome",),
     "accept_risk": ("risk",),
+    "confirm_item": ("draft",),
 }
 FIXES = ("shift_dependents", "move_dependency")
 FLAG_KINDS = (
@@ -463,6 +466,8 @@ async def _plan(
     missing = [f for f in fields if f not in body.before]
     if missing:
         raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
+    if op == "confirm_item" and not row.draft:
+        raise ChangeError(422, "Only a draft item is confirmed")
     current = read(row, fields, target)
     # A suggestion accepted after the item got dates is "outdated" (S2-minor).
     lead = "outdated" if op == "accept_date_suggestion" else "Changed since you saw it"
@@ -513,6 +518,8 @@ async def _plan(
         after = {"position": pos}
     elif op in ("cut", "restore"):
         after = {"cut": op == "cut"}
+    elif op == "confirm_item":
+        after = {"draft": False}
     elif op == "edit_title":
         title = " ".join(str(a.get("title") or "").split())
         if not title or len(title) > TITLE_MAX:

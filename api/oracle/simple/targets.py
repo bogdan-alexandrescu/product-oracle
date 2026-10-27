@@ -20,6 +20,12 @@ company's owners. A proposal writes nothing, an add creates no row, until accept
   ``{"override": {kind, position, above_feature_id, reason} | null}``. It replaces the
   feature's active override; its undo re-creates the previous one (which replaces this
   one) or, with none, removes it.
+- ``estimate_feature`` (S6): a person's estimate of the item's feature (``target.feature_id``)
+  in the baseline's attrs: ``after`` any of {goal_value, effort}, numbers > 0, rounded to
+  1 decimal (oracle.priorities.scoring reads ``goal_value`` in place of the goals' sum);
+  ``before`` {goal_value, effort} as the caller saw them (attrs ``goal_value``; ``effort``,
+  else ``effort_weeks``, as the ranking reads it; null when absent). Its undo restores the
+  attrs as they were (a key that was absent is removed).
 - ``add_item_task`` / ``edit_item_task`` / ``set_item_task_status``: title, owner_id,
   due_date, status (todo, doing, done, dropped). The new task's id is chosen when the
   change is made (``target.task_id``); its undo deletes the task.
@@ -44,12 +50,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle import audit, company_time
 from oracle.auth.models import User
 from oracle.authz import has_role
+from oracle.baseline.models import Entity
 from oracle.launches import service as launches
 from oracle.launches.models import TASK_AUDIENCES, Launch, LaunchTask
 from oracle.launches.models import TASK_STATUSES as LAUNCH_TASK_STATUSES
 from oracle.priorities import service as priorities
 from oracle.priorities.models import PriorityOverride
 from oracle.priorities.schemas import OverrideCreate
+from oracle.priorities.scoring import _number
 from oracle.roadmap.models import RoadmapItem
 from oracle.simple import changes, service
 from oracle.simple.changes import ChangeError
@@ -65,6 +73,7 @@ from oracle.simple.schemas import SimpleChangeIn, SimpleChangeResult
 
 KIND = {
     "override_priority": "override",
+    "estimate_feature": "estimate",
     "add_item_task": "task",
     "edit_item_task": "task",
     "set_item_task_status": "task",
@@ -75,7 +84,13 @@ KIND = {
     "set_launch_task_status": "launch",
 }
 OPS: frozenset[str] = frozenset(KIND)
-ID_KEY = {"task": "task_id", "action": "action_item_id", "launch": "task_id"}
+ID_KEY = {
+    "task": "task_id",
+    "action": "action_item_id",
+    "launch": "task_id",
+    "estimate": "feature_id",
+}
+ESTIMATES = ("goal_value", "effort")
 MODEL: dict[str, Any] = {"task": RoadmapItemTask, "action": SimpleActionItem, "launch": LaunchTask}
 STATUSES = {"task": TASK_STATUSES, "action": ACTION_STATUSES, "launch": LAUNCH_TASK_STATUSES}
 EDITABLE = ("title", "owner_id", "due_date")
@@ -157,6 +172,20 @@ def _keys(c: SimpleChange) -> tuple[str, ...]:
     return tuple(c.after)
 
 
+def estimates(attrs: dict[str, Any] | None) -> dict[str, float | None]:
+    """A feature's goal value estimate and effort as the ranking reads them (S6)."""
+    attrs = attrs or {}
+    goal = _number(attrs.get("goal_value"))
+    effort = _number(attrs["effort"]) if "effort" in attrs else _number(attrs.get("effort_weeks"))
+    return {"goal_value": goal if goal is not None and goal > 0 else None, "effort": effort}
+
+
+async def _feature(db: AsyncSession, feature_id: Any) -> Entity | None:
+    return await db.get(
+        Entity, uuid.UUID(str(feature_id)), with_for_update=True, populate_existing=True
+    )
+
+
 async def _active(db: AsyncSession, feature_id: uuid.UUID) -> PriorityOverride | None:
     return await db.scalar(
         select(PriorityOverride).where(
@@ -178,6 +207,12 @@ async def _current(db: AsyncSession, c: SimpleChange) -> dict[str, Any] | None:
     """The stored values of the change's fields; None when its target is gone."""
     if KIND[c.op] == "override":
         return {"override": _snap(await _active(db, uuid.UUID(c.target["feature_id"])))}
+    if KIND[c.op] == "estimate":
+        f = await _feature(db, c.target["feature_id"])
+        if f is None:
+            return None
+        now_ = estimates(f.attrs)
+        return {k: now_[k] for k in _keys(c)}
     row = await _row(db, KIND[c.op], c.target)
     return _values(row, _keys(c)) if row is not None else None
 
@@ -298,6 +333,39 @@ async def _plan(
                               "reason": reason}}  # fmt: skip
         return target, current, after
 
+    if kind == "estimate":
+        row = entry.row  # type: ignore[union-attr]
+        if row.feature_id is None:
+            raise ChangeError(422, "This item has no feature in the baseline to estimate")
+        target["feature_id"] = str(row.feature_id)
+        after = {}
+        for k in ESTIMATES:
+            if k not in a:
+                continue
+            v = a[k]
+            if isinstance(v, bool) or not isinstance(v, int | float) or v <= 0:
+                raise ChangeError(422, f"after.{k}: a number above 0")
+            after[k] = round(float(v), 1)
+            if after[k] <= 0:
+                raise ChangeError(422, f"after.{k}: a number above 0")
+        if not after:
+            raise ChangeError(422, "after: any of goal_value, effort")
+        missing = [k for k in ESTIMATES if k not in given]
+        if missing:
+            raise ChangeError(422, f"before: {', '.join(missing)} as you saw them")
+        f = await _feature(db, row.feature_id)
+        if f is None:
+            raise ChangeError(422, "This item has no feature in the baseline to estimate")
+        current = estimates(f.attrs)
+        seen = {k: given[k] for k in ESTIMATES}
+        if any(not (v is None or (isinstance(v, int | float) and not isinstance(v, bool)))
+               for v in seen.values()):  # fmt: skip
+            raise ChangeError(422, "before: goal_value and effort as numbers or null")
+        if seen != current:
+            raise await _conflict(db, SimpleChange(op=op, target=target, after=after), current,
+                                  "Changed since you saw it")  # fmt: skip
+        return target, current, after
+
     if op.startswith("add_"):
         after = {"title": _title(a.get("title"), kind),
                  "owner_id": await _owner(db, a.get("owner_id"), kind == "action")}  # fmt: skip
@@ -411,6 +479,25 @@ async def _apply(
     """Write ``values`` (the change's after, or its before for an undo) to the target. An
     override commits (the priorities service does); everything else only flushes."""
     kind, t = KIND[c.op], c.target
+    if kind == "estimate":
+        f = await _feature(db, t["feature_id"])
+        if f is None:
+            raise ChangeError(409, "The feature is gone")
+        attrs = dict(f.attrs or {})
+        if undo:
+            # The attrs as they were (a key that was absent is removed).
+            raw = t.get("raw") or {k: values.get(k) for k in c.after}
+            for k, v in raw.items():
+                if v is None:
+                    attrs.pop(k, None)
+                else:
+                    attrs[k] = v
+        else:
+            c.target = {**t, "raw": {k: attrs.get(k) for k in values}}
+            attrs.update(values)
+        f.attrs = attrs
+        await db.flush()
+        return
     if kind == "override":
         if not undo:
             oid = await _pin(db, principal, t["feature_id"], values["override"], True)

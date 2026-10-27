@@ -87,6 +87,8 @@ FIELDS = (
     "title",
     "outcome",
     "accepted_risks",
+    # S6: confirm_item.
+    "draft",
 )
 DATES = ("start_date", "end_date")
 # Blockers of review_problems that the approval itself resolves.
@@ -665,6 +667,7 @@ OP_WORDS = {
     "accept_risk": "Accepted a risk on",
     "shift_dependents": "Moved the dependents of",
     "move_dependency": "Moved the dependency of",
+    "confirm_item": "Confirmed",
 }
 
 

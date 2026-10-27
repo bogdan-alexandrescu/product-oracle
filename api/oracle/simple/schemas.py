@@ -202,6 +202,10 @@ ChangeOp = Literal[
     "set_action_item_status",
     "add_launch_task",
     "set_launch_task_status",
+    # S6: a person's estimate of a feature's goal value and effort (non-versioned), and a
+    # draft item confirmed (into the working draft).
+    "estimate_feature",
+    "confirm_item",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -405,6 +409,142 @@ class InboxSimpleApproval(BaseModel):
     submitted_at: dt.datetime | None
     decider_approved: bool
     state: Literal["new", "open"]
+
+
+# --------------------------------------------------------------------------- S6 priorities
+
+
+class SimpleQuarter(BaseModel):
+    start: dt.date
+    end: dt.date
+    # "Q4 2026"
+    label: str
+
+
+class SimplePriorityGoal(BaseModel):
+    key: str
+    title: str
+
+
+class SimplePriorityAfter(BaseModel):
+    """The dependency ranked above a higher-scoring row: "after <code>, which it needs"."""
+
+    code: str
+    title: str
+
+
+class SimplePriorityOverride(BaseModel):
+    """The active move or pin that placed a row, and who made it."""
+
+    by_name: str
+    reason: str
+    at: dt.datetime | None = None
+
+
+class SimplePriorityRow(BaseModel):
+    rank: int
+    # Oracle's rank (the formula and dependencies, before people's overrides).
+    oracle_rank: int | None = None
+    feature_id: str
+    item_id: uuid.UUID | None = None
+    # The item's key, else the feature's key.
+    code: str
+    title: str
+    goal: SimplePriorityGoal | None = None
+    milestone: str | None = None
+    horizon: Literal["now", "next", "later"] | None = None
+    goal_value: float | None = None
+    # Engineer-weeks.
+    effort: float | None = None
+    score: float | None = None
+    # The goal value is a person's estimate (estimate_feature).
+    value_estimated: bool = False
+    # Codes of the rows it depends on (direct).
+    depends_on: list[str] = []
+    after: SimplePriorityAfter | None = None
+    override: SimplePriorityOverride | None = None
+    # This quarter's plan (horizon now).
+    above_line: bool = False
+    # Serves no confirmed goal.
+    no_goal: bool = False
+    can_reorder: bool = False
+    # The caller's change applies (else it is proposed).
+    applies: bool = False
+    # The feature's active override as override_priority's ``before.override`` wants it.
+    before_override: dict[str, Any] | None = None
+
+
+class SimpleFlowScreen(BaseModel):
+    title: str
+    regions: list[str]
+
+
+class SimpleFlow(BaseModel):
+    title: str
+    steps: list[str]
+    screen: SimpleFlowScreen
+
+
+class SimplePriorityProposal(BaseModel):
+    change_id: uuid.UUID
+    op: Literal["override_priority", "estimate_feature", "confirm_item", "cut"]
+    item_id: uuid.UUID
+    # The item's baseline feature (the row it shows under); None for a draft with none.
+    feature_id: str | None = None
+    code: str
+    title: str
+    by_name: str
+    at: dt.datetime
+    reason: str | None = None
+    after: dict[str, Any]
+    # Names of who decides it.
+    waiting_for: list[str]
+    can_decide: bool = False
+    # The design bundle of the item's feature; None until S10 ("No flow yet").
+    flow: SimpleFlow | None = None
+
+
+class SimplePriorityMerge(BaseModel):
+    item_id: uuid.UUID
+    code: str
+    title: str
+
+
+class SimplePriorityDraft(BaseModel):
+    item_id: uuid.UUID
+    code: str
+    title: str
+    goal: SimplePriorityGoal | None = None
+    roadmap: SimpleDocRef
+    applies: bool = False
+    # Non-draft items of the same roadmap, same goal first (at most 8).
+    merge_into: list[SimplePriorityMerge] = []
+
+
+class SimpleGoalBucket(BaseModel):
+    # The goal's key, or "none".
+    key: str
+    title: str
+    # This quarter's engineer-weeks: the effort of the goal's rows with horizon now.
+    weeks: float
+    share: float
+    codes: list[str]
+    no_goal: bool = False
+
+
+class SimplePrioritiesOut(BaseModel):
+    today: dt.date
+    quarter: SimpleQuarter
+    method: str
+    formula: str
+    # In the company's order (rank 1 first).
+    rows: list[SimplePriorityRow]
+    proposals: list[SimplePriorityProposal]
+    drafts: list[SimplePriorityDraft]
+    buckets: list[SimpleGoalBucket]
+    weeks_total: float
+    # Commenter and up: may reorder and estimate (applies or proposes).
+    can_change: bool
 
 
 SimpleRoadmapOut.model_rebuild()

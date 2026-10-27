@@ -42924,6 +42924,37 @@
         "x-per-item": null
       }
     },
+    "/v1/simple/priorities": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Priorities",
+        "description": "The live goal-weighted ranking in the company's order joined with the roadmap items\nthe caller sees: each row's Oracle rank, goal, horizon, goal value (a person's estimate\nor the goals'), effort, score, the dependency it waits for, the override that placed it\nand whether the caller's change applies or is proposed; the open priority and estimate\nproposals, the draft items with what they may merge into, and this quarter's\nengineer-weeks per goal.",
+        "operationId": "get_simple_priorities",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimplePrioritiesOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/strategy/stack": {
       "get": {
         "tags": [
@@ -76156,7 +76187,9 @@
               "edit_action_item",
               "set_action_item_status",
               "add_launch_task",
-              "set_launch_task_status"
+              "set_launch_task_status",
+              "estimate_feature",
+              "confirm_item"
             ],
             "title": "Op"
           },
@@ -107900,7 +107933,9 @@
               "edit_action_item",
               "set_action_item_status",
               "add_launch_task",
-              "set_launch_task_status"
+              "set_launch_task_status",
+              "estimate_feature",
+              "confirm_item"
             ],
             "title": "Op"
           },
@@ -108002,7 +108037,9 @@
               "edit_action_item",
               "set_action_item_status",
               "add_launch_task",
-              "set_launch_task_status"
+              "set_launch_task_status",
+              "estimate_feature",
+              "confirm_item"
             ],
             "title": "Op"
           },
@@ -108588,6 +108625,93 @@
         ],
         "title": "SimpleFlag"
       },
+      "SimpleFlow": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Steps"
+          },
+          "screen": {
+            "$ref": "#/components/schemas/SimpleFlowScreen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "steps",
+          "screen"
+        ],
+        "title": "SimpleFlow"
+      },
+      "SimpleFlowScreen": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "regions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Regions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "regions"
+        ],
+        "title": "SimpleFlowScreen"
+      },
+      "SimpleGoalBucket": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "weeks": {
+            "type": "number",
+            "title": "Weeks"
+          },
+          "share": {
+            "type": "number",
+            "title": "Share"
+          },
+          "codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Codes"
+          },
+          "no_goal": {
+            "type": "boolean",
+            "title": "No Goal",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title",
+          "weeks",
+          "share",
+          "codes"
+        ],
+        "title": "SimpleGoalBucket"
+      },
       "SimpleGoalRef": {
         "properties": {
           "id": {
@@ -108821,6 +108945,533 @@
           "estimated"
         ],
         "title": "SimplePhase"
+      },
+      "SimplePrioritiesOut": {
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date",
+            "title": "Today"
+          },
+          "quarter": {
+            "$ref": "#/components/schemas/SimpleQuarter"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "formula": {
+            "type": "string",
+            "title": "Formula"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePriorityRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePriorityProposal"
+            },
+            "type": "array",
+            "title": "Proposals"
+          },
+          "drafts": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePriorityDraft"
+            },
+            "type": "array",
+            "title": "Drafts"
+          },
+          "buckets": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleGoalBucket"
+            },
+            "type": "array",
+            "title": "Buckets"
+          },
+          "weeks_total": {
+            "type": "number",
+            "title": "Weeks Total"
+          },
+          "can_change": {
+            "type": "boolean",
+            "title": "Can Change"
+          }
+        },
+        "type": "object",
+        "required": [
+          "today",
+          "quarter",
+          "method",
+          "formula",
+          "rows",
+          "proposals",
+          "drafts",
+          "buckets",
+          "weeks_total",
+          "can_change"
+        ],
+        "title": "SimplePrioritiesOut"
+      },
+      "SimplePriorityAfter": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "title"
+        ],
+        "title": "SimplePriorityAfter",
+        "description": "The dependency ranked above a higher-scoring row: \"after <code>, which it needs\"."
+      },
+      "SimplePriorityDraft": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePriorityGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "roadmap": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "applies": {
+            "type": "boolean",
+            "title": "Applies",
+            "default": false
+          },
+          "merge_into": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePriorityMerge"
+            },
+            "type": "array",
+            "title": "Merge Into",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "code",
+          "title",
+          "roadmap"
+        ],
+        "title": "SimplePriorityDraft"
+      },
+      "SimplePriorityGoal": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "SimplePriorityGoal"
+      },
+      "SimplePriorityMerge": {
+        "properties": {
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_id",
+          "code",
+          "title"
+        ],
+        "title": "SimplePriorityMerge"
+      },
+      "SimplePriorityOverride": {
+        "properties": {
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "by_name",
+          "reason"
+        ],
+        "title": "SimplePriorityOverride",
+        "description": "The active move or pin that placed a row, and who made it."
+      },
+      "SimplePriorityProposal": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              "override_priority",
+              "estimate_feature",
+              "confirm_item",
+              "cut"
+            ],
+            "title": "Op"
+          },
+          "item_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Item Id"
+          },
+          "feature_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "after": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "After"
+          },
+          "waiting_for": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Waiting For"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "op",
+          "item_id",
+          "code",
+          "title",
+          "by_name",
+          "at",
+          "after",
+          "waiting_for"
+        ],
+        "title": "SimplePriorityProposal"
+      },
+      "SimplePriorityRow": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "oracle_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oracle Rank"
+          },
+          "feature_id": {
+            "type": "string",
+            "title": "Feature Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePriorityGoal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "milestone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone"
+          },
+          "horizon": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "next",
+                  "later"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Horizon"
+          },
+          "goal_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal Value"
+          },
+          "effort": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "value_estimated": {
+            "type": "boolean",
+            "title": "Value Estimated",
+            "default": false
+          },
+          "depends_on": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Depends On",
+            "default": []
+          },
+          "after": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePriorityAfter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "override": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePriorityOverride"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "above_line": {
+            "type": "boolean",
+            "title": "Above Line",
+            "default": false
+          },
+          "no_goal": {
+            "type": "boolean",
+            "title": "No Goal",
+            "default": false
+          },
+          "can_reorder": {
+            "type": "boolean",
+            "title": "Can Reorder",
+            "default": false
+          },
+          "applies": {
+            "type": "boolean",
+            "title": "Applies",
+            "default": false
+          },
+          "before_override": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before Override"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "feature_id",
+          "code",
+          "title"
+        ],
+        "title": "SimplePriorityRow"
+      },
+      "SimpleQuarter": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "label"
+        ],
+        "title": "SimpleQuarter"
       },
       "SimpleResumeOut": {
         "properties": {
