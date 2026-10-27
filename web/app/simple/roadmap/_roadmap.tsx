@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Notice, SegmentedControl, toast } from "@/components/ds";
 import { Loading } from "@/components/ui";
@@ -11,6 +11,7 @@ import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { Board, boardColumns, HORIZONS, type Horizon } from "./_board";
+import { useKeyBurst } from "./_burst";
 import { Callout, FlagLine, FixButtons, FloatingCard, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import {
@@ -25,6 +26,7 @@ import {
   suggestion,
   undo,
   type Change,
+  type ChangeResult,
   type Draft,
   type Format,
   type GanttUnit,
@@ -65,6 +67,10 @@ function usePhone(): boolean {
     () => false,
   );
 }
+
+type Dates = ReturnType<typeof storedDates>;
+const sameDates = (a: Dates, b: Dates) => a.start_date === b.start_date && a.end_date === b.end_date;
+const sameHorizon = (a: Horizon, b: Horizon) => a === b;
 
 const time = (at: string) => shownDay(at, { hour: "numeric", minute: "2-digit" });
 
@@ -290,7 +296,6 @@ export function SimpleRoadmap() {
   const [f, setF] = useState<Filters>(NO_FILTERS);
   const [format, setFormat] = useState<Format>("timeline");
   const [unit, setUnit] = useState<GanttUnit>("week");
-  const [moved, setMoved] = useState<Record<string, [string, string]>>({});
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ id: string; left: number; top: number } | null>(null);
   const [tray, setTray] = useState(false);
@@ -328,50 +333,88 @@ export function SimpleRoadmap() {
   }
   const byId = useMemo(() => new Map((data?.items ?? []).map((i) => [i.id, i])), [data]);
   const canChange = can("create_simple_change");
+  // The items as last loaded, for a burst sent after the render that started it.
+  const latest = useRef(byId);
+  useEffect(() => {
+    latest.current = byId;
+  });
 
-  const act: Act = useCallback(
-    async (what, body) => {
+  /** One change through the engine, its toast (with Undo when it applied) and the reload; null when it failed. */
+  const run = useCallback(
+    async (what: string, body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
       try {
         const r = await propose(body);
         toast({
           message: resultWords(r, what),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
         });
+        return r;
       } catch (e) {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
+        return null;
       } finally {
         await reload();
-        setMoved({});
       }
     },
     [reload],
   );
+  const act: Act = useCallback(
+    async (what, body) => {
+      await run(what, body);
+    },
+    [run],
+  );
 
+  // A move (a drag, or the keyboard's burst) is one change; what is stored after it is the
+  // next burst's `before` (#723 S4 re-review: no 409 on one's own earlier move).
+  const dates = useKeyBurst<Dates>(async (id, before, after) => {
+    const item = latest.current.get(id);
+    if (!item) return null;
+    const r = await run(`Moved '${item.title}' to ${shortDay(after.start_date!)} – ${shortDay(after.end_date!)}`, { op: "move_dates", target: { item_id: id }, before, after });
+    return r ? (r.change.status === "applied" ? after : before) : null;
+  }, sameDates);
+  const horizons = useKeyBurst<Horizon>(async (id, before, after) => {
+    const item = latest.current.get(id);
+    if (!item) return null;
+    const r = await run(`Moved '${item.title}' to ${HORIZONS.find((h) => h.key === after)!.label}`, { op: "change_horizon", target: { item_id: id }, before: { horizon: before }, after: { horizon: after } });
+    return r ? (r.change.status === "applied" ? after : before) : null;
+  }, sameHorizon);
+  const moved = useMemo(() => Object.fromEntries(Object.entries(dates.pending).map(([id, d]) => [id, [d.start_date!, d.end_date!] as [string, string]])), [dates.pending]);
+
+  // What a screen reader hears while a burst waits: its dates, then that it was cancelled.
+  const [said, setSaid] = useState("");
+  const stored = (item: Item) => latest.current.get(item.id) ?? item;
+  const onKeyMove = (item: Item, start: string, end: string) => {
+    setCard(null);
+    dates.press(item.id, storedDates(stored(item)), { start_date: start, end_date: end });
+    setSaid(`${item.title}: ${shortDay(start)} – ${shortDay(end)}, not sent yet. Pause to send it; Escape cancels.`);
+  };
+  const onKeyHorizon = (item: Item, horizon: Horizon) => {
+    setCard(null);
+    horizons.press(item.id, stored(item).horizon, horizon);
+    setSaid(`${item.title}: ${HORIZONS.find((h) => h.key === horizon)!.label}, not sent yet. Pause to send it; Escape cancels.`);
+  };
+  const onKeyCancel = (burst: typeof dates | typeof horizons) => (item: Item) => {
+    if (burst.cancel(item.id)) setSaid(`${item.title}: the move is cancelled.`);
+  };
+
+  // A drag is a burst of one, sent at once (after any burst of the bar still on its way).
   const onMove = useCallback(
     (item: Item, start: string, end: string) => {
-      setMoved((m) => ({ ...m, [item.id]: [start, end] }));
       setCard(null);
-      void act(`Moved '${item.title}' to ${shortDay(start)} – ${shortDay(end)}`, {
-        op: "move_dates",
-        target: { item_id: item.id },
-        before: storedDates(item),
-        after: { start_date: start, end_date: end },
-      });
+      dates.press(item.id, storedDates(latest.current.get(item.id) ?? item), { start_date: start, end_date: end });
+      dates.flush(item.id);
     },
-    [act],
+    [dates],
   );
 
   const onHorizon = useCallback(
     (item: Item, horizon: Horizon) => {
       setCard(null);
-      void act(`Moved '${item.title}' to ${HORIZONS.find((h) => h.key === horizon)!.label}`, {
-        op: "change_horizon",
-        target: { item_id: item.id },
-        before: { horizon: item.horizon },
-        after: { horizon },
-      });
+      horizons.press(item.id, (latest.current.get(item.id) ?? item).horizon, horizon);
+      horizons.flush(item.id);
     },
-    [act],
+    [horizons],
   );
 
   const anchorOf = (id: string): { left: number; top: number } => {
@@ -489,6 +532,9 @@ export function SimpleRoadmap() {
           </Button>
         </div>
       </header>
+      <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
+        {said}
+      </p>
       <GoalCounters items={data.items} />
       <DraftBanner
         drafts={drafts.data ?? []}
@@ -555,6 +601,10 @@ export function SimpleRoadmap() {
               setCard({ id: item.id, ...anchorOf(item.id) });
             }}
             onMove={onHorizon}
+            pending={horizons.pending}
+            onKeyMove={onKeyHorizon}
+            onKeyEnd={(item) => horizons.flush(item.id)}
+            onKeyCancel={onKeyCancel(horizons)}
           />
         ) : (
           <Chart
@@ -573,6 +623,9 @@ export function SimpleRoadmap() {
               setCard({ id: item.id, ...anchorOf(item.id) });
             }}
             onMove={onMove}
+            onKeyMove={onKeyMove}
+            onKeyEnd={(item) => dates.flush(item.id)}
+            onKeyCancel={onKeyCancel(dates)}
             onSuggestion={(item) => {
               setCard(null);
               setPop({ id: item.id, ...anchorOf(item.id) });

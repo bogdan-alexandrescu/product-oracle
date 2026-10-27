@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { barKind, broken, spanWords, type Change, type Item, type Roadmap } from "./_lib";
 
@@ -69,30 +69,47 @@ export interface BoardProps {
   open: string | null;
   onOpen: (item: Item) => void;
   onMove: (item: Item, horizon: Horizon) => void;
+  /** The keyboard's burst not sent yet: the cards drawn in these columns. */
+  pending: Record<string, Horizon>;
+  /** The keyboard: a press moves the card locally (the burst is sent on a pause or blur), Escape cancels it. */
+  onKeyMove: (item: Item, horizon: Horizon) => void;
+  onKeyEnd: (item: Item) => void;
+  onKeyCancel: (item: Item) => void;
 }
 
 /**
  * D3's Now / Next / Later board: the same items as the timeline, by horizon then group.
  * A card dragged to another column (a phone: after a long press) changes its horizon
  * through the change engine; the arrow keys do the same for a focused card (left and right;
- * on a phone, where the columns stack, up and down too). A held card at the screen's edge
+ * on a phone, where the columns stack, up and down too), moving it locally and sending one
+ * change per burst. A held card at the screen's edge
  * scrolls the page; a cancelled touch moves nothing.
  */
-export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }: BoardProps) {
+export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, pending: held, onKeyMove, onKeyEnd, onKeyCancel }: BoardProps) {
   const drag = useRef<Drag | null>(null);
   const root = useRef<HTMLDivElement>(null);
   // A card the keyboard moved: it gets the focus back once it is drawn in its new column.
   const refocus = useRef<{ id: string; horizon: Horizon } | null>(null);
-  const cols = boardColumns(data);
+  const cols = boardColumns(Object.keys(held).length ? { ...data, items: data.items.map((i) => (held[i.id] ? { ...i, horizon: held[i.id] } : i)) } : data);
 
-  useEffect(() => {
+  // Before the blur's check below runs: the moved card is drawn anew in its column.
+  useLayoutEffect(() => {
     const f = refocus.current;
     const el = f && root.current?.querySelector<HTMLElement>(`[data-testid="board-card"][data-bar-id="${f.id}"]`);
     if (f && el && el.dataset.horizon === f.horizon) {
       refocus.current = null;
       el.focus();
     }
-  }, [data]);
+  });
+
+  // A card the keyboard moved is drawn anew (it loses the focus, then gets it back): only a
+  // focus that really left it ends the burst.
+  const onBlur = (item: Item) => {
+    window.setTimeout(() => {
+      if (document.activeElement?.closest?.(`[data-testid="board-card"][data-bar-id="${item.id}"]`)) return;
+      onKeyEnd(item);
+    }, 0);
+  };
 
   // A picked-up card on a touch screen: the page does not scroll under the finger.
   useEffect(() => {
@@ -238,12 +255,17 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
     // Arrows move a card to the column beside it (on a phone the columns stack: up and down
     // too; on a desktop they scroll the page).
     const step = e.key === "ArrowRight" || (phone && e.key === "ArrowDown") ? 1 : e.key === "ArrowLeft" || (phone && e.key === "ArrowUp") ? -1 : 0;
+    if (e.key === "Escape") {
+      onKeyCancel(item);
+      return;
+    }
     if (!step || !canDrag || item.status === "cut") return;
     e.preventDefault();
+    // The card's horizon here is where the burst has moved it so far.
     const at = HORIZONS.findIndex((h) => h.key === item.horizon) + step;
     if (at >= 0 && at < HORIZONS.length) {
       refocus.current = { id: item.id, horizon: HORIZONS[at].key };
-      onMove(item, HORIZONS[at].key);
+      onKeyMove(item, HORIZONS[at].key);
     }
   };
 
@@ -264,13 +286,14 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove }:
           data-kind={kind}
           data-broken={red ? "true" : "false"}
           data-open={open === item.id ? "true" : undefined}
-          aria-label={`${item.title}, ${item.horizon}${movable ? ". Arrows move it to another column" : ""}`}
+          aria-label={`${item.title}, ${item.horizon}${held[item.id] ? ", not sent yet" : ""}${movable ? ". Arrows move it to another column, sent when you pause; Escape cancels" : ""}`}
           style={{ touchAction: movable ? "pan-y" : "auto" }}
           onPointerDown={(e) => onDown(e, item)}
           onPointerMove={onPointerMove}
           onPointerUp={(e) => onUp(e, item)}
           onPointerCancel={onCancel}
           onKeyDown={(e) => onKey(e, item)}
+          onBlur={() => onBlur(item)}
           className={`relative block w-full rounded-xl border bg-surface px-3 py-2 text-left shadow-[var(--shadow)] select-none data-[open=true]:ring-2 data-[open=true]:ring-accent data-[picked=true]:shadow-tip ${
             red ? "border-crit" : kind === "draft" ? "border-dashed border-line-strong" : "border-line"
           } ${movable ? "cursor-grab" : "cursor-pointer"} ${kind === "cut" ? "opacity-70" : ""}`}
