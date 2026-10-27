@@ -587,14 +587,15 @@ async def test_a_merge_marks_the_map_stale_and_the_tick_refreshes_it_once(
 ):
     # protects=AC7 a sync seeing a merged pull request marks the map stale; the tick
     # starts exactly one refresh run; a merge during the refresh coalesces into one
-    # follow-up, and a merge within the hour of the last start starts none;
-    # fails_when=a merge goes unnoticed, the tick starts two runs, or refreshes more than
-    # hourly; no_claim=the pull request's base branch (the GitHub list does not say it).
+    # follow-up, and a merge within the day of the last start starts none (the company's
+    # default spacing, daily); fails_when=a merge goes unnoticed, the tick starts two runs,
+    # or refreshes more than daily; no_claim=the pull request's base branch (the GitHub
+    # list does not say it).
     tenant_id = await make_tenant()
     owner = await make_person(tenant_id, "dev@example.com", "commenter")
     got = await built_map(client, tenant_id, owner)
     source_id = got["source_id"]
-    await age(tenant_id, got["id"], 2)
+    await age(tenant_id, got["id"], 25)
     events: list = []
     sync_yielding(monkeypatch, events)
 
@@ -626,9 +627,9 @@ async def test_a_merge_marks_the_map_stale_and_the_tick_refreshes_it_once(
         await tick(client, tenant_id)
     rows = await maps_of(tenant_id)
     assert [m.status for m in rows][:2] == ["stale", "stale"]
-    # The refresh started within the hour: no run yet.
+    # The refresh started within the day: no run yet.
     assert len(rows) == 2
-    await age(tenant_id, str(rows[1].id), 2)
+    await age(tenant_id, str(rows[1].id), 25)
     await tick(client, tenant_id)
     assert [m.status for m in await maps_of(tenant_id)][-1] == "building"
     assert len(await maps_of(tenant_id)) == 3
@@ -642,7 +643,7 @@ async def test_a_refresh_keeps_the_maps_sharing(client, map_runtime, monkeypatch
     got = await built_map(client, tenant_id, owner)
     await client.post(f"/v1/code-maps/{got['id']}/sharing", json={"sharing": "full"},
                       headers=owner.headers)  # fmt: skip
-    await age(tenant_id, got["id"], 2)
+    await age(tenant_id, got["id"], 25)
     events = [merged_pr(9, datetime.now(UTC))]
     sync_yielding(monkeypatch, events)
     await sync(client, owner, got["source_id"])
@@ -652,6 +653,108 @@ async def test_a_refresh_keeps_the_maps_sharing(client, map_runtime, monkeypatch
     await tick(client, tenant_id)
     rows = await maps_of(tenant_id)
     assert [(m.status, m.sharing) for m in rows] == [("stale", "full"), ("ready", "full")]
+
+
+# --------------------------------------------------------------------------- refresh setting
+
+
+async def stale_map(client, tenant_id, owner) -> dict:
+    """A built map a merge has made stale (the merge itself is the sync test's)."""
+    got = await built_map(client, tenant_id, owner)
+    async with tenant_session(tenant_id) as s:
+        row = await s.get(CodeMap, uuid.UUID(got["id"]))
+        row.status = "stale"
+        await s.commit()
+    return got
+
+
+async def choose(client, tenant_id, value) -> dict:
+    boss = await make_person(tenant_id, f"boss-{uuid.uuid4().hex[:6]}@example.com", "owner")
+    resp = await client.put(
+        "/v1/settings/code_map_refresh", json={"value": value}, headers=boss.headers
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+@pytest.mark.parametrize(
+    "choice, hours",
+    [("hourly", 1), ("every_6_hours", 6), ("daily", 24), ("weekly", 168)],
+)
+async def test_each_refresh_choice_spaces_the_tick_refresh(client, map_runtime, choice, hours):
+    # protects=the company's 'Refresh stale code maps' choice is the spacing the tick keeps
+    # between a repo's last map run and its refresh: none just inside it, one just past it;
+    # fails_when=the tick still refreshes hourly whatever the company chose, or never;
+    # no_claim=the merge that made the map stale (the sync test).
+    tenant_id = await make_tenant()
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
+    got = await stale_map(client, tenant_id, owner)
+    await choose(client, tenant_id, choice)
+    await age(tenant_id, got["id"], hours - 0.25)
+    await tick(client, tenant_id)
+    assert [m.status for m in await maps_of(tenant_id)] == ["stale"]
+    await age(tenant_id, got["id"], hours + 0.25)
+    await tick(client, tenant_id)
+    assert [m.status for m in await maps_of(tenant_id)] == ["stale", "building"]
+
+
+async def test_only_on_demand_never_refreshes_and_map_the_code_still_does(client, map_runtime):
+    # protects=only on demand: the tick never refreshes a stale map, however old; Map the
+    # code refreshes it at once; fails_when=the tick refreshes on demand, or Map the code is
+    # refused on a stale map; no_claim=the run's cost approval (P3's tests).
+    tenant_id = await make_tenant()
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
+    got = await stale_map(client, tenant_id, owner)
+    await choose(client, tenant_id, "on_demand")
+    await age(tenant_id, got["id"], 24 * 400)
+    for _ in range(3):
+        await tick(client, tenant_id)
+    assert [m.status for m in await maps_of(tenant_id)] == ["stale"]
+    resp = await request_map(client, owner, got["source_id"])
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["status"] == "building"
+
+
+async def test_a_company_that_never_chose_refreshes_daily(client, map_runtime):
+    # protects=the default is daily: GET settings names it, a stale map 2 hours after its run
+    # waits, one a day after refreshes; fails_when=the old hourly spacing stays the default;
+    # no_claim=the other choices (the parametrized test).
+    tenant_id = await make_tenant()
+    owner = await make_person(tenant_id, "dev@example.com", "commenter")
+    boss = await make_person(tenant_id, "boss@example.com", "owner")
+    resp = await client.get("/v1/settings/code_map_refresh", headers=boss.headers)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["value"] == "daily" and resp.json()["is_default"] is True
+    listed = await client.get("/v1/settings", headers=boss.headers)
+    assert "code_map_refresh" in {s["key"] for s in listed.json()}
+    got = await stale_map(client, tenant_id, owner)
+    await age(tenant_id, got["id"], 2)
+    await tick(client, tenant_id)
+    assert [m.status for m in await maps_of(tenant_id)] == ["stale"]
+    await age(tenant_id, got["id"], 25)
+    await tick(client, tenant_id)
+    assert [m.status for m in await maps_of(tenant_id)] == ["stale", "building"]
+
+
+async def test_the_refresh_setting_is_an_owners_and_audited(client):
+    # protects=only owners change 'Refresh stale code maps', an unknown choice is 422, and a
+    # change is an audit entry with its value; fails_when=an approver changes it, a typo is
+    # stored, or the change leaves no trace; no_claim=the other settings' checks.
+    tenant_id = await make_tenant()
+    boss = await make_person(tenant_id, "boss@example.com", "owner")
+    lead = await make_person(tenant_id, "lead@example.com", "approver")
+    url = "/v1/settings/code_map_refresh"
+    denied = await client.put(url, json={"value": "weekly"}, headers=lead.headers)
+    assert denied.status_code == 403
+    bad = await client.put(url, json={"value": "monthly"}, headers=boss.headers)
+    assert bad.status_code == 422 and "hourly" in bad.text
+    ok = await client.put(url, json={"value": "weekly"}, headers=boss.headers)
+    assert ok.status_code == 200 and ok.json()["value"] == "weekly"
+    async with tenant_session(tenant_id) as s:
+        events = list(
+            await s.scalars(select(AuditEvent).where(AuditEvent.action == "setting.update"))
+        )
+        assert any(e.data == {"key": "code_map_refresh", "value": "weekly"} for e in events)
 
 
 # --------------------------------------------------------------------------- runs use it
