@@ -42224,7 +42224,7 @@
           "simple"
         ],
         "summary": "Create Simple Change",
-        "description": "Make a change to a roadmap item: applied for an owner and the roadmap's decider\n(with no decider, its owner), proposed to them for approvers and commenters. 409 when\n``before`` no longer matches the stored values (nothing is written). Returns the\nconstraint flags of the touched items (a proposal's as if applied).",
+        "description": "Make a change to a roadmap item: applied for an owner and the roadmap's decider\n(with no decider, its owner), proposed to them for approvers and commenters. 409 when\n``before`` no longer matches the stored values (nothing is written). Returns the\nconstraint flags of the touched items (a proposal's as if applied). A change that adds\nor reshapes a feature or flow comes with its visual: Oracle drafts it (S10).",
         "operationId": "create_simple_change",
         "security": [
           {
@@ -43050,6 +43050,369 @@
           }
         ],
         "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Visual",
+        "description": "The subject's visual: its newest drawing (null: none yet), versions newest first,\ncomments, whether Oracle is drawing it, and what the caller may do.",
+        "operationId": "get_simple_visual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleVisualOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}/versions/{number}": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Visual Version",
+        "description": "One version of the visual (the history).",
+        "operationId": "get_simple_visual_version",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          },
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleFlow"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}/comments": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Comment Simple Visual",
+        "description": "Comment on the newest drawing, or on one of its numbered annotations.",
+        "operationId": "comment_simple_visual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleVisualCommentIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleVisualOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}/revise": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Revise Simple Visual",
+        "description": "Revise: Oracle redraws the visual from its open comments (and the note) as the next\nversion (the ``simple_visual`` job). Who changes the subject directly; 409 with no\nopen comment and no note.",
+        "operationId": "revise_simple_visual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SimpleVisualReviseIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleVisualOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
+    "/v1/simple/visuals/{kind}/{subject_id}/request": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Request Simple Visual",
+        "description": "Ask Oracle to draw a subject's visual (a feature on the roadmap that has none).",
+        "operationId": "request_simple_visual",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "subject_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Subject Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SimpleVisualRequestIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleVisualOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
       }
     },
     "/v1/strategy/stack": {
@@ -82608,7 +82971,8 @@
               "intake_analysis",
               "decision_options",
               "scope_enhance",
-              "why_not_reply"
+              "why_not_reply",
+              "simple_visual"
             ],
             "title": "Kind"
           },
@@ -82671,6 +83035,18 @@
               }
             ],
             "title": "Request Id"
+          },
+          "visual_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visual Id"
           },
           "version_number": {
             "anyOf": [
@@ -87498,6 +87874,40 @@
               }
             ],
             "title": "Screen"
+          },
+          "subject_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Kind"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
           }
         },
         "type": "object",
@@ -87590,6 +88000,28 @@
             ],
             "title": "State",
             "default": "published"
+          },
+          "flow_subject": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flow Subject"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OnePagerFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -109287,6 +109719,105 @@
           },
           "screen": {
             "$ref": "#/components/schemas/SimpleFlowScreen"
+          },
+          "subject_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Kind"
+          },
+          "subject_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "versions": {
+            "type": "integer",
+            "title": "Versions",
+            "default": 1
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFlowStep"
+            },
+            "type": "array",
+            "title": "Nodes",
+            "default": []
+          },
+          "svg": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Svg"
+          },
+          "wireframe": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wireframe"
+          },
+          "touches_screen": {
+            "type": "boolean",
+            "title": "Touches Screen",
+            "default": true
+          },
+          "annotations": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleFlowNote"
+            },
+            "type": "array",
+            "title": "Annotations",
+            "default": []
+          },
+          "made_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made At"
           }
         },
         "type": "object",
@@ -109295,7 +109826,54 @@
           "steps",
           "screen"
         ],
-        "title": "SimpleFlow"
+        "title": "SimpleFlow",
+        "description": "A proposal's visual (S10, oracle.simple.visuals): its newest drawing."
+      },
+      "SimpleFlowNote": {
+        "properties": {
+          "n": {
+            "type": "integer",
+            "title": "N"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          },
+          "requirement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement"
+          }
+        },
+        "type": "object",
+        "required": [
+          "n",
+          "target",
+          "note"
+        ],
+        "title": "SimpleFlowNote",
+        "description": "A numbered annotation: the part of the drawing it is on (an element id of the flow\nor a region of the wireframe), the PRD section and requirement it ties to."
       },
       "SimpleFlowScreen": {
         "properties": {
@@ -109317,6 +109895,66 @@
           "regions"
         ],
         "title": "SimpleFlowScreen"
+      },
+      "SimpleFlowStep": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "step",
+              "decision"
+            ],
+            "title": "Kind",
+            "default": "step"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "change": {
+            "type": "string",
+            "enum": [
+              "new",
+              "changed",
+              "same"
+            ],
+            "title": "Change",
+            "default": "same"
+          },
+          "section_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Key"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label"
+        ],
+        "title": "SimpleFlowStep",
+        "description": "A step of a user flow (S10): a decision point or a step, the feature that enables\nit and what changes versus today."
       },
       "SimpleGoalBucket": {
         "properties": {
@@ -110395,6 +111033,16 @@
             "type": "array",
             "title": "Open Decisions",
             "default": []
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -110575,6 +111223,232 @@
           "title"
         ],
         "title": "SimpleTrackRef"
+      },
+      "SimpleVisualCommentIn": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "annotation": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "SimpleVisualCommentIn"
+      },
+      "SimpleVisualCommentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "annotation": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotation"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "addressed_in": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Addressed In"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version",
+          "body",
+          "by_name",
+          "at"
+        ],
+        "title": "SimpleVisualCommentOut"
+      },
+      "SimpleVisualOut": {
+        "properties": {
+          "subject_kind": {
+            "type": "string",
+            "title": "Subject Kind"
+          },
+          "subject_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Subject Id"
+          },
+          "brief": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Brief"
+          },
+          "flow": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFlow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleVisualVersionOut"
+            },
+            "type": "array",
+            "title": "Versions"
+          },
+          "comments": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleVisualCommentOut"
+            },
+            "type": "array",
+            "title": "Comments"
+          },
+          "pending": {
+            "type": "boolean",
+            "title": "Pending"
+          },
+          "can_comment": {
+            "type": "boolean",
+            "title": "Can Comment"
+          },
+          "can_revise": {
+            "type": "boolean",
+            "title": "Can Revise"
+          }
+        },
+        "type": "object",
+        "required": [
+          "subject_kind",
+          "subject_id",
+          "flow",
+          "versions",
+          "comments",
+          "pending",
+          "can_comment",
+          "can_revise"
+        ],
+        "title": "SimpleVisualOut"
+      },
+      "SimpleVisualRequestIn": {
+        "properties": {
+          "brief": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Brief",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "title": "SimpleVisualRequestIn"
+      },
+      "SimpleVisualReviseIn": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "title": "SimpleVisualReviseIn"
+      },
+      "SimpleVisualVersionOut": {
+        "properties": {
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "made_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Made At"
+          },
+          "made_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Made By Name"
+          },
+          "addressed": {
+            "type": "integer",
+            "title": "Addressed",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "title",
+          "made_at"
+        ],
+        "title": "SimpleVisualVersionOut"
       },
       "SimpleWindow": {
         "properties": {

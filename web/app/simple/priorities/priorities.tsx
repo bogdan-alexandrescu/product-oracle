@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
+import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
@@ -481,7 +482,7 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
     );
   }
 
-  const flow = p.flow ? <FlowDetail flow={p.flow} /> : null;
+  const flow = p.flow ? <FlowPanel subject={subjectOf(p.flow) ?? { kind: "change", id: p.change_id }} /> : null;
   return (
     <div
       data-testid="prio-proposal"
@@ -535,30 +536,6 @@ function FlowThumb({ flow }: { flow: Schemas["SimpleFlow"] }) {
   );
 }
 
-function FlowDetail({ flow }: { flow: Schemas["SimpleFlow"] }) {
-  return (
-    <div className="mt-3 grid gap-4 sm:grid-cols-2" data-testid="flow-detail">
-      <div>
-        <h3 className="font-semibold">User flow: {flow.title}</h3>
-        <ol className="mt-1 list-decimal pl-5">
-          {flow.steps.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ol>
-      </div>
-      <div aria-label={`Wireframe of ${flow.screen.title}`} role="img">
-        <h3 className="font-semibold">Screen: {flow.screen.title}</h3>
-        <div className="mt-1 flex flex-col gap-1 rounded-lg border border-line-strong bg-surface p-2">
-          {flow.screen.regions.map((r) => (
-            <div key={r} className="rounded border border-dashed border-line-strong px-2 py-1 text-[length:var(--simple-small)] text-text2">
-              {r}
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; proposals: Proposal[]; mayChange: boolean; changed: Changed }) {
   const [merging, setMerging] = useState<string | null>(null);

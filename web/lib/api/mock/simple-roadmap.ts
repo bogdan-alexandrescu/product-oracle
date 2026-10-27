@@ -11,6 +11,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { seeded, stableUuid } from "./ids";
+import { flowFor, type VisualsDb } from "./simple-visuals";
 
 type Item = Schemas["SimpleRoadmapItem"];
 type Suggestion = Schemas["DateSuggestionOut"];
@@ -68,6 +69,8 @@ interface SimpleDb {
   people?: Record<string, string>;
   /** S4: proposed decisions naming an item (item key -> decisions). */
   decisions?: Record<string, { number: number; title: string }[]>;
+  /** S10: the visuals (./simple-visuals.ts), shared with the one-pager's. */
+  visuals?: VisualsDb;
 }
 
 /** A reader, with every member's role (D-a: a track owner decides only as an approver or owner). */
@@ -440,6 +443,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         ...(s.section ? [`From ${rm.prd}, section ${s.section}.`] : []),
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
+      flow: flowFor(db.visuals, "feature", db.ids[s.key]),
     };
   });
   const prd = q.get("prd");

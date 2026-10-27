@@ -14,6 +14,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
+import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
 
 type Role = Schemas["Me"]["role"];
 type Change = Schemas["SimpleChangeOut"];
@@ -47,6 +48,8 @@ export interface OnePagerDb {
   blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[] }[];
   draft: null | { id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string> };
   changes: (Change & { session_open: boolean; in_meeting: boolean })[];
+  /** S10: the visuals (./simple-visuals.ts), shared with the roadmap's. */
+  visuals?: VisualsDb;
 }
 
 const DOC_ID = stableUuid("simple-one-pager-doc");
@@ -189,7 +192,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
       can_undo: kind === "change" && c.by === ctx.id && c.session_open,
       can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
-      adds_feature: lineId.startsWith("bets-"), flow: null,
+      adds_feature: lineId.startsWith("bets-"), flow: onePagerFlow(flowFor(db.visuals, "change", c.id)),
     };
   };
   const notes = [...live.map((c) => note(c, "change")), ...shown.map((c) => note(c, "proposal"))];
@@ -214,6 +217,8 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
         return {
           id: l.id, text, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
+          // S10: each bet carries its visual.
+          ...(b.key === "bets" ? { flow_subject: betSubject(text), flow: onePagerFlow(flowFor(db.visuals, "one_pager_line", betSubject(text))) } : {}),
         };
       }),
     })),
@@ -286,6 +291,8 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
       c.draft_ids = [db.draft!.id];
     }
     db.changes.push(c);
+    // S10: a bet's new wording comes with its visual (Oracle drafts it with the proposal).
+    if (lineId.startsWith("bets-")) requestVisual(db.visuals, "change", c.id, `A bet of the PRD's one-pager, reworded to: ${next}`);
     return json(201, { change: out(db, ctx, c), flags: [] });
   }
   const c = db.changes.find((x) => x.id === p[3]);

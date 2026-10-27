@@ -12215,7 +12215,8 @@ export interface paths {
          * @description Make a change to a roadmap item: applied for an owner and the roadmap's decider
          *     (with no decider, its owner), proposed to them for approvers and commenters. 409 when
          *     ``before`` no longer matches the stored values (nothing is written). Returns the
-         *     constraint flags of the touched items (a proposal's as if applied).
+         *     constraint flags of the touched items (a proposal's as if applied). A change that adds
+         *     or reshapes a feature or flow comes with its visual: Oracle drafts it (S10).
          */
         post: operations["create_simple_change"];
         delete?: never;
@@ -12474,6 +12475,109 @@ export interface paths {
         get: operations["get_simple_priorities"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/visuals/{kind}/{subject_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Visual
+         * @description The subject's visual: its newest drawing (null: none yet), versions newest first,
+         *     comments, whether Oracle is drawing it, and what the caller may do.
+         */
+        get: operations["get_simple_visual"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/visuals/{kind}/{subject_id}/versions/{number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Visual Version
+         * @description One version of the visual (the history).
+         */
+        get: operations["get_simple_visual_version"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/visuals/{kind}/{subject_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Comment Simple Visual
+         * @description Comment on the newest drawing, or on one of its numbered annotations.
+         */
+        post: operations["comment_simple_visual"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/visuals/{kind}/{subject_id}/revise": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revise Simple Visual
+         * @description Revise: Oracle redraws the visual from its open comments (and the note) as the next
+         *     version (the ``simple_visual`` job). Who changes the subject directly; 409 with no
+         *     open comment and no note.
+         */
+        post: operations["revise_simple_visual"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/visuals/{kind}/{subject_id}/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request Simple Visual
+         * @description Ask Oracle to draw a subject's visual (a feature on the roadmap that has none).
+         */
+        post: operations["request_simple_visual"];
         delete?: never;
         options?: never;
         head?: never;
@@ -26712,7 +26816,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply" | "simple_visual";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -26723,6 +26827,8 @@ export interface components {
             scope_id?: string | null;
             /** Request Id */
             request_id?: string | null;
+            /** Visual Id */
+            visual_id?: string | null;
             /** Version Number */
             version_number?: number | null;
             /** Section Key */
@@ -28581,6 +28687,12 @@ export interface components {
             steps: string[];
             /** Screen */
             screen?: string | null;
+            /** Subject Kind */
+            subject_kind?: string | null;
+            /** Subject Id */
+            subject_id?: string | null;
+            /** Version */
+            version?: number | null;
         };
         /**
          * OnePagerItem
@@ -28627,6 +28739,9 @@ export interface components {
              * @enum {string}
              */
             state: "published" | "edited" | "proposal";
+            /** Flow Subject */
+            flow_subject?: string | null;
+            flow?: components["schemas"]["OnePagerFlow"] | null;
         };
         /** OnePagerMetric */
         OnePagerMetric: {
@@ -36239,13 +36354,70 @@ export interface components {
             /** Risk Note */
             risk_note?: string | null;
         };
-        /** SimpleFlow */
+        /**
+         * SimpleFlow
+         * @description A proposal's visual (S10, oracle.simple.visuals): its newest drawing.
+         */
         SimpleFlow: {
             /** Title */
             title: string;
             /** Steps */
             steps: string[];
             screen: components["schemas"]["SimpleFlowScreen"];
+            /** Subject Kind */
+            subject_kind?: string | null;
+            /** Subject Id */
+            subject_id?: string | null;
+            /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
+             * Versions
+             * @default 1
+             */
+            versions: number;
+            /** Goal */
+            goal?: string | null;
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: components["schemas"]["SimpleFlowStep"][];
+            /** Svg */
+            svg?: string | null;
+            /** Wireframe */
+            wireframe?: string | null;
+            /**
+             * Touches Screen
+             * @default true
+             */
+            touches_screen: boolean;
+            /**
+             * Annotations
+             * @default []
+             */
+            annotations: components["schemas"]["SimpleFlowNote"][];
+            /** Made At */
+            made_at?: string | null;
+        };
+        /**
+         * SimpleFlowNote
+         * @description A numbered annotation: the part of the drawing it is on (an element id of the flow
+         *     or a region of the wireframe), the PRD section and requirement it ties to.
+         */
+        SimpleFlowNote: {
+            /** N */
+            n: number;
+            /** Target */
+            target: string;
+            /** Note */
+            note: string;
+            /** Section Key */
+            section_key?: string | null;
+            /** Requirement */
+            requirement?: string | null;
         };
         /** SimpleFlowScreen */
         SimpleFlowScreen: {
@@ -36253,6 +36425,33 @@ export interface components {
             title: string;
             /** Regions */
             regions: string[];
+        };
+        /**
+         * SimpleFlowStep
+         * @description A step of a user flow (S10): a decision point or a step, the feature that enables
+         *     it and what changes versus today.
+         */
+        SimpleFlowStep: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Kind
+             * @default step
+             * @enum {string}
+             */
+            kind: "step" | "decision";
+            /** Feature */
+            feature?: string | null;
+            /**
+             * Change
+             * @default same
+             * @enum {string}
+             */
+            change: "new" | "changed" | "same";
+            /** Section Key */
+            section_key?: string | null;
         };
         /** SimpleGoalBucket */
         SimpleGoalBucket: {
@@ -36692,6 +36891,7 @@ export interface components {
              * @default []
              */
             open_decisions: components["schemas"]["SimpleOpenDecision"][];
+            flow?: components["schemas"]["SimpleFlow"] | null;
         };
         /** SimpleRoadmapOut */
         SimpleRoadmapOut: {
@@ -36768,6 +36968,91 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /** SimpleVisualCommentIn */
+        SimpleVisualCommentIn: {
+            /** Body */
+            body: string;
+            /** Annotation */
+            annotation?: number | null;
+        };
+        /** SimpleVisualCommentOut */
+        SimpleVisualCommentOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Version */
+            version: number;
+            /** Annotation */
+            annotation?: number | null;
+            /** Body */
+            body: string;
+            /** By Name */
+            by_name: string;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** Addressed In */
+            addressed_in?: number | null;
+        };
+        /** SimpleVisualOut */
+        SimpleVisualOut: {
+            /** Subject Kind */
+            subject_kind: string;
+            /**
+             * Subject Id
+             * Format: uuid
+             */
+            subject_id: string;
+            /** Brief */
+            brief?: string | null;
+            flow: components["schemas"]["SimpleFlow"] | null;
+            /** Versions */
+            versions: components["schemas"]["SimpleVisualVersionOut"][];
+            /** Comments */
+            comments: components["schemas"]["SimpleVisualCommentOut"][];
+            /** Pending */
+            pending: boolean;
+            /** Can Comment */
+            can_comment: boolean;
+            /** Can Revise */
+            can_revise: boolean;
+        };
+        /** SimpleVisualRequestIn */
+        SimpleVisualRequestIn: {
+            /**
+             * Brief
+             * @default
+             */
+            brief: string;
+        };
+        /** SimpleVisualReviseIn */
+        SimpleVisualReviseIn: {
+            /** Note */
+            note?: string | null;
+        };
+        /** SimpleVisualVersionOut */
+        SimpleVisualVersionOut: {
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /**
+             * Made At
+             * Format: date-time
+             */
+            made_at: string;
+            /** Made By Name */
+            made_by_name?: string | null;
+            /**
+             * Addressed
+             * @default 0
+             */
+            addressed: number;
         };
         /** SimpleWindow */
         SimpleWindow: {
@@ -66264,6 +66549,179 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimplePrioritiesOut"];
+                };
+            };
+        };
+    };
+    get_simple_visual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleVisualOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_visual_version: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                subject_id: string;
+                number: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleFlow"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comment_simple_visual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleVisualCommentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleVisualOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revise_simple_visual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SimpleVisualReviseIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleVisualOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_simple_visual: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: string;
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SimpleVisualRequestIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleVisualOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

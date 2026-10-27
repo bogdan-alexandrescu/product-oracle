@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
 import { setPanelOpen } from "@/components/hop/open-state";
+import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -205,10 +206,10 @@ export const opWords = (op: string): string => OP_WORDS[op] ?? op.replace(/_/g, 
  * a flow thumbnail. */
 export const featureProposal = (c: Change, items: Map<string, Item>): boolean => !!items.get(String(c.target.item_id))?.draft;
 
-/** A proposal's flow thumbnail (S10 draws the flows): opens the flow by widening the card. */
-function FlowThumb({ onOpen }: { onOpen: () => void }) {
+/** A flow thumbnail (S10 draws the flows): opens the flow by widening the card in place. */
+function FlowThumb({ onOpen, label = "Open the flow", testId = "flow-thumb" }: { onOpen: () => void; label?: string; testId?: string }) {
   return (
-    <button type="button" data-testid="flow-thumb" aria-label="Open the flow" onClick={onOpen} className="flex h-9 w-12 flex-none items-center justify-center rounded border border-line bg-surface2">
+    <button type="button" data-testid={testId} aria-label={label} onClick={onOpen} className="flex h-9 w-12 flex-none items-center justify-center rounded border border-line bg-surface2">
       <svg width="34" height="20" viewBox="0 0 34 20" aria-hidden>
         <rect x="1" y="6" width="8" height="8" rx="2" fill="none" stroke="var(--line-strong)" />
         <rect x="13" y="6" width="8" height="8" rx="2" fill="none" stroke="var(--line-strong)" />
@@ -248,7 +249,8 @@ export function FloatingCard({
   /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
   onHorizon?: (h: Horizon) => void;
 }) {
-  const [wide, setWide] = useState<Change | null>(null);
+  // The widened card's visual: a proposal's (a change) or the item's own (its feature).
+  const [wide, setWide] = useState<FlowSubject | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   useScreenSubject({ kind: "roadmap_item", subject: { item_id: item.id, key: item.key } }, item.title);
   useEffect(() => {
@@ -356,12 +358,19 @@ export function FloatingCard({
             )}
           </section>
           <section className="mt-3">
+            <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Flow</h3>
+            <div className="mt-1 flex items-center gap-2 text-[15px]" data-testid="card-flow">
+              <FlowThumb label="Open the item's flow" testId="item-flow-thumb" onOpen={() => setWide(wide?.id === item.id ? null : { kind: "feature", id: item.id })} />
+              <span className="min-w-0 flex-1">{item.flow ? item.flow.title : <span className="text-text2">No flow yet</span>}</span>
+            </div>
+          </section>
+          <section className="mt-3">
             <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Proposals on it</h3>
             {proposals.length ? (
               <ul className="mt-1 space-y-2" data-testid="card-proposals">
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2 text-[15px]">
-                    {featureProposal(c, items) && <FlowThumb onOpen={() => setWide(wide?.id === c.id ? null : c)} />}
+                    {featureProposal(c, items) && <FlowThumb onOpen={() => setWide(wide?.id === c.id ? null : { kind: "change", id: c.id })} />}
                     <span className="min-w-0 flex-1">
                       {opWords(c.op)} · <span className="text-text2">{c.by_name}</span>
                     </span>
@@ -382,14 +391,9 @@ export function FloatingCard({
           </section>
         </div>
         {wide && (
-          <section data-testid="flow-view" className={`mt-3 rounded-lg border border-dashed border-line-strong p-4 ${phone ? "" : "col-span-2"}`}>
+          <section data-testid="flow-view" className={`mt-3 ${phone ? "" : "col-span-2"}`}>
             <h3 className="font-semibold">The flow and the screen it touches</h3>
-            <p className="mt-1 text-sm text-text2" data-testid="flow-empty">
-              No flow yet: Oracle has not drawn a user flow or a wireframe for this proposal.
-            </p>
-            <Button variant="ghost" className="mt-2" onClick={() => setWide(null)}>
-              Close the flow
-            </Button>
+            <FlowPanel key={`${wide.kind}-${wide.id}`} subject={wide} onClose={() => setWide(null)} />
           </section>
         )}
       </div>
