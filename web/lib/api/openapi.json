@@ -113900,6 +113900,14 @@
             "title": "Drafts",
             "default": []
           },
+          "waiting_people": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Waiting People",
+            "default": []
+          },
           "minutes": {
             "anyOf": [
               {

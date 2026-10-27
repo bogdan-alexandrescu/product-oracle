@@ -37823,6 +37823,11 @@ export interface components {
              * @default []
              */
             drafts: components["schemas"]["SimpleDraftOut"][];
+            /**
+             * Waiting People
+             * @default []
+             */
+            waiting_people: components["schemas"]["SimplePersonRef"][];
             minutes?: components["schemas"]["SimpleMinutes"] | null;
             /** Minutes Job */
             minutes_job?: ("drafting" | "slow" | "failed") | null;

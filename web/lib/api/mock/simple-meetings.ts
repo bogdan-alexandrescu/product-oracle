@@ -358,6 +358,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     open_decisions: openDecisions(ctx, db, p),
     pending_proposals: proposals(ctx, p),
     drafts: meetingDrafts(ctx, db, m, p),
+    waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
     minutes: m.minutes,
     minutes_job: m.status === "ended" && m.minutes_state === "drafting" ? (m.minutes_job ?? "drafting") : null,
     delivery: m.delivery,

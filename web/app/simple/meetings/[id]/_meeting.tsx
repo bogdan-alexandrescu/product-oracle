@@ -41,8 +41,8 @@ function publishedWords(d: Meeting["drafts"][number], name: (id: string) => stri
 /** While Oracle drafts the minutes, how often the end screen reads the meeting again. */
 const MINUTES_POLL_MS = 3_000;
 
-/** Names for ids, from the meeting's attendees. */
-const namer = (m: Meeting) => (id: string) => m.attendees.find((a) => a.id === id)?.name ?? "a reviewer";
+/** Names for ids, from the meeting's attendees and the people its drafts wait on (who need not be attendees). */
+const namer = (m: Meeting) => (id: string) => [...m.attendees, ...m.waiting_people].find((a) => a.id === id)?.name ?? "a reviewer";
 
 /**
  * Simple S8 (#723): one review meeting, full screen (direction A). Live: the steps

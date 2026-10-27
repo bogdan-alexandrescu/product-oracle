@@ -206,6 +206,8 @@ async def test_live_poll_reads_holds_without_recomputing(client, monkeypatch):
     assert r.status_code == 200, r.text
     d = next(d for d in r.json()["drafts"] if d["status"] == "submitted")
     assert d["waiting_on"] == [str(ctx.users["reviewer"].id)], d
+    # The banner names them though they were not invited (attendees).
+    assert [p["name"] for p in r.json()["waiting_people"]] == ["Rae Viewer"], r.json()
 
 
 def test_published_words_match_the_banner():

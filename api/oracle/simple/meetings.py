@@ -841,6 +841,8 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
     )
     dw = await drafts.who(db, {d.document_id for d in ds})
     ds = [d for d in ds if drafts.sees(principal, d, dw)]
+    waiting = list(dict.fromkeys(i for d in ds for i in d.waiting_on or []))
+    waiting_names = await _names(db, set(waiting))
     decider_or_owner = me is not None and (me == w.decider or has_role(principal.role, "owner"))
     job_state = await _minutes_job(db, m)
     return SimpleMeetingOut(
@@ -866,6 +868,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         open_decisions=await _open_decisions(db, document, item_ids),
         pending_proposals=[await changes.one_out(db, principal, c) for c in seen],
         drafts=await _draft_outs(db, principal, ds),
+        waiting_people=[_ref(i, waiting_names) for i in waiting],
         minutes=SimpleMinutes.model_validate(m.minutes) if m.minutes else None,
         minutes_job=job_state,
         delivery=SimpleDelivery.model_validate(m.delivery) if m.delivery else None,
