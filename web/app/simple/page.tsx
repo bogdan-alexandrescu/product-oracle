@@ -75,16 +75,16 @@ export default function SimpleHome() {
     },
     { keepPrevious: true },
   );
+  // The one list of scheduled reviews (Meetings > Upcoming): its first row is the next.
   const meeting = useQuery(k("meeting"), async () => {
-    const rituals = await unwrap(api.GET("/v1/rituals"));
-    const next = rituals.filter((r) => r.status === "active" && r.next_due_at).sort((a, b) => a.next_due_at!.localeCompare(b.next_due_at!))[0];
-    return { next: next ?? null };
+    const list = await unwrap(api.GET("/v1/simple/meetings"));
+    return { next: list.upcoming[0] ?? null };
   });
   const personIds = useMemo(() => {
-    const ids = new Set<string>([...(meeting.data?.next?.attendee_ids.slice(0, 4) ?? []), ...(drafts.data ?? []).flatMap((d) => d.waiting_on)]);
+    const ids = new Set<string>((drafts.data ?? []).flatMap((d) => d.waiting_on));
     for (const c of changes.data ?? []) if (c.status === "proposed") c.routed_to.forEach((id) => ids.add(id));
     return [...ids].sort();
-  }, [meeting.data, drafts.data, changes.data]);
+  }, [drafts.data, changes.data]);
   // keepPrevious: names already read stay while a new id set loads (a toast never reads a gap).
   const people = useQuery(
     k(`people|${personIds.join(",")}`),
@@ -423,40 +423,43 @@ export default function SimpleHome() {
                   testId="home-meeting-next"
                   lead={
                     <span className="simple-date-tile tnum" aria-hidden>
-                      <span>{formatInZone(next.next_due_at!, zone, { month: "short" })}</span>
-                      <strong>{formatInZone(next.next_due_at!, zone, { day: "numeric" })}</strong>
+                      <span>{formatInZone(next.due_at, zone, { month: "short" })}</span>
+                      <strong>{formatInZone(next.due_at, zone, { day: "numeric" })}</strong>
                     </span>
                   }
-                  title={next.title}
+                  title={next.ritual_title}
                   meta={
                     <>
                       <span className="tnum">
-                        {formatInZone(next.next_due_at!, zone, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })} · {next.duration_min} min
+                        {formatInZone(next.due_at, zone, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })} · {next.length_min} min
                       </span>
                       <br />
-                      {next.attendee_ids.length} {next.attendee_ids.length === 1 ? "attendee" : "attendees"}
-                      {next.attendee_ids.length > 0 &&
-                        `: ${next.attendee_ids
+                      {next.attendees.length} {next.attendees.length === 1 ? "attendee" : "attendees"}
+                      {next.attendees.length > 0 &&
+                        `: ${next.attendees
                           .slice(0, 4)
-                          .map((id) => nameOf(id, "someone"))
+                          .map((a) => a.name)
                           .join(", ")}`}
-                    </>
-                  }
-                  actions={
-                    <>
-                      {(next.owner_id === myId || can("update_ritual")) && (
-                        <Link href={`/simple/meetings/${next.id}?start=1`} className="simple-button simple-button-primary">
-                          Start meeting
-                        </Link>
-                      )}
-                      {next.last_pre_read ? (
-                        <Link href={`/simple/meetings/${next.id}?pre_read=${next.last_pre_read.id}`} className="simple-button">
+                      <br />
+                      {next.pre_read_ready && next.occurrence_id ? (
+                        <Link className="underline" href={`/company/rituals/${next.occurrence_id}`}>
                           Open pre-read
                         </Link>
                       ) : (
-                        <span className="simple-small">Pre-read not ready yet</span>
+                        "Pre-read not ready yet"
                       )}
                     </>
+                  }
+                  actions={
+                    next.meeting_id ? (
+                      <Link href={`/simple/meetings/${next.meeting_id}`} className="simple-button simple-button-primary">
+                        Open meeting
+                      </Link>
+                    ) : next.can_start ? (
+                      <Link href={`/simple/meetings?start=${next.ritual_id}`} className="simple-button simple-button-primary">
+                        Start meeting
+                      </Link>
+                    ) : undefined
                   }
                 />
               </ul>

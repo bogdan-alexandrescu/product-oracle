@@ -41,7 +41,7 @@ Visibility: a meeting is seen by whoever reads its PRD (oracle.docs.visibility).
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from sqlalchemy import func, or_, select, text
@@ -98,7 +98,11 @@ log = logging.getLogger(__name__)
 SOURCE_KIND = "simple_meeting_decision"
 DEFAULT_LENGTH = 60
 INBOX_DAYS = 30
-UPCOMING_DAYS = 14
+UPCOMING_MAX = 20
+# How far ahead Upcoming (and the rail's count) lists a ritual's next review not made yet.
+UPCOMING_HORIZON = timedelta(days=14)
+# A minutes job still drafting after this long: "still drafting", send what is written.
+MINUTES_SLOW = timedelta(minutes=2)
 SUMMARY_MAX = 4000
 MAX_QUESTIONS = 5
 MAX_ACTIONS = 8
@@ -285,7 +289,7 @@ async def _prd(db: AsyncSession, principal: Any, ref: str) -> Document:
     try:
         document = await one_pager._document(db, principal, ref)
     except ChangeError as e:
-        raise MeetingError(e.status, e.detail) from e
+        raise MeetingError(e.status, str(e)) from e
     if document.kind != "prd":
         raise MeetingError(422, "A review meeting reviews a PRD")
     return document
@@ -343,7 +347,7 @@ async def options(
         )
     occ = None
     if occurrence is not None:
-        occ = (await _upcoming(db, names, only=occurrence))[:1]
+        occ = (await _upcoming(db, names, principal, only=occurrence))[:1]
         occ = occ[0] if occ else None
         if occ is None:
             raise MeetingError(404, "No such scheduled review")
@@ -379,8 +383,11 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
         people = []
     title = (body.title or "").strip()
     occurrence = None
-    if body.occurrence_id is not None:
-        occurrence = await db.get(RitualOccurrence, body.occurrence_id)
+    occurrence_id = body.occurrence_id
+    if occurrence_id is None and body.ritual_id is not None:
+        occurrence_id = await _occurrence_now(db, principal, body.ritual_id, body.due_at)
+    if occurrence_id is not None:
+        occurrence = await db.get(RitualOccurrence, occurrence_id)
         if occurrence is None:
             raise MeetingError(404, "No such scheduled review")
         # One meeting per occurrence: two crossing starts wait on each other here.
@@ -418,6 +425,48 @@ async def start(db: AsyncSession, principal: Any, body: SimpleMeetingIn) -> Simp
                        data={"prd": str(document.id), "attendees": [str(a) for a in attendees],
                              "change_mode": m.change_mode})  # fmt: skip
     return m
+
+
+def may_start_ritual(principal: Any, ritual: Any) -> bool:
+    """Starting a ritual's review uses up its occurrence: owners and the ritual's owner only,
+    as Prepare now and the ritual's edits in Detailed (review)."""
+    me = _me(principal)
+    return me is not None and (has_role(principal.role, "owner") or me == ritual.owner_id)
+
+
+async def _occurrence_now(
+    db: AsyncSession, principal: Any, ritual_id: uuid.UUID, due: datetime | None
+) -> uuid.UUID:
+    """Starting a ritual's review from its Upcoming row (``due``, the row's due time): its
+    occurrence at that time when made, else made now when ``due`` is the ritual's
+    ``next_due_at``, which then moves on to the one after, as Prepare now does. A row the
+    ritual has moved past (a stale page, a double click, crossing starts) is 409 with the
+    meeting already started on it, never next week's occurrence."""
+    from oracle.rituals.models import Ritual, RitualOccurrence
+    from oracle.rituals.schedule import next_occurrence
+    from oracle.rituals.service import _create_occurrence
+
+    ritual = await db.get(Ritual, ritual_id, with_for_update=True)
+    if ritual is None or ritual.status != "active":
+        raise MeetingError(404, "No such scheduled review")
+    if not may_start_ritual(principal, ritual):
+        raise MeetingError(403, "Only an owner or the ritual's owner starts its review")
+    if due is None:
+        raise MeetingError(422, "due_at: the review's due time is required with ritual_id")
+    made = await db.scalar(
+        select(RitualOccurrence.id).where(
+            RitualOccurrence.ritual_id == ritual.id, RitualOccurrence.due_at == due
+        )
+    )
+    if made is not None:
+        return made
+    if ritual.next_due_at is None or ritual.next_due_at != due:
+        raise MeetingError(409, {"message": "This scheduled review has moved on: reload Upcoming",
+                                 "meeting_id": None})  # fmt: skip
+    occ_id = await _create_occurrence(db, ritual, due)
+    ritual.next_due_at = next_occurrence(ritual.schedule, due)
+    await db.flush()
+    return occ_id
 
 
 async def _get(db: AsyncSession, principal: Any, meeting_id: uuid.UUID, lock: bool = False):
@@ -597,7 +646,7 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     try:
         result = await drafts.approve_in_meeting(db, session, me, present)
     except drafts.DraftError as e:
-        raise MeetingError(e.status, e.detail) from e
+        raise MeetingError(e.status, str(e)) from e
     if not result.drafts:
         if result.not_approved:
             return result
@@ -785,6 +834,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
     dw = await drafts.who(db, {d.document_id for d in ds})
     ds = [d for d in ds if drafts.sees(principal, d, dw)]
     decider_or_owner = me is not None and (me == w.decider or has_role(principal.role, "owner"))
+    job_state = await _minutes_job(db, m)
     return SimpleMeetingOut(
         **brief.model_dump(),
         session_id=m.session_id,
@@ -809,6 +859,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         pending_proposals=[await changes.one_out(db, principal, c) for c in seen],
         drafts=await drafts.outs(db, principal, ds) if ds else [],
         minutes=SimpleMinutes.model_validate(m.minutes) if m.minutes else None,
+        minutes_job=job_state,
         delivery=SimpleDelivery.model_validate(m.delivery) if m.delivery else None,
         slack=await _slack_state(db),
         email_available=email_available(),
@@ -817,9 +868,28 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
             set_rules=m.status == "live" and me == m.presenter_id,
             approve=m.status == "live" and decider_or_owner,
             end=_presenter_or_decider(principal, m, w) and m.minutes_state != "sent",
+            redraft=job_state == "failed" and _presenter_or_decider(principal, m, w),
         ),
         not_approved=not_approved or [],
     )
+
+
+async def _minutes_job(db: AsyncSession, m: SimpleMeeting) -> str | None:
+    """While the minutes are drafting: "failed" (the job failed, was cancelled or is
+    gone), "slow" (queued or running past MINUTES_SLOW) or "drafting"."""
+    from oracle.jobs import service as jobs
+    from oracle.jobs.models import LlmJob
+
+    if m.status != "ended" or m.minutes_state != "drafting":
+        return None
+    job = await db.get(LlmJob, m.minutes_job_id) if m.minutes_job_id else None
+    if job is None or job.status in ("failed", "cancelled"):
+        return "failed"
+    if job.status == "succeeded":
+        return "drafting"  # its answer lands with the next read of the job's commit
+    # Queued, started or requeued (Draft again) last: each touches updated_at, on the job
+    # runner's clock (the wall clock).
+    return "slow" if jobs._now() - job.updated_at > MINUTES_SLOW else "drafting"
 
 
 async def _sees_change(db: AsyncSession, principal: Any, c: SimpleChange) -> bool:
@@ -830,8 +900,12 @@ async def _sees_change(db: AsyncSession, principal: Any, c: SimpleChange) -> boo
 
 
 async def _upcoming(
-    db: AsyncSession, names: dict, only: uuid.UUID | None = None
+    db: AsyncSession, names: dict, principal: Any, only: uuid.UUID | None = None
 ) -> list[SimpleUpcomingMeeting]:
+    """The reviews to start, the one source Home's "Next review meeting" and the rail's
+    Meetings count read too: one row per active ritual, soonest first: its open occurrence
+    (scheduled or ready, not over), else its next due time within UPCOMING_HORIZON when no
+    occurrence is made for it yet (rituals make them only ``prep_hours`` ahead)."""
     from oracle.rituals.models import Ritual, RitualOccurrence
 
     now = company_time.now()
@@ -844,35 +918,57 @@ async def _upcoming(
         q = q.where(RitualOccurrence.id == only)
     else:
         q = q.where(
-            RitualOccurrence.status.in_(("scheduled", "ready")),
-            RitualOccurrence.ends_at >= now,
-            RitualOccurrence.due_at <= now + timedelta(days=UPCOMING_DAYS),
+            RitualOccurrence.status.in_(("scheduled", "ready")), RitualOccurrence.ends_at >= now
         )
-    rows = (await db.execute(q.order_by(RitualOccurrence.due_at).limit(20))).all()
+    rows: list[tuple[Any, Any]] = list(
+        (await db.execute(q.order_by(RitualOccurrence.due_at).limit(UPCOMING_MAX))).all()
+    )
+    if only is None:
+        # A ritual once: its soonest open occurrence (rows are soonest first).
+        first: dict[uuid.UUID, tuple[Any, Any]] = {}
+        for o, r in rows:
+            first.setdefault(r.id, (o, r))
+        rows, seen = list(first.values()), set(first)
+        for r in await db.scalars(
+            select(Ritual).where(
+                Ritual.status == "active",
+                Ritual.next_due_at.is_not(None),
+                Ritual.next_due_at <= now + UPCOMING_HORIZON,
+            )
+        ):
+            if r.id not in seen:
+                rows.append((None, r))
+        rows.sort(key=lambda x: x[0].due_at if x[0] is not None else x[1].next_due_at)
+        rows = rows[:UPCOMING_MAX]
+    occ_ids = [o.id for o, _ in rows if o is not None]
     started = dict(
         (
             await db.execute(
                 select(SimpleMeeting.occurrence_id, SimpleMeeting.id).where(
-                    SimpleMeeting.occurrence_id.in_([o.id for o, _ in rows])
+                    SimpleMeeting.occurrence_id.in_(occ_ids)
                 )
             )
         ).all()
-    ) if rows else {}  # fmt: skip
-    return [
-        SimpleUpcomingMeeting(
-            occurrence_id=o.id,
+    ) if occ_ids else {}  # fmt: skip
+    out = []
+    for o, r in rows:
+        due = o.due_at if o is not None else r.next_due_at
+        out.append(SimpleUpcomingMeeting(
+            occurrence_id=o.id if o is not None else None,
+            ritual_id=r.id,
             ritual_title=r.title,
-            due_at=o.due_at,
-            ends_at=o.ends_at,
+            due_at=due,
+            ends_at=o.ends_at if o is not None else due + timedelta(minutes=r.duration_min),
             length_min=min(max(r.duration_min, 5), 240),
             attendees=[
                 SimplePersonRef(id=i, name=names.get(i, "someone"))
                 for i in dict.fromkeys([r.owner_id, *(r.attendee_ids or [])])
             ],
-            meeting_id=started.get(o.id),
-        )  # fmt: skip
-        for o, r in rows
-    ]
+            meeting_id=started.get(o.id) if o is not None else None,
+            pre_read_ready=o is not None and o.status == "ready",
+            can_start=may_start_ritual(principal, r),
+        ))  # fmt: skip
+    return out
 
 
 async def listing(db: AsyncSession, principal: Any) -> SimpleMeetingsOut:
@@ -891,7 +987,7 @@ async def listing(db: AsyncSession, principal: Any) -> SimpleMeetingsOut:
     out = await briefs(db, ms)
     names = {u.id: u.name or u.email for u in await _members(db)}
     return SimpleMeetingsOut(
-        upcoming=await _upcoming(db, names),
+        upcoming=await _upcoming(db, names, principal),
         live=[b for b in out if b.status == "live"],
         past=[b for b in out if b.status == "ended"],
     )
@@ -1066,6 +1162,37 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     m.minutes_state = "ready"
     await s.flush()
     return {"written": True}
+
+
+async def redraft(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> SimpleMeeting:
+    """Draft again: requeue a failed ``meeting_minutes`` job (a new one when it is gone);
+    the minutes drafting again. The presenter, the PRD's decider or an owner; 409 unless
+    the minutes are drafting with a failed job (the caller commits)."""
+    from oracle.jobs import service as jobs
+    from oracle.jobs.models import LlmJob
+
+    m, document = await _get(db, principal, meeting_id, lock=True)
+    w = await prd_who(db, document)
+    if not _presenter_or_decider(principal, m, w):
+        raise MeetingError(403, "Only the presenter, the PRD's decider or an owner drafts again")
+    if await _minutes_job(db, m) != "failed":
+        raise MeetingError(409, "Oracle is not failing to draft these minutes")
+    job = await db.get(LlmJob, m.minutes_job_id) if m.minutes_job_id else None
+    try:
+        if job is not None:
+            job = await jobs.retry(db, principal, job.id)
+        else:
+            job = await jobs.enqueue(
+                db, document, "meeting_minutes", input={"meeting_id": str(m.id)},
+                principal=principal,
+            )  # fmt: skip
+    except jobs.JobError as e:
+        raise MeetingError(e.status, str(e)) from e
+    m.minutes_job_id, m.minutes_state = job.id, "drafting"
+    await db.flush()
+    await audit.record(db, principal, "simple_meeting.redraft", "simple_meeting", m.id,
+                       data={"minutes_job_id": str(job.id)})  # fmt: skip
+    return m
 
 
 async def edit_minutes(

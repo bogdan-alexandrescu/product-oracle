@@ -48,7 +48,7 @@ for (const phone of [false, true]) {
 
       test("the Meetings page lists upcoming, live and past; an owner starts a review", async ({ page }) => {
         await meetings(page);
-        await expect(page.getByRole("region", { name: "Upcoming" })).toContainText("Weekly product review");
+        await expect(page.getByRole("region", { name: "Upcoming" })).toContainText("Weekly goals check-in");
         await expect(page.getByRole("region", { name: "Live" })).toContainText("No meeting is on now.");
         const past = page.getByRole("region", { name: "Past" });
         await expect(past).toContainText("Review: Usage alerts");
@@ -78,9 +78,10 @@ for (const phone of [false, true]) {
 
       test("a scheduled review, a one-pager and the roadmap open the start sheet", async ({ page }) => {
         await meetings(page);
-        await page.getByRole("region", { name: "Upcoming" }).getByRole("button", { name: "Start review" }).click();
-        await expect(sheet(page).getByTestId("start-occurrence")).toContainText("Weekly product review");
-        await expect(sheet(page).getByRole("checkbox", { name: "Commenter" })).toBeChecked();
+        await page.getByRole("region", { name: "Upcoming" }).getByRole("button", { name: "Start review" }).first().click();
+        await expect(sheet(page).getByTestId("start-occurrence")).toContainText(/Weekly goals check-in|Monthly roadmap refresh|Quarterly goals review/);
+        // The ritual's attendees (the owners and approvers) are checked.
+        await expect(sheet(page).getByRole("checkbox", { name: "Approver" })).toBeChecked();
         await sheet(page).getByRole("button", { name: "Close" }).click();
         await page.goto("/simple/prds/guided-setup");
         await page.getByRole("button", { name: "Start review" }).click();

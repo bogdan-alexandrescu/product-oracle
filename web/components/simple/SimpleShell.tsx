@@ -11,6 +11,7 @@ import { TAB_BAR } from "@/components/ds/rail";
 import { setPanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
+import { api, unwrap } from "@/lib/api/client";
 import { loadInbox, onWaitingChanged } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
@@ -36,11 +37,15 @@ function isActive(pathname: string, d: Dest): boolean {
 /**
  * The rail's yellow counts (S1 restyle, the owner's pick): only where something waits on the
  * signed-in person, from the Inbox: Decisions (decisions they decide), Roadmap (proposals they
- * decide and drafts waiting for their approval), Meetings (pre-reads and notes waiting).
+ * decide and drafts waiting for their approval); Meetings counts what its page lists (the
+ * production walk): the live meetings and the upcoming reviews not started yet, read when the
+ * rail mounts, when something waiting changes and on the Meetings pages, not on every other
+ * route change (review).
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const [meetings, setMeetings] = useState<number | null>(null);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
@@ -52,7 +57,6 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
         setCounts({
           Decisions: inbox.decisions.filter((d) => d.counts).length,
           Roadmap: inbox.simple_proposals.length + inbox.simple_approvals.length,
-          Meetings: inbox.rituals.filter((r) => r.counts).length,
         });
       })
       .catch(() => undefined);
@@ -60,7 +64,24 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
       alive = false;
     };
   }, [enabled, pathname, changes]);
-  return counts;
+  const meetingsPath = pathname.startsWith("/simple/meetings") ? pathname : "";
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    unwrap(api.GET("/v1/simple/meetings"))
+      .then((m) => alive && setMeetings(m.live.length + m.upcoming.filter((o) => !o.meeting_id).length))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [enabled, changes, meetingsPath]);
+  return counts && { ...counts, Meetings: meetings ?? 0 };
+}
+
+/** What a rail count counts, said in words (its label and tooltip). */
+function countWords(label: string, n: number): string {
+  if (label === "Meetings") return `${n} ${n === 1 ? "review" : "reviews"} live or coming up`;
+  return `${n} waiting on you`;
 }
 
 /**
@@ -129,7 +150,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {n > 0 && (
-                <span data-testid={`${d.testId}-count`} aria-label={`${n} waiting on you`} className="simple-count tnum">
+                <span data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className="simple-count tnum">
                   {n}
                 </span>
               )}

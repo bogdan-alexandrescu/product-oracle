@@ -214,6 +214,22 @@ function write(db: OnePagerDb, ctx: OnePagerCtx, lineId: string, values: Record<
   }
 }
 
+/**
+ * S8: the decider's Approve in a meeting with no required reviewer waiting publishes the
+ * PRD's draft (drafts.approve_in_meeting): its lines and sections become the page's, the
+ * version moves on, no working draft is left; open proposals stay.
+ */
+export function publishOnePager(db: OnePagerDb) {
+  const d = db.draft;
+  if (!d) return;
+  for (const b of db.blocks) for (const l of b.lines) if (d.lines[l.id] !== undefined) l.text = d.lines[l.id];
+  for (const sec of db.sections) if (d.sections[sec.key] !== undefined) sec.body = d.sections[sec.key];
+  db.version += 1;
+  db.draft = null;
+  db.approval = null;
+  db.changes = db.changes.filter((c) => c.status === "proposed");
+}
+
 function liveChanges(db: OnePagerDb) {
   const undone = new Set(db.changes.filter((c) => c.status === "undone").map((c) => c.undoes_id));
   return db.changes.filter((c) => (c.status === "applied" || c.status === "accepted") && !undone.has(c.id));

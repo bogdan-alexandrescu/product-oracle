@@ -15,6 +15,10 @@
  * Delivery: email is available unless localStorage MOCK_MEETINGS_KEY holds "no-email";
  * Slack is connected (to #product-reviews) when it holds "slack".
  *
+ * The minutes job (production walk): ending a meeting answers at once unless the key holds
+ * "minutes-failed" (the job fails: "failed", Draft again requeues it, which then answers) or
+ * "minutes-slow" (still drafting past 2 minutes: "slow"); Send works in every state.
+ *
  * Each decided flow is linked (meetings.decided_flows): a meeting decision on a draft item
  * names it with its flow, S10's (the priorities mock's bundles); "flow" in MOCK_MEETINGS_KEY
  * stands for S10 having drawn one for Team invite nudges. A scheduled review has at most one
@@ -25,7 +29,8 @@ import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { seedSimpleProposal } from "./simple-changes";
-import type { OnePagerDb } from "./simple-one-pager";
+import { nextOccurrence, type RitualsDb } from "./rituals";
+import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
@@ -41,6 +46,8 @@ export interface MeetingsCtx {
   members: { id: string; name: string; role: Role; email: string }[];
   roadmap: SimpleDb;
   onePager: OnePagerDb;
+  /** The rituals (./rituals.ts): Meetings > Upcoming lists each active one's next review, as Home does. */
+  rituals?: RitualsDb;
 }
 
 interface Meeting {
@@ -62,6 +69,8 @@ interface Meeting {
   ended_by: string | null;
   minutes: Minutes | null;
   minutes_state: "drafting" | "ready" | "sent" | null;
+  /** The minutes job while drafting (meetings._minutes_job). */
+  minutes_job?: "drafting" | "slow" | "failed" | null;
   delivery: Delivery | null;
   sent_at: string | null;
   approved: { at: string; waiting_on: string[] } | null;
@@ -84,10 +93,13 @@ interface Decision {
 
 interface Occurrence {
   id: string;
+  ritual_id: string;
   ritual_title: string;
   due_at: string;
   ends_at: string;
   length_min: number;
+  /** Its pre-read is built (the rituals mock's "ready"). */
+  ready?: boolean;
   attendee_ids: string[];
 }
 
@@ -163,10 +175,8 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
     at: iso(now - (10 - n) * day), subjects: [], meeting_id: null, change_ids: [], ...extra,
   });
   const db: MeetingsDb = {
-    occurrences: [{
-      id: stableUuid("simple-occurrence/weekly-review"), ritual_title: "Weekly product review",
-      due_at: iso(now + day + 3 * 3_600_000), ends_at: iso(now + day + 4 * 3_600_000), length_min: 60, attendee_ids: people,
-    }],
+    // Made when a review starts from a ritual's next due time (the rituals mock's are listed too).
+    occurrences: [],
     decisions: [
       d(1, "Start guided setup with the checklist", { subjects: [{ kind: "document", id: setup.id }, ...(checklist ? [{ kind: "roadmap_item", id: checklist.id, ref: checklist.key }] : [])] }),
       d(2, "Keep the free plan's alert limit at three", { subjects: [{ kind: "document", id: alerts.id }] }),
@@ -203,6 +213,14 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
 function mayStart(ctx: MeetingsCtx, p: Prd): boolean {
   return ctx.me.role === "owner" || ctx.me.id === p.decider;
 }
+
+/** meetings.may_start_ritual: owners and the ritual's owner start a ritual's review. */
+function mayStartRitual(ctx: MeetingsCtx, ritualId: string): boolean {
+  return ctx.me.role === "owner" || ctx.rituals?.rituals.find((r) => r.id === ritualId)?.owner_id === ctx.me.id;
+}
+
+/** meetings.UPCOMING_HORIZON: how far ahead a ritual's next review not made yet is listed. */
+const UPCOMING_HORIZON_MS = 14 * 86_400_000;
 
 function mayChange(m: Meeting, id: string): boolean {
   if (m.status === "ended") return false;
@@ -300,6 +318,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     pending_proposals: proposals(ctx, p),
     drafts: meetingDrafts(ctx, db, m, p),
     minutes: m.minutes,
+    minutes_job: m.status === "ended" && m.minutes_state === "drafting" ? (m.minutes_job ?? "drafting") : null,
     delivery: m.delivery,
     slack: slackState(),
     email_available: emailAvailable(),
@@ -308,19 +327,78 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
       set_rules: m.status === "live" && ctx.me.id === m.presenter_id,
       approve: m.status === "live" && deciderOrOwner,
       end: presenterOrDecider(ctx, m, p) && m.minutes_state !== "sent",
+      redraft: m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed" && presenterOrDecider(ctx, m, p),
     },
     not_approved: [],
   };
 }
 
+/**
+ * Meetings > Upcoming, the one list Home's "Next review meeting" and the rail's Meetings count
+ * read (meetings._upcoming): one row per active ritual, soonest first: its open occurrence, else its
+ * next due time within UPCOMING_HORIZON when no occurrence is made for it yet (occurrence_id null).
+ */
 function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["SimpleUpcomingMeeting"][] {
   const now = mockNowMs();
-  return db.occurrences
-    .filter((o) => (only ? o.id === only : Date.parse(o.ends_at) >= now))
-    .map((o) => ({
-      occurrence_id: o.id, ritual_title: o.ritual_title, due_at: o.due_at, ends_at: o.ends_at, length_min: o.length_min,
-      attendees: o.attendee_ids.map((i) => ref(ctx, i)), meeting_id: db.meetings.find((m) => m.occurrence_id === o.id)?.id ?? null,
-    }));
+  const rituals = ctx.rituals?.rituals ?? [];
+  const active = new Map(rituals.filter((r) => r.status === "active").map((r) => [r.id, r]));
+  const made: Occurrence[] = [
+    ...db.occurrences,
+    ...(ctx.rituals?.occurrences ?? [])
+      .filter((o) => (o.status === "scheduled" || o.status === "ready") && active.has(o.ritual_id))
+      .map((o) => {
+        const r = active.get(o.ritual_id)!;
+        return { id: o.id, ritual_id: r.id, ritual_title: r.title, due_at: o.due_at, ends_at: o.ends_at ?? iso(Date.parse(o.due_at) + r.duration_min * 60_000), length_min: r.duration_min, attendee_ids: [r.owner_id, ...r.attendee_ids], ready: o.status === "ready" };
+      }),
+  ];
+  const open = made
+    .filter((o) => (only ? o.id === only : Date.parse(o.ends_at) >= now && (active.has(o.ritual_id) || !rituals.some((r) => r.id === o.ritual_id))))
+    .sort((a, b) => a.due_at.localeCompare(b.due_at))
+    .filter((o, i, xs) => !!only || xs.findIndex((x) => x.ritual_id === o.ritual_id) === i);
+  const rows: Schemas["SimpleUpcomingMeeting"][] = open.map((o) => ({
+    occurrence_id: o.id, ritual_id: o.ritual_id, ritual_title: o.ritual_title, due_at: o.due_at, ends_at: o.ends_at, length_min: o.length_min,
+    attendees: [...new Set(o.attendee_ids)].map((i) => ref(ctx, i)), meeting_id: db.meetings.find((m) => m.occurrence_id === o.id)?.id ?? null,
+    pre_read_ready: !!o.ready, can_start: mayStartRitual(ctx, o.ritual_id),
+  }));
+  if (only) return rows;
+  for (const r of active.values()) {
+    if (!r.next_due_at || Date.parse(r.next_due_at) > now + UPCOMING_HORIZON_MS || open.some((o) => o.ritual_id === r.id)) continue;
+    rows.push({
+      occurrence_id: null, ritual_id: r.id, ritual_title: r.title, due_at: r.next_due_at, ends_at: iso(Date.parse(r.next_due_at) + r.duration_min * 60_000),
+      length_min: Math.min(Math.max(r.duration_min, 5), 240), attendees: [...new Set([r.owner_id, ...r.attendee_ids])].map((i) => ref(ctx, i)), meeting_id: null,
+      pre_read_ready: false, can_start: mayStartRitual(ctx, r.id),
+    });
+  }
+  return rows.sort((a, b) => a.due_at.localeCompare(b.due_at)).slice(0, 20);
+}
+
+/**
+ * Starting a ritual's review from its Upcoming row (meetings._occurrence_now): its occurrence at the
+ * row's due time when made, else made now when that is the ritual's next due time (the ritual moves
+ * on); "moved" when the ritual has moved past it (a stale page: 409, never next week's review).
+ */
+function occurrenceNow(ctx: MeetingsCtx, db: MeetingsDb, ritualId: string, due: string): Occurrence | "moved" | null {
+  const r = ctx.rituals?.rituals.find((x) => x.id === ritualId && x.status === "active");
+  if (!r) return null;
+  const at = (x: string) => Date.parse(x) === Date.parse(due);
+  const mine = db.occurrences.find((o) => o.ritual_id === r.id && at(o.due_at));
+  if (mine) return mine;
+  const theirs = ctx.rituals?.occurrences.find((o) => o.ritual_id === r.id && at(o.due_at));
+  if (theirs) {
+    return {
+      id: theirs.id, ritual_id: r.id, ritual_title: r.title, due_at: theirs.due_at, ends_at: theirs.ends_at ?? iso(Date.parse(theirs.due_at) + r.duration_min * 60_000),
+      length_min: Math.min(Math.max(r.duration_min, 5), 240), attendee_ids: [r.owner_id, ...r.attendee_ids], ready: theirs.status === "ready",
+    };
+  }
+  if (!r.next_due_at || !at(r.next_due_at)) return "moved";
+  due = r.next_due_at;
+  const o: Occurrence = {
+    id: stableUuid(`simple-occurrence/${r.id}/${due}`), ritual_id: r.id, ritual_title: r.title, due_at: due,
+    ends_at: iso(Date.parse(due) + r.duration_min * 60_000), length_min: Math.min(Math.max(r.duration_min, 5), 240), attendee_ids: [r.owner_id, ...r.attendee_ids],
+  };
+  db.occurrences.push(o);
+  r.next_due_at = nextOccurrence(r.schedule, new Date(due)).toISOString();
+  return o;
 }
 
 /** The invented bundle S10 would draw for mobile alerts (was ./simple-priorities' FLOWS). */
@@ -528,8 +606,21 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     } else people = [];
     const length = b.length_min ?? 60;
     if (length < 5 || length > 240) return json(422, { detail: "length_min: 5 to 240" });
-    const occ = b.occurrence_id ? db.occurrences.find((o) => o.id === b.occurrence_id) : undefined;
+    let occ = b.occurrence_id ? db.occurrences.find((o) => o.id === b.occurrence_id) : undefined;
+    if (b.occurrence_id && !occ) {
+      const listed = upcoming(ctx, db, b.occurrence_id)[0];
+      if (listed?.occurrence_id) occ = { id: listed.occurrence_id, ritual_id: listed.ritual_id, ritual_title: listed.ritual_title, due_at: listed.due_at, ends_at: listed.ends_at, length_min: listed.length_min, attendee_ids: listed.attendees.map((a) => a.id) };
+    }
     if (b.occurrence_id && !occ) return json(404, { detail: "No such scheduled review" });
+    if (!occ && b.ritual_id) {
+      if (!ctx.rituals?.rituals.some((r) => r.id === b.ritual_id && r.status === "active")) return json(404, { detail: "No such scheduled review" });
+      if (!mayStartRitual(ctx, b.ritual_id)) return json(403, { detail: "Only an owner or the ritual's owner starts its review" });
+      if (!b.due_at) return json(422, { detail: "due_at: the review's due time is required with ritual_id" });
+      const got = occurrenceNow(ctx, db, b.ritual_id, b.due_at);
+      if (got === "moved") return json(409, { detail: { message: "This scheduled review has moved on: reload Upcoming", meeting_id: null } });
+      if (!got) return json(404, { detail: "No such scheduled review" });
+      occ = got;
+    }
     const first = occ && db.meetings.find((x) => x.occurrence_id === occ.id);
     if (first) return json(409, { detail: { message: "This scheduled review has its meeting already", meeting_id: first.id } });
     const title = (b.title ?? "").trim() || (occ ? `${occ.ritual_title}: ${prd.title}` : `Review: ${prd.title}`);
@@ -607,6 +698,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const wait = waiting.map((i) => nameOf(ctx, i)).join(", ");
     record(db, ctx, m, `Approved ${prd.title} (${waiting.length ? `publishes when ${wait} approves` : "published"})`, [{ kind: "document", id: prd.id }], []);
     if (prd.slug === ctx.onePager.doc.slug && waiting.length) ctx.onePager.approval = { approved_in: m.title, waiting_on: waiting.map((i) => ref(ctx, i)) };
+    else if (prd.slug === ctx.onePager.doc.slug) publishOnePager(ctx.onePager);
     return ok();
   }
   if (p[4] === "end" && method === "POST") {
@@ -616,7 +708,18 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.ended_at = now;
     m.ended_by = ctx.me.id;
     m.minutes = extract(ctx, db, m);
+    const job = flags().includes("minutes-failed") ? "failed" : flags().includes("minutes-slow") ? "slow" : null;
+    m.minutes_state = job ? "drafting" : "ready";
+    m.minutes_job = job;
+    return ok();
+  }
+  if (p[4] === "minutes" && p[5] === "redraft" && method === "POST") {
+    if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner drafts again" });
+    if (!(m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed")) return json(409, { detail: "Oracle is not failing to draft these minutes" });
+    // The requeued job answers (the fake model): Oracle's minutes, ready to edit and send.
+    m.minutes = { ...extract(ctx, db, m), summary: `Oracle's minutes of ${m.title}: ${db.decisions.filter((d) => d.meeting_id === m.id).length} decisions taken.`, written_by: "oracle" };
     m.minutes_state = "ready";
+    m.minutes_job = null;
     return ok();
   }
   if (p[4] === "minutes" && method === "PUT") {
@@ -635,6 +738,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
       written_by: "edited",
     };
     if (m.minutes_state === "drafting") m.minutes_state = "ready";
+    m.minutes_job = null;
     return ok();
   }
   if (p[4] === "send" && method === "POST") {
@@ -650,6 +754,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
       slack: !!b.slack, slack_status: b.slack ? "queued" : null, slack_channel: b.slack ? slack.channel : null,
     };
     m.minutes_state = "sent";
+    m.minutes_job = null;
     m.sent_at = now;
     return ok();
   }

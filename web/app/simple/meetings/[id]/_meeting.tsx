@@ -26,6 +26,9 @@ function clock(ms: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 }
 
+/** How often a live meeting's screen reads the meeting again (other screens' Approve, Undo, changes). */
+const LIVE_POLL_MS = 5_000;
+
 /** Names for ids, from the meeting's attendees. */
 const namer = (m: Meeting) => (id: string) => m.attendees.find((a) => a.id === id)?.name ?? "a reviewer";
 
@@ -68,12 +71,20 @@ function useAct(reload: () => Promise<unknown>) {
 function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
   const zone = useCompanyZone();
   const [step, setStep] = useState(0);
+  const [notApproved, setNotApproved] = useState<Meeting["not_approved"]>([]);
   const [now, setNow] = useState(() => Date.now());
   const { busy, error, act } = useAct(reload);
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
   }, []);
+  // Every screen on the meeting follows it (the production walk: Approve on the decider's
+  // screen left the others on the old version and its draft bar): read it again every
+  // LIVE_POLL_MS, and the one-pager with it when its decisions or drafts move on.
+  useEffect(() => {
+    const t = window.setInterval(() => void reload(), LIVE_POLL_MS);
+    return () => window.clearInterval(t);
+  }, [reload]);
   const path = { params: { path: { meeting_id: m.id } } };
   const rules = (body: Schemas["SimpleMeetingRulesIn"]) => act(() => unwrap(api.PATCH("/v1/simple/meetings/{meeting_id}/rules", { ...path, body })));
   const absent = m.attendees.filter((a) => !a.present).map((a) => a.id);
@@ -103,7 +114,20 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
         </span>
         <div className="ml-auto flex flex-wrap gap-2">
           {!joined && can("join_simple_meeting") && <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/join", path)))}>Join</Button>}
-          {m.can.approve && <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/approve", path)))}>Approve</Button>}
+          {m.can.approve && (
+            <Button
+              variant="primary"
+              disabled={busy}
+              onClick={() =>
+                act(async () => {
+                  const r = await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/approve", path));
+                  setNotApproved(r.not_approved);
+                })
+              }
+            >
+              Approve
+            </Button>
+          )}
           {m.can.end && <Button disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/end", path)))}>End meeting</Button>}
         </div>
       </header>
@@ -142,11 +166,24 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           Approved in {m.title} · {d.waiting_on.length ? `publishes when ${d.waiting_on.map(name).join(", ")} approve${d.waiting_on.length === 1 ? "s" : ""}` : "published"}
         </p>
       ))}
+      {notApproved.map((x) => (
+        <p key={x.draft_id} role="status" data-testid="not-approved" className="border-b border-border px-4 py-2 text-base">
+          {x.document.title} is not approved: {x.reason}
+        </p>
+      ))}
       {error && <div className="px-4 pt-2"><ErrorNote>{error}</ErrorNote></div>}
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <main aria-label="Stage" className="min-w-0">
-          {/* Drawn again when Approve changes the drafts (its draft bar). */}
-          {step === 0 && <OnePager key={m.drafts.map((d) => `${d.status}-${d.waiting_on.length}`).join()} doc={m.prd.slug} sessionId={m.session_id} onChanged={() => void reload()} />}
+          {/* Read again whenever the meeting moves on (Approve, Undo, a change by chat): its
+              version and its draft bar follow what was published. */}
+          {step === 0 && (
+            <OnePager
+              doc={m.prd.slug}
+              sessionId={m.session_id}
+              refresh={`${m.meeting_decisions.length}|${m.drafts.map((d) => `${d.status}-${d.waiting_on.length}-${d.changes}`).join()}`}
+              onChanged={() => void reload()}
+            />
+          )}
           {step === 1 && <RoadmapSlice m={m} reload={reload} />}
           {step === 2 && <DecisionsStep m={m} reload={reload} />}
         </main>
@@ -336,6 +373,21 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
   const [questions, setQuestions] = useState((minutes?.open_questions ?? []).join("\n"));
   const [actions, setActions] = useState<ActionRow[]>((minutes?.action_items ?? []).map((a) => ({ title: a.title, owner_id: a.owner_id ?? "", due_date: a.due_date ?? "" })));
   const [dirty, setDirty] = useState(false);
+  // Oracle's minutes landing (Draft again, a slow job) fill the fields a person has not touched.
+  const written = `${minutes?.written_by ?? ""}|${minutes?.summary ?? ""}`;
+  const [shown, setShown] = useState(written);
+  if (written !== shown && !dirty) {
+    setShown(written);
+    setSummary(minutes?.summary ?? "");
+    setQuestions((minutes?.open_questions ?? []).join("\n"));
+    setActions((minutes?.action_items ?? []).map((a) => ({ title: a.title, owner_id: a.owner_id ?? "", due_date: a.due_date ?? "" })));
+  }
+  // While Oracle drafts, look again now and then: it answers, slows down or fails.
+  useEffect(() => {
+    if (m.minutes_state !== "drafting") return;
+    const t = window.setInterval(() => void reload(), 15_000);
+    return () => window.clearInterval(t);
+  }, [m.minutes_state, reload]);
   const [email, setEmail] = useState(false);
   const [slack, setSlack] = useState(false);
   const path = { params: { path: { meeting_id: m.id } } };
@@ -372,7 +424,18 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <section aria-label="Minutes" className="simple-card space-y-3">
           <h2 className="simple-h2">Oracle&apos;s minutes</h2>
-          {m.minutes_state === "drafting" && <p role="status">Drafting…</p>}
+          {m.minutes_job === "drafting" && <p role="status">Drafting…</p>}
+          {m.minutes_job === "slow" && (
+            <p role="status" data-testid="minutes-slow">Oracle is still drafting the minutes. Send what is written, or wait for its draft.</p>
+          )}
+          {m.minutes_job === "failed" && (
+            <div role="alert" data-testid="minutes-failed" className="flex flex-wrap items-center gap-3">
+              <span>Oracle could not draft the minutes. Send what is written, or draft again.</span>
+              {m.can.redraft && (
+                <Button disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/minutes/redraft", path)))}>Draft again</Button>
+              )}
+            </div>
+          )}
           {editable ? (
             <>
               <label className="flex flex-col gap-1">
@@ -465,7 +528,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                 ) : (
                   <label className="flex items-center gap-2"><input type="checkbox" disabled checked={false} onChange={() => undefined} /> Post to Slack <span className="simple-small"> · {m.slack.connected ? "No channel set" : "Not connected"}</span></label>
                 )}
-                <Button variant="primary" disabled={busy || m.minutes_state === "drafting"} onClick={send}>Send</Button>
+                <Button variant="primary" disabled={busy} onClick={send}>Send</Button>
               </>
             ) : (
               <p className="simple-small">The minutes are not sent yet.</p>

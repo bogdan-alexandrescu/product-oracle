@@ -5094,6 +5094,7 @@ async function route(db: Db, req: Request): Promise<Response> {
       members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
       roadmap: db.simple_roadmap,
       onePager: db.simple_one_pager,
+      rituals: ensureRituals(db, me),
     };
     const meetingsDb = ensureMeetings(db, meetingsCtx);
     const meetingsRes = (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
