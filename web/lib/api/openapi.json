@@ -44679,7 +44679,7 @@
           "simple"
         ],
         "summary": "Get Simple Visual",
-        "description": "The subject's visual: its newest drawing (null: none yet), versions newest first,\ncomments, whether Oracle is drawing it, and what the caller may do.",
+        "description": "The subject's visual: its newest drawing (null: none yet), versions newest first,\ncomments, whether Oracle is drawing it, and what the caller may do. ``document_id``: a\none-pager line's PRD (who may ask Oracle to draw a bet with none).",
         "operationId": "get_simple_visual",
         "security": [
           {
@@ -44707,6 +44707,23 @@
               "type": "string",
               "format": "uuid",
               "title": "Subject Id"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
             }
           }
         ],
@@ -44965,7 +44982,7 @@
           "simple"
         ],
         "summary": "Request Simple Visual",
-        "description": "Ask Oracle to draw a subject's visual (a feature on the roadmap that has none).",
+        "description": "Ask Oracle to draw a subject's visual (a feature on the roadmap, or a one-pager bet\nwith its PRD's ``document_id``, that has none).",
         "operationId": "request_simple_visual",
         "security": [
           {
@@ -115923,6 +115940,18 @@
             "maxLength": 2000,
             "title": "Brief",
             "default": ""
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
           }
         },
         "type": "object",

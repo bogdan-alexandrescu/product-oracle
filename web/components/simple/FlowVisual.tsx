@@ -91,13 +91,26 @@ function Drawing({ flow, big }: { flow: Flow; big?: boolean }) {
  * history (older versions open read-only), the comments, a comment box for commenters and
  * up, Revise for who changes the subject directly (Oracle redraws it as the next version),
  * "Ask Oracle to draw it" when there is none, and Full screen (for a meeting or a
- * presentation). What a reader may do comes from the API's can_* fields.
+ * presentation). What a reader may do comes from the API's can_* fields. A one-pager bet
+ * line names its PRD (`documentId`): the API looks the bet up on that page. While Oracle
+ * draws (the simple_visual job), the panel says so and reads again until the drawing lands.
  */
-export function FlowPanel({ subject, onClose }: { subject: FlowSubject; onClose?: () => void }) {
+export function FlowPanel({ subject, documentId, onClose }: { subject: FlowSubject; documentId?: string; onClose?: () => void }) {
   const key = `simple-visual|${subject.kind}|${subject.id}`;
   const q = useQuery(key, () =>
-    unwrap(api.GET("/v1/simple/visuals/{kind}/{subject_id}", { params: { path: { kind: subject.kind, subject_id: subject.id } } })),
+    unwrap(
+      api.GET("/v1/simple/visuals/{kind}/{subject_id}", {
+        params: { path: { kind: subject.kind, subject_id: subject.id }, query: documentId ? { document_id: documentId } : {} },
+      }),
+    ),
   );
+  const pending = q.data?.pending ?? false;
+  const { reload } = q;
+  useEffect(() => {
+    if (!pending) return;
+    const t = window.setInterval(() => void reload(), 2000);
+    return () => window.clearInterval(t);
+  }, [pending, reload]);
   const [shown, setShown] = useState<number | null>(null);
   const [old, setOld] = useState<Flow | null>(null);
   const [full, setFull] = useState(false);
@@ -140,7 +153,7 @@ export function FlowPanel({ subject, onClose }: { subject: FlowSubject; onClose?
       },
     );
   const revise = () => post(() => api.POST("/v1/simple/visuals/{kind}/{subject_id}/revise", { params: { path }, body: {} }));
-  const ask = () => post(() => api.POST("/v1/simple/visuals/{kind}/{subject_id}/request", { params: { path }, body: { brief: "" } }));
+  const ask = () => post(() => api.POST("/v1/simple/visuals/{kind}/{subject_id}/request", { params: { path }, body: { brief: "", document_id: documentId ?? null } }));
 
   async function openVersion(n: number) {
     const v = q.data;

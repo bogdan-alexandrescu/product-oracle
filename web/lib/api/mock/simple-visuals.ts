@@ -6,7 +6,9 @@ import { stableUuid } from "./ids";
  * Simple S10 (#723, D26): proposals' visuals (oracle.simple.visuals), with INVENTED
  * drawings. Each visual is held against its subject (kind, id) with its versions (newest
  * last) and comments. The mock's Oracle draws at once: asking for a drawing or pressing
- * Revise answers with the next version (the API queues the simple_visual job).
+ * Revise answers with the next version (the API queues the simple_visual job). A one-pager
+ * bet asked for with its PRD (document_id) stays pending (the job running) until the
+ * panel's next read, which draws it.
  *
  * Who: everyone reads; commenters and up comment on a drawn visual; owners (who change
  * the subject directly) ask for a drawing and revise.
@@ -22,6 +24,8 @@ interface MockVisual {
   versions: Flow[];
   comments: Schemas["SimpleVisualCommentOut"][];
   made_by: (string | null)[];
+  /** Oracle is drawing it (the simple_visual job is queued or running). */
+  pending?: boolean;
 }
 
 export interface VisualsDb {
@@ -34,8 +38,9 @@ interface Ctx {
   names: Record<string, string>;
 }
 
-/** Subjects drawn with their proposal, never asked for by id (the API's UNASKABLE_KINDS). */
-const UNASKABLE = ["suggestion", "chat_card", "one_pager_line"];
+/** Subjects drawn with their proposal, never asked for by id (the API's UNASKABLE_KINDS);
+ * a one-pager line is asked for with its PRD (document_id). */
+const UNASKABLE = ["suggestion", "chat_card"];
 const RANK: Record<string, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 const at = "2026-10-26T15:00:00Z";
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -160,9 +165,10 @@ export function requestVisual(db: VisualsDb | undefined, kind: string, id: strin
   add(db, kind, id, brief, draft(kind, id, brief));
 }
 
-function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx): Schemas["SimpleVisualOut"] {
+function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx, documentId?: string | null): Schemas["SimpleVisualOut"] {
   const owner = (RANK[ctx.role] ?? 0) >= RANK.owner;
-  if (!v) return { subject_kind: kind, subject_id: id, flow: null, versions: [], comments: [], pending: false, can_comment: false, can_revise: owner && !UNASKABLE.includes(kind) };
+  const askable = !UNASKABLE.includes(kind) && (kind !== "one_pager_line" || !!documentId);
+  if (!v) return { subject_kind: kind, subject_id: id, flow: null, versions: [], comments: [], pending: false, can_comment: false, can_revise: owner && askable };
   const n = v.versions.length;
   return {
     subject_kind: kind,
@@ -173,7 +179,7 @@ function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx): Sch
       .map((f, i) => ({ number: f.version, title: f.title, made_at: f.made_at ?? at, made_by_name: v.made_by[i] ? (ctx.names[v.made_by[i]!] ?? "someone") : null, addressed: v.comments.filter((c) => c.addressed_in === f.version).length }))
       .reverse(),
     comments: v.comments,
-    pending: false,
+    pending: !!v.pending,
     can_comment: n > 0 && (RANK[ctx.role] ?? 0) >= RANK.commenter,
     can_revise: owner,
   };
@@ -190,7 +196,15 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
   const key = `${kind}:${id}`;
   const v = db.visuals[key];
   const m = req.method;
-  if (m === "GET" && p.length === 5) return json(200, out(v, kind, id, ctx));
+  if (m === "GET" && p.length === 5) {
+    if (v?.pending) {
+      // The job has run: version 1 lands.
+      v.versions.push(draft(kind, id, v.brief));
+      v.made_by.push(null);
+      v.pending = false;
+    }
+    return json(200, out(v, kind, id, ctx, new URL(req.url).searchParams.get("document_id")));
+  }
   if (m === "GET" && p[5] === "versions") {
     const f = v?.versions.find((x) => x.version === Number(p[6]));
     return f ? json(200, { ...f, versions: v!.versions.length }) : json(404, { detail: "No such version" });
@@ -221,6 +235,12 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
   if (p[5] === "request") {
     if (UNASKABLE.includes(kind)) return json(422, { detail: "Oracle draws this visual with its proposal; it is not asked for" });
     if ((RANK[ctx.role] ?? 0) < RANK.owner) return json(403, { detail: "Only who changes this directly asks Oracle for its visual" });
+    if (kind === "one_pager_line") {
+      const doc = b.document_id ? String(b.document_id) : null;
+      if (!doc) return json(422, { detail: "A one-pager line's visual is asked for with its PRD" });
+      if (!v) add(db, kind, id, String(b.brief ?? "") || "A bet of the one-pager").pending = true;
+      return json(202, out(db.visuals[key], kind, id, ctx, doc));
+    }
     requestVisual(db, kind, id, String(b.brief ?? "") || "The new flow");
     return json(202, out(db.visuals[key], kind, id, ctx));
   }

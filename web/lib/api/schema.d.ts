@@ -13017,7 +13017,8 @@ export interface paths {
         /**
          * Get Simple Visual
          * @description The subject's visual: its newest drawing (null: none yet), versions newest first,
-         *     comments, whether Oracle is drawing it, and what the caller may do.
+         *     comments, whether Oracle is drawing it, and what the caller may do. ``document_id``: a
+         *     one-pager line's PRD (who may ask Oracle to draw a bet with none).
          */
         get: operations["get_simple_visual"];
         put?: never;
@@ -13101,7 +13102,8 @@ export interface paths {
         put?: never;
         /**
          * Request Simple Visual
-         * @description Ask Oracle to draw a subject's visual (a feature on the roadmap that has none).
+         * @description Ask Oracle to draw a subject's visual (a feature on the roadmap, or a one-pager bet
+         *     with its PRD's ``document_id``, that has none).
          */
         post: operations["request_simple_visual"];
         delete?: never;
@@ -38641,6 +38643,8 @@ export interface components {
              * @default
              */
             brief: string;
+            /** Document Id */
+            document_id?: string | null;
         };
         /** SimpleVisualReviseIn */
         SimpleVisualReviseIn: {
@@ -69084,7 +69088,9 @@ export interface operations {
     };
     get_simple_visual: {
         parameters: {
-            query?: never;
+            query?: {
+                document_id?: string | null;
+            };
             header?: never;
             path: {
                 kind: string;
