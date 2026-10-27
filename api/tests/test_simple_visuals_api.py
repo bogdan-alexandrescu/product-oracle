@@ -272,11 +272,11 @@ async def test_revise_adds_a_version(client):
     assert out == {"drawn": True, "version": 2, "removed": out["removed"]}
     assert seen[0]["mode"] == "revise" and seen[0]["note"] == "Keep it short"
     assert seen[0]["comments"] == [{"annotation": 1, "body": "Show the skip path"}]
-    got = await visual(client, ctx, "viewer", "change", cid)
+    got = await visual(client, ctx, "commenter", "change", cid)
     assert got["flow"]["version"] == 2 and got["flow"]["title"] == "Invite a teammate, or skip"
     assert [v["number"] for v in got["versions"]] == [2, 1]
     assert got["comments"][0]["addressed_in"] == 2
-    r = await client.get(f"{path}/versions/1", headers=ctx.as_("viewer"))
+    r = await client.get(f"{path}/versions/1", headers=ctx.as_("commenter"))
     assert r.status_code == 200 and r.json()["title"] == ANSWER["title"]
 
 
