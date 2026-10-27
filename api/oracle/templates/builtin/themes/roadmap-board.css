@@ -10,6 +10,11 @@
   break-inside: avoid;
 }
 .section-group > .group-body > .prd-section > h3 { margin-top: 0; font-size: 1em; }
+/* A goal group holding an audience's item table (Board's) spans the row, framed by its
+   accent rule only: side padding and a side border beside the table's own rules read as
+   an empty extra column. It spans the three columns by count: WeasyPrint (the PDF) places
+   a negative line number such as 1 / -1 wrongly. */
+.section-group > .group-body > .section-wide { grid-column: 1 / span 3; padding: 0.45rem 0 0; border: none; border-top: 3px solid var(--color-accent); border-radius: 0; }
 .section-group > .group-body > .flag-no-goal { border: 2px solid #b42318; }
 .prd-section[data-section-key="now"] > h2::after { content: "  high confidence ●●●"; font-size: 0.6em; color: var(--color-muted); }
 .prd-section[data-section-key="next"] > h2::after { content: "  medium ●●○"; font-size: 0.6em; color: var(--color-muted); }

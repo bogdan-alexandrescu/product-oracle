@@ -57,6 +57,12 @@ class FakeFireflies:
     unsorted: bool = False
     # Transcripts whose detail Fireflies refuses (HTTP 403).
     forbidden: set[str] = field(default_factory=set)
+    # Transcripts Fireflies answers with a GraphQL error (deleted since: not found).
+    gone: set[str] = field(default_factory=set)
+    # Transcripts Fireflies has not summarised yet (it writes the summary later).
+    unsummarised: set[str] = field(default_factory=set)
+    # Answer transcript() this many more times, then rate limit it (a tight budget).
+    detail_budget: int | None = None
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         assert str(request.url) == self.api_url
@@ -75,11 +81,19 @@ class FakeFireflies:
         if "transcript(" in query:
             if variables["id"] in self.forbidden:
                 return httpx.Response(403, json={"errors": [{"message": "forbidden"}]})
+            if variables["id"] in self.gone:
+                error = {"message": "Transcript not found", "extensions": {"code": "not_found"}}
+                return httpx.Response(200, json={"data": None, "errors": [error]})
+            if self.detail_budget is not None:
+                if self.detail_budget <= 0:
+                    return rate_limited()
+                self.detail_budget -= 1
             found = next((m for m in self.meetings if m["id"] == variables["id"]), None)
             if self.processing.get(variables["id"], 0) > 0:
                 self.processing[variables["id"]] -= 1
                 found = None
-            return httpx.Response(200, json={"data": {"transcript": self._detail(found)}})
+            detail = self._detail(found, query)
+            return httpx.Response(200, json={"data": {"transcript": detail}})
         raise AssertionError(f"unexpected query {query}")
 
     def _list(self, v: dict[str, Any]) -> list[dict[str, Any]]:
@@ -95,16 +109,27 @@ class FakeFireflies:
         assert limit <= 50
         return [dict(m) for m in rows[skip : skip + limit]]
 
-    @staticmethod
-    def _detail(m: dict[str, Any] | None) -> dict[str, Any] | None:
+    def _detail(self, m: dict[str, Any] | None, query: str) -> dict[str, Any] | None:
+        """Fireflies' own shape: speakers as {id, name} (answered only when asked for, as
+        GraphQL does), the summary an object, null fields until Fireflies writes it."""
         if m is None:
             return None
-        return {
+        written = m["id"] not in self.unsummarised
+        out = {
             **m,
             "meeting_attendees": [],
             "sentences": [{"index": 0, "speaker_name": "Ada", "text": f"Notes of {m['title']}."}],
-            "summary": {"overview": f"About {m['title']}.", "action_items": "", "keywords": ""},
+            "summary": {
+                "overview": f"About {m['title']}." if written else None,
+                "short_summary": f"{m['title']}." if written else None,
+                "action_items": "" if written else None,
+                "keywords": "" if written else None,
+                "outline": None,
+            },
         }
+        if "speakers {" in query:
+            out["speakers"] = [{"id": 0, "name": "Ada"}]
+        return out
 
     def _newest_first(self) -> list[dict[str, Any]]:
         return sorted(self.meetings, key=lambda m: m["date"] if _dated(m) else 0, reverse=True)

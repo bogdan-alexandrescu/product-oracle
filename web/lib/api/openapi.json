@@ -54008,6 +54008,20 @@
             "type": "object",
             "title": "Per Item",
             "default": {}
+          },
+          "simple_mode": {
+            "type": "boolean",
+            "title": "Simple Mode",
+            "default": false
+          },
+          "default_experience": {
+            "type": "string",
+            "enum": [
+              "simple",
+              "detailed"
+            ],
+            "title": "Default Experience",
+            "default": "detailed"
           }
         },
         "type": "object",
@@ -90457,11 +90471,26 @@
               "feedback_wanted": false,
               "published": false
             }
+          },
+          "experience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "detailed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience"
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account)."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple)."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -90511,6 +90540,21 @@
                 "type": "null"
               }
             ]
+          },
+          "experience": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "detailed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Experience"
           }
         },
         "type": "object",
@@ -93626,6 +93670,31 @@
           "question_ids"
         ],
         "title": "QuestionsWithdrawn"
+      },
+      "QueueWait": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "since": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Since"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "text",
+          "since"
+        ],
+        "title": "QueueWait",
+        "description": "Why SwarmCloud holds the run's current step (oracle.runs.waits), as Oracle last\nread it: SwarmCloud's park reason, in plain words, and since when."
       },
       "RankedFeature": {
         "properties": {
@@ -101791,6 +101860,16 @@
             ],
             "title": "Stuck"
           },
+          "queue_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueWait"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "can_retry": {
             "type": "boolean",
             "title": "Can Retry",
@@ -102633,6 +102712,16 @@
               }
             ],
             "title": "Stuck"
+          },
+          "queue_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueWait"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "can_retry": {
             "type": "boolean",
@@ -106847,6 +106936,16 @@
               }
             ],
             "title": "Checked At"
+          },
+          "queue_wait": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QueueWait"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

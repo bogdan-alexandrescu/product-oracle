@@ -1,5 +1,5 @@
 {% macro section(s) %}
-  <section id="{{ s.key }}" class="prd-section level-{{ s.level }}{% if s.flagged %} flag-no-goal{% endif %}" data-section-key="{{ s.key }}">
+  <section id="{{ s.key }}" class="prd-section level-{{ s.level }}{% if s.flagged %} flag-no-goal{% endif %}{% if s.wide %} section-wide{% endif %}" data-section-key="{{ s.key }}">
     <h{{ s.level }}>{{ s.heading }}</h{{ s.level }}>
     {% if s.flagged %}<p class="no-goal-note">⚑ Serves no confirmed goal</p>{% endif %}
     {{ s.body }}

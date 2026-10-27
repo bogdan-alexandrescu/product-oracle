@@ -37,6 +37,8 @@ type MeState = {
   can: (op: Operation, onItem?: boolean) => boolean;
   /** True once the capabilities of the signed-in principal have loaded. */
   capsReady: boolean;
+  /** #723: Simple mode is on (ORACLE_SIMPLE_MODE): the [Simple | Detailed] switch shows. False until the capabilities load. */
+  simpleMode: boolean;
   /** Why the capabilities could not be read, or null. */
   capsError: string | null;
   /** Reads the capabilities again (after capsError). */
@@ -125,12 +127,13 @@ export function MeProvider({ children }: { children: ReactNode }) {
       loading: state.loading,
       can,
       capsReady: ops !== null,
+      simpleMode: current?.simple_mode ?? false,
       capsError,
       retryCaps,
       refresh,
       clear,
     }),
-    [state, refresh, clear, can, ops, capsError, retryCaps],
+    [state, refresh, clear, can, ops, current, capsError, retryCaps],
   );
   const zone = state.me?.company_timezone || DEFAULT_ZONE;
   // Before the children render, so lib/format.ts formats in this zone.

@@ -64,7 +64,7 @@ def scratch_db():
 
 
 # protects=0074_live_reads chains on 0073_share_links, and the live stack's head
-# (0075_live_tokens) is the single head; fails_when=the revision is re-parented or a second
+# (0076_board_wide_tables) is the single head; fails_when=the revision is re-parented or a second
 # head appears; no_claim=what the revision creates (test_upgrade_and_downgrade).
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())

@@ -130,8 +130,15 @@ async def test_full_sync_pages_newest_first_and_yields_oldest_first():
     assert review.url == "https://app.fireflies.ai/view/01TRANSCRIPT4"
     assert review.author == "ada@example.com"
     assert review.occurred_at == datetime(2026, 10, 10, 15, tzinfo=UTC)
+    # The people who spoke, then the invitees, each once.
     assert review.acl == {
-        "participants": ["ada@example.com", "lin@example.com", "guest@example.org"]
+        "participants": [
+            "Ada Example",
+            "Lin Example",
+            "ada@example.com",
+            "lin@example.com",
+            "guest@example.org",
+        ]
     }
     assert review.content == (
         "## Overview\n\nThe team reviewed onboarding v2 and agreed to ship next sprint.\n\n"

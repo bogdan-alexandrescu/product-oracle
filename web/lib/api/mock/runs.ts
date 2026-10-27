@@ -461,6 +461,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     review_link: r.review_link ?? null,
     error: readableRefusal(r.error, r.status === "failed"),
     stuck: r.stuck,
+    queue_wait: r.queue_wait ?? null,
     can_retry: r.can_retry,
     can_stop_cancelling: r.can_stop_cancelling,
     can_retry_lookup: r.can_retry_lookup,
@@ -1992,7 +1993,9 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     }
     finish(ctx, r, "cancelled");
     // A run cancelled from the Inbox no longer waits on its lost submission or its 404s.
-    Object.assign(r, { can_retry: false, can_stop_cancelling: false, can_retry_lookup: false, stuck: null });
+    Object.assign(r, { can_retry: false, can_stop_cancelling: false, can_retry_lookup: false, stuck: null, queue_wait: null });
+    // Nothing waits in SwarmCloud's queue once the run ended (api: queue_wait is a running run's).
+    for (const s of r.segments) s.queue_wait = null;
     return done();
   }
   if (action === "retry" && m === "POST") {

@@ -705,6 +705,16 @@ class ScopeItemOut(BaseModel):
     scope_lock_version: int
 
 
+class QueueWait(BaseModel):
+    """Why SwarmCloud holds the run's current step (oracle.runs.waits), as Oracle last
+    read it: SwarmCloud's park reason, in plain words, and since when."""
+
+    code: str
+    text: str
+    # When Oracle first read the step held so (SwarmCloud does not serve the moment).
+    since: datetime
+
+
 class SegmentOut(BaseModel):
     id: uuid.UUID
     seq: int
@@ -755,6 +765,8 @@ class SegmentOut(BaseModel):
     # read since it started); empty once the segment is no longer running.
     agents: list[SegmentAgent] = []
     checked_at: datetime | None = None
+    # Why SwarmCloud holds this running segment's step, as on the run's Runs row.
+    queue_wait: QueueWait | None = None
 
 
 class ConsoleAnswer(BaseModel):
@@ -949,6 +961,8 @@ class RunSummary(BaseModel):
     # not read (Retry lookup: ``can_retry_lookup``), or an ended run's spend over its
     # ceiling while a workflow it stopped cancelling still runs (shown).
     stuck: str | None = None
+    # Why SwarmCloud holds the step the run is on (a running run only): the Runs row.
+    queue_wait: QueueWait | None = None
     can_retry: bool = False
     # Stop cancelling: Oracle stops the cancel calls, and keeps reading the workflow's
     # status and cost until it ends, counted on the run; a run that has not ended ends

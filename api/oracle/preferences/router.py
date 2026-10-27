@@ -11,6 +11,8 @@ from oracle.auth.deps import CurrentPrincipal, TenantDB
 from oracle.preferences.models import UserPreference
 
 DocumentView = Literal["brief", "full"]
+# #723: the mode a person works in, Simple or Detailed; unset until they switch.
+Experience = Literal["simple", "detailed"]
 
 
 class SlackPings(BaseModel):
@@ -41,12 +43,14 @@ class Preferences(BaseModel):
     documents open on; brief unless they switched to the full document. ``setup_hidden``:
     they hid Home's Set up checklist (A1); a header chip shows it again.
     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
-    ``slack_pings``: the Slack pings they get (My account)."""
+    ``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they
+    last switched to (#723); unset, they land by role (viewers and commenters in Simple)."""
 
     document_view: DocumentView = "brief"
     setup_hidden: bool = False
     welcome_dismissed: bool = False
     slack_pings: SlackPings = SlackPings()
+    experience: Experience | None = None
 
 
 class PreferencesUpdate(BaseModel):
@@ -54,6 +58,7 @@ class PreferencesUpdate(BaseModel):
     setup_hidden: bool | None = None
     welcome_dismissed: bool | None = None
     slack_pings: SlackPingsUpdate | None = None
+    experience: Experience | None = None
 
 
 router = APIRouter(prefix="/v1/me", tags=["auth"])
@@ -71,6 +76,9 @@ async def read_preferences(db, principal_id: uuid.UUID) -> Preferences:
         from oracle.slack.pings import chosen_of
 
         stored["slack_pings"] = chosen_of(stored["slack_pings"])
+    if stored.get("experience") == "studio":
+        # Detailed's name before the owner's decision on #723: no one is stranded by it.
+        stored["experience"] = "detailed"
     return Preferences(**stored)
 
 

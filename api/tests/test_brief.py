@@ -614,6 +614,8 @@ async def test_document_view_is_remembered_per_user(client, tenant_id):
         # Slack pings: review requested and draft ready until they choose (oracle.slack.pings).
         "slack_pings": {"draft_ready": True, "review_requested": True, "comments": False,
                         "feedback_wanted": False, "published": False},
+        # #723 S1: the mode they last switched to; unset, they land by role.
+        "experience": None,
     }  # fmt: skip
     resp = await client.patch("/v1/me/preferences", json={"document_view": "full"}, headers=viewer)
     assert resp.status_code == 200 and resp.json()["document_view"] == "full"
