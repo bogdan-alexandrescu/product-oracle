@@ -279,9 +279,8 @@ test("Simple's rail has its six destinations and none of Detailed's", async ({ p
 
 test("each placeholder names what arrives and links its Detailed page", async ({ page }) => {
   await signIn(page, EMAILS.owner);
+  // Roadmap (S4) and Priorities (S6) are screens now; Meetings and Decisions arrive with S8.
   for (const [path, detailed] of [
-    ["/simple/roadmap", "/plan"],
-    ["/simple/priorities", "/priorities"],
     ["/simple/meetings", "/company/rituals"],
     ["/simple/decisions", "/company/decisions"],
   ]) {
