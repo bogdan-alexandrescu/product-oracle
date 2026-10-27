@@ -26,6 +26,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
+import { seedSimpleProposal } from "./simple-changes";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
@@ -153,6 +154,15 @@ function items(ctx: MeetingsCtx) {
 
 /** Seeds on first use: a scheduled review, one past meeting whose minutes were sent, and
  * decisions outside meetings. */
+/** A commenter's proposal on Team invite nudges for a starting meeting to decide (once, unless one already waits). */
+function seedMeetingProposal(ctx: MeetingsCtx): void {
+  const commenter = ctx.members.find((m) => m.email === "commenter@example.com");
+  const item = items(ctx).find((i) => i.key === "setup-ideas");
+  if (!commenter || !item || (ctx.roadmap.changes ?? []).some((c) => c.status === "proposed" && c.target.item_id === item.id)) return;
+  const roles = Object.fromEntries(ctx.members.map((m) => [m.id, m.role]));
+  seedSimpleProposal(ctx.roadmap, { id: commenter.id, name: commenter.name, owners: owners(ctx), roles }, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, iso(mockNowMs() - 3_600_000), "Invites matter in week one");
+}
+
 export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: MeetingsCtx): MeetingsDb {
   if (holder.simple_meetings) return holder.simple_meetings;
   // A new company ("empty" scenario, as server.ts's MOCK_SCENARIO_KEY): no past meetings, decisions or seeded proposal.
@@ -206,8 +216,8 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
   };
   if (checklist) (ctx.roadmap.decided_in ??= {})[checklist.id] = [{ id: db.decisions[0].id, number: 1, title: db.decisions[0].title }];
   if (digest) (ctx.roadmap.decided_in ??= {})[digest.id] = [{ id: db.decisions[3].id, number: 4, title: db.decisions[3].title }];
-  // No seeded proposal here: Home and the rail read meetings on every page, and a proposal made as a side effect
-  // of that read changed what the roadmap and Home showed (train W integration).
+  // The demo proposal a meeting decides is seeded when a meeting starts (seedMeetingProposal), not here: Home and the
+  // rail read meetings on every page, and a proposal made by that read changed what the roadmap and Home showed.
   holder.simple_meetings = db;
   return db;
 }
@@ -596,6 +606,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     const prd = ps.find((x) => x.slug === b.prd || x.id === b.prd);
     if (!prd) return json(404, { detail: "No such PRD" });
     if (!mayStart(ctx, prd)) return json(403, { detail: "Only an owner or the PRD's decider starts its review meeting" });
+    seedMeetingProposal(ctx);
     const members = new Set(ctx.members.map((m) => m.id));
     const att = [...new Set([ctx.me.id, ...(b.attendee_ids ?? [])])];
     if (att.some((i) => !members.has(i))) return json(422, { detail: "Not active members" });
