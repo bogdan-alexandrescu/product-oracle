@@ -15,6 +15,11 @@ def migrated_db():
     return None
 
 
+@pytest.fixture
+def _truncate_after_test():
+    return None
+
+
 def test_github_keeps_what_deletes_are_compared_against():
     old = {
         "repos": {
