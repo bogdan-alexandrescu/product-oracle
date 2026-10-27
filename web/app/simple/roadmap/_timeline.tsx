@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import {
   addDays,
@@ -106,11 +106,15 @@ export interface ChartProps {
   compact: boolean;
   /** People who may change things drag; viewers read. */
   canDrag: boolean;
-  /** Bars moved and waiting for the change's answer (drawn at their new dates). */
+  /** Bars moved (a drag, or the keyboard's burst not sent yet) and waiting for the change's answer (drawn at their new dates). */
   moved: Record<string, [string, string]>;
   open: string | null;
   onOpen: (item: Item, anchor: { x: number; y: number }) => void;
   onMove: (item: Item, start: string, end: string) => void;
+  /** The keyboard: a press moves the bar locally (the burst is sent on a pause or blur), Escape cancels it. */
+  onKeyMove: (item: Item, start: string, end: string) => void;
+  onKeyEnd: (item: Item) => void;
+  onKeyCancel: (item: Item) => void;
   onSuggestion: (item: Item, anchor: { x: number; y: number }) => void;
   /** HTML drawn over the chart (callouts, popovers, the card), in chart pixels. */
   overlay?: (l: Layout, sc: Scale) => ReactNode;
@@ -141,7 +145,7 @@ declare global {
   }
 }
 
-export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onSuggestion, overlay, chartRef }: ChartProps) {
+export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef }: ChartProps) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(900);
   useEffect(() => {
@@ -285,15 +289,33 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
 
   const keyOpen = (it: Item) => onOpen(it, { x: sc.x((moved[it.id] ?? barSpan(it))[0]), y: (l.y.get(it.id) ?? 0) + l.rowH });
   // The keyboard's drag: an arrow moves a focused bar by a day (the Gantt's day scale) or a
-  // week; Shift+arrow moves only its end.
+  // week; Shift+arrow moves only its end. Each press builds on the last one's local move;
+  // the burst is one change (onKeyMove's caller sends it on a pause or blur).
   const keyMove = (it: Item, dir: 1 | -1, resize: boolean) => {
     if (!canDrag || it.status === "cut") return;
     const [s, e] = moved[it.id] ?? barSpan(it);
     const n = dir * (format === "gantt" && unit === "day" ? 1 : 7);
     const end = addDays(e, n);
     if (resize && end < s) return;
-    onMove(it, resize ? s : addDays(s, n), end);
+    onKeyMove(it, resize ? s : addDays(s, n), end);
   };
+  // The bars' handlers are the same functions on every render, calling this render's: a
+  // press redraws only the bar whose own props changed (memo(Bar)).
+  const handlers = useRef({ onDown, keyOpen, keyMove, onKeyEnd, onKeyCancel, onSuggestion });
+  useLayoutEffect(() => {
+    handlers.current = { onDown, keyOpen, keyMove, onKeyEnd, onKeyCancel, onSuggestion };
+  });
+  const bars = useMemo(
+    () => ({
+      onDown: (e: ReactPointerEvent<SVGGElement>, it: Item) => handlers.current.onDown(e, it),
+      onKeyOpen: (it: Item) => handlers.current.keyOpen(it),
+      onKeyMove: (it: Item, dir: 1 | -1, resize: boolean) => handlers.current.keyMove(it, dir, resize),
+      onKeyEnd: (it: Item) => handlers.current.onKeyEnd(it),
+      onKeyCancel: (it: Item) => handlers.current.onKeyCancel(it),
+      onSuggestion: (it: Item, anchor: { x: number; y: number }) => handlers.current.onSuggestion(it, anchor),
+    }),
+    [],
+  );
   const today = sc.x(data.today);
   const chartW = sc.width;
   return (
@@ -391,7 +413,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 </g>
               ))}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
-            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} onDown={onDown} onKeyOpen={keyOpen} onKeyMove={keyMove} onSuggestion={onSuggestion} /> : null))}
+            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} {...bars} /> : null))}
             <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" />
             <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600}>
               Today
@@ -479,10 +501,12 @@ type BarProps = {
   onDown: (e: ReactPointerEvent<SVGGElement>, item: Item) => void;
   onKeyOpen: (item: Item) => void;
   onKeyMove: (item: Item, dir: 1 | -1, resize: boolean) => void;
+  onKeyEnd: (item: Item) => void;
+  onKeyCancel: (item: Item) => void;
   onSuggestion: (item: Item, anchor: { x: number; y: number }) => void;
 };
 
-const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onDown, onKeyOpen, onKeyMove, onSuggestion }: BarProps) {
+const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: BarProps) {
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
   const red = broken(item).length > 0;
@@ -497,7 +521,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
   const left = Math.min(x, s ? sc.x(s.start_date) : x) - 14;
   const mark = left >= 10 ? left : Math.max(sc.x(s?.end_date ?? end), x + w) + sc.px + 12;
   const phaseWords = phased ? `, ${item.phases.map((p) => `${p.key} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${canDrag && item.status !== "cut" ? ". Arrows move it, Shift+arrows its end" : ""}`;
+  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${canDrag && item.status !== "cut" ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
   return (
     <g>
       <g
@@ -523,8 +547,9 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
           } else if (e.key === "ArrowRight" || e.key === "ArrowLeft") {
             e.preventDefault();
             onKeyMove(item, e.key === "ArrowRight" ? 1 : -1, e.shiftKey);
-          }
+          } else if (e.key === "Escape") onKeyCancel(item);
         }}
+        onBlur={() => onKeyEnd(item)}
       >
         {phased &&
           item.phases.map((p) => {
