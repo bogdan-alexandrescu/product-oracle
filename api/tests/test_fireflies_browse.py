@@ -1348,3 +1348,65 @@ async def test_a_synced_meeting_records_speakers_and_invitees(
     async with tenant_session(tenant_id) as s:
         item = await s.scalar(select(SourceItem).where(SourceItem.source_id == source_id))
     assert item.acl == {"participants": ["Ada", "ada@example.com", "lin@x.io"]}
+
+
+# protects=a re-read is best effort (review M1): a stored meeting Fireflies now refuses
+# (403) or no longer has (a GraphQL error) is passed by, so the sync still completes with
+# the new meetings stored and the source is not failed into backoff; fails_when=the
+# re-read's error ends the sync as "error"; no_claim=a rate limit or a rejected key on a
+# re-read (they still end the sync, see the test above).
+@pytest.mark.parametrize("failure", ["forbidden", "gone"])
+async def test_a_failed_reread_does_not_fail_the_sync(
+    fake, connector, tenant_id, alice, conn, failure
+):
+    fake.meetings = [meeting("R2", "Pricing sync", _days_ago(2))]
+    fake.unsummarised = {"R2"}
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        first = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert first["outcome"] == "completed", first
+
+        fake.unsummarised = set()
+        getattr(fake, failure).add("R2")
+        fake.meetings.append(meeting("N1", "Launch check-in", _days_ago(1)))
+        fake.requests.clear()
+        second = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+    assert second["outcome"] == "completed", second
+    assert fake.detail_ids() == ["N1", "R2"]
+    stored = await _contents(tenant_id, source_id)
+    assert _summarised(stored["N1"])
+    assert not _summarised(stored["R2"])
+
+
+# protects=a re-read keeps to the source's selection (review minor): a stored meeting the
+# config no longer selects is not read again nor written back; fails_when=the re-read
+# fetches it or stores it again; no_claim=when the unselected meeting is swept (on save).
+async def test_a_reread_skips_a_meeting_the_selection_no_longer_takes(
+    fake, connector, tenant_id, alice, conn
+):
+    fake.meetings = [meeting("R2", "Pricing sync", _days_ago(2))]
+    fake.unsummarised = {"R2"}
+    async with client_for(alice) as a:
+        source_id = await _source(a, conn)
+        first = (await a.post(f"/v1/sources/{source_id}/sync")).json()
+        assert first["outcome"] == "completed", first
+    fake.unsummarised = set()
+    fake.requests.clear()
+    # The connector asked directly, as an incremental pass whose stored meeting R2 the
+    # config (only "Launch" titles) no longer takes.
+    config = {"mode": "all", "title_contains": ["launch"]}
+    events = [
+        e
+        async for e in connector.sync(
+            config, {"api_key": API_KEY}, None, lacking=_lacking_of(["R2"])
+        )
+    ]
+    assert "R2" not in fake.detail_ids()
+    assert not [e for e in events if isinstance(e, base.ItemUpsert)]
+
+
+def _lacking_of(ids: list[str]):
+    async def lacking(since, mark):
+        return list(ids)
+
+    return lacking

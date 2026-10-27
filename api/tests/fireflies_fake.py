@@ -57,6 +57,8 @@ class FakeFireflies:
     unsorted: bool = False
     # Transcripts whose detail Fireflies refuses (HTTP 403).
     forbidden: set[str] = field(default_factory=set)
+    # Transcripts Fireflies answers with a GraphQL error (deleted since: not found).
+    gone: set[str] = field(default_factory=set)
     # Transcripts Fireflies has not summarised yet (it writes the summary later).
     unsummarised: set[str] = field(default_factory=set)
     # Answer transcript() this many more times, then rate limit it (a tight budget).
@@ -79,6 +81,9 @@ class FakeFireflies:
         if "transcript(" in query:
             if variables["id"] in self.forbidden:
                 return httpx.Response(403, json={"errors": [{"message": "forbidden"}]})
+            if variables["id"] in self.gone:
+                error = {"message": "Transcript not found", "extensions": {"code": "not_found"}}
+                return httpx.Response(200, json={"data": None, "errors": [error]})
             if self.detail_budget is not None:
                 if self.detail_budget <= 0:
                     return rate_limited()
