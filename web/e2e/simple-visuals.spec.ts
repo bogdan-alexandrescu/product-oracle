@@ -80,6 +80,8 @@ for (const [where, use] of [
         expect(box.width).toBeGreaterThanOrEqual(page.viewportSize()!.width - 1);
         await full.getByRole("button", { name: "Exit full screen" }).click();
         await expect(full).toHaveCount(0);
+        await wide.getByRole("button", { name: "Close the flow" }).click();
+        await expect(wide).toHaveCount(0);
         // A bet Oracle has not drawn yet.
         await page.getByRole("button", { name: "Flow for bet 3" }).click();
         await expect(page.getByRole("group", { name: "User flow of bet 3" }).getByTestId("flow-empty")).toContainText("No flow yet");
@@ -130,7 +132,7 @@ for (const [where, use] of [
         await view.getByRole("button", { name: "Close the flow" }).click();
         await expect(card).toHaveAttribute("data-wide", "false");
         await card.getByRole("button", { name: "Close", exact: true }).click();
-        await bar(page, "alert-rules").click();
+        await bar(page, "alert-digest").click();
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
         await card.getByRole("button", { name: "Open the item's flow" }).click();
         await expect(card.getByTestId("flow-empty")).toContainText("No flow yet");

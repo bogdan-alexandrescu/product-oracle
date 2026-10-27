@@ -221,7 +221,8 @@ export function OnePager({ doc }: { doc: string }) {
                           </div>
                         )}
                         {wide === l.id && l.flow_subject && (
-                          <div className="simple-noprint" data-widened="true" aria-label={`User flow of bet ${numbers.get(l.id)}`} role="group">
+                          // A phone's widened card is a full-height sheet.
+                          <div className="simple-noprint fixed inset-0 z-40 overflow-auto bg-[var(--simple-paper)] p-4 md:static md:z-auto md:bg-transparent md:p-0" data-widened="true" aria-label={`User flow of bet ${numbers.get(l.id)}`} role="group">
                             <FlowPanel subject={{ kind: "one_pager_line", id: l.flow_subject }} onClose={() => setWide(null)} />
                           </div>
                         )}
