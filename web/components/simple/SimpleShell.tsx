@@ -158,7 +158,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       <nav
         aria-label="Simple"
         data-testid="simple-tab-bar"
-        className="fixed inset-x-0 bottom-0 z-40 hidden h-[68px] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
+        className="fixed inset-x-0 bottom-0 z-40 hidden h-[var(--phone-tab-bar)] grid-cols-5 bg-rail-foot px-1.5 [--focus-ring:var(--rail-bar)] [border-top:var(--simple-rail-border)] pt-1.5 pb-2 max-[600px]:grid"
       >
         {tabDests.map((d) => {
           const active = isActive(pathname, d) && !more;
@@ -196,7 +196,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
           id="simple-more-sheet"
           role="dialog"
           aria-label="More"
-          className="fixed inset-x-0 bottom-[68px] z-40 hidden rounded-t-inspector border-t border-line bg-surface p-3 shadow-tip max-[600px]:block"
+          className="fixed inset-x-0 bottom-[var(--phone-tab-bar)] z-40 hidden rounded-t-inspector border-t border-line bg-surface p-3 shadow-tip max-[600px]:block"
         >
           <ModeSwitch placement="sheet" />
           <ul className="mb-2 grid grid-cols-3 gap-1">
