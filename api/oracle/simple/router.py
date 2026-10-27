@@ -60,14 +60,17 @@ async def get_simple_roadmap(
     track: Text = None,
     from_: Annotated[date | None, Query(alias="from")] = None,
     to: date | None = None,
+    roadmap: Text = None,
 ) -> SimpleRoadmapOut:
     """Every roadmap's items the caller may read on one timeline, grouped by goal, track or
     PRD: each with its resolved dates (source, estimated), open date suggestion,
     milestone, waterfall phases, dependencies both ways and constraint flags; plus the
     tracks' milestones, the horizon windows, the company's today and the shown roadmaps' key
     dates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``
-    (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping)."""
-    return await service.build(db, principal, group, prd, goal, track, from_, to)
+    (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping),
+    ``roadmap`` (id or slug: one roadmap's items; 404 when the caller cannot read it).
+    ``roadmaps``: every roadmap the caller may read, for the Roadmap filter."""
+    return await service.build(db, principal, group, prd, goal, track, from_, to, roadmap)
 
 
 @router.get("/date-suggestions", response_model=list[DateSuggestionOut])

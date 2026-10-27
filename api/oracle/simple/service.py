@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -681,15 +682,30 @@ async def build(
     track: str | None = None,
     start: date | None = None,
     end: date | None = None,
+    roadmap: str | None = None,
 ) -> SimpleRoadmapOut:
     from oracle.simple import drafts, key_dates
 
+    # The Roadmap filter's choices: every roadmap the reader may read (the session's
+    # principal: an approvers-only roadmap is absent for commenters and viewers).
+    readable = {
+        d.id: d
+        for d in await db.scalars(
+            select(Document).where(Document.kind == "roadmap").order_by(Document.title)
+        )
+    }
+    chosen: Document | None = None
+    if roadmap:
+        chosen = next((d for d in readable.values() if roadmap in (str(d.id), d.slug)), None)
+        if chosen is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No such roadmap")
     seen = await drafts.reader(db, principal)
     read = await load(db, seen.overlays)
     shown = [
         e
         for e in read.entries
-        if _matches(e, prd, e.prd, e.prd.id if e.prd else None)
+        if (chosen is None or e.roadmap.id == chosen.id)
+        and _matches(e, prd, e.prd, e.prd.id if e.prd else None)
         and (not goal or (e.goal is not None and goal in (str(e.goal.id), e.goal.key)))
         and (not track or (e.track is not None and track == str(e.track.id)))
         and (start is None or e.resolved.end.date >= start)
@@ -720,9 +736,12 @@ async def build(
     ids = {e.row.id for e in read.entries}
     keyed = {(e.track.id, e.row.item_key): e.row.id for e in read.entries if e.track is not None}
     w = read.windows
-    kds, kd_roadmaps = await key_dates.roadmap_key_dates(
-        db, principal, {e.roadmap.id: e.roadmap for e in shown}
-    )
+    kd_docs = {e.roadmap.id: e.roadmap for e in shown}
+    if chosen is not None:
+        # One roadmap chosen: its key dates even when the other filters hide its items.
+        kd_docs = {chosen.id: chosen}
+    kds, kd_roadmaps = await key_dates.roadmap_key_dates(db, principal, kd_docs)
+    _, all_roadmaps = await key_dates.roadmap_key_dates(db, principal, readable)
     from oracle.simple import visuals
 
     flows = await visuals.flows_for(db, "feature", [e.row.id for e in shown])
@@ -761,4 +780,6 @@ async def build(
         drafts=seen.visible,
         key_dates=kds,
         key_date_roadmaps=kd_roadmaps,
+        roadmaps=all_roadmaps,
+        roadmap=_ref(chosen),
     )

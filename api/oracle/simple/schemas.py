@@ -241,6 +241,10 @@ class SimpleRoadmapOut(BaseModel):
     # Roadmap-plus: the key dates of the roadmaps shown, by day, and those roadmaps.
     key_dates: list[SimpleKeyDate] = []
     key_date_roadmaps: list[SimpleKeyDateRoadmap] = []
+    # The Roadmap filter: every roadmap the reader may read (whether their change applies
+    # there), and the one the read is narrowed to (``roadmap``), if any.
+    roadmaps: list[SimpleKeyDateRoadmap] = []
+    roadmap: "SimpleDocRef | None" = None
 
 
 class DateSuggestionEdit(BaseModel):
