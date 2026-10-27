@@ -51,7 +51,9 @@ Fireflies writes a meeting's summary some time after its transcript and has no "
 field, so each sync, after the new meetings, reads again the stored meetings of the last
 ``REREAD_WINDOW`` (seven days) whose content has no summary yet (the engine's ``lacking``)
 and stores the record when it now has one (owner 2026-10-26). A meeting stored with a
-summary is not read again: a later title or speaker change is not picked up. A
+summary is not read again: a later title or speaker change is not picked up. A re-read
+keeps to the selection and is best effort: one Fireflies refuses or answers with an
+error is passed by (a rate limit or a rejected key still ends the sync). A
 meeting's participants are the people who spoke and the invitees (:func:`people`).
 
 ``selection`` is a fingerprint of what the config selects (``labels`` aside), so a
@@ -1117,22 +1119,39 @@ class FirefliesConnector:
                 yield CursorCheckpoint(final)
 
             # Last, so they never starve new meetings: under the same limits, a rate limit
-            # here ends the sync with everything above saved.
+            # or a rejected key here ends the sync with everything above saved. A meeting
+            # listed but not picked is not read again (nor one fetched above).
             fetched = {entry["id"] for _, entry, fetch in pending if fetch}
+            passed = {entry["id"] for _, entry in listed} - matched
             for external_id in unsummarised:
-                if external_id in fetched:
+                if external_id in fetched or external_id in passed:
                     continue
-                item = await self._reread(fireflies, external_id)
+                try:
+                    item = await self._reread(fireflies, external_id, picked)
+                except FirefliesForbidden as e:
+                    # Best effort: the meeting is passed by, the sync goes on.
+                    item = None
+                    log.warning("a Fireflies re-read failed: %s", type(e).__name__)
+                except (ConnectorRateLimited, ConnectorAuthError, ConnectorConfigError):
+                    raise
+                except ConnectorError as e:
+                    item = None
+                    log.warning("a Fireflies re-read failed: %s", type(e).__name__)
                 if item is not None:
                     yield item
                     yield CursorCheckpoint(final)
 
-    async def _reread(self, fireflies: _Fireflies, external_id: str) -> ItemUpsert | None:
+    async def _reread(
+        self, fireflies: _Fireflies, external_id: str, picked: Selection
+    ) -> ItemUpsert | None:
         """A stored meeting read again: its item when Fireflies now has its summary
-        (with the rest of the record read with it), else None."""
+        (with the rest of the record read with it) and the selection still takes it,
+        else None."""
         data = await fireflies.query(DETAIL_QUERY, id=external_id)
         transcript = data.get("transcript")
         if not _well_formed(transcript) or transcript["id"] != external_id:
+            return None
+        if not picked.matches(transcript, _fireflies_date(transcript.get("date"))):
             return None
         summary = transcript.get("summary")
         summary = summary if isinstance(summary, dict) else {}
