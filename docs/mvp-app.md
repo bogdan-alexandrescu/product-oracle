@@ -171,6 +171,7 @@ verdict on the same section supersedes the earlier item.
 | `POST /v1/simple/meetings` | start a review meeting (owners and the PRD's decider; 403 otherwise): PRD, attendees, change mode (`everyone`, `presenter`, `named` with one or two people), length |
 | `GET /v1/simple/meetings/{id}`, `POST .../join`, `PATCH .../rules`, `POST .../comments`, `POST .../approve`, `POST .../end` | the meeting screen (its `can`), joining, the presenter's change mode and absences, a comment, the decider's Approve (absent required reviewers leave the draft waiting), ending (Oracle drafts the minutes) |
 | `PUT /v1/simple/meetings/{id}/minutes`, `POST .../send` | edit the minutes before sending; send them to the Decisions page and each attendee's Inbox, and by email and to Slack when chosen |
+| `POST /v1/simple/meetings/{id}/minutes/redraft` | Draft again: requeue a failed `meeting_minutes` llm job (owners, the decider, the presenter); while drafting the meeting carries `minutes_job` (`drafting`, `slow` after 2 minutes, `failed`), and Send works on what people wrote whatever that state |
 | `GET /v1/simple/decisions?prd=&goal=&meeting=` | Simple's Decisions: decisions grouped under the meeting that took them (with its minutes), then those taken outside meetings |
 | `POST /v1/simple/changes` with `session_id`, `POST /v1/simple/changes/{id}/accept\|decline` with `{session_id}` | a change (or a decided proposal) made through a meeting's session becomes a meeting decision |
 | `GET /healthz` | liveness + DB check |
