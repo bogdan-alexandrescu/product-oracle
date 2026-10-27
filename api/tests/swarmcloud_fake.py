@@ -94,6 +94,8 @@ class Step:
     last_error: str | None = None
     error_code: str | None = None
     cost: float = 0.0
+    # Held at admission (FakeSwarmCloud.held).
+    held: bool = False
 
 
 @dataclass
@@ -181,6 +183,9 @@ class FakeSwarmCloud:
         self.wind_down_reads = 0
         self._winding: dict[str, int] = {}
         self.step_failure: dict[str, tuple[str, str]] = {}  # step_id -> (code, message)
+        # Agent steps SwarmCloud holds at admission instead of starting (no account with
+        # quota, no room): step_id -> park_reason, PARKED while set, then run on a poll.
+        self.held: dict[str, str] = {}
         # Files an agent step writes instead of the default content: step_id -> files.
         self.step_files: dict[str, dict[str, str]] = {}
         self._n = 0
@@ -622,6 +627,8 @@ class FakeSwarmCloud:
                     s.error_code = "expired"
                     s.last_error = "expired: nobody answered in time"
                     changed = True
+                if s.state == "PARKED" and s.held and s.step_id not in self.held:
+                    s.state, s.park_reason, s.held = "PENDING", None, False
                 if s.state != "PENDING":
                     continue
                 deps = [wf.step(d) for d in s.depends_on]
@@ -652,6 +659,10 @@ class FakeSwarmCloud:
                     s.expires_at = self.now + timedelta(
                         seconds=s.await_input["expires_after_seconds"]
                     )
+                    continue
+                if s.step_id in self.held:
+                    s.state, s.park_reason, s.held = "PARKED", self.held[s.step_id], True
+                    changed = True
                     continue
                 ran += 1
                 self._run_agent(wf, s)

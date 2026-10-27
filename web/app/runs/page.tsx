@@ -42,6 +42,7 @@ import {
   type RunSummary,
 } from "./_lib";
 import { NewRunDialog } from "./_new-run-dialog";
+import { QueueWaitNote } from "./_queue-wait";
 
 const ACTION: Partial<Record<RunSummary["status"], string>> = {
   awaiting_checkpoint: "Decide",
@@ -92,6 +93,7 @@ export default function RunsPage() {
           {r.waiting_on && <span className="sr-only">: {CHECKPOINT_LABEL[r.waiting_on]}</span>}
           {r.draft_rejected && <DraftRejectedChip summary={r.draft_rejected} />}
           {r.sent_back && <SentBackChip summary={r.sent_back} />}
+          {r.queue_wait && <QueueWaitNote wait={r.queue_wait} testId="run-queue-wait" />}
           {/* P3d Cost prominence: cost only where it needs a decision; on every size. */}
           {COST_DECISION_STATUSES.includes(r.status) && <RunCost run={r} />}
         </span>

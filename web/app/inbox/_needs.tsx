@@ -1416,6 +1416,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
             Cancel run
           </Button>
         )}
+        {openRun(r)}
       </>
     ),
   }));
