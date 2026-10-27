@@ -82,6 +82,7 @@ import {
   seedRuns,
   seedScopeReviewRuns,
   seedStoredRefusalRun,
+  seedKeyRenewedRun,
   sendBackEntries,
   BUILD_UNDER_WAY,
   type RunsContext,
@@ -519,6 +520,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * (AC1: it changes nothing, the name included).
  */
 export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+/** SwarmCloud #2498: a running SwarmCloud run whose key Oracle renewed while its step waited in the queue. */
+export const KEY_RENEWED_SCENARIO = "key-renewed";
 /** #561 review: things that failed on a stored Claude-pool refusal, one per surface. */
 export const STORED_REFUSALS_SCENARIO = "stored-refusals";
 /** Tests set this localStorage key to a path ("/v1/questions") to make its GETs fail with a 500. */
@@ -2566,6 +2569,7 @@ function load(): Db {
     // #644 re-review: the "discussion-replies" seed's failed reply stored the refusal on Oct 18.
     for (const m of db.discussions.messages) if (m.status === "failed") m.error = SPENT;
   }
+  if (scenario === KEY_RENEWED_SCENARIO) seedKeyRenewedRun(db.runs!, runsContext(db));
   if (scenario === VERSION_WARNINGS_SCENARIO) {
     const prd = db.documents.find((d) => d.slug === "usage-alerts");
     const roadmap = db.documents.find((d) => d.slug === "usage-alerts-roadmap");
