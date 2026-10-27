@@ -259,7 +259,11 @@ test("on a desktop the up and down arrows do not move a card, and it keeps the f
   await open(page, "board");
   await card(page, "alert-export").focus();
   await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(500);
+  await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
+  await expect(page.getByTestId("draft-banner")).toHaveCount(0);
   await page.keyboard.press("ArrowUp");
+  await page.waitForTimeout(500);
   await expect(column(page, "next").locator('[data-item="alert-export"]')).toBeVisible();
   await expect(page.getByTestId("draft-banner")).toHaveCount(0);
   await page.keyboard.press("ArrowRight");
