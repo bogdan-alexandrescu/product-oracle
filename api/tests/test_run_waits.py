@@ -3,13 +3,18 @@ whose workflow has started no agent 30 minutes after submission, as an Inbox row
 run whose key expired while its step waited in SwarmCloud's queue: what its error says,
 and the one automatic restart. Driven through the fake SwarmCloud, with invented data."""
 
+import uuid
 from datetime import datetime, timedelta
 
 import pytest
+from sqlalchemy import event
 
+from oracle.db import get_engine
 from oracle.runs import service
+from oracle.runs.models import Run
 from oracle.swarm import set_runtime
 from oracle.swarm.settings import get_runtime_settings
+from oracle.tenancy import tenant_session
 from tests.fixtures import seed_auth
 from tests.swarmcloud_fake import FakeSwarmCloud
 from tests.test_runs import get, started, tick
@@ -18,6 +23,10 @@ PUBLIC = "https://oracle.example.test"
 FIRST = "baseline-1-researcher"
 QUOTA = "Waiting for a Claude account: the accounts lent to Oracle have no quota left"
 ROOM = "Waiting for room in SwarmCloud"
+# The reads of one ``GET /v1/inbox`` with no rows but ended runs that waited in SwarmCloud's
+# queue (tests.test_inbox_checkpoint_summary's MAX_INBOX_READS bounds it with 20
+# checkpoints): the same however many of them there are.
+MAX_INBOX_READS = 72
 
 
 @pytest.fixture(autouse=True)
@@ -139,10 +148,23 @@ async def test_a_dependency_wait_shows_nothing_extra(client, owner):
     assert (await _row(client, auth, other["id"]))["queue_wait"] is None
 
 
-@pytest.mark.parametrize("reason", ["CAPACITY_EXHAUSTED", "POOL_EXHAUSTED"])
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "CAPACITY_EXHAUSTED",
+        "POOL_EXHAUSTED",
+        "CONCURRENCY_LIMIT",
+        "NO_SLOT_AVAILABLE",
+        "SLOTS_FULL",
+        "NO_ROOM",
+        "TENANT_QUEUE_FULL",
+    ],
+)
 async def test_capacity_and_pool_waits_read_as_waiting_for_room(client, owner, reason):
-    """protects=capacity and pool waits read "Waiting for room in SwarmCloud";
-    fails_when=they show their raw code; no_claim=the full list of SwarmCloud's codes."""
+    """protects=owner, 2026-10-26: a park reason containing CAPACITY, POOL, CONCURRENCY,
+    SLOT or SLOTS, NO_ROOM or QUEUE_FULL reads "Waiting for room in SwarmCloud";
+    fails_when=one of them shows its raw code (SLOT inside a longer code included);
+    no_claim=the full list of SwarmCloud's codes."""
     _, auth = owner
     swarm = _swarm()
     swarm.held[FIRST] = reason
@@ -150,6 +172,25 @@ async def test_capacity_and_pool_waits_read_as_waiting_for_room(client, owner, r
     await tick(client, auth)
     run = await get(client, auth, run["id"])
     assert run["segments"][0]["queue_wait"]["text"] == ROOM
+
+
+async def test_a_hold_on_the_workflows_first_read_is_since_its_submission(
+    client, owner, monkeypatch
+):
+    """protects=owner, 2026-10-26: "waiting since" is Oracle's first read of the hold, and
+    on the workflow's first read its submission; fails_when=the first read's moment is
+    shown though the workflow was submitted earlier; no_claim=SwarmCloud's own park time."""
+    _, auth = owner
+    swarm = _swarm()
+    clocks = _Clocks(monkeypatch, swarm)
+    swarm.held[FIRST] = "PROVIDER_QUOTA_EXHAUSTED"
+    run = await started(client, auth)
+    submitted = service._now()
+    clocks.forward(20 * 60)
+    await tick(client, auth)
+    run = await get(client, auth, run["id"])
+    since = datetime.fromisoformat(run["segments"][0]["queue_wait"]["since"])
+    assert abs((since - submitted).total_seconds()) < 60, (since, submitted)
 
 
 # --------------------------------------------------------------------------- not started
@@ -226,6 +267,102 @@ async def test_the_not_started_row_clears_when_the_run_ends(client, owner, monke
     assert resp.status_code == 200, resp.text
     assert run["id"] not in [r["id"] for r in (await _inbox(client, auth))["lookups"]]
     assert (await get(client, auth, run["id"]))["segments"][0]["queue_wait"] is None
+
+
+async def _not_started_then_cancelled(client, auth, swarm, clocks) -> str:
+    """A run flagged as not started, then cancelled from the Inbox: its id."""
+    swarm.held[FIRST] = "PROVIDER_QUOTA_EXHAUSTED"
+    run = await started(client, auth)
+    await tick(client, auth)
+    clocks.forward(31 * 60)
+    await tick(client, auth)
+    resp = await client.post(f"/v1/runs/{run['id']}/cancel", headers=auth)
+    assert resp.status_code == 200, resp.text
+    return run["id"]
+
+
+class _InboxReads:
+    """The statements of one Inbox read, and the runs its stuck-runs read loaded."""
+
+    def __init__(self, monkeypatch) -> None:
+        self.statements: list[str] = []
+        self.loaded: list[uuid.UUID] = []
+        real = service._manages
+
+        def manages(principal, run):
+            self.loaded.append(run.id)
+            return real(principal, run)
+
+        monkeypatch.setattr(service, "_manages", manages)
+
+    async def read(self, client, auth) -> dict:
+        self.statements.clear()
+        self.loaded.clear()
+
+        def count(conn, cursor, statement, *args):
+            self.statements.append(statement)
+
+        engine = get_engine().sync_engine
+        event.listen(engine, "before_cursor_execute", count)
+        try:
+            return await _inbox(client, auth)
+        finally:
+            event.remove(engine, "before_cursor_execute", count)
+
+    @property
+    def reads(self) -> int:
+        return sum(1 for st in self.statements if "SAVEPOINT" not in st)
+
+
+async def test_a_finished_run_with_a_stale_wait_is_neither_loaded_nor_shown(
+    client, owner, monkeypatch
+):
+    """protects=#732 review: the run's queue_wait knob goes when the run ends, and a
+    finished run that still carries one (written before the fix) is neither loaded by the
+    Inbox nor shown; fails_when=the knob stays on a cancelled run, or the Inbox's
+    stuck-runs read loads a finished run for it; no_claim=the other knobs' rows."""
+    tenant_id, auth = owner
+    swarm = _swarm()
+    clocks = _Clocks(monkeypatch, swarm)
+    run_id = await _not_started_then_cancelled(client, auth, swarm, clocks)
+    async with tenant_session(tenant_id) as s:
+        run = await s.get(Run, uuid.UUID(run_id))
+        assert run is not None and run.status == "cancelled"
+        assert "queue_wait" not in (run.knobs or {})
+        # A finished run's stale knob, as runs that ended before the fix kept it.
+        stale = {
+            "workflow_id": "wf-stale",
+            "seq": 1,
+            "submitted_at": "2026-01-01T00:00:00+00:00",
+            "started": False,
+            "held": {"step_id": FIRST, "code": "PROVIDER_QUOTA_EXHAUSTED", "since": "x"},
+        }
+        run.knobs = {**(run.knobs or {}), "queue_wait": stale}
+        await s.commit()
+    reads = _InboxReads(monkeypatch)
+    inbox = await reads.read(client, auth)
+    assert uuid.UUID(run_id) not in reads.loaded
+    assert run_id not in [r["id"] for r in inbox["lookups"]]
+    assert (await _row(client, auth, run_id))["queue_wait"] is None
+
+
+async def test_the_inbox_read_does_not_grow_with_finished_runs(client, owner, monkeypatch):
+    """protects=#732 review: the Inbox's stuck-runs read selects only running runs' waits,
+    so its statements and the runs it loads stay the same however many runs waited in
+    SwarmCloud's queue and ended; fails_when=a finished run that waited is loaded, or
+    the read count grows from one such run to three; no_claim=wall time."""
+    _, auth = owner
+    swarm = _swarm()
+    clocks = _Clocks(monkeypatch, swarm)
+    reads = _InboxReads(monkeypatch)
+    ended = [await _not_started_then_cancelled(client, auth, swarm, clocks)]
+    await reads.read(client, auth)
+    one, loaded_one = reads.reads, len(reads.loaded)
+    ended += [await _not_started_then_cancelled(client, auth, swarm, clocks) for _ in range(2)]
+    await reads.read(client, auth)
+    assert not {uuid.UUID(i) for i in ended} & set(reads.loaded)
+    assert len(reads.loaded) == loaded_one == 0
+    assert reads.reads == one <= MAX_INBOX_READS, (reads.reads, one)
 
 
 # --------------------------------------------------------------------------- queued expiry
