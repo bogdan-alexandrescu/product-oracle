@@ -17,6 +17,10 @@ Test cards (protects / fails_when / no_claim):
   in UTC) "this quarter" is Q4 2026 and "next quarter" Q1 2027; fails_when=the server's
   (UTC) day decides the quarter; no_claim=other zones (the company's setting is read the
   same way).
+- test_a_period_already_begun_says_so: protects=a move to a period that has begun (this
+  quarter, this month, the current Qn) says in its reply that the start is a past day,
+  and a future period's reply does not; fails_when=the card starts on a past day without
+  a word; no_claim=the card's dates (test_relative_times_move_dates).
 - test_only_understood_routes_the_rest_to_ask: protects=with only_understood, a line S9
   understands (a change request, who owns, who decides, when is) gets its reply in the
   thread with understood=true, while any other line (or a question about something not on
@@ -106,6 +110,18 @@ async def test_relative_times_use_the_company_time_zone(client, monkeypatch):
     assert nxt["cards"][0]["after"] == {"start_date": "2027-01-01", "end_date": "2027-03-31"}
     month = await say(client, ctx, "owner", "move Partner API to next month")
     assert month["cards"][0]["after"] == {"start_date": "2027-01-01", "end_date": "2027-01-31"}
+
+
+async def test_a_period_already_begun_says_so(client):
+    ctx = await make_people()
+    await World(ctx).build()
+    for when, began in (("this quarter", "Oct 1"), ("this month", "Nov 1"), ("Q4", "Oct 1")):
+        m = await say(client, ctx, "owner", f"move Partner API to {when}")
+        assert m["kind"] == "cards", when
+        assert f"That period began {began}, so the move starts on a past day." in m["body"], when
+    for when in ("next quarter", "next month", "Q2"):
+        m = await say(client, ctx, "owner", f"move Partner API to {when}")
+        assert "past day" not in m["body"], when
 
 
 async def test_only_understood_routes_the_rest_to_ask(client):

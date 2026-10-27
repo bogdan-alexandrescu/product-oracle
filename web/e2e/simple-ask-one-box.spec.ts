@@ -65,8 +65,8 @@ for (const [phone, dark] of [
     });
 
     test(`one box: plan lines get S9's answer, any other line goes to Oracle's Ask (${where})`, async ({ page }) => {
-      // protects: the Simple Ask panel shows exactly one question box and one Send, with the This page / General switch; "who owns <item>" is answered in the panel's plan thread; "What should we cut first?" opens Oracle's Ask chat about the page (the old box's thread) with the line in it, and New chat lists it under Recent
-      // fails_when: two boxes show, a plan question goes to the model's Ask, or an other line gets "I did not understand"
+      // protects: the Simple Ask panel shows exactly one question box and one Send, with the This page / General switch; "who owns <item>" is answered in the panel's plan thread; "What should we cut first?" opens Oracle's Ask chat about the page (the old box's thread) with the line in it; in that thread's one box a change line gets S9's move card and the next other line goes on to Ask in the same thread; New chat lists it under Recent
+      // fails_when: two boxes show, a plan question goes to the model's Ask (in the list or in a started thread), or an other line gets "I did not understand"
       // no_claim: the model's answer itself (the mock streams a canned reply); Detailed's panel (hop-panel.spec.ts)
       await signIn(page, EMAILS.commenter, "/simple/roadmap");
       if (dark) await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -86,18 +86,32 @@ for (const [phone, dark] of [
       await expect(panel.getByTestId("discussion-thread")).toBeVisible();
       await expect(panel.getByTestId("discussion-thread")).toContainText("What should we cut first?");
       await expect(page.getByText("I did not understand that.")).toHaveCount(0);
+      // The same thread's one box: a change line gets S9's card there, any other line stays Ask's.
+      const discussion = panel.getByTestId("discussion-thread");
+      await expect(panel.getByRole("textbox")).toHaveCount(1);
+      await discussion.getByRole("textbox", { name: "Message", exact: true }).fill("move Alert rules engine to next quarter");
+      await tap(discussion.getByRole("button", { name: "Send" }));
+      await expect(discussion.getByTestId("chat-card").filter({ hasText: "Move Alert rules engine to 1 Jan" })).toBeVisible();
+      await expect(discussion.getByTestId("discussion-message").filter({ hasText: "move Alert rules engine" })).toHaveCount(0);
+      await discussion.getByRole("textbox", { name: "Message", exact: true }).fill("And what is missing?");
+      await tap(discussion.getByRole("button", { name: "Send" }));
+      await expect(discussion.getByTestId("discussion-message").filter({ hasText: "And what is missing?" })).toHaveCount(1);
+      await expect(page.getByText("I did not understand that.")).toHaveCount(0);
       await tap(panel.getByRole("button", { name: "New chat" }));
       await expect(panel.getByRole("region", { name: "Recent" }).getByTestId("hop-chat-row")).not.toHaveCount(0);
       await expect(panel.getByRole("textbox")).toHaveCount(1);
     });
 
     test(`"next quarter" moves an item; the card's fixes wrap and its lines name both items (${where})`, async ({ page }) => {
-      // protects: "move <item> to next quarter" gives a move card from Jan 1 (not "I did not understand"); its red lines name each dependent first and the moved item as what it depends on; every fix button stays inside the card (labels wrap, nothing cut off) and applying one fix proposes it under the commenter's rights
+      // protects: "this quarter" (begun Oct 1) says the move starts on a past day; "move <item> to next quarter" gives a move card from Jan 1 (not "I did not understand"); its red lines name each dependent first and the moved item as what it depends on; every fix button stays inside the card (labels wrap, nothing cut off) and applying one fix proposes it under the commenter's rights
       // fails_when: the relative time is refused, a line names only the moved item, or a fix button pokes out of the card or panel
       // no_claim: the other phrasings (API tests per phrasing); the fixes' resulting dates (test_simple_review_fixes.py)
       await signIn(page, EMAILS.commenter, "/simple/roadmap");
       const panel = await openAsk(page, phone);
+      await say(panel, "move Alert rules engine to this quarter");
+      await expect(panel.getByTestId("chat-message").last()).toContainText("That period began Oct 1, so the move starts on a past day.");
       await say(panel, "move Alert rules engine to next quarter");
+      await expect(panel.getByTestId("chat-message").last()).not.toContainText("past day");
       const card = panel.getByTestId("chat-card").filter({ hasText: "Move Alert rules engine to 1 Jan" });
       await expect(card).toBeVisible();
       const flags = card.getByTestId("chat-card-flag");
