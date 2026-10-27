@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Notice, SegmentedControl, toast } from "@/components/ds";
@@ -359,7 +360,9 @@ function DecisionTray({
 export function SimpleRoadmap() {
   const { me, can } = useMe();
   const phone = usePhone();
-  const [f, setF] = useState<Filters>(NO_FILTERS);
+  // A link may open the roadmap filtered to one PRD (the plan strip's rows: ?prd=<slug>).
+  const params = useSearchParams();
+  const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "" }));
   const [format, setFormat] = useState<Format>("timeline");
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);

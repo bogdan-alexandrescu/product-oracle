@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Avatar, Block, HomeCard, HomeRow, PlanStrip, RowIcon, Top } from "@/app/simple/_home/cards";
+import { Avatar, Block, HomeCard, HomeRow, RowIcon, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
 import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
+import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { SimplePage } from "@/components/simple/SimplePage";
+import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -18,7 +20,9 @@ import {
   greeting,
   NEW_FLOW_OPS,
   OP_WORDS,
-  planStrip,
+  planByMonth,
+  planInput,
+  prdInPlay,
   waitSentence,
   type BrokenLink,
   type GoalTile,
@@ -110,7 +114,19 @@ export default function SimpleHome() {
     return ids;
   }, [toDecide, broken]);
   const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems]);
-  const strip = useMemo(() => planStrip(roadmap.data), [roadmap.data]);
+  // The plan this quarter: the PRD in play (the top PRD by priority when several) by month.
+  const priorities = useQuery(k("priorities"), () => unwrap(api.GET("/v1/simple/priorities")), { keepPrevious: true });
+  // With several PRDs in play, chosen once the ranking answered (or failed), so the strip never
+  // switches PRDs under the reader; with one, at once (undefined: waiting on the ranking).
+  const ranked = priorities.data !== undefined || !!priorities.error;
+  const planPrd = useMemo(
+    () => prdInPlay(roadmap.data, ranked ? (priorities.data?.rows ?? []).map((r) => r.item_id) : null),
+    [ranked, roadmap.data, priorities.data],
+  );
+  const plan = useMemo(
+    () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").map(planInput), roadmap.data.today) : null),
+    [roadmap.data, planPrd],
+  );
   const draft = (drafts.data ?? []).find((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
   const proposalRows = toDecide.length > 0 || decidesAll ? toDecide : mine;
   const proposalTitle = toDecide.length > 0 || decidesAll ? "Proposals on your items" : "Your proposals waiting";
@@ -453,8 +469,10 @@ export default function SimpleHome() {
         <Block q={roadmap} testId="home-plan">
           {() => (
             <>
-              {strip && strip.bars.length > 0 ? (
-                <PlanStrip strip={strip} />
+              {planPrd === undefined ? (
+                <Loading />
+              ) : plan && planPrd ? (
+                <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" />
               ) : (
                 <p className="simple-small" data-testid="home-plan-empty">
                   Nothing planned this quarter yet.

@@ -559,6 +559,8 @@ export const MOCK_FAIL_ONCE_KEY = "po-mock-fail-once";
 /** Tests set this localStorage key to a path ("/v1/decisions/5") to make its GETs answer late, after calls made later, or to "METHOD /path" for that call (made at once, answered late). */
 export const MOCK_SLOW_KEY = "po-mock-slow";
 export const MOCK_SLOW_MS = 1500;
+/** A test may hold the slow call longer (ms, in localStorage). */
+export const MOCK_SLOW_MS_KEY = "po-mock-slow-ms";
 /**
  * D8: tests set this localStorage key to a member's email to have them change a checkpoint's
  * shared draft after the page loaded it: the next decide bumps the draft's revision by one
@@ -862,6 +864,37 @@ function seedSimpleDecidersScenario(): Db {
 }
 
 /**
+ * The plan strip's "+N more" (#723 polish): "simple-home" plus ten invented items on the
+ * onboarding roadmap (Guided setup, the top PRD by priority), each with its own milestone.
+ */
+function seedSimpleHomeMilestonesScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const rm = db.simple_roadmap!;
+  for (let i = 1; i <= 10; i++) {
+    const key = `setup-step-${i}`;
+    rm.items.push({ key, title: `Setup step ${i}`, horizon: "now", roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: 5 * i, end: 5 * i + 20, source: "typed", milestone: { name: `Step ${i}`, day: 5 * i + 20 } });
+    rm.ids[key] = stableUuid(`simple-item/${key}`);
+  }
+  return db;
+}
+
+/**
+ * One PRD in play (#723 polish review): "simple-home" with every item but the onboarding
+ * roadmap's (Guided setup) moved half a year out, so Home's plan needs no ranking.
+ */
+function seedSimpleHomeOnePrdScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  for (const i of db.simple_roadmap!.items) {
+    if (i.roadmap === "onboarding-roadmap") continue;
+    // An undated item would be estimated into this quarter: dated after it instead.
+    if (i.start == null || i.end == null) Object.assign(i, { start: 180, end: 220, source: "typed" });
+    else Object.assign(i, { start: i.start + 180, end: i.end + 180 });
+    if (i.milestone) i.milestone.day += 180;
+  }
+  return db;
+}
+
+/**
  * #723 S1 Home's "simple-home" scenario: the default company whose confirmed goals are those
  * Simple's roadmap items serve (Grow retention, Faster activation) plus a guardrail goal, each
  * with a weight and a metric path; two proposals the commenter made (routed to the owners);
@@ -875,7 +908,7 @@ function seedSimpleHomeScenario(): Db {
   const goal = (key: string, title: string, attrs: Record<string, unknown>) =>
     db.baseline.entities.push({ ...template, id: stableUuid(`simple-goal/${key}`), key, title, body: null, attrs, status: "confirmed", locked: false, locked_by: null, locked_at: null });
   goal("grow-retention", "G-R Grow retention", { metric: "teams with weekly alerts on", unit: "teams", comparison: "at_least", start: 50, current: 100, current_as_of: "2026-10-01", target: 200, weight: 3, horizon: "medium" });
-  goal("faster-activation", "G-A Faster activation", { metric: "new teams set up in a day", unit: "%", comparison: "at_least", start: 30, target: 60, weight: 2, horizon: "short" });
+  goal("faster-activation", "G-A Faster activation", { metric: "monthly revenue from teams set up in a day", unit: "USD", comparison: "at_least", start: 30000, target: 50000, weight: 2, horizon: "short" });
   goal("quiet-alerts", "G-Q Keep alerts quiet", { metric: "teams muting alerts", unit: "teams", comparison: "at_most", start: 12, target: 10, weight: 1, horizon: "short", guardrail: true });
   const owners = db.members.filter((m) => m.role === "owner" && m.status !== "disabled").map((m) => m.id);
   const roles = Object.fromEntries(db.members.map((m) => [m.id, m.role]));
@@ -2556,6 +2589,10 @@ function load(): Db {
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
+              : scenario === "simple-home-milestones"
+                ? seedSimpleHomeMilestonesScenario
+              : scenario === "simple-home-one-prd"
+                ? seedSimpleHomeOnePrdScenario
               : scenario === "simple-chat"
                 ? () => {
                     const db = seedSimpleHomeScenario();
@@ -4974,7 +5011,8 @@ async function route(db: Db, req: Request): Promise<Response> {
   if (roadmapRes) return roadmapRes;
   // Simple S2 (#723): the company-wide roadmap and Oracle's date suggestions.
   // Simple S5: one-pagers and their line edits (edit_line) through the change engine.
-  db.simple_one_pager ??= seedOnePager();
+  // "one-pager-no-owner": the PRD was imported by a service token (no owner yet).
+  db.simple_one_pager ??= seedOnePager(localStorage.getItem(MOCK_SCENARIO_KEY) === "one-pager-no-owner");
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
@@ -5635,7 +5673,8 @@ export async function mockFetch(req: Request): Promise<Response> {
   queue = next.catch(() => undefined);
   const slow = localStorage.getItem(MOCK_SLOW_KEY);
   if ((req.method === "GET" && url.pathname === slow) || slow === `${req.method} ${url.pathname}`) {
-    return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), MOCK_SLOW_MS)));
+    const ms = Number(localStorage.getItem(MOCK_SLOW_MS_KEY)) || MOCK_SLOW_MS;
+    return next.then((res) => new Promise<Response>((r) => setTimeout(() => r(res), ms)));
   }
   return next;
 }
