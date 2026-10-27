@@ -74,6 +74,7 @@ export const ORIGIN_LABEL: Record<DecisionSummary["origin"], string> = {
   checkpoint: "A run's stop",
   request_decline: "A request said no to",
   pricing: "A pricing memo",
+  meeting: "A review meeting",
 };
 
 export const VERDICT_LABEL: Record<Schemas["DecisionReviewOut"]["verdict"], string> = {

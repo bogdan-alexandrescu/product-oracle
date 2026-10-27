@@ -68,6 +68,8 @@ interface SimpleDb {
   people?: Record<string, string>;
   /** S4: proposed decisions naming an item (item key -> decisions). */
   decisions?: Record<string, { number: number; title: string }[]>;
+  /** S8: decided decisions that changed each item (by item id), newest first. */
+  decided_in?: Record<string, { id: string; number: number; title: string }[]>;
 }
 
 /** A reader, with every member's role (D-a: a track owner decides only as an approver or owner). */
@@ -440,6 +442,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         ...(s.section ? [`From ${rm.prd}, section ${s.section}.`] : []),
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
+      // S8: the decided decisions that changed the item (./simple-meetings.ts records them).
+      decided_in: [...(db.decided_in?.[db.ids[s.key]] ?? [])],
     };
   });
   const prd = q.get("prd");

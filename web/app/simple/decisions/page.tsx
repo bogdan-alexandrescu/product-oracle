@@ -1,10 +1,17 @@
-import { SimplePage, SimplePlaceholder } from "@/components/simple/SimplePage";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
-/** Simple's Decisions (#723 S1): the screen arrives with S8; until then, /company/decisions in Detailed. */
-export default function SimpleDecisions() {
+import { Loading } from "@/components/ui";
+import { SIMPLE_MODE } from "@/lib/simple-mode";
+
+import { SimpleDecisions } from "./_decisions";
+
+/** Simple S8 (#723): Decisions, direction B "By meeting". */
+export default function SimpleDecisionsPage() {
+  if (!SIMPLE_MODE) notFound();
   return (
-    <SimplePage title="Decisions">
-      <SimplePlaceholder arrives="every decision taken in meetings and across Simple, newest first, linked from the items it changed." detailedHref="/company/decisions" detailedLabel="Company › Decisions" />
-    </SimplePage>
+    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+      <SimpleDecisions />
+    </Suspense>
   );
 }

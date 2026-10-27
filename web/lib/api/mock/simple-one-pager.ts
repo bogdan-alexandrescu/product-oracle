@@ -46,7 +46,11 @@ export interface OnePagerDb {
   sections: Sec[];
   blocks: { key: string; title: string; rules: string; kind: Schemas["OnePagerBlock"]["kind"]; lines: SeedLine[] }[];
   draft: null | { id: string; base: number; participants: string[]; lines: Record<string, string>; sections: Record<string, string> };
-  changes: (Change & { session_open: boolean; in_meeting: boolean })[];
+  changes: (Change & { session_open: boolean; in_meeting: boolean; meeting_title?: string | null })[];
+  /** S8: decided decisions that changed each line (by line id), newest first (./simple-meetings.ts). */
+  decisions?: Record<string, { id: string; number: number; title: string }[]>;
+  /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
+  approval?: { approved_in: string; waiting_on: { id: string; name: string }[] } | null;
 }
 
 const DOC_ID = stableUuid("simple-one-pager-doc");
@@ -189,7 +193,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
       before: String(c.before.line ?? ""), after: String(c.after.line ?? ""), sections: patches(c),
       can_undo: kind === "change" && c.by === ctx.id && c.session_open,
       can_decide: kind === "proposal" && (ctx.role === "owner" || c.routed_to.includes(ctx.id)),
-      adds_feature: lineId.startsWith("bets-"), flow: null,
+      adds_feature: lineId.startsWith("bets-"), flow: null, meeting_title: c.meeting_title ?? null,
     };
   };
   const notes = [...live.map((c) => note(c, "change")), ...shown.map((c) => note(c, "proposal"))];
@@ -214,6 +218,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
         return {
           id: l.id, text, source_keys: l.keys, metric: edited && b.kind === "metrics" ? metricOf(text) : l.metric ?? null,
           state: edited ? "edited" : proposed.has(l.id) ? "proposal" : "published",
+          decisions: [...(db.decisions?.[l.id] ?? [])],
         };
       }),
     })),
@@ -225,7 +230,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
     notes,
     draft: sees && db.draft
-      ? { id: db.draft.id, status: "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: false, waiting_on: [], can_submit: decides(ctx) }
+      ? { id: db.draft.id, status: "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: !!db.approval, waiting_on: db.approval?.waiting_on ?? [], can_submit: decides(ctx), approved_in: db.approval?.approved_in ?? null }
       : null,
     changes_in_review: hiddenDraft + (proposals.length - shown.length),
     can_edit: decides(ctx),

@@ -1660,6 +1660,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
     launches: [],
     // A5: access request rows are added by the server (./server.ts).
     access_requests: [],
+    // Simple S8: minutes sent to me as an attendee (./simple-meetings.ts adds them).
+    simple_minutes: [],
     // H10 request rows: none in the mock yet (lane 2 adds the requests-why-not scenario).
     requests: [],
     // INT2: intakes Oracle couldn't read twice in a row; none in the mock yet (lane 2 adds them).

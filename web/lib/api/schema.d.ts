@@ -12455,6 +12455,220 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/meetings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple Meetings
+         * @description Upcoming reviews from the rituals, live meetings and past ones (newest first).
+         */
+        get: operations["list_simple_meetings"];
+        put?: never;
+        /**
+         * Start Simple Meeting
+         * @description Start a review meeting: owners and the PRD's decider only.
+         */
+        post: operations["start_simple_meeting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Meeting Options
+         * @description The start sheet: the PRDs (each with who may start it and its default attendees),
+         *     the members, and the scheduled review it starts from.
+         */
+        get: operations["get_simple_meeting_options"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Simple Meeting */
+        get: operations["get_simple_meeting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Join Simple Meeting */
+        post: operations["join_simple_meeting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set Simple Meeting Rules
+         * @description The presenter's change mode (everyone, only the presenter, the presenter plus one
+         *     or two named people) and who is absent.
+         */
+        patch: operations["set_simple_meeting_rules"];
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Comment In Simple Meeting */
+        post: operations["comment_in_simple_meeting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve In Simple Meeting
+         * @description The decider's Approve: the present required reviewers approve with them; absent
+         *     ones get an Inbox request and the draft publishes when they approve.
+         */
+        post: operations["approve_in_simple_meeting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/end": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End Simple Meeting */
+        post: operations["end_simple_meeting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/minutes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Edit Simple Meeting Minutes */
+        put: operations["edit_simple_meeting_minutes"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/meetings/{meeting_id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Simple Meeting Minutes
+         * @description Post the minutes to the Decisions page and each attendee's Inbox; email the
+         *     attendees and post to Slack when chosen.
+         */
+        post: operations["send_simple_meeting_minutes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Decisions
+         * @description Every decision newest first, grouped under the meeting that took it (beside its
+         *     minutes), then those taken outside meetings; filter by PRD, goal or meeting.
+         */
+        get: operations["get_simple_decisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/priorities": {
         parameters: {
             query?: never;
@@ -18932,7 +19146,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting";
             /**
              * Reversibility
              * @enum {string}
@@ -19227,7 +19441,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing";
+            origin: "manual" | "oracle" | "version_approval" | "assumption" | "blocker" | "pushback_override" | "priority_override" | "autonomy" | "checkpoint" | "request_decline" | "pricing" | "meeting";
             /**
              * Reversibility
              * @enum {string}
@@ -24095,6 +24309,11 @@ export interface components {
              * @default []
              */
             simple_approvals: components["schemas"]["InboxSimpleApproval"][];
+            /**
+             * Simple Minutes
+             * @default []
+             */
+            simple_minutes: components["schemas"]["InboxSimpleMinutes"][];
         };
         /**
          * InboxOutcome
@@ -24453,6 +24672,28 @@ export interface components {
              * @enum {string}
              */
             state: "new" | "open" | "done";
+        };
+        /**
+         * InboxSimpleMinutes
+         * @description A meeting's minutes, sent to each attendee (``simple_minutes``).
+         */
+        InboxSimpleMinutes: {
+            /**
+             * Meeting Id
+             * Format: uuid
+             */
+            meeting_id: string;
+            /** Title */
+            title: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Decisions */
+            decisions: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "new" | "open";
         };
         /** InboxSource */
         InboxSource: {
@@ -26712,7 +26953,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "meeting_minutes" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -28566,6 +28807,8 @@ export interface components {
             waiting_on: components["schemas"]["SimplePersonRef"][];
             /** Can Submit */
             can_submit: boolean;
+            /** Approved In */
+            approved_in?: string | null;
         };
         /**
          * OnePagerFlow
@@ -28627,6 +28870,11 @@ export interface components {
              * @enum {string}
              */
             state: "published" | "edited" | "proposal";
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["SimpleOpenDecision"][];
         };
         /** OnePagerMetric */
         OnePagerMetric: {
@@ -28681,6 +28929,8 @@ export interface components {
             can_undo: boolean;
             /** Can Decide */
             can_decide: boolean;
+            /** Meeting Title */
+            meeting_title?: string | null;
             /** Adds Feature */
             adds_feature: boolean;
             flow?: components["schemas"]["OnePagerFlow"] | null;
@@ -35943,6 +36193,46 @@ export interface components {
              */
             runs_tokens_revoked: number;
         };
+        /** SimpleActionItemIn */
+        SimpleActionItemIn: {
+            /** Title */
+            title: string;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Due Date */
+            due_date?: string | null;
+        };
+        /** SimpleActionItemOut */
+        SimpleActionItemOut: {
+            /** Title */
+            title: string;
+            /** Owner Id */
+            owner_id?: string | null;
+            /** Due Date */
+            due_date?: string | null;
+            /** Owner Name */
+            owner_name?: string | null;
+        };
+        /** SimpleAttendee */
+        SimpleAttendee: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Roles
+             * @default []
+             */
+            roles: ("decider" | "reviewer" | "owner" | "presenter")[];
+            /**
+             * Present
+             * @default true
+             */
+            present: boolean;
+        };
         /**
          * SimpleChangeConflict
          * @description The 409 detail: what the target holds now and who changed it last (null: not
@@ -36086,6 +36376,85 @@ export interface components {
         SimpleDecisionIn: {
             /** Reason */
             reason?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+        };
+        /** SimpleDecisionRow */
+        SimpleDecisionRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            /** Origin */
+            origin: string;
+            /** Status */
+            status: string;
+            approver: components["schemas"]["SimplePersonRef"] | null;
+            /** Decided At */
+            decided_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Subjects
+             * @default []
+             */
+            subjects: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * SimpleDecisionsOut
+         * @description Simple's Decisions (direction B "By meeting"): the meetings' decisions grouped under
+         *     them, newest first, then the decisions taken outside meetings.
+         */
+        SimpleDecisionsOut: {
+            /** Meetings */
+            meetings: components["schemas"]["SimpleMeetingGroup"][];
+            /** Other */
+            other: components["schemas"]["SimpleDecisionRow"][];
+            /** Prds */
+            prds: components["schemas"]["SimpleFilterOption"][];
+            /** Goals */
+            goals: components["schemas"]["SimpleFilterOption"][];
+            /** Meeting Options */
+            meeting_options: components["schemas"]["SimpleFilterOption"][];
+        };
+        /** SimpleDelivery */
+        SimpleDelivery: {
+            /**
+             * Decisions
+             * @default true
+             */
+            decisions: boolean;
+            /**
+             * Inbox
+             * @default true
+             */
+            inbox: boolean;
+            /**
+             * Email
+             * @default false
+             */
+            email: boolean;
+            /** Email Status */
+            email_status?: string | null;
+            /**
+             * Slack
+             * @default false
+             */
+            slack: boolean;
+            /** Slack Status */
+            slack_status?: string | null;
+            /** Slack Channel */
+            slack_channel?: string | null;
         };
         /** SimpleDocRef */
         SimpleDocRef: {
@@ -36218,6 +36587,13 @@ export interface components {
              */
             can_withdraw: boolean;
         };
+        /** SimpleFilterOption */
+        SimpleFilterOption: {
+            /** Id */
+            id: string;
+            /** Title */
+            title: string;
+        };
         /** SimpleFlag */
         SimpleFlag: {
             /**
@@ -36317,6 +36693,245 @@ export interface components {
              */
             source: "item" | "track";
         };
+        /** SimpleMeetingBrief */
+        SimpleMeetingBrief: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            prd: components["schemas"]["SimpleDocRef"];
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "one_pager" | "roadmap" | "ritual";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "live" | "ended";
+            presenter: components["schemas"]["SimplePersonRef"];
+            /** Attendees */
+            attendees: components["schemas"]["SimpleAttendee"][];
+            /** Length Min */
+            length_min: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Decisions */
+            decisions: number;
+            /** Minutes State */
+            minutes_state?: ("drafting" | "ready" | "sent") | null;
+            /** Summary */
+            summary?: string | null;
+        };
+        /** SimpleMeetingCan */
+        SimpleMeetingCan: {
+            /** Change */
+            change: boolean;
+            /** Set Rules */
+            set_rules: boolean;
+            /** Approve */
+            approve: boolean;
+            /** End */
+            end: boolean;
+        };
+        /** SimpleMeetingCommentIn */
+        SimpleMeetingCommentIn: {
+            /** Text */
+            text: string;
+            /** Subjects */
+            subjects?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * SimpleMeetingDecision
+         * @description A decision taken in a meeting: a ``decisions`` row, origin ``meeting``.
+         */
+        SimpleMeetingDecision: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Title */
+            title: string;
+            approver: components["schemas"]["SimplePersonRef"];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /**
+             * Subjects
+             * @default []
+             */
+            subjects: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Change Ids
+             * @default []
+             */
+            change_ids: string[];
+        };
+        /** SimpleMeetingGroup */
+        SimpleMeetingGroup: {
+            meeting: components["schemas"]["SimpleMeetingBrief"];
+            minutes: components["schemas"]["SimpleMinutes"] | null;
+            /** Decisions */
+            decisions: components["schemas"]["SimpleDecisionRow"][];
+        };
+        /** SimpleMeetingIn */
+        SimpleMeetingIn: {
+            /** Prd */
+            prd: string;
+            /** Title */
+            title?: string | null;
+            /**
+             * Origin
+             * @default one_pager
+             * @enum {string}
+             */
+            origin: "one_pager" | "roadmap" | "ritual";
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /** Attendee Ids */
+            attendee_ids?: string[];
+            /**
+             * Change Mode
+             * @default everyone
+             * @enum {string}
+             */
+            change_mode: "everyone" | "presenter" | "named";
+            /** Change People */
+            change_people?: string[];
+            /**
+             * Length Min
+             * @default 60
+             */
+            length_min: number;
+        };
+        /** SimpleMeetingOut */
+        SimpleMeetingOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            prd: components["schemas"]["SimpleDocRef"];
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "one_pager" | "roadmap" | "ritual";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "live" | "ended";
+            presenter: components["schemas"]["SimplePersonRef"];
+            /** Attendees */
+            attendees: components["schemas"]["SimpleAttendee"][];
+            /** Length Min */
+            length_min: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Ended At */
+            ended_at: string | null;
+            /** Decisions */
+            decisions: number;
+            /** Minutes State */
+            minutes_state?: ("drafting" | "ready" | "sent") | null;
+            /** Summary */
+            summary?: string | null;
+            /**
+             * Session Id
+             * Format: uuid
+             */
+            session_id: string;
+            /** Occurrence Id */
+            occurrence_id?: string | null;
+            /**
+             * Change Mode
+             * @enum {string}
+             */
+            change_mode: "everyone" | "presenter" | "named";
+            /**
+             * Change People
+             * @default []
+             */
+            change_people: components["schemas"]["SimplePersonRef"][];
+            /**
+             * Roadmap Ids
+             * @default []
+             */
+            roadmap_ids: string[];
+            /**
+             * Meeting Decisions
+             * @default []
+             */
+            meeting_decisions: components["schemas"]["SimpleMeetingDecision"][];
+            /**
+             * Open Decisions
+             * @default []
+             */
+            open_decisions: components["schemas"]["SimpleOpenDecision"][];
+            /**
+             * Pending Proposals
+             * @default []
+             */
+            pending_proposals: components["schemas"]["SimpleChangeOut"][];
+            /**
+             * Drafts
+             * @default []
+             */
+            drafts: components["schemas"]["SimpleDraftOut"][];
+            minutes?: components["schemas"]["SimpleMinutes"] | null;
+            delivery?: components["schemas"]["SimpleDelivery"] | null;
+            slack: components["schemas"]["SimpleSlackState"];
+            /** Email Available */
+            email_available: boolean;
+            can: components["schemas"]["SimpleMeetingCan"];
+            /**
+             * Not Approved
+             * @default []
+             */
+            not_approved: components["schemas"]["SimpleNotApproved"][];
+        };
+        /** SimpleMeetingRulesIn */
+        SimpleMeetingRulesIn: {
+            /** Change Mode */
+            change_mode?: ("everyone" | "presenter" | "named") | null;
+            /** Change People */
+            change_people?: string[] | null;
+            /** Absent Ids */
+            absent_ids?: string[] | null;
+        };
+        /** SimpleMeetingsOut */
+        SimpleMeetingsOut: {
+            /** Upcoming */
+            upcoming: components["schemas"]["SimpleUpcomingMeeting"][];
+            /** Live */
+            live: components["schemas"]["SimpleMeetingBrief"][];
+            /** Past */
+            past: components["schemas"]["SimpleMeetingBrief"][];
+        };
         /** SimpleMilestone */
         SimpleMilestone: {
             /**
@@ -36345,6 +36960,61 @@ export interface components {
             status: "planned" | "done" | "dropped";
             /** Item Ids */
             item_ids: string[];
+        };
+        /** SimpleMinutes */
+        SimpleMinutes: {
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /**
+             * Open Questions
+             * @default []
+             */
+            open_questions: string[];
+            /**
+             * Action Items
+             * @default []
+             */
+            action_items: components["schemas"]["SimpleActionItemOut"][];
+            /**
+             * Waits
+             * @default []
+             */
+            waits: components["schemas"]["SimpleWait"][];
+            /**
+             * Written By
+             * @default extract
+             * @enum {string}
+             */
+            written_by: "extract" | "oracle" | "edited";
+        };
+        /** SimpleMinutesIn */
+        SimpleMinutesIn: {
+            /**
+             * Summary
+             * @default
+             */
+            summary: string;
+            /** Open Questions */
+            open_questions?: string[];
+            /** Action Items */
+            action_items?: components["schemas"]["SimpleActionItemIn"][];
+        };
+        /**
+         * SimpleNotApproved
+         * @description A roadmap a meeting's session worked on that the caller does not approve.
+         */
+        SimpleNotApproved: {
+            /**
+             * Draft Id
+             * Format: uuid
+             */
+            draft_id: string;
+            document: components["schemas"]["SimpleDocRef"];
+            /** Reason */
+            reason: string;
         };
         /**
          * SimpleOpenDecision
@@ -36692,6 +37362,11 @@ export interface components {
              * @default []
              */
             open_decisions: components["schemas"]["SimpleOpenDecision"][];
+            /**
+             * Decided In
+             * @default []
+             */
+            decided_in: components["schemas"]["SimpleOpenDecision"][];
         };
         /** SimpleRoadmapOut */
         SimpleRoadmapOut: {
@@ -36722,6 +37397,19 @@ export interface components {
              * @default []
              */
             drafts: components["schemas"]["SimpleDraftBrief"][];
+        };
+        /** SimpleSendIn */
+        SimpleSendIn: {
+            /**
+             * Email
+             * @default false
+             */
+            email: boolean;
+            /**
+             * Slack
+             * @default false
+             */
+            slack: boolean;
         };
         /** SimpleSessionIn */
         SimpleSessionIn: {
@@ -36759,6 +37447,37 @@ export interface components {
             /** Closed At */
             closed_at: string | null;
         };
+        /** SimpleSlackState */
+        SimpleSlackState: {
+            /** Connected */
+            connected: boolean;
+            /** Channel */
+            channel?: string | null;
+        };
+        /** SimpleStartOptions */
+        SimpleStartOptions: {
+            /** Prds */
+            prds: components["schemas"]["SimpleStartPrd"][];
+            /** Members */
+            members: components["schemas"]["SimplePersonRef"][];
+            /**
+             * Length Min
+             * @default 60
+             */
+            length_min: number;
+            occurrence?: components["schemas"]["SimpleUpcomingMeeting"] | null;
+        };
+        /** SimpleStartPrd */
+        SimpleStartPrd: {
+            document: components["schemas"]["SimpleDocRef"];
+            decider: components["schemas"]["SimplePersonRef"] | null;
+            /** Can Start */
+            can_start: boolean;
+            /** Starters */
+            starters: components["schemas"]["SimplePersonRef"][];
+            /** Default Attendee Ids */
+            default_attendee_ids: string[];
+        };
         /** SimpleTrackRef */
         SimpleTrackRef: {
             /**
@@ -36768,6 +37487,48 @@ export interface components {
             id: string;
             /** Title */
             title: string;
+        };
+        /**
+         * SimpleUpcomingMeeting
+         * @description A scheduled ritual occurrence: a review to start from.
+         */
+        SimpleUpcomingMeeting: {
+            /**
+             * Occurrence Id
+             * Format: uuid
+             */
+            occurrence_id: string;
+            /** Ritual Title */
+            ritual_title: string;
+            /**
+             * Due At
+             * Format: date-time
+             */
+            due_at: string;
+            /**
+             * Ends At
+             * Format: date-time
+             */
+            ends_at: string;
+            /** Length Min */
+            length_min: number;
+            /** Attendees */
+            attendees: components["schemas"]["SimplePersonRef"][];
+            /** Meeting Id */
+            meeting_id?: string | null;
+        };
+        /**
+         * SimpleWait
+         * @description What still waits on whom (an absent required reviewer's approval, a proposal).
+         */
+        SimpleWait: {
+            /** What */
+            what: string;
+            /**
+             * On
+             * @default []
+             */
+            on: components["schemas"]["SimplePersonRef"][];
         };
         /** SimpleWindow */
         SimpleWindow: {
@@ -52710,7 +53471,7 @@ export interface operations {
                 /** @description me or a member id */
                 approver?: string | null;
                 due?: boolean | null;
-                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, comma-separated */
+                /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated */
                 origin?: string | null;
                 /** @description the chosen option's key */
                 chosen?: string | null;
@@ -66236,6 +66997,388 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_meetings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingsOut"];
+                };
+            };
+        };
+    };
+    start_simple_meeting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleMeetingIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_meeting_options: {
+        parameters: {
+            query?: {
+                prd?: string | null;
+                occurrence?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleStartOptions"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_meeting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    join_simple_meeting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_simple_meeting_rules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleMeetingRulesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    comment_in_simple_meeting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleMeetingCommentIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_in_simple_meeting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    end_simple_meeting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_simple_meeting_minutes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleMinutesIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_simple_meeting_minutes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleSendIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_decisions: {
+        parameters: {
+            query?: {
+                prd?: string | null;
+                goal?: string | null;
+                meeting?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDecisionsOut"];
+                };
             };
             /** @description Validation Error */
             422: {

@@ -3,6 +3,7 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Notice, SegmentedControl, toast } from "@/components/ds";
+import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
 import { api, unwrap } from "@/lib/api/client";
@@ -295,6 +296,7 @@ export function SimpleRoadmap() {
   const [pop, setPop] = useState<{ id: string; left: number; top: number } | null>(null);
   const [tray, setTray] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [starting, setStarting] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement | null>(null);
 
@@ -481,6 +483,7 @@ export function SimpleRoadmap() {
               Needs a decision · {waiting}
             </Button>
           )}
+          <Button onClick={() => setStarting(true)}>Start review</Button>
           <Button disabled={exporting} onClick={() => void doExport("png")}>
             Export PNG
           </Button>
@@ -489,6 +492,7 @@ export function SimpleRoadmap() {
           </Button>
         </div>
       </header>
+      <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" />
       <GoalCounters items={data.items} />
       <DraftBanner
         drafts={drafts.data ?? []}

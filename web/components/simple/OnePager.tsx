@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
+import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
@@ -28,9 +29,10 @@ const TINT: Record<Line["state"], string> = {
  * one-page PDF prints. Changes and proposals sit in a right margin beside their line (under
  * it on a phone); a line edit is the change engine's `edit_line`, a section patch of every
  * source section into the PRD's shared working draft. What a reader may do comes from the
- * API's can_* fields.
+ * API's can_* fields. Inside a review meeting (S8, `sessionId`), its line edits and decisions
+ * go through the meeting's session and become the meeting's decisions.
  */
-export function OnePager({ doc }: { doc: string }) {
+export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId?: string; onChanged?: () => void }) {
   const q = useQuery(`simple-one-pager|${doc}`, () =>
     unwrap(api.GET("/v1/simple/one-pagers/{doc}", { params: { path: { doc } } })),
   );
@@ -43,6 +45,7 @@ export function OnePager({ doc }: { doc: string }) {
   const [wide, setWide] = useState<string | null>(null);
   const [presenting, setPresenting] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
   // Desktop margin: each note sits beside its line (placeNotes).
   const margin = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -64,6 +67,7 @@ export function OnePager({ doc }: { doc: string }) {
     try {
       await run();
       await q.reload();
+      onChanged?.();
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -74,12 +78,12 @@ export function OnePager({ doc }: { doc: string }) {
   const save = (line: Line) =>
     act(async () => {
       await unwrap(api.POST("/v1/simple/changes", {
-        body: { op: "edit_line", target: { document_id: v.document.id, line_id: line.id }, before: { line: line.text }, after: { line: draftText } },
+        body: { session_id: sessionId ?? null, op: "edit_line", target: { document_id: v.document.id, line_id: line.id }, before: { line: line.text }, after: { line: draftText } },
       }));
       setEditing(null);
     });
   const decide = (n: Note, action: "accept" | "decline") =>
-    act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: {} })));
+    act(() => unwrap(api.POST(`/v1/simple/changes/{change_id}/${action}`, { params: { path: { change_id: n.change_id } }, body: sessionId ? { session_id: sessionId } : {} })));
   const undo = (n: Note) =>
     act(() => unwrap(api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: n.change_id } } })));
 
@@ -131,7 +135,7 @@ export function OnePager({ doc }: { doc: string }) {
           <span>· {v.draft.changes} {v.draft.changes === 1 ? "change" : "changes"}</span>
           <span>· published v{v.draft.base_version ?? v.version} stays live until approved</span>
           {v.draft.decider_approved && v.draft.waiting_on.length > 0 && (
-            <span>· Approved in the meeting · publishes when {v.draft.waiting_on.map((p) => p.name).join(", ")} approves</span>
+            <span>· Approved in {v.draft.approved_in ?? "the meeting"} · publishes when {v.draft.waiting_on.map((p) => p.name).join(", ")} approves</span>
           )}
         </div>
       )}
@@ -147,8 +151,10 @@ export function OnePager({ doc }: { doc: string }) {
           <Button onClick={present}>Present</Button>
         )}
         <Button onClick={exportPdf}>Export PDF</Button>
+        {!sessionId && <Button onClick={() => setStarting(true)}>Start review</Button>}
         <Link className="underline" href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
       </div>
+      <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {saved && <p role="status" className="simple-noprint mx-auto max-w-[1180px] px-4 text-right text-base">Saved {saved}</p>}
       {error && <div className="mx-auto max-w-[1180px] px-4"><ErrorNote>{error}</ErrorNote></div>}
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-6 md:grid-cols-[minmax(0,820px)_var(--simple-margin)]">
@@ -206,6 +212,16 @@ export function OnePager({ doc }: { doc: string }) {
                               </button>
                             )}
                           </div>
+                        )}
+                        {l.decisions.length > 0 && (
+                          <p className="simple-noprint text-sm" data-testid="line-decisions">
+                            {l.decisions.slice(0, 3).map((d, i) => (
+                              <span key={d.id}>
+                                {i === 0 ? "Decided in " : ", "}
+                                <Link className="underline" href={`/simple/decisions#d-${d.number}`} title={d.title}>D-{d.number}</Link>
+                              </span>
+                            ))}
+                          </p>
                         )}
                         {open === l.id && (
                           <div role="dialog" aria-label={`Sources of line ${numbers.get(l.id)}`} className="simple-noprint mt-2 rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-3 text-base shadow-md">
@@ -283,7 +299,7 @@ function MarginNote({
     >
       <p>
         {n.kind === "change"
-          ? `${n.can_undo ? "You" : n.by_name} changed line ${no} · ${formatInZone(n.at, zone, { hour: "numeric", minute: "2-digit" })}${n.in_meeting ? ", in the meeting" : ""}`
+          ? `${n.can_undo ? "You" : n.by_name} changed line ${no} · ${formatInZone(n.at, zone, { hour: "numeric", minute: "2-digit" })}${n.meeting_title ? `, in ${n.meeting_title}` : n.in_meeting ? ", in the meeting" : ""}`
           : `${n.by_name} proposes new wording for line ${no}`}
       </p>
       <div className="mt-2 flex flex-wrap gap-2">

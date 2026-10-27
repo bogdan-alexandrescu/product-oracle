@@ -151,6 +151,12 @@ verdict on the same section supersedes the earlier item.
 | `GET .../versions/{n}/export?format=html\|pdf\|md\|pptx&layer=full\|brief\|deck` | export with version banner: Full (html, pdf, md), Brief (html, pdf), Deck (pdf, pptx) |
 | `GET .../versions/{n}/deck` | the brief as slides for Present mode (theme CSS, notes, expandable detail) |
 | `GET /v1/me/preferences`, `PATCH /v1/me/preferences` | per-user choices: `document_view` (`brief`/`full`), `experience` (`simple`/`detailed`, #723: the mode the person last switched to; unset, they land in `GET /v1/me/capabilities` `default_experience`: Simple for viewers and commenters, Detailed for approvers and owners) |
+| `GET /v1/simple/meetings`, `GET /v1/simple/meetings/options?prd=&occurrence=` | Simple S8 (#723): review meetings (upcoming from rituals, live, past with their minutes' summary) and the start sheet (each PRD's `can_start`, `starters`, default attendees; the members; a scheduled review) |
+| `POST /v1/simple/meetings` | start a review meeting (owners and the PRD's decider; 403 otherwise): PRD, attendees, change mode (`everyone`, `presenter`, `named` with one or two people), length |
+| `GET /v1/simple/meetings/{id}`, `POST .../join`, `PATCH .../rules`, `POST .../comments`, `POST .../approve`, `POST .../end` | the meeting screen (its `can`), joining, the presenter's change mode and absences, a comment, the decider's Approve (absent required reviewers leave the draft waiting), ending (Oracle drafts the minutes) |
+| `PUT /v1/simple/meetings/{id}/minutes`, `POST .../send` | edit the minutes before sending; send them to the Decisions page and each attendee's Inbox, and by email and to Slack when chosen |
+| `GET /v1/simple/decisions?prd=&goal=&meeting=` | Simple's Decisions: decisions grouped under the meeting that took them (with its minutes), then those taken outside meetings |
+| `POST /v1/simple/changes` with `session_id`, `POST /v1/simple/changes/{id}/accept\|decline` with `{session_id}` | a change (or a decided proposal) made through a meeting's session becomes a meeting decision |
 | `GET /healthz` | liveness + DB check |
 
 Agent track uses `Authorization: Bearer <api token>`; the UI uses the session cookie.
@@ -171,6 +177,10 @@ api/
 web/
   app/login/  app/documents/  app/documents/[doc]/  app/documents/[doc]/v/[n]/
   app/documents/[doc]/diff/
+  app/simple/meetings/  app/simple/meetings/[id]/  app/simple/decisions/   # Simple S8 (#723):
+               # the Meetings page and start sheet, the full-screen meeting (one-pager,
+               # roadmap, decisions; chat column) and its end screen (minutes, delivery),
+               # Decisions by meeting with ?prd=&goal=&meeting= filters
   components/  SectionView CitationChip CommentPopover SectionReviewBar
                FeedbackPanel VersionSwitcher DiffView
   lib/api/     schema.d.ts (openapi-typescript)  client.ts
