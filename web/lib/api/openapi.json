@@ -44451,7 +44451,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/meetings/{meeting_id}/send": {

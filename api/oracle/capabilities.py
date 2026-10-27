@@ -255,6 +255,7 @@ PER_ITEM: dict[str, Role | None] = {
     "record_discussion_change": "approver",
     "record_metric_value": "approver",
     "redraft_interview_guide": "approver",
+    "redraft_simple_meeting_minutes": "owner",
     "regenerate_spec": "owner",
     "reject_goal_suggestion": "approver",
     "remind_simple_one_pager_reviewers": "owner",

@@ -167,6 +167,7 @@ EXCEPTIONS = {
     ("simple/constraints.py", "_day"): "a roadmap item's date: a calendar date, no time of day",
     ("simple/dates.py", "_day"): "a suggested start or end: a calendar date, no time of day",
     ("simple/chat.py", "_day_words"): "a change card's item dates: calendar dates, no time of day",
+    ("simple/chat.py", "move"): "the first day of a named period (this quarter): a calendar date",
     ("simple/priorities.py", "_day"): "the line's key date or milestone: a calendar date, no time",
     ("simple/one_pager.py", "_plan_html"): "the PDF plan strip's months: calendar dates",
     ("review/collab.py", "set_assignment"): (
