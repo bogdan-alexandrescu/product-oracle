@@ -23,11 +23,27 @@ Test cards (protects / fails_when / no_claim):
   the occurrence, links the meeting to it and moves the ritual on; fails_when=Upcoming
   says no review while a ritual is due, or a start from it makes two occurrences;
   no_claim=the pre-read (oracle.rituals' tests).
+- test_ritual_start_owners_only (role x ritual start): protects=starting from a ritual's
+  next review (``ritual_id``) is for owners and the ritual's owner: a PRD's decider who
+  does not own the ritual gets 403, no occurrence is made and the ritual's schedule does
+  not move; ``can_start`` on the Upcoming row says so; fails_when=any decider uses up
+  the ritual's occurrence; no_claim=starts from an occurrence already made.
+- test_ritual_start_pins_its_due_time: protects=a ``ritual_id`` start names the row's
+  ``due_at``; a second (stale, double-clicked or crossing) start of that row is 409 with
+  the first meeting's id, a due time the ritual has moved past is 409, and only one
+  occurrence is made; fails_when=a stale start silently makes the next week's occurrence
+  and moves the ritual on again; no_claim=the occurrence's pre-read.
+- test_upcoming_one_row_per_ritual: protects=Upcoming lists a ritual once (its made
+  occurrence, else its next due time), only within UPCOMING_HORIZON, with the pre-read's
+  readiness, so the rail's count does not grow with every ritual; fails_when=a ritual
+  shows twice or a review months away counts; no_claim=the pre-read's contents.
 - test_approve_in_meeting_publishes_the_one_pager: protects=a line edited through the
   meeting and the decider's Approve there publish the one-pager (version 2, no working
-  draft, the edited line), what the meeting screen reads again after Approve;
-  fails_when=Approve leaves the PRD's draft working or the page on version 1;
-  no_claim=absent reviewers (test_simple_meetings_api's approve test).
+  draft, the edited line), what the meeting screen reads again after Approve; a
+  regression guard of the API (it passed before the walk's fix, which is the web's:
+  e2e/simple-meetings-walk.spec.ts); fails_when=Approve leaves the PRD's draft working or
+  the page on version 1; no_claim=the meeting screen's refresh, absent reviewers
+  (test_simple_meetings_api's approve test).
 """
 
 import uuid
@@ -152,10 +168,10 @@ async def test_upcoming_lists_ritual_next_review(client):
         (ritual_id, None, None)
     ]
     assert listed[0]["ritual_title"] == "Leadership review" and listed[0]["length_min"] == 60
-    body = {"prd": PRD, "ritual_id": ritual_id}
+    body = {"prd": PRD, "ritual_id": ritual_id, "due_at": listed[0]["due_at"]}
     r = await client.post(MEETINGS, json=body, headers=w.ctx.as_("commenter"))
     assert r.status_code == 403, r.text
-    m = await start(client, w, ritual_id=ritual_id)
+    m = await start(client, w, ritual_id=ritual_id, due_at=listed[0]["due_at"])
     assert m["occurrence_id"] and m["origin"] == "ritual"
     async with tenant_session(w.ctx.tenant_id) as s:
         occs = list(await s.scalars(select(RitualOccurrence)))
@@ -165,7 +181,83 @@ async def test_upcoming_lists_ritual_next_review(client):
     listed = (await client.get(MEETINGS, headers=w.ctx.as_("viewer"))).json()["upcoming"]
     assert listed[0]["occurrence_id"] == m["occurrence_id"]
     assert listed[0]["meeting_id"] == m["id"]
-    assert listed[1]["occurrence_id"] is None and listed[1]["due_at"] > listed[0]["due_at"]
+
+
+async def ritual(w, owner: str, days: float = 3) -> tuple[str, datetime]:
+    due = (company_time.now() + timedelta(days=days)).replace(microsecond=0)
+    async with tenant_session(w.ctx.tenant_id) as s:
+        r = Ritual(kind="custom", title=f"Review in {days} days", duration_min=60, prep_hours=2,
+                   schedule={"freq": "weekly", "interval": 1, "weekday": 1, "week_of_month": 1,
+                             "month": 1, "time": "10:00", "timezone": "UTC"},
+                   next_due_at=due, owner_id=w.ctx.users[owner].id)  # fmt: skip
+        s.add(r)
+        await s.commit()
+        return str(r.id), due
+
+
+async def ritual_state(w, ritual_id: str) -> tuple[datetime, int]:
+    async with tenant_session(w.ctx.tenant_id) as s:
+        r = await s.get(Ritual, uuid.UUID(ritual_id))
+        n = len(list(await s.scalars(select(RitualOccurrence.id))))
+        return r.next_due_at, n
+
+
+async def test_ritual_start_owners_only(client):
+    w = await world()
+    ritual_id, due = await ritual(w, owner="approver")
+    for who, can in [("owner", True), ("decider", False), ("approver", True), ("viewer", False)]:
+        row = (await client.get(MEETINGS, headers=w.ctx.as_(who))).json()["upcoming"][0]
+        assert row["can_start"] is can, who
+    body = {"prd": PRD, "ritual_id": ritual_id, "due_at": due.isoformat()}
+    r = await client.post(MEETINGS, json=body, headers=w.ctx.as_("decider"))
+    assert r.status_code == 403, r.text
+    assert await ritual_state(w, ritual_id) == (due, 0)
+    m = await start(client, w, "owner", ritual_id=ritual_id, due_at=due.isoformat())
+    assert m["occurrence_id"]
+    next_due, n = await ritual_state(w, ritual_id)
+    assert next_due > due and n == 1
+
+
+async def test_ritual_start_pins_its_due_time(client):
+    w = await world()
+    ritual_id, due = await ritual(w, owner="decider")
+    r = await client.post(MEETINGS, json={"prd": PRD, "ritual_id": ritual_id},
+                          headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 422, r.text
+    first = await start(client, w, ritual_id=ritual_id, due_at=due.isoformat())
+    moved, _ = await ritual_state(w, ritual_id)
+    # Bob's stale row (the same due time) and a double click: the first meeting, no new week.
+    for who in ("decider", "owner"):
+        r = await client.post(MEETINGS, json={"prd": PRD, "ritual_id": ritual_id,
+                                              "due_at": due.isoformat()},
+                              headers=w.ctx.as_(who))  # fmt: skip
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"]["meeting_id"] == first["id"]
+    # A due time the ritual never had (or has moved past without an occurrence): 409.
+    r = await client.post(MEETINGS, json={"prd": PRD, "ritual_id": ritual_id,
+                                          "due_at": (due - timedelta(days=7)).isoformat()},
+                          headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 409, r.text
+    assert await ritual_state(w, ritual_id) == (moved, 1)
+
+
+async def test_upcoming_one_row_per_ritual(client):
+    w = await world()
+    ritual_id, due = await ritual(w, owner="decider")
+    await ritual(w, owner="decider", days=60)  # past the horizon: not listed, not counted
+    listed = (await client.get(MEETINGS, headers=w.ctx.as_("viewer"))).json()["upcoming"]
+    assert [x["ritual_id"] for x in listed] == [ritual_id]
+    assert listed[0]["pre_read_ready"] is False
+    m = await start(client, w, ritual_id=ritual_id, due_at=due.isoformat())
+    async with tenant_session(w.ctx.tenant_id) as s:
+        occ = await s.get(RitualOccurrence, uuid.UUID(m["occurrence_id"]))
+        occ.status = "ready"
+        await s.commit()
+    listed = (await client.get(MEETINGS, headers=w.ctx.as_("viewer"))).json()["upcoming"]
+    assert [(x["ritual_id"], x["occurrence_id"]) for x in listed] == [
+        (ritual_id, m["occurrence_id"])
+    ]
+    assert listed[0]["meeting_id"] == m["id"] and listed[0]["pre_read_ready"] is True
 
 
 async def test_approve_in_meeting_publishes_the_one_pager(client):

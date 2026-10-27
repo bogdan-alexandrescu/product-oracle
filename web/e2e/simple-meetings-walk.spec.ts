@@ -2,6 +2,13 @@ import { MOCK_MEETINGS_KEY } from "../lib/api/mock/simple-meetings";
 import { login, signOut } from "./helpers";
 import { expect, test, type BrowserContext, type Page } from "./test";
 
+declare global {
+  interface Window {
+    /** The mock's calls ("GET /v1/…"), recorded while a spec sets it (lib/api/mock/server.ts). */
+    __poMockCalls?: string[];
+  }
+}
+
 /**
  * Simple S8 (#723), the production walk's three meeting findings, driven through the UI on
  * the mock's invented PRD "Guided setup" and its built-in rituals
@@ -31,6 +38,27 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  * version ("Version 4") with no "Working draft" bar and the edited line; fails_when = the
  * screen keeps "Version 3" or the bar after Approve; no_claim = absent reviewers (the
  * meeting screen spec's approve card).
+ *
+ * Card walk-approve-other-screen (the production sequence): a second screen on the same
+ * live meeting (another participant, or the presenter's own second tab) follows the
+ * meeting without a reload: after Approve on the first it reads "Version 4" and no draft
+ * bar; fails_when = only the screen that pressed Approve reads the new version;
+ * no_claim = the poll's interval.
+ *
+ * Card walk-upcoming-who (review): a viewer reads Upcoming and Home's next review with no
+ * Start (only owners and the ritual's owner start a ritual's review: the row's
+ * can_start), and Home says whether the review's pre-read is ready; fails_when = a viewer
+ * gets the start sheet and only then a 403, or Home drops the pre-read; no_claim = the
+ * pre-read itself.
+ *
+ * Card walk-upcoming-stale (review): a stale Start of a ritual's review (another tab
+ * started it already) says "This scheduled review has its meeting already" and makes no
+ * next week's meeting; fails_when = the stale Start opens a second meeting on the next
+ * occurrence; no_claim = crossing starts on the API (test_simple_meetings_walk).
+ *
+ * Card walk-rail-count (review): moving between Simple's pages does not read the full
+ * meetings list again for the rail's count (window.__poMockCalls); fails_when = every
+ * route change reads /v1/simple/meetings; no_claim = the Inbox's own reads.
  */
 
 async function switchTo(page: Page, email: string) {
@@ -188,6 +216,87 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("status", { name: "Working draft" })).toHaveCount(0);
         await expect(onePager).toContainText("A checklist that names the next step");
       });
+
+      test("A second screen on the meeting reads the new version after Approve, without a reload", async ({ page, context }) => {
+        await login(page);
+        await page.goto("/simple/prds/guided-setup");
+        await page.getByRole("button", { name: "Start review" }).click();
+        await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
+        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+        await page.getByRole("button", { name: "Edit line 2" }).click();
+        await page.getByLabel("Line 2").fill("A checklist that names the next step");
+        await page.getByRole("button", { name: "Save" }).click();
+        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+        const other = await context.newPage();
+        await other.goto(page.url());
+        const otherPager = other.getByTestId("meeting-screen").getByTestId("one-pager");
+        await expect(otherPager).toContainText("Version 3");
+        await expect(other.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+        await page.bringToFront();
+        await page.getByRole("button", { name: "Approve", exact: true }).click();
+        await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
+        await other.bringToFront();
+        await other.clock.runFor(6_000);
+        await expect(otherPager).toContainText("Version 4");
+        await expect(other.getByRole("status", { name: "Working draft" })).toHaveCount(0);
+        await expect(otherPager).toContainText("A checklist that names the next step");
+        await expect(other.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
+      });
+
+      test("A viewer reads Upcoming and Home's next review with no Start; Home says if its pre-read is ready", async ({ page }) => {
+        await login(page, "viewer@example.com");
+        await page.goto("/simple/meetings");
+        const upcoming = page.getByRole("region", { name: "Upcoming" });
+        await expect(upcoming.getByTestId("meetings-upcoming-row").first()).toBeVisible();
+        await expect(upcoming.getByRole("button", { name: "Start review" })).toHaveCount(0);
+        await page.goto("/simple");
+        const next = page.getByTestId("home-meeting-next");
+        await expect(next).toBeVisible();
+        await expect(next.getByRole("link", { name: "Start meeting" })).toHaveCount(0);
+        await expect(next.getByText(/Pre-read not ready yet|Open pre-read/)).toBeVisible();
+      });
+
+      test("A stale Start of an Upcoming review opens no next week's meeting", async ({ page, context }) => {
+        await login(page);
+        await page.goto("/simple/meetings");
+        const upcoming = page.getByRole("region", { name: "Upcoming" });
+        const row = upcoming.getByTestId("meetings-upcoming-row").filter({ hasText: "Weekly goals check-in" });
+        await expect(row.getByRole("button", { name: "Start review" })).toBeVisible();
+        // Another tab starts that review first; this page still shows its Start.
+        const other = await context.newPage();
+        await other.goto("/simple/meetings");
+        await other.getByRole("region", { name: "Upcoming" }).getByTestId("meetings-upcoming-row").filter({ hasText: "Weekly goals check-in" }).getByRole("button", { name: "Start review" }).click();
+        const otherSheet = other.getByRole("dialog", { name: "Start a review" });
+        await otherSheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
+        await otherSheet.getByRole("button", { name: "Start", exact: true }).click();
+        await expect(other.getByRole("heading", { name: "Weekly goals check-in: Guided setup" })).toBeVisible();
+        await page.bringToFront();
+        await row.getByRole("button", { name: "Start review" }).click();
+        const sheet = page.getByRole("dialog", { name: "Start a review" });
+        await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
+        await sheet.getByRole("button", { name: "Start", exact: true }).click();
+        await expect(sheet).toContainText("This scheduled review has its meeting already");
+        await page.goto("/simple/meetings");
+        await expect(page.getByRole("region", { name: "Live" }).getByRole("link", { name: "Join" })).toHaveCount(1);
+      });
+
+      if (!phone) {
+        test("Moving between Simple's pages does not read the meetings list again for the rail", async ({ page }) => {
+          await login(page);
+          await page.goto("/simple/roadmap");
+          await expect(page.getByTestId("simple-nav-meetings-count")).toBeVisible();
+          await page.evaluate(() => (window.__poMockCalls = []));
+          await page.getByTestId("simple-nav-decisions").filter({ visible: true }).click();
+          await expect(page).toHaveURL(/\/simple\/decisions/);
+          await page.getByTestId("simple-nav-one-pagers").filter({ visible: true }).click();
+          await expect(page).toHaveURL(/\/simple\/one-pagers/);
+          await page.getByTestId("simple-nav-roadmap").filter({ visible: true }).click();
+          await expect(page).toHaveURL(/\/simple\/roadmap/);
+          await expect(page.getByTestId("simple-nav-meetings-count")).toBeVisible();
+          const calls = await page.evaluate(() => window.__poMockCalls ?? []);
+          expect(calls.filter((c) => c === "GET /v1/simple/meetings")).toEqual([]);
+        });
+      }
     });
   }
 }
