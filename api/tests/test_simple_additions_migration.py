@@ -93,3 +93,14 @@ def test_up_down_up(scratch_db):
     assert _state() == (set(), False)
     command.upgrade(cfg, REVISION)
     assert _state() == (TABLES, True)
+
+
+def test_migration_passes_ruff():
+    """Review: the revision's lines stay within ruff's limit (CI lints api/ as a whole)."""
+    import subprocess
+    import sys
+
+    path = API_DIR / "migrations" / "versions" / f"{REVISION}.py"
+    out = subprocess.run([sys.executable, "-m", "ruff", "check", str(path)], cwd=API_DIR,
+                         capture_output=True, text=True)  # fmt: skip
+    assert out.returncode == 0, out.stdout + out.stderr

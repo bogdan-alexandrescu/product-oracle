@@ -466,3 +466,81 @@ async def test_empty_goal_suggests_once(client):
             await s.commit()
     async with tenant_session(w.ctx.tenant_id) as s:
         assert len([j for j in await jobs(s) if j.input["origin"] == "on_demand"]) == 2
+
+
+async def test_undo_add_refused_while_a_merge_kept_the_item(client):
+    """Review: undoing an added item that a merge kept would delete it with what the merge
+    moved onto it and leave the merged draft pointing at nothing."""
+    w = await World().build()
+    kept = (await w.add(client, "owner", "Guided setup"))["change"]
+    x = kept["target"]["item_id"]
+    y = (await w.add(client, "owner", "Guided setup wizard"))["change"]["target"]["item_id"]
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+        "op": "merge_item", "target": {"item_id": y, "into_id": x},
+        "before": {}, "after": {}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    merge = r.json()["change"]
+    r = await client.post(f"{CHANGES}/{kept['id']}/undo", headers=w.as_("owner"))
+    assert r.status_code == 409, r.text
+    items = await w.items(client)
+    assert x in items and items[y]["merged_into"]["id"] == x
+    # Undo the merge first, then the add goes.
+    r = await client.post(f"{CHANGES}/{merge['id']}/undo", headers=w.as_("owner"))
+    assert r.status_code == 201, r.text
+    r = await client.post(f"{CHANGES}/{kept['id']}/undo", headers=w.as_("owner"))
+    assert r.status_code == 201, r.text
+    assert x not in await w.items(client)
+
+
+async def test_merge_into_a_cut_item_is_refused(client):
+    """Review: a draft is not merged into an item that was cut."""
+    w = await World().build()
+    draft = (await w.add(client, "owner", "Import from spreadsheets"))["change"]
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+        "op": "cut", "target": {"item_id": w.ids["import-b"]}, "before": {"cut": False},
+        "after": {}, "reason": "Not this year"})  # fmt: skip
+    assert r.status_code == 201, r.text
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+        "op": "merge_item",
+        "target": {"item_id": draft["target"]["item_id"], "into_id": w.ids["import-b"]},
+        "before": {}, "after": {}})  # fmt: skip
+    assert r.status_code == 422, r.text
+
+
+async def test_a_goal_with_a_working_draft_item_is_not_empty(client):
+    """Review: a goal whose only item is a quick add in the working draft is not empty, so
+    the automatic suggestions do not run for it."""
+    w = await World().build()
+    await w.add(client, "owner", "Quiet hours", value=w.goals["quiet"])
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await additions.suggest_for_empty_goals(s) == 0
+
+
+async def test_date_suggestion_survives_publishing_an_added_item(client):
+    """Review: approving the draft must not drop an added item's open date suggestion; the
+    published copy carries it."""
+    w = await World().build()
+    iid = (await w.add(client, "owner", "Guided setup"))["change"]["target"]["item_id"]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        s.add(RoadmapDateSuggestion(item_id=uuid.UUID(iid), start_date=date(2026, 11, 2),
+                                    end_date=date(2026, 11, 20), basis="Two sprints"))  # fmt: skip
+        await s.commit()
+    ds = (await client.get("/v1/simple/drafts", headers=w.as_("decider"))).json()
+    d = next(x for x in ds if x["document"]["id"] == w.roadmap_id)
+    r = await client.post(f"/v1/simple/drafts/{d['id']}/submit", headers=w.as_("decider"))
+    assert r.status_code == 200, r.text
+    for who in ("decider", "approver"):
+        r = await client.post(f"/v1/simple/drafts/{d['id']}/approve", headers=w.as_(who))
+        assert r.status_code == 200, r.text
+    assert r.json()["status"] == "approved", r.text
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert await s.get(RoadmapItem, uuid.UUID(iid)) is None
+        copy = await s.scalar(
+            select(RoadmapItem).where(
+                RoadmapItem.title == "Guided setup", RoadmapItem.roadmap_version_id.is_not(None)
+            )
+        )
+        sug = await s.scalar(
+            select(RoadmapDateSuggestion).where(RoadmapDateSuggestion.item_id == copy.id)
+        )
+        assert sug is not None and sug.status == "open" and sug.basis == "Two sprints"
