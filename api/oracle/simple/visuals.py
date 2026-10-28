@@ -125,7 +125,8 @@ async def _subject(db: AsyncSession, kind: str, subject_id: uuid.UUID) -> Subjec
                 item = await db.get(RoadmapItem, uuid.UUID(str(c.target["item_id"])))
             except ValueError:
                 item = None
-        title = item.title if item is not None else str((c.after or {}).get("line") or c.op)
+        # Plain words: a change with no item and no line is "the change", never its op.
+        title = item.title if item is not None else str((c.after or {}).get("line") or "the change")
         doc = c.document_id or ((c.target or {}).get("document_id"))
         return Subject(
             title=title[:200],

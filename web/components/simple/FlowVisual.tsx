@@ -109,13 +109,31 @@ function Drawing({ flow, big, phone }: { flow: Flow; big?: boolean; phone: boole
   );
 }
 
+/** How long a running drawing job reads as "Draw the steps" before "Draw the screen". */
+const RUN_SCREEN_MS = 15000;
+/** A drawing made this recently carries "New" (the row need not have watched it land). */
+const NEW_MS = 15 * 60 * 1000;
+
 /** What the row says while there is no drawing: none yet, Oracle drawing it (its stages, a
  * bar, when it started), or Oracle could not draw it. */
 function NoDrawing({ v, busy, onAsk, phone }: { v: Visual; busy: boolean; onAsk: () => void; phone?: boolean }) {
   const zone = useCompanyZone();
+  // The API says queued (0) or running (1): Oracle draws the steps, then the screen, in one
+  // run, so a run past RUN_SCREEN_MS reads as drawing the screen (the bar fills past half).
+  const running = v.pending && (v.stage ?? 0) >= 1;
+  const [longRun, setLongRun] = useState(false);
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setTimeout(() => setLongRun(true), RUN_SCREEN_MS);
+    return () => {
+      window.clearTimeout(t);
+      setLongRun(false);
+    };
+  }, [running]);
   if (v.pending) {
     const stages = [`Read ${v.subject_name || "the PRD"}`, "Draw the steps", "Draw the screen"];
-    const at = Math.min(stages.length - 1, Math.max(0, v.stage ?? 0));
+    const ran = running && longRun;
+    const at = Math.min(stages.length - 1, Math.max(0, v.stage ?? 0) + (ran ? 1 : 0));
     return (
       <div className="space-y-2" data-testid="flow-empty" data-state="drawing">
         <p className="font-semibold">Oracle is drawing the flow</p>
@@ -207,7 +225,8 @@ export function FlowPanel({
   const phone = usePhone();
   const [opened, setOpened] = useState(!row);
   const [view, setView] = useState<"diagram" | "storyboard">("diagram");
-  // A drawing this row watched land (it was drawing, now it is drawn) carries "New".
+  // A drawing this row watched land (it was drawing, now it is drawn) carries "New", as does
+  // one made in the last NEW_MS (it landed while the card was closed).
   const [fresh, setFresh] = useState(false);
   const sawPending = useRef(false);
   const onOpenRef = useRef(onOpenChange);
@@ -246,7 +265,8 @@ export function FlowPanel({
   useEffect(() => {
     if (pending) sawPending.current = true;
     if (!drawnFlow || pending) return;
-    if (sawPending.current) {
+    const age = drawnFlow.made_at ? Date.now() - Date.parse(drawnFlow.made_at) : -1;
+    if (sawPending.current || (age >= 0 && age < NEW_MS)) {
       sawPending.current = false;
       setFresh(true);
     }
@@ -263,16 +283,38 @@ export function FlowPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const viewer = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!full) return;
-    // Escape leaves the viewer only: caught first, so the card under it stays open.
+    // The viewer is modal: the focus moves into it, Tab stays in it, and on leaving it goes
+    // back to what opened it.
+    const opener = document.activeElement as HTMLElement | null;
+    viewer.current?.querySelector<HTMLElement>("[data-exit-full]")?.focus();
     const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Tab" && viewer.current) {
+        const all = [...viewer.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])')].filter((el) => !el.hasAttribute("disabled") && el.getClientRects().length > 0);
+        if (!all.length) return;
+        const [first, last] = [all[0], all[all.length - 1]];
+        const inside = viewer.current.contains(document.activeElement);
+        if (e.shiftKey && (!inside || document.activeElement === first)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && (!inside || document.activeElement === last)) {
+          e.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+      // Escape leaves the viewer only: caught first, so the card under it stays open.
       if (e.key !== "Escape") return;
       e.stopPropagation();
       setFull(false);
     };
     window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      if (opener?.isConnected) opener.focus();
+    };
   }, [full]);
 
   async function post(run: () => Promise<{ data?: Visual; error?: unknown; response: Response }>, after?: () => void) {
@@ -428,10 +470,12 @@ export function FlowPanel({
 
   // The owner's pick C: the viewer over the page; Escape or Exit full screen goes back.
   const fullView = (f: Flow) => (
-    <div role="dialog" aria-modal="true" aria-label={`Full screen: ${f.title}`} data-testid="flow-fullscreen" className="fixed inset-0 z-[60] overflow-auto bg-surface p-4 sm:p-8">
+    <div ref={viewer} role="dialog" aria-modal="true" aria-label={`Full screen: ${f.title}`} data-testid="flow-fullscreen" className="fixed inset-0 z-[60] overflow-auto bg-surface p-4 sm:p-8">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <h2 className="min-w-0 flex-1 text-xl font-semibold break-words">{f.title}</h2>
-        <Button onClick={() => setFull(false)}>Exit full screen</Button>
+        <Button data-exit-full onClick={() => setFull(false)}>
+          Exit full screen
+        </Button>
       </div>
       {body(true)}
     </div>
@@ -503,10 +547,4 @@ export function FlowPanel({
       {full && flow && fullView(flow)}
     </section>
   );
-}
-
-/** A flow's live thumbnail: its real shapes (boxes, decision diamonds, step numbers). */
-export function FlowMini({ flow }: { flow: { nodes?: Flow["nodes"] | null; steps: string[] } }) {
-  // A line's thumbnail stays narrow: the line's words keep the room.
-  return <FlowDiagram flow={flow} layout="mini" className="block h-auto w-20 text-text" />;
 }

@@ -45,12 +45,17 @@ export interface VisualsDb {
 /** Tests set this localStorage key to how long (ms) a requested drawing's job runs. */
 export const MOCK_VISUAL_JOB_MS_KEY = "po-mock-visual-job-ms";
 
+/** Tests set this localStorage key to a one-pager bet's words: its first drawing fails, Retry draws it. */
+export const MOCK_VISUAL_FAIL_KEY = "po-mock-visual-fail";
+
 const jobMs = (): number => (typeof localStorage === "undefined" ? 0 : Number(localStorage.getItem(MOCK_VISUAL_JOB_MS_KEY) ?? 0) || 0);
 
 interface Ctx {
   id: string;
   role: string;
   names: Record<string, string>;
+  /** A roadmap item's name as the API's subject_name ("F-06 Weekly alert digest", or its title). */
+  itemName?: (id: string) => string | null;
 }
 
 /** Subjects drawn with their proposal, never asked for by id (the API's UNASKABLE_KINDS);
@@ -145,6 +150,8 @@ export function seedVisuals(): VisualsDb {
     failOnce: [`feature:${stableUuid("simple-item/alert-export")}`],
     names: { [`feature:${stableUuid("simple-item/alert-digest")}`]: "F-06 Weekly alert digest", [`feature:${stableUuid("simple-item/alert-export")}`]: "Alert history export" },
   };
+  const failBet = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_VISUAL_FAIL_KEY);
+  if (failBet) db.failOnce!.push(`one_pager_line:${betSubject(failBet)}`);
   const bet = betSubject("A setup checklist that shows the next step");
   add(db, "one_pager_line", bet, "A setup checklist that shows the next step", flowOf("one_pager_line", bet, 1, 1, {
     title: "Finish setup from the checklist",
@@ -163,7 +170,17 @@ export function seedVisuals(): VisualsDb {
   add(db, "feature", mobile, "Mobile alert push", flowOf("feature", mobile, 1, 1, {
     title: "Act on a pushed alert",
     goal: "Fewer missed alerts",
-    steps: [step("s1", "Get the push", "Mobile alert push", "new"), step("s2", "Open the alert", null, "same"), step("s3", "See what crossed the line", "Alert rules", "changed"), step("s4", "Snooze or assign it", null, "new", "decision")],
+    // The flows review: a long flow (8 steps) with a word longer than its box.
+    steps: [
+      step("s1", "Get the push", "Mobile alert push", "new"),
+      step("s2", "Open the alert", null, "same"),
+      step("s3", "See what crossed the line", "Alert rules", "changed"),
+      step("s4", "Check the alert-history-timeline", "Alert rules", "same"),
+      step("s5", "Is it still firing?", null, "new", "decision", "App", "The snooze and assign buttons show.", "The alert is marked resolved."),
+      step("s6", "Snooze or assign it", null, "new"),
+      step("s7", "Tell the assignee", null, "new", "step", "App"),
+      step("s8", "Close the alert", null, "same"),
+    ],
     screen: { title: "Alert on a phone", regions: ["Header: rule and time", "What crossed the line", "Chart of the last day", "Snooze and Assign buttons"] },
     notes: [{ n: 1, target: "s1", note: "The push names the rule", section_key: "alerts", requirement: "R4" }],
   })).failure = "Oracle could not draw it"; // The walk-fixes review: its redraw failed, no comment open.
@@ -230,6 +247,10 @@ function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx, docu
   };
 }
 
+/** The subject's name as the API's subject_name: an item by its code and title, else the seeded name. */
+const nameOf = (db: VisualsDb, ctx: Ctx, kind: string, id: string): string | null =>
+  db.names?.[`${kind}:${id}`] ?? (kind === "feature" || kind === "draft_item" ? (ctx.itemName?.(id) ?? null) : null);
+
 async function json(status: number, body: unknown): Promise<Response> {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
@@ -255,7 +276,7 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
         v.failure = null;
       }
     }
-    return json(200, out(v, kind, id, ctx, new URL(req.url).searchParams.get("document_id"), db.names?.[key]));
+    return json(200, out(v, kind, id, ctx, new URL(req.url).searchParams.get("document_id"), nameOf(db, ctx, kind, id)));
   }
   if (m === "GET" && p[5] === "versions") {
     const f = v?.versions.find((x) => x.version === Number(p[6]));
@@ -296,12 +317,12 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
       // Queued once: a visual with no drawing (its job drew nothing) is drawn again.
       const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "A bet of the one-pager");
       if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
-      return json(202, out(db.visuals[key], kind, id, ctx, doc, db.names?.[key]));
+      return json(202, out(db.visuals[key], kind, id, ctx, doc, nameOf(db, ctx, kind, id)));
     }
     // The job is queued: the panel reads "drawing" until its next read lands the drawing.
     const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "The new flow");
     if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
-    return json(202, out(db.visuals[key], kind, id, ctx, null, db.names?.[key]));
+    return json(202, out(db.visuals[key], kind, id, ctx, null, nameOf(db, ctx, kind, id)));
   }
   return null;
 }

@@ -22,12 +22,6 @@ export const stepsOf = (flow: { nodes?: FlowStep[] | null; steps: string[] }): F
 
 const lower = (s: string): string => (s ? s[0].toLowerCase() + s.slice(1) : s);
 
-/** A step in full words: "Decision: Is the user signed in? If yes: the plan opens. If no: ...". */
-export function stepWords(s: FlowStep): string {
-  if (s.kind !== "decision") return s.label;
-  return [`Decision: ${s.label}`, s.yes ? `If yes: ${lower(s.yes)}` : "", s.no ? `If no: ${lower(s.no)}` : ""].filter(Boolean).join(" ");
-}
-
 /** Words in lines of at most `width` characters, broken only between words; past `max`
  * lines the last line ends at a whole word with "…" (a long single word keeps its room). */
 export function wrapWords(text: string, width: number, max = 3): string[] {
@@ -46,61 +40,89 @@ export function wrapWords(text: string, width: number, max = 3): string[] {
 const W = 150;
 const GAP = 34;
 const LINE = 17;
+const FONT = 13;
+// The thumbnail's smaller shapes: the shapes and big numbers, no words.
+const MINI = { w: 60, gap: 16, step: 44, decision: 60, font: 22 };
+
+/** A label's font size: 13, or smaller when one word is wider than the box (about 0.6 em a character). */
+const fontFor = (lines: string[], room: number): number => Math.min(FONT, Math.floor((room / (0.62 * Math.max(1, ...lines.map((l) => l.length)))) * 10) / 10);
 
 /**
- * The diagram: `across` (the opened view, fitted to the width), `down` (the viewer's left
- * column) or `mini` (the row's thumbnail: the shapes and numbers, no words).
+ * The diagram: `across` (the opened view, fitted to the width: as many steps a row as fit at
+ * a readable size, the rows read left to right, top to bottom), `down` (the viewer's left
+ * column) or `mini` (the row's thumbnail: the shapes and numbers, no words, four a row).
  */
 export function FlowDiagram({ flow, layout, testId, className }: { flow: { nodes?: FlowStep[] | null; steps: string[] }; layout: "across" | "down" | "mini"; testId?: string; className?: string }) {
   const steps = stepsOf(flow);
   const mini = layout === "mini";
   const down = layout === "down";
+  const box = useRef<SVGSVGElement>(null);
+  const [room, setRoom] = useState(0);
+  useEffect(() => {
+    const el = box.current?.parentElement;
+    if (layout !== "across" || !el) return;
+    const on = () => setRoom(el.clientWidth);
+    on();
+    const ro = new ResizeObserver(on);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [layout]);
+  const w = mini ? MINI.w : W;
+  const gap = mini ? MINI.gap : GAP;
+  const per = down ? 1 : mini ? 4 : Math.max(1, Math.min(steps.length, room ? Math.floor((room - 24 + gap) / (w + gap)) : 4));
   const shapes = steps.map((s) => {
-    const lines = mini ? [] : wrapWords(s.label, s.kind === "decision" ? 14 : 17, s.kind === "decision" ? 3 : 3);
-    const h = mini ? (s.kind === "decision" ? 64 : 44) : Math.max(s.kind === "decision" ? 100 : 60, 28 + lines.length * LINE + (s.kind === "decision" ? 30 : 0));
-    return { s, lines, h };
+    const lines = mini ? [] : wrapWords(s.label, s.kind === "decision" ? 14 : 17, 3);
+    const font = mini ? FONT : fontFor(lines, s.kind === "decision" ? w - 30 : w - 10);
+    const h = mini ? (s.kind === "decision" ? MINI.decision : MINI.step) : Math.max(s.kind === "decision" ? 100 : 60, 28 + lines.length * LINE + (s.kind === "decision" ? 30 : 0));
+    return { s, lines, font, h };
   });
-  const tallest = Math.max(...shapes.map((x) => x.h), 44);
-  const placed = shapes.map((x, i) => ({ ...x, at: 12 + shapes.slice(0, i).reduce((sum, y) => sum + (down ? y.h : W) + GAP, 0) }));
-  const end = placed.length ? placed[placed.length - 1].at + (down ? placed[placed.length - 1].h : W) : 12;
-  const width = down ? W + 24 : end + 12;
-  const height = down ? end + 12 : tallest + 24;
+  const rows = Array.from({ length: Math.ceil(shapes.length / per) }, (_, r) => Math.max(...shapes.slice(r * per, r * per + per).map((x) => x.h)));
+  const rowTop = rows.map((_, r) => 12 + rows.slice(0, r).reduce((sum, h) => sum + h + gap, 0));
+  const placed = shapes.map((x, i) => {
+    const r = Math.floor(i / per);
+    const c = i % per;
+    return { ...x, x: 12 + c * (w + gap), y: rowTop[r] + (rows[r] - x.h) / 2, r, mid: rowTop[r] + rows[r] / 2 };
+  });
+  const width = 24 + Math.min(per, steps.length || 1) * (w + gap) - gap;
+  const height = rows.length ? rowTop[rows.length - 1] + rows[rows.length - 1] + 12 : 24;
   const label = `User flow: ${steps.map((s, i) => `${i + 1} ${s.label}`).join(", then ")}`;
   return (
     <svg
+      ref={box}
       role="img"
       aria-label={label}
       data-testid={testId}
       viewBox={`0 0 ${width} ${height}`}
-      className={className ?? (mini ? "h-12 w-auto max-w-[180px] text-text" : down ? "mx-auto w-full max-w-[220px] text-text" : "w-full text-text")}
+      className={className ?? (mini ? "h-auto w-[180px] max-w-full text-text" : down ? "mx-auto w-full max-w-[220px] text-text" : "w-full text-text")}
+      style={layout === "across" ? { maxWidth: width * 1.25 } : undefined}
       preserveAspectRatio="xMidYMin meet"
     >
-      {placed.map(({ s, lines, h, at }, i) => {
-        const x = down ? 12 : at;
-        const y = down ? at : 12 + (tallest - h) / 2;
-        const cx = x + W / 2;
+      {placed.map(({ s, lines, font, h, x, y, r, mid }, i) => {
+        const cx = x + w / 2;
         const cy = y + h / 2;
         const stroke = s.change === "new" ? "var(--accent)" : "var(--line-strong)";
         const next = placed[i + 1];
+        // The next step on this row: across; on the next row: down, over, down.
+        const link = !next
+          ? null
+          : next.r === r
+            ? `M${x + w} ${mid} H${next.x - 2}`
+            : `M${cx} ${y + h} V${rowTop[next.r] - gap / 2} H${next.x + w / 2} V${next.y - 2}`;
+        const n = mini ? { cx, cy, r: 16 } : { cx: x + 14, cy: y + 14, r: 11 };
         return (
           <g key={s.id}>
-            {next &&
-              (down ? (
-                <path d={`M${cx} ${y + h} V${next.at - 2}`} stroke="var(--line-strong)" strokeWidth={1.5} markerEnd="url(#flow-arrow)" fill="none" />
-              ) : (
-                <path d={`M${x + W} ${12 + tallest / 2} H${next.at - 2}`} stroke="var(--line-strong)" strokeWidth={1.5} markerEnd="url(#flow-arrow)" fill="none" />
-              ))}
+            {link && <path d={link} stroke="var(--line-strong)" strokeWidth={1.5} markerEnd="url(#flow-arrow)" fill="none" />}
             {s.kind === "decision" ? (
-              <polygon points={`${cx},${y} ${x + W},${cy} ${cx},${y + h} ${x},${cy}`} fill="var(--surface2)" stroke={stroke} strokeWidth={s.change === "new" ? 2.5 : 1.5} data-shape="decision" />
+              <polygon points={`${cx},${y} ${x + w},${cy} ${cx},${y + h} ${x},${cy}`} fill="var(--surface2)" stroke={stroke} strokeWidth={s.change === "new" ? 2.5 : 1.5} data-shape="decision" />
             ) : (
-              <rect x={x} y={y} width={W} height={h} rx={10} fill="var(--surface)" stroke={stroke} strokeWidth={s.change === "new" ? 2.5 : 1.5} strokeDasharray={s.change === "changed" ? "6 4" : undefined} data-shape="step" />
+              <rect x={x} y={y} width={w} height={h} rx={10} fill="var(--surface)" stroke={stroke} strokeWidth={s.change === "new" ? 2.5 : 1.5} strokeDasharray={s.change === "changed" ? "6 4" : undefined} data-shape="step" />
             )}
-            <circle cx={x + 14} cy={y + 14} r={mini ? 12 : 11} fill="var(--text)" />
-            <text x={x + 14} y={y + 18.5} textAnchor="middle" fontSize={mini ? 15 : 12} fontWeight={700} fill="var(--surface)">
+            <circle cx={n.cx} cy={n.cy} r={n.r} fill="var(--text)" />
+            <text x={n.cx} y={n.cy + (mini ? 7.5 : 4.5)} textAnchor="middle" fontSize={mini ? MINI.font : 12} fontWeight={700} fill="var(--surface)">
               {i + 1}
             </text>
             {lines.map((l, j) => (
-              <text key={j} x={cx} y={cy - ((lines.length - 1) * LINE) / 2 + j * LINE + 5} textAnchor="middle" fontSize={13} fill="currentColor">
+              <text key={j} x={cx} y={cy - ((lines.length - 1) * LINE) / 2 + j * LINE + 5} textAnchor="middle" fontSize={font} fill="currentColor">
                 {l}
               </text>
             ))}
