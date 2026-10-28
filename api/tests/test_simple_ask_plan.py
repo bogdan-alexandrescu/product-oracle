@@ -29,10 +29,10 @@ Test cards (protects / fails_when / no_claim):
   one plain line "Meeting notes could not be searched just now." instead, with no HTTP code
   and no connector name; fails_when=the stored reply keeps "HTTP 502" or "Fireflies";
   no_claim=the live tools' own routes (test_live_*).
-- test_live_tool_failure_reaches_the_model_plainly: protects=a live tool's 5xx (or 429)
-  answer becomes the plain line in the MCP result the model reads, while other tools'
-  errors keep their text; fails_when=the model reads "HTTP 502" or the connector's name;
-  no_claim=Fireflies itself.
+- test_live_tool_failure_reaches_the_model_plainly: protects=a live tool's 5xx answer (the
+  source failed) becomes the plain line in the MCP result the model reads, while other
+  tools' errors and Oracle's own read cap (429) keep their text; fails_when=the model
+  reads "HTTP 502" or the connector's name; no_claim=Fireflies itself.
 - test_plain_failures_units: protects=the scrub replaces a failure sentence once and keeps
   plain text untouched; fails_when=an ordinary sentence naming a product is changed;
   no_claim=every phrasing a model might use.
@@ -205,12 +205,15 @@ async def test_a_failing_source_is_one_plain_line(client):
 
 def test_live_tool_failure_reaches_the_model_plainly():
     raw = b'{"detail":"Fireflies did not answer (HTTP 502). Synced data is still available."}'
-    for code in (502, 503, 429):
+    for code in (500, 502, 503):
         out = to_result(RestResponse(code, "application/json", raw, "/v1/live/fireflies/search"))
         text = out.content[0].text
         assert out.is_error and text == plan.SOURCE_DOWN, code
     other = to_result(RestResponse(404, "application/json", b'{"detail":"x"}', "/v1/goals/1"))
     assert other.content[0].text.startswith("HTTP 404")
+    # Oracle's own cap on live reads is an instruction to the model, kept as it is.
+    cap = to_result(RestResponse(429, "application/json", b'{"detail":"cap"}', "/v1/live/sources"))
+    assert cap.content[0].text.startswith("HTTP 429")
 
 
 def test_plain_failures_units():

@@ -477,7 +477,7 @@ async def call_operation(
 
 def to_result(resp: RestResponse, data: Any = None) -> types.CallToolResult:
     """An MCP result for a REST response; ``data`` replaces the parsed JSON body."""
-    if not resp.ok and resp.path.startswith(LIVE_PATH) and resp.status_code >= 429:
+    if not resp.ok and resp.path.startswith(LIVE_PATH) and resp.status_code >= 500:
         # A live source that failed reaches Oracle's answer as one plain line: no HTTP
         # code, no connector's name (the owner's production walk, 2026-10-27).
         log.info("live read %s failed: HTTP %s", resp.path, resp.status_code)
