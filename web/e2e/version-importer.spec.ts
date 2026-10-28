@@ -14,7 +14,7 @@ async function pick(page: Page, n: number) {
   await expect(row).toHaveAttribute("aria-selected", "true");
 }
 
-test("each version names who imported it, with the id only in the tooltip", async ({ page }) => {
+test("each version names who imported it, with no id even in a tooltip (qa-docs-26)", async ({ page }) => {
   await login(page);
   await page.goto("/documents/online-deposits");
   const by = page.getByTestId("version-inspector").getByTestId("version-importer");
@@ -25,7 +25,7 @@ test("each version names who imported it, with the id only in the tooltip", asyn
   ] as const) {
     await pick(page, n);
     await expect(by).toHaveText(name);
-    await expect(by).toHaveAttribute("title", UUID);
+    await expect(by).not.toHaveAttribute("title", UUID);
     await expect(page.getByTestId("version-inspector")).not.toContainText(/[0-9a-f]{8}-[0-9a-f]{4}-/);
   }
 });
