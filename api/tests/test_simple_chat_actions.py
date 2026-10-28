@@ -239,3 +239,144 @@ async def test_record_decision_in_a_meeting_and_on_ask(client):
         c = await one_card(client, w, who, "decision: Not mine", page=page)
         assert c["may"] is None, who
         assert (await apply(client, w, who, c["id"])).status_code == code, who
+
+
+# ---------------------------------------------------------------- the review's findings
+# - test_questions_and_unknown_lines_go_to_ask: protects=on the Ask panel's one box a line
+#   that only contains "owns", "decides" or "skip" (a question, an unknown person or item)
+#   is not claimed (understood=False, nothing written), while "skip <known item>" still
+#   gets the meeting-only note and "<person> owns <item>" a card; fails_when=a natural
+#   question becomes a refusal; no_claim=Oracle's Ask's own answer.
+# - test_unknown_person_offers_matching_people: protects=an unknown or ambiguous person's
+#   question carries choices of matching people; fails_when=the question has no choices;
+#   no_claim=the choices row (chat-reader, wired by chat-join).
+# - test_owner_words_name_the_items_own_owner / test_page_document_reads_document_routes /
+#   test_ask_decision_undo_says_ask / test_apply_engine_does_not_reenter_chat_apply /
+#   test_set_owner_and_decider_in_a_meeting_per_role /
+#   test_direct_ops_in_a_meeting_for_owner_and_decider: the review's minors.
+
+
+async def ask_box(client, w, who: str, text: str) -> dict:
+    r = await client.post(ASK, json={"text": text, "only_understood": True},
+                          headers=w.ctx.as_(who))  # fmt: skip
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+async def test_questions_and_unknown_lines_go_to_ask(client):
+    w = await world()
+    for line in ("Which team owns billing?", "Tell me how marketing decides pricing",
+                 "skip the intro, what is late?", "Who really owns Cut A?",
+                 "Zelda owns Cut A", "commenter owns the moon", "skip the intro"):  # fmt: skip
+        out = await ask_box(client, w, "owner", line)
+        assert out["understood"] is False, line
+        assert out["messages"] == [], line
+    out = await ask_box(client, w, "owner", "skip Cut A")
+    assert out["understood"] is True
+    assert out["messages"][-1]["body"] == chat_actions.MEETING_NOTE
+    out = await ask_box(client, w, "owner", "commenter owns Cut A")
+    assert out["understood"] is True and out["messages"][-1]["kind"] == "cards"
+
+
+async def test_unknown_person_offers_matching_people(client):
+    w = await world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        p = await drafts.principal_for(s, w.ctx.tenant_id, w.ctx.users["owner"].id)
+        c = await chat.Ctx(s, p, None).load()
+        r = chat.parse(c, "Deee owns Cut A")
+        assert r.kind == "question" and not r.cards
+        assert "Dee Cider" in r.choices
+
+
+async def test_owner_words_name_the_items_own_owner(client):
+    w = await world()
+    c = await one_card(client, w, "owner", "approver owns Cut A")
+    assert (await apply(client, w, "owner", c["id"])).status_code == 200
+    m = await say(client, w, "owner", "who owns Cut A?")
+    assert m["kind"] == "answer" and "track" not in m["body"], m["body"]
+
+
+async def test_page_document_reads_document_routes(client):
+    w = await world()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        from oracle.docs.models import Document
+
+        doc = await s.scalar(select(Document).where(Document.slug == "payments-prd"))
+        assert (await chat_actions.page_document(s, "/simple/prds/payments-prd")).id == doc.id
+        assert (await chat_actions.page_document(s, f"/documents/{doc.id}")).id == doc.id
+        doc.slug = "roadmap"
+        await s.flush()
+        for page in ("/simple/roadmap", "/roadmap", "/simple/decisions?x=roadmap"):
+            assert await chat_actions.page_document(s, page) is None, page
+        assert (await chat_actions.page_document(s, "/documents/roadmap")).id == doc.id
+        await s.rollback()
+
+
+async def test_ask_decision_undo_says_ask(client):
+    w = await world()
+    c = await one_card(
+        client, w, "approver", "decision: Go monthly", page="/simple/prds/payments-prd"
+    )
+    r = await apply(client, w, "approver", c["id"])
+    did = uuid.UUID(r.json()["card"]["decision_id"])
+    r = await undo(client, w, "approver", c["id"])
+    assert r.status_code == 200 and r.json()["status"] == "undone"
+    from oracle.decisions.models import DecisionReview
+
+    async with tenant_session(w.ctx.tenant_id) as s:
+        assert (await s.get(Decision, did)).status == "reversed"
+        review = await s.scalar(select(DecisionReview).where(DecisionReview.decision_id == did))
+        assert review.note == "Undone on the Ask panel"
+
+
+async def test_apply_engine_does_not_reenter_chat_apply(client, monkeypatch):
+    w = await world()
+    c = await one_card(client, w, "owner", "commenter owns Cut A")
+
+    async def boom(*a, **k):
+        raise AssertionError("chat.apply re-entered")
+
+    monkeypatch.setattr(chat, "apply", boom)
+    from oracle.simple.models import SimpleChatCard
+
+    async with tenant_session(w.ctx.tenant_id) as s:
+        p = await drafts.principal_for(s, w.ctx.tenant_id, w.ctx.users["owner"].id)
+        card = await s.get(SimpleChatCard, uuid.UUID(c["id"]))
+        await chat_actions.apply_engine(s, p, card)
+        assert card.status == "applied" and card.change_id is not None
+        await s.commit()
+    assert (await item(w, "cut-a")).owner_id == w.ctx.users["commenter"].id
+
+
+async def test_set_owner_and_decider_in_a_meeting_per_role(client):
+    w = await world()
+    mid = (await start(client, w, attendee_ids=[uid(w, x) for x in (
+        "owner", "approver", "commenter", "viewer")]))["id"]  # fmt: skip
+    commenter = w.ctx.users["commenter"].id
+    for who in ("owner", "decider", "approver", "commenter"):
+        c = await one_card(client, w, who, "commenter owns Cut A", mid)
+        assert c["op"] == "set_owner"
+        r = await apply(client, w, who, c["id"])
+        assert r.status_code == 200, (who, r.text)
+        if r.json()["card"]["status"] == "applied":
+            assert (await item(w, "cut-a")).owner_id == commenter, who
+            assert (await undo(client, w, who, c["id"])).status_code == 200, who
+        assert (await item(w, "cut-a")).owner_id is None, who
+    c = await one_card(client, w, "owner", "approver decides Cut B", mid)
+    r = await apply(client, w, "owner", c["id"])
+    assert r.json()["card"]["status"] == "applied" and r.json()["card"]["decision_id"]
+    v = await say(client, w, "viewer", "commenter owns Cut A", mid)
+    assert v["cards"] == [] and v["body"] == chat.VIEWER_NOTE
+
+
+async def test_direct_ops_in_a_meeting_for_owner_and_decider(client):
+    w = await world()
+    mid = (await start(client, w, attendee_ids=[uid(w, "owner")]))["id"]
+    for who in ("owner", "decider"):
+        for line in (f"note: by {who}", f"open question: {who} asks", "next: Cut A",
+                     f"decision: {who} decided"):  # fmt: skip
+            c = await one_card(client, w, who, line, mid)
+            r = await apply(client, w, who, c["id"])
+            assert r.status_code == 200 and r.json()["card"]["status"] == "applied", (who, line)
+            assert (await undo(client, w, who, c["id"])).status_code == 200, (who, line)
+    assert (await get(client, w, mid))["notes"] == []

@@ -189,6 +189,10 @@ for (const [phone, dark] of [
       await sayIn(chat(page), "Zelda owns Setup checklist");
       await expect(chat(page).locator('[data-testid="chat-message"][data-kind="question"]').last()).toHaveText(/Who is “Zelda”\? Name a person of the company\./);
       await expect(chat(page).getByTestId("chat-card")).toHaveCount(before);
+
+      // The meeting's decision is on the Decisions page too, under its meeting.
+      await page.goto("/simple/decisions");
+      await expect(page.getByTestId("meeting-group").filter({ hasText: "Keep the checklist to five steps" })).toBeVisible();
     });
 
     test(`the Ask panel refuses the meeting-only phrases and records a decision on the page (${where})`, async ({ page }) => {
