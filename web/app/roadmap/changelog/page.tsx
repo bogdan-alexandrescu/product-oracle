@@ -2,10 +2,10 @@
 
 import { useState } from "react";
 
-import { Button, Chip, Empty, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
+import { Button, Chip, Empty, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, toast, type ChipKind } from "@/components/ds";
 import { PlanCrumb } from "@/app/plan/_crumb";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { formatDate, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -48,6 +48,9 @@ export default function ChangelogPage() {
   const [creating, setCreating] = useState(false);
   const { can } = useMe();
   const entries = q.data ?? [];
+  // Export gives the published public entries (GET /v1/changelog/export?audience=public): none, nothing to export.
+  const exportable = entries.filter((e) => e.audience === "public" && e.status === "published").length;
+  const exportWhy = q.data && exportable === 0 ? "Nothing to export yet: export gives the published public entries." : null;
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
@@ -79,6 +82,7 @@ export default function ChangelogPage() {
       a.click();
       a.remove();
       URL.revokeObjectURL(a.href);
+      toast({ message: `Downloaded changelog.${format} with ${plural(exportable, "published public entry", "published public entries")}.` });
     } catch (e) {
       setError(e instanceof Error ? e.message : errorMessage(e));
     } finally {
@@ -100,17 +104,31 @@ export default function ChangelogPage() {
         status={
           q.data && (
             <>
-              <Chip kind="acc">{entries.length} entries</Chip>
+              <Chip kind="acc">{plural(entries.length, "entry", "entries")}</Chip>
             </>
           )
         }
         action={
           <div className="flex flex-wrap gap-2">
-            <LinkButton href="/roadmap/launches">Launches</LinkButton>
-            <Button disabled={busy !== null} onClick={() => exportAs("md")} data-testid="export-md">
+            <LinkButton href="/roadmap/launches" icon="flag" data-testid="launches-link">
+              Launches
+            </LinkButton>
+            <Button
+              disabled={busy !== null || exportable === 0}
+              title={exportWhy ?? undefined}
+              aria-describedby={exportWhy ? "export-why" : undefined}
+              onClick={() => exportAs("md")}
+              data-testid="export-md"
+            >
               Export Markdown
             </Button>
-            <Button disabled={busy !== null} onClick={() => exportAs("html")} data-testid="export-html">
+            <Button
+              disabled={busy !== null || exportable === 0}
+              title={exportWhy ?? undefined}
+              aria-describedby={exportWhy ? "export-why" : undefined}
+              onClick={() => exportAs("html")}
+              data-testid="export-html"
+            >
               Export HTML
             </Button>
             {can("create_changelog_entry") && (
@@ -123,12 +141,24 @@ export default function ChangelogPage() {
       />
       <div className="flex flex-col gap-3">
         {(q.error || error) && <Notice tone="error">{q.error ?? error}</Notice>}
+        {exportWhy && (
+          <p id="export-why" className="text-sm text-text2" data-testid="export-why">
+            {exportWhy}
+            {can("publish_changelog_entry") ? " Publish a public entry to export it." : ""}
+          </p>
+        )}
         <Panel testId="changelog">
-          {q.data && entries.length === 0 && <Empty>No changelog entries yet</Empty>}
+          {q.data && entries.length === 0 && (
+            <Empty testId="changelog-empty">
+              {can("create_changelog_entry")
+                ? "No entries yet. Use New entry to add the first; Oracle adds one when it drafts a launch's kit."
+                : "No entries yet. Oracle adds one when it drafts a launch's kit, and approvers add their own."}
+            </Empty>
+          )}
           {grouped(entries).map(([day, groups]) => (
             <section key={day} aria-label={formatDate(day)} data-testid="changelog-day" className="border-b border-line px-4 py-3 last:border-b-0 max-[600px]:px-3">
               <h2 className="font-display text-lg font-bold tracking-heading">
-                <time dateTime={day}>{day}</time>
+                <time dateTime={day}>{formatDate(day)}</time>
               </h2>
               {groups.map(([category, rows]) => (
                 <div key={category} data-testid="changelog-category" data-category={category} className="mt-2">

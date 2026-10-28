@@ -23,6 +23,7 @@ import {
 } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { CATEGORY_LABEL } from "@/app/intakes/[id]/_lib";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -294,7 +295,8 @@ function Outcomes() {
           )
         }
         action={
-          canApprove && (
+          // While the form is open its own submit tracks the outcome.
+          canApprove && !tracking && (
             <Button
               variant="primary"
               onClick={() => setTracking(true)}
@@ -960,10 +962,16 @@ function TrackOutcomeForm({
 
   const ready = item && goalId && effect.trim() && metric.trim();
   return (
-    <Panel title="Track outcome">
+    <Panel title="Track outcome" bodyClassName="px-4 py-3 max-[600px]:px-3">
       <form
         className="grid grid-cols-2 gap-2.5 max-[600px]:grid-cols-1"
         data-testid="track-outcome-form"
+        onKeyDown={(e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            onCancel();
+          }
+        }}
         onSubmit={(e) => {
           e.preventDefault();
           void save();
@@ -1062,8 +1070,34 @@ function TrackOutcomeForm({
 
 const APPLIES_TO: Record<Learning["applies_to"], string> = {
   module: "Module",
-  question_category: "Question category",
-  criterion: "Quality criterion",
+  question_category: "Question topic",
+  criterion: "Quality check",
+};
+/** Names for a learning's target: question categories, quality criteria and modules by their titles. */
+function useTargetNames() {
+  const criteria = useQuery("quality-criteria", () => unwrap(api.GET("/v1/quality/criteria")));
+  const modules = useQuery("module-catalog", () => unwrap(api.GET("/v1/module-catalog")));
+  const options: Record<Learning["applies_to"], { key: string; name: string }[]> = {
+    question_category: Object.entries(CATEGORY_LABEL).map(([key, name]) => ({ key, name })),
+    criterion: (criteria.data ?? []).map((c) => ({ key: c.key, name: c.title })),
+    module: (modules.data ?? []).map((m) => ({ key: m.key, name: m.title })),
+  };
+  const nameOf = (l: Pick<Learning, "applies_to" | "target">) =>
+    options[l.applies_to].find((o) => o.key === l.target)?.name ?? humanize(l.target);
+  return { options, nameOf };
+}
+
+/** A key in words, for a target no list names: "success_metric" is "Success metric". */
+function humanize(key: string): string {
+  const words = key.replace(/[._-]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** The target field's label for each kind of learning. */
+const TARGET_WORD: Record<Learning["applies_to"], string> = {
+  module: "Which module",
+  question_category: "Which topic",
+  criterion: "Which check",
 };
 const DIRECTION: Record<Learning["direction"], string> = {
   recommend_more: "Recommend more",
@@ -1084,11 +1118,13 @@ function LearningsPanel({
   onChanged: () => Promise<void>;
 }) {
   const [adding, setAdding] = useState(false);
+  const names = useTargetNames();
   return (
     <Panel
       title="Learnings"
       count={rows?.length}
       testId="learnings-panel"
+      bodyClassName="px-4 py-3 max-[600px]:px-3"
       tools={
         canApprove &&
         !adding && (
@@ -1101,6 +1137,7 @@ function LearningsPanel({
       {error && <Notice tone="error">{error}</Notice>}
       {canApprove && adding && (
         <LearningForm
+          names={names}
           onCancel={() => setAdding(false)}
           onAdded={async () => {
             setAdding(false);
@@ -1111,9 +1148,10 @@ function LearningsPanel({
       {rows === undefined ? (
         <Loading />
       ) : rows.length === 0 ? (
-        <p className="text-sm text-text2">
-          No learnings yet. Keep one Oracle drafts from an assessment, or add
-          one.
+        <p className="text-sm text-text2" data-testid="learnings-empty">
+          {canApprove
+            ? "No learnings yet. When an outcome is checked, Oracle drafts one for you to keep. You can also add your own."
+            : "No learnings yet. When an outcome is checked, Oracle drafts one, and an approver can keep it or add their own."}
         </p>
       ) : (
         <ul className="divide-y divide-line">
@@ -1121,6 +1159,7 @@ function LearningsPanel({
             <LearningRow
               key={`${l.id}-${l.status}`}
               l={l}
+              targetName={names.nameOf(l)}
               canApprove={canApprove}
               onChanged={onChanged}
             />
@@ -1132,9 +1171,11 @@ function LearningsPanel({
 }
 
 function LearningForm({
+  names,
   onCancel,
   onAdded,
 }: {
+  names: ReturnType<typeof useTargetNames>;
   onCancel: () => void;
   onAdded: () => Promise<void>;
 }) {
@@ -1173,6 +1214,12 @@ function LearningForm({
     <form
       className="mb-3 grid grid-cols-3 gap-2.5 max-[600px]:grid-cols-1"
       data-testid="learning-form"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onCancel();
+        }
+      }}
       onSubmit={(e) => {
         e.preventDefault();
         void save();
@@ -1197,9 +1244,10 @@ function LearningForm({
         <select
           className={FIELD}
           value={appliesTo}
-          onChange={(e) =>
-            setAppliesTo(e.target.value as Learning["applies_to"])
-          }
+          onChange={(e) => {
+            setAppliesTo(e.target.value as Learning["applies_to"]);
+            setTarget("");
+          }}
         >
           {Object.entries(APPLIES_TO).map(([v, label]) => (
             <option key={v} value={v}>
@@ -1209,14 +1257,19 @@ function LearningForm({
         </select>
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        <span className="text-text2">Key</span>
-        <input
+        <span className="text-text2">{TARGET_WORD[appliesTo]}</span>
+        <select
           className={FIELD}
           value={target}
-          placeholder="success_metric"
-          maxLength={200}
           onChange={(e) => setTarget(e.target.value)}
-        />
+        >
+          <option value="">Choose one</option>
+          {names.options[appliesTo].map((o) => (
+            <option key={o.key} value={o.key}>
+              {o.name}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-text2">Direction</span>
@@ -1252,10 +1305,12 @@ function LearningForm({
 
 function LearningRow({
   l,
+  targetName,
   canApprove,
   onChanged,
 }: {
   l: Learning;
+  targetName: string;
   canApprove: boolean;
   onChanged: () => Promise<void>;
 }) {
@@ -1295,7 +1350,7 @@ function LearningRow({
         </Chip>
       </div>
       <span className="text-text2">
-        {APPLIES_TO[l.applies_to]} · {l.target} · {DIRECTION[l.direction]}
+        {APPLIES_TO[l.applies_to]} · {targetName} · {DIRECTION[l.direction]}
       </span>
       {!active && (
         <span className="text-text2">

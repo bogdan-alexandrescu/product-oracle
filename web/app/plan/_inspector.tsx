@@ -12,13 +12,12 @@ import { Button, Chip, CodeChip, Inspector, InspectorSection, LinkButton, Notice
 import { peopleByIds } from "@/components/PersonPicker";
 import { RequestSpecDialog, SPEC_STATE, specFor, specHref, useSpecs } from "@/components/RequestSpec";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDay } from "@/lib/format";
+import { formatDate, formatDay } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { acceptTrackAlertDate, alertDay, alertSentence, keepTrackAlert, listTrackAlerts, reopenTrackAlert, type TrackAlertOut } from "@/lib/api/track-alerts";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { WaiveForm } from "../company/strategy/_components/DriftList";
-import { shortDate } from "../company/strategy/_components/lib";
 import { assess, type GoalView, type Point } from "../home/_goals";
 import { dateBasis, HORIZON_LABEL, roadmapHref, stateChip, whoLabel, type PlanDrift, type PlanItem } from "./_lib";
 
@@ -31,15 +30,20 @@ function History({ item }: { item: PlanItem }) {
   // One line per import (the API groups and limits them; the tracker's own status name is left out).
   const events = q.data.tracker_events;
   const older = q.data.tracker_events_older;
-  if (q.data.versions.length === 0 && events.length === 0) return <span className="text-text2">—</span>;
+  // qa-plan-33: one line per event; a draft version that keeps the item as the version before it
+  // had it (same PRD version, same horizon) says nothing new.
+  const versions = q.data.versions.filter(
+    (v, n, all) => n === 0 || !!v.approved_at || v.prd_version !== all[n - 1]!.prd_version || v.horizon !== all[n - 1]!.horizon,
+  );
+  if (versions.length === 0 && events.length === 0) return <span className="text-text2">—</span>;
   return (
     <div className="flex flex-col gap-2">
-      {q.data.versions.length > 0 && (
+      {versions.length > 0 && (
         <ol className="flex flex-col gap-1 text-[15px]">
-          {q.data.versions.map((v) => (
-            <li key={v.version} className="tnum">
-              PRD v{v.prd_version ?? "?"} {HORIZON_LABEL[v.horizon]}
-              {v.approved_at ? ` · approved ${formatDay(v.approved_at)}` : ""}
+          {versions.map((v) => (
+            <li key={v.version} data-testid="plan-history-version" className="tnum">
+              {v.prd_version != null ? `PRD v${v.prd_version}` : "PRD"} {HORIZON_LABEL[v.horizon]}
+              {v.approved_at ? ` · approved ${formatDay(v.approved_at)}` : " · in a draft"}
             </li>
           ))}
         </ol>
@@ -530,7 +534,7 @@ function DriftCard({ d, onChanged }: { d: PlanDrift; onChanged?: () => Promise<v
       <span>{d.text}</span>
       {d.status === "waived" && d.waive_reason && (
         <span data-testid="plan-drift-waived" className="text-text2">
-          Waived {shortDate(d.waived_at)}: {d.waive_reason}
+          Waived{d.waived_at ? ` ${formatDate(d.waived_at)}` : ""}: {d.waive_reason}
         </span>
       )}
       {d.status === "open" && d.finding_id == null && <span className="text-sm text-text2">Measured on the draft roadmap. It can be waived once the roadmap is approved.</span>}

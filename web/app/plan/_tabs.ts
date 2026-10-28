@@ -19,6 +19,8 @@ export const PLAN_TABS: PlanTab[] = [
   { key: "documents", label: "Documents", name: "Roadmap documents", href: "/plan/documents", testId: "plan-tab-documents" },
   { key: "dates", label: "Dates", href: "/plan/dates", testId: "plan-tab-dates" },
   { key: "outcomes", label: "Outcomes", href: "/plan/outcomes", testId: "plan-tab-outcomes" },
+  // qa-plan-23: the alignment reports (/plan/reports and a report) show the strip, so they have their tab.
+  { key: "reports", label: "Reports", href: "/plan/reports", testId: "plan-tab-reports" },
 ];
 
 /** In the mock build only: tests register extra entries here (a JSON list of PlanTab). */

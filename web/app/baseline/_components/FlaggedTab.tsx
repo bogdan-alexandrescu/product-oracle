@@ -38,7 +38,7 @@ export function FlaggedTab({
         </span>
       ),
     },
-    { key: "state", header: "State", width: "120px", hideOnPhone: true, cell: (f) => <NodeStatusBadge status={f.status} /> },
+    { key: "state", header: "Review", width: "120px", hideOnPhone: true, cell: (f) => <NodeStatusBadge status={f.status} /> },
     {
       key: "goals",
       header: "Goals",
@@ -65,8 +65,8 @@ export function FlaggedTab({
     },
     {
       key: "confidence",
-      header: "Conf.",
-      width: "64px",
+      header: "Confidence",
+      width: "96px",
       align: "center",
       cell: (f) => <ConfidenceRing value={f.confidence} low={trace.low} size={32} />,
     },
@@ -85,7 +85,7 @@ export function FlaggedTab({
         </span>
       ),
     },
-    { key: "state", header: "State", width: "120px", hideOnPhone: true, cell: (g) => <NodeStatusBadge status={g.status} /> },
+    { key: "state", header: "Review", width: "120px", hideOnPhone: true, cell: (g) => <NodeStatusBadge status={g.status} /> },
     {
       key: "features",
       header: "Features",

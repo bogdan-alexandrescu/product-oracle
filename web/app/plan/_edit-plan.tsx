@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useId, useState } from "react";
 
 import { Button, Chip, Notice, Panel } from "@/components/ds";
-import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
+import { DOC_STATUS_LABEL } from "@/lib/format";
+import { docLabel } from "@/lib/labels";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { HORIZON_LABEL, HORIZONS, type Horizon } from "./_lib";
@@ -22,10 +24,36 @@ export function approvedRoadmaps(items: Schemas["PlanItem"][] | undefined): Plan
   return [...out].map(([slug, version]) => ({ slug, version }));
 }
 
+/** The roadmap documents by slug: their titles and approval state (qa-plan-17, qa-plan-21). */
+export function useRoadmapDocs(after = ""): Map<string, DocumentSummary> {
+  // `after` reads them again (a version approved here changes a document's approved version).
+  const q = useQuery(`plan|roadmap-docs|${after}`, () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "roadmap" } } })), { keepPrevious: true });
+  return new Map((q.data ?? []).map((d) => [d.slug, d]));
+}
+
+/** A roadmap by its title ("Usage alerts roadmap"), never its slug; the slug in words until the documents answer. */
+export function roadmapName(slug: string, docs: Map<string, DocumentSummary>, title?: string | null): string {
+  const doc = docs.get(slug);
+  if (doc) return docLabel(doc);
+  if (title) return docLabel({ title, kind: "roadmap" });
+  const words = slug.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/**
+ * How a change set's base version reads: "approved version 1" only when the roadmap document
+ * says that version is approved (qa-plan-17); else "version 1 (In review, not approved)".
+ */
+function baseWords(set: ChangeSet, doc: DocumentSummary | undefined): string {
+  if (!doc || (doc.approved_version ?? 0) >= set.base_version) return `approved version ${set.base_version}`;
+  return `version ${set.base_version} (${DOC_STATUS_LABEL[doc.status]}, not approved)`;
+}
+
 /** The Roadmap panel's Edit plan button: opens (or returns to) the roadmap's draft change set. */
 export function EditPlanButton({ roadmaps, onOpened }: { roadmaps: PlanRoadmap[]; onOpened: (s: ChangeSet) => void }) {
   const [slug, setSlug] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const docs = useRoadmapDocs();
   const picked = slug ?? roadmaps[0]?.slug;
   if (!picked) return null;
   const open = async () => {
@@ -43,7 +71,7 @@ export function EditPlanButton({ roadmaps, onOpened }: { roadmaps: PlanRoadmap[]
         <select aria-label="Roadmap to edit" value={picked} onChange={(e) => setSlug(e.target.value)} className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-sm">
           {roadmaps.map((r) => (
             <option key={r.slug} value={r.slug}>
-              {r.slug}
+              {roadmapName(r.slug, docs)}
             </option>
           ))}
         </select>
@@ -79,7 +107,7 @@ function Diff({ set }: { set: ChangeSet }) {
   );
 }
 
-function Editor({ set, onChange }: { set: ChangeSet; onChange: (s: ChangeSet | null) => void }) {
+function Editor({ set, doc, onChange }: { set: ChangeSet; doc: DocumentSummary | undefined; onChange: (s: ChangeSet | null) => void }) {
   const [error, setError] = useState<string | null>(null);
   const [cutting, setCutting] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -120,10 +148,10 @@ function Editor({ set, onChange }: { set: ChangeSet; onChange: (s: ChangeSet | n
   const picked = features.data?.find((f) => f.id === feature);
 
   return (
-    <div className="flex flex-col gap-4 px-4 py-3">
+    <div className="flex flex-col gap-4 px-4 py-3 max-[600px]:px-3">
       <p className="text-sm text-text2">
-        Changes to approved version {set.base_version} of {set.roadmap_title}. Nobody edits the approved version: Propose changes makes them a new
-        version for the decider.
+        Changes to {baseWords(set, doc)} of {doc ? docLabel(doc) : docLabel({ title: set.roadmap_title, kind: "roadmap" })}. Nobody edits the
+        approved version: Propose changes makes them a new version for the decider.
       </p>
       {error && <Notice tone="error">{error}</Notice>}
       {HORIZONS.map((h) => {
@@ -134,36 +162,59 @@ function Editor({ set, onChange }: { set: ChangeSet; onChange: (s: ChangeSet | n
             {lane.length === 0 && <p className="text-sm text-text2">No items</p>}
             <ul className="flex flex-col gap-1">
               {lane.map((i, at) => (
-                <li key={i.key} data-testid="edit-item" data-item={i.key} className="flex flex-wrap items-center gap-2 rounded-lg border border-line px-2 py-1.5">
-                  <span className="min-w-0 flex-1 truncate font-medium">{i.title}</span>
-                  {i.new && <Chip kind="acc">New</Chip>}
-                  {i.deferred && <Chip kind="warn">Deferred</Chip>}
-                  <select
-                    aria-label={`Horizon of ${i.title}`}
-                    value={i.horizon}
-                    onChange={(e) => add({ op: "move", key: i.key, horizon: e.target.value as Horizon })}
-                    className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-sm"
-                  >
-                    {HORIZONS.map((x) => (
-                      <option key={x} value={x}>
-                        {HORIZON_LABEL[x]}
-                      </option>
-                    ))}
-                  </select>
-                  <Button variant="ghost" aria-label={`Move ${i.title} up`} disabled={at === 0} onClick={() => add({ op: "reorder", key: i.key, position: at - 1 })}>
-                    Up
-                  </Button>
-                  <Button variant="ghost" aria-label={`Move ${i.title} down`} disabled={at === lane.length - 1} onClick={() => add({ op: "reorder", key: i.key, position: at + 1 })}>
-                    Down
-                  </Button>
-                  {h !== "later" && (
-                    <Button variant="ghost" onClick={() => add({ op: "defer", key: i.key })}>
-                      Defer
+                <li key={i.key} data-testid="edit-item" data-item={i.key} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-line px-2 py-1.5">
+                  {/* qa-plan-15: the title gets its own line on a phone, the controls one row under it. */}
+                  <span data-testid="edit-item-title" className="flex min-w-0 flex-1 basis-56 flex-wrap items-center gap-2 max-[600px]:basis-full">
+                    <span className="min-w-0 break-words font-medium">{i.title}</span>
+                    {i.new && <Chip kind="acc">New</Chip>}
+                    {i.deferred && <Chip kind="warn">Deferred</Chip>}
+                  </span>
+                  {/* qa-plan-34: one slot per control, so each lines up from row to row. */}
+                  <span data-testid="edit-item-controls" className="flex flex-none flex-nowrap items-center gap-2 max-[600px]:w-full max-[600px]:gap-1">
+                    <select
+                      aria-label={`Horizon of ${i.title}`}
+                      value={i.horizon}
+                      onChange={(e) => add({ op: "move", key: i.key, horizon: e.target.value as Horizon })}
+                      className="h-8 w-24 min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm max-[600px]:w-auto max-[600px]:flex-1"
+                    >
+                      {HORIZONS.map((x) => (
+                        <option key={x} value={x}>
+                          {HORIZON_LABEL[x]}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      variant="ghost"
+                      className="w-[3.75rem] flex-none disabled:opacity-40"
+                      aria-label={`Move ${i.title} up`}
+                      disabled={at === 0}
+                      title={at === 0 ? `Already first in ${HORIZON_LABEL[h]}` : undefined}
+                      onClick={() => add({ op: "reorder", key: i.key, position: at - 1 })}
+                    >
+                      Up
                     </Button>
-                  )}
-                  <Button variant="danger" onClick={() => (setCutting(i.key), setReason(""))}>
-                    Cut
-                  </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-[3.75rem] flex-none disabled:opacity-40"
+                      aria-label={`Move ${i.title} down`}
+                      disabled={at === lane.length - 1}
+                      title={at === lane.length - 1 ? `Already last in ${HORIZON_LABEL[h]}` : undefined}
+                      onClick={() => add({ op: "reorder", key: i.key, position: at + 1 })}
+                    >
+                      Down
+                    </Button>
+                    {h !== "later" ? (
+                      <Button variant="ghost" className="w-[3.75rem] flex-none" data-testid="edit-defer" onClick={() => add({ op: "defer", key: i.key })}>
+                        Defer
+                      </Button>
+                    ) : (
+                      // Later has nothing to defer to: an empty slot keeps Cut in line.
+                      <span data-testid="edit-defer" aria-hidden className="h-8 w-[3.75rem] flex-none" />
+                    )}
+                    <Button variant="danger" className="w-[3.75rem] flex-none" onClick={() => (setCutting(i.key), setReason(""))}>
+                      Cut
+                    </Button>
+                  </span>
                   {cutting === i.key && (
                     <span className="flex w-full items-center gap-2">
                       <input
@@ -250,7 +301,7 @@ function Editor({ set, onChange }: { set: ChangeSet; onChange: (s: ChangeSet | n
         </Button>
       </form>
       <div>
-        <h3 className="mb-1 font-semibold">Against approved version {set.base_version}</h3>
+        <h3 className="mb-1 font-semibold">Against {baseWords(set, doc)}</h3>
         <Diff set={set} />
       </div>
       <div className="flex items-center justify-end gap-2">
@@ -305,7 +356,19 @@ function Superseded({ set, me, canWrite }: { set: ChangeSet; me: string | null; 
 }
 
 /** A proposed version waiting for its decider: the diff, and Approve for the one who may. */
-function Proposal({ set, me, canWrite, onApproved }: { set: ChangeSet; me: string | null; canWrite: boolean; onApproved: (n: number) => void }) {
+function Proposal({
+  set,
+  doc,
+  me,
+  canWrite,
+  onApproved,
+}: {
+  set: ChangeSet;
+  doc: DocumentSummary | undefined;
+  me: string | null;
+  canWrite: boolean;
+  onApproved: (n: number) => void;
+}) {
   const [error, setError] = useState<string | null>(null);
   const n = set.proposed_version!;
   const mine = approves(set, me, canWrite);
@@ -322,7 +385,7 @@ function Proposal({ set, me, canWrite, onApproved }: { set: ChangeSet; me: strin
   return (
     <div data-testid="plan-proposal" className="flex flex-col gap-3 px-4 py-3">
       <p className="text-sm">
-        <span className="font-semibold">Version {n} proposed</span> from approved version {set.base_version} · waiting for {who}
+        <span className="font-semibold">Version {n} proposed</span> from {baseWords(set, doc)} · waiting for {who}
       </p>
       <Diff set={set} />
       {error && <Notice tone="error">{error}</Notice>}
@@ -360,6 +423,8 @@ export function PlanChanges({
   const q = useQuery(`plan-edit|${roadmap.slug}|${opened?.id ?? ""}|${opened?.lock_version ?? ""}`, () => sets(roadmap.slug), { keepPrevious: true });
   const [local, setLocal] = useState<ChangeSet | null | undefined>(undefined);
   const [live, setLive] = useState<number | null>(null);
+  const docs = useRoadmapDocs(String(live ?? ""));
+  const doc = docs.get(roadmap.slug);
   const all = q.data ?? [];
   const draft = local !== undefined ? (local?.status === "draft" ? local : null) : (opened ?? all.find((s) => s.status === "draft") ?? null);
   const proposed = [...(local?.status === "proposed" ? [local] : []), ...all.filter((s) => s.status === "proposed" && !s.approved && s.id !== local?.id)];
@@ -367,7 +432,7 @@ export function PlanChanges({
   const superseded = all.filter((s) => s.status === "superseded" && proposed.some((x) => x.proposed_version === s.superseded_by_version));
   if (!draft && proposed.length === 0 && superseded.length === 0 && live == null) return null;
   return (
-    <Panel title="Plan changes" testId="plan-changes" tools={<span className="text-sm text-text2">{roadmap.slug}</span>}>
+    <Panel title="Plan changes" testId="plan-changes" tools={<span className="text-sm text-text2">{roadmapName(roadmap.slug, docs)}</span>}>
       {live != null && (
         <div className="px-4 pt-3">
           <Notice tone="pass" testId="plan-live">
@@ -376,11 +441,12 @@ export function PlanChanges({
         </div>
       )}
       {q.error && <Notice tone="error">{q.error}</Notice>}
-      {draft && canWrite && <Editor set={draft} onChange={(s) => (setLocal(s), q.reload())} />}
+      {draft && canWrite && <Editor set={draft} doc={doc} onChange={(s) => (setLocal(s), q.reload())} />}
       {proposed.map((s) => (
         <Proposal
           key={s.id}
           set={s}
+          doc={doc}
           me={me}
           canWrite={canWrite}
           onApproved={(n) => {

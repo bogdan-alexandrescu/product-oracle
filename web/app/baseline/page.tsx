@@ -426,7 +426,8 @@ export default function BaselinePage() {
         }
         action={
           <span className="flex flex-wrap items-center gap-2">
-            {canWrite && (
+            {/* The Items tab has its own Add, on the kind it shows: one Add control there (qa-plan-49). */}
+            {canWrite && tab !== "items" && (
               <Button icon="plus" className="h-10" onClick={() => setAdding("goal")}>
                 Add item
               </Button>
@@ -444,10 +445,14 @@ export default function BaselinePage() {
         }
         status={
           <>
+            {/* On a phone the Counts strip right below says it ("Goals confirmed"): the chip
+                would stand on a line by itself above the actions (qa-plan-50). */}
             {s && (
-              <Chip kind="pass" data-testid="confirmed-chip">
-                {s.confirmed_goals} confirmed
-              </Chip>
+              <span className="inline-flex max-[600px]:hidden">
+                <Chip kind="pass" data-testid="confirmed-chip">
+                  {s.confirmed_goals} confirmed
+                </Chip>
+              </span>
             )}
             {capsReady && !canComment && <ViewOnly />}
           </>

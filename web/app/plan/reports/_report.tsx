@@ -6,12 +6,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Button, Chip, InfoTip, Label, Notice, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatDay } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
-import { HealthChip, periodBound, shortDay, slackText, type Report, type ReportTrack } from "./_lib";
+import { HealthChip, HORIZON_LABEL, periodBound, slackText, type Report, type ReportTrack } from "./_lib";
 
 const path = (id: string) => ({ params: { path: { report_id: id } } });
 
@@ -109,24 +109,31 @@ function Figures({ report }: { report: Report }) {
     ["At risk", s.at_risk],
     ["Off track", s.off_track],
     ["Dates slipping", s.slips],
-    ["Now without an issue", s.untracked_now],
+    ["Now items without an issue", s.untracked_now],
     ["Unplanned work", s.unplanned],
     ["Dates verified", s.dates_verified],
     ["Dates withdrawn", s.dates_withdrawn],
   ];
   return (
-    <dl
-      aria-label="Summary"
-      data-testid="report-figures"
-      className="grid grid-cols-4 overflow-hidden rounded-panel border border-line bg-surface shadow-panel max-[600px]:grid-cols-2"
-    >
-      {items.map(([label, value]) => (
-        <div key={label} className="flex min-w-0 flex-col-reverse justify-end border-r border-b border-line px-4 pt-3 pb-2.5 max-[600px]:px-3">
-          <dt className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{label}</dt>
-          <dd className="tnum font-display text-[26px] leading-8 font-bold tracking-heading">{value}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="flex flex-col gap-1.5">
+      <dl
+        aria-label="Summary"
+        data-testid="report-figures"
+        className="grid grid-cols-4 overflow-hidden rounded-panel border border-line bg-surface shadow-panel max-[600px]:grid-cols-2"
+      >
+        {items.map(([label, value]) => (
+          <div key={label} className="flex min-w-0 flex-col-reverse justify-end border-r border-b border-line px-4 pt-3 pb-2.5 max-[600px]:px-3">
+            <dt className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{label}</dt>
+            <dd className="tnum font-display text-[26px] leading-8 font-bold tracking-heading">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      {/* qa-plan-56: where the items behind the totals are listed. */}
+      <p data-testid="report-figures-note" className="text-sm text-text2">
+        Dates slipping are listed under each track&apos;s Needs attention. Now items without an issue are counted in each
+        track&apos;s Alignment, as untracked.
+      </p>
+    </div>
   );
 }
 
@@ -150,7 +157,7 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
           {nxt ? (
             <>
               {nxt.name}
-              {nxt.date ? `, ${shortDay(nxt.date)}` : ""}{" "}
+              {nxt.date ? `, ${formatDay(nxt.date)}` : ""}{" "}
               <span className="text-text2">{nxt.date ? (nxt.verified ? "· a verified basis supports it" : "· no verified basis") : "· undated"}</span>
             </>
           ) : (
@@ -179,7 +186,7 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
                   <Link href={n.link} prefetch={false} className="font-semibold text-accent-ink hover:underline">
                     {n.title}
                   </Link>{" "}
-                  <span className="text-text2">({n.horizon})</span>: {n.detail}
+                  <span className="text-text2">· {HORIZON_LABEL[n.horizon] ?? n.horizon}</span>: {n.detail}
                 </li>
               ))}
             </ul>
@@ -209,12 +216,12 @@ function TrackPanel({ track: t, asOfNow }: { track: ReportTrack; asOfNow: boolea
             <ul className="space-y-1.5 text-[15px]">
               {t.dates.verified.map((d) => (
                 <li key={`v-${d.reference}-${d.supports_date}`}>
-                  Verified: <span className="font-mono text-sm">{d.reference}</span> supports {shortDay(d.supports_date)}
+                  Verified: {d.reference} supports {formatDay(d.supports_date)}
                 </li>
               ))}
               {t.dates.withdrawn.map((d) => (
                 <li key={`w-${d.reference}-${d.supports_date}`}>
-                  Withdrawn: <span className="font-mono text-sm">{d.reference}</span> ({shortDay(d.supports_date)})
+                  Withdrawn: {d.reference} ({formatDay(d.supports_date)})
                   {d.reason ? `: ${d.reason}` : ""}
                 </li>
               ))}

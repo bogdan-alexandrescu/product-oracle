@@ -67,7 +67,7 @@ export function ItemsTab({
       ),
     },
     { key: "kind", header: "Kind", width: "150px", cell: (e) => <span className="text-text2">{label(e.type)}</span> },
-    { key: "state", header: "State", width: "120px", cell: (e) => <NodeStatusBadge status={e.status} /> },
+    { key: "state", header: "Review", width: "120px", cell: (e) => <NodeStatusBadge status={e.status} /> },
     {
       key: "updated",
       header: "Updated",
@@ -107,7 +107,11 @@ export function ItemsTab({
         rowKey={(e) => e.id}
         selected={selectedId}
         onSelect={(id) => onOpen(id)}
-        empty="No items of this kind yet"
+        empty={
+          filter === "all"
+            ? "No risks, assumptions, requirements or strategy choices yet"
+            : `No ${KINDS.find((k) => k.value === filter)!.label.toLowerCase()} yet`
+        }
       />
     </Panel>
   );

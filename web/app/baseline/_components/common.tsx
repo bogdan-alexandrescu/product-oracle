@@ -1,7 +1,7 @@
 import { Chip, Ring, type ChipKind } from "@/components/ds";
 import { LockIcon } from "@/components/ui";
 import type { EntityOut, GraphOut, NodeStatus } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatPercent } from "@/lib/format";
 import { goalTree } from "@/lib/goal-tree";
 
 /** Default `low` threshold of the confidence settings; the trace report carries the company's. */
@@ -48,7 +48,7 @@ export function confidenceTone(value: number, low = DEFAULT_LOW): "green" | "amb
 
 const RING_TONE = { green: "accent", amber: "warn", red: "crit" } as const;
 
-/** Confidence as a number chip (evidence, claims, link previews): "0.78". */
+/** Confidence as a number chip (evidence, claims, link previews): "78%". */
 export function ConfidenceBadge({ value, low = DEFAULT_LOW }: { value: number | null | undefined; low?: number }) {
   if (value == null) {
     return (
@@ -58,10 +58,11 @@ export function ConfidenceBadge({ value, low = DEFAULT_LOW }: { value: number | 
     );
   }
   const tone = confidenceTone(value, low);
+  // Out of 100, as the rings read (never "0.78" on one screen and "78" on the next).
   return (
-    <Chip kind={tone === "green" ? "pass" : tone === "amber" ? "warn" : "crit"} title="Confidence">
+    <Chip kind={tone === "green" ? "pass" : tone === "amber" ? "warn" : "crit"} title={`Confidence ${formatPercent(value)}`}>
       <span data-testid="confidence" data-tone={tone}>
-        {value.toFixed(2)}
+        {formatPercent(value)}
       </span>
     </Chip>
   );
@@ -78,9 +79,12 @@ export function ConfidenceRing({
   size?: number;
 }) {
   const tone = value == null ? undefined : confidenceTone(value, low);
+  // The ring's number is a percentage: its name and tooltip say so (prod-7).
+  const words = value == null ? "Not scored yet" : `Confidence ${formatPercent(value)}`;
   return (
-    <span data-testid="confidence" data-tone={tone} className="inline-flex align-middle" title="Confidence">
+    <span data-testid="confidence" data-tone={tone} className="inline-flex align-middle" title={words}>
       <Ring
+        label={words}
         value={value == null ? null : value * 100}
         size={size}
         stroke={size >= 40 ? 5 : 4}
@@ -185,9 +189,45 @@ export function formatValue(value: unknown): string {
   return JSON.stringify(value);
 }
 
-/** "attrs.status" -> "status"; plain fields stay as they are. */
-export function fieldLabel(field: string): string {
-  return field.startsWith("attrs.") ? field.slice("attrs.".length) : field;
+/** A field's name in words, as describe.py names it in proposal titles. */
+const FIELD_WORDS: Record<string, string> = {
+  body: "description",
+  current: "current value",
+  contribution: "strength",
+  target_text: "target (as written)",
+  horizon_text: "horizon (as written)",
+};
+
+/** "attrs.status" -> "delivery status" (a feature's) or "status"; "body" -> "description"; "_" as spaces. */
+export function fieldLabel(field: string, entityType?: string | null): string {
+  const bare = field.replace(/^attrs\./, "");
+  if (bare === "status" && entityType === "feature") return "delivery status";
+  return FIELD_WORDS[bare] ?? bare.replaceAll("_", " ");
+}
+
+/** A field name to start a line or a chip with: "Delivery status". */
+export const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
+/** Fields whose values are a fixed set of states, shown capitalized ("in_progress" -> "In progress"). */
+const STATE_FIELDS = new Set(["status"]);
+const STRENGTHS = ["none", "weak", "medium", "strong"];
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A field's value in words: states capitalized, strengths named, items by their title, never JSON. */
+export function valueWords(field: string, value: unknown, graph?: GraphOut): string {
+  const bare = field.replace(/^attrs\./, "");
+  if (value == null || value === "") return "—";
+  if (bare === "contribution" && typeof value === "number" && Number.isInteger(value) && value >= 0 && value < STRENGTHS.length)
+    return capitalize(STRENGTHS[value]);
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (typeof value === "number") return String(value);
+  if (Array.isArray(value)) return value.map((v) => valueWords("", v, graph)).join(", ");
+  if (typeof value === "object") return "a new value";
+  const text = String(value);
+  if (UUID.test(text.trim())) return graph?.entities.find((e) => e.id === text.trim().toLowerCase())?.title ?? "an item that was removed";
+  if (STATE_FIELDS.has(bare) && /^[a-z][a-z0-9_]*$/.test(text)) return capitalize(text.replaceAll("_", " "));
+  if (/^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(text)) return text.replaceAll("_", " ");
+  return text;
 }
 
 export function titleOf(graph: GraphOut | undefined, id: string | null | undefined): string {

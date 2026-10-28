@@ -59,6 +59,7 @@ HEALTH_LABEL = {
     "paused": "Paused",
     "closed": "Closed",
 }
+HORIZON_LABEL = {"now": "Now", "next": "Next", "later": "Later"}
 SLIP_KINDS = ("date_slip", "overdue")
 DRIFT_KINDS = ("ahead", "unplanned")
 
@@ -397,6 +398,11 @@ async def content_for(
     }
 
 
+def _day(iso: str) -> str:
+    """ "Nov 30" from "2026-11-30"."""
+    return short_day(date.fromisoformat(iso[:10]))
+
+
 def _line(text: str | None) -> str:
     return " ".join((text or "").split())
 
@@ -433,7 +439,7 @@ def markdown(content: dict[str, Any]) -> str:
         lines += ["", f"## {_line(t['prd']['title'])} · {health}", "", _line(t["headline"]), ""]
         nxt = t.get("next_milestone")
         if nxt:
-            day = nxt["date"] or "no date"
+            day = short_day(date.fromisoformat(nxt["date"])) if nxt["date"] else "no date"
             basis = "verified basis" if nxt["verified"] else "no verified basis"
             lines.append(f"- Next milestone: {_line(nxt['name'])}, {day} ({basis})")
         a = t["alignment"]
@@ -446,7 +452,8 @@ def markdown(content: dict[str, Any]) -> str:
         if t["needs_attention"]:
             lines += ["", f"### Needs attention ({when})", ""]
             lines += [
-                f"- [{_link_text(n['title'])}]({n['link']}) ({n['horizon']}): {_line(n['detail'])}"
+                f"- [{_link_text(n['title'])}]({n['link']}) · "
+                f"{HORIZON_LABEL.get(n['horizon'], n['horizon'])}: {_line(n['detail'])}"
                 for n in t["needs_attention"]
             ]
         if t["drift"]:
@@ -456,11 +463,11 @@ def markdown(content: dict[str, Any]) -> str:
         if dates["verified"] or dates["withdrawn"]:
             lines += ["", "### Dates", ""]
             lines += [
-                f"- Verified: {_line(d['reference'])} supports {d['supports_date']}"
+                f"- Verified: {_line(d['reference'])} supports {_day(d['supports_date'])}"
                 for d in dates["verified"]
             ]
             lines += [
-                f"- Withdrawn: {_line(d['reference'])} ({d['supports_date']})"
+                f"- Withdrawn: {_line(d['reference'])} ({_day(d['supports_date'])})"
                 + (f": {_line(d['reason'])}" if d.get("reason") else "")
                 for d in dates["withdrawn"]
             ]

@@ -109,9 +109,56 @@ def one_count(reasons: Iterable[str]) -> list[str]:
     return out
 
 
+# A reason naming one baseline item by its ref ("feature:delivery-x changed").
+_REF = re.compile(r"([a-z][a-z_]*):\S+ (.+)")
+# What there is one of for an item: its feature, the product.
+_THE = ("feature", "product")
+
+
+def _noun(kind: str, n: int) -> str:
+    word = kind.replace("_", " ")
+    if n == 1:
+        return f"the {word}" if kind in _THE else f"a {word}"
+    if word.endswith("y") and not word.endswith(("ay", "ey", "oy", "uy")):
+        return f"{n} {word[:-1]}ies"
+    return f"{n} {word}{'es' if word.endswith(('s', 'x', 'ch', 'sh')) else 's'}"
+
+
+def in_words(reasons: Iterable[str]) -> list[str]:
+    """Reasons naming baseline items by ref, said in words (prod-6): "feature:delivery-x
+    changed", "goal:g-b changed", "goal:g-c changed" read "The feature and 2 goals
+    changed"; one line per verb, where its first reason stood. Other reasons are kept."""
+    out: list[str | tuple[str, dict[str, int]]] = []
+    by_verb: dict[str, dict[str, int]] = {}
+    for reason in reasons:
+        m = _REF.fullmatch(reason)
+        if not m:
+            if reason not in out:
+                out.append(reason)
+            continue
+        kind, verb = m[1], m[2]
+        if verb not in by_verb:
+            by_verb[verb] = {}
+            out.append((verb, by_verb[verb]))
+        by_verb[verb][kind] = by_verb[verb].get(kind, 0) + 1
+    lines: list[str] = []
+    for entry in out:
+        if isinstance(entry, str):
+            lines.append(entry)
+            continue
+        verb, kinds = entry
+        nouns = [_noun(k, n) for k, n in kinds.items()]
+        subject = nouns[0] if len(nouns) == 1 else f"{', '.join(nouns[:-1])} and {nouns[-1]}"
+        many = len(nouns) > 1 or next(iter(kinds.values())) > 1
+        said = verb.replace("was ", "were ", 1) if many and verb.startswith("was ") else verb
+        line = f"{subject} {said}"
+        lines.append(line if lines else line[0].upper() + line[1:])
+    return lines
+
+
 def stale_why(reasons: Iterable[str] | None, default: str) -> str:
-    """An item's stale reasons as one line, each said once."""
-    return "; ".join(one_count(reasons or [])) or default
+    """An item's stale reasons as one line, each said once, in words."""
+    return "; ".join(in_words(one_count(reasons or []))) or default
 
 
 # A reason naming what the reader may not see, said without it (#541).

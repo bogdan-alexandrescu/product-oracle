@@ -45,6 +45,13 @@ const fig = (n: unknown, unit: unknown) => (unit === "%" ? `${n}%` : `${n} ${uni
 /** The fields a person reads as one: a target is its value, unit and comparison. */
 const GROUP: Record<string, string> = { metric: "metric", unit: "target", comparison: "target", target: "target", horizon: "horizon", owner: "owner" };
 
+/** The interview's title names its gap (goal_interview.interview_title): only an owner missing asks who owns it. */
+export function interviewTitle(title: string, missing: readonly string[]): string {
+  const short = title.slice(0, 200 - 20);
+  if (missing.length > 0 && missing.every((k) => k === "owner")) return `Who should own “${short}”?`;
+  return `Make “${short}” measurable`;
+}
+
 /** goal_check.missing as the interview names it: "target, horizon, owner". */
 export function missingGroups(missing: readonly string[]): string[] {
   return [...new Set(missing.map((k) => GROUP[k] ?? k))];
@@ -154,7 +161,7 @@ export async function routeGoalInterview(ctx: GoalInterviewContext, req: Request
       subject_url: `/baseline?entity=${goal.id}`,
       document_id: null,
       run_id: null,
-      title: `Make “${goal.title}” measurable`,
+      title: interviewTitle(goal.title, check(goal).missing),
       visibility: priv ? "private" : "open",
       author_only: false,
       status: "open",

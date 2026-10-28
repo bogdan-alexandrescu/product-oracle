@@ -320,7 +320,7 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
                       </Chip>
                     )}
                   </span>
-                  {t.description && <span className="mt-0.5 block truncate text-sm text-text2">{t.description}</span>}
+                  {t.description && <span className="mt-0.5 block text-sm text-text2" data-testid="template-description">{t.description}</span>}
                 </span>
               </label>
             );

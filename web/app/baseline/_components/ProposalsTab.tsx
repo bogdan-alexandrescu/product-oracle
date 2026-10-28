@@ -9,7 +9,7 @@ import type { GraphOut, ProposalOut, Schemas } from "@/lib/api/client";
 import { useCompanyZone, zoneDay } from "@/lib/dates";
 import { formatDateTime } from "@/lib/format";
 
-import { ACCEPT_LOCKS, formatValue, titleOf } from "./common";
+import { ACCEPT_LOCKS, fieldLabel, titleOf, valueWords } from "./common";
 import { LIMIT_LABEL, suggestedBlocker } from "./PromoteBlocker";
 
 type Payload = { op?: string; kind?: string; fields?: Record<string, unknown>; reason?: string | null; origin?: string };
@@ -186,8 +186,19 @@ function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
 /** A goal the graph says is not measurable yet (B5's goal_check). */
 const vagueGoal = (graph: GraphOut | undefined, id: string) => graph?.entities.find((e) => e.id === id && e.type === "goal")?.goal_check?.measurable === false;
 
-/** A proposal's field key in words: "attrs.milestone" is "milestone". */
-export const fieldName = (key: string) => key.replace(/^attrs\./, "");
+/** A proposal's field key in words: "attrs.milestone" is "milestone", "attrs.status" "status". */
+export const fieldName = (key: string) => fieldLabel(key);
+
+/** Fields the Details list leaves out: ids and keys people never read. */
+const HIDDEN_FIELDS = new Set(["id", "key"]);
+const OP_WORD: Record<string, string> = { create: "Add", update: "Change", delete: "Remove" };
+
+/** Details' first line: "Change:", "Add feature:", "Remove link". */
+function opLine(payload: Payload, type: string | undefined, fields: number): string {
+  const verb = OP_WORD[payload.op ?? "update"] ?? "Change";
+  const what = payload.kind === "edge" ? " link" : payload.op === "update" || !type ? "" : ` ${type.replaceAll("_", " ")}`;
+  return `${verb}${what}${fields > 0 ? ":" : ""}`;
+}
 
 type Overlap = Schemas["ProposalOverlap"];
 
@@ -234,10 +245,10 @@ function OverlapWarning({
         {overlaps.map((o) => (
           <li key={o.field} data-testid={`overlap-${fieldName(o.field)}`} className="flex min-w-0 flex-col gap-0.5">
             <p data-testid="overlap-now" className="[overflow-wrap:anywhere]">
-              <span className="text-text2">{fieldName(o.field)} now:</span> <b className="font-semibold">{formatValue(o.current)}</b>
+              <span className="text-text2">{fieldName(o.field)} now:</span> <b className="font-semibold">{valueWords(o.field, o.current)}</b>
             </p>
             <p data-testid="overlap-proposed" className="[overflow-wrap:anywhere]">
-              <span className="text-text2">this proposal:</span> <b className="font-semibold">{formatValue(o.proposed)}</b>
+              <span className="text-text2">this proposal:</span> <b className="font-semibold">{valueWords(o.field, o.proposed)}</b>
             </p>
           </li>
         ))}
@@ -348,7 +359,8 @@ function ProposalList({
           <ul aria-label="Proposals">
             {proposals.map((p) => {
               const payload = p.payload as Payload;
-              const fields = flatFields(payload.fields);
+              const fields = flatFields(payload.fields).filter(([k]) => !HIDDEN_FIELDS.has(k));
+              const type = (p.entity_id && graph?.entities.find((e) => e.id === p.entity_id)?.type) || (payload.fields?.type as string | undefined);
               const overlaps = p.overlaps ?? [];
               const warn = canWrite && warning === p.id && overlaps.length > 0;
               const siblings = p.entity_id ? proposals.filter((o) => o.id !== p.id && o.entity_id === p.entity_id).map((o) => o.id) : [];
@@ -389,15 +401,15 @@ function ProposalList({
                     )}
                     <details className="text-sm">
                       <summary className="w-fit cursor-pointer text-[13px] font-semibold text-text2 hover:text-text">Details</summary>
-                      <p className="mt-1 font-mono text-text2">
-                        {payload.op ?? "change"} {payload.kind ?? "entity"}
+                      <p className="mt-1 text-text2" data-testid="proposal-op">
+                        {opLine(payload, type, fields.length)}
                       </p>
                       {fields.length > 0 && (
-                        <dl className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5" aria-label="Proposed fields">
+                        <dl className="mt-0.5 flex flex-col gap-0.5" aria-label="Proposed fields">
                           {fields.map(([k, v]) => (
-                            <div key={k} className="flex min-w-0 gap-1">
-                              <dt className="font-mono text-text2">{k}:</dt>
-                              <dd className="truncate font-semibold">{formatValue(v)}</dd>
+                            <div key={k} className="flex min-w-0 flex-wrap gap-1 [overflow-wrap:anywhere]">
+                              <dt className="text-text2">{fieldLabel(k, type)}</dt>{" "}
+                              <dd className="font-semibold">→ {valueWords(k, v, graph)}</dd>
                             </div>
                           ))}
                         </dl>
