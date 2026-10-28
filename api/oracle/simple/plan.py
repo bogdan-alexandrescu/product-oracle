@@ -444,6 +444,8 @@ def compute(data: dict[str, Any] | None) -> View:
                 m.feature_codes.append(f["code"])
             effort = None if f.get("pm_owned") else (f.get("effort") or [None] * n)[i]
             start = end = None
+            # Oracle's own placement is estimated; weeks the PRD names are the PRD's.
+            stated = False
             if code in weeks:
                 ws = weeks[code]
                 k = len(ws)
@@ -451,6 +453,7 @@ def compute(data: dict[str, Any] | None) -> View:
                 word, a, b = _word((f.get("order") or [""] * n)[i])
                 prev = last.get(code)
                 if word == "weeks":
+                    stated = True
                     lo, hi = min(max(a - 1, 0), k - 1), min(max(b - 1, 0), k - 1)  # type: ignore[operator]
                 elif word == "parallel" and prev is not None:
                     lo = prev[0]
@@ -476,7 +479,7 @@ def compute(data: dict[str, Any] | None) -> View:
                 name=f"{f['name']}, part {i + 1} of {n}" if n > 1 else f["name"],
                 milestone=code, milestone_name=m.name,
                 milestone_start=m.start_date, milestone_end=m.end_date,
-                start_date=start, end_date=end, estimated=True,
+                start_date=start, end_date=end, estimated=not stated,
                 effort_weeks=effort, goal=(f.get("goals") or [None])[0],
                 pm_owned=bool(f.get("pm_owned")),
             ))  # fmt: skip
@@ -559,7 +562,9 @@ async def ensure(
     db: AsyncSession, document: Document, *, force: bool = False, persist: bool = True
 ) -> tuple[SimplePrdPlan | None, DocumentVersion | None]:
     """The PRD's stored plan, read again when a newer version is approved (or ``force``);
-    with no tables the ``prd_plan`` job is queued. One row per PRD, updated in place."""
+    with no tables the ``prd_plan`` job is queued. One row per PRD, updated in place.
+    ``persist=False`` (a read) writes and queues nothing: a version not stored yet is read
+    from its tables into a row never added, else it has no plan yet ("none")."""
     from oracle.jobs import service as jobs
 
     v = await approved_version(db, document.id)
@@ -568,13 +573,16 @@ async def ensure(
         return row, None
     if row is not None and row.version_id == v.id and not force:
         return row, v
+    if not persist:
+        shown = SimplePrdPlan(document_id=document.id, data={})
+        _read(shown, v)
+        if shown.status == "reading":
+            shown.status = "none"
+        return shown, v
     if row is None:
         row = SimplePrdPlan(document_id=document.id, data={})
-        if persist:
-            db.add(row)
+        db.add(row)
     _read(row, v)
-    if not persist:
-        return row, v
     await db.flush()
     if row.status == "reading":
         try:
@@ -584,6 +592,21 @@ async def ensure(
             row.status, row.error = "none", str(e)
         await db.flush()
     return row, v
+
+
+# Approved version (id, text hash) -> its tables parsed: an approved version's text does
+# not change, so each is parsed once per process (bounded).
+_PARSED: dict[tuple[uuid.UUID, str, Any], dict[str, Any] | None] = {}
+_PARSED_MAX = 512
+
+
+def _parsed(v: DocumentVersion) -> dict[str, Any] | None:
+    key = (v.id, v.content_hash or "", v.approved_at)
+    if key not in _PARSED:
+        if len(_PARSED) >= _PARSED_MAX:
+            _PARSED.pop(next(iter(_PARSED)))
+        _PARSED[key] = parse(v.markdown or "", (v.approved_at or company_time.now()).date())
+    return _PARSED[key]
 
 
 async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, View]:
@@ -610,7 +633,7 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
         if row is not None and row.version_id == v.id:
             data = {**row.data, "source": row.source} if row.status == "ready" else None
         else:
-            data = parse(v.markdown or "", (v.approved_at or company_time.now()).date())
+            data = _parsed(v)
         if data:
             out[pid] = compute(data)
     return out
@@ -670,6 +693,12 @@ async def run_job(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     row.status, row.source, row.data, row.error = "ready", "oracle", data, None
     await s.flush()
     return {"read": True, "milestones": len(data["milestones"])}
+
+
+async def on_version_approved(db: AsyncSession, document: Document) -> None:
+    """A PRD version was approved: read its plan now (its tables, else the ``prd_plan``
+    job), so every page that reads plans sees it."""
+    await ensure(db, document)
 
 
 async def job_failed(s: AsyncSession, job: Any) -> None:

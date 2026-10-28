@@ -86,6 +86,9 @@ class Entry:
     needed_by: list[uuid.UUID] = field(default_factory=list)
     blockers: list[constraints.Blocker] = field(default_factory=list)
     suggestion: RoadmapDateSuggestion | None = None
+    # plan-model review: the span of all the item's open slice suggestions (what Accept
+    # applies), shown as the item's suggestion; None: the suggestion's own dates.
+    suggestion_span: tuple[date, date] | None = None
     flags: list[constraints.Flag] = field(default_factory=list)
     # The track owner's role now (None: no owner, or a disabled one): D-a.
     owner_role: str | None = None
@@ -282,14 +285,19 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     }
     blockers = await _blockers(db, {b for r in rows for b in r.blocker_ids or []})
     cut = await _cut(db, roadmap_ids)
-    # The item's first open suggestion (plan-model: its first slice's).
+    # The item's first open suggestion (plan-model: its first slice's, shown with the span
+    # of all its open slices, the dates Accept applies).
     suggestions: dict[uuid.UUID, RoadmapDateSuggestion] = {}
+    spans: dict[uuid.UUID, tuple[date, date]] = {}
     for s in await db.scalars(
         select(RoadmapDateSuggestion)
         .where(RoadmapDateSuggestion.status == "open")
         .order_by(RoadmapDateSuggestion.start_date)
     ):
-        suggestions.setdefault(s.item_id, s)
+        first = suggestions.setdefault(s.item_id, s)
+        if s.slice_code is not None and first.slice_code is not None:
+            a, b = spans.get(s.item_id, (s.start_date, s.end_date))
+            spans[s.item_id] = (min(a, s.start_date), max(b, s.end_date))
     deciders = {
         p.document_id: p.decider_id
         for p in await db.scalars(
@@ -331,6 +339,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 milestone=milestone,
                 blockers=[blockers[b] for b in row.blocker_ids or [] if b in blockers],
                 suggestion=suggestions.get(row.id),
+                suggestion_span=spans.get(row.id),
                 owner_role=owner_roles.get(track.id) if track is not None else None,
                 owner_name=people[row.owner_id][1]
                 if row.owner_id in people
@@ -512,14 +521,20 @@ def _date(d: dates.Dated) -> SimpleDate:
     return SimpleDate(date=d.date, source=d.source, estimated=d.estimated)
 
 
-def suggestion_out(s: RoadmapDateSuggestion, row: RoadmapItem, may: bool) -> DateSuggestionOut:
+def suggestion_out(
+    s: RoadmapDateSuggestion,
+    row: RoadmapItem,
+    may: bool,
+    span: tuple[date, date] | None = None,
+) -> DateSuggestionOut:
+    start, end = span or (s.start_date, s.end_date)
     return DateSuggestionOut(
         id=s.id,
         item_id=s.item_id,
         item_key=row.item_key,
         item_title=row.title,
-        start_date=s.start_date,
-        end_date=s.end_date,
+        start_date=start,
+        end_date=end,
         basis=s.basis,
         status=s.status,  # type: ignore[arg-type]
         created_at=s.created_at,
@@ -668,7 +683,9 @@ def item_out(
         end=_date(r.end),
         source=r.source,
         estimated=r.estimated,
-        suggestion=suggestion_out(e.suggestion, row, may) if e.suggestion is not None else None,
+        suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
+        if e.suggestion is not None
+        else None,
         milestone=e.milestone,
         phases=[
             SimplePhase(key=p.key, start=p.start, end=p.end, estimated=p.estimated)  # type: ignore[arg-type]

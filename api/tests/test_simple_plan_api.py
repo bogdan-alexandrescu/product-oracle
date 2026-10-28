@@ -60,8 +60,8 @@ from sqlalchemy import func, select
 
 from oracle import company_time
 from oracle.auth.models import User
-from oracle.docs.models import Document, DocumentVersion
 from oracle.baseline.models import Entity
+from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs.models import LlmJob
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackMilestone

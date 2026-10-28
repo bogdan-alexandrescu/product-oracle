@@ -41,34 +41,40 @@ const GOALS: { name: string; targets: [string, string][] }[] = [
   { name: "Revenue", targets: [["M1", "$0 (no paid plan yet)"], ["M2", "$5,000 monthly recurring revenue"], ["M3", "$20,000 monthly recurring revenue"]] },
 ];
 
-/** [feature code, plain name, goal, then per milestone: [milestone, engineer-weeks (null: PM-owned), week offset in it]]. */
-type Feature = [string, string, string, [string, number | null, number][]];
+/**
+ * [feature code, plain name, goal, then per milestone: [milestone, engineer-weeks (null: PM-owned),
+ * week offset in it, whether the PRD states those weeks ("weeks 2-4") or Oracle placed the slice]].
+ */
+type Feature = [string, string, string, [string, number | null, number, boolean][]];
 const FEATURES: Feature[] = [
-  ["F-01", "Setup checklist", "Activation", [["M1", 3, 0]]],
-  ["F-02", "Sample data import", "Activation", [["M1", 3, 1]]],
-  ["F-03", "Setup failure alerts", "Reliability", [["M1", 2, 0]]],
-  ["F-04", "Pricing page words", "Revenue", [["M1", null, 2]]],
-  ["F-05", "Team invites", "Growth", [["M1", 3, 1], ["M2", 2, 0]]],
-  ["F-06", "Setup error report", "Reliability", [["M1", 2, 2]]],
-  ["F-07", "Bulk import", "Activation", [["M2", 3, 0]]],
-  ["F-08", "Usage dashboard", "Growth", [["M2", 3, 1]]],
-  ["F-09", "Retry queue", "Reliability", [["M2", 3, 0]]],
-  ["F-10", "Launch email", "Growth", [["M2", null, 3]]],
-  ["F-11", "Self-serve checkout", "Revenue", [["M2", 2, 2], ["M3", 3, 0]]],
-  ["F-12", "Referral link", "Growth", [["M2", 2, 2], ["M3", 2, 1]]],
-  ["F-13", "Public signup", "Growth", [["M3", 4, 0]]],
-  ["F-14", "Plan limits", "Revenue", [["M3", 3, 2]]],
-  ["F-15", "Status page", "Reliability", [["M3", 2, 0]]],
-  ["F-16", "Onboarding emails", "Activation", [["M3", 2, 3]]],
-  ["F-17", "Annual billing", "Revenue", [["M3", 3, 3]]],
-  ["F-18", "Pricing questions page", "Revenue", [["M3", null, 4]]],
-  ["F-19", "Load test", "Reliability", [["M3", 2, 4]]],
-  ["F-20", "Help center search", "Activation", [["M3", 2, 4]]],
+  ["F-01", "Setup checklist", "Activation", [["M1", 3, 0, true]]],
+  ["F-02", "Sample data import", "Activation", [["M1", 3, 1, true]]],
+  ["F-03", "Setup failure alerts", "Reliability", [["M1", 2, 0, false]]],
+  ["F-04", "Pricing page words", "Revenue", [["M1", null, 2, false]]],
+  ["F-05", "Team invites", "Growth", [["M1", 3, 1, true], ["M2", 2, 0, true]]],
+  ["F-06", "Setup error report", "Reliability", [["M1", 2, 2, false]]],
+  ["F-07", "Bulk import", "Activation", [["M2", 3, 0, true]]],
+  ["F-08", "Usage dashboard", "Growth", [["M2", 3, 1, false]]],
+  ["F-09", "Retry queue", "Reliability", [["M2", 3, 0, true]]],
+  ["F-10", "Launch email", "Growth", [["M2", null, 3, false]]],
+  ["F-11", "Self-serve checkout", "Revenue", [["M2", 2, 2, true], ["M3", 3, 0, false]]],
+  ["F-12", "Referral link", "Growth", [["M2", 2, 2, false], ["M3", 2, 1, false]]],
+  ["F-13", "Public signup", "Growth", [["M3", 4, 0, true]]],
+  ["F-14", "Plan limits", "Revenue", [["M3", 3, 2, false]]],
+  ["F-15", "Status page", "Reliability", [["M3", 2, 0, true]]],
+  ["F-16", "Onboarding emails", "Activation", [["M3", 2, 3, false]]],
+  ["F-17", "Annual billing", "Revenue", [["M3", 3, 3, false]]],
+  ["F-18", "Pricing questions page", "Revenue", [["M3", null, 4, false]]],
+  ["F-19", "Load test", "Reliability", [["M3", 2, 4, false]]],
+  ["F-20", "Help center search", "Activation", [["M3", 2, 4, false]]],
 ];
+
+/** A plan feature's plain name (its slices in more than one milestone are named "..., part i of n"). */
+export const planFeatureName = (code: string): string | undefined => FEATURES.find(([c]) => c === code)?.[1];
 
 const inHoliday = (day: string) => HOLIDAYS.some((h) => day >= h.start && day <= h.end);
 
-/** A slice placed inside its milestone (Oracle estimates it): a Monday start, its weeks long. */
+/** A slice placed inside its milestone (the PRD's weeks, else Oracle's): a Monday start, its weeks long. */
 function placed(m: Milestone, weeks: number | null, offset: number): { start: string; end: string } {
   let start = addDays(m.start, offset * 7);
   while (inHoliday(start)) start = addDays(start, 7);
@@ -78,20 +84,22 @@ function placed(m: Milestone, weeks: number | null, offset: number): { start: st
 
 export const planSlices = (): Slice[] =>
   FEATURES.flatMap(([code, name, goal, parts]) =>
-    parts.map(([mc, weeks, offset], k) => {
+    parts.map(([mc, weeks, offset, stated], k) => {
       const m = MILESTONES.find((x) => x.code === mc)!;
       const at = placed(m, weeks, offset);
       return {
         code: parts.length > 1 ? `${code}${"abcdefgh"[k]}` : code,
         feature_code: code,
-        name,
+        // A feature built over n > 1 milestones: one slice per milestone, "<name>, part i of n".
+        name: parts.length > 1 ? `${name}, part ${k + 1} of ${parts.length}` : name,
         milestone: m.code,
         milestone_name: m.name,
         milestone_start: m.start,
         milestone_end: m.end,
         start_date: at.start,
         end_date: at.end,
-        estimated: true,
+        // Estimated only when Oracle placed the slice; the PRD's own weeks are not.
+        estimated: !stated,
         effort_weeks: weeks,
         goal,
         pm_owned: weeks === null,
@@ -134,7 +142,7 @@ export const seedPlan = (): PlanDb => ({ read_at: "2026-10-20T15:05:00Z", versio
 export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], role: Role): PlanOut {
   const can = role === "owner";
   if (!plan) {
-    return { prd, version: null, status: "none", source: null, dated: false, message: "This PRD has no plan yet.", milestones: [], slices: [], goals: [], goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: null };
+    return { prd, version: null, status: "none", source: null, dated: false, message: "This PRD has no approved version yet.", milestones: [], slices: [], goals: [], goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: null };
   }
   const slices = planSlices();
   const weeks = new Map<string, number>();

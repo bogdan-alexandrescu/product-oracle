@@ -34,8 +34,7 @@ async def _doc(db, principal, prd: str):
 async def get_simple_prd_plan(prd: str, principal: Reader, db: TenantDB) -> SimplePlanOut:
     """The PRD's plan as its latest approved version has it."""
     document = await _doc(db, principal, prd)
-    row, v = await plan.ensure(db, document)
-    await db.commit()
+    row, v = await plan.ensure(db, document, persist=False)
     return plan.plan_out(document, row, v, principal)
 
 

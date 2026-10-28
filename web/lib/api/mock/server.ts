@@ -155,7 +155,7 @@ import {
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
-import { PLAN_PRD_SLUG, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
+import { PLAN_PRD_SLUG, planFeatureName, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, takeReaderWrote, type ChatDb } from "./simple-chat";
@@ -943,7 +943,8 @@ function seedSimpleWalkScenario(): Db {
  * volume, M3 Open to all), twenty features F-01..F-20 on the onboarding roadmap (the setup
  * checklist and the sample data import are F-01 and F-02), each with its slices, the plan's
  * span on Home and the priorities, its one-pager's Timeline drawn from the same slices.
- * Invented data.
+ * Team invites (F-05, in M1 and M2) is left undated, so its slices' date suggestions wait in
+ * the roadmap tray's "Dates to confirm". Invented data.
  */
 function seedSimplePlanScenario(): Db {
   const db = seedSimpleHomeOnePrdScenario();
@@ -967,7 +968,11 @@ function seedSimplePlanScenario(): Db {
     const horizon = start <= w.now[1] ? "now" : "next";
     const from = w[horizon][0];
     const k = `plan-${section}`;
-    rm.items.push({ key: k, title: of[0].name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: days(from, start), end: days(from, end), source: "typed", section, heading: `${code} ${of[0].name}` });
+    const name = planFeatureName(code) ?? of[0].name;
+    // Team invites (F-05, a slice in M1 and one in M2) has no dates of its own: Oracle's date
+    // suggestion for it, in the tray's "Dates to confirm", spans its two slices.
+    const dated = code === "F-05" ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
+    rm.items.push({ key: k, title: name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", ...dated, section, heading: `${code} ${name}` });
     rm.ids[k] = stableUuid(`simple-item/${k}`);
   }
   db.simple_one_pager = seedOnePager();

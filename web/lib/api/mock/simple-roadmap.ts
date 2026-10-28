@@ -459,7 +459,28 @@ function visibleItems(db: SimpleDb, role: Role): SeedItem[] {
   return db.items.filter((s) => !restricted || ROADMAPS[s.roadmap].visibility === "company");
 }
 
-/** oracle.simple.suggestions.regenerate: one open suggestion per undated item. */
+/** plan-model (suggestions._planned): the item's dated slices in its PRD's plan; none when the plan does not place it. */
+function plannedSlices(db: SimpleDb, s: SeedItem): Schemas["SimpleSlice"][] {
+  const code = prdCode(s.section);
+  if (!db.plan || !code || ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") !== PLAN_PRD_SLUG) return [];
+  return planSlices().filter((x) => x.feature_code === code && x.start_date && x.end_date);
+}
+
+/**
+ * The item's date suggestion as the roadmap shows it (service.build): its open one; for an
+ * item the plan places, one per slice, shown as their span (the earliest start, the latest
+ * end) under the first slice's id, which Accept applies whole.
+ */
+export function itemSuggestion(db: SimpleDb, itemId: string): Suggestion | undefined {
+  const open = db.suggestions.filter((x) => x.item_id === itemId && x.status === "open").sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0));
+  const first = open[0];
+  if (!first || first.slice_code == null) return first;
+  const start = open.map((x) => x.start_date).reduce((a, b) => (b < a ? b : a));
+  const end = open.map((x) => x.end_date).reduce((a, b) => (b > a ? b : a));
+  return { ...first, start_date: start, end_date: end };
+}
+
+/** oracle.simple.suggestions.regenerate: one open suggestion per undated item (plan-model: per slice of a planned one). */
 function regenerate(db: SimpleDb, today: string): number {
   const w = simpleWindows(today);
   const resolved = new Map(db.items.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
@@ -475,7 +496,27 @@ function regenerate(db: SimpleDb, today: string): number {
     const current = db.suggestions.find((x) => x.item_id === id && x.status === "open");
     const undated = r.start.estimated && r.end.estimated && !closed(s) && s.status !== "done" && !s.drafting_until;
     if (!undated || db.suggestions.some((x) => x.item_id === id && x.status === "dismissed")) {
-      if (current) db.suggestions = db.suggestions.filter((x) => x !== current);
+      db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open"));
+      continue;
+    }
+    // plan-model: an item the plan places gets one suggestion per dated slice, inside its milestone.
+    const planned = plannedSlices(db, s);
+    if (planned.length) {
+      const codes = new Set(planned.map((x) => x.code));
+      db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open" && !codes.has(x.slice_code ?? "")));
+      for (const sl of planned) {
+        const [start, end] = [sl.start_date!, sl.end_date!];
+        const basis = `Placed inside ${sl.milestone} ${sl.milestone_name} by the PRD's order (${word(sl.milestone_start!)} – ${word(sl.milestone_end!)}).`;
+        open += 1;
+        const mine = db.suggestions.find((x) => x.item_id === id && x.status === "open" && x.slice_code === sl.code);
+        if (mine) Object.assign(mine, { start_date: start, end_date: end, basis });
+        else
+          db.suggestions.push({
+            id: stableUuid(`simple-suggestion/${s.key}/${sl.code}/${start}/${end}`),
+            item_id: id, item_key: s.key, item_title: s.title, start_date: start, end_date: end, basis,
+            status: "open", created_at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, slice_code: sl.code, can_decide: false,
+          });
+      }
       continue;
     }
     const window = w[s.horizon];
@@ -570,7 +611,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const r = all.get(s.key)!.r;
     const rm = ROADMAPS[s.roadmap];
     const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
-    const suggestion = db.suggestions.find((x) => x.item_id === db.ids[s.key] && x.status === "open");
+    const suggestion = itemSuggestion(db, db.ids[s.key]);
     return {
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
       code: prdCode(s.section),

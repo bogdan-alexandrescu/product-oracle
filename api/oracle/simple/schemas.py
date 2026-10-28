@@ -857,7 +857,8 @@ class SimpleGoalBucket(BaseModel):
     # The goal's key, or "none".
     key: str
     title: str
-    # This quarter's engineer-weeks: the effort of the goal's rows with horizon now.
+    # This quarter's engineer-weeks: the effort of the goal's rows the plan places in its
+    # span (plan-model), else (no dated plan) of its rows with horizon now.
     weeks: float
     share: float
     codes: list[str]
