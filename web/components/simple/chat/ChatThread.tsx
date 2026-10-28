@@ -31,6 +31,34 @@ export function ChatThreadView({
   /** Words typed in for the person (a goal's "Suggest from the chat"); they go on writing after them. */
   typed?: string;
 }) {
+  const end = useRef<HTMLDivElement>(null);
+  const count = thread?.messages.length ?? 0;
+  useEffect(() => {
+    end.current?.scrollIntoView?.({ block: "nearest" });
+  }, [count]);
+
+  return (
+    <div className="flex min-h-0 flex-col gap-3" data-testid={testId}>
+      <ChatMessages messages={thread?.messages ?? []} onCardChanged={onCardChanged} onThread={onThread} />
+      <div ref={end} />
+      <ChatComposer send={send} placeholder={placeholder} hint={hint} typed={typed} />
+    </div>
+  );
+}
+
+/** The chat's box and Send (Enter sends, Shift+Enter a new line); `send` failing keeps the text and says why. */
+export function ChatComposer({
+  send,
+  placeholder,
+  hint,
+  typed,
+}: {
+  send: (text: string) => Promise<unknown>;
+  placeholder: string;
+  hint?: string;
+  /** Words typed in for the person (a goal's "Suggest from the chat"); they go on writing after them. */
+  typed?: string;
+}) {
   const [text, setText] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
   const [had, setHad] = useState(typed);
@@ -48,11 +76,6 @@ export function ChatThreadView({
   }, [typed]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const end = useRef<HTMLDivElement>(null);
-  const count = thread?.messages.length ?? 0;
-  useEffect(() => {
-    end.current?.scrollIntoView?.({ block: "nearest" });
-  }, [count]);
 
   const submit = async () => {
     const t = text.trim();
@@ -70,49 +93,45 @@ export function ChatThreadView({
   };
 
   return (
-    <div className="flex min-h-0 flex-col gap-3" data-testid={testId}>
-      <ChatMessages messages={thread?.messages ?? []} onCardChanged={onCardChanged} onThread={onThread} />
-      <div ref={end} />
-      <form
-        className="flex flex-col gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
+    <form
+      className="flex flex-col gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void submit();
+      }}
+    >
+      {hint && (
+        <p className="simple-small text-text2" data-testid="chat-hint">
+          {hint}
+        </p>
+      )}
+      <textarea
+        ref={box}
+        aria-label="Message Oracle"
+        rows={2}
+        maxLength={2000}
+        value={text}
+        placeholder={placeholder}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            void submit();
+          }
         }}
-      >
-        {hint && (
-          <p className="simple-small text-text2" data-testid="chat-hint">
-            {hint}
-          </p>
-        )}
-        <textarea
-          ref={box}
-          aria-label="Message Oracle"
-          rows={2}
-          maxLength={2000}
-          value={text}
-          placeholder={placeholder}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void submit();
-            }
-          }}
-          className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-text"
-        />
-        {error && (
-          <p role="alert" className="simple-small text-crit">
-            {error}
-          </p>
-        )}
-        <div>
-          <button type="submit" className="simple-button simple-button-primary" disabled={busy || !text.trim()}>
-            Send
-          </button>
-        </div>
-      </form>
-    </div>
+        className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-text"
+      />
+      {error && (
+        <p role="alert" className="simple-small text-crit">
+          {error}
+        </p>
+      )}
+      <div>
+        <button type="submit" className="simple-button simple-button-primary" disabled={busy || !text.trim()}>
+          Send
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -138,35 +157,46 @@ export function usePendingPoll(thread: { messages: ChatMessage[] } | null, reloa
  * thread, which `onThread` takes.
  */
 export function ChatMessages({ messages, onCardChanged, onThread }: { messages: Thread["messages"]; onCardChanged?: () => void; onThread?: (t: Thread) => void }) {
-  // A line handed to Oracle's Ask (kind "ask") lives in Ask's chat: neither it nor the person's line shows here.
-  const handed = new Set(messages.filter((m) => m.kind === "ask").flatMap((m) => [m.id, m.reply_to]));
   return (
     <ol className="flex flex-col gap-3" aria-label="Messages">
-      {messages.filter((m) => !handed.has(m.id)).map((m) => (
-        <li key={m.id} data-testid="chat-message" data-kind={m.kind} data-author={m.author_kind} className={`flex flex-col gap-2 ${m.author_kind === "person" ? "items-end" : "items-start"}`}>
-          <div className={`max-w-[95%] rounded-xl px-3 py-2 ${m.author_kind === "person" ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}>
-            <p className="simple-small font-semibold">{m.author_name}</p>
-            {m.kind === "pending" ? (
-              <p className="whitespace-pre-wrap text-text2" data-testid="chat-pending" role="status">
-                <span data-testid="chat-message-body">{m.body}</span>
-              </p>
-            ) : (
-              <p className="whitespace-pre-wrap" data-testid="chat-message-body">
-                {m.body}
-              </p>
-            )}
-          </div>
-          <LineActions message={m} onThread={onThread} />
-          {m.cards.length > 0 && (
-            <div className="flex w-full flex-col gap-2">
-              {m.cards.map((c) => (
-                <ChatCard key={c.id} card={c} onChanged={onCardChanged} />
-              ))}
-            </div>
-          )}
-        </li>
+      {shownLines(messages).map((m) => (
+        <ChatLine key={m.id} message={m} onCardChanged={onCardChanged} onThread={onThread} />
       ))}
     </ol>
+  );
+}
+
+/** The lines a chat shows: a line handed to Oracle's Ask (kind "ask") lives in Ask's chat, so neither it nor the person's line shows. */
+export function shownLines(messages: Thread["messages"]): Thread["messages"] {
+  const handed = new Set(messages.filter((m) => m.kind === "ask").flatMap((m) => [m.id, m.reply_to]));
+  return messages.filter((m) => !handed.has(m.id));
+}
+
+/** One line of a chat (an <li>): its author, its words, its actions and Oracle's cards. */
+export function ChatLine({ message: m, onCardChanged, onThread }: { message: ChatMessage; onCardChanged?: () => void; onThread?: (t: Thread) => void }) {
+  return (
+    <li data-testid="chat-message" data-kind={m.kind} data-author={m.author_kind} className={`flex flex-col gap-2 ${m.author_kind === "person" ? "items-end" : "items-start"}`}>
+      <div className={`max-w-[95%] rounded-xl px-3 py-2 ${m.author_kind === "person" ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}>
+        <p className="simple-small font-semibold">{m.author_name}</p>
+        {m.kind === "pending" ? (
+          <p className="whitespace-pre-wrap text-text2" data-testid="chat-pending" role="status">
+            <span data-testid="chat-message-body">{m.body}</span>
+          </p>
+        ) : (
+          <p className="whitespace-pre-wrap" data-testid="chat-message-body">
+            {m.body}
+          </p>
+        )}
+      </div>
+      <LineActions message={m} onThread={onThread} />
+      {m.cards.length > 0 && (
+        <div className="flex w-full flex-col gap-2">
+          {m.cards.map((c) => (
+            <ChatCard key={c.id} card={c} onChanged={onCardChanged} />
+          ))}
+        </div>
+      )}
+    </li>
   );
 }
 

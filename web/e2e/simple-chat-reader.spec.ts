@@ -202,9 +202,10 @@ for (const [phone, dark] of [
       await expect(last(thread).getByRole("button", { name: "Apply all" })).toBeVisible();
 
       await say(panel, "why is Delivery pipeline v2 after the integrity work");
-      const discussion = panel.getByTestId("discussion-thread");
-      await expect(discussion).toBeVisible();
-      await expect(discussion.getByTestId("discussion-message").filter({ hasText: "why is Delivery pipeline v2 after the integrity work" })).toHaveCount(1);
+      // ask-fresh: Oracle's Ask answers in the same chat (no discussion screen in Simple).
+      await expect(thread.getByTestId("ask-answer").last()).toBeVisible();
+      await expect(thread.getByTestId("chat-message-body").filter({ hasText: "why is Delivery pipeline v2 after the integrity work" })).toHaveCount(1);
+      await expect(panel.getByTestId("discussion-thread")).toHaveCount(0);
       await expect(page.getByText("I did not understand that.")).toHaveCount(0);
     });
   });
@@ -232,30 +233,28 @@ test.describe("chat-reader review", () => {
     await signIn(page, EMAILS.commenter, "/simple/roadmap");
     const panel = await openAsk(page, false);
     await say(panel, "why is Delivery pipeline v2 after the integrity work");
-    const discussion = panel.getByTestId("discussion-thread");
-    await expect(discussion.getByTestId("discussion-message").filter({ hasText: "why is Delivery pipeline v2 after the integrity work" })).toHaveCount(1);
-    await tap(panel.getByRole("button", { name: "New chat" }));
+    await expect(panel.getByTestId("ask-answer").last()).toBeVisible();
+    // ask-fresh: the same chat shows the line once (as Ask's), never "Asking Oracle…" from the plan reader.
     const thread = panel.getByTestId("ask-chat-thread");
-    await expect(thread).toBeVisible();
     await say(panel, "can we push Delivery pipeline v2 out a quarter");
     await expect(last(thread).getByTestId("chat-message-body")).toHaveText("I understood one change:");
     await expect(thread.getByText("Asking Oracle…")).toHaveCount(0);
-    await expect(thread.getByText("why is Delivery pipeline v2 after the integrity work")).toHaveCount(0);
+    await expect(thread.getByText("why is Delivery pipeline v2 after the integrity work")).toHaveCount(1);
   });
 
   test("Ask chat: a line still being read after the first wait goes to Oracle's Ask when read", async ({ page }) => {
-    // protects: inside an Ask chat a line the reader is still reading after askInChat's first wait (20 polls) is handed to Oracle's Ask once the reader reads it as a question
+    // protects: in the panel's chat a line the reader is still reading after a long wait (25 reads) is handed to Oracle's Ask once the reader reads it as a question
     // fails_when: the slow line stays "Asking Oracle…" and never reaches Ask
     // no_claim: the model's Ask answer (the mock streams a canned reply)
     test.setTimeout(150_000);
     await signIn(page, EMAILS.commenter, "/simple/roadmap");
     const panel = await openAsk(page, false);
     await say(panel, "why is Delivery pipeline v2 after the integrity work");
-    const discussion = panel.getByTestId("discussion-thread");
-    await expect(discussion.getByTestId("discussion-message").filter({ hasText: "why is Delivery pipeline v2 after the integrity work" })).toHaveCount(1);
-    await discussion.getByRole("textbox", { name: "Message" }).fill("why is Delivery pipeline v2 moving so slowly");
-    await tap(discussion.getByRole("button", { name: "Send" }));
-    await expect(discussion.getByTestId("discussion-message").filter({ hasText: "why is Delivery pipeline v2 moving so slowly" })).toHaveCount(1, { timeout: 90_000 });
+    const thread = panel.getByTestId("ask-chat-thread");
+    await expect(thread.getByTestId("ask-answer")).toHaveCount(1);
+    await say(panel, "why is Delivery pipeline v2 moving so slowly");
+    await expect(thread.getByTestId("ask-answer")).toHaveCount(2, { timeout: 90_000 });
+    await expect(thread.getByTestId("chat-message-body").filter({ hasText: "why is Delivery pipeline v2 moving so slowly" })).toHaveCount(1);
     await expect(panel.getByText("Asking Oracle…")).toHaveCount(0);
   });
 });

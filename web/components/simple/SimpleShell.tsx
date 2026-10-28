@@ -130,7 +130,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [border-right:var(--simple-rail-border)] max-[600px]:hidden"
       >
         <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
-          <Mark size={32} tone="sky" className="block" />
+          <Mark size={32} tone="current" className="block text-accent-ink" />
           <span className="font-display text-[18px] font-semibold text-rail-active-text">Oracle</span>
         </span>
         {SIMPLE_DESTINATIONS.map((d) => (
@@ -155,7 +155,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
         className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden"
       >
         <Link href={SIMPLE_HOME} aria-label="Product Oracle" data-testid="simple-nav-brand" className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
-          <Mark size={32} tone="sky" className="block" />
+          <Mark size={32} tone="current" className="block text-accent-ink" />
           <span className="font-display text-[18px] font-semibold text-rail-active-text">Oracle</span>
         </Link>
         <ModeSwitch placement="wide" />

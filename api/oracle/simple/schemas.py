@@ -1093,6 +1093,12 @@ class ChatIn(BaseModel):
     # The Ask panel's one box: write nothing when Oracle's reader does not know the line
     # (the answer says understood=false and the panel asks Oracle's Ask instead).
     only_understood: bool = False
+    # ask-fresh: continue the caller's own Ask chat ``chat_id``; else ``new_chat`` starts a
+    # new one about ``page`` (the Ask panel opened again); else the page's first chat.
+    chat_id: uuid.UUID | None = None
+    new_chat: bool = False
+    # ask-fresh: the new chat is about General, not the page (Recent names it "General").
+    general: bool = False
 
 
 class ChatFix(BaseModel):
@@ -1174,6 +1180,28 @@ class ChatThreadOut(BaseModel):
     rules: ChatRulesOut | None
     # False when Oracle's reader did not know the last line (the Ask panel's one box).
     understood: bool = True
+    # ask-fresh: the Oracle's Ask chat this Ask chat handed its questions to, if any.
+    ask_id: uuid.UUID | None = None
+
+
+class ChatSummaryOut(BaseModel):
+    """ask-fresh: one of the person's Ask chats on Recent chats, named by its page."""
+
+    id: uuid.UUID
+    page: str
+    page_name: str
+    last_at: dt.datetime
+    ask_id: uuid.UUID | None = None
+    # Started under "General": named so on Recent, and reopened as General.
+    general: bool = False
+
+
+class ChatListOut(BaseModel):
+    items: list[ChatSummaryOut]
+
+
+class ChatAskIn(BaseModel):
+    ask_id: uuid.UUID
 
 
 class ChatChooseIn(BaseModel):

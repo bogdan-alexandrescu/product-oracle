@@ -43439,7 +43439,7 @@
           "simple"
         ],
         "summary": "Get Simple Chat",
-        "description": "The caller's Ask-panel thread on ``page`` (the Simple page the panel was opened\nfrom; Home without one): their requests, Oracle's replies and cards.",
+        "description": "The caller's Ask chat ``chat`` (ask-fresh: one of theirs, 404 for anyone else's or a\nmeeting's); without it, their first Ask-panel thread on ``page`` (Home without one):\ntheir requests, Oracle's replies and cards.",
         "operationId": "get_simple_chat",
         "security": [
           {
@@ -43465,6 +43465,23 @@
                 }
               ],
               "title": "Page"
+            }
+          },
+          {
+            "name": "chat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Chat"
             }
           }
         ],
@@ -43492,6 +43509,100 @@
         },
         "x-min-role": "viewer",
         "x-per-item": "viewer"
+      }
+    },
+    "/v1/simple/chats": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple Chats",
+        "description": "Recent chats (ask-fresh): the caller's last ten Ask chats from any Simple page,\nnewest first, each named by its page; meeting chats stay in their meeting.",
+        "operationId": "list_simple_chats",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatListOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/chats/{chat_id}/ask": {
+      "put": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Link Simple Chat Ask",
+        "description": "Link the caller's own Oracle's Ask chat to their Ask chat ``chat_id`` (the panel\nhanded it a question), so the chat reopened from Recent shows both.",
+        "operationId": "link_simple_chat_ask",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Chat Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatAskIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSummaryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/simple/chat/messages": {
@@ -58288,6 +58399,20 @@
         ],
         "title": "ChatApplyOut"
       },
+      "ChatAskIn": {
+        "properties": {
+          "ask_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ask Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ask_id"
+        ],
+        "title": "ChatAskIn"
+      },
       "ChatCardOut": {
         "properties": {
           "id": {
@@ -58677,6 +58802,28 @@
             "type": "boolean",
             "title": "Only Understood",
             "default": false
+          },
+          "chat_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Id"
+          },
+          "new_chat": {
+            "type": "boolean",
+            "title": "New Chat",
+            "default": false
+          },
+          "general": {
+            "type": "boolean",
+            "title": "General",
+            "default": false
           }
         },
         "type": "object",
@@ -58684,6 +58831,22 @@
           "text"
         ],
         "title": "ChatIn"
+      },
+      "ChatListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChatSummaryOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ChatListOut"
       },
       "ChatMessageOut": {
         "properties": {
@@ -58896,6 +59059,54 @@
         ],
         "title": "ChatStopOut"
       },
+      "ChatSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "page": {
+            "type": "string",
+            "title": "Page"
+          },
+          "page_name": {
+            "type": "string",
+            "title": "Page Name"
+          },
+          "last_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last At"
+          },
+          "ask_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ask Id"
+          },
+          "general": {
+            "type": "boolean",
+            "title": "General",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "page",
+          "page_name",
+          "last_at"
+        ],
+        "title": "ChatSummaryOut",
+        "description": "ask-fresh: one of the person's Ask chats on Recent chats, named by its page."
+      },
       "ChatThreadOut": {
         "properties": {
           "id": {
@@ -58943,6 +59154,18 @@
             "type": "boolean",
             "title": "Understood",
             "default": true
+          },
+          "ask_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ask Id"
           }
         },
         "type": "object",

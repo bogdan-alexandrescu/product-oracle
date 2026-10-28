@@ -94,6 +94,33 @@ interface Thread {
   meeting_id: string | null;
   owner_id: string | null;
   messages: StoredMessage[];
+  /** ask-fresh: an Ask chat's page and the Oracle's Ask chat it handed its questions to. */
+  page?: string;
+  ask_id?: string | null;
+  started_at?: string;
+  /** Started under "General": Recent names it so (oracle.simple.chat._summary). */
+  general?: boolean;
+}
+
+/** Simple's page names as the panel says them (oracle.discussions.context.page_name): never a route. */
+const PAGE_NAMES: Record<string, string> = { "": "Home", "one-pagers": "One-pager", roadmap: "Roadmap", priorities: "Priorities", meetings: "Meetings", decisions: "Decisions", prds: "One-pager" };
+export function pageName(page: string | null | undefined): string {
+  const parts = pageOf(page).split("/").filter(Boolean).slice(1);
+  const name = PAGE_NAMES[parts[0] ?? ""] ?? "Home";
+  return name === "One-pager" && parts.length < 2 ? "One-pagers" : name;
+}
+
+/** The caller's own Ask chat `id` (ask-fresh): its key, or null for anyone else's or a meeting's. */
+function ownChat(chat: ChatDb, ctx: ChatCtx, id: string | null | undefined): string | null {
+  if (!id) return null;
+  const hit = Object.entries(chat.threads).find(([key, t]) => t.id === id && key.startsWith(`ask:${ctx.id}:`));
+  return hit ? hit[0] : null;
+}
+
+function chatSummary(key: string, t: Thread) {
+  const page = t.page ?? pageOf(key.split(":").slice(2).join(":").split("#")[0]);
+  const general = t.general === true;
+  return { id: t.id, page, page_name: general ? "General" : pageName(page), last_at: t.messages.at(-1)?.at ?? t.started_at ?? now(), ask_id: t.ask_id ?? null, general };
 }
 
 interface Meeting {
@@ -153,6 +180,8 @@ export type ChatCtx = SimpleChangesCtx & {
   proposeDecision?: (b: Schemas["DecisionCreate"]) => Promise<string | null>;
   /** Who confirms it (ChatMeetings.proposeTo). */
   proposeTo?: (documentId: string | null) => { id: string; name: string } | null;
+  /** ask-fresh: whether `id` is the caller's own private panel chat (PUT /v1/simple/chats/{id}/ask). */
+  ownsDiscussion?: (id: string) => boolean;
 };
 
 /** On Ask a commenter's decision is a proposal (the owner's pick, 2026-10-27): who it goes to, else null. */
@@ -917,6 +946,7 @@ function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, m
       return { ...msg, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
     }),
     rules: meeting ? rulesOut(meeting, ctx) : null,
+    ask_id: t?.ask_id ?? null,
   };
 }
 
@@ -969,7 +999,7 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
     const msg = t.messages.find((x) => x.id === id);
     if (!msg) continue;
     const meeting = t.meeting_id ? (chat.meetings[t.meeting_id] ?? null) : null;
-    if (meeting ? !meeting.attendee_ids.includes(ctx.id) : key !== `ask:${ctx.id}`) return null;
+    if (meeting ? !meeting.attendee_ids.includes(ctx.id) : !key.startsWith(`ask:${ctx.id}:`)) return null;
     return { key, meeting, msg };
   }
   return null;
@@ -1190,7 +1220,10 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
 
   // The walk: one Ask thread per person AND page (chat.page_of; Home without a page).
   if (p[2] === "chat" && !p[3] && m === "GET") {
-    const key = `ask:${ctx.id}:${pageOf(new URL(req.url).searchParams.get("page"))}`;
+    const q = new URL(req.url).searchParams;
+    const own = q.get("chat") ? ownChat(chat, ctx, q.get("chat")) : null;
+    if (q.get("chat") && !own) return json(404, { detail: "No such chat" });
+    const key = own ?? `ask:${ctx.id}:${pageOf(q.get("page"))}`;
     resolvePending(db, chat, key, ctx);
     return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, null));
   }
@@ -1250,9 +1283,35 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     const b = await body();
     const text = String(b.text ?? "").trim();
     if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
-    const key = `ask:${ctx.id}:${pageOf(typeof b.page === "string" ? b.page : null)}`;
-    const understood = say(db, chat, key, null, ctx, text, b.only_understood === true, typeof b.page === "string" ? (s8?.documentOf(b.page) ?? null) : null);
+    // ask-fresh: continue the caller's own chat `chat_id`; `new_chat` starts a new one about the page.
+    const own = typeof b.chat_id === "string" ? ownChat(chat, ctx, b.chat_id) : null;
+    if (typeof b.chat_id === "string" && !own) return json(404, { detail: "No such chat" });
+    const page = own ? (chat.threads[own].page ?? "/simple") : pageOf(typeof b.page === "string" ? b.page : null);
+    const key = own ?? `ask:${ctx.id}:${page}${b.new_chat === true ? `#${crypto.randomUUID()}` : ""}`;
+    const started = !!chat.threads[key];
+    const understood = say(db, chat, key, null, ctx, text, b.only_understood === true, s8?.documentOf(page) ?? null);
+    // A new chat's first line handed to Ask: the chat exists (empty), for the panel to link its Ask chat.
+    if (!understood && b.new_chat === true && !own) chat.threads[key] ??= { id: crypto.randomUUID(), meeting_id: null, owner_id: ctx.id, messages: [] };
+    if (chat.threads[key]) Object.assign(chat.threads[key], { page, started_at: chat.threads[key].started_at ?? now() });
+    // A chat started under "General" stays General.
+    if (chat.threads[key] && !started && b.general === true) chat.threads[key].general = true;
     return json(200, { ...threadOut(db, chat, chat.threads[key] ?? null, ctx, null), understood });
+  }
+  // Recent chats (ask-fresh): the caller's last ten Ask chats from any page; never a meeting's.
+  if (p[2] === "chats" && !p[3] && m === "GET") {
+    const items = Object.entries(chat.threads)
+      .filter(([key, t]) => key.startsWith(`ask:${ctx.id}:`) && (t.messages.length > 0 || t.ask_id))
+      .map(([key, t]) => chatSummary(key, t))
+      .sort((a, b) => b.last_at.localeCompare(a.last_at))
+      .slice(0, 10);
+    return json(200, { items });
+  }
+  if (p[2] === "chats" && p[3] && p[4] === "ask" && m === "PUT") {
+    const own = ownChat(chat, ctx, p[3]);
+    const askId = String((await body()).ask_id ?? "");
+    if (!own || !askId || !(ctx.ownsDiscussion?.(askId) ?? true)) return json(404, { detail: "No such chat" });
+    chat.threads[own].ask_id = askId;
+    return json(200, chatSummary(own, chat.threads[own]));
   }
 
   if (p[2] === "meetings" && p[3] && p[4] === "chat") {

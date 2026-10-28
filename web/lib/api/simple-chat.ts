@@ -103,7 +103,9 @@ export type ChatRules = {
 };
 
 /** `understood`: false when Oracle's plan reader did not know the last line (with only_understood, nothing was written). */
-export type ChatThread = { id: string | null; meeting_id: string | null; messages: ChatMessage[]; rules: ChatRules | null; understood?: boolean };
+export type ChatThread = { id: string | null; meeting_id: string | null; messages: ChatMessage[]; rules: ChatRules | null; understood?: boolean; ask_id?: string | null };
+/** ask-fresh: one of the person's Ask chats on Recent chats, named by its page. */
+export type ChatSummary = Schemas["ChatSummaryOut"];
 // chat-actions: null for the direct ops (minutes notes, agenda, decisions).
 export type ChatApply = { card: ChatCard; result: Schemas["SimpleChangeResult"] | null };
 
@@ -130,19 +132,40 @@ type Call = (path: string, init?: Init) => Promise<{ data?: unknown; error?: unk
 const loose = api as unknown as { GET: Call; POST: Call; PUT: Call };
 
 /** GET /v1/simple/chat?page=: the reader's own Ask thread on that Simple page (one per page; Home without one). */
-export function askThread(page?: string): Promise<ChatThread> {
-  return unwrap(loose.GET("/v1/simple/chat", page ? { params: { query: { page } } } : undefined)) as Promise<ChatThread>;
+export function askThread(page?: string, chat?: string | null): Promise<ChatThread> {
+  const query = { ...(page ? { page } : {}), ...(chat ? { chat } : {}) };
+  return unwrap(loose.GET("/v1/simple/chat", page || chat ? { params: { query } } : undefined)) as Promise<ChatThread>;
 }
+
+/** ask-fresh: which Ask chat a line goes to: `chatId` continues one; `newChat` starts one about the page. */
+export type ChatTo = { chatId?: string | null; newChat?: boolean; general?: boolean };
 
 /**
  * POST /v1/simple/chat/messages: the person's line and Oracle's reply. `onlyUnderstood` (the
  * Ask panel's one box): a line the plan reader does not know writes nothing and comes back
  * `understood: false`, for the panel to ask Oracle's Ask instead.
  */
-export function askSay(text: string, page?: string, onlyUnderstood = false): Promise<ChatThread> {
+export function askSay(text: string, page?: string, onlyUnderstood = false, to: ChatTo = {}): Promise<ChatThread> {
   return unwrap(
-    loose.POST("/v1/simple/chat/messages", { body: { text, ...(page ? { page } : {}), ...(onlyUnderstood ? { only_understood: true } : {}) } }),
+    loose.POST("/v1/simple/chat/messages", {
+      body: {
+        text,
+        ...(page ? { page } : {}),
+        ...(onlyUnderstood ? { only_understood: true } : {}),
+        ...(to.chatId ? { chat_id: to.chatId } : to.newChat ? { new_chat: true, ...(to.general ? { general: true } : {}) } : {}),
+      },
+    }),
   ) as Promise<ChatThread>;
+}
+
+/** GET /v1/simple/chats (ask-fresh): Recent chats, the reader's last Ask chats from any page; never a meeting's. */
+export async function recentChats(): Promise<ChatSummary[]> {
+  return ((await unwrap(loose.GET("/v1/simple/chats"))) as { items: ChatSummary[] }).items;
+}
+
+/** PUT /v1/simple/chats/{chat_id}/ask: the Oracle's Ask chat the Ask chat handed a question to. */
+export function linkAsk(chatId: string, askId: string): Promise<ChatSummary> {
+  return unwrap(loose.PUT("/v1/simple/chats/{chat_id}/ask", { params: { path: { chat_id: chatId } }, body: { ask_id: askId } })) as Promise<ChatSummary>;
 }
 
 /** GET /v1/simple/meetings/{meeting_id}/chat. */
