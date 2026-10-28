@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "./test";
 
 import { THEME_KEY } from "../lib/theme";
-import { ADMIN, signOut } from "./helpers";
+import { ADMIN } from "./helpers";
 
 /*
  * Simple chat follow-ups (the owner's pick, 2026-10-27: "Approvers and owners record it at
@@ -68,7 +68,12 @@ for (const [phone, dark] of [
       await page.goto("/simple/decisions");
       await expect(page.getByRole("region", { name: "Outside meetings" })).toContainText(TEXT);
 
-      await signOut(page);
+      // The decider signs in, in the same browser (the mock's data stays): the commenter signs
+      // out from the rail's account menu on a desktop, the top bar's on a phone.
+      await page.goto("/home");
+      await tap(page.getByTestId("user-menu").or(page.getByTestId("phone-user-menu")).filter({ visible: true }).first());
+      await tap(page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }));
+      await expect(page).toHaveURL(/\/login/);
       await signIn(page, ADMIN.email, "/simple");
       const row = page.getByTestId("home-decision").filter({ hasText: TEXT });
       await expect(row).toBeVisible();
