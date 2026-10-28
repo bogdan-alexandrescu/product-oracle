@@ -527,6 +527,8 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): 
     readerWrote = true;
     const r = msg.reading;
     r.attempts += 1;
+    // A line saying "slowly" stays pending for 25 reads (longer than the Ask chat's first wait).
+    if (/\bslowly\b/i.test(r.text) && r.attempts < 25) continue;
     if (/\bflaky\b/i.test(r.text) && r.attempts === 1) {
       Object.assign(msg, { kind: "failed", body: "I couldn't read that just now.", retry: true });
       continue;

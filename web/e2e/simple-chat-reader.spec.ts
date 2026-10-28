@@ -207,3 +207,42 @@ for (const [phone, dark] of [
     });
   });
 }
+
+test.describe("chat-reader review", () => {
+  test.beforeEach(async ({ context }) => {
+    await context.addInitScript(([key]) => localStorage.setItem(key, "simple-chat"), [MOCK_SCENARIO_KEY] as const);
+  });
+
+  test("meeting chat: a question gets the same note as the API", async ({ page }) => {
+    // protects: in the meeting chat a line the reader reads as a question gives the API's own words, "I could not tell what to change. Say it another way."
+    // fails_when: the mock says something the API never says ("That reads as a question…")
+    // no_claim: Ask's one box (it goes to Oracle's Ask)
+    const chat = await meeting(page, EMAILS.owner);
+    await say(chat, "why is Delivery pipeline v2 after the integrity work?");
+    await expect(last(chat)).toHaveAttribute("data-kind", "note");
+    await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I could not tell what to change. Say it another way.");
+  });
+
+  test("Ask: a line handed to Oracle's Ask leaves nothing in the plan thread, even one read slowly", async ({ page }) => {
+    // protects: a question the reader hands to Oracle's Ask shows neither the person's line nor "Asking Oracle…" in the plan thread; inside an Ask chat a line still being read after the first wait goes to Ask once the reader is done
+    // fails_when: the plan thread keeps "Asking Oracle…" and the line, or a slow line stays "Asking Oracle…" and never reaches Ask
+    // no_claim: the model's Ask answer (the mock streams a canned reply)
+    test.setTimeout(150_000);
+    await signIn(page, EMAILS.commenter, "/simple/roadmap");
+    const panel = await openAsk(page, false);
+    await say(panel, "why is Delivery pipeline v2 after the integrity work");
+    const discussion = panel.getByTestId("discussion-thread");
+    await expect(discussion.getByTestId("discussion-message").filter({ hasText: "why is Delivery pipeline v2 after the integrity work" })).toHaveCount(1);
+
+    await discussion.getByRole("textbox", { name: "Message" }).fill("slowly: why is Delivery pipeline v2 so late");
+    await tap(discussion.getByRole("button", { name: "Send" }));
+    await expect(discussion.getByTestId("discussion-message").filter({ hasText: "slowly: why is Delivery pipeline v2 so late" })).toHaveCount(1, { timeout: 90_000 });
+    await expect(panel.getByText("Asking Oracle…")).toHaveCount(0);
+
+    await tap(panel.getByRole("button", { name: "New chat" }));
+    const thread = panel.getByTestId("ask-chat-thread");
+    await expect(thread).toBeVisible();
+    await expect(thread.getByText("Asking Oracle…")).toHaveCount(0);
+    await expect(thread.getByText("why is Delivery pipeline v2 after the integrity work")).toHaveCount(0);
+  });
+});
