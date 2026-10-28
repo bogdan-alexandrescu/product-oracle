@@ -20,7 +20,7 @@ import { GenerateDialog } from "../_generate";
  */
 export default function LatestReportPage() {
   const router = useRouter();
-  const { can } = useMe();
+  const { can, capsReady } = useMe();
   const [open, setOpen] = useState(false);
   const q = useQuery("alignment-reports|latest", () => unwrap(api.GET("/v1/alignment-reports", { params: { query: { limit: 1 } } })));
   const latest = q.data?.[0]?.id;
@@ -28,11 +28,14 @@ export default function LatestReportPage() {
   useEffect(() => {
     if (latest) router.replace(`/plan/reports/${latest}`);
   }, [router, latest]);
-  if (!none) return <div className="px-6 py-8">{q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}</div>;
+  // capsReady too: `can` is false until the capabilities load, so an owner must not be
+  // shown the viewer's wording (and no button) for that brief window.
+  if (!none || !capsReady) return <div className="px-6 py-8">{q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}</div>;
   const canGenerate = can("create_alignment_report");
   return (
     <Page>
-      <PageHeader title="Alignment report" back={<PlanCrumb />} />
+      {/* qa-plan-25: every Plan tab's page is titled "Plan", like the strip beneath it. */}
+      <PageHeader title="Plan" back={<PlanCrumb />} />
       <Panel testId="no-report-yet">
         <div className="flex flex-col items-center gap-1 px-4 py-10 text-center text-[15px] text-text2">
           <p className="font-display text-lg font-bold text-text">No report yet</p>

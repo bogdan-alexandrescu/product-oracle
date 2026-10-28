@@ -91,6 +91,45 @@ function useDocumentHome(pathname: string): string | undefined {
   return slug ? documentHomes.get(decodeURIComponent(slug)) : undefined;
 }
 
+/*
+ * A recorded change's impact (/impact/changes/<id>) can be about a PRD version, a baseline
+ * item or a source: the route alone does not say which. The Impact page knows once its report
+ * has loaded (it already works out where "back" goes) and says so here; until then, or for a
+ * change the rail has no destination for (a member, an intake, an access request), nothing in
+ * the rail is highlighted rather than guessing PRDs.
+ */
+const changeHomes = new Map<string, string>();
+let changeHomesVersion = 0;
+const changeHomesListeners = new Set<() => void>();
+
+function subscribeChangeHomes(listener: () => void) {
+  changeHomesListeners.add(listener);
+  return () => {
+    changeHomesListeners.delete(listener);
+  };
+}
+
+/** An impact page says which destination the change it shows belongs to. */
+export function useChangeDestination(id: string | undefined, href: string | undefined) {
+  useLayoutEffect(() => {
+    if (!id || !href || changeHomes.get(id) === href) return;
+    changeHomes.set(id, href);
+    changeHomesVersion += 1;
+    changeHomesListeners.forEach((listener) => listener());
+  }, [id, href]);
+}
+
+/** The destination a recorded change's impact page belongs to, once it has said so. */
+function useChangeHome(pathname: string): string | undefined {
+  useSyncExternalStore(
+    subscribeChangeHomes,
+    () => changeHomesVersion,
+    () => 0,
+  );
+  const id = /^\/impact\/changes\/([^/]+)/.exec(pathname)?.[1];
+  return id ? changeHomes.get(decodeURIComponent(id)) : undefined;
+}
+
 function isActive(pathname: string, d: Dest, home?: string): boolean {
   // A document page: the list its document belongs to (Company for /company/strategy and for an update's, /company/updates).
   if (home) return d.href === home || home.startsWith(`${d.href}/`);
@@ -103,9 +142,11 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
   if (d.href === "/documents" && pathname.startsWith("/specs/")) return true;
   // qa-plan-19: the Roadmap's tabs (changelog, launches) are tabs of Plan.
   if (d.href === "/plan" && (pathname === "/roadmap" || pathname.startsWith("/roadmap/"))) return true;
-  // qa-plan-59: a baseline item's what-if belongs with Baseline, a recorded change's impact with PRDs.
+  // qa-plan-59: a baseline item's what-if belongs with Baseline.
   if (d.href === "/baseline" && pathname.startsWith("/impact/entities/")) return true;
-  if (d.href === "/documents" && pathname.startsWith("/impact/changes/")) return true;
+  // A recorded change's impact (/impact/changes/<id>) highlights by what it says it's about
+  // (useChangeHome, above the "if (home)" branch); unknown, it highlights nothing rather than
+  // guessing PRDs.
   return pathname === base || pathname.startsWith(`${base}/`);
 }
 
@@ -338,7 +379,9 @@ function Navs() {
   // While /v1/me loads, keep the rail so a signed-in page never jumps.
   const shown = (loading || !!me) && !bare(pathname);
   const inbox = useInboxCount(shown);
-  const home = useDocumentHome(pathname);
+  const documentHome = useDocumentHome(pathname);
+  const changeHome = useChangeHome(pathname);
+  const home = documentHome ?? changeHome;
   const [more, setMore] = useState(false);
   // #370: Settings opens on the first tab the role can read, and leaves when there is none.
   const settingsTabs = useSettingsTabs();

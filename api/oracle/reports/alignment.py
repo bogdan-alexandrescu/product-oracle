@@ -60,7 +60,6 @@ HEALTH_LABEL = {
     "closed": "Closed",
 }
 HORIZON_LABEL = {"now": "Now", "next": "Next", "later": "Later"}
-SLIP_KINDS = ("date_slip", "overdue")
 DRIFT_KINDS = ("ahead", "unplanned")
 
 
@@ -334,7 +333,7 @@ async def _track_content(
         "alignment": counts,
         "needs_attention": needs,
         "drift": drift,
-        "slips": sum(1 for d in o.drift if d.kind in SLIP_KINDS),
+        "slips": slips_in(needs),
         "dates": dates,
         "prd_moved": o.prd_moved,
     }
@@ -405,6 +404,14 @@ def _day(iso: str) -> str:
 
 def _line(text: str | None) -> str:
     return " ".join((text or "").split())
+
+
+def slips_in(needs: list[dict[str, Any]]) -> int:
+    """How many of a track's needs-attention reasons are "slipping" (qa-plan-56): the same
+    count the page lists under Needs attention, not only the date_slip/overdue drift
+    entries - a track milestone that has passed with no tracker issue is "slipping" too,
+    but is not drift."""
+    return sum(1 for n in needs if n.get("kind") == "slipping")
 
 
 def _link_text(text: str | None) -> str:

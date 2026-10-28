@@ -112,7 +112,11 @@ export function EvidenceChip({ e }: { e: Schemas["EvidenceChip"] }) {
 /** A feature key as its name, where the caller knows the ranking. */
 export type NameOf = (key: string) => string;
 
-/** Words for a change: "Moved above F-2" / "Pinned at #1". */
+/**
+ * Words for a change: "Moved above Saved addresses" / "Pinned at #1". The feature it moved
+ * above by its name: the API's own title for it (the object form's `title`) over a lookup by key, which only works while the key is still in the
+ * ranking shown; either way, never the bare key.
+ */
 export function changeLabel(
   o: {
     kind: Kind;
@@ -123,7 +127,7 @@ export function changeLabel(
 ): string {
   const key = typeof o.above === "string" ? o.above : o.above?.key;
   const own = typeof o.above === "object" ? o.above?.title : undefined;
-  const above = key ? (name?.(key) ?? own ?? key) : null;
+  const above = key ? (own ?? name?.(key) ?? key) : null;
   return o.kind === "move" ? `Moved above ${above ?? "—"}` : `Pinned at #${o.position}`;
 }
 

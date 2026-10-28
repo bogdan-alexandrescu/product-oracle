@@ -157,27 +157,48 @@ def in_words(reasons: Iterable[str]) -> list[str]:
 
 
 def stale_why(reasons: Iterable[str] | None, default: str) -> str:
-    """An item's stale reasons as one line, each said once, in words."""
-    return "; ".join(in_words(one_count(reasons or []))) or default
+    """An item's stale reasons as one line, each said once, in words. A reason stored
+    in the old literal form (prod-6) is reworded first (:func:`_reworded`), with no
+    migration needed."""
+    reworded = [_reworded(r) for r in (reasons or [])]
+    return "; ".join(in_words(one_count(reworded))) or default
 
 
 # A reason naming what the reader may not see, said without it (#541).
 HIDDEN_REASON = "a linked baseline item changed"
 
+# A section-link reason stored before prod-6's fix, naming the linked item by its bare
+# ref ("PRD section s-5-1 links feature:promo-codes, which changed") instead of its
+# name. There is no name to recover from the stored text, only its kind, so it is put
+# into words the same way a ref-named reason already is (:func:`in_words`'s ``_noun``).
+_OLD_SECTION_LINK = re.compile(r"PRD section (\S+) links ([a-z][a-z_]*):\S+(, which changed)")
+
+
+def _reworded(reason: str) -> str:
+    """A stored reason rewritten in words if it is in the old literal form, so a
+    migration is never needed: the read path keeps up with the wording on its own."""
+    if m := _OLD_SECTION_LINK.fullmatch(reason):
+        return f"PRD section {m[1]} links {_noun(m[2], 1)}{m[3]}"
+    return reason
+
 
 def for_reader(reasons: Iterable[str] | None, hidden: Any) -> list[str]:
     """``reasons`` as the reader may read them: one naming a decision or document the
     reader may not see (``hidden``, :func:`oracle.docs.visibility.hidden_for_reader`;
-    None sees all) is said as :data:`HIDDEN_REASON`, once."""
-    out = list(reasons or [])
+    None sees all) is said as :data:`HIDDEN_REASON`, once. A reason stored in the old
+    literal form (prod-6) is put into words (:func:`_reworded`), with no migration."""
+    out = [_reworded(r) for r in (reasons or [])]
     if hidden is None:
         return out
     return list(dict.fromkeys(HIDDEN_REASON if hidden.names(r) else r for r in out))
 
 
 def detail_for_reader(detail: str | None, hidden: Any) -> str | None:
-    """A stored ``"; "``-joined reason line (:func:`stale_why`) for the reader."""
-    if not detail or hidden is None:
+    """A stored ``"; "``-joined reason line (:func:`stale_why`) for the reader. A
+    reason stored in the old literal form (prod-6) is put into words on the way out
+    (:func:`for_reader`, :func:`_reworded`), with no migration needed, whether or not
+    this reader has anything hidden from them."""
+    if not detail:
         return detail
     return "; ".join(for_reader(detail.split("; "), hidden))
 
@@ -254,6 +275,25 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
         for root in (event.data or {}).get("roots") or []
         if isinstance(root, dict) and root.get("ref") and (u := _uuid(root.get("id")))
     }
+    # The changed entity's own name (prod-6): a PRD section link names what it links by
+    # its title, never its bare ref ("feature:promo-codes").
+    names: dict[uuid.UUID, str] = {
+        u: str(title)
+        for root in (event.data or {}).get("roots") or []
+        if isinstance(root, dict)
+        and (u := _uuid(root.get("id")))
+        and isinstance(root.get("entity"), dict)
+        and (title := root["entity"].get("title"))
+    }
+    entity = (event.data or {}).get("entity")
+    if event.subject_id is not None and isinstance(entity, dict) and entity.get("title"):
+        names.setdefault(event.subject_id, str(entity["title"]))
+
+    def named(linked: set[uuid.UUID]) -> str:
+        if len(linked) == 1 and (name := names.get(next(iter(linked)))):
+            return name
+        n = len(linked) or len(ids)
+        return f"{n} baseline item{'' if n == 1 else 's'}"
 
     def what(linked: set[uuid.UUID]) -> str:
         if not counted:
@@ -299,6 +339,21 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
         linked: dict[tuple, set[uuid.UUID]] = {}
         for v, k, e in links:
             linked.setdefault((v, k), set()).add(e)
+        headings = {
+            (v, k): h
+            for v, k, h in (
+                await db.execute(
+                    select(Section.version_id, Section.section_key, Section.heading).where(
+                        or_(
+                            *(
+                                and_(Section.version_id == v, Section.section_key == k)
+                                for v, k in linked
+                            )
+                        )
+                    )
+                )
+            ).all()
+        }
         rows = await db.scalars(
             select(RoadmapItem).where(
                 or_(
@@ -315,9 +370,11 @@ async def _by_entities(db: AsyncSession, event: ChangeEvent, found: dict) -> Non
         )
         for item in rows:
             own = linked.get((item.prd_version_id, item.prd_section_key), set())
+            heading = headings.get((item.prd_version_id, item.prd_section_key))
+            heading = heading or item.prd_section_key
             found.setdefault(
                 item.id,
-                (item, f"PRD section {item.prd_section_key} links {what(own)}, which changed"),
+                (item, f"PRD section {heading} links {named(own)}, which changed"),
             )
 
 

@@ -447,6 +447,38 @@ export function ranking(method: Method, cal: TrackRecord = null): Schemas["Prior
 
 const entityId = (key: string) => `00000000-0000-4000-8000-${hash(key).padStart(12, "0")}`;
 const featureById = (id: string) => FEATURES.find((f) => entityId(f.key) === id);
+
+/** The mock scenario (MOCK_SCENARIO_KEY) with one change from before a feature it moved above was retired. */
+export const LEGACY_OVERRIDE_SCENARIO = "priority-legacy-override";
+
+/**
+ * A move stored while "Shipping carrier picker" was still a feature, kept after it was retired
+ * (its key is no longer anyone's): the Changes log still has the API's own title for it, not
+ * just its key.
+ */
+function legacyOverride(): OverrideRow {
+  return {
+    id: "00000000-0000-4000-8000-00000000f001",
+    feature: { id: entityId("F-1"), key: "F-1", title: "Saved addresses at checkout" },
+    kind: "move",
+    above: { id: entityId("F-99"), key: "F-99", title: "Shipping carrier picker" },
+    position: null,
+    reason: "Checkout work came first while the carrier picker was still planned",
+    evidence_ids: [],
+    evidence: [],
+    pushback: [],
+    kept_after_pushback: false,
+    reason_check: { status: "skipped", ms: null },
+    snapshot_id: null,
+    created_by: { id: "legacy", name: "Dana Decider" },
+    created_at: "2026-09-01T09:00:00Z",
+    removed_at: null,
+    removed_by: null,
+    removed_reason: null,
+    replaced_by: null,
+    no_longer_applies: false,
+  };
+}
 type OverrideInput = {
   id: string;
   feature: string;
@@ -1833,7 +1865,7 @@ function startDraft(db: Db, st: LaneFState, input: Schemas["StartDraftIn"]): Res
 
 // ---------------------------------------------------------------- state + routing
 
-function seedState(): LaneFState {
+function seedState(scenario?: string | null): LaneFState {
   const themes: ThemeRow[] = THEME_SEEDS.map((t) => ({
     id: uuid(),
     key: t.key,
@@ -1862,7 +1894,7 @@ function seedState(): LaneFState {
       versions: [{ ...v, created_at: SEEDED_AT }],
     };
   });
-  return { templates, themes, snapshots: [], defaults: {} };
+  return { templates, themes, snapshots: [], defaults: {}, overrides: scenario === LEGACY_OVERRIDE_SCENARIO ? [legacyOverride()] : [] };
 }
 
 /**
@@ -1906,8 +1938,8 @@ function compare(db: Db, snap: SnapshotRow): Schemas["CompareOut"] {
   };
 }
 
-function state(db: Db): LaneFState {
-  db.lane_f ??= seeded("lane-f", seedState);
+function state(db: Db, scenario?: string | null): LaneFState {
+  db.lane_f ??= seeded("lane-f", () => seedState(scenario));
   return db.lane_f;
 }
 
@@ -1925,10 +1957,17 @@ function goalTitles(db: Db, r: Schemas["PriorityRanking"]): Schemas["PriorityRan
  * Handles /v1/priorities, /v1/templates, /v1/themes and /v1/drafts; returns null for
  * any other route so server.ts carries on.
  */
-export async function laneF(db: Db, req: Request, p: string[], m: string, role?: Schemas["Me"]["role"]): Promise<Response | null> {
+export async function laneF(
+  db: Db,
+  req: Request,
+  p: string[],
+  m: string,
+  role?: Schemas["Me"]["role"],
+  scenario?: string | null,
+): Promise<Response | null> {
   const area = p[1];
   if (!["priorities", "templates", "themes", "drafts"].includes(area)) return null;
-  const st = state(db);
+  const st = state(db, scenario);
   const q = new URL(req.url).searchParams;
   const body = async <T>() => JSON.parse((await req.text()) || "null") as T;
 

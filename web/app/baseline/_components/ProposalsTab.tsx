@@ -186,8 +186,10 @@ function Source({ p, meId }: { p: ProposalOut; meId?: string | null }) {
 /** A goal the graph says is not measurable yet (B5's goal_check). */
 const vagueGoal = (graph: GraphOut | undefined, id: string) => graph?.entities.find((e) => e.id === id && e.type === "goal")?.goal_check?.measurable === false;
 
-/** A proposal's field key in words: "attrs.milestone" is "milestone", "attrs.status" "status". */
-export const fieldName = (key: string) => fieldLabel(key);
+/** A proposal's field key in words, the one map the Details list and the overlap warning
+ * both read (#review minor): "attrs.milestone" is "milestone"; a feature's "status" is named
+ * fully, "delivery status", not left bare. */
+export const fieldName = (key: string, entityType?: string | null) => fieldLabel(key, entityType);
 
 /** Fields the Details list leaves out: ids and keys people never read. */
 const HIDDEN_FIELDS = new Set(["id", "key"]);
@@ -225,10 +227,12 @@ function OverlapChip({ overlaps }: { overlaps: Overlap[] }) {
 /** Accept's in-place warning: each affected field now and in this proposal, then skip, apply anyway or reject. */
 function OverlapWarning({
   p,
+  type,
   busy,
   onDecide,
 }: {
   p: ProposalOut;
+  type?: string;
   busy: boolean;
   onDecide: (proposal: ProposalOut, accept: boolean, skip?: string[]) => void;
 }) {
@@ -245,7 +249,7 @@ function OverlapWarning({
         {overlaps.map((o) => (
           <li key={o.field} data-testid={`overlap-${fieldName(o.field)}`} className="flex min-w-0 flex-col gap-0.5">
             <p data-testid="overlap-now" className="[overflow-wrap:anywhere]">
-              <span className="text-text2">{fieldName(o.field)} now:</span> <b className="font-semibold">{valueWords(o.field, o.current)}</b>
+              <span className="text-text2">{fieldName(o.field, type)} now:</span> <b className="font-semibold">{valueWords(o.field, o.current)}</b>
             </p>
             <p data-testid="overlap-proposed" className="[overflow-wrap:anywhere]">
               <span className="text-text2">this proposal:</span> <b className="font-semibold">{valueWords(o.field, o.proposed)}</b>
@@ -255,7 +259,7 @@ function OverlapWarning({
       </ul>
       <div className="flex flex-wrap gap-2">
         <Button variant="primary" disabled={busy} title={ACCEPT_LOCKS} onClick={() => onDecide(p, true, skip)}>
-          {skip.length === 1 ? `Skip ${fieldName(skip[0])}, apply the rest` : "Skip these fields, apply the rest"}
+          {skip.length === 1 ? `Skip ${fieldName(skip[0], type)}, apply the rest` : "Skip these fields, apply the rest"}
         </Button>
         <Button disabled={busy} title={ACCEPT_LOCKS} onClick={() => onDecide(p, true)}>
           Apply anyway
@@ -408,14 +412,14 @@ function ProposalList({
                         <dl className="mt-0.5 flex flex-col gap-0.5" aria-label="Proposed fields">
                           {fields.map(([k, v]) => (
                             <div key={k} className="flex min-w-0 flex-wrap gap-1 [overflow-wrap:anywhere]">
-                              <dt className="text-text2">{fieldLabel(k, type)}</dt>{" "}
+                              <dt className="text-text2">{fieldName(k, type)}</dt>{" "}
                               <dd className="font-semibold">→ {valueWords(k, v, graph)}</dd>
                             </div>
                           ))}
                         </dl>
                       )}
                     </details>
-                    {warn && <OverlapWarning p={p} busy={busy} onDecide={onDecide} />}
+                    {warn && <OverlapWarning p={p} type={type} busy={busy} onDecide={onDecide} />}
                   </div>
                   {byRun && onMakeMeasurable && p.entity_id && vagueGoal(graph, p.entity_id) && (
                     <Button className="flex-none" disabled={busy} onClick={() => onMakeMeasurable(p.entity_id!)}>

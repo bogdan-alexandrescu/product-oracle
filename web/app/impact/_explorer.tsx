@@ -18,6 +18,7 @@ import {
   SegmentedControl,
   Sheet,
   Split,
+  useChangeDestination,
   ViewOnly,
   type Column,
 } from "@/components/ds";
@@ -111,6 +112,9 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
       : source.kind === "entity"
         ? { href: "/baseline", label: "Baseline" }
         : subject?.back;
+  // qa-plan-59 / review: the rail highlights by what a recorded change's impact is about (a
+  // PRD version, Baseline, Sources), once the report has said so; nothing it can't place.
+  useChangeDestination(source.kind === "change" ? source.id : undefined, source.kind === "change" ? backTo?.href : undefined);
   const back = backTo ? (
     <Link href={backTo.href} data-testid="impact-back" className="hover:underline">
       ← {backTo.label}
@@ -307,12 +311,12 @@ function Lineage({
       for (const o of report.affected) by.set(o.category, [...(by.get(o.category) ?? []), o]);
       return [...by.entries()].map(([c, os]) => ({
         key: `c:${c}`, label: CATEGORY[c], sub: `${os.length} outputs`, category: c, count: os.length,
-        freshness: stalest(os.map((o) => o.freshness)), ups: new Set(os.flatMap((o) => upstreamsOfIn(o).map((u) => u.key))),
+        freshness: stalest(os.map((o) => o.freshness)), ups: new Set(os.flatMap((o) => upstreamsOfIn(o, names).map((u) => u.key))),
       }));
     }
     return shown.map((o) => ({
       key: keyOf(o), label: outputTitle(o), sub: statusLabel(o.status), freshness: o.freshness, output: o,
-      ups: new Set(upstreamsOfIn(o).map((u) => u.key)),
+      ups: new Set(upstreamsOfIn(o, names).map((u) => u.key)),
     }));
   }, [report, grouped, openCategory]);
   const shownUps = ups.filter((u) => nodes.some((n) => n.ups.has(u.key)));
@@ -415,7 +419,7 @@ function Lineage({
                 })()}
                 {u.entityId && !u.deleted && (
                   <Link href={`/impact/entities/${u.entityId}`} className="ml-auto flex-none font-medium text-accent-ink hover:underline">
-                    What if {u.entityKey} changed?
+                    What if {u.label} changed?
                   </Link>
                 )}
               </span>
@@ -795,9 +799,7 @@ function EntitiesPanel({ report }: { report: Report }) {
       <ul>
         {report.affected_entities.map((e) => (
           <li key={e.id} className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 text-sm last:border-b-0">
-            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
-              {e.title} <span className="text-text2">({e.key})</span>
-            </span>
+            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{e.title}</span>
             <span className="text-text2">
               {statusLabel(e.type)} · {e.status.replaceAll("_", " ")}
             </span>
@@ -874,7 +876,7 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
                   )}
                   {u.entityId && !u.deleted && (
                     <Link href={`/impact/entities/${u.entityId}`} className="font-medium text-accent-ink hover:underline">
-                      What if {u.entityKey} changed?
+                      What if {u.label} changed?
                     </Link>
                   )}
                 </span>

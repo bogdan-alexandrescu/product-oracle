@@ -79,7 +79,7 @@ export function upstreamOf(d: Dependency, names?: Names): Upstream {
     const e = u.entity;
     const conf = e.locked ? "locked" : e.confidence != null ? `${formatPercent(e.confidence)} confidence` : null;
     return {
-      key: `e:${e.id}`, kind: "entity", label: e.title, sub: [e.key, e.type.replaceAll("_", " "), conf].filter(Boolean).join(" · "),
+      key: `e:${e.id}`, kind: "entity", label: e.title, sub: [statusLabel(e.type), conf].filter(Boolean).join(" · "),
       short: u.deleted ? `${e.title} (deleted)` : e.title, deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null,
       entityId: e.id, entityKey: e.key,
     };

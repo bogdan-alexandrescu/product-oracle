@@ -254,6 +254,7 @@ export function TrackPanel({
               // qa-plan-30: Escape cancels the rename.
               if (e.key !== "Escape") return;
               e.preventDefault();
+              e.stopPropagation();
               setTitle(track.title);
               setRenaming(false);
             }}

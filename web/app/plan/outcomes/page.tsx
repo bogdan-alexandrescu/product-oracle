@@ -6,6 +6,7 @@ import { Suspense, useState, useSyncExternalStore } from "react";
 import {
   Button,
   Chip,
+  confirmInPage,
   DataTable,
   FilterChips,
   InfoTip,
@@ -1082,9 +1083,16 @@ function useTargetNames() {
     criterion: (criteria.data ?? []).map((c) => ({ key: c.key, name: c.title })),
     module: (modules.data ?? []).map((m) => ({ key: m.key, name: m.title })),
   };
+  // When the list failed to load, there is nothing to pick from (its kind cannot be added
+  // at all): type the key by hand instead.
+  const failed: Record<Learning["applies_to"], boolean> = {
+    question_category: false,
+    criterion: !!criteria.error,
+    module: !!modules.error,
+  };
   const nameOf = (l: Pick<Learning, "applies_to" | "target">) =>
     options[l.applies_to].find((o) => o.key === l.target)?.name ?? humanize(l.target);
-  return { options, nameOf };
+  return { options, failed, nameOf };
 }
 
 /** A key in words, for a target no list names: "success_metric" is "Success metric". */
@@ -1215,10 +1223,22 @@ function LearningForm({
       className="mb-3 grid grid-cols-3 gap-2.5 max-[600px]:grid-cols-1"
       data-testid="learning-form"
       onKeyDown={(e) => {
-        if (e.key === "Escape") {
-          e.preventDefault();
-          onCancel();
-        }
+        if (e.key !== "Escape") return;
+        // Escape on an open select or listbox only closes it; it is not asking to
+        // cancel the form, so typed text must not be dropped because of it.
+        const target = e.target as HTMLElement;
+        if (e.defaultPrevented || target.tagName === "SELECT" || target.closest('[role="listbox"]')) return;
+        e.preventDefault();
+        void (async () => {
+          if (
+            await confirmInPage({
+              action: "Discard learning",
+              message: "Discard this learning? What you typed will be lost.",
+              destructive: true,
+            })
+          )
+            onCancel();
+        })();
       }}
       onSubmit={(e) => {
         e.preventDefault();
@@ -1258,18 +1278,31 @@ function LearningForm({
       </label>
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-text2">{TARGET_WORD[appliesTo]}</span>
-        <select
-          className={FIELD}
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-        >
-          <option value="">Choose one</option>
-          {names.options[appliesTo].map((o) => (
-            <option key={o.key} value={o.key}>
-              {o.name}
-            </option>
-          ))}
-        </select>
+        {names.failed[appliesTo] ? (
+          <>
+            <input
+              className={FIELD}
+              value={target}
+              maxLength={300}
+              onChange={(e) => setTarget(e.target.value)}
+              data-testid="learning-target-key"
+            />
+            <span className="text-sm text-text2">The list did not load; type its key.</span>
+          </>
+        ) : (
+          <select
+            className={FIELD}
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+          >
+            <option value="">Choose one</option>
+            {names.options[appliesTo].map((o) => (
+              <option key={o.key} value={o.key}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        )}
       </label>
       <label className="flex flex-col gap-1 text-sm">
         <span className="text-text2">Direction</span>

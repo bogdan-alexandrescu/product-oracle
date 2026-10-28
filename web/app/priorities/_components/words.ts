@@ -58,18 +58,26 @@ export function formatScore(n: number | null | undefined): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: n !== 0 && Math.abs(n) < 1 ? 2 : 1 });
 }
 
+/**
+ * Every standalone number in a step, in the Score column's style ("5,400", "83.3"): never a
+ * raw figure or one stuck at two decimals. A goal's key ("g.activation") has no digits, so it
+ * is left alone; a number already turned into a percent ("60%") keeps its sign.
+ */
+function fmtNums(s: string): string {
+  return s.replace(/(?<![\w.])\d+(?:\.\d+)?(?![\w%])/g, (n) => formatScore(Number(n)));
+}
+
 /** A step the scorer wrote, with category names and input names in words. */
 export function stepWords(step: string): string {
   const moscow = step.match(/^(must|should|could|won't|wont) = (\d+); tie-break goal value (.+)$/);
   if (moscow) {
-    const value = Number(moscow[3]);
-    return `${MOSCOW_LABEL[moscow[1]!]} = ${moscow[2]}; ties broken by goal value ${Number.isFinite(value) ? formatScore(value) : moscow[3]}`;
+    return fmtNums(`${MOSCOW_LABEL[moscow[1]!]} = ${moscow[2]}; ties broken by goal value ${moscow[3]}`);
   }
   const named = step.match(/^(score|goal value|cost of delay|confidence) = /);
-  if (named) return named[1]!.charAt(0).toUpperCase() + step.slice(1);
+  if (named) return fmtNums(named[1]!.charAt(0).toUpperCase() + step.slice(1));
   const missing = step.match(/^not scored: missing (.+)$/);
   if (missing) return `Not scored: no ${missing[1]!.split(/,\s*/).map(inputLabel).join(", ")}`;
-  return step;
+  return fmtNums(step);
 }
 
 /** An input's value in words: a MoSCoW category by name, a number in the page's style. */

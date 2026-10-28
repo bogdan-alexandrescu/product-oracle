@@ -68,7 +68,8 @@ export default function ReportsPage() {
   return (
     <Page>
       <PageHeader
-        title="Alignment reports"
+        // qa-plan-25: every Plan tab's page is titled "Plan", like the strip beneath it.
+        title="Plan"
         back={<PlanCrumb />}
         action={
           can("create_alignment_report") && (

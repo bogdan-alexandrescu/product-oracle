@@ -32,9 +32,17 @@ export function ruleSentence(res: Resolution, claims: Claim[]): string | null {
   const rule = res.rule ?? "";
   if (!rule) return null;
   const win = res.winner != null ? claims[res.winner] : undefined;
-  // The runner-up: the best other claim by confidence.
   const others = claims.filter((_, i) => i !== res.winner);
-  const lose = [...others].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+  // The runner-up: whichever claim the rule actually ranked second, not just the
+  // highest confidence of the rest. pick_winner sorts every claim by the full order
+  // (confidence, then source precedence, then date); with 3+ claims a tied pair's
+  // precedence tiebreak can put a lower-confidence claim ahead of a higher one, so
+  // the rule's own numbers (its confidence against the winner's) name which claim it was.
+  const named = rule.match(/confidence(?: tie)? \(?(\d+\.\d+)(?: vs | beats )(\d+\.\d+)\)?/);
+  const byConfidence = () => [...others].sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))[0];
+  const lose = named
+    ? others.find((c) => Math.abs((c.confidence ?? 0) - Number(named[2])) < 0.005) ?? byConfidence()
+    : byConfidence();
   if (!rule.startsWith("confidence tie")) {
     return win
       ? `Higher confidence wins: ${pct(win)} against ${pct(lose)}.`

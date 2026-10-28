@@ -233,26 +233,33 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
     });
   }
   if (out.length === 0) {
-    // Nothing of its own: features moved up for their dependencies sit above it.
-    const above = features
-      .slice(0, at)
-      .filter((x) => s(x) < s(f))
-      .map((x) => x.title);
+    // Nothing of its own: features moved up for their dependencies sit above it, or a person
+    // moved or pinned a neighbour (qa-plan-20): that says who, never a dependency it doesn't have.
+    const moved = (x: RankedFeature) => `${x.title} (moved by ${x.override!.by})`;
+    const higher = features.slice(0, at).filter((x) => s(x) < s(f));
+    const above = higher.filter((x) => !x.override).map((x) => x.title);
+    const movedAbove = higher.filter((x) => !!x.override).map(moved);
     if (above.length > 0) {
       out.push({
         label: `Below ${above.join(", ")}: placed earlier for a dependency`,
         title: "A feature that others depend on is placed above its score, so features scored higher can sit below it.",
       });
     }
+    if (movedAbove.length > 0) {
+      out.push({
+        label: `Below ${movedAbove.join(", ")}`,
+        title: "A person moved or pinned these features above their score.",
+      });
+    }
     // Or it sits above features scored higher that rank lower for their own reason.
     const below = features
       .slice(at + 1)
       .filter((x) => s(x) > s(f))
-      .map((x) => `${x.title} (${!x.serves_goal ? "no confirmed goal" : "waits for a dependency"})`);
-    if (above.length === 0 && below.length > 0) {
+      .map((x) => (x.override ? moved(x) : `${x.title} (${!x.serves_goal ? "no confirmed goal" : "waits for a dependency"})`));
+    if (higher.length === 0 && below.length > 0) {
       out.push({
         label: `Above ${below.join(", ")}`,
-        title: "Features scored higher rank below this one: features with no confirmed goal come last, and a feature waits for those it depends on.",
+        title: "Features scored higher rank below this one: a person moved them, features with no confirmed goal come last, or a feature waits for those it depends on.",
       });
     }
   }
@@ -300,7 +307,8 @@ function EvidenceChip({ ev }: { ev: EvidenceUsed }) {
 
 /**
  * A score step with its confidence factor on the page's 0-100 scale: "score = 6 × 0.75 ÷ 2"
- * reads "score = 6 × 75% ÷ 2" (the same arithmetic).
+ * reads "score = 6 × 60 ÷ 2" (confidence shown the one way the page shows it everywhere, as in
+ * the Confidence meter's "Confidence 60", never a fraction or a percent sign).
  */
 function stepText(step: string, confidence: number | null | undefined): string {
   if (confidence == null || !/^score\b/.test(step)) return step;
@@ -310,7 +318,7 @@ function stepText(step: string, confidence: number | null | undefined): string {
   const at = step.lastIndexOf(factor);
   const end = at + factor.length;
   if (end < step.length && step[end] !== " ") return step;
-  return `${step.slice(0, at)} × ${pct(confidence)}%${step.slice(end)}`;
+  return `${step.slice(0, at)} × ${pct(confidence)}${step.slice(end)}`;
 }
 
 /** The ranking method: a radio group drawn as B1's segmented control. */
@@ -995,7 +1003,7 @@ function Priorities() {
     {
       key: "goal",
       header: "Goal",
-      width: "150px",
+      width: "120px",
       // Every goal whole (prod-4, qa-plan-42): one per line, a long name on two.
       wrap: true,
       cell: (f) =>
@@ -1012,22 +1020,23 @@ function Priorities() {
     {
       key: "confidence",
       header: "Confidence",
-      width: "104px",
+      width: "80px",
       hideOnPhone: true,
-      narrow: "mid",
+      // Kept at 1440 px and up with the inspector docked; only a table under 820 px drops it.
+      narrow: "laptop",
       cell: (f) => {
         const c = pct(f.explanation.confidence.value);
         return c == null ? (
           <span className="text-text2">—</span>
         ) : (
-          <Meter value={c} max={100} showMax={false} label={`Confidence ${c}`} width={80} />
+          <Meter value={c} max={100} showMax={false} label={`Confidence ${c}`} width={48} />
         );
       },
     },
     {
       key: "score",
       header: "Score",
-      width: "80px",
+      width: "68px",
       align: "right",
       phoneLabel: "Score",
       cell: (f) => (
@@ -1039,9 +1048,9 @@ function Priorities() {
     {
       key: "deps",
       header: "Depends on",
-      width: "140px",
+      width: "108px",
       hideOnPhone: true,
-      narrow: "mid",
+      narrow: "laptop",
       wrap: true,
       cell: (f) => {
         const text = f.depends_on.map((k) => featureName(features, k)).join(", ");
@@ -1055,7 +1064,7 @@ function Priorities() {
     {
       key: "flags",
       header: "Flags",
-      width: "220px",
+      width: "160px",
       wrap: true,
       cell: (f) => {
         // A person's change leads; the flags fold into the count after it. Run mode: the

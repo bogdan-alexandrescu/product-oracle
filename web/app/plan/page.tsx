@@ -220,6 +220,7 @@ export default function PlanPage() {
             key={`${r.slug}|${opened?.roadmap === r.slug ? opened.id : ""}`}
             roadmap={r}
             opened={opened?.roadmap === r.slug ? opened : null}
+            docs={roadmapDocs}
             me={userId}
             canWrite={canWrite}
             onPlanChanged={() => void q.reload()}
@@ -242,7 +243,7 @@ export default function PlanPage() {
                       {roadmapName(r.slug, roadmapDocs)} v{r.version}
                     </span>
                   ))}
-                  {canWrite && <EditPlanButton roadmaps={roadmaps} onOpened={setOpened} />}
+                  {canWrite && <EditPlanButton roadmaps={roadmaps} docs={roadmapDocs} onOpened={setOpened} />}
                   <span data-testid="plan-legend" className="text-sm text-text2 max-[600px]:hidden">
                     Dashed: proposed by a draft, not approved
                   </span>

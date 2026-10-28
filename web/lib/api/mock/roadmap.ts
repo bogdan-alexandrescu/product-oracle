@@ -1133,7 +1133,7 @@ const CHECKOUT_DRAFT: PlanSeedItem[] = [
  */
 export function routePlan(ctx: PlanContext, db: RoadmapDb, req: Request, p: string[], q: URLSearchParams): Response | null {
   if (p[1] !== "plan" || req.method !== "GET") return null;
-  if (p[2] === "items" && p[3] === "history") return planHistory(db, q);
+  if (p[2] === "items" && p[3] === "history") return planHistory(ctx, db, q);
   if (p[2]) return null;
   const scope = q.get("scope") ?? "all";
   if (scope !== "all" && scope !== "approved") return json(422, { detail: "scope: all or approved" });
@@ -1192,7 +1192,7 @@ function dateStatus(
 const TRACKER_HISTORY_LIMIT = 20;
 const SHOWN_FIELDS: Schemas["TrackerFieldChange"]["field"][] = ["state", "target_date", "estimate"];
 
-function planHistory(db: RoadmapDb, q: URLSearchParams): Response {
+function planHistory(ctx: PlanContext, db: RoadmapDb, q: URLSearchParams): Response {
   const roadmap = q.get("roadmap");
   const key = q.get("item") ?? "";
   // F2 §2: the tracker history of the item's issues (the Plan's seeded records), as
@@ -1217,7 +1217,12 @@ function planHistory(db: RoadmapDb, q: URLSearchParams): Response {
   if (roadmap === ALERTS_ROADMAP_SLUG) {
     const a = ALERTS_APPROVED.find((i) => i.key === key);
     if (!a) return out([]);
-    const versions: Schemas["ItemVersion"][] = [{ version: 1, prd_version: 1, horizon: a.horizon, approved_at: "2026-10-18T10:00:00Z" }];
+    // qa-plan-17: v1's own approval reads the roadmap document's real versions, so this
+    // agrees with the Documents tab (never approved by default; approved once a scenario
+    // approves it) instead of a date hardcoded here regardless of that.
+    const roadmapDoc = ctx.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+    const v1ApprovedAt = (roadmapDoc && ctx.versions.find((v) => v.document_id === roadmapDoc.id && v.number === 1)?.approved_at) ?? null;
+    const versions: Schemas["ItemVersion"][] = [{ version: 1, prd_version: 1, horizon: a.horizon, approved_at: v1ApprovedAt }];
     const d = ALERTS_DRAFT[key];
     if (!d || d.change.kind !== "dropped") versions.push({ version: 2, prd_version: 1, horizon: d?.horizon ?? a.horizon, approved_at: null });
     return out(versions);

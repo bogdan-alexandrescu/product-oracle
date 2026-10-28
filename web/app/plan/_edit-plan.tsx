@@ -50,10 +50,17 @@ function baseWords(set: ChangeSet, doc: DocumentSummary | undefined): string {
 }
 
 /** The Roadmap panel's Edit plan button: opens (or returns to) the roadmap's draft change set. */
-export function EditPlanButton({ roadmaps, onOpened }: { roadmaps: PlanRoadmap[]; onOpened: (s: ChangeSet) => void }) {
+export function EditPlanButton({
+  roadmaps,
+  docs,
+  onOpened,
+}: {
+  roadmaps: PlanRoadmap[];
+  docs: Map<string, DocumentSummary>;
+  onOpened: (s: ChangeSet) => void;
+}) {
   const [slug, setSlug] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const docs = useRoadmapDocs();
   const picked = slug ?? roadmaps[0]?.slug;
   if (!picked) return null;
   const open = async () => {
@@ -410,12 +417,14 @@ function Proposal({
 export function PlanChanges({
   roadmap,
   opened,
+  docs,
   me,
   canWrite,
   onPlanChanged,
 }: {
   roadmap: PlanRoadmap;
   opened: ChangeSet | null;
+  docs: Map<string, DocumentSummary>;
   me: string | null;
   canWrite: boolean;
   onPlanChanged: () => void;
@@ -423,7 +432,6 @@ export function PlanChanges({
   const q = useQuery(`plan-edit|${roadmap.slug}|${opened?.id ?? ""}|${opened?.lock_version ?? ""}`, () => sets(roadmap.slug), { keepPrevious: true });
   const [local, setLocal] = useState<ChangeSet | null | undefined>(undefined);
   const [live, setLive] = useState<number | null>(null);
-  const docs = useRoadmapDocs(String(live ?? ""));
   const doc = docs.get(roadmap.slug);
   const all = q.data ?? [];
   const draft = local !== undefined ? (local?.status === "draft" ? local : null) : (opened ?? all.find((s) => s.status === "draft") ?? null);

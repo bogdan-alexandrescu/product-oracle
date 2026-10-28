@@ -295,11 +295,14 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     {
       key: "metric",
       header: "Metric",
+      width: "150px",
       hideOnPhone: true,
-      // A table under 1320 px wide gives the goal's name the room (qa-plan-2); the drawer shows it.
-      narrow: "wide",
+      // Kept at a laptop's width: Weight and Features go first (under 1320 px), Metric only beside
+      // a drawer (under 1000 px). A long metric wraps rather than taking the goal's name's room.
+      narrow: "mid",
+      wrap: true,
       cell: (g) => (
-        <span data-attr="metric" title={formatValue(g.attrs?.metric)} className="text-text2">
+        <span data-attr="metric" title={formatValue(g.attrs?.metric)} className="block text-text2">
           {formatValue(g.attrs?.metric)}
         </span>
       ),
