@@ -465,6 +465,41 @@ async def test_review_under_discussion_is_what_the_meeting_takes(client, meeting
     assert m["agenda"] == {"next": "Ledger v2", "skipped": []}
 
 
+async def test_review_under_discussion_drops_a_cut_agenda_item(client, meetings):  # noqa: F811
+    # protects: the item the agenda takes next is under discussion only while it is still
+    # in the plan; once it is cut the reader is told the PRD under review (the review's
+    # minor); fails_when: under_discussion names the dropped item.
+    from types import SimpleNamespace
+
+    from oracle.roadmap.models import RoadmapItem
+
+    ctx = await make_people()
+    w = await World(ctx).build()
+    mid = _meeting(ctx, meetings)
+    meetings.prd = "Payments PRD"
+    meetings.agenda[mid] = [SimpleNamespace(id=uuid.uuid4(), number=7, title="Ship it")]
+    meetings.next[mid] = "Ledger v2"
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(RoadmapItem, uuid.UUID(w.ids["Ledger v2"]))).cut = True
+        await s.commit()
+    await post(client, ctx, "owner", "push that out a quarter", mid)
+    seen: list = []
+    await read(ctx, actions(), seen)
+    m = seen[0]["context"]["meeting"]
+    assert m["under_discussion"] == "Payments PRD"
+
+
+async def test_reader_prompt_is_a_new_version(client):
+    # protects: the reader's context changed shape (agenda an object, open_decisions,
+    # under_discussion), so its prompt is a new version, not v1 edited in place (the
+    # review's minor); fails_when: the reader still runs chat_reader.v1.
+    from oracle.jobs import prompting
+
+    name, text = prompting.current("chat_reader")
+    assert name == "chat_reader.v2"
+    assert "under_discussion" in text and "open_decisions" in text
+
+
 async def test_review_choice_labels_are_oracles_words(client):
     # protects: a clarify choice's label (posted as the person's line when picked) is Oracle's
     # own words: the item's title, or the card's restatement when the choices share an item;

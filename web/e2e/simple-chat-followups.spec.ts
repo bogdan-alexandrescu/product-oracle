@@ -81,5 +81,36 @@ for (const [phone, dark] of [
       await expect(page.getByText(`Decided: ${TEXT}`)).toBeVisible();
       await expect(page.getByTestId("home-decision").filter({ hasText: TEXT })).toHaveCount(0);
     });
+
+    test(`the decider declines a commenter's proposal on Home and it is not shown as decided (${where})`, async ({ page }) => {
+      // protects: a commenter naming someone else ("decision by Approver: …") is told the proposal goes to the page's decider, not Approver; the decider's Choose another option -> Decline ends the proposal (withdrawn), so Simple's Decisions page reads it "withdrawn" and Home's decided list never shows it
+      // fails_when: Decline decides the proposal's "Decline" option (it reads as a decision taken), or the card keeps Approver as the decider
+      // no_claim: Decide (the test above), meetings (unchanged)
+      const DECLINED = "Guided setup drops the tour";
+      await signIn(page, COMMENTER, "/simple/prds/guided-setup");
+      const panel = await openAsk(page, phone);
+      await panel.getByRole("textbox", { name: "Message Oracle" }).fill(`decision by Approver: ${DECLINED}`);
+      await tap(panel.getByRole("button", { name: "Send" }));
+      const card = panel.getByTestId("chat-card").filter({ hasText: `Record the decision: ${DECLINED}` }).last();
+      await expect(card.getByTestId("chat-card-proposed-to")).toHaveText("Goes to Admin; they decide (not Approver: the page's decider confirms a commenter's decision)");
+      await tap(card.getByRole("button", { name: "Propose" }));
+      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin; they decide");
+
+      await page.goto("/home");
+      await tap(page.getByTestId("user-menu").or(page.getByTestId("phone-user-menu")).filter({ visible: true }).first());
+      await tap(page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }));
+      await expect(page).toHaveURL(/\/login/);
+      await signIn(page, ADMIN.email, "/simple");
+      const row = page.getByTestId("home-decision").filter({ hasText: DECLINED });
+      await tap(row.getByRole("button", { name: "Choose another option" }));
+      await tap(row.getByRole("group", { name: "Other options" }).getByRole("button", { name: "Decline" }));
+      await expect(page.getByText(`Declined: ${DECLINED}`)).toBeVisible();
+      await expect(page.getByTestId("home-decision").filter({ hasText: DECLINED })).toHaveCount(0);
+      await page.reload();
+      await expect(page.getByTestId("home-since-row").filter({ hasText: DECLINED })).toHaveCount(0);
+
+      await page.goto("/simple/decisions");
+      await expect(page.getByRole("region", { name: "Outside meetings" }).getByTestId("decision-row").filter({ hasText: DECLINED })).toContainText("· withdrawn");
+    });
   });
 }

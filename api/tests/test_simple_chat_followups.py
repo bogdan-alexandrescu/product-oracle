@@ -126,3 +126,85 @@ async def test_meeting_decision_per_role(client):
             assert (await s.get(Decision, uuid.UUID(did))).status == "decided"
     m = await say(client, w, "viewer", "decision: Not mine", mid)
     assert m["kind"] == "note" and m["cards"] == []
+
+
+# The review's minors (each fails on the branch before its fix):
+# - test_commenter_naming_a_decider_is_told_who_decides: "decision by Rae Viewer: X" from a
+#   commenter on the Ask panel goes to the document's decider and the card says so (it
+#   names Dee Cider as the decider, and Rae Viewer as not); fails_when=the card keeps Rae.
+# - test_ask_decider_only_for_decision_lines: a commenter's other Ask lines never resolve
+#   who confirms a proposal; fails_when=every line runs ask_decider.
+# - test_card_follows_the_role_at_apply: a commenter's card applied after they became an
+#   approver records at once and no longer says it goes to someone; fails_when=the applied
+#   card still carries proposed_to.
+# - test_meeting_decision_on_the_next_item_clears_it: a meeting decision about the item the
+#   agenda takes next clears agenda.next; fails_when=the decided item stays "next".
+
+
+async def test_commenter_naming_a_decider_is_told_who_decides(client):
+    w = await world()
+    c = await one_card(client, w, "commenter", "decision by Rae Viewer: Go quarterly", page=PAGE)
+    assert c["may"] == "propose"
+    p = c["preview"]
+    assert p["proposed_to"] == "Dee Cider" and p["decider_name"] == "Dee Cider"
+    assert p["not_to"] == "Rae Viewer"
+    assert c["after"]["decider_id"] is None
+    r = await apply(client, w, "commenter", c["id"])
+    assert r.status_code == 200, r.text
+    d = await _decision(w, "Go quarterly")
+    assert d.status == "proposed" and d.approver_id == w.ctx.users["decider"].id
+
+
+async def test_ask_decider_only_for_decision_lines(client, monkeypatch):
+    from oracle.simple import chat_actions
+
+    w = await world()
+    calls: list = []
+    real = chat_actions.ask_decider
+
+    async def counted(db, document):
+        calls.append(document)
+        return await real(db, document)
+
+    monkeypatch.setattr(chat_actions, "ask_decider", counted)
+    await say(client, w, "commenter", "when does Ledger v2 end?", page=PAGE)
+    assert calls == []
+    c = await one_card(client, w, "commenter", "decision: Ship it biweekly", page=PAGE)
+    assert c["preview"]["proposed_to"] == "Dee Cider" and len(calls) == 1
+
+
+async def test_card_follows_the_role_at_apply(client):
+    from oracle.auth.models import User
+
+    w = await world()
+    c = await one_card(client, w, "commenter", "decision: Ship it nightly", page=PAGE)
+    assert c["preview"]["proposed_to"] == "Dee Cider"
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(User, w.ctx.users["commenter"].id)).role = "approver"
+        await s.commit()
+    r = await apply(client, w, "commenter", c["id"])
+    assert r.status_code == 200, r.text
+    card = r.json()["card"]
+    assert card["status"] == "applied" and "proposed_to" not in card["preview"]
+    assert card["preview"]["decider_name"] != "Dee Cider"
+    assert (await _decision(w, "Ship it nightly")).status == "decided"
+
+
+async def test_meeting_decision_on_the_next_item_clears_it(client):
+    w = await world()
+    mid = (await start(client, w))["id"]
+    title = (await _item_title(w))
+    c = await one_card(client, w, "decider", f"take {title} next", mid)
+    assert (await apply(client, w, "decider", c["id"])).status_code == 200
+    assert (await get(client, w, mid))["agenda"]["next"]["title"] == title
+    c = await one_card(client, w, "decider", f"Rae Viewer owns {title}", mid)
+    r = await apply(client, w, "decider", c["id"])
+    assert r.status_code == 200, r.text
+    assert (await get(client, w, mid))["agenda"]["next"] is None
+
+
+async def _item_title(w) -> str:
+    from oracle.roadmap.models import RoadmapItem
+
+    async with tenant_session(w.ctx.tenant_id) as s:
+        return (await s.get(RoadmapItem, uuid.UUID(next(iter(w.ids.values()))))).title

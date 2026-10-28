@@ -178,6 +178,8 @@ class FakeMeetings:
         meetings._open_decisions), the agenda the meeting keeps (chat-actions' "take X
         next" / "skip X") and the PRD under review."""
         nxt = self.next.get(meeting_id)
+        # The agenda's item as S8's _agenda_out gives it: the roadmap item's own id.
+        nid = await db.scalar(select(RoadmapItem.id).where(RoadmapItem.title == nxt)) if nxt else None
         return SimpleNamespace(
             title=self.titles.get(meeting_id, "Review"),
             open_decisions=[
@@ -185,7 +187,7 @@ class FakeMeetings:
                 for d in sorted(self.agenda.get(meeting_id, []), key=lambda d: -d.number)
             ],
             agenda=SimpleNamespace(
-                next=SimpleNamespace(id=uuid.uuid4(), title=nxt) if nxt else None, skipped=[]
+                next=SimpleNamespace(id=nid or uuid.uuid4(), title=nxt) if nxt else None, skipped=[]
             ),
             prd=SimpleNamespace(title=self.prd) if self.prd else None,
         )  # fmt: skip
