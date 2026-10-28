@@ -97,7 +97,7 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
       <div className="flex flex-none flex-col gap-2 border-b border-line px-4 py-3">
         <div className="flex flex-wrap gap-2">
           <button type="button" data-testid="ask-new-chat" className="simple-button" onClick={startNew}>
-            <Icon name="plus" size={18} />
+            <Icon name="plus" size={20} />
             New chat
           </button>
           <button
@@ -107,7 +107,7 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
             className="simple-button"
             onClick={() => (recent === null ? void openRecent() : setRecent(null))}
           >
-            <Icon name="clock" size={18} />
+            <Icon name="clock" size={20} />
             Recent chats
           </button>
         </div>
@@ -181,7 +181,7 @@ function RecentChats({ items, onOpen }: { items: ChatSummary[]; onOpen: (c: Chat
                 onClick={() => onOpen(c)}
                 className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-text hover:bg-surface2"
               >
-                <Icon name="comment" size={18} />
+                <Icon name="comment" size={20} />
                 <span className="min-w-0 flex-1">
                   {c.page_name} · {chatWhen(c.last_at, zone)}
                 </span>
@@ -219,7 +219,9 @@ function ChatView({
   const [ask, setAsk] = useState<AskMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
   const ids = useRef({ id: chat.id, askId: chat.askId });
-  ids.current = { id: chat.id ?? thread?.id ?? null, askId: chat.askId };
+  useEffect(() => {
+    ids.current = { id: chat.id ?? thread?.id ?? ids.current.id, askId: chat.askId ?? ids.current.askId };
+  });
   const page = chat.page;
 
   const load = useCallback(async () => {
@@ -294,7 +296,10 @@ function ChatView({
     const id = ids.current.id;
     const t = await askSay(text, page, asks, id ? { chatId: id } : { newChat: true });
     setThread(t);
-    if (t.id && t.id !== id) onChat({ id: t.id });
+    if (t.id && t.id !== id) {
+      ids.current.id = t.id;
+      onChat({ id: t.id });
+    }
     if (t.understood === false && asks) await handOn(text, t.id);
   };
 
