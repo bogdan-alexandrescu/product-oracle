@@ -217,6 +217,20 @@ for (const [phone, dark] of [
       await expect(page.getByRole("region", { name: "Outside meetings" })).toContainText("Guided setup starts with the checklist");
     });
 
+    test(`questions that only contain "owns" or "skip" go to Oracle's Ask (${where})`, async ({ page }) => {
+      // protects: on the Ask panel's one box "Which team owns billing?" is not claimed as a "<person> owns <item>" phrase: it opens Oracle's Ask with the line, with no card and no "Who is …?" or "I could not find …"
+      // fails_when: a natural question gets a chat-actions refusal or a card
+      // no_claim: the model's answer itself (the mock streams a canned reply)
+      await signIn(page, EMAILS.owner, "/simple/roadmap");
+      const panel = await openAsk(page, phone);
+      await sayIn(panel, "Which team owns billing?");
+      await expect(panel.getByTestId("discussion-thread")).toBeVisible();
+      await expect(panel.getByTestId("discussion-thread")).toContainText("Which team owns billing?");
+      await expect(page.getByText("Name a person of the company")).toHaveCount(0);
+      await expect(page.getByText("on the roadmap. Which item")).toHaveCount(0);
+      await expect(panel.getByTestId("chat-card")).toHaveCount(0);
+    });
+
     test(`an approver's "owns" proposes; a viewer in a meeting gets no card (${where})`, async ({ page }) => {
       // protects: an approver's "Approver owns In-app tour" on Ask is a card whose button is Propose (they do not decide that item) and Apply proposes it to the owners ("Proposed to Admin by Approver"); a viewer's "note: …" and "Admin owns …" in a meeting chat get the viewers' note and no card
       // fails_when: the approver's card applies, or a viewer gets a card
