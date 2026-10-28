@@ -960,3 +960,53 @@ code .date-mark {
     animation: none;
   }
 }
+
+/*
+ * fid-prio (Goal buckets, the owner's pick B "Effort per goal, per milestone"): each milestone's
+ * strong bar colour (M1 blue, M2 violet, M3 amber; a fourth green) with --on-accent text on it,
+ * and its chip's tint and ink in the goal cards. Light and dark.
+ */
+:root {
+  --simple-m1-bar: #0369a1;
+  --simple-m2-bar: #6d28d9;
+  --simple-m3-bar: #a8680a;
+  --simple-m4-bar: #0a7a55;
+  --simple-m1-tag: #e5f3fc;
+  --simple-m1-tag-ink: #075985;
+  --simple-m2-tag: #f1ecfd;
+  --simple-m2-tag-ink: #5b21b6;
+  --simple-m3-tag: #fbf1e1;
+  --simple-m3-tag-ink: #7a4f00;
+  --simple-m4-tag: #e3f5ee;
+  --simple-m4-tag-ink: #0a7a55;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --simple-m1-bar: #7cc8f8;
+    --simple-m2-bar: #c4b5fd;
+    --simple-m3-bar: #f0b75a;
+    --simple-m4-bar: #4cd9a0;
+    --simple-m1-tag: #0f2742;
+    --simple-m1-tag-ink: #b9e3fc;
+    --simple-m2-tag: #221a3f;
+    --simple-m2-tag-ink: #ddd6fe;
+    --simple-m3-tag: #2c2210;
+    --simple-m3-tag-ink: #f5d38a;
+    --simple-m4-tag: #0d2e25;
+    --simple-m4-tag-ink: #4cd9a0;
+  }
+}
+:root[data-theme="dark"] {
+  --simple-m1-bar: #7cc8f8;
+  --simple-m2-bar: #c4b5fd;
+  --simple-m3-bar: #f0b75a;
+  --simple-m4-bar: #4cd9a0;
+  --simple-m1-tag: #0f2742;
+  --simple-m1-tag-ink: #b9e3fc;
+  --simple-m2-tag: #221a3f;
+  --simple-m2-tag-ink: #ddd6fe;
+  --simple-m3-tag: #2c2210;
+  --simple-m3-tag-ink: #f5d38a;
+  --simple-m4-tag: #0d2e25;
+  --simple-m4-tag-ink: #4cd9a0;
+}

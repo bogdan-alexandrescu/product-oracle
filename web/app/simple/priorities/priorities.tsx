@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as R
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { FlowThumb } from "@/components/simple/Flow";
-import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
+import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { usePanelOpen } from "@/components/hop/open-state";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -14,7 +14,7 @@ import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { goalTotal, PlanBucketsHead, PlanFeatureList, wk } from "./plan-buckets";
+import { featureCount, goalLabel, PlanBucketsHead, PlanFeatureList, planGoals } from "./plan-buckets";
 
 type Out = Schemas["SimplePrioritiesOut"];
 type Row = Schemas["SimplePriorityRow"];
@@ -29,9 +29,9 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "value-effort", label: "Value / effort" },
   { key: "buckets", label: "Goal buckets" },
 ];
-/** Shapes by goal (never colour alone), in the order the goals first rank. */
+/** Shapes by goal (never colour alone), in the order the goals first rank; "none": a row with no goal. */
 const SHAPES = ["circle", "square", "triangle", "diamond", "pentagon"] as const;
-type Shape = (typeof SHAPES)[number] | "cross";
+type Shape = (typeof SHAPES)[number] | "none";
 
 /** Whether the screen is a phone's (under 640 px). */
 export function usePhone(): boolean {
@@ -191,7 +191,7 @@ export function Priorities() {
   );
 }
 
-/** Each goal's shape (first ranked first); rows with no goal are crosses. */
+/** Each goal's shape (first ranked first); rows with no goal are a neutral dashed circle. */
 function goalShapes(rows: Row[]): Map<string, Shape> {
   const out = new Map<string, Shape>();
   for (const r of rows) if (r.goal && !out.has(r.goal.key)) out.set(r.goal.key, SHAPES[out.size % SHAPES.length]);
@@ -677,26 +677,51 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
 
 // --------------------------------------------------------------------------- value / effort
 
+/**
+ * A mark as the owner's pick B draws it, in a 36 px box centred on its spot: the goal's shape in
+ * the accent, its code on it (9.5 px); hollow below the line. No goal: a neutral circle with a
+ * dashed edge (never a cross).
+ */
 function ShapeMark({ shape, hollow, code }: { shape: Shape; hollow: boolean; code?: string }) {
-  const fill = hollow ? "var(--surface)" : "var(--accent)";
-  const text = hollow ? "var(--text)" : "var(--on-accent)";
-  const common = { fill, stroke: "var(--accent)", strokeWidth: 2 };
+  const none = shape === "none";
+  const fill = hollow ? "var(--surface)" : none ? "var(--line)" : "var(--accent)";
+  const text = hollow || none ? "var(--text)" : "var(--on-accent)";
+  const common = { fill, stroke: none ? "var(--text2)" : "var(--accent)", strokeWidth: 2, ...(none ? { strokeDasharray: "4 3" } : {}) };
   const path: Record<Shape, React.ReactNode> = {
-    circle: <circle cx="16" cy="16" r="13" {...common} />,
-    square: <rect x="4" y="4" width="24" height="24" rx="2" {...common} />,
-    triangle: <polygon points="16,2 30,28 2,28" {...common} />,
-    diamond: <polygon points="16,1 31,16 16,31 1,16" {...common} />,
-    pentagon: <polygon points="16,2 30,12 25,29 7,29 2,12" {...common} />,
-    cross: <polygon points="11,2 21,2 21,11 30,11 30,21 21,21 21,30 11,30 11,21 2,21 2,11 11,11" {...common} />,
+    circle: <circle cx="18" cy="18" r="14" {...common} />,
+    square: <rect x="5" y="5" width="26" height="26" rx="3" {...common} />,
+    triangle: <polygon points="18,2 36,31 0,31" {...common} />,
+    diamond: <polygon points="18,1 35,18 18,35 1,18" {...common} />,
+    pentagon: <polygon points="18,3 33,14 27,32 9,32 3,14" {...common} />,
+    none: <circle cx="18" cy="18" r="14" {...common} />,
   };
   return (
-    <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden>
+    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden className="block overflow-visible">
       {path[shape]}
       {code != null && (
-        <text data-testid="vxe-code" x="16" y={shape === "triangle" ? 23 : 20} textAnchor="middle" fontSize={code.length <= 2 ? 11 : code.length === 3 ? 9.5 : 8} fontWeight="700" fill={text}>
+        <text data-testid="vxe-code" x="18" y={shape === "triangle" ? 26.3 : shape === "pentagon" ? 23 : 21.4} textAnchor="middle" fontSize={code.length <= 4 ? 9.5 : 8} fontWeight="700" fill={text}>
           {code}
         </text>
       )}
+    </svg>
+  );
+}
+
+/** The legend's small marks (22 px), as B draws them. */
+function LegendMark({ shape }: { shape: Shape }) {
+  const none = shape === "none";
+  const common = { fill: none ? "var(--line)" : "var(--accent)", stroke: none ? "var(--text2)" : "var(--accent)", strokeWidth: 2, ...(none ? { strokeDasharray: "3 2" } : {}) };
+  const path: Record<Shape, React.ReactNode> = {
+    circle: <circle cx="11" cy="11" r="7" {...common} />,
+    square: <rect x="5" y="5" width="12" height="12" rx="3" {...common} />,
+    triangle: <polygon points="11,3 22,18 0,18" {...common} />,
+    diamond: <polygon points="11,1 21,11 11,21 1,11" {...common} />,
+    pentagon: <polygon points="11,2 20,9 17,19 5,19 2,9" {...common} />,
+    none: <circle cx="11" cy="11" r="8" {...common} />,
+  };
+  return (
+    <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden className="flex-none overflow-visible">
+      {path[shape]}
     </svg>
   );
 }
@@ -706,6 +731,13 @@ function effortTicks(top: number): number[] {
   const out = [0.5, 1, 2, 4];
   while (out.at(-1)! * 2 <= top) out.push(out.at(-1)! * 2);
   return out;
+}
+
+/** The goal value axis: up to four even steps (0, 0.5, 1, 1.5, 2 as B draws them) from 0 to just past the highest value. */
+function valueTicks(max: number): number[] {
+  const step = [0.25, 0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100].find((x) => Math.ceil((max * 1.05) / x) <= 4) ?? Math.ceil((max * 1.05) / 4);
+  const n = Math.max(1, Math.ceil((max * 1.05) / step));
+  return Array.from({ length: n + 1 }, (_, k) => Math.round(k * step * 100) / 100);
 }
 
 /**
@@ -721,8 +753,22 @@ function medianSplit(rows: Row[], key: (r: Row) => number, high: boolean): { med
   return { median, firstHalf: new Set(sorted.slice(0, Math.ceil(n / 2)).map((r) => r.feature_id)) };
 }
 
+/** A rectangle on the plot, in pixels: left, top, right, bottom. */
+type Box = [number, number, number, number];
+
 function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; shapes: Map<string, Shape>; mayChange: boolean; changed: Changed; moved: Moved | null }) {
   const box = useRef<HTMLDivElement>(null);
+  // The plot's size, kept as it resizes (where the median lines' words fit).
+  const [plotSize, setPlotSize] = useState({ w: 0, h: 0 });
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const on = () => setPlotSize({ w: el.clientWidth, h: el.clientHeight });
+    on();
+    const ro = new ResizeObserver(on);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [drag, setDrag] = useState<{ code: string; x0: number; y0: number; dx: number; dy: number } | null>(null);
   // plan-charts: the mark and row selected together (Escape clears); a drag is not a selection.
   const [selected, setSelected] = useState<string | null>(null);
@@ -731,7 +777,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   const effortOf = (r: Row) => Math.max(0.25, r.effort ?? 0);
   const maxE = Math.max(4, ...rows.map(effortOf));
   const minE = Math.min(0.5, ...rows.map(effortOf));
-  const maxV = Math.max(4, ...rows.map((r) => (r.goal_value ?? 0) * 1.25));
+  const vTicks = valueTicks(Math.max(0, ...rows.map((r) => r.goal_value ?? 0)));
+  const maxV = vTicks.at(-1)!;
   // The log effort axis, a little room past the first and last tick.
   const lo = Math.log2(minE) - 0.4;
   const hi = Math.log2(maxE) + 0.4;
@@ -742,7 +789,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   const byEffort = medianSplit(rows, effortOf, false);
   const quadrant = (r: Row) => (byValue.firstHalf.has(r.feature_id) ? (byEffort.firstHalf.has(r.feature_id) ? 0 : 1) : byEffort.firstHalf.has(r.feature_id) ? 2 : 3);
   const counts = [0, 1, 2, 3].map((q) => rows.filter((r) => quadrant(r) === q).length);
-  const shapeOf = (r: Row): Shape => (r.goal ? (shapes.get(r.goal.key) ?? "circle") : "cross");
+  const shapeOf = (r: Row): Shape => (r.goal ? (shapes.get(r.goal.key) ?? "circle") : "none");
   const sideRefs = useRef(new Map<string, HTMLLIElement>());
   const markRefs = useRef(new Map<string, HTMLButtonElement>());
 
@@ -808,39 +855,89 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     }
   }
 
-  // Marks on the same spot fan out sideways around it so none hides another.
+  // Marks on the same spot fan out sideways around it so none hides another (B: 37 px apart).
   const spot = (r: Row) => `${effortOf(r)}|${r.goal_value ?? 0}`;
   const twins = new Map<string, string[]>();
   for (const r of rows) twins.set(spot(r), [...(twins.get(spot(r)) ?? []), r.feature_id]);
   const fan = (r: Row) => {
     const at = twins.get(spot(r))!;
-    return (at.indexOf(r.feature_id) - (at.length - 1) / 2) * 34;
+    return (at.indexOf(r.feature_id) - (at.length - 1) / 2) * 37;
   };
 
   const QUADRANTS = [
-    { name: "Quick wins", at: "left-0 top-0" },
-    { name: "Big bets", at: "right-0 top-0 text-right" },
-    { name: "Fill-ins", at: "bottom-0 left-0" },
-    { name: "Later", at: "bottom-0 right-0 text-right" },
+    { name: "Quick wins", at: "left-[10px] top-[8px]" },
+    { name: "Big bets", at: "right-[10px] top-[8px] text-right" },
+    { name: "Fill-ins", at: "bottom-[8px] left-[10px]" },
+    { name: "Later", at: "bottom-[22px] right-[10px] text-right" },
   ];
+  // B's legend: "Codes are the PRD's F-codes" when every mark's code is one, else codes stay with the item.
+  const fCodes = rows.length > 0 && rows.every((r) => /^F-\d+$/.test(r.short_code || r.code));
+  const effortAt = xPct(byEffort.median);
+  const valueAt = yPct(byValue.median);
+  // B writes "middle effort" at the foot of its line and "middle value" under its line at 82%
+  // across; where a mark or a quadrant's name sits there, the words take the next free spot.
+  const { w, h } = plotSize;
+  const ex = (effortAt / 100) * w;
+  const vy = (valueAt / 100) * h;
+  const taken: Box[] = [
+    ...rows.map((r): Box => {
+      const x = (xPct(effortOf(r)) / 100) * w + fan(r);
+      const y = (yPct(r.goal_value ?? 0) / 100) * h;
+      return [x - 18, y - 18, x + 18, y + 18];
+    }),
+    ...QUADRANTS.map((q, k): Box => {
+      const len = `${q.name} · ${counts[k]}`.length * 8.6;
+      return [[10, 8, 10 + len, 28], [w - 10 - len, 8, w - 10, 28], [10, h - 28, 10 + len, h - 8], [w - 10 - len, h - 42, w - 10, h - 22]][k] as Box;
+    }),
+  ];
+  const free = (b: Box) => b[0] >= 0 && b[2] <= w && b[1] >= 0 && b[3] <= h && !taken.some((o) => o[0] < b[2] && b[0] < o[2] && o[1] < b[3] && b[1] < o[3]);
+  const effortSpots: { box: Box; style: React.CSSProperties }[] = [
+    { box: [ex + 5, h - 19, ex + 91, h - 3], style: { left: `calc(${effortAt}% + 5px)`, bottom: 3 } },
+    { box: [ex - 91, h - 19, ex - 5, h - 3], style: { left: `calc(${effortAt}% - 5px)`, bottom: 3, transform: "translateX(-100%)" } },
+    { box: [ex + 5, 32, ex + 91, 48], style: { left: `calc(${effortAt}% + 5px)`, top: 32 } },
+    { box: [ex - 91, 32, ex - 5, 48], style: { left: `calc(${effortAt}% - 5px)`, top: 32, transform: "translateX(-100%)" } },
+  ];
+  const valueSpots: { box: Box; style: React.CSSProperties }[] = [0.82, 0.6, 0.3].flatMap((at) => [
+    { box: [at * w - 42, vy + 4, at * w + 42, vy + 20] as Box, style: { left: `${at * 100}%`, top: `calc(${valueAt}% + 4px)`, transform: "translateX(-50%)" } },
+    { box: [at * w - 42, vy - 20, at * w + 42, vy - 4] as Box, style: { left: `${at * 100}%`, top: `calc(${valueAt}% - 20px)`, transform: "translateX(-50%)" } },
+  ]);
+  const effortLabel = (w && effortSpots.find((s) => free(s.box))) || effortSpots[0];
+  const valueLabel = (w && valueSpots.find((s) => free(s.box))) || valueSpots[0];
   const split = lineSplit(rows);
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-      <section aria-label="Value / effort">
-        <div className="flex">
-          <div className="flex w-6 items-center justify-center">
-            <span className="-rotate-90 whitespace-nowrap text-[length:var(--simple-small)] text-text2">Goal value ↑</span>
-          </div>
-          <div ref={box} data-testid="vxe-plot" className="relative aspect-[4/3] flex-1 touch-none rounded-[var(--simple-card-radius)] border border-line bg-surface">
-            <div aria-hidden className="pointer-events-none absolute inset-0">
+      <section aria-label="Value / effort" className="min-w-0">
+        <div className="pl-[46px] pr-[14px] pt-3">
+          {/* B's plot is 706 x 548; a phone's narrow plot is square, so its marks keep their room. */}
+          <div ref={box} data-testid="vxe-plot" className="relative aspect-square touch-none rounded-xl border border-line bg-surface sm:aspect-[706/548]">
+            <svg aria-hidden className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
               {ticks.map((t) => (
-                <span key={t} className="absolute inset-y-0 border-l border-line/60" style={{ left: `${xPct(t)}%` }} />
+                <line key={`x${t}`} x1={`${xPct(t)}%`} x2={`${xPct(t)}%`} y1="0" y2="100%" stroke="var(--line)" strokeWidth=".7" />
               ))}
-              <span data-testid="vxe-median-effort" className="absolute inset-y-0 w-0 border-l-2 border-dashed border-line-strong" style={{ left: `${xPct(byEffort.median)}%` }} />
-              <span data-testid="vxe-median-value" className="absolute inset-x-0 h-0 border-t-2 border-dashed border-line-strong" style={{ top: `${yPct(byValue.median)}%` }} />
-            </div>
+              {vTicks.map((v) => (
+                <line key={`y${v}`} x1="0" x2="100%" y1={`${yPct(v)}%`} y2={`${yPct(v)}%`} stroke="var(--line)" strokeWidth=".7" />
+              ))}
+              <line x1={`${effortAt}%`} x2={`${effortAt}%`} y1="0" y2="100%" stroke="var(--accent-ink)" strokeDasharray="6 4" strokeWidth="1.5" />
+              <line x1="0" x2="100%" y1={`${valueAt}%`} y2={`${valueAt}%`} stroke="var(--accent-ink)" strokeDasharray="6 4" strokeWidth="1.5" />
+            </svg>
+            <span aria-hidden className="pointer-events-none absolute top-1/2 whitespace-nowrap text-[14px] leading-5 text-text2" style={{ left: -32, transform: "translate(-50%, -50%) rotate(-90deg)" }}>
+              Goal value ↑
+            </span>
+            {vTicks.map((v) => (
+              <span key={v} data-testid="vxe-value-tick" aria-hidden className="pointer-events-none absolute right-[calc(100%+6px)] -translate-y-1/2 text-[12px] leading-4 tabular-nums text-text2" style={{ top: `${yPct(v)}%` }}>
+                {v}
+              </span>
+            ))}
+            <span data-testid="vxe-median-effort" aria-hidden className="pointer-events-none absolute inset-y-0 w-0" style={{ left: `${effortAt}%` }} />
+            <span data-testid="vxe-median-value" aria-hidden className="pointer-events-none absolute inset-x-0 h-0" style={{ top: `${valueAt}%` }} />
+            <span data-testid="vxe-middle-effort" aria-hidden className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink" style={effortLabel.style}>
+              middle effort
+            </span>
+            <span data-testid="vxe-middle-value" aria-hidden className="pointer-events-none absolute whitespace-nowrap text-[12px] font-semibold leading-4 text-accent-ink" style={valueLabel.style}>
+              middle value
+            </span>
             {QUADRANTS.map((q, k) => (
-              <span key={q.name} data-testid="vxe-quadrant" className={`pointer-events-none absolute p-2 text-[length:var(--simple-small)] font-medium text-text2 ${q.at}`}>
+              <span key={q.name} data-testid="vxe-quadrant" className={`pointer-events-none absolute whitespace-nowrap text-[15px] font-[650] leading-5 text-text-faint ${q.at}`}>
                 {q.name} · {counts[k]}
               </span>
             ))}
@@ -861,10 +958,11 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   data-code={r.code}
                   data-above={r.above_line ? "true" : "false"}
                   data-moved={isMoved ? "true" : undefined}
+                  data-shape={shapeOf(r)}
                   aria-pressed={isSelected}
-                  aria-label={`#${r.rank} ${r.code}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}`}
+                  aria-label={`#${r.rank} ${r.code}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}${r.goal ? "" : ", no goal"}`}
                   title={`#${r.rank} ${r.short_code || r.code} · ${r.title}`}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-lg ${isSelected ? "z-20 scale-125 ring-4 ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-pointer"}`}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${isSelected ? "z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-pointer"}`}
                   style={{ left, top }}
                   onClick={() => {
                     if (dragged.current) {
@@ -890,39 +988,38 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
               );
             })}
           </div>
-        </div>
-        <div className="flex" aria-hidden>
-          <div className="w-6 flex-none" />
-          <div className="relative h-6 flex-1">
+          <div className="relative h-[22px]" aria-hidden>
             {ticks.map((t) => (
-              <span key={t} data-testid="vxe-tick" className="absolute top-0.5 -translate-x-1/2 whitespace-nowrap text-[length:var(--simple-small)] tabular-nums text-text2" style={{ left: `${xPct(t)}%` }}>
-                {t} wk
+              <span key={t} data-testid="vxe-tick" className="absolute top-[4px] -translate-x-1/2 whitespace-nowrap text-[12px] leading-4 tabular-nums text-text2" style={{ left: `${xPct(t)}%` }}>
+                {t}
               </span>
             ))}
           </div>
+          <p className="text-center text-[14px] leading-[18px] text-text2">Effort (engineer-weeks, log scale) →</p>
         </div>
-        <p className="mt-1 pl-6 text-center text-[length:var(--simple-small)] text-text2">Effort (weeks, each step doubles) →</p>
-        <ul className="mt-2 flex flex-wrap gap-4 pl-6 text-[length:var(--simple-small)] text-text2" aria-label="Legend">
+        <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 pl-6 text-[15px] leading-[22px] text-text2" aria-label="Legend">
           {[...shapes.entries()].map(([k, s]) => (
             <li key={k} className="flex items-center gap-1">
-              <ShapeMark shape={s} hollow={false} />
+              <LegendMark shape={s} />
               {rows.find((r) => r.goal?.key === k)?.goal?.title}
             </li>
           ))}
-          {rows.some((r) => r.no_goal) && (
-            <li className="flex items-center gap-1">
-              <ShapeMark shape="cross" hollow={false} />
+          {rows.some((r) => !r.goal) && (
+            <li className="flex items-center gap-1" data-testid="vxe-legend-no-goal">
+              <LegendMark shape="none" />
               No goal
             </li>
           )}
-          <li>Codes stay with the item; ranks are in the list. Hollow is below the line ({lineWords(data)}). The dashed lines are the middle value and the middle effort: half the features sit on each side.</li>
+          <li>
+            {fCodes ? "Codes are the PRD's F-codes; ranks are in the list." : "Codes stay with the item; ranks are in the list."} Hollow: below the line ({lineWords(data)}).
+          </li>
         </ul>
-        <p className="mt-1 pl-6 text-[length:var(--simple-small)] text-text-faint">
-          Select a mark to find it in the list{mayChange ? "; drag it sideways to change its effort, up or down to change its goal value (or use the arrow keys)" : ""}. Escape clears.
+        <p className="mt-1 pl-6 text-[15px] leading-[22px] text-text-faint">
+          {mayChange ? "Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys)." : "Select a mark to find it in the list."}
         </p>
       </section>
-      <section aria-label="Ranked side list">
-        <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Ranked</h2>
+      <section aria-label="Ranked side list" className="min-w-0">
+        <h2 className="mb-2 text-[21px] font-[650] leading-7">Ranked</h2>
         <LineCaption data={data} compact />
         <ol className="flex flex-col gap-1">
           {rows.flatMap((r, i) => {
@@ -942,26 +1039,21 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                 data-misses={r.above_line ? undefined : "true"}
                 data-moved={words ? "true" : undefined}
                 data-selected={isSelected ? "true" : undefined}
-                className={`scroll-my-4 rounded-lg border text-[length:var(--simple-small)] ${isSelected ? "border-accent bg-accent-soft ring-2 ring-accent" : words ? "border-accent ring-2 ring-accent" : "border-line"} ${isSelected ? "" : r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}
+                className={`scroll-my-4 rounded-lg border text-[15px] leading-[22px] ${isSelected ? "border-accent bg-accent-soft ring-2 ring-accent" : words ? "border-accent ring-2 ring-accent" : "border-line"} ${isSelected ? "" : r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}
               >
-                <button
-                  type="button"
-                  aria-pressed={isSelected}
-                  onClick={() => select(r.feature_id, "row")}
-                  className="flex w-full flex-wrap items-center gap-x-2 rounded-lg px-2 py-1 text-left"
-                >
-                  <span className="w-6 text-right font-semibold tabular-nums" data-testid="side-rank">
+                <button type="button" aria-pressed={isSelected} onClick={() => select(r.feature_id, "row")} className="flex w-full items-center gap-1.5 rounded-lg px-2 py-0.5 text-left">
+                  <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
                     {r.rank}
                   </span>
-                  <span className="font-mono text-[length:var(--simple-small)]" data-testid="side-code" title={r.code}>
+                  <span className="flex-none font-mono text-[13px]" data-testid="side-code" title={r.code}>
                     {r.short_code || r.code}
                   </span>
-                  <span className="min-w-[8rem] flex-1 break-words" data-testid="prio-title">
+                  <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
                     {r.title}
                   </span>
                   {!r.above_line && <MissesTag data={data} compact />}
-                  <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
                   {words && <MovedTag words={words} />}
+                  <span className="flex-none tabular-nums text-text2">{fmt(r.score, 2)}</span>
                 </button>
               </li>,
             ];
@@ -986,31 +1078,35 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
   const [picking, setPicking] = useState(current.kind === "date");
   const offered = data.lines ?? [];
   const value = picking || current.kind === "date" ? "pick" : current.key;
-  const field = "rounded-lg border border-line bg-bg px-2 py-1 text-[length:var(--simple-small)]";
+  // B's box: 32 px high, as wide as the line it shows (not its longest option), a chevron of its own.
+  const field = "h-8 rounded-lg border border-line-strong bg-surface px-2 text-[15px] text-text";
   return (
-    <div className="flex flex-wrap items-center gap-2 text-[length:var(--simple-small)]" data-testid="line-picker">
-      <label htmlFor="prio-line" className="font-medium">
+    <div className="flex flex-wrap items-center gap-2 text-[15px]" data-testid="line-picker">
+      <label htmlFor="prio-line" className="font-semibold">
         Line
       </label>
-      <select
-        id="prio-line"
-        value={value}
-        className={field}
-        onChange={(e) => {
-          if (e.target.value === "pick") setPicking(true);
-          else {
-            setPicking(false);
-            onPick(e.target.value);
-          }
-        }}
-      >
-        {offered.map((l) => (
-          <option key={l.key} value={l.key}>
-            {l.kind === "key_date" ? `Key date: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
-          </option>
-        ))}
-        <option value="pick">{current.kind === "date" ? current.label : "Pick a date…"}</option>
-      </select>
+      <span className="relative inline-flex max-w-full">
+        <select
+          id="prio-line"
+          value={value}
+          className={`${field} max-w-full appearance-none pr-[26px] [field-sizing:content]`}
+          onChange={(e) => {
+            if (e.target.value === "pick") setPicking(true);
+            else {
+              setPicking(false);
+              onPick(e.target.value);
+            }
+          }}
+        >
+          {offered.map((l) => (
+            <option key={l.key} value={l.key}>
+              {l.kind === "key_date" ? `Key date: ${l.label}` : l.kind === "milestone" ? `Milestone: ${l.label}` : l.label}
+            </option>
+          ))}
+          <option value="pick">{current.kind === "date" ? current.label : "Pick a date…"}</option>
+        </select>
+        <span aria-hidden className="pointer-events-none absolute right-[9px] top-[11px] h-1.5 w-1.5 rotate-45 border-b-[1.5px] border-r-[1.5px] border-text2" />
+      </span>
       {value === "pick" && (
         <input type="date" aria-label="The line's date" className={field} defaultValue={current.date ?? ""} onChange={(e) => e.target.value && onPick(`date:${e.target.value}`)} />
       )}
@@ -1038,7 +1134,7 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
   const misses = data.rows.filter((r) => !r.above_line).map((r) => r.title);
   const cut = compact && misses.length > 3;
   return (
-    <p data-testid="line-caption" title={cut ? misses.join(", ") : undefined} className="mb-2 text-[length:var(--simple-small)] text-text2">
+    <p data-testid="line-caption" title={cut ? misses.join(", ") : undefined} className={`mb-2 text-[length:var(--simple-small)] text-text2 ${compact ? "leading-[21px]" : ""}`}>
       <span className="font-medium text-accent-ink">
         {misses.length} of {data.rows.length} miss {lineLabel(data)}
       </span>
@@ -1047,10 +1143,16 @@ function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }
   );
 }
 
-/** A row's own mark when it misses the line. */
+/** A row's own mark when it misses the line; compact (Value/effort's side list, B): a small "Misses" chip, the line in its title. */
 function MissesTag({ data, compact = false }: { data: Out; compact?: boolean }) {
+  if (compact)
+    return (
+      <span data-testid="prio-misses" title={`Misses ${lineLabel(data)}`} className="flex-none whitespace-nowrap rounded-full border border-line-strong px-1.5 text-[12px] leading-[18px] text-text2">
+        Misses
+      </span>
+    );
   return (
-    <span data-testid="prio-misses" className={`flex-none rounded-full border border-line-strong bg-surface px-2 text-[length:var(--simple-small)] text-text2 ${compact ? "max-w-[10rem] truncate" : ""}`}>
+    <span data-testid="prio-misses" className="flex-none rounded-full border border-line-strong bg-surface px-2 text-[length:var(--simple-small)] text-text2">
       Misses {lineLabel(data)}
     </span>
   );
@@ -1059,7 +1161,7 @@ function MissesTag({ data, compact = false }: { data: Out; compact?: boolean }) 
 /** The divider row, drawn only when every row after it misses the line. */
 function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }) {
   return (
-    <li role="separator" data-testid="line-divider" className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? "py-0.5" : "py-1"}`}>
+    <li role="separator" data-testid="line-divider" className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? "py-0.5 leading-[21px]" : "py-1"}`}>
       <span aria-hidden className="h-0.5 w-6 flex-none bg-accent-ink" />
       <span>The line: {lineLabel(data)} · everything below misses it</span>
       <span aria-hidden className="h-0.5 flex-1 bg-accent-ink" />
@@ -1117,14 +1219,30 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
   );
 }
 
-/** plan-charts: the plan's header, then a card per goal listing each feature with its milestone chips. */
+/** The goal a plan goal names among the goals people suggest under: the same name (its code aside), the same code, or the same key. */
+function suggestionGoal(api: GoalSuggestionsApi, goal: string): Schemas["SimpleGoalSuggestionGoal"] | undefined {
+  const mine = goalLabel(goal);
+  return api.data?.goals.find((g) => {
+    const theirs = goalLabel(g.goal.title);
+    return theirs.name.toLowerCase() === mine.name.toLowerCase() || (!!mine.code && theirs.code === mine.code) || g.goal.key === goal;
+  });
+}
+
+/** plan-charts (the owner's pick B): the plan's header, then a card per goal listing each feature with its milestone chips. */
 function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi }) {
-  const goals = [...plan.goals.map((g) => g.name)];
-  for (const w of plan.goal_weeks) if (!goals.includes(w.goal)) goals.push(w.goal);
+  const { can } = useMe();
+  const goals = planGoals(plan);
   const noGoal = plan.slices.some((x) => !x.goal);
-  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
-  // A confirmed goal of the same name keeps its suggestions under its card.
-  const bucketOf = (goal: string) => data.buckets.find((b) => !b.no_goal && b.title.toLowerCase() === goal.toLowerCase());
+  const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
+  // Who may suggest (commenters and up) gets B's two buttons; anyone else, the suggestions to read.
+  const suggests = can("create_goal_suggestion");
+  // A goal's code: its own ("G-A1 Account Safety"), else the code of the goal it names.
+  const codeOf = (goal: string): string | null => {
+    const own = goalLabel(goal).code;
+    if (own) return own;
+    const named = suggestionGoal(suggestions, goal);
+    return named ? goalLabel(named.goal.title).code : null;
+  };
   // This quarter's roadmap items the plan does not hold (another PRD's, or none), by their goal.
   const rowOf = new Map(data.rows.map((r) => [r.code, r]));
   const outside = data.buckets
@@ -1132,50 +1250,82 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
     .filter((x) => x.rows.length > 0);
   return (
     <section aria-label="Goal buckets">
-      <PlanBucketsHead plan={plan} />
-      <ul className="mt-[var(--simple-gap)] grid gap-[var(--simple-gap)] sm:grid-cols-2">
+      <PlanBucketsHead plan={plan} codeOf={codeOf} />
+      <ul className="mt-4 grid items-start gap-4 sm:grid-cols-2">
         {goals.map((g) => {
-          const b = bucketOf(g);
+          const state = suggestionGoal(suggestions, g);
+          const code = codeOf(g);
           return (
-            <li key={g} data-testid="plan-goal" data-goal={g} className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <h3 className="font-semibold">{g}</h3>
-                <span data-testid="plan-goal-total" className="tabular-nums">
-                  {wk(goalTotal(plan, g))} wk
+            <li key={g} data-testid="plan-goal" data-goal={g} className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-4">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <h3 className="text-[21px] font-[650] leading-7">{goalLabel(g).name}</h3>
+                {code && <span className="font-mono text-[13px] text-text2">{code}</span>}
+                <span data-testid="plan-goal-count" className="ml-auto text-[15px] text-text2">
+                  {featureCount(plan, g)}
                 </span>
               </div>
               <PlanFeatureList plan={plan} goal={g} />
-              {b && (
+              {state && suggests && (
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
+                  <button
+                    type="button"
+                    data-testid="goal-suggest-feature"
+                    onClick={() => setPanel({ goal: state.goal, start: "form" })}
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-[14px] font-[650] text-text hover:bg-surface2"
+                  >
+                    + Suggest a feature
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="goal-ask-oracle"
+                    disabled={state.pending}
+                    onClick={() => {
+                      setPanel({ goal: state.goal, start: "oracle" });
+                      void suggestions.suggest(state.goal);
+                    }}
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent-soft px-3 text-[14px] font-[650] text-accent-ink hover:bg-accent-mid disabled:cursor-default"
+                  >
+                    {state.pending ? "✦ Oracle is suggesting…" : "✦ Ask Oracle to suggest"}
+                  </button>
+                </div>
+              )}
+              {state && !suggests && (
                 <div className="mt-3 border-t border-line pt-3">
-                  <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} />
+                  <SuggestionsButton goal={state.goal} api={suggestions} onOpen={(goal) => setPanel({ goal })} />
                 </div>
               )}
             </li>
           );
         })}
         {noGoal && (
-          <li data-testid="plan-goal" data-goal="" className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-3">
-            <h3 className="font-semibold">No goal</h3>
-            <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no goal in the plan</p>
+          <li data-testid="plan-goal" data-goal="" className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-4">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <h3 className="text-[21px] font-[650] leading-7">No goal</h3>
+              <span data-testid="plan-goal-count" className="ml-auto text-[15px] text-text2">
+                {featureCount(plan, null)}
+              </span>
+            </div>
+            <p className="mt-1 text-[15px] text-warn">⚠ Serves no goal in the plan</p>
             <PlanFeatureList plan={plan} goal={null} />
           </li>
         )}
         {outside.length > 0 && (
-          <li data-testid="plan-outside" className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 sm:col-span-2">
-            <h3 className="font-semibold">Also this quarter, outside the plan</h3>
-            <ul className="mt-1 flex flex-col gap-1.5 text-[length:var(--simple-small)]">
+          <li data-testid="plan-outside" className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-4 sm:col-span-2">
+            <h3 className="text-[21px] font-[650] leading-7">Also this quarter, outside the plan</h3>
+            <ul className="mt-2">
               {outside.map(({ b, rows }) => (
-                <li key={b.key} data-testid="plan-outside-goal" data-key={b.key}>
-                  <span className={`font-medium ${b.no_goal ? "text-warn" : ""}`}>{b.no_goal ? "⚠ Serves no confirmed goal" : b.title}</span>
+                <li key={b.key} data-testid="plan-outside-goal" data-key={b.key} className="border-b border-line py-[5px] text-[16px] leading-[22px]">
+                  <span className={`font-[650] ${b.no_goal ? "text-warn" : ""}`}>{b.no_goal ? "⚠ Serves no confirmed goal" : b.title}</span>
                   {": "}
-                  {rows.map((r) => `${r.short_code || r.code} ${r.title}`).join(", ")} · {fmt(rows.reduce((n, r) => n + (r.effort ?? 0), 0))} wk
+                  {rows.map((r) => `${r.short_code || r.code} ${r.title}`).join(", ")}
+                  <span className="text-text2"> · {fmt(rows.reduce((n, r) => n + (r.effort ?? 0), 0))} wk</span>
                 </li>
               ))}
             </ul>
           </li>
         )}
       </ul>
-      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
+      {panel && <GoalPanel key={`${panel.goal.key}:${panel.start ?? ""}`} goal={panel.goal} start={panel.start} api={suggestions} onClose={() => setPanel(null)} />}
     </section>
   );
 }

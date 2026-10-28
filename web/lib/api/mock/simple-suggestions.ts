@@ -16,7 +16,7 @@ import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
-import { canEditRoadmap, closed, GOALS, goalId, lookalikes, matchesOf, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
+import { canEditRoadmap, closed, GOALS, goalId, knowTalkGoals, lookalikes, matchesOf, TALK_GOALS, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
 
 type Role = Schemas["Me"]["role"];
 
@@ -55,6 +55,21 @@ const POOL: Record<string, Idea[]> = {
     { title: "Invite from the checklist", outcome: "The checklist asks for one teammate", why: "Teams of two activate twice as often.", evidence: [ev("Invites and activation", "metric", "medium")] },
     { title: "Setup help chat", outcome: "A new team asks a question without leaving setup", why: "Support tickets in week one are setup questions.", evidence: [ev("Week-one tickets", "conversation", "low")] },
   ],
+  // fid-prio: the plan's goals ("simple-plan"), for "✦ Ask Oracle to suggest" on Priorities' Goal buckets.
+  reliability: [
+    { title: "Setup health check", outcome: "An admin sees which setup steps fail most this week", why: "Most setup failures repeat on the same two steps.", evidence: [ev("Setup failures by step", "metric", "high")] },
+    { title: "Resume a broken setup", outcome: "A team picks up setup where it stopped", why: "Teams that restart setup from the top often give up.", evidence: [ev("Restarted setups", "metric", "medium")] },
+  ],
+  growth: [
+    { title: "Invite reminders", outcome: "A teammate who has not joined gets one reminder", why: "Half of the invites sent are never opened.", evidence: [ev("Invite opens", "metric", "medium")] },
+    { title: "Share a setup link", outcome: "An admin shares one link that sets a new team up", why: "Admins ask how to bring in a second team.", evidence: [ev("4 requests for a team link", "request", "low")] },
+  ],
+  activation: [
+    { title: "Setup progress email", outcome: "An admin gets one email with the steps left", why: "Teams that stop on day one rarely come back without a nudge.", evidence: [ev("Day-one drop-off", "metric", "medium")] },
+  ],
+  revenue: [
+    { title: "Trial end reminder", outcome: "A team hears three days before its trial ends", why: "Most trials end without the admin noticing.", evidence: [ev("Trial ends without a visit", "metric", "medium")] },
+  ],
 };
 
 const FLOW = (title: string): Schemas["SimpleFlow"] => (plainFlow({
@@ -85,8 +100,10 @@ const isEmpty = (db: SimpleDb, goal: string): boolean => !db.items.some((s) => !
 
 /** The suggest jobs whose time has come propose up to 3 new features; an empty goal gets one automatically, once. */
 function settle(db: SimpleDb): void {
+  // A dated plan's goals are goals people suggest under (fid-prio); Oracle suggests for them only when asked.
+  knowTalkGoals(db);
   db.goal_suggestions ??= seedGoalSuggestions();
-  db.auto_done ??= ["quiet-alerts"];
+  db.auto_done ??= ["quiet-alerts", ...Object.keys(TALK_GOALS)];
   db.goal_jobs ??= {};
   const now = mockNowMs();
   for (const goal of Object.keys(GOALS)) {

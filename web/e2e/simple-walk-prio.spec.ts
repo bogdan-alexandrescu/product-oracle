@@ -19,30 +19,37 @@ const DESKTOP = { viewport: { width: 1366, height: 820 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const ROLES = { owner: undefined, viewer: "viewer@example.com" } as const;
 
-type Marks = { above: boolean; misses: boolean; tag: string | null; title: string }[];
+type Marks = { above: boolean; misses: boolean; tag: string | null; tagTitle: string | null; title: string }[];
 
 async function marks(rows: Locator, titleOf: (row: Locator) => Locator): Promise<Marks> {
   const out: Marks = [];
   for (const r of await rows.all()) {
     const tag = r.getByTestId("prio-misses");
+    const has = (await tag.count()) > 0;
     out.push({
       above: (await r.getAttribute("data-above")) === "true",
       misses: (await r.getAttribute("data-misses")) === "true",
-      tag: (await tag.count()) ? await tag.textContent() : null,
+      tag: has ? await tag.textContent() : null,
+      tagTitle: has ? await tag.getAttribute("title") : null,
       title: ((await titleOf(r).textContent()) ?? "").trim(),
     });
   }
   return out;
 }
 
-/** Each row's mark agrees with its side of the line, the caption counts and names them, and a divider shows only when everything below it misses. */
-async function checkLine(page: Page, scope: Locator, rows: Locator, titleOf: (row: Locator) => Locator, label: string): Promise<boolean> {
+/**
+ * Each row's mark agrees with its side of the line, the caption counts and names them, and a
+ * divider shows only when everything below it misses. `compact`: Value/effort's side list (the
+ * owner's pick B), whose tag is a small "Misses" chip with the line in its title.
+ */
+async function checkLine(page: Page, scope: Locator, rows: Locator, titleOf: (row: Locator) => Locator, label: string, compact = false): Promise<boolean> {
   await expect(rows.first()).toBeVisible();
   const m = await marks(rows, titleOf);
   const missing = m.filter((r) => !r.above);
   for (const r of m) {
     expect(r.misses, r.title).toBe(!r.above);
-    expect(r.tag, r.title).toBe(r.above ? null : `Misses ${label}`);
+    expect(r.tag, r.title).toBe(r.above ? null : compact ? "Misses" : `Misses ${label}`);
+    if (compact) expect(r.tagTitle, r.title).toBe(r.above ? null : `Misses ${label}`);
   }
   const caption = scope.getByTestId("line-caption");
   await expect(caption).toContainText(`${missing.length} of ${m.length} miss ${label}`);
@@ -67,7 +74,8 @@ for (const [where, size] of [
         /**
          * Card walk-prio-line-marks: protects = on Priorities' ranked list and the 2x2's ranked
          * side list, rank (dependency) order stays and each row that misses the line carries
-         * "Misses <line>" and is muted, the caption above says "N of M miss <line>" and names
+         * "Misses <line>" (the side list: B's small "Misses" chip, the line in its title) and is
+         * muted, the caption above says "N of M miss <line>" and names
          * them, and the one divider row shows only when every row below it misses (never with
          * rows that make the line under it), for This quarter, each key date and a picked date;
          * fails_when = a row that makes the line sits under a divider, a missing row has no tag
@@ -101,7 +109,7 @@ for (const [where, size] of [
 
           await page.getByRole("tab", { name: "Value / effort" }).click();
           const side = page.getByRole("region", { name: "Ranked side list" });
-          await checkLine(page, side, side.getByTestId("side-row"), (r) => r.getByTestId("prio-title"), "By Dec 31, 2026");
+          await checkLine(page, side, side.getByTestId("side-row"), (r) => r.getByTestId("prio-title"), "By Dec 31, 2026", true);
           await select.selectOption("now");
           await expect(page).not.toHaveURL(/line=/);
         });

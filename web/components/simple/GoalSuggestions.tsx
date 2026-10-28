@@ -304,7 +304,7 @@ export function SuggestionsButton({ goal, api: a, onOpen, className = "" }: { go
 }
 
 /** "Suggest a feature": name, what it does and for whom, the goal set, who decides; folded to one line for the decider. */
-function SuggestForm({ goal, decider, folded, onSent }: { goal: GoalBrief; decider: string | null; folded: boolean; onSent: () => Promise<void> }) {
+function SuggestForm({ goal, decider, folded, focus = false, onSent }: { goal: GoalBrief; decider: string | null; folded: boolean; focus?: boolean; onSent: () => Promise<void> }) {
   const [open, setOpen] = useState(!folded);
   const [title, setTitle] = useState("");
   const [outcome, setOutcome] = useState("");
@@ -342,7 +342,7 @@ function SuggestForm({ goal, decider, folded, onSent }: { goal: GoalBrief; decid
       <label className="simple-small font-medium" htmlFor={`suggest-title-${goal.key}`}>
         Feature name
       </label>
-      <input id={`suggest-title-${goal.key}`} required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg border border-line bg-bg px-3 py-2" />
+      <input id={`suggest-title-${goal.key}`} autoFocus={focus} required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg border border-line bg-bg px-3 py-2" />
       <label className="simple-small font-medium" htmlFor={`suggest-outcome-${goal.key}`}>
         What it does, and for whom
       </label>
@@ -423,12 +423,15 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
   );
 }
 
+/** Where the drawer opens: the form open (a goal card's "+ Suggest a feature") or Oracle's tab ("✦ Ask Oracle to suggest"). */
+export type GoalPanelStart = "form" | "oracle";
+
 /** The drawer's body: the form on top, "Suggest from the chat", then the People and Oracle tabs. */
-export function GoalSuggestionList({ goal, api: a, onChat }: { goal: GoalBrief; api: GoalSuggestionsApi; onChat?: () => void }) {
+export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: GoalBrief; api: GoalSuggestionsApi; onChat?: () => void; start?: GoalPanelStart }) {
   const { can } = useMe();
   const state = goalState(a, goal);
   const { people, oracle } = goalRows(a, goal);
-  const [tab, setTab] = useState<"people" | "oracle">("people");
+  const [tab, setTab] = useState<"people" | "oracle">(start === "oracle" ? "oracle" : "people");
   const [asking, setAsking] = useState(false);
   const suggests = can("create_goal_suggestion");
   const tabs = [
@@ -439,7 +442,7 @@ export function GoalSuggestionList({ goal, api: a, onChat }: { goal: GoalBrief; 
     <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-3">
       {suggests && (
         <>
-          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} folded={!!state?.can_decide} onSent={a.reload} />
+          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} folded={start !== "form" && !!state?.can_decide} focus={start === "form"} onSent={a.reload} />
           <button
             type="button"
             data-testid="suggest-from-chat"
@@ -519,14 +522,14 @@ export function GoalSuggestionList({ goal, api: a, onChat }: { goal: GoalBrief; 
 }
 
 /** A goal's suggestions drawer: a side panel on a desktop, a bottom sheet on a phone. */
-export function GoalPanel({ goal, api: a, onClose }: { goal: GoalBrief; api: GoalSuggestionsApi; onClose: () => void }) {
+export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; api: GoalSuggestionsApi; onClose: () => void; start?: GoalPanelStart }) {
   const phone = usePhone();
   const title = `Suggestions · ${goal.title}`;
   if (phone)
     return (
       <Sheet open title={title} onClose={onClose} testId="goal-panel">
         <div className="p-4">
-          <GoalSuggestionList goal={goal} api={a} onChat={onClose} />
+          <GoalSuggestionList goal={goal} api={a} onChat={onClose} start={start} />
         </div>
       </Sheet>
     );
@@ -538,7 +541,7 @@ export function GoalPanel({ goal, api: a, onClose }: { goal: GoalBrief; api: Goa
           ×
         </button>
       </div>
-      <GoalSuggestionList goal={goal} api={a} onChat={onClose} />
+      <GoalSuggestionList goal={goal} api={a} onChat={onClose} start={start} />
     </aside>
   );
 }
