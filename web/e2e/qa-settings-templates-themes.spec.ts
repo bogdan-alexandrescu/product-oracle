@@ -97,21 +97,21 @@ test("qa-settings-20: descriptions and font stacks have room for their text", as
   await login(page);
   await openTemplates(page);
   await page.getByRole("link", { name: "AI feature PRD" }).click();
-  const description = page.getByLabel("Description", { exact: true });
+  const description = page.getByRole("textbox", { name: /^Description/ });
   await expect(description).toHaveValue("Specify model behaviour, evals, fallbacks, cost and prompt ownership");
   expect(await description.evaluate((e) => e.tagName)).toBe("TEXTAREA");
   expect(await fits(description)).toBe(true);
 
   await openTheme(page, "Clean document");
-  const body = page.getByLabel("Body font", { exact: true });
+  const body = page.getByRole("textbox", { name: /^Body font/ });
   await expect(body).toHaveValue(/Helvetica, Arial, sans-serif/);
   expect(await fits(body)).toBe(true);
-  expect(await page.getByLabel("Description", { exact: true }).evaluate((e) => e.tagName)).toBe("TEXTAREA");
+  expect(await page.getByRole("textbox", { name: /^Description/ }).evaluate((e) => e.tagName)).toBe("TEXTAREA");
 
   await page.goto("/settings/templates/new");
-  expect(await page.getByLabel("Description", { exact: true }).evaluate((e) => e.tagName)).toBe("TEXTAREA");
+  expect(await page.getByRole("textbox", { name: /^Description/ }).evaluate((e) => e.tagName)).toBe("TEXTAREA");
   await page.goto("/settings/themes/new");
-  expect(await page.getByLabel("Description", { exact: true }).evaluate((e) => e.tagName)).toBe("TEXTAREA");
+  expect(await page.getByRole("textbox", { name: /^Description/ }).evaluate((e) => e.tagName)).toBe("TEXTAREA");
 });
 
 test("qa-settings-21: themes list swatches are named; the preview opens large; the theme page preview is wide", async ({

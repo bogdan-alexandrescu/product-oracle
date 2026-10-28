@@ -9,8 +9,13 @@ import { login } from "./helpers";
 
 async function openSettings(page: Page, tab: string, heading: string, email?: string) {
   await login(page, email);
-  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
-  await page.getByRole("navigation", { name: "Settings" }).getByTestId(`nav-${tab}`).click();
+  if ((page.viewportSize()?.width ?? 1440) < 768) {
+    // A phone has no side rails: the tab is opened by its address.
+    await page.goto(`/settings/${tab}`);
+  } else {
+    await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
+    await page.getByRole("navigation", { name: "Settings" }).getByTestId(`nav-${tab}`).click();
+  }
   await expect(page).toHaveURL(new RegExp(`/settings/${tab}$`));
   await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
 }
@@ -104,7 +109,8 @@ test("qa-settings-34: Project ID, and the Host choice in regular weight under a 
   await openSettings(page, "analytics", "Analytics");
   await expect(page.getByLabel("Project ID", { exact: true })).toBeVisible();
   await expect(page.getByText("Project id", { exact: true })).toHaveCount(0);
-  const host = page.getByLabel("Host", { exact: true });
+  // The label wraps the select, so the select's name is "Host" and its chosen option.
+  const host = page.getByRole("combobox", { name: /^Host/ });
   await expect(host).toHaveCSS("font-weight", "400");
   await expect(page.getByText("Host", { exact: true })).toHaveCSS("font-weight", "600");
 });

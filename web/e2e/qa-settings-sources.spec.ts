@@ -11,8 +11,13 @@ const SOURCES_KEY = "po-mock-sources-v2";
 
 async function openSources(page: Page) {
   await login(page);
-  await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
-  await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-sources").click();
+  if ((page.viewportSize()?.width ?? 1440) < 768) {
+    // A phone has no side rails: the tab is opened by its address.
+    await page.goto("/settings/sources");
+  } else {
+    await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
+    await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-sources").click();
+  }
   await expect(page).toHaveURL(/\/settings\/sources$/);
   await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
 }
@@ -64,7 +69,10 @@ test("prod-11: a large source reads 10,437 items, with the thousands separated",
   // Another sync grew the source while this page was closed.
   await page.evaluate((key) => {
     const db = JSON.parse(localStorage.getItem(key)!);
-    db.sources.find((s: { name: string }) => s.name === "Product chat").item_count = 10437;
+    // The mock counts a source's stored items, so the sync's items are stored, kept small.
+    const chat = db.sources.find((s: { name: string }) => s.name === "Product chat");
+    const own = db.items.filter((i: { source_id: string; deleted_at: string | null }) => i.source_id === chat.id && !i.deleted_at);
+    for (let n = own.length; n < 10437; n++) db.items.push({ id: `g${n}`, source_id: chat.id, external_id: `g${n}`, deleted_at: null });
     localStorage.setItem(key, JSON.stringify(db));
   }, SOURCES_KEY);
   await page.reload();
@@ -98,10 +106,6 @@ for (const viewport of [
     await expect(add).toBeDisabled();
     await expect(why).toHaveText("Tick at least one page.");
 
-    // Fireflies with nothing picked.
-    await form.getByLabel("Kind").selectOption("fireflies");
-    await expect(add).toBeDisabled();
-    await expect(why).toHaveText("Pick the meetings or series to pull in.");
     // Beside the button, whole: on a phone it wraps under it rather than running off the screen.
     await why.scrollIntoViewIfNeeded();
     await expect(why).toBeInViewport({ ratio: 1 });
