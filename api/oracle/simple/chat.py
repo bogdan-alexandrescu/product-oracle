@@ -1171,12 +1171,17 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
 def _grounded(c: Ctx, said: str) -> bool:
     """Whether the reader's answer speaks of Oracle's data: it names an item (its title or
     key) or a person it was given; any other answer is not Oracle's to give."""
-    if c.item is not None:
-        # roadmap-talk: in an item's talk the answer is about the item ("it").
-        return True
     t = said.lower()
     names = [e.row.title for e in c.entries()] + [e.row.item_key or "" for e in c.entries()]
     names += [display_name(u.email, u.name) for u in c.people]
+    if c.item is not None:
+        # roadmap-talk: in an item's talk ("it") the answer may name its milestone, goal or PRD.
+        e = c.item
+        names += [x for x in (getattr(e, "code", None), e.milestone.name if e.milestone else None,
+                              e.goal.title if e.goal is not None else None,
+                              e.prd.title if e.prd is not None else None) if x]  # fmt: skip
+        if e.milestone is not None and e.milestone.name:
+            names.append(e.milestone.name.split()[0])
     return any(len(n) >= 3 and n.lower() in t for n in names)
 
 
@@ -1404,16 +1409,28 @@ def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
         return not _actions().proposes(principal)
     if card.op == "add_feature_ask" or card.op in _actions().DIRECT_OPS:
         return True
-    if card.op == "add_item":
-        # roadmap-talk: a new item is the roadmap's to add (an owner, else its decider).
-        me = getattr(principal, "user_id", None)
-        return has_role(principal.role, "owner") or (
-            has_role(principal.role, "approver") and me in read_.deciders.values()
-        )
     if card.item_id is None:
         return has_role(principal.role, "owner")
     e = read_.by_id().get(card.item_id)
     return e is not None and service.can_decide(principal, e, read_.deciders)
+
+
+async def _adds_directly(
+    db: AsyncSession, principal: Any, card: SimpleChatCard, read_: service.Read
+) -> bool:
+    """roadmap-talk: whether an add_item card applies (else proposes): the engine's own rule
+    (additions.create) on the roadmap the new item goes to."""
+    from oracle.simple import additions
+
+    where = (card.target or {}).get("where") or {}
+    try:
+        goal = (await additions._goal(db, where.get("value"))
+                if where.get("kind") == "goal" else None)  # fmt: skip
+        doc = await additions._roadmap_for(db, principal, card.target.get("roadmap_id"), goal,
+                                           read_)  # fmt: skip
+    except ChangeError:
+        return has_role(principal.role, "owner")
+    return drafts.can_edit(principal, doc.id, await drafts.who(db, {doc.id}))
 
 
 def _talk() -> Any:
@@ -1529,7 +1546,9 @@ async def cards_out(
         if c.status == "open":
             bar = _card_bar(principal, c, rules)
             if bar is None:
-                may = "apply" if _decides(principal, c, read_) else "propose"
+                decides = (await _adds_directly(db, principal, c, read_) if c.op == "add_item"
+                           else _decides(principal, c, read_))  # fmt: skip
+                may = "apply" if decides else "propose"
         outs.append(ChatCardOut(
             id=c.id, message_id=c.message_id, op=c.op, target=c.target,  # type: ignore[arg-type]
             before=c.before, after=c.after, summary=c.summary, item_id=c.item_id,
@@ -1578,7 +1597,7 @@ async def apply(
         raise ChatError(403, bar)
     if values:
         if fix is not None:
-            raise ChatError(422, "values: a fix takes no corrections")
+            raise ChatError(422, "A fix takes no corrections")
         await _talk().correct(db, principal, card, values)
         await db.flush()
     if card.op in _actions().DIRECT_OPS:
@@ -1624,6 +1643,10 @@ async def apply(
     if fix is None:
         card.status = "applied" if status == "applied" else "proposed"
         card.change_id, card.decided_by, card.decided_at = result.change.id, me, company_time.now()
+        if card.op == "add_item" and status == "applied" and card.item_id is None:
+            # roadmap-talk: the new item, so its bar flashes on the timeline.
+            new = (result.change.target or {}).get("item_id")
+            card.item_id = uuid.UUID(str(new)) if new else None
     if rules is not None and status == "applied":
         meetings = _module(MEETINGS)
         if meetings is not None:

@@ -315,6 +315,10 @@ def phrase(c: Any, t: str) -> tuple[str, dict[str, Any]] | None:
 # --------------------------------------------------------------------------- the card out
 
 
+FIELD_WORDS = {"title": "title", "goal": "goal", "milestone": "milestone",
+               "start_date": "start", "end_date": "end", "owner": "owner"}  # fmt: skip
+
+
 def correct_out(card: SimpleChatCard) -> tuple[dict | None, dict | None]:
     """(change_words, correct) of an open roadmap card (None, None for any other)."""
     p = card.preview or {}
@@ -352,10 +356,11 @@ def args_of(card: SimpleChatCard, values: dict[str, Any]) -> tuple[str, dict[str
     any field not given)."""
     _, cur = correct_out(card)
     if cur is None:
-        raise chat.ChatError(422, "values: this card has nothing to correct")
+        raise chat.ChatError(422, "This change has nothing to correct")
     unknown = set(values) - set(cur["fields"])
     if unknown:
-        raise chat.ChatError(422, f"values: {', '.join(sorted(unknown))} cannot be corrected here")
+        words = ", ".join(FIELD_WORDS.get(k, "that") for k in sorted(unknown))
+        raise chat.ChatError(422, f"The {words} cannot be corrected here")
     v = {**cur["values"], **{k: x for k, x in values.items() if x not in (None, "")}}
     item = str(card.item_id) if card.item_id else None
     if card.op == "move_dates":
@@ -386,6 +391,24 @@ async def correct(db: Any, principal: Any, card: SimpleChatCard, values: dict[st
     kw = reply.cards[0]
     card.summary, card.target, card.before = kw["summary"], kw["target"], kw["before"]
     card.after, card.preview = kw["after"], {**(kw["preview"] or {}), "roadmap": True}
+    await _restate_line(db, card)
+
+
+async def _restate_line(db: Any, card: SimpleChatCard) -> None:
+    """An item talk's one-card line ("I understood: ...") says the corrected card."""
+    from oracle.discussions.models import DiscussionMessage
+
+    if card.message_id is None:
+        return
+    msg = await db.get(DiscussionMessage, card.message_id)
+    if msg is None or not (msg.body or "").startswith("I understood: "):
+        return
+    ids = await db.scalars(
+        select(SimpleChatCard.id).where(SimpleChatCard.message_id == card.message_id)
+    )
+    if len(list(ids)) == 1:
+        s = card.summary
+        msg.body = f"I understood: {s[:1].lower()}{s[1:]}."
 
 
 def restate(c: Any, reply: chat.Reply) -> chat.Reply:
