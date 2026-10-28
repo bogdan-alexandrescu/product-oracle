@@ -24,7 +24,7 @@ import uuid
 from datetime import date
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit, company_time
@@ -109,6 +109,15 @@ def parse(text: str, ref: date) -> list[dict[str, Any]] | None:
     return None
 
 
+def cut(words: str, n: int) -> str:
+    """``words`` in at most ``n`` characters, cut at a word ("…" when cut)."""
+    words = " ".join(str(words).split())
+    if len(words) <= n:
+        return words
+    head = words[: n - 1]
+    return (head.rsplit(" ", 1)[0] if " " in head else head).rstrip(" ,;:-") + "…"
+
+
 def clean(answer: Any) -> list[dict[str, Any]]:
     """The job's answer held to the questions' shape."""
     raw = answer.get("questions") if isinstance(answer, dict) else None
@@ -120,10 +129,10 @@ def clean(answer: Any) -> list[dict[str, Any]]:
         feats = q.get("features") if isinstance(q.get("features"), list) else []
         decided = q.get("decided") if isinstance(q.get("decided"), dict) else None
         out.append({
-            "code": str(q["code"])[:20], "title": str(q["title"])[:200],
-            "recommendation": (str(q["recommendation"])[:500] if q.get("recommendation")
+            "code": str(q["code"])[:20], "title": cut(q["title"], 200),
+            "recommendation": (cut(q["recommendation"], 500) if q.get("recommendation")
                                else None),
-            "alternatives": [str(a)[:200] for a in alts if a][:6],
+            "alternatives": [cut(a, 200) for a in alts if a][:6],
             "milestone": str(q["milestone"]) if q.get("milestone") else None,
             "features": [str(f) for f in feats][:10],
             "due": plan._iso(q.get("due")), "decided": decided,
@@ -170,6 +179,7 @@ async def import_answer(db: AsyncSession, document: Document, v: DocumentVersion
     if decider is None:
         return 0
     now = company_time.now()
+    codes = {_source(document.id, q["code"]) for q in rows}
     for q in rows:
         sid = _source(document.id, q["code"])
         d = await db.scalar(
@@ -185,14 +195,15 @@ async def import_answer(db: AsyncSession, document: Document, v: DocumentVersion
                 "features": q.get("features") or [], "due_from_prd": q.get("due"),
                 "decider_named": named}  # fmt: skip
         if d is None:
-            d = Decision(number=await next_number(db), title=q["title"][:200], question=q["title"],
+            d = Decision(number=await next_number(db), title=cut(q["title"], 200),
+                         question=q["title"],
                          options=options, status="proposed", approver_id=decider,
                          driver="oracle", origin="prd", source_kind=SOURCE_KIND, source_id=sid,
                          subjects=[{"kind": "document", "id": str(document.id),
                                     "ref": document.slug}])  # fmt: skip
             db.add(d)
         else:
-            d.title, d.question = q["title"][:200], q["title"]
+            d.title, d.question = cut(q["title"], 200), q["title"]
             if d.status == "proposed":
                 d.options = options
             if not (d.prd_question or {}).get("decider_set"):
@@ -214,46 +225,64 @@ async def import_answer(db: AsyncSession, document: Document, v: DocumentVersion
             d.review_at = on
             info["decided_by_name"] = decided.get("by")
             d.prd_question = info
+    # A question the version no longer has leaves the list (a decided one stays decided).
+    for d in await db.scalars(select(Decision).where(Decision.origin == "prd")):
+        info = d.prd_question or {}
+        if (info.get("document_id") == str(document.id) and d.source_id not in codes
+                and d.status == "proposed" and not info.get("removed")):  # fmt: skip
+            d.prd_question = {**info, "removed": True, "version_id": str(v.id)}
     await db.flush()
-    await _set_due(db, document)
+    views = await plan.views(db, {document.id})
+    for d in await db.scalars(select(Decision).where(Decision.origin == "prd")):
+        info = d.prd_question or {}
+        if info.get("document_id") == str(document.id):
+            d.due_on = due(info, views.get(document.id))
+    await db.flush()
     return len(rows)
 
 
-async def _set_due(db: AsyncSession, document: Document) -> None:
-    views = await plan.views(db, {document.id})
-    view = views.get(document.id)
+def due(info: dict[str, Any], view: plan.View | None) -> date | None:
+    """The PRD's day, else the end of the milestone it blocks when that milestone is the one
+    running (or the next to run), else that later milestone's start: from the plan as it is
+    read now, so a plan read again moves it."""
+    if info.get("due_from_prd"):
+        return date.fromisoformat(info["due_from_prd"])
     today = company_time.today()
     ms = [m for m in (view.milestones if view else []) if m.start_date and m.end_date]
     current = next((m for m in ms if m.start_date <= today <= m.end_date), None) or next(
         (m for m in sorted(ms, key=lambda m: m.start_date) if m.start_date > today), None
     )
-    for d in await db.scalars(select(Decision).where(Decision.origin == "prd")):
-        info = d.prd_question or {}
-        if info.get("document_id") != str(document.id):
-            continue
-        due = date.fromisoformat(info["due_from_prd"]) if info.get("due_from_prd") else None
-        if due is None and info.get("milestone"):
-            m = next((m for m in ms if m.code == info["milestone"]), None)
-            if m is not None:
-                later = current is not None and m.start_date > current.start_date
-                due = m.start_date if later else m.end_date
-        d.due_on = due
-    await db.flush()
+    m = next((m for m in ms if m.code == info.get("milestone")), None)
+    if m is None:
+        return None
+    later = current is not None and m.start_date > current.start_date
+    return m.start_date if later else m.end_date
+
+
+async def _read(db: AsyncSession, v: DocumentVersion) -> bool:
+    """Whether this version's questions are read already: a question carries it, or a
+    ``prd_questions`` job for it was ever queued (whatever came of it)."""
+    from oracle.jobs.models import LlmJob
+
+    if await db.scalar(select(Decision.id).where(
+            Decision.origin == "prd",
+            Decision.prd_question["version_id"].astext == str(v.id)).limit(1)):  # fmt: skip
+        return True
+    return bool(await db.scalar(select(LlmJob.id).where(
+        LlmJob.kind == "prd_questions", LlmJob.version_id == v.id).limit(1)))  # fmt: skip
 
 
 async def ensure(db: AsyncSession, document: Document) -> None:
-    """Read the latest approved version's questions once (its table, else the job)."""
+    """Read the latest approved version's questions once (its table, else one job), under
+    a per-PRD lock so two reads at once import each question once."""
     from oracle.jobs import service as jobs
 
     v = await approved(db, document.id)
-    if v is None:
+    if v is None or await _read(db, v):
         return
-    done = await db.scalar(
-        select(Decision.id)
-        .where(Decision.origin == "prd", Decision.prd_question["version_id"].astext == str(v.id))
-        .limit(1)
-    )
-    if done is not None:
+    await db.execute(text("SELECT pg_advisory_xact_lock(hashtext(:k))"),
+                     {"k": f"oracle:prd-questions:{document.id}"})  # fmt: skip
+    if await _read(db, v):
         return
     rows = parse(v.markdown or "", (v.approved_at or company_time.now()).date())
     if rows is not None:
@@ -305,14 +334,19 @@ def may_decide(principal: Any, d: Decision) -> bool:
     return principal is not None and (has_role(principal.role, "owner") or me == d.approver_id)
 
 
-async def rows(db: AsyncSession, principal: Any, readable: set[uuid.UUID]) -> list[SimpleQuestion]:
+async def rows(
+    db: AsyncSession, principal: Any, readable: set[uuid.UUID], only: set[uuid.UUID] | None = None
+) -> list[SimpleQuestion]:
     """Every readable PRD's questions: open first, soonest due first; decided after."""
     docs = {d.id: d for d in await db.scalars(select(Document).where(Document.id.in_(readable)))}
     for doc in docs.values():
         await ensure(db, doc)
     ds = [d for d in await db.scalars(select(Decision).where(Decision.origin == "prd"))
           if (d.prd_question or {}).get("document_id")
-          and uuid.UUID(d.prd_question["document_id"]) in docs]  # fmt: skip
+          and uuid.UUID(d.prd_question["document_id"]) in docs
+          and not (d.status == "proposed" and d.prd_question.get("removed"))]  # fmt: skip
+    if only is not None:
+        ds = [d for d in ds if d.id in only]
     views = await plan.views(db, set(docs))
     pending = {}
     for c in await db.scalars(select(SimpleChange).where(
@@ -327,6 +361,8 @@ async def rows(db: AsyncSession, principal: Any, readable: set[uuid.UUID]) -> li
         info = d.prd_question or {}
         doc = docs[uuid.UUID(info["document_id"])]
         view = views.get(doc.id)
+        if d.status == "proposed" and d.due_on != (when := due(info, view)):
+            d.due_on = when
         ms = view.milestone(info.get("milestone")) if view else None
         feats = _features(info, view)
         label = None
@@ -431,10 +467,14 @@ async def waiting(db: AsyncSession, principal: Any) -> SimpleDecisionsWaitingOut
     )
 
 
-async def page_fields(db: AsyncSession, principal: Any, readable: set[uuid.UUID]) -> dict:
+async def page_fields(
+    db: AsyncSession, principal: Any, readable: set[uuid.UUID], only: set[uuid.UUID] | None = None
+) -> dict:
+    """The Decisions page's questions: of these PRDs (the page's PRD and goal filters), and
+    of ``only`` these decisions when the page shows one meeting."""
     from oracle.preferences.models import UserPreference
 
-    qs = await rows(db, principal, readable)
+    qs = await rows(db, principal, readable, only)
     view = None
     if principal is not None:
         view = await db.scalar(select(UserPreference.value).where(
@@ -466,8 +506,10 @@ async def _decision(db: AsyncSession, target: dict[str, Any]) -> Decision:
 
 
 def _state(d: Decision) -> dict[str, Any]:
+    info = d.prd_question or {}
     return {"status": d.status, "chosen_option": d.chosen_option,
-            "decider_id": str(d.approver_id)}  # fmt: skip
+            "decider_id": str(d.approver_id), "decider_named": bool(info.get("decider_named")),
+            "decider_set": bool(info.get("decider_set"))}  # fmt: skip
 
 
 async def _write(db: AsyncSession, principal: Any, d: Decision, op: str, after: dict,
@@ -596,6 +638,9 @@ async def undo(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChang
     d = await _decision(db, c.target)
     if c.op == "name_decider":
         d.approver_id = uuid.UUID(c.before["decider_id"])
+        d.prd_question = {**(d.prd_question or {}),
+                          "decider_named": c.before.get("decider_named", True),
+                          "decider_set": c.before.get("decider_set", False)}  # fmt: skip
     else:
         await _write(db, principal, d, c.op, {"status": "proposed"}, None)
         from oracle.simple.models import SimpleMeetingDecision as MeetingDecisionRow

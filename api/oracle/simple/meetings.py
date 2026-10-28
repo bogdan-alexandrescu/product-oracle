@@ -1789,8 +1789,17 @@ async def decisions_page(
         ))  # fmt: skip
     from oracle.simple import questions
 
+    # The questions follow the filters too: the PRD's, the goal's PRDs', the meeting's.
+    qdocs = {prd_doc.id} if prd_doc is not None else set(readable)
+    if goal_ent is not None:
+        qdocs &= {
+            e.prd.id
+            for e in read.entries
+            if e.prd is not None and e.goal is not None and e.goal.id == goal_ent.id
+        }
+    only = {d.id for _, d in links.get(meeting, [])} if meeting is not None else None
     return SimpleDecisionsOut(
-        **await questions.page_fields(db, principal, readable),
+        **await questions.page_fields(db, principal, qdocs, only),
         meetings=groups,
         other=[_row(d, names) for d in others],
         prds=[SimpleFilterOption(id=d.slug, title=d.title)

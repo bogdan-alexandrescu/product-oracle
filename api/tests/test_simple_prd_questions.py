@@ -86,7 +86,7 @@ async def version(s, doc: Document, n: int, body: str):
     return v
 
 
-async def seed(ctx: Ctx, body: str = FIXTURE, decider: bool = True) -> dict:
+async def seed(ctx: Ctx, body: str = FIXTURE, with_decider: bool = True) -> dict:
     async with tenant_session(ctx.tenant_id) as s:
         prd = Document(slug="guided-setup", title="Guided setup", kind="prd", status="approved",
                        visibility="company")  # fmt: skip
@@ -97,7 +97,7 @@ async def seed(ctx: Ctx, body: str = FIXTURE, decider: bool = True) -> dict:
         s.add(decider)
         await s.flush()
         ctx.users["decider"] = decider
-        if decider:
+        if with_decider:
             s.add(DocumentReviewPolicy(document_id=prd.id, decider_id=decider.id))
         await s.commit()
         return {"prd": prd.id}
@@ -291,11 +291,17 @@ async def test_concurrent_reads_import_once(client):
 
 async def test_undo_name_decider_restores_needs_input(client):
     ctx = await make_ctx()
-    await seed(ctx, decider=False)
+    await seed(ctx, with_decider=False)
     q = next(q for q in (await page(client, ctx))["questions"] if q["code"] == "Q3")
-    assert q["missing"] == "decider" and q["decider"] is None
+    assert q["missing"] == "decider" and q["decider"] is None, (
+        q["status"],
+        q["column"],
+        q["missing"],
+        q["decider"],
+        q["can"],
+    )
     r = await client.post("/v1/simple/changes", headers=ctx.as_("owner"), json={
-        "op": "name_decider", "target": {"decision_id": q["id"]},
+        "op": "name_decider", "target": {"decision_id": q["id"]}, "before": {},
         "after": {"decider_id": str(ctx.users["approver"].id)}})  # fmt: skip
     assert r.status_code == 201, r.text
     named = {x["code"]: x for x in (await page(client, ctx))["questions"]}["Q3"]
