@@ -27,6 +27,7 @@ reverses that decision. The presenter changes the mode through S8's ``set_rules`
 flow or feature carries the stored flow and requests a visual when it has none.
 """
 
+import difflib
 import importlib
 import re
 import uuid
@@ -196,12 +197,15 @@ def parse_period(text: str, today: date) -> tuple[date, date] | None:
 
 class Reply:
     """``understood``: the line is one Oracle's reader knows (the Ask panel's one box sends
-    any other line to Oracle's Ask); ``missing``: no item has the name it gave."""
+    any other line to Oracle's Ask); ``missing``: no item (or person) has the name it gave."""
 
     def __init__(self, kind: str, body: str, cards: list[dict[str, Any]] | None = None,
-                 understood: bool = True, missing: bool = False) -> None:  # fmt: skip
+                 understood: bool = True, missing: bool = False,
+                 choices: list[str] | None = None) -> None:  # fmt: skip
         self.kind, self.body, self.cards = kind, body, cards or []
         self.understood, self.missing = understood, missing
+        # chat-actions: the people a person question offers (chat-join shows them).
+        self.choices = choices or []
 
 
 class Ctx:
@@ -269,9 +273,15 @@ class Ctx:
         if len(hits) == 1:
             return hits[0]
         if hits:
-            return Reply("question", f"Which {_unquote(text)}: "
-                         f"{_or([display_name(u.email, u.name) for u in hits[:5]])}?")  # fmt: skip
-        return Reply("question", f"Who is “{_unquote(text)}”? Name a person of the company.")
+            shown = [display_name(u.email, u.name) for u in hits[:5]]
+            return Reply("question", f"Which {_unquote(text)}: {_or(shown)}?",
+                         choices=shown)  # fmt: skip
+        # No one by that name: offer the people whose names come closest.
+        near = {n: u for u in self.people for n in names(u)}
+        close = difflib.get_close_matches(x, list(near), n=5, cutoff=0.6)
+        shown = list(dict.fromkeys(display_name(near[n].email, near[n].name) for n in close))
+        return Reply("question", f"Who is “{_unquote(text)}”? Name a person of the company.",
+                     missing=True, choices=shown)  # fmt: skip
 
 
 def _card(summary: str, op: str, e: service.Entry | None, target: dict, before: dict,
@@ -287,6 +297,8 @@ def _dates(e: service.Entry) -> dict[str, Any]:
 
 
 def _owner_words(c: Ctx, e: service.Entry) -> str:
+    if e.owner_name and any(u.id == e.row.owner_id for u in c.people):
+        return f"{e.owner_name} owns {e.row.title}."
     if e.owner_name:
         return f"{e.owner_name} owns {e.row.title} (its track's owner)."
     return f"{e.row.title} has no owner yet."
@@ -1016,13 +1028,13 @@ async def undo(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCard
     return await one(db, principal, card, rules)
 
 
-async def _reverse(db: AsyncSession, principal: Any, decision_id: uuid.UUID) -> None:
-    """The card's meeting decision no longer holds: reversed, with a review saying why, so
-    the Decisions log and the minutes stop showing it as decided."""
+async def _reverse(db: AsyncSession, principal: Any, decision_id: uuid.UUID,
+                   note: str = "Undone in the meeting chat") -> None:  # fmt: skip
+    """The card's decision no longer holds: reversed, with a review saying why (``note``),
+    so the Decisions log and the minutes stop showing it as decided."""
     d = await db.get(Decision, decision_id, with_for_update=True)
     if d is None or d.status != "decided":
         return
-    note = "Undone in the meeting chat"
     d.status = "reversed"
     db.add(DecisionReview(decision_id=d.id, verdict="reversed", note=note,
                           reviewed_by=_me(principal)))  # fmt: skip

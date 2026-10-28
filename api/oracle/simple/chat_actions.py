@@ -24,15 +24,17 @@ import re
 import uuid
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from oracle import company_time
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.members.names import display_name
-from oracle.simple import chat
+from oracle.simple import changes, chat
 from oracle.simple.models import SimpleChatCard
+from oracle.simple.schemas import SimpleChangeIn
 
 ENGINE_OPS = ("set_owner", "set_decider")
 DIRECT_OPS = ("record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip")
@@ -142,11 +144,11 @@ build_open_question = _note_build("question")
 
 def _agenda_build(move: str):
     def build(c: chat.Ctx, args: dict[str, Any]) -> dict | chat.Reply:
-        if c.meeting is None:
-            return chat.Reply("note", MEETING_NOTE)
         e = c.find(str(args.get("item") or ""))
         if isinstance(e, chat.Reply):
             return e
+        if c.meeting is None:
+            return chat.Reply("note", MEETING_NOTE)
         title = e.row.title
         return {"summary": f"Take {title} next" if move == "next" else f"Skip {title}",
                 "op": f"agenda_{move}", "item_id": e.row.id,
@@ -164,24 +166,33 @@ build_agenda_skip = _agenda_build("skip")
 
 # --------------------------------------------------------------------------- the phrases
 
-PHRASES: list[tuple[str, Any, tuple[str, ...]]] = [
-    (r"(?:open )?question:\s*(.+)", build_open_question, ("text",)),
-    (r"(?:minutes )?note:\s*(.+)", build_minutes_note, ("text",)),
-    (r"next:\s*(.+?)\.?", build_agenda_next, ("item",)),
-    (r"(?:take|discuss) (.+?) next\.?", build_agenda_next, ("item",)),
-    (r"skip (.+?)\.?", build_agenda_skip, ("item",)),
-    (r"(?:we )?decided:\s*(.+)", build_record_decision, ("text",)),
-    (r"decision(?: by (.+?))?:\s*(.+)", build_record_decision, ("decider", "text")),
-    (r"(?!who\b)(.+?) (?:now )?owns (.+?)\.?", build_set_owner, ("person", "item")),
-    (r"(?!who\b)(.+?) (?:now )?decides (.+?)\.?", build_set_decider, ("person", "item")),
-]
+# (pattern, build, arg names, worded: a "<words>: ..." phrase, which claims its line even
+# when it ends in "?"; the others leave a question to the reader).
+PHRASES: list[tuple[str, Any, tuple[str, ...], bool]] = [
+    (r"(?:open )?question:\s*(.+)", build_open_question, ("text",), True),
+    (r"(?:minutes )?note:\s*(.+)", build_minutes_note, ("text",), True),
+    (r"next:\s*(.+?)\.?", build_agenda_next, ("item",), True),
+    (r"(?:take|discuss) (.+?) next\.?", build_agenda_next, ("item",), False),
+    (r"skip (.+?)\.?", build_agenda_skip, ("item",), False),
+    (r"(?:we )?decided:\s*(.+)", build_record_decision, ("text",), True),
+    (r"decision(?: by (.+?))?:\s*(.+)", build_record_decision, ("decider", "text"), True),
+    (r"(?!who\b)(.+?) (?:now )?owns (.+?)\.?", build_set_owner, ("person", "item"), False),
+    (r"(?!who\b)(.+?) (?:now )?decides (.+?)\.?", build_set_decider, ("person", "item"), False),
+]  # fmt: skip
 
 
 def parse(c: chat.Ctx, t: str) -> chat.Reply | None:
-    """The fixed phrases, through the same build functions (None: not one of them)."""
-    for pattern, build, names in PHRASES:
+    """The fixed phrases, through the same build functions (None: not one of them). A
+    phrase claims its line only when its item and person resolve: an unknown one answers
+    ``understood=False`` (the Ask panel's one box sends the line to Oracle's Ask)."""
+    for pattern, build, names, worded in PHRASES:
+        if not worded and t.rstrip().endswith("?"):
+            continue
         if m := re.fullmatch(pattern, t, re.I):
-            return reply(build(c, dict(zip(names, m.groups(), strict=True))))
+            r = reply(build(c, dict(zip(names, m.groups(), strict=True))))
+            if r.missing:
+                r.understood = False
+            return r
     return None
 
 
@@ -291,9 +302,33 @@ async def apply_agenda(db: AsyncSession, principal: Any, card: SimpleChatCard) -
 
 
 async def apply_engine(db: AsyncSession, principal: Any, card: SimpleChatCard) -> None:
-    """set_owner / set_decider: chat.apply's change-engine path (with the caller's rights,
-    the meeting's session and its meeting decision) takes them as any engine card."""
-    await chat.apply(db, principal, card.id)
+    """set_owner / set_decider as a plain (db, principal, card) apply: the change engine
+    with the caller's rights (in a meeting, into the meeting's session). It does not call
+    chat.apply (which reloads the card and dispatches here); the engine commits."""
+    rules = await chat.rules_of(db, card.meeting_id) if card.meeting_id else None
+    bar_why = chat._card_bar(principal, card, rules)
+    if bar_why is not None:
+        raise chat.ChatError(403, bar_why)
+    if card.status != "open":
+        raise chat.ChatError(409, f"This card is {card.status} already")
+    body = SimpleChangeIn(op=card.op, target=card.target, before=card.before,  # type: ignore[arg-type]
+                          after=card.after,
+                          session_id=getattr(rules, "session_id", None))  # fmt: skip
+    card.status = "applied"
+    result = await changes.create(db, principal, body)
+    card.status = "applied" if result.change.status == "applied" else "proposed"
+    card.change_id, card.decided_by = result.change.id, chat._me(principal)
+    card.decided_at = company_time.now()
+    meetings = chat._module(chat.MEETINGS)
+    if rules is not None and card.status == "applied" and meetings is not None:
+        # In a meeting an applied card is a meeting decision (as chat.apply makes it).
+        subjects = [{"kind": "roadmap_item", "id": str(card.item_id)}] if card.item_id else []
+        try:
+            card.decision_id = await meetings.record_meeting_decision(
+                db, principal, rules.meeting_id, card.summary, subjects, [result.change.id]
+            )
+        except getattr(meetings, "MeetingError", ()) as e:
+            raise chat.ChatError(e.status, e.detail) from e
 
 
 APPLY = {
@@ -319,7 +354,10 @@ async def undo(db: AsyncSession, principal: Any, card: SimpleChatCard, rules: An
     try:
         if card.op == "record_decision":
             if card.decision_id is not None:
-                await chat._reverse(db, principal, card.decision_id)
+                where = (
+                    "in the meeting chat" if card.target.get("meeting_id") else "on the Ask panel"
+                )
+                await chat._reverse(db, principal, card.decision_id, f"Undone {where}")
         elif card.op in ("minutes_note", "open_question"):
             await meetings.remove_note(db, uuid.UUID(card.target["meeting_id"]),
                                        str(card.target.get("note_id")))  # fmt: skip
@@ -330,23 +368,25 @@ async def undo(db: AsyncSession, principal: Any, card: SimpleChatCard, rules: An
         raise chat.ChatError(e.status, e.detail) from e
 
 
+DOCUMENT_ROUTES = ("documents", "prds", "one-pagers")
+
+
 async def page_document(db: AsyncSession, page: str | None) -> Document | None:
-    """The document the Ask panel's page shows (its id or slug in the path), if any."""
+    """The document the Ask panel's page shows: the id or slug right after a document
+    route (/documents/<doc>, /simple/prds/<doc>, /simple/one-pagers/<doc>), if any."""
     if not page:
         return None
-    parts = [p for p in re.split(r"[/?#=&]", page) if p]
-    ids: list[uuid.UUID] = []
-    for p in parts:
-        try:
-            ids.append(uuid.UUID(p))
-        except ValueError:
-            pass
-    slugs = [p for p in parts if re.fullmatch(r"[a-z0-9][a-z0-9-]{2,}", p) and p != "simple"]
-    if not ids and not slugs:
+    parts = [p for p in re.split(r"/", re.split(r"[?#]", page, maxsplit=1)[0]) if p]
+    ref = next((b for a, b in zip(parts, parts[1:], strict=False) if a in DOCUMENT_ROUTES), None)
+    if ref is None:
         return None
-    return await db.scalar(
-        select(Document).where(or_(Document.id.in_(ids), Document.slug.in_(slugs))).limit(1)
-    )
+    try:
+        return await db.get(Document, uuid.UUID(ref))
+    except ValueError:
+        pass
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", ref):
+        return None
+    return await db.scalar(select(Document).where(Document.slug == ref).limit(1))
 
 
 ACTIONS: list[dict[str, Any]] = [

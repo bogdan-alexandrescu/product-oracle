@@ -419,6 +419,15 @@ const LOCAL_OPS = new Set(["record_decision", "minutes_note", "open_question", "
  * question: <text>", "next: <item>" and "skip <item>". Null: none of them.
  */
 function chatAction(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting | null, items: Item[], documentId: string | null, change: (build: () => Reply) => Reply): Reply | null {
+  // A phrase claims its line only when its item and person resolve (as the API's parse()):
+  // an unknown one is `understood: false`, for the Ask panel's one box to send to Oracle's Ask.
+  const r = chatActionReply(db, ctx, t, meeting, items, documentId, change);
+  return r && r.missing ? { ...r, understood: false } : r;
+}
+
+function chatActionReply(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting | null, items: Item[], documentId: string | null, change: (build: () => Reply) => Reply): Reply | null {
+  // "skip …", "<person> owns …" and "<person> decides …" leave a question ("…?") to the reader.
+  const asks = t.trim().endsWith("?");
   const draft = (summary: string, op: string, item: Item | null, target: Values, before: Values, after: Values, preview: Preview): Reply => ({
     kind: "cards",
     body: ONE_CHANGE,
@@ -428,15 +437,19 @@ function chatAction(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting | nu
     const n = unquote(x).toLowerCase();
     const all = Object.entries(ctx.names);
     const hit = all.find(([, v]) => v.toLowerCase() === n) ?? all.find(([, v]) => v.toLowerCase().split(" ")[0] === n);
-    return hit ? { id: hit[0], name: hit[1] } : { kind: "question", body: `Who is “${unquote(x)}”? Name a person of the company.`, cards: [] };
+    return hit ? { id: hit[0], name: hit[1] } : { kind: "question", body: `Who is “${unquote(x)}”? Name a person of the company.`, cards: [], missing: true };
   };
   const isPerson = (x: { id: string; name: string } | Reply): x is { id: string; name: string } => "id" in x;
   const text = (x: string) => x.trim().replace(/^["'“‘]|["'”’]$/g, "").trim();
   let m: RegExpExecArray | null;
 
-  if ((m = /^(note|open question):\s*(.+)$/i.exec(t)) || (m = /^(next):\s*(.+)$/i.exec(t)) || (m = /^(skip)\s+(.+)$/i.exec(t))) {
+  if ((m = /^(note|open question):\s*(.+)$/i.exec(t)) || (m = /^(next):\s*(.+)$/i.exec(t)) || (!asks && (m = /^(skip)\s+(.+)$/i.exec(t)))) {
     const [, verb, rest] = m;
-    if (!meeting) return { kind: "note", body: MEETING_ONLY, cards: [] };
+    if (!meeting) {
+      // Outside a meeting, the note for a known item only ("skip the intro" is not one).
+      const i = /^(next|skip)$/i.test(verb) ? findItem(items, rest) : null;
+      return i && !isItem(i) ? i : { kind: "note", body: MEETING_ONLY, cards: [] };
+    }
     return change(() => {
       const v = verb.toLowerCase();
       if (v === "note") return draft(`Add to the minutes: ${text(rest)}`, "minutes_note", null, { meeting_id: meeting.id }, {}, { text: text(rest) }, { kind: "note", text: text(rest) });
@@ -457,7 +470,7 @@ function chatAction(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting | nu
       return draft(`Record the decision: ${words}`, "record_decision", null, target, {}, { text: words, decider_id: who.id }, { kind: "decision", text: words, decider_name: who.name, where: meeting ? "meeting" : "page" });
     });
   }
-  if ((m = /^(.+?) (owns|decides) (.+)$/i.exec(t)) && !/^who$/i.test(m[1])) {
+  if (!asks && (m = /^(.+?) (owns|decides) (.+)$/i.exec(t)) && !/^who$/i.test(m[1])) {
     const [, x, verb, y] = m;
     return change(() => {
       const who = person(x);
