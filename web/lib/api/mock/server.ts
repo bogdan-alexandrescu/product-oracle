@@ -156,7 +156,7 @@ import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simpl
 import { ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
-import { routeSimpleChat, seedSimpleChat, type ChatDb } from "./simple-chat";
+import { planAnswer, routeSimpleChat, seedSimpleChat, type ChatDb } from "./simple-chat";
 import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -4336,6 +4336,22 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
   return seeded;
 }
 
+/** Oracle's Ask on one of Simple's pages answers from the plan first, as the API's. */
+function simplePlanReply(db: Db, me: MemberRow, d: DiscussionRow, question: string): { pieces: string[]; citations: Record<string, unknown>[] } | null {
+  const path = d.subject_kind === "screen" ? String((d.subject as { path?: string }).path ?? "") : "";
+  if (path !== "/simple" && !path.startsWith("/simple/")) return null;
+  const live = db.members.filter((x) => x.status !== "disabled");
+  const ctx = {
+    id: me.id,
+    role: me.role,
+    roles: Object.fromEntries(live.map((x) => [x.id, x.role])),
+    owners: live.filter((x) => x.role === "owner").map((x) => x.id),
+    names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+  };
+  const answer = planAnswer((db.simple_roadmap ??= seedSimpleRoadmap()), ctx, question);
+  return answer ? { pieces: [answer], citations: [] } : null;
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -4543,7 +4559,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       },
       current: () => load().discussions ?? emptyDiscussions(),
       // B6: the scripted Oracle of a goals interview.
-      replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)),
+      // Simple's Ask reads the company's plan first (./simple-chat.ts planAnswer).
+      replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)) ?? simplePlanReply(db, me, d, asked.body),
       // #710: Oracle reads the asker's Fireflies live in a private chat (./live.ts).
       liveReply: (asked, alone) => liveReply(asked.body, alone),
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
