@@ -10,7 +10,8 @@ Test cards (protects / fails_when / no_claim):
 - test_slices_are_placed_inside_their_milestones: protects=one slice per milestone a
   feature spans (F-03a in M1, F-03b in M2), placed by the PRD's order words ("weeks 1-2",
   "then", "last", "first", "in parallel", "weeks 3-4" counted in work weeks past the
-  holiday), every slice inside its milestone and marked estimated; the PM-owned item has
+  holiday), every slice inside its milestone; estimated only where Oracle placed it (a
+  slice the PRD places by its weeks is not, review); the PM-owned item has
   no engineer-weeks; fails_when=a slice leaves its milestone or the order is ignored;
   no_claim=dates the PRD gives a slice itself.
 - test_weeks_per_goal_and_span_label: protects=engineer-weeks per goal per milestone count
@@ -72,7 +73,10 @@ def test_slices_are_placed_inside_their_milestones():
     for x in view.slices:
         m = ms[x.milestone]
         assert m.start_date <= x.start_date <= x.end_date <= m.end_date
-        assert x.estimated is True and x.feature_code == x.code[:4]
+        assert x.feature_code == x.code[:4]
+    # review: only Oracle's own placement is estimated; "weeks 1-2" is the PRD's.
+    weeks = {k for k, v in s.items() if v.estimated is False}
+    assert weeks == {"F-01", "F-05"}
     assert s["F-03a"].name == "Invite teammates, part 1 of 2"
     assert s["F-03b"].effort_weeks == 3.0 and s["F-03b"].goal == "Growth"
     assert s["F-04"].pm_owned is True and s["F-04"].effort_weeks is None

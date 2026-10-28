@@ -31,6 +31,24 @@ Test cards (protects / fails_when / no_claim):
   item takes one slice's dates only; no_claim=undo (the engine's own tests).
 - test_quarter_label_from_the_plan: protects=Priorities' quarter is the plan's span
   ("2 Nov - 12 Feb"), not the calendar quarter; fails_when="Q4 2026"; no_claim=the web.
+- test_approving_a_version_reads_its_plan (review): protects=approving a PRD version with
+  no tables queues the prd_plan job at once, and its answer is what the roadmap shows;
+  fails_when=only a call to the plan endpoint reads it; no_claim=the live model.
+- test_reading_the_plan_writes_nothing (review): protects=a viewer's GET of the plan
+  stores no plan row and queues no job; fails_when=a read writes or spends; no_claim=the
+  owner's "Read the plan again".
+- test_dates_to_confirm_show_what_accept_applies (review): protects=the roadmap item's
+  suggestion is the span of its open slices (F-03: 16 Nov - 18 Dec), the dates Accept
+  saves; fails_when=it shows the first slice's dates only; no_claim=the web tray.
+- test_this_quarters_weeks_follow_the_plan (review): protects=Priorities' engineer-weeks
+  per goal "this quarter" count the items the plan places in its span, whatever their
+  horizon; fails_when=only Now items count; no_claim=the ranking.
+- test_chat_this_quarter_is_the_plans_span (review): protects="move F-03 to this
+  quarter" in Simple's chat means the plan's span; fails_when=the calendar quarter;
+  no_claim=other periods (calendar, test_simple_chat_walk_ask).
+- test_views_parse_a_version_once (review): protects=reading the plans again does not
+  parse an unchanged approved version's text again; fails_when=every read re-parses;
+  no_claim=the stored plan's reads.
 """
 
 import hashlib
@@ -43,6 +61,7 @@ from sqlalchemy import func, select
 from oracle import company_time
 from oracle.auth.models import User
 from oracle.docs.models import Document, DocumentVersion
+from oracle.baseline.models import Entity
 from oracle.jobs.models import LlmJob
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackMilestone
@@ -151,7 +170,8 @@ async def test_job_reads_a_prd_without_tables(client):
     ctx = await make_ctx()
     prose = "# Guided setup\n\nWe ship the checklist first, then invites, then the digest.\n"
     await seed(ctx, prose)
-    body = (await client.get(url("guided-setup"), headers=ctx.as_("owner"))).json()
+    r = await client.post(f"{url('guided-setup')}/read-again", headers=ctx.as_("owner"))
+    body = r.json()
     assert body["status"] == "reading" and body["milestones"] == []
     answer = {
         "milestones": [
@@ -265,3 +285,118 @@ async def test_accept_a_slice_per_role(client, role, status):
         if status == "applied"
         else {"F-03a": "open", "F-03b": "open"}
     )
+
+
+PROSE_ANSWER = {
+    "milestones": [
+        {"code": "M1", "name": "Prove it", "start": "2026-11-09", "end": "2026-12-04",
+         "effort_weeks": 6, "done_when": [], "targets": []},
+    ],
+    "features": [
+        {"code": "F-03", "name": "Invite teammates", "milestones": ["M1"], "effort": [2],
+         "goals": ["Growth"], "order": ["first"], "pm_owned": False},
+    ],
+    "goals": ["Growth"],
+    "holidays": [],
+}  # fmt: skip
+
+
+async def test_approving_a_version_reads_its_plan(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx, items=("f-03",))
+    async with tenant_session(ctx.tenant_id) as s:
+        prd = await s.get(Document, ids["prd"])
+        await version(s, prd, 2, "# Guided setup\n\nInvites first, in four weeks.\n",
+                      approved=False)  # fmt: skip
+        await s.commit()
+    r = await client.post("/v1/documents/guided-setup/versions/2/approve", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+
+    async def ask(kind, payload):
+        return PROSE_ANSWER
+
+    async with tenant_session(ctx.tenant_id) as s:
+        job = await s.scalar(select(LlmJob).where(LlmJob.kind == "prd_plan"))
+        assert job is not None, "approving the version queues the plan's job"
+        assert (await plan.run_job(s, job, ask))["read"] is True
+        await s.commit()
+    body = (await client.get("/v1/simple/roadmap", headers=ctx.as_("viewer"))).json()
+    assert body["span"]["label"] == "9 Nov - 4 Dec"
+    (item,) = body["items"]
+    assert [x["code"] for x in item["slices"]] == ["F-03"]
+
+
+async def test_reading_the_plan_writes_nothing(client):
+    ctx = await make_ctx()
+    await seed(ctx, "# Guided setup\n\nInvites first.\n")
+    r = await client.get(url("guided-setup"), headers=ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    assert r.json()["milestones"] == []
+    async with tenant_session(ctx.tenant_id) as s:
+        assert await s.scalar(select(func.count()).select_from(SimplePrdPlan)) == 0
+        jobs = select(func.count()).select_from(LlmJob).where(LlmJob.kind == "prd_plan")
+        assert await s.scalar(jobs) == 0
+
+
+async def test_dates_to_confirm_show_what_accept_applies(client):
+    ctx = await make_ctx()
+    await seed(ctx, items=("f-03",))
+    async with tenant_session(ctx.tenant_id) as s:
+        await suggestions.regenerate(s)
+        await s.commit()
+    body = (await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))).json()
+    (item,) = body["items"]
+    shown = item["suggestion"]
+    assert (shown["start_date"], shown["end_date"]) == ("2026-11-16", "2026-12-18")
+    r = await client.post(
+        f"/v1/simple/roadmap/date-suggestions/{shown['id']}/accept", headers=ctx.as_("owner")
+    )
+    assert r.status_code == 200, r.text
+    after = r.json()["change"]["after"]
+    assert (after["start_date"], after["end_date"]) == (shown["start_date"], shown["end_date"])
+
+
+async def test_this_quarters_weeks_follow_the_plan(client):
+    ctx = await make_ctx()
+    await seed(ctx, items=("f-03",))
+    async with tenant_session(ctx.tenant_id) as s:
+        feature = Entity(type="feature", key="invite-teammates", title="Invite teammates",
+                         status="confirmed", origin="user", attrs={"effort": 5})  # fmt: skip
+        s.add(feature)
+        await s.flush()
+        row = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "f-03"))
+        row.feature_id, row.horizon = feature.id, "later"
+        await s.commit()
+    r = await client.get("/v1/simple/priorities", headers=ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    weeks = {b["key"]: b["weeks"] for b in r.json()["buckets"]}
+    assert sum(weeks.values()) == 5.0, weeks
+
+
+async def test_chat_this_quarter_is_the_plans_span(client):
+    from tests.test_simple_chat_api import say
+
+    ctx = await make_ctx()
+    await seed(ctx, items=("f-03",))
+    m = await say(client, ctx, "owner", "move F-03 to this quarter")
+    assert m["kind"] == "cards", m["body"]
+    (card,) = m["cards"]
+    assert card["after"] == {"start_date": "2026-11-02", "end_date": "2027-02-12"}
+
+
+async def test_views_parse_a_version_once(client, monkeypatch):
+    ctx = await make_ctx()
+    ids = await seed(ctx)
+    calls = []
+    real = plan.parse
+
+    def counted(text, ref):
+        calls.append(ref)
+        return real(text, ref)
+
+    monkeypatch.setattr(plan, "parse", counted)
+    async with tenant_session(ctx.tenant_id) as s:
+        first = await plan.views(s, {ids["prd"]})
+        again = await plan.views(s, {ids["prd"]})
+    assert first[ids["prd"]].span == again[ids["prd"]].span
+    assert len(calls) <= 1
