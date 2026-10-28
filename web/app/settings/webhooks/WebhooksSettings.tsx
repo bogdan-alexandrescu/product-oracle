@@ -82,7 +82,7 @@ export function WebhooksSettings() {
     <>
       <PageHeader
         title="Webhooks"
-        status={
+        info={
           <InfoTip label="Webhooks" align="start" side="bottom">
             Oracle posts each event as signed JSON (Standard Webhooks: webhook-id, webhook-timestamp, webhook-signature). Check the
             signature with the secret and refuse a timestamp more than 5 minutes off; the runbook (docs/ops-webhooks.md) has a verify

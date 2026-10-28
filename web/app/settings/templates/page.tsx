@@ -161,15 +161,13 @@ export default function TemplatesPage() {
     <>
       <PageHeader
         title="Templates"
-        status={
-          <>
-            <InfoTip label="templates" align="start" side="bottom">
-              The skeletons new PRDs and roadmaps start from. Every saved change to a template is a new version; documents keep
-              the version they started from.
-            </InfoTip>
-            {capsReady && !canCreate && <ViewOnly />}
-          </>
+        info={
+          <InfoTip label="templates" align="start" side="bottom">
+            The skeletons new PRDs and roadmaps start from. Every saved change to a template is a new version; documents keep
+            the version they started from.
+          </InfoTip>
         }
+        status={capsReady && !canCreate && <ViewOnly />}
         action={
           canCreate && (
             <LinkButton variant="primary" icon="plus" href="/settings/templates/new">

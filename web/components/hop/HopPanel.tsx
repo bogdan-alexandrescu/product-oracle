@@ -16,8 +16,6 @@ import { errorMessage } from "@/lib/use-query";
 
 type View = { kind: "list" } | { kind: "thread"; id: string } | { kind: "share"; id: string };
 
-const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
-
 /** Chats on this subject ("Here") and the reader's own panel chats ("Recent", the last 10). */
 function useLists(subject: ScreenSubject, tick: number) {
   const [here, setHere] = useState<DiscussionRow[] | null>(null);
@@ -100,7 +98,7 @@ function NewChat({ subject, onStarted }: { subject: ScreenSubject; onStarted: (i
       setText("");
       onStarted(id);
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -154,7 +152,7 @@ function ShareForm({ id, onShared, onCancel }: { id: string; onShared: (id: stri
         setTitle(d.title);
         setText(d.summary ?? lastReply?.body ?? "");
       })
-      .catch((e) => live && setError(detail(e)));
+      .catch((e) => live && setError(errorMessage(e)));
     return () => {
       live = false;
     };
@@ -169,7 +167,7 @@ function ShareForm({ id, onShared, onCancel }: { id: string; onShared: (id: stri
       );
       onShared(d.id);
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

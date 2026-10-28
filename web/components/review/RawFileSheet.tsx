@@ -33,7 +33,7 @@ export function RawFileSheet({
         parseAs: "text",
       })
       .then(({ data, response }) => {
-        if (live) setLoaded({ which: open, text: response.ok ? (data as string) : `Could not load ${name} (${response.status}).` });
+        if (live) setLoaded({ which: open, text: response.ok ? (data as string) : `Could not load ${name}. Try again.` });
       });
     return () => {
       live = false;

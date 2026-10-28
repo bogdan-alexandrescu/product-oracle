@@ -59,7 +59,7 @@ type Refusal =
 const toApprove = (r: Row) => (r.state === "draft" || r.state === "missing" || r.state === "changed") && r.left_out_reason !== "no_goal";
 
 /** The 422 detail of PUT public-texts as a Refusal. */
-function refusal(error: unknown, status: number): Refusal {
+function refusal(error: unknown): Refusal {
   const detail = error && typeof error === "object" && "detail" in error ? (error as { detail: unknown }).detail : null;
   if (detail && typeof detail === "object") {
     const d = detail as { code?: string; message?: string; findings?: Finding[]; warnings?: string[] };
@@ -68,7 +68,7 @@ function refusal(error: unknown, status: number): Refusal {
     if (d.message) return { kind: "other", message: d.message };
   }
   if (typeof detail === "string") return { kind: "other", message: detail };
-  return { kind: "other", message: `Request failed (${status}).` };
+  return { kind: "other", message: "Something went wrong. Try again." };
 }
 
 /** Why Approve waits, beside the button. */
@@ -80,7 +80,7 @@ async function putText(doc: string, version: number, itemKey: string, body: Text
       params: { path: { doc, item_key: itemKey }, query: { version } },
       body,
     });
-    return response.ok ? null : refusal(error, response.status);
+    return response.ok ? null : refusal(error);
   } catch (e) {
     return { kind: "other", message: errorMessage(e) };
   }
@@ -108,7 +108,7 @@ function RefusalAlert({ refusal }: { refusal: Refusal }) {
 async function putPage(doc: string, body: PageIn): Promise<Refusal | null> {
   try {
     const { error, response } = await api.PUT("/v1/roadmaps/{doc}/public-page", { params: { path: { doc } }, body });
-    return response.ok ? null : refusal(error, response.status);
+    return response.ok ? null : refusal(error);
   } catch (e) {
     return { kind: "other", message: errorMessage(e) };
   }

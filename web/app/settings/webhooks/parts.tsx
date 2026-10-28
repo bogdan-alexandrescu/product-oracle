@@ -20,7 +20,7 @@ export const GROUPS: { id: EventType["group"]; label: string }[] = [
 const PAUSED: Record<NonNullable<Webhook["paused_reason"]>, string> = {
   manual: "by hand",
   failing: "failing",
-  gone: "gone (410)",
+  gone: "endpoint gone",
   creator_disabled: "creator removed",
   creator_demoted: "creator demoted",
 };

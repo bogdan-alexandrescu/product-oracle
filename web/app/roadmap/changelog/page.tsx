@@ -91,15 +91,17 @@ export default function ChangelogPage() {
     <Page>
       <PageHeader
         title="Changelog"
+        info={
+          <InfoTip label="Changelog" align="start" side="bottom">
+            Internal entries are for everyone at the company. Public entries need an approver&apos;s Publish; Export
+            gives the published ones as Markdown or HTML for a person to post. Oracle posts nothing outside.
+          </InfoTip>
+        }
         back={<PlanCrumb />}
         status={
           q.data && (
             <>
               <Chip kind="acc">{entries.length} entries</Chip>
-              <InfoTip label="Changelog" align="start" side="bottom">
-                Internal entries are for everyone at the company. Public entries need an approver&apos;s Publish; Export
-                gives the published ones as Markdown or HTML for a person to post. Oracle posts nothing outside.
-              </InfoTip>
             </>
           )
         }

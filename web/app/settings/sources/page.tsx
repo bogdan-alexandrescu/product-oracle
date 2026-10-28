@@ -967,11 +967,13 @@ export default function SourceSettingsPage() {
     <>
       <PageHeader
         title="Sources"
+        info={
+          <InfoTip label="sources" align="start" side="bottom">
+            What your connections pull in. Only you see it; it reaches others only as evidence you add to the baseline.
+          </InfoTip>
+        }
         status={
           <>
-            <InfoTip label="sources" align="start" side="bottom">
-              What your connections pull in. Only you see it; it reaches others only as evidence you add to the baseline.
-            </InfoTip>
             {errors > 0 && (
               <Chip kind="crit" dot>
                 {errors} in error

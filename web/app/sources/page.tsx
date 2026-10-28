@@ -310,6 +310,11 @@ function SourcesSearchPage() {
     <Page>
       <PageHeader
         title="Sources"
+        info={
+          <InfoTip label="Ranking" align="start" side="bottom">
+            Search what your sources pulled in. Results are ranked by relevance weighted by confidence.
+          </InfoTip>
+        }
         status={
           <>
             {results && (
@@ -317,9 +322,6 @@ function SourcesSearchPage() {
                 {hits.length} {hits.length === 1 ? "hit" : "hits"}
               </Chip>
             )}
-            <InfoTip label="Ranking" align="start" side="bottom">
-              Search what your sources pulled in. Results are ranked by relevance weighted by confidence.
-            </InfoTip>
           </>
         }
         action={

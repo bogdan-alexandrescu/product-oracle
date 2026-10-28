@@ -176,6 +176,12 @@ function Launches() {
     <Page>
       <PageHeader
         title="Launches"
+        info={
+          <InfoTip label="Launches" align="start" side="bottom">
+            Approving a roadmap plans a launch for each item in Now. It is ready when its tracker issues or milestones
+            are done. Oracle drafts the kit; a person checks it, sends it and marks the launch launched.
+          </InfoTip>
+        }
         back={<PlanCrumb />}
         status={
           q.data && (
@@ -183,10 +189,6 @@ function Launches() {
               <Chip kind="acc">
                 {rows.length} {rows.length === 1 ? "launch" : "launches"}
               </Chip>
-              <InfoTip label="Launches" align="start" side="bottom">
-                Approving a roadmap plans a launch for each item in Now. It is ready when its tracker issues or milestones
-                are done. Oracle drafts the kit; a person checks it, sends it and marks the launch launched.
-              </InfoTip>
             </>
           )
         }

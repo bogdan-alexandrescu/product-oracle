@@ -419,6 +419,11 @@ export default function BaselinePage() {
       )}
       <PageHeader
         title="Baseline"
+        info={
+          <InfoTip label="Baseline" align="start" side="bottom">
+            Goals, products and features the product is built on, each linked to its evidence.
+          </InfoTip>
+        }
         action={
           <span className="flex flex-wrap items-center gap-2">
             {canWrite && (
@@ -445,9 +450,6 @@ export default function BaselinePage() {
               </Chip>
             )}
             {capsReady && !canComment && <ViewOnly />}
-            <InfoTip label="Baseline" align="start" side="bottom">
-              Goals, products and features the product is built on, each linked to its evidence.
-            </InfoTip>
           </>
         }
       />

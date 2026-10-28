@@ -1794,7 +1794,7 @@ function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
       params: { path: { run_id: runId, checkpoint_id: cp.id } },
       parseAs: "text",
     });
-    setText(response.ok ? (data as string) : `Could not load the review (${response.status}).`);
+    setText(response.ok ? (data as string) : "Could not load the review. Try again.");
   }
   return (
     <div data-testid="sent-review">
@@ -1847,7 +1847,7 @@ function Artifacts({
       params: { path: { run_id: runId, seq, name }, query },
       parseAs: "text",
     });
-    setContent(response.ok ? (data as string) : `Could not load ${name} (${response.status}).`);
+    setContent(response.ok ? (data as string) : `Could not load ${name}. Try again.`);
   }
   const file = (name: string, attempt: number | null) => {
     const on = isOpen(name, attempt);
