@@ -214,6 +214,8 @@ class DateSuggestionOut(BaseModel):
     created_at: dt.datetime
     decided_by: uuid.UUID | None = None
     decided_at: dt.datetime | None = None
+    # plan-model: the slice it dates (F-05a), inside the slice's milestone; null: the item.
+    slice_code: str | None = None
     # The caller may accept, edit or dismiss it: an owner, the roadmap's decider, or with
     # no decider the roadmap's track owner.
     can_decide: bool = False

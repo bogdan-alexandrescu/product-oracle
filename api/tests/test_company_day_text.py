@@ -170,6 +170,8 @@ EXCEPTIONS = {
     ("simple/chat.py", "_b_move"): "the first day of a named period (this quarter): calendar date",
     ("simple/priorities.py", "_day"): "the line's key date or milestone: a calendar date, no time",
     ("simple/one_pager.py", "_plan_html"): "the PDF plan strip's months: calendar dates",
+    ("simple/plan.py", "_day"): "a plan milestone's start or end: a calendar date, no time",
+    ("simple/plan.py", "run_job"): "machine field: the approved day in the job's JSON",
     ("review/collab.py", "set_assignment"): (
         "a section's due day: a picked calendar day the web stores at 17:00 UTC, so its UTC "
         "date is the day picked"

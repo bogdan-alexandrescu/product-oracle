@@ -42,7 +42,7 @@ from oracle.roadmap.models import (
     TrackerRecord,
     TrackMilestone,
 )
-from oracle.simple import constraints, dates
+from oracle.simple import constraints, dates, plan_strip
 from oracle.simple.models import RoadmapDateSuggestion
 from oracle.simple.schemas import (
     DateSuggestionOut,
@@ -282,12 +282,14 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     }
     blockers = await _blockers(db, {b for r in rows for b in r.blocker_ids or []})
     cut = await _cut(db, roadmap_ids)
-    suggestions = {
-        s.item_id: s
-        for s in await db.scalars(
-            select(RoadmapDateSuggestion).where(RoadmapDateSuggestion.status == "open")
-        )
-    }
+    # The item's first open suggestion (plan-model: its first slice's).
+    suggestions: dict[uuid.UUID, RoadmapDateSuggestion] = {}
+    for s in await db.scalars(
+        select(RoadmapDateSuggestion)
+        .where(RoadmapDateSuggestion.status == "open")
+        .order_by(RoadmapDateSuggestion.start_date)
+    ):
+        suggestions.setdefault(s.item_id, s)
     deciders = {
         p.document_id: p.decider_id
         for p in await db.scalars(
@@ -523,6 +525,7 @@ def suggestion_out(s: RoadmapDateSuggestion, row: RoadmapItem, may: bool) -> Dat
         created_at=s.created_at,
         decided_by=s.decided_by,
         decided_at=s.decided_at,
+        slice_code=s.slice_code,
         can_decide=may,
     )
 
@@ -728,6 +731,28 @@ async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list
     return out
 
 
+def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> SimpleMilestone:
+    """A track milestone, with start, end, engineer-weeks, done when and targets from its
+    PRD's plan (the plan's milestone of the same code) when the plan has it."""
+    out = SimpleMilestone(
+        id=m.id,
+        track_id=m.track_id,
+        name=m.name,
+        date=m.target_date,
+        horizon=m.horizon,  # type: ignore[arg-type]
+        status=m.status,  # type: ignore[arg-type]
+        item_ids=[
+            keyed[(m.track_id, k)] for k in m.item_keys or [] if keyed.get((m.track_id, k)) in ids
+        ],
+    )
+    pm = view.milestone(plan_strip.milestone_of(m.name)[0]) if view is not None else None
+    if pm is not None:
+        out.start_date, out.end_date = pm.start_date, pm.end_date or m.target_date
+        out.effort_weeks, out.done_when, out.targets = pm.effort_weeks, pm.done_when, pm.targets
+        out.date = out.date or pm.end_date
+    return out
+
+
 def _metric(goal: Entity) -> str | None:
     metric = (goal.attrs or {}).get("metric")
     if isinstance(metric, dict):
@@ -837,6 +862,26 @@ async def build(
     for it in items:
         # A draft's own visual (S7) first, else its feature's (S10).
         it.flow = it.flow or flows.get(it.id)
+    # plan-model: each item's slices and milestones from its PRD's plan; the track
+    # milestones dated by the plan of their track's PRD.
+    from oracle.simple import plan as plans
+
+    track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
+    views = await plans.views(db, {e.prd.id for e in shown if e.prd} | set(track_prd.values()))
+    for it in items:
+        view = views.get(it.prd.id) if it.prd else None
+        if view is None:
+            continue
+        it.slices = view.slices_of(it.code)
+        it.milestones = list(dict.fromkeys(x.milestone for x in it.slices))
+        if it.milestone is not None:
+            named = it.milestone.record_name or it.milestone.name
+            pm = view.milestone(plan_strip.milestone_of(named)[0])
+            if pm is not None and pm.end_date is not None:
+                it.milestone.start_date = pm.start_date
+                it.milestone.date = it.milestone.date or pm.end_date
+    shown_prds = {e.prd.id for e in shown if e.prd}
+    span = plans.current_span([v for p, v in views.items() if p in shown_prds], read.today)
     return SimpleRoadmapOut(
         today=read.today,
         group=group,  # type: ignore[arg-type]
@@ -846,21 +891,10 @@ async def build(
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
         items=items,
         milestones=[
-            SimpleMilestone(
-                id=m.id,
-                track_id=m.track_id,
-                name=m.name,
-                date=m.target_date,
-                horizon=m.horizon,  # type: ignore[arg-type]
-                status=m.status,  # type: ignore[arg-type]
-                item_ids=[
-                    keyed[(m.track_id, k)]
-                    for k in m.item_keys or []
-                    if keyed.get((m.track_id, k)) in ids
-                ],
-            )
+            _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
             for m in read.milestones
         ],
+        span=span,
         changes_in_review=seen.changes_in_review,
         drafts=seen.visible,
         key_dates=kds,

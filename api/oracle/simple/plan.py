@@ -60,9 +60,11 @@ LETTERS = "abcdefghij"
 _MS = re.compile(r"\bM(\d{1,2})\b", re.I)
 _CODE = re.compile(r"\b([A-Z]{1,3}-\d{1,3})\b")
 _NUM = re.compile(r"\d+(?:\.\d+)?")
-_MONTHS = {m: i + 1 for i, m in enumerate(
-    ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"))}  # fmt: skip
+_MONTHS = {
+    m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())
+}
 _HOLIDAY = re.compile(r"(?im)^\s*(?:[-*]\s*)?(?:no[- ]work weeks?|holidays?)\s*:\s*(.+)$")
+_RULE = re.compile(r"\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?")
 _WEEKS = re.compile(r"weeks?\s*(\d+)(?:\s*(?:-|–|to)\s*(\d+))?", re.I)
 
 
@@ -83,7 +85,7 @@ def tables(text: str) -> list[tuple[list[str], list[list[str]]]]:
     i = 0
     while i < len(lines) - 1:
         head, rule = lines[i].strip(), lines[i + 1].strip()
-        if head.startswith("|") and re.fullmatch(r"\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?", rule):
+        if head.startswith("|") and _RULE.fullmatch(rule):
             header = [" ".join(c.lower().split()) for c in _cells(head)]
             rows: list[list[str]] = []
             i += 2
@@ -268,8 +270,8 @@ def parse(text: str, ref: date) -> dict[str, Any] | None:
                 goal = _cell(r, c_goal) or "Goal"
                 if m and f"M{int(m[1])}" in by_code and _cell(r, c_t):
                     goals.append(goal) if goal not in goals else None
-                    by_code[f"M{int(m[1])}"]["targets"].append({"goal": goal,
-                                                               "target": _cell(r, c_t)})  # fmt: skip
+                    target = {"goal": goal, "target": _cell(r, c_t)}
+                    by_code[f"M{int(m[1])}"]["targets"].append(target)
     for f in features:
         for g in f["goals"]:
             if g not in goals:
@@ -409,8 +411,11 @@ def compute(data: dict[str, Any] | None) -> View:
         view.message = NO_PLAN
         return view
     view.holidays = [
-        SimpleHoliday(start=date.fromisoformat(h["start"]), end=date.fromisoformat(h["end"]),
-                      label=h.get("label"))  # fmt: skip
+        SimpleHoliday(
+            start=date.fromisoformat(h["start"]),
+            end=date.fromisoformat(h["end"]),
+            label=h.get("label"),
+        )  # fmt: skip
         for h in data.get("holidays") or []
     ]
     raw = data["milestones"]
@@ -480,7 +485,8 @@ def compute(data: dict[str, Any] | None) -> View:
         if s.effort_weeks:
             by[s.milestone].planned_weeks += s.effort_weeks
             if s.goal:
-                totals[(s.goal, s.milestone)] = totals.get((s.goal, s.milestone), 0) + s.effort_weeks
+                k = (s.goal, s.milestone)
+                totals[k] = totals.get(k, 0) + s.effort_weeks
     goals = list(data.get("goals") or [])
     order = {c: i for i, c in enumerate(by)}
     view.goal_weeks = [
@@ -491,9 +497,15 @@ def compute(data: dict[str, Any] | None) -> View:
         )
     ]
     view.goals = [
-        SimplePlanGoal(name=g, targets=[SimplePlanGoalTarget(milestone=m.code, target=t.target)
-                                        for m in view.milestones for t in m.targets
-                                        if t.goal == g])  # fmt: skip
+        SimplePlanGoal(
+            name=g,
+            targets=[
+                SimplePlanGoalTarget(milestone=m.code, target=t.target)
+                for m in view.milestones
+                for t in m.targets
+                if t.goal == g
+            ],
+        )  # fmt: skip
         for g in goals
     ]
     view.dated = all(m.start_date and m.end_date for m in view.milestones)

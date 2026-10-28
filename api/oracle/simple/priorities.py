@@ -76,6 +76,18 @@ def quarter(today: date) -> SimpleQuarter:
                          label=f"Q{q + 1} {today.year}")  # fmt: skip
 
 
+async def plan_quarter(db: AsyncSession, read_: service.Read) -> SimpleQuarter:
+    """plan-model: "this quarter" is the plan's span (the plan running today, else the next
+    to start) of the PRDs on the roadmap; the calendar quarter only with no dated plan."""
+    from oracle.simple import plan
+
+    views = await plan.views(db, {e.prd.id for e in read_.entries if e.prd})
+    span = plan.current_span(list(views.values()), read_.today)
+    if span is None:
+        return quarter(read_.today)
+    return SimpleQuarter(start=span.start, end=span.end, label=span.label)
+
+
 def _items(read_: service.Read) -> dict[str, service.Entry]:
     """Feature id -> its item: the earliest horizon, then the lowest key (cut and draft items
     never: a draft is not ranked yet)."""
@@ -439,7 +451,7 @@ async def build(
     buckets, total = _buckets(rows)
     return SimplePrioritiesOut(
         today=read_.today,
-        quarter=quarter(read_.today),
+        quarter=await plan_quarter(db, read_),
         method=METHOD,
         formula=ranking.formula,
         rows=rows,

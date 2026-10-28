@@ -534,6 +534,15 @@ async def _plan(
             # Engineering or tracker dates arrived after the suggestion was made.
             raise await _conflict(db, current, {str(row.id)}, lead)
         start, end = s.start_date, s.end_date
+        if s.slice_code is not None:
+            # plan-model: a slice's dates: the item takes the span of all its slices.
+            for o in await db.scalars(
+                select(RoadmapDateSuggestion).where(
+                    RoadmapDateSuggestion.item_id == row.id,
+                    RoadmapDateSuggestion.status == "open",
+                )
+            ):
+                start, end = min(start, o.start_date), max(end, o.end_date)
         if a.get("start_date") is not None or a.get("end_date") is not None:
             # The edit variant (D-b): the person's dates instead of the suggestion's.
             start, end = (
@@ -683,6 +692,16 @@ async def _apply(
         if s is not None and not undo and s.status == "open":
             s.status = "edited" if c.target.get("edited") else "accepted"
             s.decided_by, s.decided_at = _me(principal), company_time.now()
+            if s.slice_code is not None:
+                # plan-model: the item's other slices are dated with it.
+                for o in await db.scalars(
+                    select(RoadmapDateSuggestion).where(
+                        RoadmapDateSuggestion.item_id == s.item_id,
+                        RoadmapDateSuggestion.status == "open",
+                        RoadmapDateSuggestion.id != s.id,
+                    )
+                ):
+                    o.status, o.decided_by, o.decided_at = s.status, s.decided_by, s.decided_at
         elif s is not None and undo and s.status in ("accepted", "edited"):
             other = await db.scalar(
                 select(RoadmapDateSuggestion.id).where(
@@ -691,6 +710,16 @@ async def _apply(
                 )
             )
             if other is None:
+                if s.slice_code is not None:
+                    for o in await db.scalars(
+                        select(RoadmapDateSuggestion).where(
+                            RoadmapDateSuggestion.item_id == s.item_id,
+                            RoadmapDateSuggestion.status == s.status,
+                            RoadmapDateSuggestion.decided_at == s.decided_at,
+                            RoadmapDateSuggestion.id != s.id,
+                        )
+                    ):
+                        o.status, o.decided_by, o.decided_at = "open", None, None
                 s.status, s.decided_by, s.decided_at = "open", None, None
     await db.flush()
 
