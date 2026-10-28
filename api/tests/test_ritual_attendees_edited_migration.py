@@ -1,4 +1,4 @@
-"""Migration 0087_ritual_attendees_edited_at (the walk-fixes review 2).
+"""Migration 0089_ritual_attendees_edited_at (the walk-fixes review 2).
 
 Card: protects=rituals.attendees_edited_at comes and goes with the revision, chained on
 0086_simple_meetings as the single head; fails_when=the column is missing or the
@@ -17,8 +17,8 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0087_ritual_attendees_edited_at"
-PREVIOUS = "0086_simple_meetings"
+REVISION = "0089_ritual_attendees_edited_at"
+PREVIOUS = "0088_simple_chat_actions"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
     .set(database=make_url(TEST_DATABASE_URL).database + "_migrations_ritual_attendees_edited")

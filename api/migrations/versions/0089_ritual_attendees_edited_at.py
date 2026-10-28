@@ -7,8 +7,8 @@
 
 The downgrade drops the column.
 
-Revision ID: 0087_ritual_attendees_edited_at
-Revises: 0086_simple_meetings
+Revision ID: 0089_ritual_attendees_edited_at
+Revises: 0088_simple_chat_actions
 """
 
 from collections.abc import Sequence
@@ -16,8 +16,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0087_ritual_attendees_edited_at"
-down_revision: str | None = "0086_simple_meetings"
+revision: str = "0089_ritual_attendees_edited_at"
+down_revision: str | None = "0088_simple_chat_actions"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

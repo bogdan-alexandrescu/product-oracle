@@ -42,6 +42,7 @@ import { stableUuid } from "./ids";
 import { nextOccurrence, type RitualsDb } from "./rituals";
 import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
+import type { ChatMeetings, MeetingAgenda, MeetingNote } from "./simple-chat";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
 /** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
@@ -90,6 +91,9 @@ interface Meeting {
   delivery: Delivery | null;
   sent_at: string | null;
   approved: { at: string; waiting_on: string[]; blocked_by?: string[] } | null;
+  /** Chat actions (./simple-chat.ts): the notes and open questions typed in its chat, and its agenda's next and skipped items. */
+  notes?: MeetingNote[];
+  agenda_state?: MeetingAgenda;
 }
 
 interface Decision {
@@ -97,7 +101,7 @@ interface Decision {
   number: number;
   title: string;
   origin: string;
-  status: "decided" | "proposed";
+  status: "decided" | "proposed" | "withdrawn";
   approver_id: string | null;
   at: string;
   subjects: { kind: string; id: string; ref?: string }[];
@@ -338,15 +342,15 @@ function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
   else {
     const quick = extract(ctx, db, m);
     const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
-    // An empty record: the plain line, no model's words (meetings.run_job).
-    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
+    // An empty record: the plain line, no model's words (meetings.run_job); notes and open questions count as the record.
+    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? withNotes(m, `Oracle's minutes of ${m.title}: ${n} decisions taken.`) : quick.summary, written_by: "oracle" };
     m.minutes_state = "ready";
     m.minutes_job = null;
   }
   m.minutes_due = null;
 }
 
-function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] {
+function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] & { notes: MeetingNote[]; agenda: MeetingAgenda } {
   const p = prds(ctx).find((x) => x.slug === m.prd)!;
   const deciderOrOwner = ctx.me.id === p.decider || ctx.me.role === "owner";
   return {
@@ -377,6 +381,8 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
       redraft: m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed" && presenterOrDecider(ctx, m, p),
     },
     not_approved: [],
+    notes: m.notes ?? [],
+    agenda: m.agenda_state ?? { next: null, skipped: [] },
   };
 }
 
@@ -557,6 +563,92 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
   return res;
 }
 
+/** The chat's minutes notes, as "Notes: <text>" lines after the summary. */
+function withNotes(m: Meeting, summary: string): string {
+  const lines = (m.notes ?? []).filter((n) => n.kind === "note").map((n) => `Notes: ${n.text}`);
+  return [summary, ...lines].join("\n");
+}
+
+/** The chat's open questions, for the minutes' open_questions. */
+const questionsOf = (m: Meeting) => (m.notes ?? []).filter((n) => n.kind === "question").map((n) => n.text);
+
+/**
+ * The review meetings as the chat (./simple-chat.ts) reads and writes them: rules, notes,
+ * agenda and decisions; `open` reads (and seeds) the db and its context on first use.
+ */
+export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): ChatMeetings {
+  const meetings = () => open().db;
+  const find = (id: string) => meetings().meetings.find((x) => x.id === id);
+  return {
+    find(id) {
+      const m = find(id);
+      return m ? { title: m.title, presenter_id: m.presenter_id, attendee_ids: m.attendee_ids, change_mode: m.change_mode, change_people: m.change_people, ended: m.status === "ended" } : null;
+    },
+    setMode(id, mode, people) {
+      const m = find(id);
+      if (m) Object.assign(m, { change_mode: mode, change_people: people });
+    },
+    note(id, n) {
+      const m = find(id);
+      if (m) (m.notes ??= []).push(n);
+    },
+    unnote(id, cardId) {
+      const m = find(id);
+      if (m) m.notes = (m.notes ?? []).filter((x) => x.card_id !== cardId);
+    },
+    agenda: (id) => structuredClone(find(id)?.agenda_state ?? { next: null, skipped: [] }),
+    setAgenda(id, a) {
+      const m = find(id);
+      if (m) m.agenda_state = a;
+    },
+    decide(meetingId, title, deciderId, documentId) {
+      const { db, ctx } = open();
+      const m = meetingId ? find(meetingId) : undefined;
+      if (m) {
+        const prd = prds(ctx).find((x) => x.slug === m.prd);
+        const d = record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
+        d.approver_id = deciderId;
+        return d.id;
+      }
+      const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
+      const d: Decision = {
+        id: crypto.randomUUID(), number, title, origin: "chat", status: "decided", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
+        subjects: documentId ? [{ kind: "document", id: documentId }] : [], meeting_id: null, change_ids: [],
+      };
+      db.decisions.push(d);
+      return d.id;
+    },
+    undecide(decisionId) {
+      const db = meetings();
+      db.decisions = db.decisions.filter((d) => d.id !== decisionId);
+    },
+    documentOf(page) {
+      const slug = /^\/simple\/prds\/([^/?#]+)/.exec(page)?.[1];
+      return slug ? (prds(open().ctx).find((x) => x.slug === slug)?.id ?? null) : null;
+    },
+    proposeTo(documentId) {
+      // As chat_actions.ask_decider: the document's decider, else the company's owners; the first who may decide.
+      const { ctx } = open();
+      const prd = documentId ? prds(ctx).find((x) => x.ids.includes(documentId)) : undefined;
+      const ids = [prd?.decider ?? null, ...owners(ctx)];
+      const may = (id: string | null) => ctx.members.find((m) => m.id === id && RANK[m.role] >= RANK.approver);
+      const to = ids.map(may).find((x) => !!x);
+      return to ? { id: to.id, name: to.name } : null;
+    },
+    propose(title, deciderId, documentId, id) {
+      const { db } = open();
+      const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
+      const d: Decision = {
+        // The decision log's id: its Decide or Decline (withdraw) shows here too (server.ts).
+        id: id ?? crypto.randomUUID(), number, title, origin: "chat", status: "proposed", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
+        subjects: documentId ? [{ kind: "document", id: documentId }] : [], meeting_id: null, change_ids: [],
+      };
+      db.decisions.push(d);
+      return d.id;
+    },
+  };
+}
+
 function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const p = prds(ctx).find((x) => x.slug === m.prd)!;
   const titles = db.decisions.filter((d) => d.meeting_id === m.id).sort((a, b) => -newestFirst(a, b)).map((d) => d.title);
@@ -564,7 +656,7 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const lines = ctx.chatLines?.(m.id) ?? [];
   const summary = titles.length
     ? `${titles.length} ${titles.length === 1 ? "decision" : "decisions"} in ${m.title}: ${titles.slice(0, 6).join("; ")}${titles.length > 6 ? "…" : "."}`
-    : lines.length
+    : lines.length || (m.notes ?? []).length
       ? `${m.title}: no decision was taken.`
       : `${m.title}: nothing was decided or recorded.`;
   const waits: Schemas["SimpleWait"][] = [];
@@ -577,8 +669,9 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
     if (made.has(c.id) && c.status === "proposed") waits.push({ what: `Proposal: ${describe(ctx, c)[0]}`, on: c.routed_to.map((i) => ref(ctx, i)) });
   }
   return {
-    summary: summary.slice(0, 4000),
-    open_questions: lines.filter((x) => x.trim().endsWith("?")).slice(0, 5),
+    summary: withNotes(m, summary).slice(0, 4000),
+    // Only the meeting's own record: its open questions, then the chat's questions.
+    open_questions: [...questionsOf(m), ...lines.filter((x) => x.trim().endsWith("?"))].slice(0, 5),
     action_items: [],
     waits,
     written_by: "extract",
@@ -792,8 +885,8 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     // The requeued job answers (the fake model): Oracle's minutes, ready to edit and send.
     const quick = extract(ctx, db, m);
     const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
-    // An empty record: the plain line, no model's words (meetings.run_job).
-    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
+    // An empty record: the plain line, no model's words (meetings.run_job); notes and open questions count as the record.
+    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length || (m.notes ?? []).length ? withNotes(m, `Oracle's minutes of ${m.title}: ${n} decisions taken.`) : quick.summary, written_by: "oracle" };
     m.minutes_state = "ready";
     m.minutes_job = null;
     return ok();

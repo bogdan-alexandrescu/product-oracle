@@ -13,6 +13,27 @@ export type ChatPreview =
   | { kind: "cut"; item_id: string }
   | null;
 
+/**
+ * Chat actions' previews (no roadmap ghost: the card says what changes): an item's owner or
+ * decider, a decision, a minutes note or open question, and the meeting's agenda.
+ */
+export type ActionPreview =
+  | { kind: "owner" | "decider"; item_id: string; person_id: string; person_name: string; before_name: string | null }
+  | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page"; proposed_to?: string | null; not_to?: string | null }
+  | { kind: "note" | "question"; text: string }
+  | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string };
+
+/** A card's preview: a roadmap ghost (ChatPreview) or a chat action's description. */
+export type CardPreview = ChatPreview | ActionPreview;
+
+const ACTION_KINDS = new Set(["owner", "decider", "decision", "note", "question", "agenda"]);
+export const isActionPreview = (p: CardPreview): p is ActionPreview => !!p && ACTION_KINDS.has(p.kind);
+
+/** A meeting's live notes and open questions typed in its chat (SimpleMeetingOut.notes). */
+export type MeetingNote = Schemas["SimpleMeetingNote"];
+/** A meeting's agenda changes made in its chat (SimpleMeetingOut.agenda). */
+export type MeetingAgenda = Schemas["SimpleAgenda"];
+
 export type ChatFix = { label: string; op: string; target: Record<string, unknown>; before: Record<string, unknown>; after: Record<string, unknown> };
 
 export type ChatCard = {
@@ -30,7 +51,7 @@ export type ChatCard = {
   why_not: string | null;
   flags: Schemas["SimpleItemFlags"][];
   fixes: ChatFix[];
-  preview: ChatPreview;
+  preview: CardPreview;
   flow: Schemas["SimpleFlow"] | null;
   change_id: string | null;
   decided_by_name: string | null;
@@ -45,9 +66,27 @@ export type ChatMessage = {
   author_name: string;
   body: string;
   at: string;
-  kind: "request" | "cards" | "question" | "answer" | "note";
+  /** chat-reader: "pending" (the reader's job runs: "Reading that…"), "failed" (Retry reads it again), "ask" (the Ask box: a question for Oracle's Ask). */
+  kind: "request" | "cards" | "question" | "answer" | "note" | "pending" | "failed" | "ask";
   cards: ChatCard[];
+  /** Oracle's line: the person's line it answers. */
+  reply_to: string | null;
+  /** A clarify question's choices (the last is "Neither"); [] otherwise. */
+  choices: ChatChoice[];
+  /** The choice already picked (the choices then close). */
+  picked: number | null;
+  /** A failed line: Retry reads it again. */
+  retry: boolean;
 };
+
+export type ChatChoice = { index: number; label: string };
+export type ApplyAll = { thread: ChatThread; applied: string[]; stopped: { card_id: string; summary: string; reason: string } | null };
+
+/** How often a thread with a pending line is read again. */
+export const PENDING_POLL_MS = 1500;
+
+/** Whether Oracle's reader is still reading a line of the thread (the thread then polls). */
+export const hasPending = (t: { messages: ChatMessage[] } | null | undefined): boolean => !!t?.messages.some((m) => m.kind === "pending");
 
 export type PersonRef = { id: string; name: string };
 export type ChangeMode = "everyone" | "presenter" | "named";
@@ -64,7 +103,8 @@ export type ChatRules = {
 
 /** `understood`: false when Oracle's plan reader did not know the last line (with only_understood, nothing was written). */
 export type ChatThread = { id: string | null; meeting_id: string | null; messages: ChatMessage[]; rules: ChatRules | null; understood?: boolean };
-export type ChatApply = { card: ChatCard; result: Schemas["SimpleChangeResult"] };
+// chat-actions: null for the direct ops (minutes notes, agenda, decisions).
+export type ChatApply = { card: ChatCard; result: Schemas["SimpleChangeResult"] | null };
 
 export type WalkStep = {
   id: string;
@@ -76,6 +116,10 @@ export type WalkStep = {
   decision: { id: string; title: string; url: string } | null;
 };
 export type Walk = { steps: WalkStep[] };
+
+/** The chat actions' ops (restated as one change: "I understood one change:"). */
+export const ACTION_OPS = ["set_owner", "set_decider", "record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip"] as const;
+export type ActionOp = (typeof ACTION_OPS)[number];
 
 /** Ops that add or change a flow or a feature: their cards show the flow (or "No flow yet"). */
 export const FLOW_OPS = new Set(["add_feature_ask", "add_item_task"]);
@@ -130,6 +174,21 @@ export function discardCard(cardId: string): Promise<ChatCard> {
 /** POST /v1/simple/chat/cards/{card_id}/undo. */
 export function undoCard(cardId: string): Promise<ChatCard> {
   return unwrap(loose.POST("/v1/simple/chat/cards/{card_id}/undo", { params: { path: { card_id: cardId } } })) as Promise<ChatCard>;
+}
+
+/** POST /v1/simple/chat/messages/{message_id}/retry: a failed line is read again (pending). */
+export function retryMessage(messageId: string): Promise<ChatThread> {
+  return unwrap(loose.POST("/v1/simple/chat/messages/{message_id}/retry", { params: { path: { message_id: messageId } } })) as Promise<ChatThread>;
+}
+
+/** POST /v1/simple/chat/messages/{message_id}/choose: the choice's label as the person's line, and its card (or "Say it another way"). */
+export function chooseChoice(messageId: string, index: number): Promise<ChatThread> {
+  return unwrap(loose.POST("/v1/simple/chat/messages/{message_id}/choose", { params: { path: { message_id: messageId } }, body: { index } })) as Promise<ChatThread>;
+}
+
+/** POST /v1/simple/chat/messages/{message_id}/apply-all: the line's open cards in order, stopping at the first that cannot apply. */
+export function applyAll(messageId: string): Promise<ApplyAll> {
+  return unwrap(loose.POST("/v1/simple/chat/messages/{message_id}/apply-all", { params: { path: { message_id: messageId } } })) as Promise<ApplyAll>;
 }
 
 /** GET /v1/simple/walk. */

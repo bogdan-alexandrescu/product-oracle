@@ -6,7 +6,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { meetingSay, meetingThread, setChatMode, type ChangeMode, type ChatRules, type ChatThread } from "@/lib/api/simple-chat";
 import { errorMessage } from "@/lib/use-query";
 
-import { ChatThreadView } from "./ChatThread";
+import { ChatThreadView, usePendingPoll } from "./ChatThread";
 
 const POLL_MS = 2000;
 const MODE_WORDS: Record<ChangeMode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter + named people" };
@@ -20,9 +20,10 @@ function rulesLine(r: ChatRules): string {
 /**
  * A meeting's shared change-by-chat thread (Simple S9): every attendee's lines and Oracle's
  * cards, polled so each tab sees the others; the rules line (who may apply) and, for the
- * presenter, the control that changes it. Viewers ask questions only.
+ * presenter, the control that changes it. Viewers ask questions only. `onCardChanged`: a card
+ * here was applied, discarded or undone (the host reads its meeting again).
  */
-export function MeetingChat({ meetingId, sessionId }: { meetingId: string; sessionId: string }) {
+export function MeetingChat({ meetingId, sessionId, onCardChanged }: { meetingId: string; sessionId: string; onCardChanged?: () => void }) {
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -56,6 +57,9 @@ export function MeetingChat({ meetingId, sessionId }: { meetingId: string; sessi
     };
   }, [meetingId]);
 
+  // chat-reader: a line Oracle's reader is reading is read again sooner than the shared poll.
+  usePendingPoll(thread, load);
+
   const rules = thread?.rules ?? null;
   return (
     <section aria-label="Meeting chat" data-testid="meeting-chat" data-session={sessionId || undefined} className="simple-card flex min-h-0 flex-col gap-3 max-[600px]:mb-[76px]">
@@ -81,7 +85,16 @@ export function MeetingChat({ meetingId, sessionId }: { meetingId: string; sessi
           placeholder={rules?.ask_only ? "Ask a question about the plan…" : "Ask a question or ask for a change…"}
           hint={rules?.ask_only ? "You can ask questions here; viewers don't change the plan." : undefined}
           send={async (text) => setThread(await meetingSay(meetingId, text))}
-          onCardChanged={() => void load()}
+          onCardChanged={() => {
+            void load();
+            // The meeting screen reads the meeting again: its notes, agenda and decisions follow the card.
+            onCardChanged?.();
+          }}
+          onThread={(t) => {
+            setThread(t);
+            // Apply all (and a picked choice) change cards too: the meeting screen follows them.
+            onCardChanged?.();
+          }}
         />
       )}
     </section>

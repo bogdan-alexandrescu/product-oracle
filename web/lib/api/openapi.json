@@ -43857,6 +43857,189 @@
         "x-per-item": null
       }
     },
+    "/v1/simple/chat/messages/{message_id}/retry": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Retry Simple Chat Read",
+        "description": "Read again a line Oracle's reader could not read (its job failed or was\ncancelled): the line is \"Reading that\u2026\" again.",
+        "operationId": "retry_simple_chat_read",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Message Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatThreadOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/chat/messages/{message_id}/choose": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Choose Simple Chat Choice",
+        "description": "Pick one of Oracle's question's choices: the choice is the caller's next line and\nits card Oracle's reply (no model call); \"Neither\" builds nothing. Nothing changes\nuntil Apply.",
+        "operationId": "choose_simple_chat_choice",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Message Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatChooseIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatThreadOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/chat/messages/{message_id}/apply-all": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Apply All Simple Chat Cards",
+        "description": "Apply a reply's open cards in order, each as its own Apply; stop at the first that\ncannot apply and say which and why (the rest stay open).",
+        "operationId": "apply_all_simple_chat_cards",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Message Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatApplyAllOut"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale: nothing written",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "$ref": "#/components/schemas/SimpleChangeConflict"
+                  },
+                  "title": "Response 409 Apply All Simple Chat Cards"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter"
+      }
+    },
     "/v1/simple/walk": {
       "get": {
         "tags": [
@@ -57966,6 +58149,38 @@
         ],
         "title": "ChangesReport"
       },
+      "ChatApplyAllOut": {
+        "properties": {
+          "thread": {
+            "$ref": "#/components/schemas/ChatThreadOut"
+          },
+          "applied": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Applied"
+          },
+          "stopped": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChatStopOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "thread",
+          "applied",
+          "stopped"
+        ],
+        "title": "ChatApplyAllOut"
+      },
       "ChatApplyIn": {
         "properties": {
           "fix": {
@@ -57990,13 +58205,19 @@
             "$ref": "#/components/schemas/ChatCardOut"
           },
           "result": {
-            "$ref": "#/components/schemas/SimpleChangeResult"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleChangeResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "required": [
-          "card",
-          "result"
+          "card"
         ],
         "title": "ChatApplyOut"
       },
@@ -58020,39 +58241,55 @@
             "title": "Message Id"
           },
           "op": {
-            "type": "string",
-            "enum": [
-              "move_dates",
-              "change_horizon",
-              "reorder",
-              "cut",
-              "restore",
-              "edit_title",
-              "edit_outcome",
-              "accept_date_suggestion",
-              "accept_risk",
-              "shift_dependents",
-              "move_dependency",
-              "override_priority",
-              "add_item_task",
-              "edit_item_task",
-              "set_item_task_status",
-              "add_action_item",
-              "edit_action_item",
-              "set_action_item_status",
-              "add_launch_task",
-              "set_launch_task_status",
-              "estimate_feature",
-              "confirm_item",
-              "edit_line",
-              "add_key_date",
-              "edit_key_date",
-              "remove_key_date",
-              "add_item",
-              "merge_item",
-              "keep_both",
-              "set_milestone",
-              "add_feature_ask"
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "move_dates",
+                  "change_horizon",
+                  "reorder",
+                  "cut",
+                  "restore",
+                  "edit_title",
+                  "edit_outcome",
+                  "accept_date_suggestion",
+                  "accept_risk",
+                  "shift_dependents",
+                  "move_dependency",
+                  "override_priority",
+                  "add_item_task",
+                  "edit_item_task",
+                  "set_item_task_status",
+                  "add_action_item",
+                  "edit_action_item",
+                  "set_action_item_status",
+                  "add_launch_task",
+                  "set_launch_task_status",
+                  "estimate_feature",
+                  "confirm_item",
+                  "edit_line",
+                  "add_key_date",
+                  "edit_key_date",
+                  "remove_key_date",
+                  "add_item",
+                  "merge_item",
+                  "keep_both",
+                  "set_milestone",
+                  "add_feature_ask",
+                  "set_owner",
+                  "set_decider"
+                ]
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "record_decision",
+                  "minutes_note",
+                  "open_question",
+                  "agenda_next",
+                  "agenda_skip"
+                ]
+              }
             ],
             "title": "Op"
           },
@@ -58244,6 +58481,39 @@
         ],
         "title": "ChatCardOut"
       },
+      "ChatChoiceOut": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "title": "Index"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index",
+          "label"
+        ],
+        "title": "ChatChoiceOut"
+      },
+      "ChatChooseIn": {
+        "properties": {
+          "index": {
+            "type": "integer",
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Index"
+          }
+        },
+        "type": "object",
+        "required": [
+          "index"
+        ],
+        "title": "ChatChooseIn"
+      },
       "ChatFix": {
         "properties": {
           "label": {
@@ -58283,7 +58553,9 @@
               "merge_item",
               "keep_both",
               "set_milestone",
-              "add_feature_ask"
+              "add_feature_ask",
+              "set_owner",
+              "set_decider"
             ],
             "title": "Op"
           },
@@ -58392,7 +58664,10 @@
               "cards",
               "question",
               "answer",
-              "note"
+              "note",
+              "pending",
+              "failed",
+              "ask"
             ],
             "title": "Kind"
           },
@@ -58402,6 +58677,41 @@
             },
             "type": "array",
             "title": "Cards"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "choices": {
+            "items": {
+              "$ref": "#/components/schemas/ChatChoiceOut"
+            },
+            "type": "array",
+            "title": "Choices"
+          },
+          "picked": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Picked"
+          },
+          "retry": {
+            "type": "boolean",
+            "title": "Retry",
+            "default": false
           }
         },
         "type": "object",
@@ -58493,6 +58803,30 @@
           "ended"
         ],
         "title": "ChatRulesOut"
+      },
+      "ChatStopOut": {
+        "properties": {
+          "card_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Card Id"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "card_id",
+          "summary",
+          "reason"
+        ],
+        "title": "ChatStopOut"
       },
       "ChatThreadOut": {
         "properties": {
@@ -78941,7 +79275,9 @@
               "merge_item",
               "keep_both",
               "set_milestone",
-              "add_feature_ask"
+              "add_feature_ask",
+              "set_owner",
+              "set_decider"
             ],
             "title": "Op"
           },
@@ -85313,7 +85649,8 @@
               "why_not_reply",
               "item_draft",
               "goal_suggestions",
-              "simple_visual"
+              "simple_visual",
+              "chat_reader"
             ],
             "title": "Kind"
           },
@@ -111550,6 +111887,50 @@
         ],
         "title": "SimpleActionItemOut"
       },
+      "SimpleAgenda": {
+        "properties": {
+          "next": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleAgendaItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleAgendaItem"
+            },
+            "type": "array",
+            "title": "Skipped",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "SimpleAgenda",
+        "description": "chat-actions: the item the meeting takes next and the items it skips."
+      },
+      "SimpleAgendaItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "SimpleAgendaItem"
+      },
       "SimpleAttendee": {
         "properties": {
           "id": {
@@ -111679,7 +112060,9 @@
               "merge_item",
               "keep_both",
               "set_milestone",
-              "add_feature_ask"
+              "add_feature_ask",
+              "set_owner",
+              "set_decider"
             ],
             "title": "Op"
           },
@@ -111792,7 +112175,9 @@
               "merge_item",
               "keep_both",
               "set_milestone",
-              "add_feature_ask"
+              "add_feature_ask",
+              "set_owner",
+              "set_decider"
             ],
             "title": "Op"
           },
@@ -113888,6 +114273,51 @@
         ],
         "title": "SimpleMeetingIn"
       },
+      "SimpleMeetingNote": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "note",
+              "question"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "by_name": {
+            "type": "string",
+            "title": "By Name"
+          },
+          "card_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "by_name"
+        ],
+        "title": "SimpleMeetingNote",
+        "description": "chat-actions: a minutes note or open question added during the meeting."
+      },
       "SimpleMeetingOut": {
         "properties": {
           "id": {
@@ -114117,6 +114547,20 @@
             "type": "array",
             "title": "Not Approved",
             "default": []
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMeetingNote"
+            },
+            "type": "array",
+            "title": "Notes",
+            "default": []
+          },
+          "agenda": {
+            "$ref": "#/components/schemas/SimpleAgenda",
+            "default": {
+              "skipped": []
+            }
           }
         },
         "type": "object",

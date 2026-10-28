@@ -318,6 +318,10 @@ class RoadmapItem(TenantScoped, Base):
     trace: Mapped[list[dict[str, Any]]] = _json("[]")
     # {"name", "date", "date_source", "basis_ids"}; a date only with a verified basis.
     milestone: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    # Simple chat-actions: the item's own owner and decider (None: its track's owner and
+    # its roadmap's decider).
+    owner_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    decider_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     validation_gates: Mapped[list[dict[str, Any]]] = _json("[]")
     economics: Mapped[dict[str, Any]] = _json()
     priority: Mapped[dict[str, Any] | None] = mapped_column(JSONB)

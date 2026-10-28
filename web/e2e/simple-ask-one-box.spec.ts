@@ -136,7 +136,7 @@ for (const [phone, dark] of [
 }
 
 test("a viewer's one box still answers the plan and changes nothing (desktop)", async ({ page, context }) => {
-  // protects: a viewer (who starts no Ask chats) still has the one box: "move <item> to H1" gives a card they may not apply, with why; a line the plan reader does not know gets its reply in the same thread (no second box, no chat started)
+  // protects: a viewer (who starts no Ask chats) still has the one box: "move <item> to H1" gives a card they may not apply, with why; a line the plan reader does not know gets the reader's reply in the same thread (no second box, no chat started)
   // fails_when: a viewer loses the box, their card is actionable, or a second box appears
   // no_claim: Oracle's Ask for viewers (they start no chats, as before)
   await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
@@ -148,7 +148,8 @@ test("a viewer's one box still answers the plan and changes nothing (desktop)", 
   await expect(card.getByRole("button", { name: "Apply" })).toBeDisabled();
   await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
   await say(panel, "Summarise this page for me");
-  await expect(panel.getByTestId("chat-message").last()).toContainText("I did not understand that.");
+  // chat-reader: Oracle's reader reads the line; with no change in it, a plain refusal.
+  await expect(panel.getByTestId("chat-message").last()).toContainText("I could not tell what to change. Say it another way.");
   await expect(panel.getByTestId("discussion-thread")).toHaveCount(0);
   await expect(panel.getByRole("textbox")).toHaveCount(1);
 });

@@ -56,25 +56,30 @@ class Record:
     chat: list[Line] = field(default_factory=list)
     decisions: list[dict[str, Any]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    # The meeting's open questions (chat-actions' "open question: ...").
+    asked: list[str] = field(default_factory=list)
     actions: list[dict[str, Any]] = field(default_factory=list)
     waits: list[str] = field(default_factory=list)
 
     @property
     def empty(self) -> bool:
-        return not (self.chat or self.decisions or self.actions or self.waits)
+        return not (
+            self.chat or self.decisions or self.notes or self.asked or self.actions or self.waits
+        )
 
     def lines(self) -> list[Line]:
         return [
             *self.chat,
             *(Line(d["title"]) for d in self.decisions),
             *(Line(n) for n in self.notes),
+            *(Line(q) for q in self.asked),
             *(Line(a["title"], a.get("owner_id")) for a in self.actions),
             *(Line(w) for w in self.waits),
         ]
 
     def questions(self) -> list[str]:
-        """The chat's questions, in order."""
-        return [c.text for c in self.chat if c.text.rstrip().endswith("?")]
+        """The meeting's open questions, then the chat's questions, in order."""
+        return [*self.asked, *(c.text for c in self.chat if c.text.rstrip().endswith("?"))]
 
 
 def _clip(text: str) -> str:
@@ -120,6 +125,13 @@ async def record(
         }
         for a in actions
     ]
+    # chat-actions: the minutes notes and open questions added during the meeting.
+    for n in getattr(m, "notes", None) or []:
+        text = _clip(n.get("text") or "")
+        if text and n.get("kind") == "question":
+            out.asked.append(text)
+        elif text and n.get("kind") == "note":
+            out.notes.append(text)
     out.waits = [_clip(w["what"]) for w in waits]
     return out
 

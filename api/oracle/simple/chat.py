@@ -27,9 +27,12 @@ reverses that decision. The presenter changes the mode through S8's ``set_rules`
 flow or feature carries the stored flow and requests a visual when it has none.
 """
 
+import difflib
 import importlib
 import re
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -44,12 +47,14 @@ from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionP
 from oracle.members.names import display_name
 from oracle.simple import changes, drafts, service, targets
 from oracle.simple.changes import ChangeError
-from oracle.simple.models import SimpleChange, SimpleChatCard
+from oracle.simple.models import SimpleChange, SimpleChatCard, SimpleChatRead
 from oracle.simple.schemas import (
     ChatCardOut,
+    ChatChoiceOut,
     ChatFix,
     ChatMessageOut,
     ChatRulesOut,
+    ChatStopOut,
     ChatThreadOut,
     SimpleChangeIn,
     SimpleChangeResult,
@@ -64,6 +69,8 @@ from oracle.simple.schemas import (
 MEETINGS = "oracle.simple.meetings"
 VISUALS = "oracle.simple.visuals"
 ENGINE = "oracle.simple.chat"
+READER_JOB = "chat_reader"
+DEAD = ("failed", "cancelled")
 FLOW_OPS = ("add_feature_ask", "add_item_task")
 CARD_OPS_ON_ITEMS = ("move_dates", "change_horizon", "set_milestone", "edit_title", "cut")
 VIEWER_NOTE = "Viewers ask questions here; ask the presenter to make a change."
@@ -80,6 +87,11 @@ MONTHS = {
         ).split()
     )
 }
+HERE = "Here is the change. Preview it, then apply or discard it."
+NEITHER: dict[str, Any] = {"label": "Neither", "op": None, "args": {}}
+READING = "Reading that…"
+COULD_NOT_READ = "I couldn't read that just now."
+SAY_AGAIN = "Say it another way."
 QUOTE = r"[\"'“‘](.+?)[\"'”’]"
 DAY = r"(\d{4}-\d{2}-\d{2}|[a-z]+ \d{1,2})"
 
@@ -196,12 +208,22 @@ def parse_period(text: str, today: date) -> tuple[date, date] | None:
 
 class Reply:
     """``understood``: the line is one Oracle's reader knows (the Ask panel's one box sends
-    any other line to Oracle's Ask); ``missing``: no item has the name it gave."""
+    any other line to Oracle's Ask); ``missing``: no item (or person) has the name it gave."""
 
     def __init__(self, kind: str, body: str, cards: list[dict[str, Any]] | None = None,
-                 understood: bool = True, missing: bool = False) -> None:  # fmt: skip
+                 understood: bool = True, missing: bool = False, reader: bool = False,
+                 choices: list[dict[str, Any]] | None = None) -> None:  # fmt: skip
         self.kind, self.body, self.cards = kind, body, cards or []
         self.understood, self.missing = understood, missing
+        # ``reader``: a line parse() does not know, for Oracle's reader (the chat_reader job).
+        self.reader = reader
+        # A question's clickable choices ({label, op, args}; NEITHER last).
+        self.choices = choices or []
+        # The items an ambiguous name matched (ChatOp builds turn them into choices).
+        self.candidates: list[service.Entry] = []
+        # The people an unknown or ambiguous name may mean (build turns them into choices).
+        self.people: list[str] = []
+        self.person_text: str | None = None
 
 
 class Ctx:
@@ -212,11 +234,25 @@ class Ctx:
         self.read: service.Read | None = None
         self.overlays: dict[uuid.UUID, dict[str, Any]] = {}
         self.people: list[User] = []
+        # chat-actions: the Ask panel's page and the document it shows.
+        self.page: str | None = None
+        self.page_document: Any = None
+        self.meeting_decider_name: str | None = None
+        # A commenter's decision on the Ask panel is proposed to this person.
+        self.ask_decider: User | None = None
+        # Only a line that may build a decision card resolves it (False: the line is not one).
+        self.wants_decider = True
 
     async def load(self) -> "Ctx":
+        from oracle.simple import chat_actions
+
+        self.page_document = await chat_actions.page_document(self.db, self.page)
         self.overlays = await drafts.overlays_for(self.db, self.principal)
         self.read = await service.load(self.db, self.overlays)
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
+        self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
+        if self.meeting is None and self.wants_decider and chat_actions.proposes(self.principal):
+            self.ask_decider = await chat_actions.ask_decider(self.db, self.page_document)
         return self
 
     @property
@@ -231,6 +267,9 @@ class Ctx:
     def find(self, text: str) -> service.Entry | Reply:
         x = _unquote(text).lower()
         es = self.entries()
+        by_id = [e for e in es if str(e.row.id) == x or (e.row.item_key or "").lower() == x]
+        if len(by_id) == 1:
+            return by_id[0]
         exact = [e for e in es if e.row.title.lower() == x]
         if len(exact) == 1:
             return exact[0]
@@ -241,7 +280,9 @@ class Ctx:
             titles = sorted({e.row.title for e in hits})[:5]
             if len(titles) == 1:
                 titles = [f"{e.row.title} ({e.roadmap.title})" for e in hits[:5]]
-            return Reply("question", f"Which one: {_or(titles)}?")
+            q = Reply("question", f"Which one: {_or(titles)}?")
+            q.candidates = sorted(hits, key=lambda e: e.row.title)
+            return q
         missing = _unquote(text)
         return Reply("question", f"I could not find “{missing}” on the roadmap. Which item?",
                      missing=True)  # fmt: skip
@@ -261,17 +302,30 @@ class Ctx:
         if len(hits) == 1:
             return hits[0]
         if hits:
-            return Reply("question", f"Which {_unquote(text)}: "
-                         f"{_or([display_name(u.email, u.name) for u in hits[:5]])}?")  # fmt: skip
-        return Reply("question", f"Who is “{_unquote(text)}”? Name a person of the company.")
+            shown = [display_name(u.email, u.name) for u in hits[:5]]
+            q = Reply("question", f"Which {_unquote(text)}: {_or(shown)}?")
+            q.people, q.person_text = shown, text
+            return q
+        # No one by that name: offer the people whose names come closest.
+        near = {n: u for u in self.people for n in names(u)}
+        close = difflib.get_close_matches(x, list(near), n=5, cutoff=0.6)
+        shown = list(dict.fromkeys(display_name(near[n].email, near[n].name) for n in close))
+        q = Reply("question", f"Who is “{_unquote(text)}”? Name a person of the company.",
+                  missing=True)  # fmt: skip
+        q.people, q.person_text = shown, text
+        return q
+
+
+def _kw(summary: str, op: str, e: service.Entry | None, target: dict, before: dict,
+        after: dict, preview: dict | None = None) -> dict[str, Any]:  # fmt: skip
+    """A card's kwargs (``simple_chat_cards``), as ChatOp.build returns them."""
+    return {"summary": summary, "op": op, "item_id": e.row.id if e is not None else None,
+            "target": target, "before": before, "after": after, "preview": preview}  # fmt: skip
 
 
 def _card(summary: str, op: str, e: service.Entry | None, target: dict, before: dict,
           after: dict, preview: dict | None = None) -> Reply:  # fmt: skip
-    return Reply("cards", "Here is the change. Preview it, then apply or discard it.", [
-        {"summary": summary, "op": op, "item_id": e.row.id if e is not None else None,
-         "target": target, "before": before, "after": after, "preview": preview}
-    ])  # fmt: skip
+    return Reply("cards", HERE, [_kw(summary, op, e, target, before, after, preview)])
 
 
 def _dates(e: service.Entry) -> dict[str, Any]:
@@ -279,6 +333,8 @@ def _dates(e: service.Entry) -> dict[str, Any]:
 
 
 def _owner_words(c: Ctx, e: service.Entry) -> str:
+    if e.owner_name and any(u.id == e.row.owner_id for u in c.people):
+        return f"{e.owner_name} owns {e.row.title}."
     if e.owner_name:
         return f"{e.owner_name} owns {e.row.title} (its track's owner)."
     return f"{e.row.title} has no owner yet."
@@ -293,14 +349,313 @@ def _decider_words(c: Ctx, e: service.Entry) -> str:
     return f"{_or(names)} {'decide' if len(names) > 1 else 'decides'} {e.row.title}."
 
 
+# --------------------------------------------------------------------------- ops
+
+
+Built = dict[str, Any] | Reply
+
+
+@dataclass(frozen=True)
+class ChatOp:
+    """One change a chat line may ask for: what Oracle's reader is offered (``op``,
+    ``describe``, ``args``: arg name -> one-line meaning) and how its card is built
+    (``build``: the card kwargs, or a Reply: a question with choices, a refusal). parse()
+    and the reader build cards only through it: the same item lookup, date words,
+    permissions and constraint check."""
+
+    op: str
+    describe: str
+    args: dict[str, str]
+    build: Callable[[Ctx, dict[str, Any]], "dict | Reply"]
+
+
+OPS: dict[str, ChatOp] = {}
+
+
+def register(op: ChatOp) -> None:
+    OPS[op.op] = op
+
+
+def _arg(a: dict[str, Any], key: str) -> str | None:
+    v = a.get(key)
+    if v is None:
+        return None
+    v = str(v).strip()
+    return v or None
+
+
+def _need(a: dict[str, Any], key: str) -> str:
+    v = _arg(a, key)
+    if v is None:
+        raise ValueError(f"{key} is missing")
+    return v
+
+
+def _add_months(d: date, n: int) -> date:
+    y, m = divmod(d.month - 1 + n, 12)
+    year, month = d.year + y, m + 1
+    last = (date(year + (month == 12), month % 12 + 1, 1) - timedelta(days=1)).day
+    return date(year, month, min(d.day, last))
+
+
+def parse_shift(text: str) -> tuple[int, int] | None:
+    """ "1 quarter", "a month", "2 weeks", "10 days": (months, days) to move by."""
+    t = " ".join(text.lower().split()).removeprefix("+").removeprefix("by ")
+    m = re.fullmatch(r"(a|an|one|two|three|\d+) (quarter|month|week|day)s?(?: later| out)?", t)
+    if not m:
+        return None
+    n = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3}.get(m[1]) or int(m[1])
+    unit = m[2]
+    if unit == "quarter":
+        return 3 * n, 0
+    if unit == "month":
+        return n, 0
+    return 0, n * (7 if unit == "week" else 1)
+
+
+def _b_horizon(c: Ctx, a: dict[str, Any]) -> Built:
+    e = c.find(_need(a, "item"))
+    if isinstance(e, Reply):
+        return e
+    h = _need(a, "horizon").lower()
+    if h not in ("now", "next", "later"):
+        raise ValueError("horizon: now, next or later")
+    return _kw(f"Move {e.row.title} to {h.capitalize()}", "change_horizon", e,
+               {"item_id": str(e.row.id)}, {"horizon": e.row.horizon}, {"horizon": h},
+               {"kind": "horizon", "item_id": str(e.row.id), "horizon": h})  # fmt: skip
+
+
+def _b_move(c: Ctx, a: dict[str, Any]) -> Built:
+    when, shift = _arg(a, "when"), _arg(a, "shift")
+    period = parse_period(when, c.today) if when else None
+    day = None
+    if when and period is None:
+        day = parse_day(when, c.today) if re.fullmatch(DAY, when, re.I) else None
+    by = parse_shift(shift) if shift else None
+    if period is None and day is None and by is None:
+        raise ValueError(f"I could not tell which day “{when or shift or ''}” is")
+    e = c.find(_need(a, "item"))
+    if isinstance(e, Reply):
+        return e
+    r = e.resolved
+    length = (r.end.date - r.start.date).days
+    if by is not None:
+        start = _add_months(r.start.date, by[0]) + timedelta(days=by[1])
+        end = _add_months(r.end.date, by[0]) + timedelta(days=by[1])
+    elif period is not None:
+        start, last = period
+        end = last if r.undated else start + timedelta(days=length)
+    else:
+        assert day is not None
+        start = day
+        end = start + timedelta(days=29 if r.undated else length)
+    s, en = start.isoformat(), end.isoformat()
+    card = _kw(f"Move {e.row.title} to {_day_words(start)} – {_day_words(end, True)}",
+               "move_dates", e, {"item_id": str(e.row.id)}, _dates(e),
+               {"start_date": s, "end_date": en},
+               {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
+                "end_date": en})  # fmt: skip
+    if period is not None and start < c.today:
+        # "this quarter" / "this month" / the current Qn start on their first day.
+        return Reply("cards", f"Here is the change. That period began {start:%b} {start.day}, "
+                     "so the move starts on a past day. Preview it, then apply or discard it.",
+                     [card])  # fmt: skip
+    return card
+
+
+def _b_milestone(c: Ctx, a: dict[str, Any]) -> Built:
+    words = _need(a, "day")
+    day = parse_day(words, c.today)
+    if day is None:
+        return Reply("question", f"Which day is “{words}”?")
+    e = c.find(_need(a, "item"))
+    if isinstance(e, Reply):
+        return e
+    name = _unquote(_need(a, "name"))
+    after = {"milestone": {"name": name, "date": day.isoformat(), "date_source": "typed"}}
+    return _kw(f"Add the milestone “{name}” to {e.row.title} on {_day_words(day, True)}",
+               "set_milestone", e, {"item_id": str(e.row.id)},
+               {"milestone": e.row.milestone}, after,
+               {"kind": "milestone", "item_id": str(e.row.id), "name": name,
+                "date": day.isoformat()})  # fmt: skip
+
+
+def _b_ask(c: Ctx, a: dict[str, Any]) -> Built:
+    who = _unquote(a["from"]) if _arg(a, "from") else None
+    title = _unquote(_need(a, "title"))
+    ours = who is not None and any(
+        who.lower() in (display_name(u.email, u.name).lower(),) for u in c.people
+    )
+    kind = "team" if ours else ("customer" if who else "unknown")
+    channel = "meeting" if c.meeting is not None else "other"
+    return _kw(f"New feature ask{f' from {who}' if who else ''}: {title}",
+               "add_feature_ask", None, {}, {},
+               {"title": title, "requester_name": who, "requester_kind": kind,
+                "channel": channel})  # fmt: skip
+
+
+def _b_launch(c: Ctx, a: dict[str, Any]) -> Built:
+    e = c.find(_need(a, "item"))
+    if isinstance(e, Reply):
+        return e
+    title = _unquote(_need(a, "title"))
+    return _kw(f"Add the launch task “{title}” to {e.row.title}'s launch",
+               "add_launch_task", e, {"item_id": str(e.row.id)}, {},
+               {"title": title, "owner_id": None})  # fmt: skip
+
+
+def _due(c: Ctx, a: dict[str, Any]) -> date | None | Reply:
+    words = _arg(a, "due")
+    if words is None:
+        return None
+    due = parse_day(words, c.today)
+    return due if due is not None else Reply("question", f"Which day is “{words}”?")
+
+
+def _b_task(c: Ctx, a: dict[str, Any]) -> Built:
+    e = c.find(_need(a, "item"))
+    if isinstance(e, Reply):
+        return e
+    owner = c.person(a["owner"]) if _arg(a, "owner") else None
+    if isinstance(owner, Reply):
+        return owner
+    due = _due(c, a)
+    if isinstance(due, Reply):
+        return due
+    title = _unquote(_need(a, "title"))
+    words = (f" for {display_name(owner.email, owner.name)}" if owner else "") + (
+        f" by {_day_words(due, True)}" if due else ""
+    )
+    return _kw(f"Add the task “{title}” to {e.row.title}{words}", "add_item_task", e,
+               {"item_id": str(e.row.id)}, {},
+               {"title": title, "owner_id": str(owner.id) if owner else None,
+                "due_date": due.isoformat() if due else None})  # fmt: skip
+
+
+def _b_action(c: Ctx, a: dict[str, Any]) -> Built:
+    owner = c.person(_need(a, "owner"))
+    if isinstance(owner, Reply):
+        return owner
+    e = c.find(a["item"]) if _arg(a, "item") else None
+    if isinstance(e, Reply):
+        return e
+    due = _due(c, a)
+    if isinstance(due, Reply):
+        return due
+    title = _need(a, "title")
+    target: dict[str, Any] = {}
+    if c.meeting is not None:
+        target["meeting_id"] = str(c.meeting.meeting_id)
+    if e is not None:
+        target["item_id"] = str(e.row.id)
+    words = (f" by {_day_words(due, True)}" if due else "") + (
+        f" ({e.row.title})" if e is not None else ""
+    )
+    name = display_name(owner.email, owner.name)
+    return _kw(f"Action item: {name} to {title}{words}", "add_action_item", e, target,
+               {}, {"title": title, "owner_id": str(owner.id),
+                    "due_date": due.isoformat() if due else None})  # fmt: skip
+
+
+def _b_rename(c: Ctx, a: dict[str, Any]) -> Built:
+    e = c.find(_need(a, "item"))
+    if isinstance(e, Reply):
+        return e
+    title = _unquote(_need(a, "title"))
+    return _kw(f"Rename {e.row.title} to “{title}”", "edit_title", e,
+               {"item_id": str(e.row.id)}, {"title": e.row.title}, {"title": title},
+               {"kind": "title", "item_id": str(e.row.id), "title": title})  # fmt: skip
+
+
+def _b_cut(c: Ctx, a: dict[str, Any]) -> Built:
+    e = c.find(_need(a, "item"))
+    if isinstance(e, Reply):
+        return e
+    if e.row.cut:
+        return Reply("note", f"{e.row.title} is cut already.")
+    return _kw(f"Cut {e.row.title}", "cut", e, {"item_id": str(e.row.id)},
+               {"cut": False}, {"cut": True},
+               {"kind": "cut", "item_id": str(e.row.id)})  # fmt: skip
+
+
+ITEM = "the roadmap item's id (or its exact title)"
+for _op in (
+    ChatOp("move_dates", "Move an item's dates: to a period or day, or by a shift",
+           {"item": ITEM, "when": "the new start: a period (\"next quarter\", \"Q2 2027\", "
+            "\"March\") or a day (\"March 3\", \"2027-03-03\")",
+            "shift": "or move it by \"1 quarter\", \"2 months\", \"3 weeks\""}, _b_move),
+    ChatOp("change_horizon", "Move an item to Now, Next or Later",
+           {"item": ITEM, "horizon": "now, next or later"}, _b_horizon),
+    ChatOp("set_milestone", "Set an item's milestone",
+           {"item": ITEM, "name": "the milestone's name", "day": "its day"}, _b_milestone),
+    ChatOp("add_feature_ask", "File a new feature ask",
+           {"title": "what is asked for", "from": "who asked (optional)"}, _b_ask),
+    ChatOp("add_launch_task", "Add a task to an item's launch",
+           {"item": ITEM, "title": "the task"}, _b_launch),
+    ChatOp("add_item_task", "Add a task under a roadmap item",
+           {"item": ITEM, "title": "the task", "owner": "who does it (optional)",
+            "due": "by which day (optional)"}, _b_task),
+    ChatOp("add_action_item", "Record a meeting action item",
+           {"owner": "who does it", "title": "what they do", "due": "by which day (optional)",
+            "item": "the roadmap item it is about (optional)"}, _b_action),
+    ChatOp("edit_title", "Rename an item", {"item": ITEM, "title": "the new title"}, _b_rename),
+    ChatOp("cut", "Cut an item from the roadmap", {"item": ITEM}, _b_cut),
+):  # fmt: skip
+    register(_op)
+
+
+# The joined actions' own apply (chat_actions.ACTIONS): op -> async (db, principal, card).
+APPLIERS: dict[str, Callable[..., Any]] = {}
+
+
+def join(actions: list[dict[str, Any]]) -> None:
+    """chat-join: chat-actions' ACTIONS become ops the reader offers and parse() builds
+    (through ChatOp.build), and chat.apply applies their cards through their own apply."""
+    for a in actions:
+        register(ChatOp(a["op"], a["describe"], dict(a["args"]), a["build"]))
+        APPLIERS[a["op"]] = a["apply"]
+
+
+def _count(n: int) -> str:
+    words = {1: "one change", 2: "two changes", 3: "three changes"}
+    return f"I understood {words.get(n, f'{n} changes')}:"
+
+
+def build(c: Ctx, op: str, args: dict[str, Any], body: str | None = None) -> Reply:
+    """One op's reply through its ChatOp.build: a card, a question (an ambiguous item gets
+    its choices, "Neither" last), or a plain refusal (an unknown op, a bad arg)."""
+    known = OPS.get(op)
+    if known is None:
+        return Reply("note", "I can't do that here.")
+    if not isinstance(args, dict) or set(args) - set(known.args):
+        return Reply("note", f"I can't do that here: {known.describe.lower()} takes "
+                             f"{_or(list(known.args))}.")  # fmt: skip
+    try:
+        out = known.build(c, {k: v for k, v in args.items() if v is not None})
+    except (KeyError, ValueError, TypeError) as e:
+        return Reply("note", f"I can't do that here: {e}.")
+    if isinstance(out, Reply):
+        if out.candidates and "item" in known.args:
+            out.choices = [
+                {"label": x.row.title, "op": op, "args": {**args, "item": str(x.row.id)}}
+                for x in out.candidates[:5]
+            ] + [NEITHER]
+        elif out.people:
+            # An unknown or ambiguous person: the people the name may mean, as choices.
+            key = next((k for k, v in args.items() if v == out.person_text), None)
+            if key is not None:
+                out.choices = [{"label": n, "op": op, "args": {**args, key: n}}
+                               for n in out.people] + [NEITHER]  # fmt: skip
+        return out
+    return Reply("cards", body or HERE, [out])
+
+
 def parse(c: Ctx, text: str) -> Reply:
-    """Oracle's reply to one line (deterministic). The plan's questions are answered from
-    Oracle's data; change requests become cards; anything else, one short question."""
+    """Oracle's reply to one line (deterministic, the fast path). The plan's questions are
+    answered from Oracle's data; change requests become cards; any other line is for
+    Oracle's reader (``reader``)."""
     t = " ".join(text.split())
     viewer_in_meeting = c.meeting is not None and not has_role(c.principal.role, "commenter")
-
-    def found(x: str):
-        return c.find(x)
 
     def asked(x: str):
         # A question about something not on the roadmap is Ask's (the page, the company).
@@ -329,180 +684,64 @@ def parse(c: Ctx, text: str) -> Reply:
             return e
         return Reply("answer", f"{e.row.title} is {e.status.replace('_', ' ')} ({e.row.horizon}).")
 
-    def change(build) -> Reply:
-        if viewer_in_meeting:
-            return Reply("note", VIEWER_NOTE)
-        return build()
+    asks = _phrase(c, t) or _actions().phrase(t)
+    if asks is None:
+        return Reply("question", f"I did not understand that. {EXAMPLES}", understood=False,
+                     reader=True)  # fmt: skip
+    if viewer_in_meeting:
+        return Reply("note", VIEWER_NOTE)
+    # The joined actions restate what was understood ("I understood one change:").
+    out = build(c, *asks, body=_count(1) if asks[0] in APPLIERS else None)
+    if out.missing and out.person_text is not None:
+        # A person Oracle cannot find: asked at once, with the people the name may mean (the
+        # Ask panel's one box sends the line to Oracle's Ask).
+        out.understood = False
+        return out
+    if out.missing:
+        # A phrase it knows naming no item ("move the alert thing to Q2"): the reader reads
+        # the name in context.
+        return Reply("question", out.body, understood=False, reader=True,
+                     choices=out.choices)  # fmt: skip
+    return out
 
+
+def _decision_line(text: str) -> bool:
+    """Whether parse() may build a decision card from this line (only then does a
+    commenter's Ask line resolve who confirms their proposal)."""
+    asks = _actions().phrase(" ".join(text.split()))
+    return asks is not None and asks[0] == "record_decision"
+
+
+def _phrase(c: Ctx, t: str) -> tuple[str, dict[str, Any]] | None:
+    """The fixed phrases parse() knows: the op and its args, or None."""
     if m := re.fullmatch(r"move (.+) to (now|next|later)\.?", t, re.I):
-
-        def horizon() -> Reply:
-            e = found(m[1])
-            if isinstance(e, Reply):
-                return e
-            h = m[2].lower()
-            return _card(f"Move {e.row.title} to {h.capitalize()}", "change_horizon", e,
-                         {"item_id": str(e.row.id)}, {"horizon": e.row.horizon}, {"horizon": h},
-                         {"kind": "horizon", "item_id": str(e.row.id), "horizon": h})  # fmt: skip
-
-        return change(horizon)
-    period = day = None
-    if m := re.fullmatch(r"move (.+) to (.+?)\.?", t, re.I):
+        return "change_horizon", {"item": m[1], "horizon": m[2].lower()}
+    if re.fullmatch(r"move (.+) to (.+?)\.?", t, re.I):
         # The item's name may hold " to ": try each split, the shortest time first.
-        cuts = [x.start() for x in re.finditer(r" to ", t, re.I)]
-        for at in reversed(cuts):
+        for at in reversed([x.start() for x in re.finditer(r" to ", t, re.I)]):
             what, when = t[5:at], re.sub(r"\.$", "", t[at + 4 :])
-            if p := parse_period(when, c.today):
-                period = (what, p)
-            elif re.fullmatch(DAY, when, re.I) and (d := parse_day(when, c.today)):
-                day = (what, d)
-            if period or day:
-                break
-    if period or day:
-
-        def move() -> Reply:
-            e = found((period or day)[0])  # type: ignore[index]
-            if isinstance(e, Reply):
-                return e
-            r = e.resolved
-            length = (r.end.date - r.start.date).days
-            if period:
-                start, last = period[1]
-                end = last if r.undated else start + timedelta(days=length)
-            else:
-                start = day[1]  # type: ignore[index]
-                end = start + timedelta(days=29 if r.undated else length)
-            s, en = start.isoformat(), end.isoformat()
-            reply = _card(f"Move {e.row.title} to {_day_words(start)} – {_day_words(end, True)}",
-                         "move_dates", e, {"item_id": str(e.row.id)}, _dates(e),
-                         {"start_date": s, "end_date": en},
-                         {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
-                          "end_date": en})  # fmt: skip
-            if period and start < c.today:
-                # "this quarter" / "this month" / the current Qn start on their first day.
-                reply.body = (f"Here is the change. That period began {start:%b} {start.day}, so "
-                              "the move starts on a past day. Preview it, then apply or discard "
-                              "it.")  # fmt: skip
-            return reply
-
-        return change(move)
+            if parse_period(when, c.today) or (
+                re.fullmatch(DAY, when, re.I) and parse_day(when, c.today)
+            ):
+                return "move_dates", {"item": what, "when": when}
     if m := re.fullmatch(rf"add (?:a )?milestone {QUOTE} to (.+) on {DAY}\.?", t, re.I):
-
-        def milestone() -> Reply:
-            day = parse_day(m[3], c.today)
-            if day is None:
-                return Reply("question", f"Which day is “{m[3]}”?")
-            e = found(m[2])
-            if isinstance(e, Reply):
-                return e
-            name = m[1].strip()
-            after = {"milestone": {"name": name, "date": day.isoformat(), "date_source": "typed"}}
-            return _card(f"Add the milestone “{name}” to {e.row.title} on {_day_words(day, True)}",
-                         "set_milestone", e, {"item_id": str(e.row.id)},
-                         {"milestone": e.row.milestone}, after,
-                         {"kind": "milestone", "item_id": str(e.row.id), "name": name,
-                          "date": day.isoformat()})  # fmt: skip
-
-        return change(milestone)
+        return "set_milestone", {"item": m[2], "name": m[1], "day": m[3]}
     if m := re.fullmatch(r"(?:new )?feature ask(?: from (.+?))?:\s*(.+)", t, re.I):
-
-        def ask() -> Reply:
-            who = _unquote(m[1]) if m[1] else None
-            title = _unquote(m[2])
-            ours = who is not None and any(
-                who.lower() in (display_name(u.email, u.name).lower(),) for u in c.people
-            )
-            kind = "team" if ours else ("customer" if who else "unknown")
-            channel = "meeting" if c.meeting is not None else "other"
-            return _card(f"New feature ask{f' from {who}' if who else ''}: {title}",
-                         "add_feature_ask", None, {}, {},
-                         {"title": title, "requester_name": who, "requester_kind": kind,
-                          "channel": channel})  # fmt: skip
-
-        return change(ask)
+        return "add_feature_ask", {"title": m[2], "from": m[1]}
     if m := re.fullmatch(rf"add (?:a )?launch task {QUOTE} (?:to|for|on) (.+?)\.?", t, re.I):
-
-        def launch() -> Reply:
-            e = found(m[2])
-            if isinstance(e, Reply):
-                return e
-            return _card(f"Add the launch task “{m[1]}” to {e.row.title}'s launch",
-                         "add_launch_task", e, {"item_id": str(e.row.id)}, {},
-                         {"title": m[1], "owner_id": None})  # fmt: skip
-
-        return change(launch)
+        return "add_launch_task", {"item": m[2], "title": m[1]}
     if m := re.fullmatch(
         rf"add (?:a )?task {QUOTE} (?:to|under|on) (.+?)(?: for (.+?))?(?: by {DAY})?\.?", t, re.I
     ):
-
-        def task() -> Reply:
-            e = found(m[2])
-            if isinstance(e, Reply):
-                return e
-            owner = c.person(m[3]) if m[3] else None
-            if isinstance(owner, Reply):
-                return owner
-            due = parse_day(m[4], c.today) if m[4] else None
-            words = (f" for {display_name(owner.email, owner.name)}" if owner else "") + (
-                f" by {_day_words(due, True)}" if due else ""
-            )
-            return _card(f"Add the task “{m[1]}” to {e.row.title}{words}", "add_item_task", e,
-                         {"item_id": str(e.row.id)}, {},
-                         {"title": m[1], "owner_id": str(owner.id) if owner else None,
-                          "due_date": due.isoformat() if due else None})  # fmt: skip
-
-        return change(task)
+        return "add_item_task", {"item": m[2], "title": m[1], "owner": m[3], "due": m[4]}
     action_re = rf"action item:?\s*(.+?) to (.+?)(?: by {DAY})?(?: on (.+?))?\.?"
     if m := re.fullmatch(action_re, t, re.I):
-
-        def action() -> Reply:
-            owner = c.person(m[1])
-            if isinstance(owner, Reply):
-                return owner
-            e = found(m[4]) if m[4] else None
-            if isinstance(e, Reply):
-                return e
-            due = parse_day(m[3], c.today) if m[3] else None
-            target: dict[str, Any] = {}
-            if c.meeting is not None:
-                target["meeting_id"] = str(c.meeting.meeting_id)
-            if e is not None:
-                target["item_id"] = str(e.row.id)
-            words = (f" by {_day_words(due, True)}" if due else "") + (
-                f" ({e.row.title})" if e is not None else ""
-            )
-            name = display_name(owner.email, owner.name)
-            return _card(f"Action item: {name} to {m[2]}{words}", "add_action_item", e, target,
-                         {}, {"title": m[2], "owner_id": str(owner.id),
-                              "due_date": due.isoformat() if due else None})  # fmt: skip
-
-        return change(action)
+        return "add_action_item", {"owner": m[1], "title": m[2], "due": m[3], "item": m[4]}
     if m := re.fullmatch(r"rename (.+) to (.+)", t, re.I):
-
-        def rename() -> Reply:
-            e = found(m[1])
-            if isinstance(e, Reply):
-                return e
-            title = _unquote(m[2])
-            return _card(f"Rename {e.row.title} to “{title}”", "edit_title", e,
-                         {"item_id": str(e.row.id)}, {"title": e.row.title}, {"title": title},
-                         {"kind": "title", "item_id": str(e.row.id), "title": title})  # fmt: skip
-
-        return change(rename)
+        return "edit_title", {"item": m[1], "title": m[2]}
     if m := re.fullmatch(r"cut (.+?)\.?", t, re.I):
-
-        def cut() -> Reply:
-            e = found(m[1])
-            if isinstance(e, Reply):
-                return e
-            if e.row.cut:
-                return Reply("note", f"{e.row.title} is cut already.")
-            return _card(f"Cut {e.row.title}", "cut", e, {"item_id": str(e.row.id)},
-                         {"cut": False}, {"cut": True},
-                         {"kind": "cut", "item_id": str(e.row.id)})  # fmt: skip
-
-        return change(cut)
-    return Reply("question", f"I did not understand that. {EXAMPLES}", understood=False)
+        return "cut", {"item": m[1]}
+    return None
 
 
 # --------------------------------------------------------------------------- meetings
@@ -605,6 +844,15 @@ def _key(meeting_id: uuid.UUID | None, me: uuid.UUID, page: str | None = None) -
     return path, f"screen:{path}"
 
 
+def page_of_thread(d: Discussion | None) -> str | None:
+    """The page of a person's Ask thread (``/simple/ask/<me><page>``); None for a meeting's."""
+    path = ((d.subject or {}) if d is not None else {}).get("path") or ""
+    if not path.startswith("/simple/ask/"):
+        return None
+    rest = path[len("/simple/ask/") :]
+    return rest[rest.find("/") :] if "/" in rest else None
+
+
 async def _thread(
     db: AsyncSession,
     principal: Any,
@@ -668,13 +916,23 @@ async def thread(
         for c, o in zip(cards, outs, strict=True):
             by_msg.setdefault(c.message_id, []).append(o)  # type: ignore[arg-type]
         names = await _names(db, {m.author_id for m in msgs if m.author_id})
+        reads = {r.message_id: r for r in await db.scalars(
+            select(SimpleChatRead).where(SimpleChatRead.discussion_id == d.id))}  # fmt: skip
+        jobs = await _job_states(db, [r.job_id for r in reads.values() if r.job_id])
         for m in msgs:
             person = m.author_kind == "person"
+            r = reads.get(m.id)
+            kind, body = "request" if person else (m.prompt or "note"), m.body
+            if kind == "pending" and r is not None and jobs.get(r.job_id) in DEAD:  # type: ignore[arg-type]
+                kind, body = "failed", COULD_NOT_READ
+            choices = [ChatChoiceOut(index=i, label=c["label"])
+                       for i, c in enumerate(r.choices or [])] if r is not None else []  # fmt: skip
             messages.append(ChatMessageOut(
                 id=m.id, author_kind="person" if person else "oracle", author_id=m.author_id,
                 author_name=names.get(m.author_id, "someone") if person else "Oracle",  # type: ignore[arg-type]
-                body=m.body, at=m.created_at, kind="request" if person else (m.prompt or "note"),  # type: ignore[arg-type]
-                cards=by_msg.get(m.id, []),
+                body=body, at=m.created_at, kind=kind,  # type: ignore[arg-type]
+                cards=by_msg.get(m.id, []), reply_to=m.reply_to, choices=choices,
+                picked=r.picked if r is not None else None, retry=kind == "failed",
             ))  # fmt: skip
     return ChatThreadOut(
         id=d.id if d is not None else None,
@@ -692,46 +950,409 @@ async def post(
     only_understood: bool = False,
     page: str | None = None,
 ) -> ChatThreadOut:
-    """The person's line and Oracle's reply, in one go. ``only_understood`` (the Ask
-    panel's one box): a line Oracle's reader does not know writes nothing and answers
-    ``understood=False``, for the panel to send it to Oracle's Ask."""
-    me = _me(principal)
+    """The person's line and Oracle's reply. parse() answers the lines it knows at once;
+    any other line is for Oracle's reader: Oracle's line reads "Reading that…" while the
+    ``chat_reader`` job runs (the thread refreshes until it completes). ``only_understood``
+    (the Ask panel's one box): a question about something not on the roadmap writes
+    nothing and answers ``understood=False``, for the panel to send it to Oracle's Ask."""
     rules = None
     if meeting_id is not None:
         rules = await rules_of(db, meeting_id)
         if not _attends(principal, rules):
             raise ChatError(403, "Only the meeting's attendees use its chat")
-    ctx = await Ctx(db, principal, rules).load()
+    ctx = Ctx(db, principal, rules)
+    ctx.page = page
+    ctx.wants_decider = _decision_line(text)
+    await ctx.load()
     reply = parse(ctx, text)
-    if only_understood and not reply.understood:
+    if only_understood and not reply.understood and not reply.reader:
         out = await thread(db, principal, meeting_id, page)
         out.understood = False
         return out
+    if reply.reader:
+        reply = Reply("pending", READING)
+    asked, answer = await _write(db, principal, meeting_id, text.strip(), reply, page=page)
+    if reply.kind == "pending":
+        read = SimpleChatRead(discussion_id=answer.discussion_id, message_id=answer.id,
+                              ask_id=asked.id, meeting_id=meeting_id, by=_me(principal),
+                              line=text.strip(), page=page, ask_box=only_understood)  # fmt: skip
+        db.add(read)
+        await db.flush()
+        await _enqueue_read(db, principal, read)
+    await db.commit()
+    return await thread(db, principal, meeting_id, page)
+
+
+async def _write(
+    db: AsyncSession,
+    principal: Any,
+    meeting_id: uuid.UUID | None,
+    line: str,
+    reply: Reply,
+    page: str | None = None,
+) -> tuple[DiscussionMessage, DiscussionMessage]:
+    """The person's line and Oracle's reply with its cards (and choices); the caller
+    commits."""
+    me = _me(principal)
     d = await _thread(db, principal, meeting_id, create=True, page=page)
     assert d is not None
     # Real time orders the lines (the company clock may stand still in tests).
     at = datetime.now(UTC)
     asked = DiscussionMessage(discussion_id=d.id, author_kind="person", author_id=me,
-                              body=text.strip(), status="complete", created_at=at)  # fmt: skip
+                              body=line, status="complete", created_at=at)  # fmt: skip
     answer = DiscussionMessage(discussion_id=d.id, author_kind="oracle", body=reply.body,
-                               status="complete", reply_to=None, model=ENGINE,
-                               prompt=reply.kind,
+                               status="pending" if reply.kind == "pending" else "complete",
+                               reply_to=None, model=ENGINE, prompt=reply.kind,
                                created_at=at + timedelta(microseconds=1))  # fmt: skip
     db.add_all([asked, answer])
     d.last_message_at = at
     await db.flush()
     answer.reply_to = asked.id
-    for c in reply.cards:
-        card = SimpleChatCard(discussion_id=d.id, message_id=answer.id, meeting_id=meeting_id,
-                              owner_id=None if meeting_id else me, status="open", **c)  # fmt: skip
+    await _attach(db, principal, answer, meeting_id, reply)
+    if reply.choices:
+        db.add(SimpleChatRead(discussion_id=d.id, message_id=answer.id, ask_id=asked.id,
+                              meeting_id=meeting_id, by=me, line=line,
+                              choices=_jsonable(reply.choices)))  # fmt: skip
+    return asked, answer
+
+
+def _jsonable(choices: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [{"label": str(c["label"]), "op": c.get("op"),
+             "args": {k: v if v is None else str(v) for k, v in (c.get("args") or {}).items()}}
+            for c in choices]  # fmt: skip
+
+
+async def _attach(
+    db: AsyncSession,
+    principal: Any,
+    answer: DiscussionMessage,
+    meeting_id: uuid.UUID | None,
+    reply: Reply,
+) -> None:
+    """Oracle's cards on its line, in the order asked (real time orders them)."""
+    at = datetime.now(UTC)
+    for i, c in enumerate(reply.cards):
+        card = SimpleChatCard(discussion_id=answer.discussion_id, message_id=answer.id,
+                              meeting_id=meeting_id,
+                              owner_id=None if meeting_id else _me(principal), status="open",
+                              created_at=at + timedelta(microseconds=i), **c)  # fmt: skip
         db.add(card)
         await db.flush()
         if card.op in FLOW_OPS:
             await _request_visual(db, principal, card)
+
+
+# --------------------------------------------------------------------------- the reader
+
+
+async def _job_states(db: AsyncSession, ids: list[uuid.UUID]) -> dict[uuid.UUID, str]:
+    if not ids:
+        return {}
+    from oracle.jobs.models import LlmJob
+
+    rows = await db.execute(select(LlmJob.id, LlmJob.status).where(LlmJob.id.in_(ids)))
+    return {i: st for i, st in rows.all()}
+
+
+async def _enqueue_read(db: AsyncSession, principal: Any, read: SimpleChatRead) -> None:
+    from oracle.jobs.models import LlmJob
+
+    job = LlmJob(kind=READER_JOB, status="queued", input={"read_id": str(read.id)},
+                 requested_by=_me(principal), attempts=0)  # fmt: skip
+    db.add(job)
+    await db.flush()
+    read.job_id = job.id
+    await audit.record(db, principal, "llm_job.queue", "llm_job", job.id,
+                       {"kind": READER_JOB, "read_id": str(read.id)})  # fmt: skip
+
+
+async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
+    db = c.db
+    assert c.read is not None
+    prior = list(
+        await db.scalars(
+            select(DiscussionMessage)
+            .where(DiscussionMessage.discussion_id == read.discussion_id,
+                   DiscussionMessage.created_at < (
+                       select(DiscussionMessage.created_at)
+                       .where(DiscussionMessage.id == read.ask_id).scalar_subquery()))
+            .order_by(DiscussionMessage.created_at.desc(), DiscussionMessage.id.desc())
+            .limit(10)
+        )
+    )  # fmt: skip
+    names = {u.id: display_name(u.email, u.name) for u in c.people}
+    context: dict[str, Any] = {"role": c.principal.role}
+    if c.meeting is not None:
+        r = c.meeting
+        context["meeting"] = {
+            "presenter": names.get(r.presenter_id),
+            "attendees": [names.get(i) for i in (r.attendee_ids or []) if i in names],
+            "change_mode": r.change_mode,
+        }
+        meetings = _module(MEETINGS)
+        try:
+            # A savepoint: a failing read of the agenda leaves the job's transaction usable.
+            async with db.begin_nested():
+                one_ = await meetings.one(db, c.principal, r.meeting_id) if meetings else None
+        except Exception:  # noqa: BLE001 -- the agenda is context, never required
+            one_ = None
+        if one_ is not None:
+            context["meeting"]["title"] = getattr(one_, "title", None)
+            # The open decisions as S8 lists them (newest first): context, not an order.
+            context["meeting"]["open_decisions"] = [
+                f"D-{x.number} {x.title}" if getattr(x, "number", None) else str(x.title)
+                for x in getattr(one_, "open_decisions", []) or []
+            ][:20]
+            # The agenda the meeting keeps (chat-actions' "take X next" / "skip X").
+            agenda = getattr(one_, "agenda", None)
+            nxt = getattr(getattr(agenda, "next", None), "title", None)
+            context["meeting"]["agenda"] = {
+                "next": nxt,
+                "skipped": [x.title for x in getattr(agenda, "skipped", None) or []],
+            }
+            prd = getattr(one_, "prd", None)
+            context["meeting"]["prd"] = getattr(prd, "title", None)
+            # Under discussion: the item the meeting takes next while it is still in the plan
+            # (a decision about it clears it from the agenda), else the PRD under review
+            # (never the newest open decision).
+            nid = str(getattr(getattr(agenda, "next", None), "id", ""))
+            live = any(str(e.row.id) == nid and not e.row.cut for e in c.entries())
+            context["meeting"]["under_discussion"] = (nxt if live else None) or getattr(
+                prd, "title", None
+            )
+    else:
+        context["page"] = read.page
+    items = []
+    for e in c.entries()[:200]:
+        r_ = e.resolved
+        deciders = service.decider_ids(e, c.read.deciders)
+        items.append({
+            "id": str(e.row.id), "key": e.row.item_key, "title": e.row.title,
+            "start": r_.start.date.isoformat(), "end": r_.end.date.isoformat(),
+            "estimated": r_.undated, "milestone": (e.milestone.name if e.milestone else None),
+            "owner": e.owner_name, "decider": _or([names[i] for i in deciders if i in names])
+            if deciders else None, "track": e.track.title if e.track else None,
+            "horizon": e.row.horizon, "cut": e.row.cut,
+        })  # fmt: skip
+    return {
+        "line": read.line,
+        "thread": [
+            {
+                "who": "Oracle" if m.author_kind != "person" else names.get(m.author_id, "someone"),
+                "text": m.body[:500],
+            }  # type: ignore[arg-type]
+            for m in reversed(prior)
+        ],  # fmt: skip
+        "context": context,
+        "items": items,
+        "people": [{"name": display_name(u.email, u.name), "email": u.email} for u in c.people],
+        "today": c.today.isoformat(),
+        "ops": [{"op": o.op, "describe": o.describe, "args": o.args} for o in OPS.values()],
+    }
+
+
+def _grounded(c: Ctx, said: str) -> bool:
+    """Whether the reader's answer speaks of Oracle's data: it names an item (its title or
+    key) or a person it was given; any other answer is not Oracle's to give."""
+    t = said.lower()
+    names = [e.row.title for e in c.entries()] + [e.row.item_key or "" for e in c.entries()]
+    names += [display_name(u.email, u.name) for u in c.people]
+    return any(len(n) >= 3 and n.lower() in t for n in names)
+
+
+def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
+    """The reader's answer, validated: every action through ChatOp.build (an unknown op, a
+    bad arg or an item the caller cannot read is a plain refusal, never a card); a clarify
+    question keeps only the choices that build; an answer is Oracle's data only."""
+    if not isinstance(answer, dict):
+        return Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
+    actions = answer.get("actions") or []
+    clarify = answer.get("clarify")
+    said = answer.get("answer")
+    viewer_in_meeting = c.meeting is not None and not has_role(c.principal.role, "commenter")
+    if isinstance(actions, list) and actions:
+        if viewer_in_meeting:
+            return Reply("note", VIEWER_NOTE)
+        cards: list[dict[str, Any]] = []
+        refused: list[str] = []
+        for a in actions[:5]:
+            if not isinstance(a, dict):
+                refused.append(f"I could not tell what to change. {SAY_AGAIN}")
+                continue
+            r = build(c, str(a.get("op")), a.get("args") or {})
+            if r.kind != "cards":
+                if r.choices:
+                    # An action naming an item that matches several: ask which.
+                    return Reply("question", "Which item?" if r.candidates else "Who do you mean?",
+                                 choices=r.choices)  # fmt: skip
+                if r.kind == "question" and (not r.missing or r.person_text is not None):
+                    # An unknown person, a day it cannot read: ask (the next line answers).
+                    return Reply("question", r.body)
+                refused.append(r.body if r.kind == "note" else f"I can't do that: {r.body}")
+                continue
+            cards += r.cards
+        if not cards:
+            return Reply("note", refused[0])
+        if refused:
+            # The valid cards stay; the line says which one it cannot do.
+            why = (
+                refused[0].removeprefix("I can't do that here: ").removeprefix("I can't do that: ")
+            )
+            return Reply("cards", f"One I can't do: {why} {_count(len(cards))}", cards)
+        return Reply("cards", _count(len(cards)), cards)
+    if isinstance(clarify, dict) and clarify.get("choices"):
+        if viewer_in_meeting:
+            return Reply("note", VIEWER_NOTE)
+        built: list[tuple[dict[str, Any], dict[str, Any]]] = []
+        for ch in clarify["choices"][:5]:
+            if not isinstance(ch, dict) or not ch.get("op"):
+                continue
+            r = build(c, str(ch["op"]), ch.get("args") or {})
+            if r.kind == "cards":
+                built.append((ch, r.cards[0]))
+        # A choice's label (the person's line when picked) is Oracle's words, never the
+        # model's: the item's title when each choice is another item, else the card's
+        # restatement.
+        titles = {str(e.row.id): e.row.title for e in c.entries()}
+        items = [str(card.get("item_id")) for _, card in built]
+        by_item = len(set(items)) == len(items) and all(i in titles for i in items)
+        choices = [{"label": titles[i] if by_item else card["summary"], "op": ch["op"],
+                    "args": ch.get("args") or {}}
+                   for i, (ch, card) in zip(items, built, strict=True)]  # fmt: skip
+        if not choices:
+            return Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
+        question = str(clarify.get("question") or "Which one?")[:200]
+        return Reply("question", question, choices=[*choices, NEITHER])
+    if isinstance(said, str) and said.strip() and _grounded(c, said):
+        return Reply("answer", said.strip()[:1500])
+    if ask_box:
+        return Reply("ask", "Asking Oracle…")
+    return Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
+
+
+async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
+    """The ``chat_reader`` job: one call with the line in its context; the validated
+    answer becomes Oracle's line (cards, a question with choices, an answer or a refusal)."""
+    from oracle.docs import visibility
+    from oracle.jobs.kinds import JobInputError
+
+    read_id = (job.input or {}).get("read_id")
+    read = await s.get(SimpleChatRead, uuid.UUID(read_id)) if read_id else None
+    if read is None:
+        raise JobInputError("the chat line no longer exists")
+    msg = await s.get(DiscussionMessage, read.message_id)
+    if msg is None or msg.prompt != "pending":
+        raise JobInputError("the chat line was answered already")
+    principal = await drafts.principal_for(s, job.tenant_id, read.by)
+    visibility.bind(s, principal)
+    rules = await rules_of(s, read.meeting_id) if read.meeting_id is not None else None
+    c = await Ctx(s, principal, rules).load()
+    answer = await ask(READER_JOB, await _payload(c, read))
+    reply = interpret(c, answer, read.ask_box)
+    msg.body, msg.prompt, msg.status = reply.body, reply.kind, "complete"
+    read.choices = _jsonable(reply.choices)
+    await _attach(s, principal, msg, read.meeting_id, reply)
+    await s.flush()
+    return {"kind": reply.kind, "cards": len(reply.cards), "choices": len(reply.choices)}
+
+
+async def _read_of(
+    db: AsyncSession, principal: Any, message_id: uuid.UUID
+) -> tuple[SimpleChatRead, Any]:
+    read = await db.scalar(
+        select(SimpleChatRead).where(SimpleChatRead.message_id == message_id).with_for_update()
+    )
+    if read is None:
+        raise ChatError(404, "No such line")
+    rules = None
+    if read.meeting_id is not None:
+        rules = await rules_of(db, read.meeting_id)
+        if not _attends(principal, rules):
+            raise ChatError(404, "No such line")
+    elif read.by != _me(principal):
+        raise ChatError(404, "No such line")
+    return read, rules
+
+
+async def retry(db: AsyncSession, principal: Any, message_id: uuid.UUID) -> ChatThreadOut:
+    """A failed or cancelled read is read again (a new ``chat_reader`` job)."""
+    read, _ = await _read_of(db, principal, message_id)
+    msg = await db.get(DiscussionMessage, read.message_id)
+    assert msg is not None
+    states = await _job_states(db, [read.job_id] if read.job_id else [])
+    if msg.prompt != "pending" or states.get(read.job_id) not in DEAD:  # type: ignore[arg-type]
+        raise ChatError(409, "Only a line Oracle could not read is read again")
+    msg.body = READING
+    await _enqueue_read(db, principal, read)
     await db.commit()
-    out = await thread(db, principal, meeting_id, page)
-    out.understood = reply.understood
-    return out
+    return await thread(db, principal, read.meeting_id, read.page)
+
+
+async def choose(
+    db: AsyncSession, principal: Any, message_id: uuid.UUID, index: int
+) -> ChatThreadOut:
+    """A clicked choice: its label is the person's next line and Oracle's reply is the
+    choice's card (no model call); "Neither" builds nothing."""
+    read, rules = await _read_of(db, principal, message_id)
+    if read.picked is not None:
+        raise ChatError(409, "A choice was picked already")
+    if not 0 <= index < len(read.choices or []):
+        raise ChatError(422, "index: one of the question's choices")
+    ch = read.choices[index]
+    read.picked = index
+    if ch.get("op") is None:
+        reply = Reply("note", SAY_AGAIN)
+    else:
+        c = Ctx(db, principal, rules)
+        c.wants_decider = ch.get("op") == "record_decision"
+        await c.load()
+        if rules is not None and not has_role(principal.role, "commenter"):
+            reply = Reply("note", VIEWER_NOTE)
+        else:
+            reply = build(c, ch["op"], ch.get("args") or {}, _count(1))
+            if reply.kind != "cards":
+                reply = Reply("note", reply.body)
+    await _write(db, principal, read.meeting_id, ch["label"], reply, page=read.page)
+    await db.commit()
+    return await thread(db, principal, read.meeting_id, read.page)
+
+
+async def apply_all(
+    db: AsyncSession, principal: Any, message_id: uuid.UUID, one_commit: Any
+) -> tuple[ChatThreadOut, list[uuid.UUID], ChatStopOut | None]:
+    """Apply a reply's open cards in order; stop at the first that cannot apply (the rest
+    stay open) and say which and why. ``one_commit``: the route's commit of one card's
+    change with its meeting decision (changes_router._one_commit)."""
+    msg = await db.get(DiscussionMessage, message_id)
+    if msg is None:
+        raise ChatError(404, "No such line")
+    # The Ask thread's page (a thread per person and page), read before the rollback below.
+    page = page_of_thread(await db.get(Discussion, msg.discussion_id))
+    cards = list(
+        await db.scalars(
+            select(SimpleChatCard)
+            .where(SimpleChatCard.message_id == message_id, SimpleChatCard.status == "open")
+            .order_by(SimpleChatCard.created_at, SimpleChatCard.id)
+        )
+    )
+    if not cards:
+        raise ChatError(409, "No open cards on this line")
+    todo = [(c.id, c.summary) for c in cards]
+    _, rules = await _get(db, principal, todo[0][0])
+    meeting_id = rules.meeting_id if rules is not None else None
+    await db.rollback()
+    applied: list[uuid.UUID] = []
+    stopped: ChatStopOut | None = None
+    for card_id, summary in todo:
+        try:
+            async with one_commit(db):
+                await apply(db, principal, card_id)
+        except (ChatError, ChangeError) as e:
+            await db.rollback()
+            stopped = ChatStopOut(card_id=card_id, summary=summary, reason=str(e.detail))
+            break
+        applied.append(card_id)
+    return await thread(db, principal, meeting_id, page), applied, stopped
 
 
 # --------------------------------------------------------------------------- cards
@@ -754,7 +1375,10 @@ async def _flow(db: AsyncSession, card: SimpleChatCard) -> Any:
 
 def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
     """Whether the caller's Apply applies (else proposes): the change engine's rule."""
-    if card.op == "add_feature_ask":
+    if card.op == "record_decision" and not card.target.get("meeting_id"):
+        # On the Ask panel a commenter's decision is a proposal (the owner's pick).
+        return not _actions().proposes(principal)
+    if card.op == "add_feature_ask" or card.op in _actions().DIRECT_OPS:
         return True
     if card.item_id is None:
         return has_role(principal.role, "owner")
@@ -762,7 +1386,15 @@ def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
     return e is not None and service.can_decide(principal, e, read_.deciders)
 
 
+def _actions() -> Any:
+    from oracle.simple import chat_actions
+
+    return chat_actions
+
+
 def _card_bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
+    if card.op in _actions().DIRECT_OPS:
+        return _actions().bar(principal, card, rules)
     if rules is not None:
         return meeting_bar(principal, rules)
     if not has_role(principal.role, "commenter"):
@@ -901,6 +1533,8 @@ async def apply(
     bar = _card_bar(principal, card, rules)
     if bar is not None:
         raise ChatError(403, bar)
+    if card.op in _actions().DIRECT_OPS:
+        return await _apply_direct(db, principal, card_id, rules, fix)
     if fix is not None:
         fixes = (await one(db, principal, card, rules)).fixes
         if fix >= len(fixes):
@@ -957,6 +1591,24 @@ async def apply(
     return await one(db, principal, card, rules), result
 
 
+async def _apply_direct(
+    db: AsyncSession, principal: Any, card_id: uuid.UUID, rules: Any, fix: int | None
+) -> tuple[ChatCardOut, SimpleChangeResult | None]:
+    """chat-actions' ops: applied through the meetings module or Oracle's decisions (no
+    change-engine change), in one transaction with the card."""
+    if fix is not None:
+        raise ChatError(422, "fix: one of the card's fixes")
+    card = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
+    if card is None or card.status != "open":
+        raise ChatError(409, f"This card is {card.status if card else 'gone'} already")
+    await APPLIERS[card.op](db, principal, card)
+    # An applier may leave the card proposed (a commenter's decision on the Ask panel).
+    card.status = "proposed" if card.status == "proposed" else "applied"
+    card.decided_by, card.decided_at = _me(principal), company_time.now()
+    await db.commit()
+    return await one(db, principal, card, rules), None
+
+
 async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCardOut:
     card, rules = await _get(db, principal, card_id)
     if card.status != "open":
@@ -974,6 +1626,11 @@ async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatC
 
 async def undo(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCardOut:
     card, rules = await _get(db, principal, card_id)
+    if card.status == "applied" and card.op in _actions().DIRECT_OPS:
+        await _actions().undo(db, principal, card, rules)
+        card.status = "undone"
+        await db.commit()
+        return await one(db, principal, card, rules)
     if card.status != "applied" or card.change_id is None:
         raise ChatError(409, "Only an applied card undoes")
     await changes.undo(db, principal, card.change_id)
@@ -986,13 +1643,13 @@ async def undo(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCard
     return await one(db, principal, card, rules)
 
 
-async def _reverse(db: AsyncSession, principal: Any, decision_id: uuid.UUID) -> None:
-    """The card's meeting decision no longer holds: reversed, with a review saying why, so
-    the Decisions log and the minutes stop showing it as decided."""
+async def _reverse(db: AsyncSession, principal: Any, decision_id: uuid.UUID,
+                   note: str = "Undone in the meeting chat") -> None:  # fmt: skip
+    """The card's decision no longer holds: reversed, with a review saying why (``note``),
+    so the Decisions log and the minutes stop showing it as decided."""
     d = await db.get(Decision, decision_id, with_for_update=True)
     if d is None or d.status != "decided":
         return
-    note = "Undone in the meeting chat"
     d.status = "reversed"
     db.add(DecisionReview(decision_id=d.id, verdict="reversed", note=note,
                           reviewed_by=_me(principal)))  # fmt: skip
@@ -1098,3 +1755,6 @@ async def walk(db: AsyncSession, principal: Any) -> WalkOut:
         for (i, _), o in zip(cards, outs, strict=True):
             steps[i].card = o
     return WalkOut(steps=steps)
+
+
+import oracle.simple.chat_actions  # noqa: E402, F401  (chat-join: registers its ACTIONS)

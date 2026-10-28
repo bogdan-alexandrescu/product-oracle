@@ -101,6 +101,8 @@ JOBS = (
     "simple_visual",
     # Simple S8: a review meeting's minutes (oracle.simple.meetings).
     "meeting_minutes",
+    # Simple chat-reader: a free-form chat line read in context (oracle.simple.chat).
+    "chat_reader",
 )
 
 #: Accounts one call may try before giving up (the first plus two swaps).

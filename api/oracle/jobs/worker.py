@@ -201,9 +201,13 @@ async def claim_next(tenant_id: uuid.UUID) -> uuid.UUID | None:
             elif request_id is not None:
                 # H10: a declined request's why-not replies.
                 owner, model, column = request_id, ProductRequest, LlmJob.request_id
-            else:
+            elif visual_id is not None:
                 # Simple S10: a proposal's visual, under its simple_visuals row's lock.
                 owner, model, column = visual_id, SimpleVisual, LlmJob.visual_id
+            else:
+                # Simple chat-reader: a chat line's read has no subject row; each job is its
+                # own (claimed under its own row lock).
+                owner, model, column = job_id, LlmJob, LlmJob.id
             if owner in busy:
                 continue
             # The owner's row lock serialises claims of its jobs across workers.
