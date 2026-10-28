@@ -7,8 +7,10 @@ The user message is a JSON object:
 - `line`: what the person typed.
 - `thread`: the thread's last lines, oldest first (`who`, `text`), so "do that for F-19
   too" can be read.
-- `context`: where they asked: `page` (the Simple page) or `meeting` (its title, agenda,
-  the item under discussion, attendees) and `role` (the person's role).
+- `context`: where they asked: `page` (the Simple page) or `meeting` (its title, its PRD,
+  `under_discussion` (the item the meeting takes now, else the PRD under review: "that"
+  means it), its `agenda` (`next`, `skipped`), its `open_decisions` (newest first; not an
+  order of discussion), attendees) and `role` (the person's role).
 - `items`: the roadmap items the person reads (`id`, `key`, `title`, `start`, `end`,
   `milestone`, `owner`, `decider`, `track`, `horizon`).
 - `people`: the company's people (`name`, `email`).

@@ -238,6 +238,8 @@ class Ctx:
         self.page: str | None = None
         self.page_document: Any = None
         self.meeting_decider_name: str | None = None
+        # A commenter's decision on the Ask panel is proposed to this person.
+        self.ask_decider: User | None = None
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -247,6 +249,8 @@ class Ctx:
         self.read = await service.load(self.db, self.overlays)
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
         self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
+        if self.meeting is None and chat_actions.proposes(self.principal):
+            self.ask_decider = await chat_actions.ask_decider(self.db, self.page_document)
         return self
 
     @property
@@ -1055,17 +1059,23 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             one_ = None
         if one_ is not None:
             context["meeting"]["title"] = getattr(one_, "title", None)
-            agenda = [
-                getattr(x, "title", str(x)) for x in getattr(one_, "open_decisions", []) or []
+            # The open decisions as S8 lists them (newest first): context, not an order.
+            context["meeting"]["open_decisions"] = [
+                f"D-{x.number} {x.title}" if getattr(x, "number", None) else str(x.title)
+                for x in getattr(one_, "open_decisions", []) or []
             ][:20]
-            context["meeting"]["agenda"] = agenda
+            # The agenda the meeting keeps (chat-actions' "take X next" / "skip X").
+            agenda = getattr(one_, "agenda", None)
+            nxt = getattr(getattr(agenda, "next", None), "title", None)
+            context["meeting"]["agenda"] = {
+                "next": nxt,
+                "skipped": [x.title for x in getattr(agenda, "skipped", None) or []],
+            }
             prd = getattr(one_, "prd", None)
             context["meeting"]["prd"] = getattr(prd, "title", None)
-            # The agenda's first open decision is the item taken now ("take X next" puts
-            # X first); with none open, the PRD under review.
-            context["meeting"]["under_discussion"] = (
-                agenda[0] if agenda else getattr(prd, "title", None)
-            )
+            # Under discussion: the item the meeting takes next, else the PRD under review
+            # (never the newest open decision).
+            context["meeting"]["under_discussion"] = nxt or getattr(prd, "title", None)
     else:
         context["page"] = read.page
     items = []
@@ -1317,6 +1327,9 @@ async def _flow(db: AsyncSession, card: SimpleChatCard) -> Any:
 
 def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
     """Whether the caller's Apply applies (else proposes): the change engine's rule."""
+    if card.op == "record_decision" and not card.target.get("meeting_id"):
+        # On the Ask panel a commenter's decision is a proposal (the owner's pick).
+        return not _actions().proposes(principal)
     if card.op == "add_feature_ask" or card.op in _actions().DIRECT_OPS:
         return True
     if card.item_id is None:
@@ -1541,7 +1554,9 @@ async def _apply_direct(
     if card is None or card.status != "open":
         raise ChatError(409, f"This card is {card.status if card else 'gone'} already")
     await APPLIERS[card.op](db, principal, card)
-    card.status, card.decided_by, card.decided_at = "applied", _me(principal), company_time.now()
+    # An applier may leave the card proposed (a commenter's decision on the Ask panel).
+    card.status = "proposed" if card.status == "proposed" else "applied"
+    card.decided_by, card.decided_at = _me(principal), company_time.now()
     await db.commit()
     return await one(db, principal, card, rules), None
 

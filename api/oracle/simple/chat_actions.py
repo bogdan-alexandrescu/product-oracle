@@ -8,7 +8,10 @@
   ``record_meeting_decision``: the minutes' "Decisions taken" and the Decisions page),
   decided by the named person, else the PRD's decider, else the caller; on the Ask panel, a
   decision on the page's document (Oracle's decisions, ``capture``), for approvers and
-  owners. Undo reverses it (a review says why).
+  owners; a commenter's is a proposal (the owner's pick, 2026-10-27: "Approvers and owners
+  record it at once, commenters as proposal"): an open decision on the document, proposed
+  by them, for its decider (else its owners, as the change engine routes) to decide.
+  Undo reverses a recorded one (a review says why).
 - ``minutes_note`` / ``open_question`` (text): meeting only; the meeting's notes (its screen,
   then Oracle's drafted minutes: Summary notes, Open questions). Undo removes the note.
 - ``agenda_next`` / ``agenda_skip`` (item): meeting only; the meeting's agenda, seen by every
@@ -28,6 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import company_time
+from oracle.auth.models import User
 from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
@@ -113,11 +117,18 @@ def build_record_decision(c: chat.Ctx, args: dict[str, Any]) -> dict | chat.Repl
     else:
         me = chat._me(c.principal)
         decider_name = next((_name(u) for u in c.people if u.id == me), "you")
+    preview: dict[str, Any] = {"kind": "decision", "text": text, "decider_name": decider_name,
+                               "where": where}  # fmt: skip
+    if c.meeting is None and proposes(c.principal):
+        # A commenter's decision is a proposal: who confirms it.
+        to = getattr(c, "ask_decider", None)
+        preview["proposed_to"] = _name(to) if to is not None else "an owner"
+        if decider is None:
+            preview["decider_name"] = preview["proposed_to"]
     return {"summary": f"Record the decision: {text}", "op": "record_decision", "item_id": None,
             "target": target, "before": {},
             "after": {"text": text, "decider_id": str(decider.id) if decider else None},
-            "preview": {"kind": "decision", "text": text, "decider_name": decider_name,
-                        "where": where}}  # fmt: skip
+            "preview": preview}  # fmt: skip
 
 
 def _note_build(kind: str):
@@ -204,8 +215,37 @@ def bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
         return MEETING_NOTE
     if card.owner_id is not None and card.owner_id != chat._me(principal):
         return "This card is someone else's"
-    if not has_role(principal.role, "approver"):
-        return "Approvers and owners record decisions; ask one of them"
+    if not has_role(principal.role, "commenter"):
+        return "Viewers read the plan; they don't record decisions"
+    return None
+
+
+def proposes(principal: Any) -> bool:
+    """On the Ask panel a commenter's decision is a proposal (approvers and owners record)."""
+    return has_role(principal.role, "commenter") and not has_role(principal.role, "approver")
+
+
+async def ask_decider(db: AsyncSession, document: Document | None) -> User | None:
+    """Who confirms a commenter's decision on the Ask panel, as the change engine routes a
+    proposal: the document's decider, else its owners (its tracks'), else the company's
+    owners; the first of them who may decide (an active approver or above)."""
+    from oracle.simple import one_pager
+
+    if document is not None:
+        w = await one_pager.who(db, document)
+        ids = [w.decider, *w.track_owners, *w.company_owners]
+    else:
+        ids = list(
+            await db.scalars(
+                select(User.id)
+                .where(User.role == "owner", User.disabled_at.is_(None))
+                .order_by(User.created_at, User.id)
+            )
+        )
+    for i in ids:
+        u = await db.get(User, i) if i is not None else None
+        if u is not None and u.disabled_at is None and has_role(u.role, "approver"):
+            return u
     return None
 
 
@@ -254,6 +294,9 @@ async def apply_record_decision(db: AsyncSession, principal: Any, card: SimpleCh
         return
     doc_id = card.target.get("document_id")
     subjects = [{"kind": "document", "id": doc_id}] if doc_id else []
+    if proposes(principal):
+        await _propose_decision(db, principal, card, text, doc_id)
+        return
     decider = named or me
     d = await capture.capture(
         db, principal, origin="manual", source_kind=SOURCE_KIND, source_id=card.id, title=text,
@@ -262,6 +305,34 @@ async def apply_record_decision(db: AsyncSession, principal: Any, card: SimpleCh
         context="Recorded from the Ask panel", subjects=subjects, decided_by=decider,
     )  # fmt: skip
     card.decision_id = d.id
+
+
+async def _propose_decision(
+    db: AsyncSession, principal: Any, card: SimpleChatCard, text: str, doc_id: str | None
+) -> None:
+    """A commenter's decision on the Ask panel: an open decision (Oracle's decisions'
+    ``create``) proposed by them, for the document's decider to decide or decline."""
+    from oracle.decisions import service
+    from oracle.decisions.schemas import DecisionCreate, DecisionOption, Subject
+
+    doc = await db.get(Document, uuid.UUID(doc_id)) if doc_id else None
+    decider = await ask_decider(db, doc)
+    if decider is None:
+        raise chat.ChatError(409, "No one can decide this yet: ask an owner")
+    body = DecisionCreate(
+        title=text[:200], context="Proposed from the Ask panel",
+        options=[DecisionOption(key="decided", label=text[:200]),
+                 DecisionOption(key="declined", label="Decline")],
+        approver_id=decider.id,
+        subjects=[Subject(kind="document", id=uuid.UUID(doc_id))] if doc_id else [],
+    )  # fmt: skip
+    try:
+        d = await service.create(db, principal, body)
+    except service.DecisionError as e:
+        raise chat.ChatError(e.status, e.detail) from e
+    card.decision_id = d.id
+    card.preview = {**(card.preview or {}), "proposed_to": _name(decider)}
+    card.status = "proposed"
 
 
 async def apply_note(db: AsyncSession, principal: Any, card: SimpleChatCard) -> None:
