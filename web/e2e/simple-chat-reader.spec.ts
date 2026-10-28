@@ -234,13 +234,12 @@ test.describe("chat-reader review", () => {
     const panel = await openAsk(page, false);
     await say(panel, "why is Delivery pipeline v2 after the integrity work");
     await expect(panel.getByTestId("ask-answer").last()).toBeVisible();
-    await tap(panel.getByRole("button", { name: "New chat" }));
+    // ask-fresh: the same chat shows the line once (as Ask's), never "Asking Oracle…" from the plan reader.
     const thread = panel.getByTestId("ask-chat-thread");
-    await expect(thread).toBeVisible();
     await say(panel, "can we push Delivery pipeline v2 out a quarter");
     await expect(last(thread).getByTestId("chat-message-body")).toHaveText("I understood one change:");
     await expect(thread.getByText("Asking Oracle…")).toHaveCount(0);
-    await expect(thread.getByText("why is Delivery pipeline v2 after the integrity work")).toHaveCount(0);
+    await expect(thread.getByText("why is Delivery pipeline v2 after the integrity work")).toHaveCount(1);
   });
 
   test("Ask chat: a line still being read after the first wait goes to Oracle's Ask when read", async ({ page }) => {
