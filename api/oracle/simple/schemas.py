@@ -613,6 +613,11 @@ class SimpleFlowStep(BaseModel):
     feature: str | None = None
     change: Literal["new", "changed", "same"] = "same"
     section_key: str | None = None
+    # Who does it ("User", "App", "Admin"...); null on drawings made before it was asked.
+    actor: str | None = None
+    # A decision: what its Yes and its No lead to, in words.
+    yes: str | None = None
+    no: str | None = None
 
 
 class SimpleFlowNote(BaseModel):
@@ -682,6 +687,12 @@ class SimpleVisualOut(BaseModel):
     # not check out): the panel says so and offers Retry. ``failure``: why, in words.
     failed: bool = False
     failure: str | None = None
+    # While Oracle draws: when the job was asked for and how far it got, 0 reading the
+    # subject (queued), 1 drawing (running); the subject named with its code, for "Read
+    # F-06 Adaptive pacing".
+    started_at: dt.datetime | None = None
+    stage: int = 0
+    subject_name: str | None = None
     # Commenters and up comment on a drawn visual; who changes the subject directly asks
     # for a drawing and revises.
     can_comment: bool

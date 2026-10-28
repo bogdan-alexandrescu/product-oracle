@@ -64,6 +64,7 @@ MAX_STEPS = 12
 MAX_REGIONS = 10
 MAX_NOTES = 20
 LABEL_MAX = 80
+ACTOR_MAX = 24
 NOTE_MAX = 400
 BRIEF_MAX = 2000
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
@@ -103,6 +104,8 @@ class Subject:
     # A change: who may read it (its author, who decides it).
     change: SimpleChange | None = None
     context: dict[str, Any] = field(default_factory=dict)
+    # The subject named with its code when it has one ("F-06 Adaptive pacing").
+    name: str | None = None
 
 
 async def _subject(db: AsyncSession, kind: str, subject_id: uuid.UUID) -> Subject:
@@ -133,8 +136,12 @@ async def _subject(db: AsyncSession, kind: str, subject_id: uuid.UUID) -> Subjec
     if kind in ("feature", "draft_item"):
         item = await db.get(RoadmapItem, subject_id)
         if item is not None:
+            from oracle.simple.priorities import prd_code
+
+            code = prd_code(item.prd_section_key)
             return Subject(
                 title=item.title,
+                name=f"{code} {item.title}" if code else item.title,
                 document_id=item.roadmap_document_id,
                 context={"outcome": item.outcome, "prd_section_key": item.prd_section_key,
                          "prd_document_id": str(item.prd_document_id or "") or None},
@@ -424,8 +431,16 @@ async def read(
         db, {c.author_id for c in comments} | {x.made_by for x in vers if x.made_by}
     )
     open_count = {x.number: sum(1 for c in comments if c.addressed_in == x.number) for x in vers}
-    pending = await _live_job(db, v) is not None
+    job = await _live_job(db, v)
+    pending = job is not None
     failure = None if pending else await _last_failure(db, v)
+    subject_name = None
+    if pending:
+        try:
+            got = await _subject(db, v.subject_kind, v.subject_id)
+            subject_name = got.name or got.title or None
+        except VisualError:
+            subject_name = None
     return SimpleVisualOut(
         subject_kind=v.subject_kind,
         subject_id=v.subject_id,
@@ -456,6 +471,9 @@ async def read(
         pending=pending,
         failed=failure is not None,
         failure=failure,
+        started_at=job.created_at if job is not None else None,
+        stage=1 if job is not None and job.status == "running" else 0,
+        subject_name=subject_name,
         can_comment=bool(vers)
         and has_role(principal.role, "commenter")
         and _me(principal) is not None,
@@ -783,6 +801,7 @@ def check_answer(answer: Any, section_keys: set[str] | None) -> Checked:
         if not _ID.fullmatch(sid) or sid in seen:
             sid = f"s{i}"
         seen.add(sid)
+        decision = raw.get("kind") == "decision"
         key = raw.get("section_key")
         if key is not None and section_keys is not None and key not in section_keys:
             out.removed.append(f"step {sid}: unknown PRD section {key!r}")
@@ -790,10 +809,13 @@ def check_answer(answer: Any, section_keys: set[str] | None) -> Checked:
         out.steps.append({
             "id": sid,
             "label": label,
-            "kind": "decision" if raw.get("kind") == "decision" else "step",
+            "kind": "decision" if decision else "step",
             "feature": _text(raw.get("feature"), LABEL_MAX) or None,
             "change": raw.get("change") if raw.get("change") in ("new", "changed") else "same",
             "section_key": str(key) if key else None,
+            "actor": _text(raw.get("actor"), ACTOR_MAX) or None,
+            "yes": (_text(raw.get("yes"), LABEL_MAX) or None) if decision else None,
+            "no": (_text(raw.get("no"), LABEL_MAX) or None) if decision else None,
         })  # fmt: skip
     if len(out.steps) < 2:
         out.problems.append("a user flow needs at least two steps")
