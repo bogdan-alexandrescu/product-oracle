@@ -31,6 +31,12 @@ Test cards (protects / fails_when / no_claim):
   item takes one slice's dates only; no_claim=undo (the engine's own tests).
 - test_quarter_label_from_the_plan: protects=Priorities' quarter is the plan's span
   ("2 Nov - 12 Feb"), not the calendar quarter; fails_when="Q4 2026"; no_claim=the web.
+- test_priorities_carry_the_plan (parametrized owner, decider, approver, commenter, viewer):
+  protects=Priorities carries the plan "this quarter" is (plan-charts' Goal buckets header):
+  its PRD, milestones with dates, capacity and planned weeks, slices, engineer-weeks per goal
+  per milestone (each slice once) and its span, the same for every role; fails_when=the plan
+  is missing, its totals differ from the plan endpoint's or a role reads another plan;
+  no_claim=the web's drawing (Playwright's simple-priorities-plan spec).
 """
 
 import hashlib
@@ -230,6 +236,31 @@ async def test_quarter_label_from_the_plan(client):
     assert r.status_code == 200, r.text
     q = r.json()["quarter"]
     assert (q["label"], q["start"], q["end"]) == ("2 Nov - 12 Feb", "2026-11-02", "2027-02-12")
+
+
+@pytest.mark.parametrize("role", ["owner", "decider", "approver", "commenter", "viewer"])
+async def test_priorities_carry_the_plan(client, role):
+    ctx = await make_ctx()
+    await seed(ctx, items=("f-03",))
+    r = await client.get("/v1/simple/priorities", headers=ctx.as_(role))
+    assert r.status_code == 200, r.text
+    p = r.json()["plan"]
+    assert p["prd"]["slug"] == "guided-setup" and p["status"] == "ready"
+    assert p["span"]["label"] == "2 Nov - 12 Feb"
+    ms = {m["code"]: m for m in p["milestones"]}
+    assert [c for c in ms] == ["M1", "M2", "M3"]
+    assert (ms["M2"]["start_date"], ms["M2"]["end_date"]) == ("2026-11-30", "2026-12-25")
+    assert [m["effort_weeks"] for m in p["milestones"]] == [8, 8, 12]
+    full = (await client.get(url("guided-setup"), headers=ctx.as_(role))).json()
+    assert [m["planned_weeks"] for m in p["milestones"]] == [
+        m["planned_weeks"] for m in full["milestones"]
+    ]
+    assert p["goal_weeks"] == full["goal_weeks"]
+    assert {s["code"] for s in p["slices"]} == {s["code"] for s in full["slices"]}
+    # Each slice once: the goal weeks add up to the planned weeks.
+    assert sum(w["weeks"] for w in p["goal_weeks"]) == sum(
+        m["planned_weeks"] for m in p["milestones"]
+    )
 
 
 @pytest.mark.parametrize(
