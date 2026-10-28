@@ -56,6 +56,7 @@ export function ScrollStrip({
   children,
   className = "",
   stripClassName = "",
+  itemsName,
   ref,
   ...rest
 }: Omit<HTMLAttributes<HTMLDivElement>, "className"> & {
@@ -64,6 +65,8 @@ export function ScrollStrip({
   className?: string;
   /** The scrolling element. */
   stripClassName?: string;
+  /** What the strip holds, for its chevrons' names ("tabs": Scroll tabs right); none: Scroll right. */
+  itemsName?: string;
   ref?: Ref<HTMLDivElement>;
 }) {
   const el = useRef<HTMLDivElement | null>(null);
@@ -192,7 +195,7 @@ export function ScrollStrip({
     return (
       <button
         type="button"
-        aria-label={dir === 1 ? "Scroll tabs right" : "Scroll tabs left"}
+        aria-label={`Scroll ${itemsName ? `${itemsName} ` : ""}${dir === 1 ? "right" : "left"}`}
         aria-controls={id}
         aria-disabled={live ? undefined : true}
         data-testid={dir === 1 ? "strip-more-right" : "strip-more-left"}

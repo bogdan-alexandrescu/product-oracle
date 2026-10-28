@@ -13,7 +13,8 @@ const BASE =
  * an outline button keeps its outline in the line colour; the text stays text2 (4.5:1 or
  * better on both, light and dark), and hover changes nothing. The focus ring is not set
  * here: every button takes the page's one ring (globals.css :focus-visible, 2px accent
- * outline 2px off the button), visible on an accent fill and on the page alike.
+ * outline 2px off the button), visible on an accent fill and on the page alike. A ghost has
+ * no fill or outline to change, and its resting text is already text2: disabled, it is dimmed.
  */
 const DISABLED_FILL =
   "disabled:bg-surface2 disabled:text-text2 disabled:brightness-100 disabled:hover:bg-surface2 disabled:hover:brightness-100 aria-disabled:bg-surface2 aria-disabled:text-text2 aria-disabled:hover:brightness-100";
@@ -28,7 +29,7 @@ const VARIANT: Record<ButtonVariant, string> = {
   // A form's submit inside a panel: filled like primary, at row size; never a row action.
   solid: `h-8 rounded-lg px-3 text-sm bg-accent text-on-accent hover:brightness-110 ${DISABLED_FILL}`,
   ghost:
-    "h-8 rounded-lg px-2.5 text-sm font-medium text-text2 hover:bg-surface2 hover:text-text disabled:hover:bg-transparent disabled:hover:text-text2",
+    "h-8 rounded-lg px-2.5 text-sm font-medium text-text2 hover:bg-surface2 hover:text-text disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-text2 aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-text2",
   danger: `h-8 rounded-lg px-3 text-sm border border-crit bg-surface text-crit hover:bg-crit-bg ${DISABLED_OUTLINE}`,
   // Secondary action in an Inspector head ("Open").
   hero: "h-8 rounded-lg px-3 text-sm border border-hero-text2 bg-transparent text-hero-text hover:bg-hero-2",

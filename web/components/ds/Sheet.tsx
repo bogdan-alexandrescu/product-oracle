@@ -71,6 +71,10 @@ export function Sheet({
     const p = panel.current;
     (p?.querySelector<HTMLElement>("[data-autofocus]") ?? p)?.focus();
     const onKey = (e: KeyboardEvent) => {
+      // A dialog opened from the sheet (portalled outside it) handles its own keys: its
+      // Escape asks before dropping typed work, and its Tab stays inside it.
+      const at = document.activeElement;
+      if (p && at && at !== document.body && !p.contains(at) && at.closest('[role="dialog"], [role="alertdialog"]')) return;
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();

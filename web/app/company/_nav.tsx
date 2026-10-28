@@ -22,7 +22,7 @@ export function CompanyNav() {
   const { can } = useMe();
   return (
     <nav aria-label="Company" data-testid="company-nav" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
-      <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">
+      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1">
         {visibleTabs(can).map((t) => {
           const on = pathname === t.href || pathname.startsWith(`${t.href}/`);
           return (

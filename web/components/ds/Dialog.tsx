@@ -20,7 +20,8 @@ const SIZE = { md: "max-w-xl", lg: "max-w-3xl" } as const;
  *
  * Escape, the X and a click on the backdrop close it; while `dirty` (the person typed
  * something) they first ask "Discard your changes?" inside the dialog, with Keep editing
- * and Discard. Cancel always closes: it is the explicit choice.
+ * and Discard. Cancel always closes: it is the explicit choice. While `busy` (saving) none
+ * of them closes it, and Cancel and the X are disabled.
  *
  * With `onSubmit` the body and footer are one form, so Enter in a field submits it; give
  * the primary action `type="submit"`.
@@ -33,6 +34,7 @@ export function Dialog({
   head,
   actions,
   cancelLabel = "Cancel",
+  busy = false,
   onSubmit,
   size = "md",
   children,
@@ -47,6 +49,8 @@ export function Dialog({
   /** The footer's actions after Cancel, the primary one last; none: no footer. */
   actions?: ReactNode;
   cancelLabel?: string;
+  /** Saving: closing waits until it is done. */
+  busy?: boolean;
   onSubmit?: () => void;
   size?: keyof typeof SIZE;
   children: ReactNode;
@@ -57,9 +61,9 @@ export function Dialog({
   /** Where focus was when the question opened: Keep editing puts it back. */
   const before = useRef<HTMLElement | null>(null);
 
-  const state = useRef({ dirty, asking, onClose });
+  const state = useRef({ dirty, asking, busy, onClose });
   useEffect(() => {
-    state.current = { dirty, asking, onClose };
+    state.current = { dirty, asking, busy, onClose };
   });
 
   const keepEditing = () => {
@@ -70,6 +74,7 @@ export function Dialog({
   /** Escape, the X or the backdrop: asks first while there are changes. */
   const requestClose = () => {
     const s = state.current;
+    if (s.busy) return;
     if (s.asking) return keepEditing();
     if (!s.dirty) return s.onClose();
     before.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -99,7 +104,7 @@ export function Dialog({
   const footer =
     actions !== undefined ? (
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4" data-testid="dialog-footer">
-        <Button variant="secondary" onClick={onClose}>
+        <Button variant="secondary" onClick={onClose} disabled={busy}>
           {cancelLabel}
         </Button>
         {actions}
@@ -142,8 +147,9 @@ export function Dialog({
           <button
             type="button"
             onClick={requestClose}
-            aria-label={`Close ${title}`}
-            className="grid size-8 flex-none place-items-center rounded-lg text-text2 hover:bg-surface2 hover:text-text"
+            disabled={busy}
+            aria-label="Close"
+            className="grid size-8 flex-none place-items-center rounded-lg text-text2 hover:bg-surface2 hover:text-text disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
           >
             <Icon name="x" size={20} />
           </button>

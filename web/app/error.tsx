@@ -18,7 +18,7 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
           <Button variant="primary" onClick={reset}>
             Try again
           </Button>
-          <LinkButton href="/home" variant="secondary" icon="home" className="h-10">
+          <LinkButton href="/" variant="secondary" icon="home" className="h-10">
             Go to Home
           </LinkButton>
         </div>

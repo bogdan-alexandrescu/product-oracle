@@ -65,7 +65,8 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
     <Dialog
       title="New launch"
       testId="new-launch-dialog"
-      dirty={picked.length > 0 || customName !== null}
+      dirty={picked.length > 0 || customName !== null || trackId !== null}
+      busy={busy}
       onClose={onClose}
       onSubmit={() => {
         if (canSubmit && !busy) void create();

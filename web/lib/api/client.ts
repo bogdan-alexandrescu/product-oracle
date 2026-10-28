@@ -132,7 +132,8 @@ const ROLE_HOLDERS: Record<string, string> = {
 export function roleRefusal(message: string): string | null {
   const role = /^Requires the (\w+) role/.exec(message)?.[1];
   const who = role ? ROLE_HOLDERS[role] : undefined;
-  const lead = /^Requires the engineering lead or an owner|or the engineering lead/.test(message);
+  // The lead's clause widens the role right before it ("Requires the approver role or the engineering lead").
+  const lead = /^Requires the (engineering lead or an owner|\w+ role or the engineering lead)\b/.test(message);
   if (!who && !lead) return null;
   const only = who ? `Only ${lead ? `${who.replace(" and ", ", ")} and the engineering lead` : who} can do this.` : "Only owners and the engineering lead can do this.";
   // What the API says after the refusal ("…: commenters suggest a change instead") stays.
@@ -142,8 +143,11 @@ export function roleRefusal(message: string): string | null {
 
 /** The API's message as a person reads it (its own words), or null when it reads as a code. */
 export function asSentence(message: string | null | undefined): string | null {
-  // A field's name before its problem ("project_id: give the PostHog project id") is left out.
-  const text = message?.trim().replace(/^[a-z]+[_.][a-z0-9_.]*: (?=\S)/, "") ?? "";
+  // A field's name before its problem ("project_id: give the PostHog project id", "body.title: …")
+  // is left out; a host ("posthog.com: …") is not a field's name and stays.
+  const text = message?.trim().replace(/^(?![a-z0-9-]+\.(?:com|io|net|org|dev|app|ai|co)\b)[a-z]+[_.][a-z0-9_.]*: (?=\S)/, "") ?? "";
+  // One plain word ("Forbidden") still reads; a code ("source_changed") does not.
+  if (/^[A-Z][a-z]+$/.test(text)) return `${text}.`;
   if (!/\s/.test(text) || /[{}]/.test(text)) return null;
   // A field's name in brackets inside the sentence ("(basis_ids)") is left out too.
   return text.replace(/ \([a-z]+_[a-z0-9_]*\)/g, "");

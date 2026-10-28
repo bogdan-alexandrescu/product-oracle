@@ -667,6 +667,8 @@ function HopDock() {
   }, [open]);
   if (!shown) return null;
   if (simple && !open) return null;
+  // Sticky, the dock is its own stacking layer: z-40 keeps it (and the drawer that overlays
+  // the page below 1600 px) above anything in the page that sets its own z-index.
   // The strip is 44 px and the dock's left border 1 px more: a 44 px dock would push the
   // strip 1 px past the right edge (sideways scroll).
   const width = simple ? "w-0 min-[1600px]:w-[400px] min-[1600px]:border-l" : open ? "w-[45px] border-l min-[1600px]:w-[400px]" : "w-[45px] border-l";
@@ -675,7 +677,7 @@ function HopDock() {
       aria-label="Ask Oracle"
       data-testid="hop-dock"
       data-open={open ? "true" : "false"}
-      className={`sticky top-0 col-start-3 row-start-1 h-dvh border-line bg-surface max-[600px]:hidden ${width}`}
+      className={`sticky top-0 z-40 col-start-3 row-start-1 h-dvh border-line bg-surface max-[600px]:hidden ${width}`}
     >
       {!simple && (
         <button

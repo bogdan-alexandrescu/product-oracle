@@ -38,7 +38,7 @@ export function PlanNav() {
   const extra = useMemo(() => parse(raw).filter((t) => !PLAN_TABS.some((x) => x.key === t.key)), [raw]);
   return (
     <nav aria-label="Plan" data-testid="plan-tabs" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
-      <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">
+      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1">
         {[...PLAN_TABS, ...extra].map((t) => {
           const on = isOpen(t, pathname);
           return (

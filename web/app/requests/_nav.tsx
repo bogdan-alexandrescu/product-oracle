@@ -16,7 +16,7 @@ export function RequestsNav() {
   const pathname = usePathname();
   return (
     <nav aria-label="Requests" data-testid="requests-nav" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
-      <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">
+      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1">
         {ITEMS.map((it) => {
           const on = pathname === it.href || (!it.exact && pathname.startsWith(`${it.href}/`));
           return (

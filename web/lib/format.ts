@@ -18,13 +18,15 @@ export { inWords } from "@/lib/dates";
  * the clock; tests pass them.
  */
 
-/** A calendar day with no zone, kept as written. */
-const NAIVE_DAY = /^\d{4}-\d{2}-\d{2}(T[\d:.]+)?$/;
+/** A calendar day, kept as written. */
+const NAIVE_DAY = /^\d{4}-\d{2}-\d{2}$/;
+/** A timestamp with no zone: the API's moments are UTC. */
+const NAIVE_TIME = /^\d{4}-\d{2}-\d{2}T[\d:.]+$/;
 
 /** The calendar day (YYYY-MM-DD) `value` falls on in `zone`; a calendar day as written. */
 function dayOf(value: string | number | Date, zone: string): string | null {
-  if (typeof value === "string" && NAIVE_DAY.test(value)) return value.slice(0, 10);
-  const at = new Date(value);
+  if (typeof value === "string" && NAIVE_DAY.test(value)) return value;
+  const at = new Date(typeof value === "string" && NAIVE_TIME.test(value) ? `${value}Z` : value);
   return Number.isNaN(at.getTime()) ? null : dayIn(at, zone);
 }
 
@@ -60,10 +62,11 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** How long ago `value` was: "now" (under a minute), "5m", "3h", "2d", "3w", "4mo", "2y". */
+/** How long ago `value` was: "now" (within a minute), "5m", "3h", "2d", "3w", "4mo", "2y"; "in 5m" when it is still to come. */
 export function formatAge(value: string | number | Date, now: number | Date = Date.now()): string {
   const ms = new Date(now).getTime() - new Date(value).getTime();
   if (Number.isNaN(ms)) return "";
+  if (ms <= -MINUTE) return `in ${formatAge(now, new Date(value).getTime())}`;
   if (ms < MINUTE) return "now";
   if (ms < HOUR) return `${Math.floor(ms / MINUTE)}m`;
   if (ms < DAY) return `${Math.floor(ms / HOUR)}h`;

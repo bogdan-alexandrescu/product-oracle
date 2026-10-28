@@ -25,7 +25,7 @@ export function SettingsNav() {
       data-testid="settings-nav"
       className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
-      <ScrollStrip className="min-h-9" stripClassName="items-center gap-1 lg:flex-wrap">
+      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1 lg:flex-wrap">
         {tabs.map((it) => {
           const on =
             pathname === it.href ||
