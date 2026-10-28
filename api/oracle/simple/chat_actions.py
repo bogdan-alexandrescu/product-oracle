@@ -120,11 +120,13 @@ def build_record_decision(c: chat.Ctx, args: dict[str, Any]) -> dict | chat.Repl
     preview: dict[str, Any] = {"kind": "decision", "text": text, "decider_name": decider_name,
                                "where": where}  # fmt: skip
     if c.meeting is None and proposes(c.principal):
-        # A commenter's decision is a proposal: who confirms it.
+        # A commenter's decision is a proposal: who confirms it (the page's decider, never
+        # a person they name: the card says so).
         to = getattr(c, "ask_decider", None)
-        preview["proposed_to"] = _name(to) if to is not None else "an owner"
-        if decider is None:
-            preview["decider_name"] = preview["proposed_to"]
+        preview["proposed_to"] = preview["decider_name"] = _name(to) if to else "an owner"
+        if decider is not None and (to is None or decider.id != to.id):
+            preview["not_to"] = _name(decider)
+        decider = None
     return {"summary": f"Record the decision: {text}", "op": "record_decision", "item_id": None,
             "target": target, "before": {},
             "after": {"text": text, "decider_id": str(decider.id) if decider else None},
@@ -298,6 +300,11 @@ async def apply_record_decision(db: AsyncSession, principal: Any, card: SimpleCh
         await _propose_decision(db, principal, card, text, doc_id)
         return
     decider = named or me
+    if "proposed_to" in (card.preview or {}):
+        # Built while they proposed, applied once they record: the card says who decided.
+        preview = {k: v for k, v in card.preview.items() if k not in ("proposed_to", "not_to")}
+        mine = await db.get(User, decider) if decider else None
+        card.preview = {**preview, "decider_name": _name(mine) if mine else "you"}
     d = await capture.capture(
         db, principal, origin="manual", source_kind=SOURCE_KIND, source_id=card.id, title=text,
         options=[{"key": "decided", "label": text}], chosen_option="decided",
@@ -331,7 +338,8 @@ async def _propose_decision(
     except service.DecisionError as e:
         raise chat.ChatError(e.status, e.detail) from e
     card.decision_id = d.id
-    card.preview = {**(card.preview or {}), "proposed_to": _name(decider)}
+    card.preview = {**(card.preview or {}), "proposed_to": _name(decider),
+                    "decider_name": _name(decider)}  # fmt: skip
     card.status = "proposed"
 
 

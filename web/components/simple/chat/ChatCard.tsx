@@ -106,6 +106,7 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
       {open && action?.kind === "decision" && action.proposed_to && (
         <p className="simple-small text-text2" data-testid="chat-card-proposed-to">
           Goes to {action.proposed_to}; they decide
+          {action.not_to ? ` (not ${action.not_to}: the page's decider confirms a commenter's decision)` : ""}
         </p>
       )}
       {red.length > 0 && (

@@ -179,7 +179,8 @@ class FakeMeetings:
         next" / "skip X") and the PRD under review."""
         nxt = self.next.get(meeting_id)
         # The agenda's item as S8's _agenda_out gives it: the roadmap item's own id.
-        nid = await db.scalar(select(RoadmapItem.id).where(RoadmapItem.title == nxt)) if nxt else None
+        by_title = select(RoadmapItem.id).where(RoadmapItem.title == nxt)
+        nid = await db.scalar(by_title) if nxt else None
         return SimpleNamespace(
             title=self.titles.get(meeting_id, "Review"),
             open_decisions=[

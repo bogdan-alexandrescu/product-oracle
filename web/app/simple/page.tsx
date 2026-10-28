@@ -228,6 +228,14 @@ export default function SimpleHome() {
 
   function decide(d: Decision, key: string) {
     const option = d.options.find((o) => o.key === key)!;
+    if (key === "declined" && d.can_withdraw) {
+      // A proposal's Decline (a commenter's decision from the Ask panel) ends it: withdrawn, never decided.
+      void act(
+        () => unwrap(api.POST("/v1/decisions/{decision}/withdraw", { params: { path: { decision: String(d.number) } }, body: { reason: "Declined on Simple's Home" } })),
+        `Declined: ${d.title}`,
+      );
+      return;
+    }
     void act(
       () =>
         unwrap(

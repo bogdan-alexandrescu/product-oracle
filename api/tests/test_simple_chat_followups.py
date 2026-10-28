@@ -193,7 +193,7 @@ async def test_card_follows_the_role_at_apply(client):
 async def test_meeting_decision_on_the_next_item_clears_it(client):
     w = await world()
     mid = (await start(client, w))["id"]
-    title = (await _item_title(w))
+    title = await _item_title(w)
     c = await one_card(client, w, "decider", f"take {title} next", mid)
     assert (await apply(client, w, "decider", c["id"])).status_code == 200
     assert (await get(client, w, mid))["agenda"]["next"]["title"] == title

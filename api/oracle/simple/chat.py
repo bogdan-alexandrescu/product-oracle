@@ -240,6 +240,8 @@ class Ctx:
         self.meeting_decider_name: str | None = None
         # A commenter's decision on the Ask panel is proposed to this person.
         self.ask_decider: User | None = None
+        # Only a line that may build a decision card resolves it (False: the line is not one).
+        self.wants_decider = True
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -249,7 +251,7 @@ class Ctx:
         self.read = await service.load(self.db, self.overlays)
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
         self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
-        if self.meeting is None and chat_actions.proposes(self.principal):
+        if self.meeting is None and self.wants_decider and chat_actions.proposes(self.principal):
             self.ask_decider = await chat_actions.ask_decider(self.db, self.page_document)
         return self
 
@@ -703,6 +705,13 @@ def parse(c: Ctx, text: str) -> Reply:
     return out
 
 
+def _decision_line(text: str) -> bool:
+    """Whether parse() may build a decision card from this line (only then does a
+    commenter's Ask line resolve who confirms their proposal)."""
+    asks = _actions().phrase(" ".join(text.split()))
+    return asks is not None and asks[0] == "record_decision"
+
+
 def _phrase(c: Ctx, t: str) -> tuple[str, dict[str, Any]] | None:
     """The fixed phrases parse() knows: the op and its args, or None."""
     if m := re.fullmatch(r"move (.+) to (now|next|later)\.?", t, re.I):
@@ -929,6 +938,7 @@ async def post(
             raise ChatError(403, "Only the meeting's attendees use its chat")
     ctx = Ctx(db, principal, rules)
     ctx.page = page
+    ctx.wants_decider = _decision_line(text)
     await ctx.load()
     reply = parse(ctx, text)
     if only_understood and not reply.understood and not reply.reader:
@@ -1073,9 +1083,14 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             }
             prd = getattr(one_, "prd", None)
             context["meeting"]["prd"] = getattr(prd, "title", None)
-            # Under discussion: the item the meeting takes next, else the PRD under review
+            # Under discussion: the item the meeting takes next while it is still in the plan
+            # (a decision about it clears it from the agenda), else the PRD under review
             # (never the newest open decision).
-            context["meeting"]["under_discussion"] = nxt or getattr(prd, "title", None)
+            nid = str(getattr(getattr(agenda, "next", None), "id", ""))
+            live = any(str(e.row.id) == nid and not e.row.cut for e in c.entries())
+            context["meeting"]["under_discussion"] = (nxt if live else None) or getattr(
+                prd, "title", None
+            )
     else:
         context["page"] = read.page
     items = []
@@ -1259,7 +1274,9 @@ async def choose(
     if ch.get("op") is None:
         reply = Reply("note", SAY_AGAIN)
     else:
-        c = await Ctx(db, principal, rules).load()
+        c = Ctx(db, principal, rules)
+        c.wants_decider = ch.get("op") == "record_decision"
+        await c.load()
         if rules is not None and not has_role(principal.role, "commenter"):
             reply = Reply("note", VIEWER_NOTE)
         else:

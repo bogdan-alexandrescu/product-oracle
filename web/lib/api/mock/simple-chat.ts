@@ -33,7 +33,7 @@ type Preview =
   | { kind: "milestone"; item_id: string; name: string; date: string }
   | { kind: "cut"; item_id: string }
   | { kind: "owner" | "decider"; item_id: string; person_id: string; person_name: string; before_name: string | null }
-  | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page"; proposed_to?: string }
+  | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page"; proposed_to?: string; not_to?: string }
   | { kind: "note" | "question"; text: string }
   | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string }
   | null;
@@ -480,13 +480,15 @@ function agendaDraft(meeting: Meeting, i: Item, move: "next" | "skip"): Draft {
   return actionDraft(move === "next" ? `Take ${i.title} next` : `Skip ${i.title}`, `agenda_${move}`, i, { meeting_id: meeting.id, item_id: i.id }, {}, { move }, { kind: "agenda", item_id: i.id, move, item_title: i.title });
 }
 
-function decisionDraft(meeting: Meeting | null, documentId: string | null, who: Person, text: string, proposedTo: string | null = null): Draft {
+function decisionDraft(meeting: Meeting | null, documentId: string | null, who: Person, text: string, proposedTo: string | null = null, named: Person | null = null): Draft {
   const t = words(text);
   const target: Values = meeting ? { meeting_id: meeting.id } : documentId ? { document_id: documentId } : {};
+  // A commenter's proposal goes to the page's decider, never a person they name (as chat_actions: the card says so).
+  const notTo = proposedTo && named && named.name !== proposedTo ? { not_to: named.name } : {};
   const preview = proposedTo
-    ? { kind: "decision" as const, text: t, decider_name: proposedTo, where: "page" as const, proposed_to: proposedTo }
+    ? { kind: "decision" as const, text: t, decider_name: proposedTo, where: "page" as const, proposed_to: proposedTo, ...notTo }
     : { kind: "decision" as const, text: t, decider_name: who.name, where: meeting ? ("meeting" as const) : ("page" as const) };
-  return actionDraft(`Record the decision: ${t}`, "record_decision", null, target, {}, { text: t, decider_id: who.id }, preview);
+  return actionDraft(`Record the decision: ${t}`, "record_decision", null, target, {}, { text: t, decider_id: proposedTo ? null : who.id }, preview);
 }
 /** Chat actions' cards: "I understood one change:" (the contract's reply line). */
 const ONE_CHANGE = "I understood one change:";
@@ -536,7 +538,7 @@ function chatActionReply(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting
     return change(() => {
       const who = by ? person(by) : { id: ctx.id, name: ctx.names[ctx.id] ?? "someone" };
       if (!isPerson(who)) return who;
-      return one(decisionDraft(meeting, documentId, who, what, askProposal(ctx, meeting, documentId)));
+      return one(decisionDraft(meeting, documentId, who, what, askProposal(ctx, meeting, documentId), by ? who : null));
     });
   }
   if (!asks && (m = /^(.+?) (owns|decides) (.+)$/i.exec(t)) && !/^who$/i.test(m[1])) {
@@ -1048,6 +1050,11 @@ function applyLocal(c: StoredCard, meeting: Meeting | null, ctx: ChatCtx, s8?: C
   } else if (c.op === "record_decision") {
     const text = String(c.after.text ?? "");
     const decider = String(c.after.decider_id ?? ctx.id);
+    if (c.preview && "proposed_to" in c.preview) {
+      // Built while they proposed, applied once they record (as chat_actions): the card says who decided.
+      const { proposed_to: _to, not_to: _not, ...rest } = c.preview as Record<string, unknown>;
+      c.preview = { ...rest, decider_name: ctx.names[decider] ?? "you" } as typeof c.preview;
+    }
     if (remote) decision = remote.decide(meeting!.id, text, decider, null);
     else if (meeting) {
       decision = crypto.randomUUID();

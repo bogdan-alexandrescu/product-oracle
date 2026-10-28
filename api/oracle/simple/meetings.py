@@ -188,6 +188,11 @@ async def record_meeting_decision(
     if me is None:
         raise MeetingError(403, "Meeting decisions are made by people")
     clean = [_subject(s) for s in subjects or []]
+    nxt = (m.agenda or {}).get("next")
+    if nxt and any(s and s.get("kind") == "roadmap_item" and str(s.get("id")) == nxt
+                   for s in clean):  # fmt: skip
+        # Decided: the item the agenda took next is no longer under discussion.
+        m.agenda = {**(m.agenda or {}), "next": None}
     d = await capture.capture(
         db,
         principal,
