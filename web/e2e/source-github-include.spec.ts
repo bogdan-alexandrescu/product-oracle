@@ -46,7 +46,7 @@ test("editing what a GitHub source reads", async ({ page }) => {
   await login(page);
   await page.goto("/settings/sources");
   const repo = page.getByRole("listitem", { name: "Example repo" });
-  await expect(repo).toContainText("1 item(s)");
+  await expect(repo).toContainText("1 item");
   await expect(repo.getByTestId("github-include")).toHaveCount(0);
   await repo.getByRole("button", { name: "More actions for Example repo" }).click();
   await repo.getByRole("menuitem", { name: "Edit repositories" }).click();
@@ -57,7 +57,7 @@ test("editing what a GitHub source reads", async ({ page }) => {
   await repo.getByRole("button", { name: "Save repositories" }).click();
   await expect(repo.getByTestId("github-include")).toHaveText("ReadsIssues");
   // The README it held is not read any more: removed on save.
-  await expect(repo).toContainText("0 item(s)");
+  await expect(repo).toContainText("0 items");
 
   await repo.getByRole("button", { name: "More actions for Example repo" }).click();
   await repo.getByRole("menuitem", { name: "Edit repositories" }).click();

@@ -96,7 +96,7 @@ test("13a: an owner connects PostHog in Settings › Analytics and the key is ne
   await expect(state).toHaveText("Not connected");
 
   await page.getByLabel("Host").selectOption("us");
-  await page.getByLabel("Project id").fill("67890");
+  await page.getByLabel("Project ID").fill("67890");
   await page.getByLabel("Personal API key").fill("phx_example_key_for_tests");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(state).toHaveText("Connected to PostHog · project 67890 · US cloud");

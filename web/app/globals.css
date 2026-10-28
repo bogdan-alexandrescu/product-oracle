@@ -342,17 +342,33 @@ body {
 }
 
 /* A strip that scrolls sideways (ScrollStrip): fades out at each edge that has more to scroll to,
-   so a cut-off item reads as "more", not clipped. Nothing fades when everything fits. */
+   so a cut-off item reads as "more", not clipped. ScrollStrip sets --cut-l/--cut-r to where the
+   first whole item starts: an item cut by the edge is hidden up to its last 20 px (its padding),
+   so no label shows cut mid-word; a whole item at the edge fades over its 12 px padding only.
+   Nothing fades when everything fits. No native scrollbar: the chevrons and swipes move it. */
 @utility scroll-fade {
-  --fade-l: 0px;
-  --fade-r: 0px;
-  mask-image: linear-gradient(to right, transparent, #000 var(--fade-l), #000 calc(100% - var(--fade-r)), transparent);
+  --fade-l0: 0px;
+  --fade-l1: 0px;
+  --fade-r0: 0px;
+  --fade-r1: 0px;
+  mask-image: linear-gradient(
+    to right,
+    transparent var(--fade-l0),
+    #000 var(--fade-l1),
+    #000 calc(100% - var(--fade-r1)),
+    transparent calc(100% - var(--fade-r0))
+  );
   scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
   &[data-more-left] {
-    --fade-l: 32px;
+    --fade-l0: max(0px, calc(var(--cut-l, 0px) - 20px));
+    --fade-l1: max(12px, var(--cut-l, 0px));
   }
   &[data-more-right] {
-    --fade-r: 32px;
+    --fade-r0: max(0px, calc(var(--cut-r, 0px) - 20px));
+    --fade-r1: max(12px, var(--cut-r, 0px));
   }
 }
 /* Phone sheets (ds Sheet): every control is a 44 px touch target. */

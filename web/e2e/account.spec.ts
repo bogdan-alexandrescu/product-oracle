@@ -162,7 +162,7 @@ test("my account: from the user menu; a personal token's secret is shown once", 
   await expect(secret).toHaveText(/^po_/);
   await expect(page.getByTestId("new-token")).toContainText("Shown once");
   await expect(page.getByTestId("new-token-expiry")).toHaveText(`Expires ${inDays(90)}`);
-  await expect(page.getByTestId("my-token-row").filter({ hasText: "laptop script" })).toContainText("oracle:read");
+  await expect(page.getByTestId("my-token-row").filter({ hasText: "laptop script" }).getByTestId("scopes")).toHaveText("Read");
   const value = await secret.textContent();
 
   // Gone once dismissed, and never shown again after a reload.

@@ -82,7 +82,7 @@ export async function proposeMeasure(change: DiscussionChange, payload: GoalMeas
   const body = (error ?? {}) as { detail?: unknown; errors?: unknown; pushback?: unknown };
   if (response.status === 422 && Array.isArray(body.errors)) return { kind: "invalid", errors: body.errors as Schemas["GoalProblem"][] };
   if (response.status === 409 && body.pushback) return { kind: "pushback", reason: String(body.detail ?? "") };
-  return { kind: "error", message: typeof body.detail === "string" ? body.detail : `Request failed (${response.status})` };
+  return { kind: "error", message: typeof body.detail === "string" ? body.detail : "Something went wrong. Try again." };
 }
 
 /** G3's generic Dismiss (POST /v1/discussion-changes/{change_id}/dismiss; approvers). */

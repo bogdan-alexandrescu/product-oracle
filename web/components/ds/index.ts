@@ -6,6 +6,7 @@ export { Bars, Meter, Ring, Sparkline, type RingTone } from "./Charts";
 export { Chip, GoalTag, ViewOnly, type ChipKind } from "./Chip";
 export { ConfirmHost, confirmInPage, useFocusTrap, type ConfirmAsk } from "./ConfirmDialog";
 export { DataTable, type Column } from "./DataTable";
+export { Dialog } from "./Dialog";
 export { Avatar, CostFigure, initialsOf, KpiStrip, Numeral, ToGo, type Kpi } from "./Figures";
 export { Icon, type IconName } from "./Icon";
 export { InfoTip } from "./InfoTip";

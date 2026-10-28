@@ -59,12 +59,12 @@ test("invite: the row says when access was last tried and Google's reason; Retry
   await expect(access).toHaveText(`Last tried ${pacific(second)} · ${PLUS_REASON}`);
   await expect(row.getByTestId("invite-access")).toHaveText("Access not granted yet");
 
-  // The email's outcome is text as well.
+  // The email worked: its chip says when, and no "Last tried" (that is for a failure only).
   await expect(row.getByTestId("invite-email")).toContainText("Sent");
-  await expect(row.getByTestId("invite-email-detail")).toHaveText(`Last tried ${pacific(second)}`);
+  await expect(row.getByTestId("invite-email-detail")).toHaveCount(0);
 });
 
-test("invite: Retry that grants access says so with the time", async ({ page }) => {
+test("invite: Retry that grants access says so with the day, and no Last tried", async ({ page }) => {
   await scenario(page, "iap-pending");
   await login(page);
   await page.goto("/settings/members");
@@ -75,8 +75,8 @@ test("invite: Retry that grants access says so with the time", async ({ page }) 
   const access = row.getByTestId("invite-access-detail");
   await expect(access).toContainText("oracle-api-be: Google returned 403 (permission denied)");
   await row.getByRole("button", { name: "Retry access for pat@example.com" }).click();
-  await expect(row.getByTestId("invite-access")).toHaveText("Access granted");
-  await expect(access).toHaveText(/^Last tried \w{3} \d{1,2}, \d{1,2}:\d{2} [AP]M P[DS]T$/);
+  await expect(row.getByTestId("invite-access")).toHaveText(/^Access granted \w{3} \d{1,2}$/);
+  await expect(access).toHaveCount(0);
 });
 
 test("invite: a failed email's reason is text on the row", async ({ page }) => {

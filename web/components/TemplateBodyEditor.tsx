@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Chip, InfoTip, Label } from "@/components/ds";
 import { TEXTAREA } from "@/app/settings/_components/fields";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { problemText, type Problem } from "@/lib/api/problems";
+import { plural } from "@/lib/format";
 import { useLive, type Live } from "@/lib/use-live";
+import { useQuery } from "@/lib/use-query";
 
 export type TemplateCheck = Schemas["TemplateValidateOut"];
 
@@ -28,6 +31,28 @@ brief: [problem, solution]
 ## Sources and data points {#sources}
 <!-- The only place for sources, numbers and evidence. -->
 `;
+
+/** Every theme's name by its key (archived ones too): a template names its theme by key. */
+export function useThemeNames(): Map<string, string> | undefined {
+  const q = useQuery("themes|all", () => unwrap(api.GET("/v1/themes", { params: { query: { include_archived: true } } })));
+  return q.data ? new Map(q.data.map((t) => [t.key, t.name])) : undefined;
+}
+
+/**
+ * qa-settings-13: a template's suggested theme by its name, linked to the theme; the key
+ * shows only while the names load or for a theme that no longer exists.
+ */
+export function ThemeName({ themeKey, names }: { themeKey: string | null | undefined; names: Map<string, string> | undefined }) {
+  if (!themeKey) return <span className="text-text2">—</span>;
+  if (!names) return <span className="text-text2">…</span>;
+  const name = names.get(themeKey);
+  if (!name) return <span className="text-text2">{themeKey}</span>;
+  return (
+    <Link href={`/settings/themes/${themeKey}`} onClick={(e) => e.stopPropagation()} className="text-accent-ink hover:underline">
+      {name}
+    </Link>
+  );
+}
 
 const validateBody = (body: string) => unwrap(api.POST("/v1/templates/validate", { body: { body } }));
 
@@ -107,6 +132,7 @@ export function TemplateBodyEditor({
   const own = useTemplateCheck(value, !given);
   const live = given ?? own;
   const check = live.data;
+  const themeNames = useThemeNames();
   return (
     <div className="flex flex-col gap-2">
       <span className="flex items-center gap-1.5">
@@ -140,7 +166,7 @@ export function TemplateBodyEditor({
             {check.suggested_theme && (
               <>
                 <Label>· theme</Label>
-                <span className="font-mono text-[13px]">{check.suggested_theme}</span>
+                <ThemeName themeKey={check.suggested_theme} names={themeNames} />
               </>
             )}
             {check.brief_sections.length > 0 && (
@@ -158,7 +184,7 @@ export function TemplateBodyEditor({
           <div className="flex flex-col gap-1.5">
             <p className="flex items-center gap-2">
               <Chip kind="crit" dot>
-                <span className="tnum">{check.problems.length}</span> problem{check.problems.length > 1 ? "s" : ""}
+                <span className="tnum">{plural(check.problems.length, "problem")}</span>
                 {live.pending ? " · checking…" : ""}
               </Chip>
             </p>

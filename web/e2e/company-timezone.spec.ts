@@ -9,7 +9,7 @@ import { login } from "./helpers";
  */
 
 // protects: an owner sets the Company time zone on Settings › Company (America/Los_Angeles
-// until then, owner decision 2026-10-22), the
+// until then, owner decision 2026-10-22, shown as "Not set · Pacific is used"), the
 // Set up checklist's Time zone step opens it and shows the zone, and the weekly alignment
 // report says it runs in that zone instead of asking for its own.
 // fails_when: there is no Company time zone, it reads UTC before an owner sets it, it does
@@ -23,7 +23,9 @@ test("Company time zone: set on Settings › Company, read by the weekly report"
   await step.getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company/);
   const zone = page.getByLabel("Company time zone");
-  await expect(zone).toHaveValue("America/Los_Angeles");
+  // #514 / qa-settings-2: none stored yet reads as not set, not as Los Angeles chosen.
+  await expect(zone).toHaveValue("");
+  await expect(zone.locator("option:checked")).toHaveText("Not set · Pacific is used");
   await zone.selectOption("Asia/Tokyo");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
@@ -34,7 +36,9 @@ test("Company time zone: set on Settings › Company, read by the weekly report"
   const report = page.getByTestId("report-schedule");
   await expect(report).toBeVisible();
   await expect(report.getByLabel("Time zone")).toHaveCount(0);
-  await expect(report.getByTestId("report-zone")).toHaveText("Asia/Tokyo");
+  // The zone in words (zoneName), not its IANA name.
+  await expect(report.getByTestId("report-zone")).toContainText("(Tokyo)");
+  await expect(report.getByTestId("report-zone")).not.toContainText("Asia/Tokyo");
   await expect(report.getByRole("link", { name: "Change" })).toHaveAttribute("href", "/settings/company#timezone");
 
   await page.goto("/home");

@@ -52,5 +52,5 @@ test("a seed written while the app's own write is in flight is kept", async ({ p
 
   await page.goto(`/runs/${ROADMAP_REVIEW_RUN.run.id}`);
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
-  await expect(page.getByText(/^run [0-9a-f-]+ not found$/)).toHaveCount(0);
+  await expect(page.getByText("This run doesn't exist or was deleted.")).toHaveCount(0);
 });

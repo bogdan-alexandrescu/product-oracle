@@ -147,7 +147,7 @@ export async function interviewsCall<T>(method: string, path: string, body?: unk
       ? "Your session has expired. Sign in again."
       : typeof detail === "string"
         ? detail
-        : `Request failed (${res.status}).`;
+        : "Something went wrong. Try again.";
   throw new ApiError(res.status, message);
 }
 

@@ -192,6 +192,8 @@ test("the chosen mode is remembered across a reload and the next sign-in", async
 const PAIRS: [detailed: string, simple: string][] = [
   ["/home", "/simple"],
   ["/documents/checkout-redesign", "/simple/one-pagers/checkout-redesign"],
+  // qa-shell-5: the PRDs list and the One-pagers list match both ways.
+  ["/documents", "/simple/one-pagers"],
   ["/plan", "/simple/roadmap"],
   ["/priorities", "/simple/priorities"],
   ["/company/rituals", "/simple/meetings"],
@@ -221,11 +223,6 @@ test("the switch lands on the matching page, Simple to Detailed", async ({ page 
     await switchTo(page, "Detailed");
     await expectDetailed(page, detailed);
   }
-  // Anything else: Detailed's Home.
-  await page.goto("/simple/one-pagers");
-  await expectSimple(page, "/simple/one-pagers");
-  await switchTo(page, "Detailed");
-  await expectDetailed(page, "/home");
 });
 
 test("a /simple link opens in Simple for an owner whose saved mode is Detailed", async ({ page }) => {
@@ -263,8 +260,9 @@ test("Simple's rail has its six destinations and none of Detailed's", async ({ p
   for (const detailed of ["Requests", "Baseline", "PRDs", "Plan", "Runs", "Inbox", "Company", "Settings"]) {
     await expect(rail.getByRole("link", { name: detailed, exact: true })).toHaveCount(0);
   }
-  // The Ask panel stays.
-  await expect(page.getByTestId("hop-strip")).toBeVisible();
+  // qa-shell-16: one Ask control, the rail's Ask Oracle; no Ask strip beside it.
+  await expect(page.getByTestId("simple-ask")).toBeVisible();
+  await expect(page.getByTestId("hop-strip")).toHaveCount(0);
 
   for (const [name, path, heading] of [
     ["One-pagers", "/simple/one-pagers", "One-pagers"],

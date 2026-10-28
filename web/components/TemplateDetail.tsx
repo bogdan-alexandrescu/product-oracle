@@ -17,8 +17,15 @@ import {
   Panel,
   Split,
 } from "@/components/ds";
-import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
-import { ProblemList, TemplateBodyEditor, WarningList, useTemplateCheck } from "@/components/TemplateBodyEditor";
+import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
+import {
+  ProblemList,
+  TemplateBodyEditor,
+  ThemeName,
+  WarningList,
+  useTemplateCheck,
+  useThemeNames,
+} from "@/components/TemplateBodyEditor";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
@@ -37,6 +44,17 @@ const BACK = (
     ← Templates
   </Link>
 );
+
+function VersionBody({ body }: { body: string }) {
+  return (
+    <pre
+      data-testid="version-body"
+      className="max-h-[32rem] overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] leading-5 whitespace-pre-wrap text-text"
+    >
+      {body}
+    </pre>
+  );
+}
 
 /** A template: its versions, an editor for the next version, details, archive / restore. */
 export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
@@ -57,6 +75,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const latest = t?.versions[t.versions.length - 1];
   const body = draft ?? latest?.body ?? "";
   const live = useTemplateCheck(body, !!t);
+  const themes = useThemeNames();
 
   if (q.error) {
     return (
@@ -140,6 +159,9 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
 
   const kindLabel = t.kind === "prd" ? "PRD" : "Roadmap";
   const dirty = draft !== null && draft !== latest.body;
+  // qa-settings-19: the version shown is what the editor holds: say so, not print it twice.
+  const sameAsEditor = canEdit && shown.body === body;
+  const suggestWhen = latest.suggest_when ?? t.suggest_when;
 
   const inspector = (
     <Inspector
@@ -176,7 +198,12 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               <input className={INPUT} value={nameValue} onChange={(e) => setName(e.target.value)} />
             </Field>
             <Field label="Description">
-              <input className={INPUT} value={descriptionValue} onChange={(e) => setDescription(e.target.value)} />
+              <textarea
+                rows={3}
+                className={TEXTAREA}
+                value={descriptionValue}
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </Field>
             <div>
               <Button onClick={saveDetails} disabled={!detailsChanged || !nameValue.trim() || busy !== null}>
@@ -186,19 +213,24 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
           </div>
         </InspectorSection>
       )}
-      <InspectorSection label="Facts">
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.suggested_theme ?? "—"}</span>}>
-          Suggested theme
-        </InspectorRow>
+      {!canEdit && t.description && (
+        <InspectorSection label="Description">
+          <p className="text-[15px] text-text">{t.description}</p>
+        </InspectorSection>
+      )}
+      {/* qa-settings-19: the text itself, not an (i) with no value beside it. */}
+      {suggestWhen && (
+        <InspectorSection label="Suggested when" testId="suggest-when">
+          <p className="text-[15px] text-text">{suggestWhen}</p>
+        </InspectorSection>
+      )}
+      <InspectorSection label="Facts" testId="template-facts">
+        <InspectorRow value={<ThemeName themeKey={t.suggested_theme} names={themes} />}>Suggested theme</InspectorRow>
         <InspectorRow value={formatDate(t.created_at)}>Added</InspectorRow>
         {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
-        {latest.suggest_when && (
-          <div className="flex min-h-8 items-center gap-2.5">
-            <span className="flex-1">Suggested when</span>
-            <InfoTip label="Suggested when">{latest.suggest_when}</InfoTip>
-          </div>
-        )}
+      </InspectorSection>
+      <InspectorSection label="For developers" testId="template-developers">
+        <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
       </InspectorSection>
       {canEdit && (
         <InspectorSection>
@@ -310,12 +342,18 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
               <WarningList warnings={shown.warnings} />
             </div>
           )}
-          <pre
-            data-testid="version-body"
-            className="max-h-[32rem] overflow-auto rounded-button border border-line bg-surface2 p-3 font-mono text-[13px] leading-5 whitespace-pre-wrap text-text"
-          >
-            {shown.body}
-          </pre>
+          {sameAsEditor ? (
+            <details data-testid="version-same" className="text-sm">
+              <summary className="cursor-pointer text-text2 hover:text-text">
+                {`Same as the editor above. Show v${shown.version}`}
+              </summary>
+              <div className="mt-2">
+                <VersionBody body={shown.body} />
+              </div>
+            </details>
+          ) : (
+            <VersionBody body={shown.body} />
+          )}
         </Panel>
       </Split>
     </>

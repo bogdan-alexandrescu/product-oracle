@@ -14,6 +14,7 @@ import { Button, confirmInPage, Notice, PageHeader, Panel } from "@/components/d
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
+import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { ZONE_NOT_SET } from "@/lib/zone";
@@ -169,7 +170,7 @@ function SlackPanel({
         ) : (
           <>
             <p data-testid="slack-connected">
-              Connected to <b>{status?.label ?? slack.account_label ?? slack.account_id}</b> as @Product Oracle
+              Connected to <b>{status?.label ?? slack.account_label ?? "your Slack workspace"}</b> as @Product Oracle
             </p>
             {status?.needs_reconnect ? (
               <Notice
@@ -280,7 +281,7 @@ function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: 
           <div className="flex h-9 items-center gap-2 text-sm">
             <span className="font-semibold text-text2">Company time zone</span>
             <span data-testid="report-zone" className="tnum">
-              {stored.data?.is_default ? ZONE_NOT_SET : zone}
+              {stored.data?.is_default ? ZONE_NOT_SET : zoneName(zone)}
             </span>
             <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
               Change

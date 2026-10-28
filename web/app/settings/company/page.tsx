@@ -1,13 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel, ViewOnly } from "@/components/ds";
 import { BRANDING_OPS } from "@/lib/api/branding";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { displayName } from "@/lib/names";
+import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+import { ZONE_NOT_SET } from "@/lib/zone";
 
 import { INPUT, SELECT_FIELD } from "../_components/fields";
 import { BrandingPanel } from "./BrandingPanel";
@@ -162,16 +164,11 @@ function HorizonsPanel() {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
-              {changed ? (
-                <Button type="submit" variant="solid" disabled={busy}>
+              {/* Unchanged defaults: Save keeps them, which ticks Set up's Horizons step. */}
+              {(changed || setting.is_default) && (
+                <Button type="submit" variant="solid" disabled={busy} aria-label="Save horizons">
                   Save
                 </Button>
-              ) : (
-                setting.is_default && (
-                  <Button type="submit" variant="solid" disabled={busy} icon="check">
-                    Confirm
-                  </Button>
-                )
               )}
               {!setting.is_default && (
                 <Button variant="ghost" disabled={busy} onClick={() => void reset()} className="ml-auto">
@@ -189,26 +186,30 @@ function HorizonsPanel() {
 /** Common zones first; the browser's full list after. */
 const ZONES = ["UTC", "America/Los_Angeles", "America/Denver", "America/Chicago", "America/New_York", "Europe/London", "Europe/Berlin", "Asia/Tokyo", "Australia/Sydney"];
 
-function zones(current: string): string[] {
+/** The zones to pick from, each with its name in words ("Pacific Time (Los Angeles)"). */
+function zoneOptions(current: string): { value: string; label: string }[] {
   const all = typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
-  return [...new Set([current, ...ZONES, ...all])];
+  return [...new Set([...(current ? [current] : []), ...ZONES, ...all])].map((z) => ({ value: z, label: zoneName(z) }));
 }
 
 /**
- * The Company time zone (one setting, America/Los_Angeles by default): every date and time on screen, goals' today, the weekly report and rituals.
+ * The Company time zone (one setting, America/Los_Angeles until an owner picks one): every date and time on screen, goals' today, the weekly report and rituals.
  * #370: only a role that can change it (owners) gets the form; others read the zone.
+ * #514: none stored yet reads "Not set · Pacific is used", as Notifications and Home's Set up say.
  */
 function TimezonePanel({ canChange }: { canChange: boolean }) {
   const { refresh } = useMe();
   const settingQ = useQuery("settings|company_timezone", () =>
     unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "company_timezone" } } })),
   );
-  const stored = settingQ.data ? String(settingQ.data.value) : null;
+  // "": none stored yet (the API answers the default with is_default).
+  const stored = settingQ.data ? (settingQ.data.is_default ? "" : String(settingQ.data.value)) : null;
   const [edit, setEdit] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const zone = edit ?? stored;
+  const options = useMemo(() => (stored === null ? [] : zoneOptions(stored)), [stored]);
 
   async function save() {
     if (!zone) return;
@@ -247,13 +248,13 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
             <Notice tone="error">{settingQ.error}</Notice>
           </div>
         )}
-        {zone && !canChange && (
+        {zone !== null && !canChange && (
           <div className={ROW.replace("88px", "160px")} data-testid="timezone-value">
             <span className={ROW_LABEL}>Company time zone</span>
-            <span className="text-[15px]">{zone}</span>
+            <span className="text-[15px]">{zone ? zoneName(zone) : ZONE_NOT_SET}</span>
           </div>
         )}
-        {zone && canChange && (
+        {zone !== null && canChange && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -266,16 +267,21 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
               </label>
               <select
                 id="company-timezone"
-                className={`${SELECT_FIELD} max-w-72`}
+                className={`${SELECT_FIELD} max-w-80`}
                 value={zone}
                 onChange={(e) => {
                   setEdit(e.target.value);
                   setSaved(false);
                 }}
               >
-                {zones(zone).map((z) => (
-                  <option key={z} value={z}>
-                    {z}
+                {!stored && (
+                  <option value="" disabled>
+                    {ZONE_NOT_SET}
+                  </option>
+                )}
+                {options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
                   </option>
                 ))}
               </select>
@@ -286,9 +292,14 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
-              <Button type="submit" variant="solid" disabled={busy}>
+              <Button type="submit" variant="solid" disabled={busy || !zone} aria-label="Save time zone">
                 Save
               </Button>
+              {!zone && (
+                <span data-testid="timezone-hint" className="text-sm text-text2">
+                  Pick a time zone to set it.
+                </span>
+              )}
               {saved && (
                 <span role="status" className="text-sm font-semibold text-pass">
                   Saved
@@ -390,7 +401,7 @@ function PricingOwnerPanel() {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
-              <Button type="submit" variant="solid" disabled={busy || !chosen}>
+              <Button type="submit" variant="solid" disabled={busy || !chosen} aria-label="Save pricing owner">
                 Save
               </Button>
               {saved && (

@@ -253,7 +253,7 @@ test("plan inspector: an unverified date offers Verify date; the dialog picks th
   // The record's own target is the date: another date is refused because the record is sent.
   await dialog.getByLabel("Date it supports").fill("2026-12-20");
   await dialog.getByRole("button", { name: "Verify" }).click();
-  await expect(dialog).toContainText("tracker record ENG-431 targets 2026-12-15, not 2026-12-20");
+  await expect(dialog).toContainText(/tracker record ENG-431 targets 2026-12-15, not 2026-12-20/i);
   await dialog.getByLabel("Date it supports").fill("2026-12-15");
   await dialog.getByRole("button", { name: "Verify" }).click();
   await expect(dialog).toBeHidden();

@@ -5,6 +5,7 @@ import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "rea
 import { Button, Chip, InfoTip, Label, Notice, SegmentedControl } from "@/components/ds";
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
 import { calendarDay, dayIn, todayIn, useCompanyZone, zoneDay, zoneTime, zoneWeekday } from "@/lib/dates";
+import { formatCount, plural } from "@/lib/format";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { INPUT } from "../_components/fields";
@@ -113,8 +114,8 @@ export function firefliesSummary(c: FirefliesConfig): string {
   const range = firefliesRange(c);
   if (c.mode === "all") return range ? `All meetings ${range}` : "All meetings";
   const parts = [
-    ...(c.series.length ? [`${c.series.length} series`] : []),
-    ...(c.meetings.length ? [`${c.meetings.length} meeting${c.meetings.length === 1 ? "" : "s"}`] : []),
+    ...(c.series.length ? [plural(c.series.length, "series", "series")] : []),
+    ...(c.meetings.length ? [plural(c.meetings.length, "meeting")] : []),
   ];
   if (!parts.length) return "Nothing picked yet";
   return [...parts, ...(range ? [range] : [])].join(", ");
@@ -242,7 +243,7 @@ function Section({ title, count, children, action }: { title: string; count?: nu
     <section className="flex min-w-0 flex-col gap-2" aria-label={title}>
       <div className="flex min-h-9 items-center gap-2">
         <h3 className="text-[15px] font-semibold">{title}</h3>
-        {count != null && <span className="tnum text-sm text-text2">{count}</span>}
+        {count != null && <span className="tnum text-sm text-text2">{formatCount(count)}</span>}
         <span className="ml-auto flex items-center">{action}</span>
       </div>
       {children}
@@ -499,7 +500,7 @@ export function FirefliesPicker({
             {series.data && seriesRows.length === 0 && <p className="px-1 text-[15px] text-text2">No recurring meetings</p>}
             {series.data?.truncated && (
               <Notice testId="fireflies-series-partial" tone="warn">
-                Counts cover the newest {series.data.scanned.toLocaleString("en-US")} meetings. Narrow From and To to count
+                Counts cover the newest {formatCount(series.data.scanned)} meetings. Narrow From and To to count
                 them all.
               </Notice>
             )}
@@ -513,7 +514,7 @@ export function FirefliesPicker({
                   </Button>
                 }
               >
-                {missing.length} meeting{missing.length === 1 ? "" : "s"} titled “{s.title}” {missing.length === 1 ? "is" : "are"}{" "}
+                {plural(missing.length, "meeting")} titled “{s.title}” {missing.length === 1 ? "is" : "are"}{" "}
                 outside this series in these dates.
               </Notice>
             ))}
@@ -541,9 +542,9 @@ export function FirefliesPicker({
                       {s.meeting_count > 0 && (
                         <span
                           className="tnum flex-none text-sm text-text2"
-                          title={`${s.meeting_count} meetings${s.last_date ? `, last ${zoneDay(s.last_date, zone)}` : ""}`}
+                          title={`${plural(s.meeting_count, "meeting")}${s.last_date ? `, last ${zoneDay(s.last_date, zone)}` : ""}`}
                         >
-                          {s.meeting_count} · {s.last_date ? zoneDay(s.last_date, zone) : "—"}
+                          {formatCount(s.meeting_count)} · {s.last_date ? zoneDay(s.last_date, zone) : "—"}
                         </span>
                       )}
                     </label>
@@ -561,7 +562,7 @@ export function FirefliesPicker({
                 <Button onClick={undoTickAll}>Undo tick all</Button>
               ) : (meetings.next || tickable.some((m) => !pickedMeetings.has(m.id))) && !meetingsFull ? (
                 <Button onClick={() => void tickAll()} disabled={!settled}>
-                  {`Tick all ${tickable.length}${meetings.next ? "+" : ""} result${tickable.length === 1 && !meetings.next ? "" : "s"}`}
+                  {`Tick all ${formatCount(tickable.length)}${meetings.next ? "+" : ""} result${tickable.length === 1 && !meetings.next ? "" : "s"}`}
                 </Button>
               ) : null
             }
@@ -590,7 +591,7 @@ export function FirefliesPicker({
             )}
             {meetingsFull && (
               <Notice testId="fireflies-meetings-cap">
-                {MAX_MEETINGS.toLocaleString("en-US")} meetings picked, the most a source takes: unpick one, or pick its
+                {formatCount(MAX_MEETINGS)} meetings picked, the most a source takes: unpick one, or pick its
                 series instead.
               </Notice>
             )}

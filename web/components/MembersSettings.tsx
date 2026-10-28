@@ -8,7 +8,7 @@ import { AccessRequests } from "@/components/members/AccessRequests";
 import { personName, RemoveDialog, RoleDialog } from "@/components/members/ChangePreview";
 import { MemberInspector } from "@/components/members/MemberInspector";
 import { SignInRules } from "@/components/members/SignInRules";
-import { FindPerson, matches, PeopleReadOnly } from "@/components/members/PeopleReadOnly";
+import { FindPerson, matches, NoMatch, PeopleReadOnly } from "@/components/members/PeopleReadOnly";
 import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
 import {
   Avatar,
@@ -27,8 +27,9 @@ import {
 } from "@/components/ds";
 import { api, unwrap, type Invite, type Member } from "@/lib/api/client";
 import { hasRole, membersApi, type HandOver, type Impact } from "@/lib/api/members-types";
-import { formatDate, formatDateTime, formatDay } from "@/lib/format";
+import { formatDate, formatDateTime, formatDay, formatShortDate } from "@/lib/format";
 import { useMe, type Role } from "@/lib/me";
+import { displayName } from "@/lib/names";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 const ROLES: { role: Role; label: string; can: string }[] = [
@@ -49,6 +50,27 @@ const MESSAGE_MAX = 500;
 const MESSAGE_COUNT_FROM = 400;
 /** A name is at most 80 characters (A5). */
 const NAME_MAX = 80;
+/** An address the invite can go to: something@domain.tld, no spaces. */
+const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Why Send invite is off, said under the Email field; null once the address can be sent to. */
+function emailProblem(email: string): string | null {
+  if (!email.trim()) return "Enter an email address";
+  return EMAIL_SHAPE.test(email.trim()) ? null : "Enter a valid email address, like name@company.com";
+}
+
+/** An email that wraps does so after its "@", not inside the name or the domain. */
+function EmailLines({ email }: { email: string }) {
+  const at = email.lastIndexOf("@");
+  if (at < 0) return <>{email}</>;
+  return (
+    <>
+      {email.slice(0, at + 1)}
+      <wbr />
+      {email.slice(at + 1)}
+    </>
+  );
+}
 
 const RESENT = ["", "resent once", "resent twice"];
 
@@ -105,7 +127,7 @@ export function MembersSettings() {
   if (ready && (canManage || canInvite)) return <OwnerView selfId={me?.user_id ?? null} manage={canManage} />;
   return (
     <>
-      <PageHeader title="Members" status={pageTip} />
+      <PageHeader title="Members" info={pageTip} />
       {ready && (
         <Split inspector={<RolesInspector />}>
           <RoleNote />
@@ -202,32 +224,13 @@ function plusAddressWarning(email: string): string | null {
   return `Google sign-in treats this as ${base}; IAP access can't be granted to it.`;
 }
 
-/** "Last tried Oct 22, 9:05 AM PDT · <reason>": what an invite's row says of an outcome, as text. */
+/** "Last tried Oct 22, 9:05 AM PDT · <reason>": said only of an attempt that failed, as text. */
 function Tried({ at, reason, testId }: { at?: string | null; reason?: string | null; testId: string }) {
   const said = [at ? `Last tried ${formatDateTime(at)}` : null, reason || null].filter(Boolean).join(" · ");
   if (!said) return null;
   return (
     <span data-testid={testId} className="basis-full break-words text-[13px] text-text2">
       {said}
-    </span>
-  );
-}
-
-/** An invite's Google IAP access: granted, or not yet with Retry; when last tried and why. Nothing without IAP. */
-function AccessState({ invite, retrying, onRetry }: { invite: Invite; retrying: boolean; onRetry: () => void }) {
-  if (invite.access !== "granted" && invite.access !== "pending") return null;
-  const granted = invite.access === "granted";
-  return (
-    <span className="flex basis-full flex-wrap items-center gap-1.5">
-      <Chip kind={granted ? "pass" : "warn"} data-testid="invite-access">
-        {granted ? "Access granted" : "Access not granted yet"}
-      </Chip>
-      {!granted && (
-        <Button variant="ghost" aria-label={`Retry access for ${invite.email}`} aria-busy={retrying || undefined} disabled={retrying} onClick={onRetry}>
-          {retrying ? "Retrying…" : "Retry"}
-        </Button>
-      )}
-      <Tried at={invite.access_at} reason={granted ? null : invite.access_error} testId="invite-access-detail" />
     </span>
   );
 }
@@ -239,23 +242,61 @@ const EMAIL_LABEL: Record<Invite["email_status"], string> = {
   not_sent: "Not sent",
 };
 
-/** An invite's email: Sent <date>, Sending…, Not sent (no sender), or Failed; Resend; when last tried and why. */
-function EmailState({ invite, resending, onResend }: { invite: Invite; resending: boolean; onResend: () => void }) {
+/** "Sent Oct 15", "Access granted Oct 15": the day the email or access worked; its full time on hover. */
+function On({ at }: { at?: string | null }) {
+  return at ? <span title={formatDateTime(at)}> {shortDate(at)}</span> : null;
+}
+
+/**
+ * An open invite's one status line (owners): the email (Sent <day>, Sending…, Not sent, or
+ * Failed, with Resend) and Google IAP access (Access granted <day>, or not yet with Retry;
+ * nothing without IAP). When it was last tried and why shows only after a failure. An expired
+ * invite has neither: its Expired chip says it, and Resend gives it 14 more days.
+ */
+function InviteDelivery({
+  invite,
+  busy,
+  onRetry,
+  onResend,
+}: {
+  invite: Invite;
+  busy: string | null;
+  onRetry: () => void;
+  onResend: () => void;
+}) {
+  if (invite.status === "expired") return null;
   const s = invite.email_status;
-  const reason = s === "failed" ? invite.email_error : s === "not_sent" ? "Oracle has no sender set up: send them the sign-in link" : null;
+  const access = invite.access === "granted" || invite.access === "pending" ? invite.access : null;
+  const retrying = busy === `access:${invite.id}`;
+  const resending = busy === `email:${invite.id}`;
+  const emailReason = s === "failed" ? invite.email_error : s === "not_sent" ? "Oracle has no sender set up: send them the sign-in link" : null;
   return (
-    <span className="flex basis-full flex-wrap items-center gap-1.5">
-      <Chip kind={s === "failed" ? "crit" : s === "sent" ? "line" : "na"} data-testid="invite-email">
-        {EMAIL_LABEL[s]}
-        {s === "sent" && invite.email_at ? ` ${shortDate(invite.email_at)}` : ""}
-      </Chip>
-      {(s === "failed" || s === "sent") && (
-        <Button variant="ghost" aria-label={`Resend invitation to ${invite.email}`} disabled={resending} onClick={onResend}>
-          {resending ? "Resending…" : "Resend"}
-        </Button>
-      )}
-      <Tried at={s === "sent" || s === "failed" ? invite.email_at : null} reason={reason} testId="invite-email-detail" />
-    </span>
+    <>
+      <span data-testid="invite-status" className="flex basis-full flex-wrap items-center gap-1.5">
+        <Chip kind={s === "failed" ? "crit" : s === "sent" ? "line" : "na"} data-testid="invite-email">
+          {EMAIL_LABEL[s]}
+          {s === "sent" && <On at={invite.email_at} />}
+        </Chip>
+        {(s === "failed" || s === "sent") && (
+          <Button variant="ghost" aria-label={`Resend invitation to ${invite.email}`} disabled={resending} onClick={onResend}>
+            {resending ? "Resending…" : "Resend"}
+          </Button>
+        )}
+        {access && (
+          <Chip kind={access === "granted" ? "pass" : "warn"} data-testid="invite-access">
+            {access === "granted" ? "Access granted" : "Access not granted yet"}
+            {access === "granted" && <On at={invite.access_at} />}
+          </Chip>
+        )}
+        {access === "pending" && (
+          <Button variant="ghost" aria-label={`Retry access for ${invite.email}`} aria-busy={retrying || undefined} disabled={retrying} onClick={onRetry}>
+            {retrying ? "Retrying…" : "Retry"}
+          </Button>
+        )}
+      </span>
+      <Tried at={s === "failed" ? invite.email_at : null} reason={emailReason} testId="invite-email-detail" />
+      {access === "pending" && <Tried at={invite.access_at} reason={invite.access_error} testId="invite-access-detail" />}
+    </>
   );
 }
 
@@ -481,9 +522,11 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
 
   async function invite(e: FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (emailProblem(email)) return;
     setPending(true);
+    // A new attempt clears the last one's outcome: only the latest shows.
     setInviteError(null);
+    setMade(null);
     try {
       const created = await unwrap(
         api.POST("/v1/invites", {
@@ -600,52 +643,68 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     {
       key: "email",
       header: "Member",
+      wrap: true,
       cell: (m) => (
-        <span className="flex min-w-0 items-center gap-2.5">
+        <span className="flex min-w-0 items-start gap-2.5">
           <Avatar name={personName(m)} size={28} tone={m.id === selfId ? "me" : "default"} />
-          {/* A5: the name in bold, the email under it (the email alone with no name); opens the member inspector. */}
-          <button
-            type="button"
-            data-testid="member-open"
-            onClick={() => setInspecting(m.id)}
-            className={`flex min-w-0 flex-col text-left leading-tight hover:underline ${removed(m) ? "text-text2" : ""}`}
-          >
-            <span className="truncate font-semibold">{personName(m)}</span>
-            {m.name?.trim() && <span className="truncate text-[13px] font-normal text-text2">{m.email}</span>}
-          </button>
-          {m.id === selfId && (
-            <Chip kind="acc">
-              <span className="sr-only">(</span>you<span className="sr-only">)</span>
-            </Chip>
-          )}
-          {/* On a phone the Eng lead column hides; this chip says it instead. */}
-          {m.engineering_lead && (
-            <Chip kind="acc" className="hidden max-[600px]:inline-flex">
-              Eng lead
-            </Chip>
-          )}
+          <span className="flex min-w-0 flex-col items-start gap-1">
+            {/* A5: the name in bold, the email whole under it (it wraps, never cut); opens the member inspector. */}
+            <button
+              type="button"
+              data-testid="member-open"
+              onClick={() => setInspecting(m.id)}
+              className={`flex min-w-0 max-w-full flex-col text-left leading-tight hover:underline ${removed(m) ? "text-text2" : ""}`}
+            >
+              <span data-testid="member-name" className="font-semibold [overflow-wrap:anywhere]">
+                {personName(m)}
+              </span>
+              <span data-testid="member-email" className="text-[13px] font-normal text-text2 [overflow-wrap:anywhere]">
+                <EmailLines email={m.email} />
+              </span>
+            </button>
+            {/* The chips on their own line, so the email keeps its room. */}
+            {(m.id === selfId || m.engineering_lead) && (
+              <span className="flex flex-wrap gap-1">
+                {m.id === selfId && (
+                  <Chip kind="acc" data-testid="member-you">
+                    <span className="sr-only">(</span>you<span className="sr-only">)</span>
+                  </Chip>
+                )}
+                {/* On a phone the Eng lead column hides; this chip says it instead. */}
+                {m.engineering_lead && (
+                  <Chip kind="acc" className="hidden max-[600px]:inline-flex">
+                    Eng lead
+                  </Chip>
+                )}
+              </span>
+            )}
+          </span>
         </span>
       ),
     },
-    { key: "role", header: "Role", width: "128px", wrap: true, cell: roleCell },
+    // Wide enough for the whole of "Commenter" in its select.
+    { key: "role", header: "Role", width: "148px", wrap: true, cell: roleCell },
     {
       key: "lead",
       // The anchor of A1's Engineering lead step (Set up on Home).
       header: <span id="engineering-lead">Eng lead</span>,
-      width: "110px",
+      width: "84px",
       hideOnPhone: true,
       cell: (m) => (removed(m) ? <span className="text-text2">{m.engineering_lead ? "Yes" : "—"}</span> : leadBox(m)),
     },
-    { key: "status", header: "Status", width: "146px", wrap: true, cell: (m) => <StatusChip m={m} /> },
+    { key: "status", header: "Status", width: "140px", wrap: true, cell: (m) => <StatusChip m={m} /> },
     {
       key: "signin",
       header: "Last sign-in",
-      width: "104px",
+      // "Oct 20" (the year only when it is not this one); the full time on hover.
+      width: "100px",
       phoneLabel: "Signed in ",
+      // Beside the inspector the member's name and email need the room; the inspector has it.
+      narrow: "hide",
       cell: (m) =>
         m.last_sign_in_at ? (
           <span className="tnum text-text2" title={formatDateTime(m.last_sign_in_at)}>
-            {formatDate(m.last_sign_in_at)}
+            {formatShortDate(m.last_sign_in_at)}
           </span>
         ) : (
           <span className="text-text2" title="Not known: no sign-in recorded yet">
@@ -659,6 +718,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
       width: "72px",
       align: "right",
       phoneLabel: "Tokens ",
+      narrow: "hide",
       cell: (m) => (
         <Link
           href={`/settings/api-tokens?member=${m.id}`}
@@ -670,9 +730,10 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         </Link>
       ),
     },
-    { key: "action", header: <span className="sr-only">Actions</span>, width: "132px", align: "right", phone: "action", wrap: true, cell: actionCell },
+    { key: "action", header: <span className="sr-only">Actions</span>, width: "112px", align: "right", phone: "action", wrap: true, cell: actionCell },
   ];
 
+  const problem = emailProblem(email);
   const invites = invitesQ.data;
   // Oracle sends invite emails in the background: look again until none is still sending.
   const sending = invites?.some((i) => i.email_status === "queued") ?? false;
@@ -727,11 +788,17 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 setInviteError(null);
               }}
               placeholder="name@company.com"
-              aria-invalid={inviteError ? true : undefined}
-              aria-describedby={inviteError ? "invite-error" : undefined}
+              aria-invalid={inviteError || (email.trim() && problem) ? true : undefined}
+              aria-describedby={inviteError ? "invite-error" : problem ? "invite-email-hint" : undefined}
               className={INPUT}
             />
           </Field>
+          {/* Why Send invite is off: nothing typed yet, or not an address. */}
+          {problem && !inviteError && (
+            <p id="invite-email-hint" data-testid="invite-email-hint" className={`-mt-1.5 text-[13px] ${email.trim() ? "font-medium text-crit" : "text-text2"}`}>
+              {problem}
+            </p>
+          )}
           {plusAddressWarning(email) && (
             <p data-testid="plus-address-warning" role="note" className="-mt-1.5 text-[13px] font-medium text-warn">
               {plusAddressWarning(email)}
@@ -788,7 +855,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
             </p>
           )}
           <div>
-            <Button type="submit" variant="solid" icon="plus" disabled={pending || !email.trim()}>
+            <Button type="submit" variant="solid" icon="plus" disabled={pending || !!problem}>
               {pending ? "Inviting…" : "Send invite"}
             </Button>
           </div>
@@ -806,16 +873,12 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 key={i.id}
                 data-testid="invite-row"
                 {...inviteActs.rowAttrs(i.id)}
-                className="flex min-h-11 flex-wrap items-center gap-1.5 border-t border-line py-1.5 first:border-t-0"
+                className="flex min-h-11 flex-wrap items-center gap-1.5 border-t border-line py-2 first:border-t-0"
               >
-                <span data-testid="invite-who" className="min-w-0 flex-1 truncate font-medium max-[600px]:min-w-[9rem]" title={invitedLine(i)}>
-                  {i.name ? (
-                    <>
-                      {i.name} <span className="font-normal text-text2">{i.email}</span>
-                    </>
-                  ) : (
-                    i.email
-                  )}
+                {/* The name, and the whole email on its own line under it (it wraps, never cut). */}
+                <span data-testid="invite-who" className="flex min-w-0 basis-full flex-col leading-tight" title={invitedLine(i)}>
+                  <span className="font-medium [overflow-wrap:anywhere]">{displayName(i.email, i.name)}</span>{" "}
+                  <span className="text-[13px] text-text2 [overflow-wrap:anywhere]">{i.email}</span>
                 </span>
                 {inviteActs.acted?.key === i.id ? (
                   <ActedCell acted={inviteActs.acted} onUndo={inviteActs.undo} />
@@ -852,8 +915,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                       </span>
                     )}
                     {/* #370: Retry and Resend are an owner's; an approver sees neither. */}
-                    {manage && <AccessState invite={i} retrying={busy === `access:${i.id}`} onRetry={() => retryAccess(i)} />}
-                    {manage && <EmailState invite={i} resending={busy === `email:${i.id}`} onResend={() => resend(i)} />}
+                    {manage && <InviteDelivery invite={i} busy={busy} onRetry={() => retryAccess(i)} onResend={() => resend(i)} />}
                   </>
                 )}
               </li>
@@ -865,18 +927,14 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
     </Inspector>
   );
 
-  const active = members?.filter((m) => !removed(m)).length;
+  // "Find a person" by the name shown (the same rule on every view) or the email.
+  const found = members?.filter((m) => matches(find, personName(m), m.email));
   const inspected = inspecting ? members?.find((m) => m.id === inspecting) : undefined;
   return (
     <>
       <PageHeader
         title="Members"
-        status={
-          <>
-            {manage && active != null && <Chip kind="acc">{active} active</Chip>}
-            {pageTip}
-          </>
-        }
+        status={pageTip}
         action={
           <Button
             variant="primary"
@@ -911,25 +969,32 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         {!manage && <RoleNote />}
         <AccessRequests roles={inviteRoles} onInvited={() => void invitesQ.reload()} />
         {!manage && <PeopleReadOnly />}
-        {manage && <Panel title="People" count={members?.length} tools={<FindPerson value={find} onChange={setFind} />}>
-          {membersQ.error ? (
-            <div className="p-4">
-              <Notice tone="error">{membersQ.error}</Notice>
-            </div>
-          ) : (
-            <div className={SETTLING}>
-              <DataTable
-                label="Members"
-                columns={columns}
-                rows={members?.filter((m) => matches(find, m.name, m.email))}
-                loading={!members}
-                rowKey={(m) => m.id}
-                rowProps={(m) => ({ "data-testid": "member-row", "data-status": m.status, ...memberActs.rowAttrs(m.id) })}
-                empty="No members"
-              />
-            </div>
-          )}
-        </Panel>}
+        {manage && (
+          <Panel
+            title="People"
+            // The one count of people: the active ones shown; a removed row says Removed and is not counted.
+            count={found && <PeopleCount active={found.filter((m) => !removed(m)).length} />}
+            tools={<FindPerson value={find} onChange={setFind} />}
+          >
+            {membersQ.error ? (
+              <div className="p-4">
+                <Notice tone="error">{membersQ.error}</Notice>
+              </div>
+            ) : (
+              <div className={SETTLING}>
+                <DataTable
+                  label="Members"
+                  columns={columns}
+                  rows={found}
+                  loading={!members}
+                  rowKey={(m) => m.id}
+                  rowProps={(m) => ({ "data-testid": "member-row", "data-status": m.status, ...memberActs.rowAttrs(m.id) })}
+                  empty={<NoMatch find={find} onClear={() => setFind("")} />}
+                />
+              </div>
+            )}
+          </Panel>
+        )}
         {manage && <SignInRules />}
       </Split>
       <RemoveDialog
@@ -951,6 +1016,15 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
         onConfirm={(moves) => demoting && changeRole(demoting.member, demoting.role, moves)}
       />
     </>
+  );
+}
+
+/** The People count: "4 active"; removed people are not counted (their rows say Removed). */
+function PeopleCount({ active }: { active: number }) {
+  return (
+    <span>
+      {active} <span className="text-[15px] font-semibold text-text2">active</span>
+    </span>
   );
 }
 

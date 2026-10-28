@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import { Button, Chip, Icon, InfoTip, LinkButton, Notice } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { plural } from "@/lib/format";
 import { chooseFromDrive, drivePickerReady, preloadDrivePicker, type PickerConfig } from "@/lib/google-picker";
 import { errorMessage } from "@/lib/use-query";
 
@@ -354,7 +355,7 @@ export function DriveNotes({
           <Chip kind="na" title={skippedTitle(reason)}>
             {reason}
           </Chip>
-          <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>
+          <span className="tnum flex-none font-medium">{plural(names.length, "doc")}</span>
           <NameList names={names} />
         </li>
       ))}
@@ -363,7 +364,7 @@ export function DriveNotes({
           <Chip kind="warn" title="Pulled in, but owned outside the company">
             {reason}
           </Chip>
-          <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>
+          <span className="tnum flex-none font-medium">{plural(names.length, "doc")}</span>
           <NameList names={names} />
         </li>
       ))}

@@ -276,18 +276,20 @@ function Outcomes() {
     <Page>
       <PageHeader
         title="Plan"
+        info={
+          <InfoTip label="Outcomes" align="start" side="bottom">
+            Approving a roadmap records what each item is expected to do for
+            its goal. When the item ships, Oracle waits for the goal to
+            move, then proposes whether the prediction held. A person
+            confirms it.
+          </InfoTip>
+        }
         status={
           q.data && (
             <>
               <Chip kind="acc">
                 {rows.length} {rows.length === 1 ? "outcome" : "outcomes"}
               </Chip>
-              <InfoTip label="Outcomes" align="start" side="bottom">
-                Approving a roadmap records what each item is expected to do for
-                its goal. When the item ships, Oracle waits for the goal to
-                move, then proposes whether the prediction held. A person
-                confirms it.
-              </InfoTip>
             </>
           )
         }

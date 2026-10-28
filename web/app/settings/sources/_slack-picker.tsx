@@ -5,6 +5,8 @@ import { useId } from "react";
 import { Icon } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
+import { zoneName } from "@/lib/format";
+import { useQuery } from "@/lib/use-query";
 
 import { INPUT } from "../_components/fields";
 import { BrowseList, labelsOf, listOf, type BrowsePage, type PickerProps } from "./_browse-list";
@@ -113,7 +115,7 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
             </p>
           ) : (
             <p id={hintId} className="text-[13px] leading-5 text-text2">
-              Optional, whole days in the Company time zone ({zone}). Nothing posted after Until is read, thread replies included. Narrowing the
+              Optional, whole days in the Company time zone ({zoneName(zone)}). Nothing posted after Until is read, thread replies included. Narrowing the
               range removes messages outside it when you save.
             </p>
           )}
@@ -121,4 +123,33 @@ export function SlackPicker({ connectionId, config, onChange }: PickerProps) {
       }
     />
   );
+}
+
+/** Pages of the channel list read to name a source's unnamed channels. */
+const NAME_PAGES = 5;
+
+/**
+ * Names of a Slack source's channels for its row, "#product": the names the source saved
+ * (`labels`), and for a channel saved before names were kept, the name in the channel list of
+ * its connection (read only when one is missing). A channel not found there reads "Channel <id>".
+ */
+export function useSlackChannelNames(connectionId: string | null, ids: string[], saved: Record<string, string>): (id: string) => string {
+  const missing = connectionId ? ids.filter((id) => !saved[id]) : [];
+  const q = useQuery(missing.length ? `slack-channel-names|${connectionId}|${missing.join(",")}` : "slack-channel-names|none", async () => {
+    const found: Record<string, string> = {};
+    if (!missing.length) return found;
+    let cursor: string | null = null;
+    for (let i = 0; i < NAME_PAGES; i++) {
+      const page: { channels: { id: string; name: string }[]; next_cursor?: string | null } = await unwrap(
+        api.GET("/v1/connections/{connection_id}/slack/channels", {
+          params: { path: { connection_id: connectionId! }, query: { search: "", ...(cursor ? { cursor } : {}) } },
+        }),
+      );
+      for (const c of page.channels) found[c.id] = `#${c.name}`;
+      cursor = page.next_cursor ?? null;
+      if (!cursor || missing.every((id) => found[id])) break;
+    }
+    return found;
+  });
+  return (id) => saved[id] ?? q.data?.[id] ?? (q.loading && missing.includes(id) ? "…" : `Channel ${id}`);
 }

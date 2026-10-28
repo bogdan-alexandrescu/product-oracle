@@ -20,13 +20,13 @@ const FACTOR_LABEL: Record<string, string> = {
   goal_impact: "Goal impact",
 };
 
-/** The API's own words for a refused link ("This link is not public: …"), else the status. */
+/** The API's own words for a refused link ("This link is not public: …"), else a plain sentence. */
 function linkError(error: unknown, status: number): string {
   if (error && typeof error === "object" && "detail" in error && typeof error.detail === "string") {
     return error.detail;
   }
   if (status === 403) return "You need the commenter role to add evidence.";
-  return `Could not fetch the link (${status}).`;
+  return "Could not fetch the link. Try again.";
 }
 
 /**

@@ -11,7 +11,9 @@ import { useSettingsTabs } from "@/lib/settings-tabs";
  * Settings' own sections: a strip under the page title (PageHeader draws it, see the
  * settings layout). Evidence search (/sources) lives under Sources. Opened from Home's Set
  * up checklist (?from=setup), it ends with the way back to Home; another tab drops it.
- * Only the tabs the signed-in role can read show (#370).
+ * Only the tabs the signed-in role can read show (#370). Its 13 tabs do not fit one row
+ * beside the rail and the Ask strip, so from 1024 px they wrap to a second row (every tab in
+ * full view); on a phone they scroll sideways in the strip.
  */
 export function SettingsNav() {
   const pathname = usePathname();
@@ -23,7 +25,7 @@ export function SettingsNav() {
       data-testid="settings-nav"
       className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
-      <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">
+      <ScrollStrip className="min-h-9" stripClassName="items-center gap-1 lg:flex-wrap">
         {tabs.map((it) => {
           const on =
             pathname === it.href ||

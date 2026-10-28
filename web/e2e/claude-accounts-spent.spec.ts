@@ -22,6 +22,8 @@ import { login, openTab } from "./helpers";
 const OWNER = "admin@example.com";
 const APPROVER = "approver@example.com";
 const WORDED = /(Mon|Tue|Wed|Thu|Fri|Sat|Sun) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{1,2}:\d\d [AP]M P[DS]T/;
+/** The accounts table's date, as every other on the page (qa-settings-15): "Oct 29, 10:22 AM PDT". */
+const DATE_TIME = /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{1,2}:\d\d [AP]M P[DS]T/;
 const ISO = /\d{4}-\d\d-\d\dT\d\d:\d\d/;
 
 const withSpentPool = (page: Page) => page.addInitScript(([key, name]) => localStorage.setItem(key, name), [MOCK_SCENARIO_KEY, POOL_SPENT_SCENARIO]);
@@ -52,7 +54,8 @@ test("a spent account reads Spent until a worded time, and the owner is told Ora
 
   // The list and the inspector say what the gateway decides by.
   await expect(row(page, "weekly")).toContainText(/Spent until/);
-  await expect(row(page, "weekly")).toContainText(WORDED);
+  await expect(row(page, "weekly")).toContainText(DATE_TIME);
+  await expect(row(page, "weekly")).not.toContainText(WORDED);
   await expect(row(page, "weekly")).not.toContainText("Available");
   await expect(detail(page).getByRole("heading", { name: "weekly" })).toBeVisible();
   await expect(detail(page)).toContainText("Spent until");

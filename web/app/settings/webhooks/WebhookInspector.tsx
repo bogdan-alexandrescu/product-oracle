@@ -7,7 +7,7 @@ import { Button, Inspector, InspectorRow, InspectorSection, Sheet } from "@/comp
 import { ErrorNote } from "@/components/ui";
 import { Field, INPUT } from "@/app/settings/_components/fields";
 import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
@@ -93,7 +93,7 @@ export function WebhookInspector({
         <InspectorRow value={hook.api_version}>API version</InspectorRow>
         <InspectorRow value={<span data-testid="approvers-content">{hook.include_approvers_content ? "On" : "Off"}</span>}>Owners-and-approvers content</InspectorRow>
         <div className="mt-2 text-[13px] leading-[18px] text-text2">
-          {hook.event_types.length} event{hook.event_types.length === 1 ? "" : "s"}:{" "}
+          {plural(hook.event_types.length, "event")}:{" "}
           {hook.event_types.map((t) => labels.get(t) ?? t).join(" · ")}
         </div>
         {can("update_webhook") && (

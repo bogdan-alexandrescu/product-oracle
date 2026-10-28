@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
-import { Button, type Column, DataTable, Icon, InfoTip, Notice, PageHeader, Panel, Split } from "@/components/ds";
+import { Button, type Column, DataTable, Empty, Icon, InfoTip, Notice, PageHeader, Panel, Split } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -31,6 +31,7 @@ export function WebhooksSettings() {
   // Created by and take over are an owner's view: the owner-only operation says who that is (#370).
   const ownerView = can("take_over_webhook");
   const hooks = hooksQ.data;
+  const noneYet = !!hooks && hooks.length === 0;
   const selected = hooks?.find((h) => h.id === selectedId) ?? null;
 
   const select = (id: string | null) => router.replace(id ? `${pathname}?webhook=${id}` : pathname, { scroll: false });
@@ -82,7 +83,7 @@ export function WebhooksSettings() {
     <>
       <PageHeader
         title="Webhooks"
-        status={
+        info={
           <InfoTip label="Webhooks" align="start" side="bottom">
             Oracle posts each event as signed JSON (Standard Webhooks: webhook-id, webhook-timestamp, webhook-signature). Check the
             signature with the secret and refuse a timestamp more than 5 minutes off; the runbook (docs/ops-webhooks.md) has a verify
@@ -90,7 +91,9 @@ export function WebhooksSettings() {
           </InfoTip>
         }
         action={
-          can("create_webhook") && (
+          // With none yet, the empty state below carries the one New webhook button.
+          can("create_webhook") &&
+          !noneYet && (
             <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
               New webhook
             </Button>
@@ -122,6 +125,23 @@ export function WebhooksSettings() {
             <div className="p-4">
               <Notice tone="error">{hooksQ.error}</Notice>
             </div>
+          ) : noneYet ? (
+            // None yet: what a webhook is for and how to make one, not column headers above nothing.
+            <div data-testid="webhooks-empty" className="flex flex-col items-center gap-1 px-4 pb-10">
+              <Empty icon="link">No webhooks yet</Empty>
+              <p className="-mt-2 max-w-md text-center text-[15px] text-text2">
+                A webhook tells another tool, like a chat channel or a tracker, when a run, draft or approval changes.
+              </p>
+              {can("create_webhook") ? (
+                <div className="mt-3">
+                  <Button variant="secondary" icon="plus" onClick={() => setCreating(true)}>
+                    New webhook
+                  </Button>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-text2">An owner or approver can add one.</p>
+              )}
+            </div>
           ) : (
             <DataTable
               label="Webhooks"
@@ -132,7 +152,6 @@ export function WebhooksSettings() {
               selected={selected?.id ?? null}
               onSelect={(id) => select(id)}
               rowProps={() => ({ "data-testid": "webhook-row" })}
-              empty="No webhooks yet"
             />
           )}
         </Panel>

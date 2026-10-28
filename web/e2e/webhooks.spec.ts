@@ -158,7 +158,7 @@ test("webhooks: an owner sees who made each, turns on owners-and-approvers conte
   await expect(deploy).toContainText("Approver");
   await expect(deploy).toContainText("Paused: failing");
   // Last delivery reads how long ago, not a day.
-  await expect(deploy).toContainText("✕ 500 · 4 h ago");
+  await expect(deploy).toContainText("✕ 500 · 4h ago");
 
   // The owners-and-approvers switch needs a why.
   await page.getByRole("button", { name: "New webhook" }).click();

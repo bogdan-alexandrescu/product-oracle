@@ -6,7 +6,7 @@ import { entryText, itemKind } from "@/components/ArtifactMenu";
 import { Button, Chip, Empty, InfoTip, Notice, PageHeader, Panel, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { artifactsChanged } from "@/lib/artifacts";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -54,7 +54,7 @@ function Row({ e, onRestored }: { e: Entry; onRestored: () => void }) {
       </div>
       <div className="flex flex-none items-center gap-2">
         <Chip kind={e.days_left <= 3 ? "warn" : "line"}>
-          {e.days_left} {e.days_left === 1 ? "day" : "days"} left
+          {plural(e.days_left, "day")} left
         </Chip>
         <Button aria-label={`Restore ${e.root.title}`} disabled={busy} onClick={restore}>
           Restore
@@ -73,7 +73,7 @@ export default function TrashPage() {
     <>
       <PageHeader
         title="Trash"
-        status={
+        info={
           <InfoTip label="Trash" align="start" side="bottom">
             Deleted artifacts wait here for 30 days, with everything that went with them. Restore brings them back
             together; after 30 days they are gone for good.
