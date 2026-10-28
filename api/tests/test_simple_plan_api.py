@@ -24,6 +24,11 @@ Test cards (protects / fails_when / no_claim):
   packing (main's suggester gave Nov 2 + 42 days for every item); fails_when=a suggestion
   starts at the window or ends past its milestone; no_claim=accept's change engine (its
   own tests).
+- test_accept_a_slice_per_role (parametrized owner, decider, approver, commenter, viewer):
+  protects=accepting a slice's date is a change through the engine: owners and the decider
+  apply it (the item takes the span of its slices, both slices accepted), approvers and
+  commenters propose it, viewers are refused; fails_when=a role applies that may not, or the
+  item takes one slice's dates only; no_claim=undo (the engine's own tests).
 - test_quarter_label_from_the_plan: protects=Priorities' quarter is the plan's span
   ("2 Nov - 12 Feb"), not the calendar quarter; fails_when="Q4 2026"; no_claim=the web.
 """
@@ -225,3 +230,38 @@ async def test_quarter_label_from_the_plan(client):
     assert r.status_code == 200, r.text
     q = r.json()["quarter"]
     assert (q["label"], q["start"], q["end"]) == ("2 Nov - 12 Feb", "2026-11-02", "2027-02-12")
+
+
+@pytest.mark.parametrize(
+    ("role", "status"),
+    [("owner", "applied"), ("decider", "applied"), ("approver", "proposed"),
+     ("commenter", "proposed"), ("viewer", None)],
+)  # fmt: skip
+async def test_accept_a_slice_per_role(client, role, status):
+    ctx = await make_ctx()
+    await seed(ctx, items=("f-03",))
+    async with tenant_session(ctx.tenant_id) as s:
+        await suggestions.regenerate(s)
+        await s.commit()
+    rows = (await client.get("/v1/simple/roadmap/date-suggestions",
+                             headers=ctx.as_(role))).json()  # fmt: skip
+    first = next(r for r in rows if r["slice_code"] == "F-03a")
+    r = await client.post(
+        f"/v1/simple/roadmap/date-suggestions/{first['id']}/accept", headers=ctx.as_(role)
+    )
+    if status is None:
+        assert r.status_code == 403, r.text
+        return
+    assert r.status_code == 200, r.text
+    change = r.json()["change"]
+    assert change["status"] == status
+    assert (change["after"]["start_date"], change["after"]["end_date"]) == (
+        "2026-11-16", "2026-12-18",
+    )  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        states = {x.slice_code: x.status for x in await s.scalars(select(RoadmapDateSuggestion))}
+    assert states == (
+        {"F-03a": "accepted", "F-03b": "accepted"}
+        if status == "applied"
+        else {"F-03a": "open", "F-03b": "open"}
+    )
