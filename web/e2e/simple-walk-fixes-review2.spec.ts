@@ -41,13 +41,15 @@ test("the next review lists who was present until the ritual's attendees are edi
   // An owner edits the ritual's attendees after the review: its list is the list.
   await page.goto("/company/rituals");
   const ritualRow = page.getByTestId("ritual-row").filter({ hasText: title });
-  const before = await ritualRow.innerText();
+  // The row's Attendees count (its whole text also changes when the owner's name loads, which proved nothing).
+  const count = ritualRow.getByRole("gridcell").nth(3);
+  const before = Number(await count.innerText());
   await ritualRow.click();
   const panel = page.getByTestId("ritual-inspector").filter({ visible: true });
   await panel.getByRole("checkbox", { name: "viewer@example.com" }).check();
   await panel.getByRole("button", { name: "Save" }).click();
   // The save has landed when the ritual's row counts one more attendee (the ticked box proves nothing).
-  await expect.poll(() => ritualRow.innerText()).not.toBe(before);
+  await expect(count).toHaveText(String(before + 1));
 
   await page.goto("/simple");
   await expect(page.getByTestId("home-meeting-next")).toContainText("Viewer");
