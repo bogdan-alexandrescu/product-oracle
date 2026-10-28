@@ -21,6 +21,9 @@ import { ChatCard } from "./ChatCard";
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 
 /** A change-by-chat thread (Simple S9): the lines oldest first, Oracle's cards, and the composer. */
+/** Words typed into a chat box for the person, and which ask put them there. */
+export type Typed = { text: string; n: number };
+
 export function ChatThreadView({
   thread,
   send,
@@ -40,8 +43,9 @@ export function ChatThreadView({
   onCardChanged?: () => void;
   /** chat-reader: Retry, a choice or Apply all answered this thread. */
   onThread?: (t: Thread) => void;
-  /** Words typed in for the person (a goal's "Suggest from the chat"); they go on writing after them. */
-  typed?: string;
+  /** Words typed in for the person (a goal's "Suggest from the chat", a PRD question's Ask Oracle); they go on
+   * writing after them. `n` counts the asks, so the same words asked again fill the box again. */
+  typed?: Typed;
   /** A line under the message box (the item's talk: "Just you and Oracle · kept with this item"). */
   note?: string;
 }) {
@@ -81,25 +85,27 @@ export function ChatComposer({
   send: (text: string) => Promise<unknown>;
   placeholder: string;
   hint?: string;
-  /** Words typed in for the person (a goal's "Suggest from the chat"); they go on writing after them. */
-  typed?: string;
+  /** Words typed in for the person (a goal's "Suggest from the chat", a PRD question's Ask Oracle); they go on
+   * writing after them. `n` counts the asks, so the same words asked again fill the box again. */
+  typed?: Typed;
   /** A line under the message box (the item's talk: "Just you and Oracle · kept with this item"). */
   note?: string;
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(typed?.text ?? "");
   const box = useRef<HTMLTextAreaElement>(null);
-  const [had, setHad] = useState(typed);
-  if (typed !== had) {
-    setHad(typed);
-    if (typed) setText(typed);
+  const [had, setHad] = useState(typed?.n ?? 0);
+  if ((typed?.n ?? 0) !== had) {
+    setHad(typed?.n ?? 0);
+    if (typed?.text) setText(typed.text);
   }
   useEffect(() => {
-    if (!typed) return;
+    const words = typed?.text;
+    if (!words) return;
     const t = box.current;
     if (t) {
       t.focus();
       window.setTimeout(
-        () => t.setSelectionRange(typed.length, typed.length),
+        () => t.setSelectionRange(words.length, words.length),
         0,
       );
     }

@@ -73,6 +73,9 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "add_feature_ask": return title ? `filed the feature ask ${title}` : "filed a feature ask";
     case "set_owner": return `changed the owner of ${x}`;
     case "set_decider": return `changed the decider of ${x}`;
+    // prd-questions: a PRD question (a decision) answered, or its decider named.
+    case "decide_question": return `decided ${x}`;
+    case "name_decider": return `named who decides ${x}`;
   }
   return `changed ${x}`;
 }
