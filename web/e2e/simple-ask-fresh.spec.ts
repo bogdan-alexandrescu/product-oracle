@@ -19,13 +19,15 @@ import { ADMIN } from "./helpers";
  * none of Detailed's discussion UI; the mark's colour is the accent ink in both themes;
  * fails_when=a reopened panel shows the last chat's lines, Recent lists a meeting chat or
  * names a chat by its route, a reopened chat loses its lines, or the mark is the sky
- * gradient on Simple's light rail; no_claim=Oracle's Ask answers themselves (the mock's
+ * gradient on Simple's light rail; a General chat is listed by its page, or a Recent row's
+ * time carries a zone after it; no_claim=Oracle's Ask answers themselves (the mock's
  * canned reply; simple-ask-plan-first.spec.ts), Detailed's panel (hop-panel.spec.ts).
  */
 
 const MEETING = `/simple/meetings/${CHAT_MEETING_ID}/chat`;
 const INK = { light: "rgb(7, 89, 133)", dark: "rgb(185, 227, 252)" } as const;
-const WHEN = String.raw`Today, \d{1,2}:\d{2}\s?[AP]M [A-Z]{2,5}`;
+// "Today, 7:42 PM", as the owner's example reads: the company's time, no zone after it.
+const WHEN = String.raw`Today, \d{1,2}:\d{2}\s?[AP]M`;
 
 /** Clicks `l` once it is scrolled to the middle (on a phone the tab bar covers the bottom). */
 async function tap(l: Locator) {
@@ -136,6 +138,24 @@ for (const [phone, dark] of [
       await expect(panel.getByTestId("chat-message-body").filter({ hasText: "who owns Weekly alert digest?" })).toBeVisible();
       await say(panel, "when is Weekly alert digest?");
       await expect(panel.locator('[data-testid="chat-message"][data-author="person"]')).toHaveCount(2);
+    });
+
+    test(`A chat about General is listed in Recent as General and reopens as one (${where})`, async ({ page }) => {
+      await signIn(page, "/simple/roadmap");
+      const panel = await openAsk(page, phone);
+      await tap(panel.getByRole("button", { name: "General", exact: true }));
+      await expect(panel.getByTestId("ask-about")).toHaveText("New chat about General");
+      await say(panel, "who owns Weekly alert digest?");
+      await tap(panel.getByRole("button", { name: "New chat" }));
+      await say(panel, "when is Alert rules engine?");
+      await tap(panel.getByRole("button", { name: "Recent chats" }));
+      const rows = panel.getByTestId("ask-recent-row");
+      await expect(rows).toHaveCount(2);
+      await expect(rows.nth(0)).toHaveText(new RegExp(`^Roadmap · ${WHEN}$`));
+      await expect(rows.nth(1)).toHaveText(new RegExp(`^General · ${WHEN}$`));
+      await tap(rows.nth(1));
+      await expect(panel.getByTestId("ask-about")).toHaveText("Chat about General");
+      await expect(panel.getByTestId("chat-message-body").filter({ hasText: "who owns Weekly alert digest?" })).toBeVisible();
     });
 
     test(`Simple's mark is drawn in the accent ink (${where})`, async ({ page }) => {

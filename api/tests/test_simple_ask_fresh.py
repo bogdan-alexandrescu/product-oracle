@@ -22,8 +22,19 @@ Test cards (protects / fails_when / no_claim):
   own private panel chat) is linked to it and comes back on Recent and the thread;
   another person's discussion is 404; fails_when=a chat reopened from Recent loses its
   Ask answers.
+- test_link_ask_needs_private_discussion: protects=only the caller's own PRIVATE panel
+  discussion links to their chat (review minor); fails_when=an open discussion of theirs
+  is linked, so a chat reopened from Recent would show lines others read.
+- test_general_chat_listed_as_general: protects=a chat whose lines were sent under
+  "General" is listed in Recent as General (``general`` true, ``page_name`` "General")
+  for each role, and stays General when continued (review minor); fails_when=a General
+  chat is listed by the page it was opened on.
 """
 
+from sqlalchemy import update
+
+from oracle.discussions.models import Discussion
+from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_meetings_api import MEETINGS, start, world
 
@@ -128,3 +139,36 @@ async def test_link_ask_discussion(client):
         "/v1/simple/chat", params={"chat": chat["id"]}, headers=w.ctx.as_("commenter")
     )
     assert r.json()["ask_id"] == ask
+
+
+async def test_link_ask_needs_private_discussion(client):
+    w = await world()
+    chat = await post(client, w, "commenter", "who owns Ledger v2?", page="/simple", new_chat=True)
+    r = await client.post("/v1/discussions", headers=w.ctx.as_("commenter"), json={
+        "subject_kind": "screen", "subject": {"path": "/simple"},
+        "origin": "panel", "visibility": "private"})  # fmt: skip
+    ask = r.json()["id"]
+    async with tenant_session(w.ctx.tenant_id) as s:
+        await s.execute(update(Discussion).where(Discussion.id == ask).values(visibility="open"))
+        await s.commit()
+    r = await client.put(f"/v1/simple/chats/{chat['id']}/ask", json={"ask_id": ask},
+                         headers=w.ctx.as_("commenter"))  # fmt: skip
+    assert r.status_code == 404
+    assert (await recent(client, w, "commenter"))[0]["ask_id"] is None
+
+
+async def test_general_chat_listed_as_general(client):
+    w = await world()
+    for who in ROLES:
+        a = await post(client, w, who, "who owns Ledger v2?", page="/simple/roadmap",
+                       new_chat=True, general=True)  # fmt: skip
+        b = await post(client, w, who, "when is Ledger v2?", page="/simple/roadmap",
+                       new_chat=True)  # fmt: skip
+        items = await recent(client, w, who)
+        assert [(x["id"], x["page_name"], x["general"]) for x in items] == [
+            (b["id"], "Roadmap", False), (a["id"], "General", True)], who  # fmt: skip
+        assert items[1]["page"] == "/simple/roadmap"
+        await post(client, w, who, "who decides Ledger v2?", chat_id=a["id"])
+        items = await recent(client, w, who)
+        assert (items[0]["id"], items[0]["page_name"], items[0]["general"]) == (
+            a["id"], "General", True), who  # fmt: skip
