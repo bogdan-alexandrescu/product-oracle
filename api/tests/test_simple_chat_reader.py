@@ -218,7 +218,7 @@ async def test_ambiguous_gives_choices_then_a_card(client):
     ctx = await make_people()
     w = await World(ctx).build()
     digest, export = w.ids["Alert digest"], w.ids["Alert export"]
-    await post(client, ctx, "owner", "move the alert thing to next quarter")
+    await post(client, ctx, "owner", "shift the alert thing to next quarter")
     clarify = {"actions": [], "answer": None, "clarify": {"question": "Which item?", "choices": [
         {"label": "Alert digest", "op": "move_dates", "args": {"item": digest,
                                                                "when": "next quarter"}},

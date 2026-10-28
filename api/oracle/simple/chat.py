@@ -643,7 +643,12 @@ def parse(c: Ctx, text: str) -> Reply:
                      reader=True)  # fmt: skip
     if viewer_in_meeting:
         return Reply("note", VIEWER_NOTE)
-    return build(c, *asks)
+    out = build(c, *asks)
+    if out.missing:
+        # A phrase it knows naming no item ("move the alert thing to Q2"): the reader reads
+        # the name in context.
+        return Reply("question", out.body, understood=False, reader=True)
+    return out
 
 
 def _phrase(c: Ctx, t: str) -> tuple[str, dict[str, Any]] | None:
@@ -931,12 +936,13 @@ async def _attach(
     meeting_id: uuid.UUID | None,
     reply: Reply,
 ) -> None:
-    """Oracle's cards on its line."""
-    for c in reply.cards:
+    """Oracle's cards on its line, in the order asked (real time orders them)."""
+    at = datetime.now(UTC)
+    for i, c in enumerate(reply.cards):
         card = SimpleChatCard(discussion_id=answer.discussion_id, message_id=answer.id,
                               meeting_id=meeting_id,
                               owner_id=None if meeting_id else _me(principal), status="open",
-                              **c)  # fmt: skip
+                              created_at=at + timedelta(microseconds=i), **c)  # fmt: skip
         db.add(card)
         await db.flush()
         if card.op in FLOW_OPS:
@@ -1012,7 +1018,7 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             "start": r_.start.date.isoformat(), "end": r_.end.date.isoformat(),
             "estimated": r_.undated, "milestone": (e.milestone.name if e.milestone else None),
             "owner": e.owner_name, "decider": _or([names[i] for i in deciders if i in names])
-            if deciders else None, "track": e.track.name if e.track else None,
+            if deciders else None, "track": e.track.title if e.track else None,
             "horizon": e.row.horizon, "cut": e.row.cut,
         })  # fmt: skip
     return {
@@ -1182,12 +1188,13 @@ async def apply_all(
     )
     if not cards:
         raise ChatError(409, "No open cards on this line")
-    _, rules = await _get(db, principal, cards[0].id)
+    todo = [(c.id, c.summary) for c in cards]
+    _, rules = await _get(db, principal, todo[0][0])
+    meeting_id = rules.meeting_id if rules is not None else None
     await db.rollback()
     applied: list[uuid.UUID] = []
     stopped: ChatStopOut | None = None
-    for card in cards:
-        card_id, summary = card.id, card.summary
+    for card_id, summary in todo:
         try:
             async with one_commit(db):
                 await apply(db, principal, card_id)
@@ -1196,7 +1203,7 @@ async def apply_all(
             stopped = ChatStopOut(card_id=card_id, summary=summary, reason=str(e.detail))
             break
         applied.append(card_id)
-    return await thread(db, principal, rules.meeting_id if rules else None), applied, stopped
+    return await thread(db, principal, meeting_id), applied, stopped
 
 
 # --------------------------------------------------------------------------- cards
