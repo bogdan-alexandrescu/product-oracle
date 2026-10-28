@@ -80,15 +80,17 @@ test("a published PRD's card names its stage once", async ({ page }) => {
   const card = page.getByTestId("plan-prd-card").filter({ hasText: "Usage alerts" });
   await expect(card).toHaveAttribute("data-stage", "approved");
   const labels = card.getByTestId("journey-labels");
-  await expect(labels).toHaveText("IdeaPublish");
-  await expect(labels.locator("b")).toHaveText("Publish");
+  // qa-plan-32: Plan's own end label ("Approved"), not the PRD journey's ("Publish").
+  await expect(labels).toHaveText("IdeaApproved");
+  await expect(labels.locator("b")).toHaveText("Approved");
 });
 
 test("an item's History has one line per event", async ({ page }) => {
   await openPlan(page);
   await row(page, "Threshold alerts on spend").getByTestId("plan-title").click();
   const lines = inspector(page).getByTestId("plan-history").getByTestId("plan-history-version");
-  await expect(lines).toHaveText(["PRD v1 Now · approved Oct 18"]);
+  // qa-plan-17: the roadmap is never approved by default, so its item history agrees.
+  await expect(lines).toHaveText(["PRD v1 Now · in a draft"]);
 });
 
 test("Why it needs you says what changed in words", async ({ page }) => {

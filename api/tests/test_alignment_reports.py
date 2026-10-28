@@ -400,6 +400,24 @@ def test_report_prose_names_days_in_words_not_iso():
     assert "2026-" not in md.split("\n", 1)[1] and "(now)" not in md
 
 
+def test_slips_counts_every_slipping_reason_the_page_lists_not_only_drift():
+    """qa-plan-56: the summary's "Dates slipping" must match what Needs attention lists.
+    protects=a track milestone that has passed with no tracker issue (a "slipping" reason
+    that is not a drift entry) counts too; fails_when=slips counts only date_slip/overdue
+    drift entries, undercounting what the page shows; no_claim=the roadmap's own counts."""
+    needs = [
+        {"item_key": "threshold-alerts", "kind": "slipping",
+         "detail": "ENG-405 targets Dec 9, after the milestone date Nov 30."},
+        {"item_key": "first-release", "kind": "slipping",
+         "detail": "Milestone Beta, Nov 30, has passed."},
+        {"item_key": "saved-carts", "kind": "blocked", "detail": "Waiting on design"},
+    ]  # fmt: skip
+    # Both "slipping" reasons count, even though only one of them would show up in drift.
+    assert alignment.slips_in(needs) == 2
+    assert alignment.slips_in([]) == 0
+    assert alignment.slips_in([{"kind": "stale", "detail": "x"}]) == 0
+
+
 def test_headline_wording():
     """protects=§1's headline; fails_when=counts or plurals are wrong; no_claim=the counts."""
     assert alignment.headline({"tracks": 3, "at_risk": 1, "off_track": 0, "slips": 2,
