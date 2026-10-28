@@ -176,7 +176,7 @@ test("12e: the changelog shows the launch's entry under Added; Publish and Expor
   await expect(entry).toBeVisible();
   await expect(entry.getByTestId("entry-status")).toHaveText("Draft");
   // Newest day first.
-  await expect(page.getByTestId("changelog-day").first().locator("time")).toHaveText("2026-10-20");
+  await expect(page.getByTestId("changelog-day").first().locator("time")).toHaveText("Oct 20, 2026");
 
   await entry.getByRole("button", { name: "Publish" }).click();
   await expect(entry.getByTestId("entry-status")).toHaveText("Published");

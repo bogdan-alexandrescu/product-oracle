@@ -43,7 +43,7 @@ test("baseline: editing a feature's milestone saves only it, and shows in its hi
   await expect(d.locator('[data-attr="effort"]')).toHaveText("XL");
 
   const history = d.getByTestId("entity-history");
-  await expect(history.getByRole("listitem").first()).toContainText("milestone: Beta → General availability");
+  await expect(history.getByRole("listitem").first()).toContainText("Milestone: Beta → General availability");
 });
 
 test("baseline: the edit form adds a known attribute the entry lacks", async ({ page }) => {
@@ -59,6 +59,6 @@ test("baseline: the edit form adds a known attribute the entry lacks", async ({ 
   await expect(d.locator('[data-attr="size"]')).toHaveText("Small");
   await expect(d.locator('[data-attr="status"]')).toHaveText("Planned");
   const change = d.getByTestId("entity-history").getByRole("listitem").first();
-  await expect(change).toContainText("size: Small");
+  await expect(change).toContainText("Size: Small");
   await expect(change).not.toContainText("status");
 });

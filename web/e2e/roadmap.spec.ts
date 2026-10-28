@@ -33,10 +33,10 @@ test("roadmap screen lists roadmaps with status, template and source PRD; PRDs l
   await expect(row).toContainText("Usage alerts roadmap");
   await expect(row).toContainText("In review");
   await expect(row).toContainText("v1");
-  await expect(row).toContainText("now-next-later");
-  // The template key alone in the row (the theme is in the inspector); the source PRD by name.
-  await expect(row).not.toContainText("roadmap-board");
-  await expect(page.getByTestId("roadmap-inspector")).toContainText("roadmap-board");
+  await expect(row.getByTestId("roadmap-template")).toHaveText("Now / Next / Later");
+  // The template by name alone in the row (the theme is in the inspector); the source PRD by name.
+  await expect(row).not.toContainText("Roadmap board");
+  await expect(page.getByTestId("roadmap-inspector")).toContainText("Roadmap board");
   await expect(row.getByTestId("roadmap-source")).toHaveText("Usage alerts PRD v1");
   await expect(row.getByRole("link", { name: "Usage alerts PRD v1" })).toHaveAttribute("href", "/documents/usage-alerts/v/1");
 

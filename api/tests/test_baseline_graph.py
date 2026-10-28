@@ -630,7 +630,7 @@ async def test_proposals_carry_summary_and_proposer(client, ctx):
     )
     assert resp.status_code == 202, resp.text
     proposal = resp.json()["proposal"]
-    assert proposal["summary"] == "Set Dark mode’s delivery status to planned (was idea)"
+    assert proposal["summary"] == "Set Dark mode’s delivery status to Planned (was Idea)"
     assert proposal["proposer"]["kind"] == "person"
     assert proposal["proposer"]["label"] == "Owner"
 

@@ -71,12 +71,12 @@ test("an approver adds a learning by hand", async ({ page }) => {
   const form = page.getByTestId("learning-form");
   await form.getByLabel("Learning").fill("Ask who owns the rollout before the plan is approved");
   await form.getByLabel("Applies to").selectOption("question_category");
-  await form.getByLabel("Key").fill("ownership");
+  await form.getByLabel("Which topic").selectOption("ownership");
   await form.getByLabel("Direction").selectOption("recommend_more");
   await form.getByRole("button", { name: "Add learning" }).click();
   await expect(form).toHaveCount(0);
   const added = learning(page, "Ask who owns the rollout");
-  await expect(added).toContainText("Question category · ownership");
+  await expect(added).toContainText("Question topic · Team ownership");
   await expect(added).toContainText("Recommend more");
   await expect(added.getByTestId("learning-status")).toHaveText("Active");
 

@@ -109,5 +109,6 @@ test("Why it needs you names one count", async ({ page }) => {
   const why = page.getByTestId("plan-inspector").filter({ visible: true }).getByTestId("plan-why");
   await expect(why).toContainText("11 baseline items changed");
   await expect(why).not.toContainText("42 baseline items");
-  await expect(why).not.toContainText(";");
+  // Said once: the other reasons (its feature, goals and product, in words) are not counts.
+  expect((await why.innerText()).match(/baseline items changed/g)).toHaveLength(1);
 });

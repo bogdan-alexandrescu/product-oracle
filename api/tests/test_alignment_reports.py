@@ -290,7 +290,7 @@ def _content(n_tracks: int) -> dict:
             "alignment": {"aligned": 1, "drift": 0, "untracked": 0, "done": 0},
             "needs_attention": [{
                 "item_key": "item-b", "title": "Item <B>", "horizon": "now", "kind": "slipping",
-                "detail": "ENG-405 targets 2026-12-09, after the milestone date 2026-11-30.",
+                "detail": "ENG-405 targets Dec 9, after the milestone date Nov 30.",
                 "alert_id": None, "link": f"/plan?item=prd-{i}:item-b",
             }] if risky else [],
             "drift": [], "dates": {"verified": [], "withdrawn": []}, "prd_moved": False,
@@ -349,7 +349,7 @@ def test_markdown_escapes_brackets_in_item_links():
     content = _content(1)
     content["tracks"][0]["needs_attention"][0]["title"] = "Item [B] \\ done]"
     md = alignment.markdown(content)
-    assert "- [Item \\[B\\] \\\\ done\\]](/plan?item=prd-0:item-b) (now): " in md
+    assert "- [Item \\[B\\] \\\\ done\\]](/plan?item=prd-0:item-b) · Now: " in md
 
 
 def test_markdown_carries_the_headline_and_one_part_per_track():
@@ -361,6 +361,45 @@ def test_markdown_carries_the_headline_and_one_part_per_track():
     assert "## PRD 0 · At risk, was On track" in md and "## PRD 1 · On track" in md
     assert "### Needs attention (as of now)" in md
     assert "(/plan?item=prd-0:item-b)" in md
+
+
+def test_report_prose_names_days_in_words_not_iso():
+    """protects=qa-plan-9/57 (dates and horizons in the report's sentences); fails_when=a
+    track headline, a drift detail or the Markdown shows 2026-11-30 or "(now)" instead of
+    "Nov 30" and "· Now"; no_claim=the machine fields (next_milestone.date stays ISO)."""
+    from types import SimpleNamespace
+
+    from oracle.roadmap import tracker, views
+
+    nxt = SimpleNamespace(name="First release", target_date=date(2026, 11, 30))
+    counts = {"items": 3, "at_risk": 1, "blocked": 0, "stale": 0, "slipping": 1}
+    assert views._headline("at_risk", counts, nxt) == (
+        "At risk: 1 of 3 items need attention (1 slipping). Next milestone: First release, Nov 30."
+    )
+    assert views._headline("on_track", counts, nxt) == (
+        "On track: 3 items. Next milestone: First release, Nov 30."
+    )
+    item = SimpleNamespace(item_key="threshold-alerts", horizon="now")
+    record = SimpleNamespace(external_ref="ENG-405", state="in_progress",
+                             target_date=date(2026, 12, 9))  # fmt: skip
+    (slip,) = tracker.drift_of(item, [record], date(2026, 11, 30), date(2026, 10, 28))
+    assert slip.detail == "ENG-405 targets Dec 9, after the milestone date Nov 30."
+    overdue = tracker.drift_of(item, [record], date(2026, 10, 20), date(2026, 10, 28))
+    assert overdue[-1].detail == (
+        "The milestone date Oct 20 has passed and the work is not done."
+    )
+    content = _content(1)
+    content["tracks"][0]["dates"] = {
+        "verified": [{"reference": "ENG-412", "supports_date": "2026-11-30"}],
+        "withdrawn": [{"reference": "ENG-413", "supports_date": "2026-12-15",
+                       "reason": "Estimate replaced"}],
+    }  # fmt: skip
+    md = alignment.markdown(content)
+    assert "- Next milestone: Beta, Nov 30 (verified basis)" in md
+    assert "(/plan?item=prd-0:item-b) · Now: ENG-405 targets Dec 9" in md
+    assert "- Verified: ENG-412 supports Nov 30" in md
+    assert "- Withdrawn: ENG-413 (Dec 15): Estimate replaced" in md
+    assert "2026-" not in md.split("\n", 1)[1] and "(now)" not in md
 
 
 def test_headline_wording():
