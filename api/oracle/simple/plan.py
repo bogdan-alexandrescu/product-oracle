@@ -159,8 +159,14 @@ def _is_ms_table(h: list[str]) -> bool:
 
 
 def _part_col(h: list[str]) -> int | None:
-    """prd-timeline: an open questions / decisions table's or a risks table's column."""
-    return _col(h, "question", "open question", "decision", "risk")
+    """prd-timeline: an open questions / decisions table's column (its first: the question)
+    or a risks table's. A features table (Feature, Milestone, Effort) is never one, so a
+    Risk column inside it stays its features' (prd-timeline fix2)."""
+    if h and h[0].startswith(("question", "open question", "decision")):
+        return 0
+    if _col(h, "feature") is not None:
+        return None
+    return _col(h, "risk")
 
 
 def _milestones(header: list[str], rows: list[list[str]], ref: date) -> list[dict[str, Any]]:
