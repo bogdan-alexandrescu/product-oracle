@@ -5182,8 +5182,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       const res = (await routeDecisions(dctx, ensureDecisions(db, dctx), post, ["v1", "decisions"], new URLSearchParams()))!;
       if (!res.ok) return null;
       const doc = b.subjects?.find((x) => x.kind === "document")?.id ?? null;
-      reviews.propose(b.title, b.approver_id, doc);
-      return ((await res.json()) as Schemas["DecisionOut"]).id;
+      const id = ((await res.json()) as Schemas["DecisionOut"]).id;
+      reviews.propose(b.title, b.approver_id, doc, id);
+      return id;
     };
     const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d) };
     const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, chatCtx, req, p, reviews);
@@ -5229,6 +5230,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   const decisionsCtx = decisionsContext(db, me);
   ensureDecisions(db, decisionsCtx);
   const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
+  if (decided?.ok && req.method === "POST" && p[1] === "decisions" && (p[3] === "decide" || p[3] === "withdraw")) {
+    // An Ask proposal's Decide or Decline (withdraw) shows on Simple's Decisions page (one decisions row in the API).
+    const logged = db.decisions!.decisions.find((d) => String(d.number) === p[2] || d.id === p[2]);
+    const copy = logged && db.simple_meetings?.decisions.find((d) => d.id === logged.id);
+    if (copy && (logged.status === "decided" || logged.status === "withdrawn")) copy.status = logged.status;
+  }
   if (decided) return decided;
   // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
   const ritualsCtx = ritualsContext(db, me);

@@ -208,3 +208,20 @@ async def _item_title(w) -> str:
 
     async with tenant_session(w.ctx.tenant_id) as s:
         return (await s.get(RoadmapItem, uuid.UUID(next(iter(w.ids.values()))))).title
+
+
+async def test_decider_declines_a_proposal_by_withdrawing_it(client):
+    # protects: Home's Decline of an Ask proposal is a withdraw: Decisions lists it
+    # "withdrawn" and the decided list never has it (the review's major; the web's
+    # Decline is the spec's).
+    w = await world()
+    c = await one_card(client, w, "commenter", "decision: Ship it hourly", page=PAGE)
+    assert (await apply(client, w, "commenter", c["id"])).status_code == 200
+    d = await _decision(w, "Ship it hourly")
+    r = await client.post(f"/v1/decisions/{d.number}/withdraw", headers=w.ctx.as_("decider"),
+                          json={"reason": "Declined on Simple's Home"})  # fmt: skip
+    assert r.status_code == 200, r.text
+    page = (await client.get("/v1/simple/decisions", headers=w.ctx.as_("decider"))).json()
+    assert [x["status"] for x in page["other"] if x["id"] == str(d.id)] == ["withdrawn"]
+    done = (await client.get("/v1/decisions?status=decided", headers=w.ctx.as_("decider"))).json()
+    assert str(d.id) not in [x["id"] for x in done]

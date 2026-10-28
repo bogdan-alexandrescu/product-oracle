@@ -99,7 +99,7 @@ interface Decision {
   number: number;
   title: string;
   origin: string;
-  status: "decided" | "proposed";
+  status: "decided" | "proposed" | "withdrawn";
   approver_id: string | null;
   at: string;
   subjects: { kind: string; id: string; ref?: string }[];
@@ -618,11 +618,12 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       const to = ids.map(may).find((x) => !!x);
       return to ? { id: to.id, name: to.name } : null;
     },
-    propose(title, deciderId, documentId) {
+    propose(title, deciderId, documentId, id) {
       const { db } = open();
       const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
       const d: Decision = {
-        id: crypto.randomUUID(), number, title, origin: "chat", status: "proposed", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
+        // The decision log's id: its Decide or Decline (withdraw) shows here too (server.ts).
+        id: id ?? crypto.randomUUID(), number, title, origin: "chat", status: "proposed", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
         subjects: documentId ? [{ kind: "document", id: documentId }] : [], meeting_id: null, change_ids: [],
       };
       db.decisions.push(d);

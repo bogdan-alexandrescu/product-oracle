@@ -136,7 +136,7 @@ export interface ChatMeetings {
   /** Who confirms a commenter's decision on Ask: the document's decider, else an owner (an approver or above). */
   proposeTo(documentId: string | null): { id: string; name: string } | null;
   /** A commenter's decision on Ask, open on the Decisions page for `deciderId`. */
-  propose(title: string, deciderId: string, documentId: string | null): string;
+  propose(title: string, deciderId: string, documentId: string | null, id?: string): string;
 }
 
 export interface ChatDb {
@@ -1052,8 +1052,10 @@ function applyLocal(c: StoredCard, meeting: Meeting | null, ctx: ChatCtx, s8?: C
     const decider = String(c.after.decider_id ?? ctx.id);
     if (c.preview && "proposed_to" in c.preview) {
       // Built while they proposed, applied once they record (as chat_actions): the card says who decided.
-      const { proposed_to: _to, not_to: _not, ...rest } = c.preview as Record<string, unknown>;
-      c.preview = { ...rest, decider_name: ctx.names[decider] ?? "you" } as typeof c.preview;
+      const rest: Record<string, unknown> = { ...c.preview, decider_name: ctx.names[decider] ?? "you" };
+      delete rest.proposed_to;
+      delete rest.not_to;
+      c.preview = rest as typeof c.preview;
     }
     if (remote) decision = remote.decide(meeting!.id, text, decider, null);
     else if (meeting) {
