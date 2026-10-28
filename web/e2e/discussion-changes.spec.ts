@@ -39,7 +39,7 @@ async function startDiscussion(page: Page, opts: { private?: boolean; ask?: bool
   const s = await openSection(page, "problem");
   await sectionAction(s, "2. Problem", "Discuss this section");
   const form = page.getByTestId("start-discussion").filter({ visible: true });
-  if (opts.private) await form.getByRole("group", { name: "Who can read it" }).getByRole("button", { name: "Private" }).click();
+  if (opts.private) await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
   await form.getByRole("button", { name: "Start discussion" }).click();
   await expect(thread(page)).toBeVisible();
   if (opts.ask === false) return;

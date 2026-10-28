@@ -123,6 +123,23 @@ def test_the_publish_gate_message_names_headings_and_plan_dates():
         _plain(b.rationale)
         # The ids stay in the machine field.
         assert b.key == "unverified_date" and b.id.startswith("now-payment-step:")
+    # qa-docs-2: the dates as people read them, never ISO; the id keeps the text as written.
+    assert [b.title for b in blocks] == ["Dec 15, 2026", "Nov 30, 2026"]
+    assert blocks[0].id == "now-payment-step:2026-12-15"
+    assert "is not backed by a confirmed schedule" in blocks[0].rationale
+    assert "2026-" not in blocks[0].rationale
+
+
+def test_the_date_message_reads_the_date_as_people_do():
+    """protects=qa-docs-34 a date warning names the day as "Dec 15, 2026" in plain words;
+    fails_when=it shows an ISO date or "rests on no verified"; no_claim=a date that reads as
+    more than one day (kept as written, its days listed)."""
+    msg = doc_dates.problem_message(_mark(), "Checkout redesign PRD", heading="Payment step")
+    assert msg.startswith("the date Dec 15, 2026 (")
+    assert "not backed by a confirmed schedule" in msg and "rests on" not in msg
+    assert "2026-12-15" not in msg
+    two = doc_dates.problem_message(MARKS[-1], None, heading="Payment step")
+    assert "12/1/2026" in two and "Dec 1, 2026 or Jan 12, 2026" in two
 
 
 # --------------------------------------------------------------------------- the helper
@@ -342,7 +359,7 @@ async def test_a_run_s_date_warning_and_the_approve_refusal_are_plain(client, ow
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     (w,) = [w for w in version["warnings"] if w["code"] == "unverified_date"]
     _plain(w["message"])
-    assert "Plan › Dates" in w["message"] and "2026-12-15" in w["message"]
+    assert "Plan › Dates" in w["message"] and "Dec 15, 2026" in w["message"]
     assert '"Payment step"' in w["message"] and "Checkout redesign" in w["message"]
     # The ids agents need: the section key, the date and the PRD's slug.
     assert w["section_keys"] == ["now-payment-step"]
@@ -354,7 +371,7 @@ async def test_a_run_s_date_warning_and_the_approve_refusal_are_plain(client, ow
     assert resp.status_code == 409, resp.text
     body = resp.json()
     _plain(body["detail"])
-    assert "Plan › Dates" in body["detail"] and "2026-12-15" in body["detail"]
+    assert "Plan › Dates" in body["detail"] and "Dec 15, 2026" in body["detail"]
     for b in body["blocking"]:
         _plain(b["rationale"])
     assert [b["id"] for b in body["blocking"]] == ["now-payment-step:2026-12-15"]

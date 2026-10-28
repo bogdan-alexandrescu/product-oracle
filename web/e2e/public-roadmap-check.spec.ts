@@ -31,10 +31,10 @@ test("check the Public version, then share it with a passcode", async ({ page })
   await expect(page).toHaveURL(/\/documents\/example-labs-roadmap\/public$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Public version");
   const summary = page.getByTestId("public-summary");
-  await expect(summary).toContainText("2 shown · 3 left out");
-  await expect(summary).toContainText("1 without an approved text");
+  await expect(summary).toContainText("2 items on the public page · 3 left out");
+  await expect(summary).toContainText("1 without an approved public text");
   await expect(summary).toContainText("1 excluded");
-  await expect(summary).toContainText("1 serves no confirmed goal");
+  await expect(summary).toContainText("1 not tied to a confirmed company goal");
   const removed = page.getByRole("region", { name: "What is removed" });
   await expect(removed).toContainText("owners");
   await expect(removed).toContainText("tracker links");
@@ -62,7 +62,7 @@ test("check the Public version, then share it with a passcode", async ({ page })
   await row.getByRole("button", { name: "Approve" }).click();
   await page.getByRole("radio", { name: /All/ }).click();
   await expect(rows.filter({ hasText: "Northwind bulk import" }).getByTestId("public-state")).toHaveText("Approved");
-  await expect(summary).toContainText("3 shown · 2 left out");
+  await expect(summary).toContainText("3 items on the public page · 2 left out");
   await expect(preview.getByText("Bulk import", { exact: true })).toBeVisible();
   await expect(preview.getByText("Planned", { exact: true })).toBeVisible();
 

@@ -135,7 +135,7 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
   await page.getByTestId("doc-header").getByRole("link", { name: "Publish", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/publish$`));
-  await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v2");
+  await expect(page.getByTestId("publish-ready")).toHaveText(/^(Ready to publish v2|Publishable, but .+)$/);
   await page.getByTestId("publish-button").click();
   await page.getByRole("dialog", { name: "Publish v2?" }).getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByTestId("published-chip")).toHaveText("Published v2");

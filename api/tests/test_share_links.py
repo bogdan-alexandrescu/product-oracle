@@ -321,7 +321,11 @@ async def test_the_right_passcode_opens_the_page_with_a_cookie_on_the_links_path
     assert "<!--" not in page.text
     assert "expires" in body_text.lower()
     status = await client.get(f"{PUBLIC}/{token}/status", headers={"Cookie": cookie_of(resp)})
-    assert status.json() == {"state": "active", "allow_download": True}
+    got = status.json()
+    # qa-docs-71: the page's header names the roadmap, who shared it and when the link ends.
+    assert got["state"] == "active" and got["allow_download"] is True
+    assert got["title"] == "Example Labs roadmap" and got["shared_by"] and got["expires_at"]
+    assert set(got) == {"state", "allow_download", "title", "shared_by", "expires_at"}
     # Another link's cookie opens nothing here.
     other = token_of((await create(client, ctx, "owner", passcode="other-passcode-9")).json())
     resp = await client.get(f"{PUBLIC}/{other}", headers={"Cookie": cookie_of(resp)})

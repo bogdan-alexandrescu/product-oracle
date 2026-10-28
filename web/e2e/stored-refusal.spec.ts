@@ -15,15 +15,17 @@ test("a stored Claude-pool refusal on a PRD's Reports row reads like the time it
   const reports = page.getByTestId("history-reports").filter({ visible: true }).getByTestId("reports-panel");
 
   await expect(reports.getByTestId("job-failed")).toHaveText("Failed Oct 18, 4:12 PM PDT");
+  // qa-docs-4: the Reports row says it in plain words, with a Retry; no Claude-account wording.
   const refusal = reports.getByRole("alert");
-  await expect(refusal).toHaveText(
-    "No Claude account could take this call: every Claude account was spent; the earliest window was due to clear Sun Oct 25, 3:00 PM PDT. " +
-      "Every Claude account was out of quota when this ran.",
-  );
-  await expect(refusal).not.toContainText("2026-10-25T");
+  await expect(refusal).toContainText("The reports could not be written. Try again.");
+  await expect(refusal).not.toContainText("Claude account");
+  await expect(refusal.getByRole("button", { name: "Retry" })).toBeVisible();
 
-  // Oracle's work shows the same job the same way.
+  // Oracle's work says it plainly too; the account detail is under the job's Details.
   const work = page.getByTestId("jobs-panel").filter({ visible: true }).getByTestId("llm-job").filter({ hasText: "Reports" });
+  await expect(work.getByTestId("job-failed-plain")).toBeVisible();
+  await expect(work.getByTestId("job-error")).toBeHidden();
+  await work.getByText("Details", { exact: true }).click();
   await expect(work.getByTestId("job-error")).toContainText("could take this call: every Claude account was spent; the earliest window was due to clear Sun Oct 25, 3:00 PM PDT.");
   await expect(work.getByTestId("job-error")).not.toContainText("2026-10-25T");
 

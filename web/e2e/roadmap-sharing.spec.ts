@@ -219,8 +219,10 @@ test("an unpublished roadmap asks to publish first", async ({ page }) => {
   await page.goto("/documents/usage-alerts-roadmap");
   await page.getByRole("button", { name: "Share", exact: true }).click();
   const sheet = page.getByRole("dialog", { name: "Share roadmap" });
-  await expect(sheet.getByText("Publish this version first")).toBeVisible();
-  await expect(sheet.getByRole("link", { name: "Publish" })).toHaveAttribute("href", "/documents/usage-alerts-roadmap/publish");
+  // qa-docs-2: v1's withdrawn date keeps it from being published; the sheet says so.
+  await expect(sheet.getByTestId("share-not-published")).toContainText("v1 can't be published yet");
+  await expect(sheet.getByTestId("share-blocks")).toContainText("Dec 15, 2026");
+  await expect(sheet.getByRole("link", { name: "Go to Publish" })).toHaveAttribute("href", "/documents/usage-alerts-roadmap/publish");
   await expect(sheet.getByRole("button", { name: "Create link" })).toHaveCount(0);
 });
 

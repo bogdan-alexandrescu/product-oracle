@@ -70,7 +70,9 @@ test("new roadmap: a board audience gets the outcome roadmap; company default", 
 
   // The owner makes it the company default; it shows on the next visit.
   await page.getByRole("button", { name: "Make company default" }).click();
-  await expect(page.getByRole("status")).toContainText("Company default for new roadmaps saved");
+  // QA docs-8: it asks first, as it changes every new roadmap in the company.
+  await page.getByRole("alertdialog", { name: "Make company default" }).getByRole("button", { name: "Make company default" }).click();
+  await expect(page.getByTestId("company-default-saved")).toContainText("Company default for new roadmaps saved");
   await page.reload();
   await expect(page.getByTestId("company-default")).toContainText("Outcome roadmap");
   // With no answers, the company default is the recommendation.

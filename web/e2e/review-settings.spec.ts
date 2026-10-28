@@ -201,6 +201,9 @@ for (const theme of ["light", "dark"] as const) {
     const sections = page.getByTestId("section-assignments");
     await expect(sections.locator('[data-section-key="goal-trace"]')).toContainText("Owner Admin");
     await expect(page.getByTestId("campaigns")).toContainText("Company-wide feedback");
+    // Sections with no owner fold into one line (qa-docs-45); Assign lists them.
+    await sections.getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
+    await expect(sections.locator('[data-section-key="problem"]')).toBeVisible();
     for (const sel of [
       '[data-testid="section-assignments"] [data-section-key="goal-trace"] span.font-semibold',
       '[data-testid="section-assignments"] [data-section-key="problem"] div.text-sm > *',

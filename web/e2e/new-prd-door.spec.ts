@@ -71,7 +71,7 @@ test("brief to draft: goals, out of scope and a template, then Draft with Oracle
 
   const goals = page.getByRole("group", { name: "Which goals does it serve?" });
   await expect(goals.getByRole("checkbox")).toHaveCount(2);
-  await expect(goals).toContainText("to go");
+  await expect(goals).toContainText("from target");
   await goals.getByRole("checkbox", { name: /Raise activation/ }).check();
 
   await page.getByRole("textbox", { name: "Out of scope 1" }).fill("Address book sharing between accounts");

@@ -431,7 +431,10 @@ def test_the_deck_banner_names_the_company_time():
     ev = ExportVersion(
         document=doc, version=version, sections=[], citations=[], latest_number=2, zone=AUCKLAND
     )
-    assert "approved 2026-10-13 09:00 NZDT" in deck._banner(ev)
+    banner = deck._banner(ev)
+    # In words, capitalised, no ISO date (QA docs-30).
+    assert "Approved Oct 13, 9:00 AM NZDT" in banner
+    assert "2026-" not in banner
 
 
 # --------------------------------------------------------------------------- #463 fixes 2

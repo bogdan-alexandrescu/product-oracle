@@ -165,7 +165,7 @@ for (const role of ["approver", "viewer"] as const) {
 
 test("ready: one line, the button enabled, a confirm step, then published", async ({ page }) => {
   await openPublish(page, "visit-reminders");
-  await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v1");
+  await expect(page.getByTestId("publish-ready")).toHaveText("Publishable, but 4 sections are not reviewed");
   await expect(page.getByTestId("block-row")).toHaveCount(0);
   await expect(page.getByTestId("blocks-chip")).toHaveText("0 blocks");
   await expect(page.getByTestId("hard-check").filter({ hasText: "Fail" })).toHaveCount(0);
@@ -197,7 +197,7 @@ test("ready: commenters check readiness but cannot publish", async ({ page }) =>
 
 test("409 in the dialog: a block that appears after the page loaded is named in the dialog", async ({ page }) => {
   await openPublish(page, "visit-reminders");
-  await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v1");
+  await expect(page.getByTestId("publish-ready")).toHaveText("Publishable, but 4 sections are not reviewed");
   await page.getByTestId("publish-button").click();
   const dialog = page.getByRole("dialog", { name: "Publish v1?" });
   await expect(dialog).toBeVisible();
@@ -339,7 +339,7 @@ test.describe("phone", () => {
 
   test("ready state on a phone", async ({ page }) => {
     await openPublish(page, "visit-reminders");
-    await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v1");
+    await expect(page.getByTestId("publish-ready")).toHaveText("Publishable, but 4 sections are not reviewed");
     await expect(page.getByTestId("publish-button")).toBeEnabled();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
