@@ -326,7 +326,6 @@ function ChatView({
   const here = useRef<HTMLElement>(null);
   useEffect(() => {
     // Only the box a person sees takes them (the dock's panel is hidden on a phone): a DOM check.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (waiting && here.current?.getClientRects().length) setTyped(takeAskDraft());
   }, [waiting]);
 
