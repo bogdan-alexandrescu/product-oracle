@@ -170,6 +170,7 @@ PER_ITEM: dict[str, Role | None] = {
     "add_scope_requirement": "approver",
     "answer_question": "owner",
     "answer_with_discussion_change": "approver",
+    "apply_all_simple_chat_cards": None,
     "apply_discussion_change": "approver",
     "apply_simple_chat_card": None,
     "approve_feasibility_scope": "owner",
@@ -184,6 +185,7 @@ PER_ITEM: dict[str, Role | None] = {
     "cancel_discussion_reply": "approver",
     "cancel_run": "owner",
     # S8: attendees, or whom the meeting's change mode lets change (oracle.simple.meetings).
+    "choose_simple_chat_choice": None,
     "comment_in_simple_meeting": None,
     "comment_simple_visual": "commenter",
     # A Fireflies endpoint is an owner's to set (on connect, or on its own route); below
@@ -270,6 +272,7 @@ PER_ITEM: dict[str, Role | None] = {
     "retry_import_run": "owner",
     "retry_lookup_run": "owner",
     "retry_run": "owner",
+    "retry_simple_chat_read": None,
     "review_decision": None,
     "review_design_artifact": "owner",
     "revise_simple_visual": "owner",

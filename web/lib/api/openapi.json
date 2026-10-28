@@ -43907,7 +43907,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/simple/chat/messages/{message_id}/choose": {
@@ -43970,7 +43971,8 @@
             }
           }
         },
-        "x-min-role": "viewer"
+        "x-min-role": "viewer",
+        "x-per-item": null
       }
     },
     "/v1/simple/chat/messages/{message_id}/apply-all": {
@@ -44037,7 +44039,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": null
       }
     },
     "/v1/simple/walk": {

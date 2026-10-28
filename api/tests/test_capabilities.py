@@ -401,6 +401,9 @@ SIMPLE_PER_ITEM = {
     "apply_simple_chat_card": None,
     "discard_simple_chat_card": None,
     "undo_simple_chat_card": None,
+    "apply_all_simple_chat_cards": None,
+    "choose_simple_chat_choice": None,
+    "retry_simple_chat_read": None,
     # S7 suggestions.
     "suggest_goal_features": "commenter",
     "accept_goal_suggestion": "commenter",
