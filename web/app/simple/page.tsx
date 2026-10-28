@@ -564,10 +564,13 @@ export default function SimpleHome() {
           <Block q={{ ...changes, error: changes.error ?? inbox.error, data: inbox.data && changes.data }} testId="home-since">
             {(rows) => {
               const seen = inbox.data?.last_seen_at ?? null;
+              const fresh = rows.filter((c) => c.status !== "proposed" && (!seen || (c.decided_at ?? c.at) > seen));
+              const shown = new Set(fresh.map((c) => c.id));
               const recent = [
-                ...rows
-                  // An undo says itself on the change it undid ("· undone"), not as a row of its own.
-                  .filter((c) => c.status !== "proposed" && !c.undoes_id && (!seen || (c.decided_at ?? c.at) > seen))
+                ...fresh
+                  // An undo says itself on the change it undid ("· undone") when that one is shown; an
+                  // undo of a change from before the last visit is a row of its own.
+                  .filter((c) => !c.undoes_id || !shown.has(c.undoes_id))
                   .map((c) => ({ key: c.id, at: c.decided_at ?? c.at, icon: "roadmap" as const, title: c.words || `${c.by_name}: ${changeWords(c, roadmap.data?.items.find((i) => i.id === c.target.item_id))}`, who: null, status: null })),
                 ...(inbox.data?.decisions ?? [])
                   .filter((d) => (d.reason === "oracle_decided" || d.reason === "informed") && (!seen || d.since > seen))

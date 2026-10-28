@@ -1245,6 +1245,7 @@ async def end(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Simple
         occ = await db.get(RitualOccurrence, m.occurrence_id, with_for_update=True)
         if occ is not None and occ.status in ("scheduled", "ready", "missed"):
             occ.status, occ.held_by, occ.held_at = "held", _me(principal), now
+            await audit.record(db, principal, "ritual.held", "ritual_occurrence", occ.id)
     session = await db.get(SimpleSession, m.session_id, with_for_update=True)
     if session is not None and session.closed_at is None:
         session.closed_at = now
