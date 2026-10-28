@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "./test";
 
+import { MOCK_TICK_ERRORS_KEY } from "../lib/api/mock/runs";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
@@ -589,18 +590,7 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
 });
 
 test("fix-work review: a check that could not read some runs says so on a run that is not at work", async ({ page }) => {
-  // The mock's tick never fails, and it answers inside the page (no network to route): the
-  // check's answer gets two runs it could not read on its way to the page.
-  await page.addInitScript(() => {
-    const json = Response.prototype.json;
-    Response.prototype.json = async function (this: Response) {
-      const out = (await json.call(this)) as unknown;
-      if (out && typeof out === "object" && "runs_checked" in out && Array.isArray((out as { errors?: unknown }).errors)) {
-        (out as { errors: string[] }).errors = ["run a: SwarmCloud HTTP 502", "run b: SwarmCloud HTTP 502"];
-      }
-      return out;
-    };
-  });
+  await page.addInitScript(([key]) => localStorage.setItem(key, "2"), [MOCK_TICK_ERRORS_KEY] as const);
   await openRuns(page);
   await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   await expect(status(page)).toHaveText("Waiting for review");
