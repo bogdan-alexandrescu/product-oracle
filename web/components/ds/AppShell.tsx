@@ -103,6 +103,9 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
   if (d.href === "/documents" && pathname.startsWith("/specs/")) return true;
   // qa-plan-19: the Roadmap's tabs (changelog, launches) are tabs of Plan.
   if (d.href === "/plan" && (pathname === "/roadmap" || pathname.startsWith("/roadmap/"))) return true;
+  // qa-plan-59: a baseline item's what-if belongs with Baseline, a recorded change's impact with PRDs.
+  if (d.href === "/baseline" && pathname.startsWith("/impact/entities/")) return true;
+  if (d.href === "/documents" && pathname.startsWith("/impact/changes/")) return true;
   return pathname === base || pathname.startsWith(`${base}/`);
 }
 

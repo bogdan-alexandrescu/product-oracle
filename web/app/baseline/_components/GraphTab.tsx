@@ -2,10 +2,11 @@
 
 import { Fragment, useState, type FormEvent, type MouseEvent, type ReactNode } from "react";
 
-import { Button, Chip, CodeChip, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
+import { Button, Chip, CodeChip, confirmInPage, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
 import type { EdgeOut, EntityOut, GraphOut, TraceFeature, TraceReport } from "@/lib/api/client";
 import { named, namedText, type Named } from "@/lib/codes";
-import { goalTree, percent } from "@/lib/goal-tree";
+import { formatPercent } from "@/lib/format";
+import { goalTree } from "@/lib/goal-tree";
 
 import type { AddKind } from "./AddItem";
 import {
@@ -120,11 +121,29 @@ function TitleButton({
         e.stopPropagation();
         onOpen(entity.id);
       }}
-      className={`${className.includes("min-w-") ? "" : "min-w-0"} truncate text-left hover:underline ${className}`}
+      className={`${className.includes("min-w-") ? "" : "min-w-0"} ${className.includes("line-clamp") ? "" : "truncate"} text-left hover:underline ${className}`}
+      title={name ?? entity.title}
     >
       {name ?? entity.title}
     </button>
   );
+}
+
+/** Fill from text's question: which goals it saves to, and what it reads. */
+function fillAsk(goals: EntityOut[]) {
+  const names = goals
+    .filter((g) => fillable([g]) > 0)
+    .map((g) => {
+      const texts = Object.entries(g.attrs ?? {})
+        .filter(([k, v]) => k.endsWith("_text") && k !== "owner_text" && g.attrs?.[k.slice(0, -5)] == null && v != null && v !== "")
+        .map(([k, v]) => `${k.slice(0, -5).replaceAll("_", " ")} “${String(v)}”`);
+      return texts.length ? `${g.title} (${texts.join(", ")})` : g.title;
+    });
+  const n = names.length;
+  return {
+    action: `Fill ${n} ${n === 1 ? "goal" : "goals"} from text`,
+    message: `Oracle reads the text and saves it as typed fields on ${names.join("; ")}. A locked goal gets a proposal instead; ranges and owner names stay as text.`,
+  };
 }
 
 /**
@@ -191,6 +210,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     {
       key: "goal",
       header: "Goal",
+      wrap: true,
       cell: (g) => {
         const vague = g.goal_check?.measurable === false;
         const indent = tree.get(g.id)?.depth ? "pl-6" : "";
@@ -200,7 +220,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           </Chip>
         );
         const head = (
-          <span className={`flex min-w-0 items-center gap-2 ${indent}`}>
+          <span className={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 ${indent}`}>
             {(tree.get(g.id)?.children ?? 0) > 0 && (
               <button
                 type="button"
@@ -224,8 +244,14 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
               proposed={g.status === "proposed"}
               codeOnly
             />
-            {/* The title keeps room beside an indent and its chips (#345); the chips give way first. */}
-            <TitleButton entity={g} name={tags.get(g.id)} onOpen={onOpen} className="min-w-[8rem] font-medium" />
+            {/* The name gets the room first (qa-plan-2): it wraps to two lines, then ends in an
+                ellipsis with the whole name on hover; the chips wrap below it, never cut. */}
+            <TitleButton
+              entity={g}
+              name={tags.get(g.id)}
+              onOpen={onOpen}
+              className="min-w-[8rem] flex-1 font-medium whitespace-normal line-clamp-2 [overflow-wrap:anywhere]"
+            />
             {vague && !onMakeMeasurable && <span className="flex-none">{chip}</span>}
             <LockMark entity={g} meId={meId} />
           </span>
@@ -239,7 +265,8 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           <span className={measurable ? "flex min-w-0 flex-col gap-1 py-1" : "contents"}>
             {head}
             {measurable && (
-              <span className={`flex min-w-0 items-center gap-1 ${indent}`}>
+              // Wraps when there is no room beside it, never under the row's actions (qa-plan-16).
+              <span className={`flex min-w-0 flex-wrap items-center gap-1 ${indent}`}>
                 <span className="flex-none">{chip}</span>
                 <Button
                   variant="ghost"
@@ -260,14 +287,17 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     },
     {
       key: "status",
-      header: "State",
-      width: "120px",
+      // Its review state (proposed, confirmed); the Feature × goal table's Delivery is another thing (qa-plan-44).
+      header: "Review",
+      width: "112px",
       cell: (g) => <NodeStatusBadge status={g.status} />,
     },
     {
       key: "metric",
       header: "Metric",
       hideOnPhone: true,
+      // A table under 1320 px wide gives the goal's name the room (qa-plan-2); the drawer shows it.
+      narrow: "wide",
       cell: (g) => (
         <span data-attr="metric" title={formatValue(g.attrs?.metric)} className="text-text2">
           {formatValue(g.attrs?.metric)}
@@ -293,17 +323,24 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       key: "progress",
       header: "Progress",
       width: "120px",
+      // "60% from subgoals" takes a second line rather than an ellipsis.
+      wrap: true,
       phoneLabel: "Progress",
       cell: (g) =>
         g.progress?.value != null ? (
           <span
             data-attr="progress"
             data-source={g.progress.source}
-            className="tnum whitespace-nowrap"
-            title={g.progress.source === "subgoals" ? "Rolled up from its subgoals" : "Its own measurement"}
+            className="tnum"
+            title={
+              g.progress.source === "subgoals"
+                ? `${formatPercent(g.progress.value)} of the way to target, rolled up from its subgoals`
+                : `${formatPercent(g.progress.value)} of the way to target, from its latest measured value`
+            }
           >
-            {percent(g.progress.value)}
-            <span className="ml-1 text-text2">{g.progress.source === "subgoals" ? "subgoals" : "own"}</span>
+            {/* What the number is, in words (qa-plan-43): "50% of target", "60% from subgoals". */}
+            {formatPercent(g.progress.value)}{" "}
+            <span className="text-sm text-text2">{g.progress.source === "subgoals" ? "from subgoals" : "of target"}</span>
           </span>
         ) : (
           <span data-attr="progress" className="text-text2">
@@ -314,8 +351,10 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     {
       key: "horizon",
       header: "Horizon",
-      width: "132px",
+      width: "120px",
       hideOnPhone: true,
+      // A drawer beside the table drops Horizon, Owner and Confidence before the goal's name (qa-plan-3).
+      narrow: "hide",
       cell: (g) => {
         const h = horizonLabel(g.attrs ?? {});
         if (!h) return <TextFallback attr="horizon" text={g.attrs?.horizon_text ?? g.attrs?.horizon} />;
@@ -331,6 +370,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       header: "Owner",
       width: "120px",
       hideOnPhone: true,
+      narrow: "hide",
       cell: (g) => <OwnerName id={g.attrs?.owner} owners={owners} />,
     },
     {
@@ -339,6 +379,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       width: "76px",
       align: "right",
       hideOnPhone: true,
+      narrow: "wide",
       cell: (g) => (
         <span data-attr="weight" className="tnum">
           {formatValue(g.attrs?.weight)}
@@ -351,14 +392,16 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       width: "84px",
       align: "right",
       hideOnPhone: true,
+      narrow: "wide",
       cell: (g) => <span className="tnum">{coverage.get(g.id)?.features.length ?? "–"}</span>,
     },
     {
       key: "confidence",
-      header: "Conf.",
-      width: "64px",
+      header: "Confidence",
+      width: "96px",
       align: "center",
       hideOnPhone: true,
+      narrow: "hide",
       cell: (g) => <ConfidenceRing value={g.confidence} low={low} size={32} />,
     },
   ];
@@ -366,13 +409,14 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
     goalCols.push({
       key: "act",
       header: <span className="sr-only">Action</span>,
-      // The whole button: nothing in the action column truncates.
-      width: "232px",
+      // The whole button: nothing in the action column truncates. One button a line, so the
+      // column stays narrow and the goal's name keeps the room (qa-plan-2).
+      width: "136px",
       className: "overflow-visible",
       align: "right",
       phone: "action",
       cell: (g) => (
-        <span className="flex flex-wrap justify-end gap-2">
+        <span className="flex flex-col items-end gap-1.5 py-1 max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:py-0">
           {g.status === "proposed" && (
             <Button
               disabled={busy}
@@ -416,7 +460,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         tools={
           <>
             <InfoTip label="Feature × goal">
-              Each bar group is a feature&apos;s contribution to a goal, 0 (none) to 3 (strong). Rings show confidence.
+              Each bar group is a feature&apos;s contribution to a goal, 0 (none) to 3 (strong). Rings show confidence, out of 100.
             </InfoTip>
             {add("feature")}
           </>
@@ -425,6 +469,11 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
         {groups.length === 0 ? (
           <p className="px-4 py-8 text-center text-text2">No features yet</p>
         ) : (
+          <>
+          {/* What the marks mean, in words beside them (prod-7). */}
+          <p className="border-b border-line px-4 py-2 text-sm text-text2 max-[600px]:px-3" data-testid="ledger-legend">
+            Rings: confidence, 0 to 100%. Bars: how much a feature moves a goal, none to strong. A dot: no link.
+          </p>
           <Ledger
             goals={goals}
             groups={groups}
@@ -438,6 +487,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             selectedId={selectedId}
             onOpen={onOpen}
           />
+          </>
         )}
       </Panel>
 
@@ -459,8 +509,14 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
             {add("goal")}
             {canWrite && onFill && toFill > 0 && (
               <>
-              <Button disabled={busy} onClick={onFill}>
-                {`Fill from text (${toFill} ${toFill === 1 ? "goal" : "goals"})`}
+              <Button
+                disabled={busy}
+                onClick={async () => {
+                  // It saves to the goals: say which and ask first (qa-plan-47).
+                  if (await confirmInPage(fillAsk(goals))) onFill();
+                }}
+              >
+                {`Fill goals from text (${toFill} ${toFill === 1 ? "goal" : "goals"})`}
               </Button>
               <InfoTip label="Fill from text">
                 Oracle reads the goals&apos; targets, values and horizons still written as text, with the rules Home uses. A
@@ -543,7 +599,7 @@ function Ledger({
         <colgroup>
           <col />
           <col className="w-[132px] max-[600px]:hidden" />
-          <col className="w-[64px] max-[600px]:hidden" />
+          <col className="w-[96px] max-[600px]:hidden" />
           {goals.map((g) => (
             <col key={g.id} className="w-[124px] max-[1100px]:w-[96px] max-[600px]:w-[52px]" />
           ))}
@@ -554,10 +610,10 @@ function Ledger({
               Feature
             </th>
             <th scope="col" className={`${th} text-left align-bottom max-[600px]:hidden`}>
-              State
+              Delivery
             </th>
             <th scope="col" className={`${th} text-center align-bottom max-[600px]:hidden`}>
-              Conf.
+              Confidence
             </th>
             {goals.map((g) => (
               <th
@@ -705,10 +761,12 @@ function FeatureRow({
           )}
         </span>
       </td>
-      <td role="cell" className="truncate px-2 py-1.5 max-[600px]:hidden">
+      {/* A phone keeps the delivery state and confidence, labelled, on the feature's second line (qa-plan-50). */}
+      <td role="cell" data-testid="feature-delivery" className="truncate px-2 py-1.5 max-[600px]:block max-[600px]:overflow-visible max-[600px]:p-0">
         <DeliveryChip value={feature.attrs?.status} />
       </td>
-      <td role="cell" className="px-2 py-1.5 text-center max-[600px]:hidden">
+      <td role="cell" data-testid="feature-confidence" className="px-2 py-1.5 text-center max-[600px]:flex max-[600px]:items-center max-[600px]:gap-1 max-[600px]:p-0">
+        <span className="hidden text-sm text-text2 max-[600px]:inline">Confidence</span>
         <ConfidenceRing value={feature.confidence} low={low} size={32} />
       </td>
       {goals.map((g) => {
@@ -737,7 +795,7 @@ function FeatureRow({
 
 /** A supports link: its confidence ring when scored, else its contribution 0-3. */
 function LinkCell({ edge, low }: { edge: EdgeOut; low: number }): ReactNode {
-  if (edge.confidence != null) return <ConfidenceRing value={edge.confidence} low={low} size={32} />;
+  if (edge.confidence != null) return <ConfidenceRing value={edge.confidence} low={low} size={32} what="Link confidence" />;
   return <ContributionPips value={contributionOf(edge.attrs)} proposed={edge.status === "proposed"} />;
 }
 

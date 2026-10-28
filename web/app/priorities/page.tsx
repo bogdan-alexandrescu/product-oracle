@@ -56,6 +56,7 @@ import {
   formulaText,
   inputLabel,
   inputValueText,
+  prdName,
   sourceName,
   stepWords,
 } from "./_components/words";
@@ -230,6 +231,19 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
       title: "Features with a goal but no score rank after the scored ones and before features with no goal.",
       flag: "missing_inputs",
     });
+  }
+  if (out.length === 0) {
+    // Nothing of its own: features moved up for their dependencies sit above it.
+    const above = features
+      .slice(0, at)
+      .filter((x) => s(x) < s(f))
+      .map((x) => x.title);
+    if (above.length > 0) {
+      out.push({
+        label: `Below ${above.join(", ")}: placed earlier for a dependency`,
+        title: "A feature that others depend on is placed above its score, so features scored higher can sit below it.",
+      });
+    }
   }
   return out;
 }
@@ -616,7 +630,7 @@ function Snapshots({ reloadKey, features }: { features: RankedFeature[]; reloadK
               <Chip kind="acc">{METHOD_LABEL[s.method]}</Chip>
               {s.run_id && (
                 <span className="min-w-0 truncate font-medium" data-testid="snapshot-prd">
-                  {s.document ? `${s.document.title ?? s.document.slug} · ` : ""}approved order
+                  {s.document ? `${prdName(s.document)} · ` : ""}approved order
                 </span>
               )}
               <span className="tnum text-text2">{plural(s.feature_count, "feature")}</span>
@@ -672,7 +686,7 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
   const [error, setError] = useState<string | null>(null);
   const { snapshot: snap, run, checkpoint: cp } = c;
   const doc = snap.document;
-  const prd = doc ? (doc.title ?? doc.slug) : null;
+  const prd = doc ? prdName(doc) : null;
   const deciding = snap.status === "proposed" && cp?.status === "pending";
   const blocked = cp?.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
 
@@ -889,7 +903,7 @@ function Priorities() {
           phone: "meta",
           phoneLabel: "Live",
           cell: (f) => (
-            <span data-testid="live-rank" className="tnum font-mono" title="Rank in Oracle's live ranking of the same features">
+            <span data-testid="live-rank" className="tnum" title="Rank in Oracle's live ranking of the same features">
               {byKey.get(f.key)?.live_rank ?? "—"}
             </span>
           ),
@@ -905,7 +919,7 @@ function Priorities() {
             return (
               <span
                 data-testid="delta"
-                className={`tnum font-mono ${d == null || d === 0 ? "text-text2" : "text-text"}`}
+                className={`tnum ${d == null || d === 0 ? "text-text2" : "text-text"}`}
                 title={d == null ? "Not in the live ranking" : d === 0 ? "Same rank as the live ranking" : `${Math.abs(d)} ${d > 0 ? "above" : "below"} the live ranking`}
               >
                 {deltaText(d)}
@@ -1021,7 +1035,7 @@ function Priorities() {
       cell: (f) => {
         const text = f.depends_on.map((k) => featureName(features, k)).join(", ");
         return (
-          <span className="block text-[13px] leading-[18px] text-text2" title={text || undefined}>
+          <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={text || undefined}>
             {text || "—"}
           </span>
         );
@@ -1043,7 +1057,7 @@ function Priorities() {
         const shown = changed || cmp || reasons.length > 0 ? 0 : 1;
         const rest = flags.slice(shown);
         return (
-          <span className="flex flex-wrap items-center gap-1.5 py-0.5">
+          <span data-testid="row-flags" className="flex flex-wrap items-center gap-1.5 py-0.5">
             {byKey.get(f.key)?.problems.map((p) => (
               <ProblemChip key={p.code} p={p} />
             ))}

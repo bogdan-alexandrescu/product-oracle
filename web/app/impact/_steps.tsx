@@ -11,6 +11,13 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { FRESH, usd, type Output, type Proposal } from "./_lib";
+import { useNamesOf } from "./_names";
+
+/** "prd_to_roadmap" → "PRD to roadmap": a run's flow in words. */
+const flowWords = (flow: string) => {
+  const w = flow.replaceAll("_", " ").replace(/\bprd\b/gi, "PRD");
+  return w.charAt(0).toUpperCase() + w.slice(1);
+};
 
 type Proposed = Schemas["RegenerationOut"];
 type Estimate = Schemas["RegenerateEstimateOut"];
@@ -199,12 +206,13 @@ function Settle({ output, review, onChanged }: { output: Output; review: boolean
 
 function ProposeStep({ requestId, may, proposed, onProposed }: { requestId: string; may: boolean; proposed?: Proposed; onProposed: (p: Proposed) => void }) {
   const { busy, error, run } = useAction();
+  const names = useNamesOf();
   if (proposed) {
     return (
       <p data-testid="plan-proposed" className="text-sm">
-        Draft run {proposed.run_id.slice(0, 8)} from PRD v{proposed.prd_version}
-        {proposed.section_keys.length > 0 && ` · ${proposed.section_keys.join(", ")}`}.
-        {proposed.dropped_section_keys.length > 0 && ` Dropped ${proposed.dropped_section_keys.join(", ")} (no longer in the PRD).`}
+        Draft run proposed from PRD v{proposed.prd_version}
+        {proposed.section_keys.length > 0 && ` · ${proposed.section_keys.map((k) => names.section(k)).join(", ")}`}.
+        {proposed.dropped_section_keys.length > 0 && ` Dropped ${proposed.dropped_section_keys.map((k) => names.section(k)).join(", ")} (no longer in the PRD).`}
       </p>
     );
   }
@@ -243,7 +251,7 @@ function EstimateStep({ slug, may, estimate, onEstimate }: { slug: string; may: 
     return (
       <div data-testid="plan-estimate" className="flex flex-col gap-1 text-sm">
         <div className="flex items-center gap-2">
-          <span className="flex-1">Estimate · flow <code className="font-mono text-[13px]">{estimate.flow}</code></span>
+          <span className="flex-1">Estimate · {flowWords(estimate.flow)}</span>
           <b className="tnum">{usd(estimate.estimate_usd)}</b>
         </div>
         <div className="flex items-center gap-2 text-text2">

@@ -23,7 +23,7 @@ import {
 } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { shownDay } from "@/lib/dates";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatPercent, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -38,12 +38,13 @@ import {
   statusLabel,
   upstreamLine,
   upstreamOf,
-  upstreamsOf,
+  upstreamsOf as upstreamsOfIn,
   type ImpactSource,
   type Output,
   type Report,
   type Upstream,
 } from "./_lib";
+import { NamesContext, subjectWords, useNames, useNamesOf, type SubjectWords } from "./_names";
 import { PlanSteps, type RowResult } from "./_steps";
 
 type View = "lineage" | "table";
@@ -101,12 +102,20 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
     onChanged: reload,
   });
 
-  const back =
-    source.kind === "version" ? (
-      <Link href={`/documents/${source.doc}/v/${source.n}`} className="hover:underline">
-        ← {report?.subject.title ?? `${source.doc} v${source.n}`}
-      </Link>
-    ) : undefined;
+  const names = useNames(report);
+  const subject = report ? subjectWords(report, names) : null;
+  // qa-plan-59: every Impact page leads back to what it is about (the version, Baseline or Sources).
+  const backTo =
+    source.kind === "version"
+      ? { href: `/documents/${source.doc}/v/${source.n}`, label: report?.subject.title ?? `${names.doc(source.doc)} v${source.n}` }
+      : source.kind === "entity"
+        ? { href: "/baseline", label: "Baseline" }
+        : subject?.back;
+  const back = backTo ? (
+    <Link href={backTo.href} data-testid="impact-back" className="hover:underline">
+      ← {backTo.label}
+    </Link>
+  ) : undefined;
   const counts = report ? countFreshness(report.affected) : null;
   const status = report && (
     <>
@@ -120,13 +129,14 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
       {counts!.under_review > 0 && <Chip kind="na">{counts!.under_review} under review</Chip>}
     </>
   );
-  const suffix = report ? (source.kind === "version" ? report.subject.title : (report.subject.title ?? report.subject.ref)) : null;
+  // qa-plan-61: one sentence, "Impact: Guided setup", not the title and a suffix run together.
+  const title = subject ? `Impact: ${subject.title}` : "Impact";
 
   return (
+    <NamesContext.Provider value={names}>
     <Page>
       <PageHeader
-        title="Impact"
-        suffix={suffix}
+        title={title}
         back={back}
         status={status}
         action={
@@ -151,7 +161,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
         <LoadingBoard />
       ) : (
         <div className="flex flex-col gap-4 max-[600px]:gap-3">
-          <Notice>{intro(report, source)}</Notice>
+          <Notice>{intro(report, source, subject!)}</Notice>
           {report.truncated && (
             <Notice tone="warn">Lineage cut off at the walk limit (depth 8, 2000 nodes or 500 roots). Some outputs may be missing.</Notice>
           )}
@@ -176,7 +186,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
                 )
               }
             >
-              <Lineage report={report} source={source} selected={selected} onPick={pick} />
+              <Lineage report={report} source={source} subject={subject!} selected={selected} onPick={pick} />
               <AffectedList report={report} selected={selected} onPick={pick} />
             </Split>
           ) : (
@@ -203,6 +213,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
         </Sheet>
       )}
     </Page>
+    </NamesContext.Provider>
   );
 }
 
@@ -212,9 +223,9 @@ function countFreshness(affected: Output[]) {
   return c;
 }
 
-function intro(report: Report, source: ImpactSource): string {
+function intro(report: Report, source: ImpactSource, subject: SubjectWords): string {
   if (!report.preview) return "Recorded: this change marked these outputs Potentially stale.";
-  if (source.kind === "entity") return `What if ${report.subject.title ?? report.subject.ref} changed? Preview only; nothing is marked stale.`;
+  if (source.kind === "entity") return `What if ${report.subject.title ?? subject.title} changed? Preview only; nothing is marked stale.`;
   const n = source.kind === "version" ? source.n : null;
   return `Preview: nothing has been marked stale. The lines show what each output was built from in earlier versions${
     n ? `; v${n} changed the sections in the middle column` : ""
@@ -252,13 +263,40 @@ const COL = { subject: [0, 22], upstream: [30, 62], output: [70, 100] } as const
 
 type OutNode = { key: string; label: string; sub: string; freshness: Output["freshness"]; ups: Set<string>; output?: Output; category?: Output["category"]; count?: number };
 
-function Lineage({ report, source, selected, onPick }: { report: Report; source: ImpactSource; selected: Output | null; onPick: (o: Output) => void }) {
+function Lineage({
+  report,
+  source,
+  subject,
+  selected,
+  onPick,
+}: {
+  report: Report;
+  source: ImpactSource;
+  subject: SubjectWords;
+  selected: Output | null;
+  onPick: (o: Output) => void;
+}) {
+  const names = useNamesOf();
   const [openCategory, setOpenCategory] = useState<Output["category"] | null>(null);
-  const ups = useMemo(() => {
-    const m = new Map<string, Upstream>();
-    for (const o of report.affected) for (const u of upstreamsOf(o)) if (!m.has(u.key)) m.set(u.key, u);
+  const upstreamsOf = (o: Output) => upstreamsOfIn(o, names);
+  const ups = (() => {
+    const m = new Map<string, Upstream & { builtOn?: string }>();
+    for (const o of report.affected) {
+      for (const d of o.dependencies ?? []) {
+        const u = upstreamOf(d, names);
+        if (m.has(u.key)) continue;
+        // qa-plan-58: a recorded change names one version (v2); the section it reached is that
+        // version's, as the subject says. The version the outputs were built on is said apart.
+        const v = subject.version;
+        const up = d.upstream;
+        if (source.kind === "change" && v && up.document_slug === v.slug && u.kind === "section") {
+          const built = up.version_number != null && up.version_number !== v.n ? `Outputs were built on v${up.version_number}` : undefined;
+          m.set(u.key, { ...u, sub: `Section of ${names.doc(v.slug)} v${v.n}`, builtOn: built });
+        } else m.set(u.key, u);
+      }
+    }
     return [...m.values()];
-  }, [report]);
+  })();
   // Past GROUP_AT outputs, one node per category (its count and stalest freshness, edges
   // from all its outputs' upstreams); choosing one shows just that category's outputs.
   const grouped = report.affected.length > GROUP_AT;
@@ -269,12 +307,12 @@ function Lineage({ report, source, selected, onPick }: { report: Report; source:
       for (const o of report.affected) by.set(o.category, [...(by.get(o.category) ?? []), o]);
       return [...by.entries()].map(([c, os]) => ({
         key: `c:${c}`, label: CATEGORY[c], sub: `${os.length} outputs`, category: c, count: os.length,
-        freshness: stalest(os.map((o) => o.freshness)), ups: new Set(os.flatMap((o) => upstreamsOf(o).map((u) => u.key))),
+        freshness: stalest(os.map((o) => o.freshness)), ups: new Set(os.flatMap((o) => upstreamsOfIn(o).map((u) => u.key))),
       }));
     }
     return shown.map((o) => ({
       key: keyOf(o), label: outputTitle(o), sub: statusLabel(o.status), freshness: o.freshness, output: o,
-      ups: new Set(upstreamsOf(o).map((u) => u.key)),
+      ups: new Set(upstreamsOfIn(o).map((u) => u.key)),
     }));
   }, [report, grouped, openCategory]);
   const shownUps = ups.filter((u) => nodes.some((n) => n.ups.has(u.key)));
@@ -350,7 +388,7 @@ function Lineage({ report, source, selected, onPick }: { report: Report; source:
               }),
             )}
           </svg>
-          <SubjectNode report={report} style={{ left: `${COL.subject[0]}%`, width: `${COL.subject[1] - COL.subject[0]}%`, top: subjectY - NODE / 2 }} />
+          <SubjectNode report={report} subject={subject} style={{ left: `${COL.subject[0]}%`, width: `${COL.subject[1] - COL.subject[0]}%`, top: subjectY - NODE / 2 }} />
           {shownUps.map((u, i) => (
             <div
               key={u.key}
@@ -361,10 +399,20 @@ function Lineage({ report, source, selected, onPick }: { report: Report; source:
               }`}
               style={{ left: `${COL.upstream[0]}%`, width: `${COL.upstream[1] - COL.upstream[0]}%`, top: y(i, shownUps.length) - NODE / 2, height: NODE }}
             >
-              <span className="truncate text-sm font-semibold">{u.label}</span>
+              <span className="truncate text-sm font-semibold" title={u.label}>
+                {u.label}
+              </span>
               <span className="flex min-w-0 items-center gap-1.5 truncate text-[13px] text-text2">
                 {u.deleted && <Chip kind="crit">Deleted</Chip>}
-                <span className="truncate">{u.deleted && u.deletedAt ? `${u.entityKey ?? u.label} · ${formatDate(u.deletedAt)}` : u.sub}</span>
+                {(() => {
+                  const sub = u.deleted && u.deletedAt ? `${u.entityKey ?? u.label} · ${formatDate(u.deletedAt)}` : u.sub;
+                  const built = u.builtOn;
+                  return (
+                    <span className="truncate" data-testid="lineage-upstream-sub" title={built ? `${sub}. ${built}.` : sub}>
+                      {sub}
+                    </span>
+                  );
+                })()}
                 {u.entityId && !u.deleted && (
                   <Link href={`/impact/entities/${u.entityId}`} className="ml-auto flex-none font-medium text-accent-ink hover:underline">
                     What if {u.entityKey} changed?
@@ -380,10 +428,14 @@ function Lineage({ report, source, selected, onPick }: { report: Report; source:
               <>
                 <span aria-hidden className={`w-1 flex-none self-stretch rounded-full ${BAR[n.freshness]}`} />
                 <span className="flex min-w-0 flex-1 flex-col text-left">
-                  <span className="truncate text-sm font-semibold">{n.label}</span>
+                  <span className="truncate text-sm font-semibold" title={n.label}>
+                    {n.label}
+                  </span>
                   <span className="flex min-w-0 items-center gap-1.5 text-[13px] text-text2">
                     <Chip kind={FRESH[n.freshness].kind}>{FRESH[n.freshness].label}</Chip>
-                    <span className="truncate">{n.sub}</span>
+                    <span className="truncate" title={n.sub}>
+                      {n.sub}
+                    </span>
                   </span>
                 </span>
               </>
@@ -426,40 +478,39 @@ const BAR: Record<Output["freshness"], string> = {
   under_review: "bg-na",
 };
 
-function SubjectNode({ report, style }: { report: Report; style: React.CSSProperties }) {
+/** The subject in words (qa-plan-10): "Checkout redesign PRD v2 › Success metrics section edited". */
+function SubjectNode({ report, subject, style }: { report: Report; subject: SubjectWords; style: React.CSSProperties }) {
   const c = report.change;
+  const sub = c ? `Recorded ${formatDate(c.created_at)}` : report.preview ? "Preview" : null;
   return (
     <div
       data-testid="lineage-subject"
+      title={subject.title}
       className="absolute flex flex-col justify-center rounded-button border border-accent bg-accent-soft px-3 py-1.5 text-accent-ink"
       style={{ ...style, height: NODE }}
     >
-      {c ? (
-        <>
-          <span className="truncate text-sm font-semibold">{statusLabel(c.cause)}</span>
-          <span className="truncate text-[13px]">
-            {c.subject_ref ?? c.subject_kind} · {formatDate(c.created_at)}
-          </span>
-        </>
-      ) : (
-        <>
-          <span className="truncate text-sm font-semibold">{report.subject.title ?? report.subject.ref}</span>
-          <span className="truncate text-[13px]">{report.subject.ref}</span>
-        </>
-      )}
+      <span className={`text-sm leading-5 font-semibold [overflow-wrap:anywhere] ${sub ? "line-clamp-2" : "line-clamp-3"}`}>{subject.title}</span>
+      {sub && <span className="truncate text-[13px]">{sub}</span>}
     </div>
   );
 }
 
 /** B's grouped list, instead of the graph on a phone only: outputs by what they were built from. */
 function AffectedList({ report, selected, onPick }: { report: Report; selected: Output | null; onPick: (o: Output) => void }) {
+  const names = useNamesOf();
   const groups = new Map<string, Output[]>();
   for (const o of report.affected) {
-    const label = `From ${upstreamsOf(o).map((u) => u.short).join(", ") || "the subject"}`;
+    const label = `From ${upstreamsOfIn(o, names).map((u) => u.short).join(", ") || "the subject"}`;
     groups.set(label, [...(groups.get(label) ?? []), o]);
   }
   return (
     <Panel title="Affected outputs" count={report.affected.length} className="min-[601px]:hidden">
+      {/* qa-plan-60: on a phone the plan opens per output; say so, and how big it is. */}
+      <p data-testid="impact-phone-hint" className="border-b border-line px-4 py-2 text-sm text-text2">
+        {report.plan.length > 0
+          ? `The regeneration plan has ${plural(report.plan.length, "proposal", "proposals")}. Tap an output to see its proposal and act on it.`
+          : "Nothing to propose: the affected outputs are superseded or rejected. Tap an output to see why."}
+      </p>
       {[...groups.entries()].map(([label, os]) => (
         <div key={label} className="border-b border-line last:border-b-0">
           <div className="bg-surface2 px-4 py-1.5 text-[13px] font-semibold text-text2">{label}</div>
@@ -514,6 +565,7 @@ function PlanSidebar({
   onPick: (o: Output) => void;
   rowProps: RowPropsOf;
 }) {
+  const names = useNamesOf();
   const byKey = new Map(report.affected.map((o) => [keyOf(o), o]));
   return (
     <Inspector
@@ -565,7 +617,9 @@ function PlanSidebar({
                   <PlanSteps {...rowProps(o)} />
                 </div>
               ) : (
-                <p className="mt-1 line-clamp-2 pl-8 text-sm text-text2">{p.how}</p>
+                <p className="mt-1 line-clamp-2 pl-8 text-sm text-text2" title={names.words(p.how)}>
+                  {names.words(p.how)}
+                </p>
               )}
             </li>
           );
@@ -586,24 +640,25 @@ function PlanSidebar({
 }
 
 function ProposalBody({ proposal }: { proposal: NonNullable<ReturnType<typeof proposalOf>> }) {
+  const names = useNamesOf();
   return (
     <>
       {proposal.section_keys.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-1.5" data-testid="plan-sections">
           {proposal.section_keys.map((k) => (
-            <code key={k} className="rounded bg-surface2 px-1.5 py-0.5 font-mono text-[13px]">
-              {k}
-            </code>
+            <Chip key={k} kind="line">
+              {names.section(k)}
+            </Chip>
           ))}
         </div>
       )}
       <p data-testid="plan-how" className="text-sm">
-        {proposal.how}
+        {names.words(proposal.how)}
       </p>
       {proposal.reasons.length > 0 && (
         <ul className="list-disc pl-5 text-sm text-text2">
           {proposal.reasons.map((r) => (
-            <li key={r}>{r}</li>
+            <li key={r}>{names.words(r)}</li>
           ))}
         </ul>
       )}
@@ -622,6 +677,7 @@ const FILTER: Record<Filter, (o: Output) => boolean> = {
 };
 
 function OutputTable({ report, selected, onPick }: { report: Report; selected: Output | null; onPick: (o: Output) => void }) {
+  const names = useNamesOf();
   const columns: Column<Output>[] = [
     {
       key: "output",
@@ -629,10 +685,17 @@ function OutputTable({ report, selected, onPick }: { report: Report; selected: O
       phone: "title",
       cell: (o) => (
         <span className="flex min-w-0 flex-col">
-          <span className="truncate font-medium">{outputTitle(o)}</span>
-          <span className="truncate text-[13px] text-text2">
-            {o.status === "superseded" || o.status === "rejected" ? `${statusLabel(o.status)} · no proposal` : (o.reasons?.[0] ?? "")}
+          <span className="truncate font-medium" title={outputTitle(o)}>
+            {outputTitle(o)}
           </span>
+          {(() => {
+            const why = o.status === "superseded" || o.status === "rejected" ? `${statusLabel(o.status)} · no proposal` : names.words(o.reasons?.[0] ?? "");
+            return (
+              <span className="truncate text-[13px] text-text2" title={why}>
+                {why}
+              </span>
+            );
+          })()}
         </span>
       ),
     },
@@ -683,6 +746,7 @@ function OutputTable({ report, selected, onPick }: { report: Report; selected: O
 }
 
 function PlanList({ report }: { report: Report }) {
+  const names = useNamesOf();
   const byKey = new Map(report.affected.map((o) => [keyOf(o), o]));
   return (
     <Panel title="Regeneration plan" count={report.plan.length} tools={<span className="text-sm text-text2">Act on each row; nothing runs the whole plan at once</span>}>
@@ -697,13 +761,13 @@ function PlanList({ report }: { report: Report }) {
                   <span className="font-semibold [overflow-wrap:anywhere]">{o ? outputTitle(o) : p.title}</span>
                   <Chip kind={p.action === "review" ? "warn" : "acc"}>{p.action === "review" ? "Review" : "Regenerate"}</Chip>
                   {p.section_keys.map((k) => (
-                    <code key={k} className="rounded bg-surface2 px-1.5 py-0.5 font-mono text-[13px]">
-                      {k}
-                    </code>
+                    <Chip key={k} kind="line">
+                      {names.section(k)}
+                    </Chip>
                   ))}
                   {p.entity_ids.length > 0 && <span className="text-[13px] text-text2">{p.entity_ids.length} baseline item{p.entity_ids.length === 1 ? "" : "s"}</span>}
                 </div>
-                <p className="text-sm text-text2">{p.how}</p>
+                <p className="text-sm text-text2">{names.words(p.how)}</p>
               </div>
             </li>
           );
@@ -731,12 +795,13 @@ function EntitiesPanel({ report }: { report: Report }) {
       <ul>
         {report.affected_entities.map((e) => (
           <li key={e.id} className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 text-sm last:border-b-0">
-            <code className="font-mono text-[13px]">{e.key}</code>
-            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{e.title}</span>
-            <span className="text-text2">
-              {e.type.replaceAll("_", " ")} · {e.status}
+            <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">
+              {e.title} <span className="text-text2">({e.key})</span>
             </span>
-            {e.confidence != null && <span className="tnum">{e.confidence.toFixed(2)}</span>}
+            <span className="text-text2">
+              {statusLabel(e.type)} · {e.status.replaceAll("_", " ")}
+            </span>
+            {e.confidence != null && <span className="tnum">{formatPercent(e.confidence)} confidence</span>}
             {e.locked && <Chip kind="line">Locked</Chip>}
           </li>
         ))}
@@ -773,6 +838,7 @@ function OutputInspector({ report, output, ...steps }: { report: Report; output:
 
 /** The inspector's (and the phone sheet's) sections: why, built from, proposal, the stages. */
 function OutputSections({ report, output, ...steps }: { report: Report; output: Output } & ReturnType<RowPropsOf>) {
+  const names = useNamesOf();
   const proposal = proposalOf(report, output);
   return (
     <>
@@ -780,7 +846,7 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
         <InspectorSection label="Why it's affected">
           <ul className="list-disc pl-5 text-sm">
             {output.reasons!.map((r) => (
-              <li key={r}>{r}</li>
+              <li key={r}>{names.words(r)}</li>
             ))}
           </ul>
         </InspectorSection>
@@ -788,12 +854,12 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
       <InspectorSection label="Built from">
         <ul className="flex flex-col gap-2">
           {(output.dependencies ?? []).map((d) => {
-            const u = upstreamOf(d);
+            const u = upstreamOf(d, names);
             return (
               <li key={d.id} data-testid="dependency" className="flex flex-col gap-0.5 text-sm">
                 <span className="flex flex-wrap items-center gap-1.5">
                   <Chip kind={FRESH[d.freshness].kind}>{FRESH[d.freshness].label}</Chip>
-                  <span className="min-w-0 [overflow-wrap:anywhere]">{upstreamLine(d)}</span>
+                  <span className="min-w-0 [overflow-wrap:anywhere]">{upstreamLine(d, names)}</span>
                   {u.deleted && <Chip kind="crit">Deleted</Chip>}
                 </span>
                 <span className="flex flex-wrap gap-x-2 text-[13px] text-text2">
@@ -820,7 +886,7 @@ function OutputSections({ report, output, ...steps }: { report: Report; output: 
       </InspectorSection>
       <InspectorSection label="Proposal">
         {proposal ? (
-          <p className="text-sm">{proposal.how}</p>
+          <p className="text-sm">{names.words(proposal.how)}</p>
         ) : (
           <p className="text-sm text-text2">{statusLabel(output.status)}, so it is not in the plan.</p>
         )}

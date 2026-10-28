@@ -130,8 +130,8 @@ function Figures({ report }: { report: Report }) {
       </dl>
       {/* qa-plan-56: where the items behind the totals are listed. */}
       <p data-testid="report-figures-note" className="text-sm text-text2">
-        Dates slipping are listed under each track&apos;s Needs attention. Now items without an issue are counted in each
-        track&apos;s Alignment, as untracked.
+        Dates slipping are listed under each track&apos;s Needs attention. Now items without an issue are among the untracked
+        items in each track&apos;s Alignment.
       </p>
     </div>
   );

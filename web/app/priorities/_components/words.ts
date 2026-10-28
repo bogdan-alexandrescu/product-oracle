@@ -4,6 +4,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { SOURCE_LABEL, formatDate, plural } from "@/lib/format";
+import { docLabel } from "@/lib/labels";
 
 type Method = Schemas["PriorityRanking"]["method"];
 
@@ -64,6 +65,8 @@ export function stepWords(step: string): string {
     const value = Number(moscow[3]);
     return `${MOSCOW_LABEL[moscow[1]!]} = ${moscow[2]}; ties broken by goal value ${Number.isFinite(value) ? formatScore(value) : moscow[3]}`;
   }
+  const named = step.match(/^(score|goal value|cost of delay|confidence) = /);
+  if (named) return named[1]!.charAt(0).toUpperCase() + step.slice(1);
   const missing = step.match(/^not scored: missing (.+)$/);
   if (missing) return `Not scored: no ${missing[1]!.split(/,\s*/).map(inputLabel).join(", ")}`;
   return step;
@@ -151,4 +154,12 @@ export function evidenceName(ev: { title?: string | null; ref?: string | null; s
   if (t) return refWords(t, ev.source_kind);
   if (ev.ref) return refWords(ev.ref, ev.source_kind);
   return "Evidence";
+}
+
+/** The PRD a snapshot is for, by its title ("Saved addresses PRD"), else its slug in words. */
+export function prdName(doc: { title?: string | null; slug: string }): string {
+  const title = doc.title?.trim();
+  if (title) return docLabel({ title, kind: "prd" });
+  const words = doc.slug.replace(/[-_]+/g, " ").trim();
+  return docLabel({ title: words.charAt(0).toUpperCase() + words.slice(1), kind: "prd" });
 }

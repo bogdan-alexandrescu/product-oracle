@@ -143,7 +143,7 @@ function summaryOf(ts: Track[]): Schemas["ReportSummaryFigures"] {
 }
 
 function markdown(r: Omit<Report, "read" | "markdown">): string {
-  const parts = r.tracks.map((t) => [`## ${t.prd.title}`, "", t.headline, ...t.needs_attention.map((n) => `- [${n.title}](${n.link}): ${n.detail}`)].join("\n"));
+  const parts = r.tracks.map((t) => [`## ${t.prd.title}`, "", t.headline, ...t.needs_attention.map((n) => `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${n.detail}`)].join("\n"));
   return [`# ${r.title}`, "", r.headline, "", ...parts].join("\n") + "\n";
 }
 

@@ -73,14 +73,17 @@ export function ConfidenceRing({
   value,
   low = DEFAULT_LOW,
   size = 34,
+  what = "Confidence",
 }: {
   value: number | null | undefined;
   low?: number;
   size?: number;
+  /** What the ring scores, in its name and tooltip ("Link confidence 50%"). */
+  what?: string;
 }) {
   const tone = value == null ? undefined : confidenceTone(value, low);
   // The ring's number is a percentage: its name and tooltip say so (prod-7).
-  const words = value == null ? "Not scored yet" : `Confidence ${formatPercent(value)}`;
+  const words = value == null ? "Not scored yet" : `${what} ${formatPercent(value)}`;
   return (
     <span data-testid="confidence" data-tone={tone} className="inline-flex align-middle" title={words}>
       <Ring

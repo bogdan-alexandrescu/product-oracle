@@ -95,7 +95,9 @@ export function useNames(report: Report | undefined): Names {
   const section = (k: string, slug?: string | null, n?: number | null) =>
     (slug && n != null ? loaded.headings[`${slug}@${n}#${k}`] : undefined) ?? loaded.byKey[k] ?? slugWords(k);
   const words = (text: string) => {
-    let t = text.replace(/\bsections? ([\w.-]+(?:, [\w.-]+)*)(?= (?:changed|was removed|of)\b)/g, (_, keys: string) => {
+    // "(flow prd_to_roadmap)" is the run's flow id: the sentence already says what it is.
+    let t = text.replace(/ \(flow [\w-]+\)/g, "");
+    t = t.replace(/\bsections? ([\w.-]+(?:, [\w.-]+)*)(?=[,;)]| (?:changed|was removed|of|from)\b|$)/g, (_, keys: string) => {
       const list = keys.split(", ").map((k) => `“${section(k)}”`);
       return list.length === 1 ? `the ${list[0]} section` : `the ${list.join(", ")} sections`;
     });
@@ -113,3 +115,52 @@ const slugOnly: Names = { doc: slugWords, section: (k) => slugWords(k), words: (
 /** The report's names, for the explorer's parts (ImpactExplorer provides them). */
 export const NamesContext = createContext<Names>(slugOnly);
 export const useNamesOf = () => useContext(NamesContext);
+
+/** What a change did, in words: "edited", "deleted", "permission changed". */
+const CAUSE: Record<string, string> = {
+  section_edited: "edited",
+  section_removed: "removed",
+  entity_deleted: "deleted",
+  entity_changed: "changed",
+  source_permission: "permission changed",
+};
+const causeWords = (cause: string) => CAUSE[cause] ?? cause.replace(/^(?:section|document|version|entity)_/, "").replaceAll("_", " ");
+
+export type SubjectWords = {
+  /** "Checkout redesign PRD v2 › Success metrics section edited". */
+  title: string;
+  /** Where the report's subject lives, for the back link: "Checkout redesign PRD v2" at its version page. */
+  back: { href: string; label: string } | null;
+  /** The document and version the subject names, where it names one: the lineage shows that version. */
+  version: { slug: string; n: number } | null;
+};
+
+/**
+ * The report's subject in words (qa-plan-10, 58, 59): never "slug@2#metrics" or "requirement:R-90".
+ * A recorded change names its document version and section; a what-if names the baseline item.
+ */
+export function subjectWords(report: Report, names: Names): SubjectWords {
+  const c = report.change;
+  const ref = c?.subject_ref ?? report.subject.ref ?? null;
+  const p = parseRef(ref);
+  if (p && p.n != null) {
+    const where = `${names.doc(p.slug)} v${p.n}`;
+    const what = c ? (p.key ? `${names.section(p.key, p.slug, p.n)} section ${causeWords(c.cause)}` : causeWords(c.cause)) : null;
+    return {
+      title: report.subject.title && !c ? report.subject.title : what ? `${where} › ${what}` : where,
+      back: { href: `/documents/${p.slug}/v/${p.n}`, label: where },
+      version: { slug: p.slug, n: p.n },
+    };
+  }
+  const kindKey = ref ? /^([a-z_]+):(.+)$/.exec(ref) : null;
+  const kind = kindKey?.[1] ?? c?.subject_kind ?? report.subject.kind;
+  const named = report.subject.title ?? (kindKey ? `${slugWords(kindKey[1])} ${kindKey[2]}` : ref ? names.words(ref) : slugWords(kind));
+  const title = c ? `${named} ${causeWords(c.cause)}` : named;
+  const back =
+    kind === "source"
+      ? { href: "/sources", label: "Sources" }
+      : ["member", "intake", "access_request"].includes(kind)
+        ? null
+        : { href: "/baseline", label: "Baseline" };
+  return { title, back, version: null };
+}

@@ -1,6 +1,6 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { formatPercent } from "@/lib/format";
+import { formatMoney, formatPercent } from "@/lib/format";
 
 import type { Names } from "./_names";
 
@@ -120,4 +120,5 @@ export function proposalOf(report: Report, o: Output): Proposal | undefined {
   return report.plan.find((p) => keyOf(p) === k);
 }
 
-export const usd = (n: number) => `$${n.toFixed(2)}`;
+/** "$6.00": the shared money format. */
+export const usd = formatMoney;

@@ -4,7 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties
 
 import { Chip } from "@/components/ds";
 import type { EvidenceOut } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatPercent } from "@/lib/format";
 
 import { ConfidenceBadge, DEFAULT_LOW, sourceKindLabel } from "./common";
 
@@ -101,7 +101,7 @@ export function EvidenceChip({ evidence, low = DEFAULT_LOW }: { evidence: Eviden
         data-testid="evidence-chip"
         aria-expanded={open}
         aria-describedby={open ? cardId : undefined}
-        aria-label={`Evidence: ${label}${removed ? ", source removed" : ""}, confidence ${evidence.confidence != null ? evidence.confidence.toFixed(2) : "not scored"}`}
+        aria-label={`Evidence: ${label}${removed ? ", source removed" : ""}, confidence ${evidence.confidence != null ? formatPercent(evidence.confidence) : "not scored"}`}
         onClick={() => setPinned((p) => !p)}
         onFocus={() => setHover(true)}
         onBlur={() => setHover(false)}

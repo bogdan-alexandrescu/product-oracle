@@ -104,7 +104,8 @@ const FEATURES: FeatureSeed[] = [
       // Five more at the mean (0.75), so the feature's confidence stays as it was.
       { id: "ev-5", confidence: 0.75, ref: "https://example.com/support/thread-1182", title: "Support thread 1182", source_kind: "slack", date: "2026-09-20" },
       { id: "ev-6", confidence: 0.75, ref: "interview-11.md", title: "Interview 11", source_kind: "upload", date: "2026-09-25" },
-      { id: "ev-7", confidence: 0.75, ref: "https://example.com/tracker/issue-388", title: "Issue 388", source_kind: "github", date: "2026-09-28" },
+      // A source titled by its ref, as the API cites a pull request (prod-5).
+      { id: "ev-7", confidence: 0.75, ref: "https://example.com/tracker/pull-920", title: "svc-backend#920", source_kind: "github:pull_request", date: "2026-09-28" },
       { id: "ev-8", confidence: 0.75, ref: "https://example.com/calls/review-0930", title: "Call review, 30 September", source_kind: "fireflies", date: "2026-09-30" },
       { id: "ev-9", confidence: 0.75, ref: "https://example.com/research/survey-q3-open", title: "Survey Q3, open answers", source_kind: "notion", date: "2026-10-03" },
     ],
