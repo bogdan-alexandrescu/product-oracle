@@ -20,7 +20,7 @@ test("request changes on roadmap items: attempt 2 runs and the previous attempt'
   await page.getByRole("button", { name: "Check agents now" }).click();
   const items = page.getByTestId("segment-roadmap_items");
   // D1: the run page shows the waiting stop as its summary line (Review items), not a panel.
-  await expect(items.getByRole("link", { name: "Waiting : Roadmap items" })).toBeVisible();
+  await expect(items.getByText("Waiting: Roadmap items")).toBeVisible();
   await expect(items.getByTestId("items-review-line")).toBeVisible();
   await expect(items.getByRole("group", { name: /Previous attempt/ })).toHaveCount(0);
 

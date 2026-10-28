@@ -24,7 +24,7 @@ async function seeded(page: Page, email = APPROVER) {
 /** From the runs list to the run, then its checkpoint row's Review feature set. */
 async function openReview(page: Page, slug: string) {
   await page.getByTestId("nav-runs").click();
-  await page.getByTestId("run-row").filter({ hasText: new RegExp(`${slug}(?!-)`) }).getByRole("link").first().click();
+  await page.getByTestId("run-row").getByRole("link", { name: new RegExp(`^${slug.replace(/-/g, " ")}( PRD)?$`, "i") }).first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);

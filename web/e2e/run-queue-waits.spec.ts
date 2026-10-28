@@ -88,7 +88,7 @@ test("a run not started after 30 minutes is an Inbox row with Open and Cancel, c
 
   await page.goto("/inbox");
   await expect(badge).toHaveText(String(before + 1));
-  const row = page.getByTestId("inbox-lookups").locator("tr[data-row]").filter({ hasText: "queued onboarding" });
+  const row = page.getByTestId("inbox-lookups").locator("tr[data-row]").filter({ hasText: "queued-onboarding" });
   await expect(row).toContainText(QUOTA);
   await expect(row).toContainText(`since ${SINCE_WORDS}`);
   await expect(row.getByRole("button", { name: "Retry" })).toHaveCount(0);
