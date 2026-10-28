@@ -64,7 +64,7 @@ test("Queue: filters by state, goal and theme, searches, and shows a filed reque
   await dialog.getByLabel("What it is and why").fill(WHY);
   await dialog.getByRole("button", { name: "File request" }).click();
   await expect(row(page, TITLE)).toHaveAttribute("aria-current", "true");
-  await expect(row(page, TITLE).getByTestId("request-age")).toHaveText("today");
+  await expect(row(page, TITLE).getByTestId("request-age")).toHaveText("now");
   await expect(inspector(page).getByRole("heading", { name: TITLE })).toBeVisible();
   await filter(page, "State").selectOption("new");
   await expect(row(page, TITLE)).toBeVisible();

@@ -87,12 +87,12 @@ export default function RunsPage() {
       key: "for",
       header: "For",
       phone: "title",
-      wrap: true,
       cell: (r) => (
         // qa-work-29: on a phone the link is a 44 px target (and the whole row opens the run).
         <Link
           href={`/runs/${r.id}`}
-          className="font-medium hover:underline max-[600px]:inline-flex max-[600px]:min-h-11 max-[600px]:items-center"
+          title={runName(r)}
+          className="block truncate font-medium hover:underline max-[600px]:flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal"
           onClick={(e) => e.stopPropagation()}
         >
           {runName(r)}
@@ -102,7 +102,7 @@ export default function RunsPage() {
     {
       key: "flow",
       header: "Flow",
-      width: "200px",
+      width: "180px",
       phone: "meta",
       narrow: "hide",
       // qa-work-23: wide enough for the flows' names; one cut short shows in full on hover.
@@ -115,7 +115,7 @@ export default function RunsPage() {
     {
       key: "state",
       header: "State",
-      width: "360px",
+      width: "350px",
       phone: "meta",
       cell: (r) => (
         <span className="flex min-w-0 flex-wrap items-center gap-2.5 gap-y-1">
@@ -132,7 +132,7 @@ export default function RunsPage() {
     {
       key: "act",
       header: <span className="sr-only">Action</span>,
-      width: "132px",
+      width: "120px",
       align: "right",
       phone: "action",
       cell: (r) => {

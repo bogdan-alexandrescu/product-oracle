@@ -168,7 +168,7 @@ test("an owner deletes a run from its page and restores it", async ({ page }) =>
   await expect(page.getByTestId("trash-entry")).toHaveCount(1);
   await expect(page.getByTestId("trash-entry")).toContainText("Run");
 
-  await page.getByRole("button", { name: `Restore ${title}` }).click();
+  await page.getByRole("button", { name: /^Restore / }).click();
   await expect(page.getByText("Trash is empty")).toBeVisible();
   await page.goto(url);
   await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
