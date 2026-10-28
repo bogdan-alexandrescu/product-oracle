@@ -668,13 +668,18 @@ const line = (ctx: ChatCtx, body: string, at: string): StoredMessage => ({
  */
 function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string, onlyUnderstood = false): boolean {
   const reply = parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names));
+  // A question about something not on the roadmap is Ask's (the one box writes nothing); a
+  // change phrase naming no item is read by the reader in context, as the API does.
+  const asksElsewhere = reply.understood === false && !!reply.missing;
+  if (asksElsewhere && onlyUnderstood) return false;
+  if (!asksElsewhere && reply.missing) reply.understood = false;
   const t = (chat.threads[key] ??= { id: crypto.randomUUID(), meeting_id: meeting?.id ?? null, owner_id: meeting ? null : ctx.id, messages: [] });
   const at = now();
   const person = line(ctx, text, at);
   t.messages.push(person);
   const id = crypto.randomUUID();
   const base = { id, author_kind: "oracle" as const, author_id: null, author_name: "Oracle", at, reply_to: person.id, picked: null, retry: false };
-  if (reply.understood === false) {
+  if (reply.understood === false && !asksElsewhere) {
     t.messages.push({ ...base, kind: "pending", body: "Reading that…", card_ids: [], choices: [], reading: { text, role: ctx.role, meeting_id: meeting?.id ?? null, attempts: 0, ask: onlyUnderstood } });
     return true;
   }
