@@ -94,10 +94,13 @@ test("a member makes a new link; the old link says it was replaced", async ({ pa
 });
 
 test("a viewer is not offered a new link", async ({ page }) => {
-  // protects=the creator-or-approver rule through the interview's can_manage; fails_when=a
-  // viewer sees Make a new link; no_claim=the API's 403 (api/tests/test_interviews.py).
+  // protects=the creator-or-approver rule through the interview's can_manage, and the made
+  // date for every reader; fails_when=a viewer sees Make a new link or not when the link was
+  // made; no_claim=the API's 403 (api/tests/test_interviews.py).
   await login(page, "viewer@example.com");
   await openInterview(page);
+  // Everyone who reads the interview sees when its link was made; only a manager may replace it.
+  await expect(page.getByTestId("interview-link-made")).toHaveText(/^Made [A-Z][a-z]{2} \d{1,2}/);
   await expect(page.getByTestId("interview-link-note")).toBeVisible();
   await expect(page.getByRole("button", { name: "Make a new link", exact: true })).toHaveCount(0);
 });
