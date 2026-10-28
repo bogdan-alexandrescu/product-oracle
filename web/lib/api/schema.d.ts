@@ -38658,6 +38658,7 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["SimpleLine"][];
+            plan?: components["schemas"]["SimplePlanOut"] | null;
         };
         /**
          * SimplePriorityAfter
@@ -38828,6 +38829,11 @@ export interface components {
              * @default false
              */
             no_goal: boolean;
+            /**
+             * In Plan
+             * @default false
+             */
+            in_plan: boolean;
             /**
              * Can Reorder
              * @default false

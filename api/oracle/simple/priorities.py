@@ -44,8 +44,10 @@ from oracle.simple import changes, drafts, key_dates, service, targets
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader
 from oracle.simple.schemas import (
+    SimpleDocRef,
     SimpleGoalBucket,
     SimpleLine,
+    SimplePlanOut,
     SimplePrioritiesOut,
     SimplePriorityAfter,
     SimplePriorityDraft,
@@ -103,6 +105,29 @@ async def plan_quarter(
         )
     }
     return SimpleQuarter(start=span.start, end=span.end, label=span.label), inside
+
+
+async def plan_in_play(
+    db: AsyncSession, read_: service.Read
+) -> tuple[SimpleQuarter, SimplePlanOut | None]:
+    """The quarter and plan-charts' plan: the plan "this quarter" is (its PRD on the roadmap
+    the reader sees, its milestones, slices and engineer-weeks per goal per milestone)."""
+    from oracle.simple import plan
+
+    prds = {e.prd.id: e.prd for e in read_.entries if e.prd}
+    picked = plan.current(await plan.views(db, set(prds)), read_.today)
+    if picked is None or picked[1].span is None:
+        return quarter(read_.today), None
+    pid, view = picked
+    span = view.span
+    doc = prds[pid]
+    return SimpleQuarter(start=span.start, end=span.end, label=span.label), SimplePlanOut(
+        prd=SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title),
+        status="ready", source=view.milestones[0].source if view.milestones else None,
+        dated=view.dated, message=view.message, milestones=view.milestones,
+        slices=view.slices, goals=view.goals, goal_weeks=view.goal_weeks, span=span,
+        holidays=view.holidays,
+    )  # fmt: skip
 
 
 def _items(read_: service.Read) -> dict[str, service.Entry]:
@@ -428,10 +453,12 @@ async def build(
     id_of = {f.key: f.entity_id for f in ranking.features}
     rows: list[SimplePriorityRow] = []
     deps: dict[str, list[str]] = {}
+    prd_of: list[str | None] = []
     for f in ranking.features:
         e = items.get(f.entity_id)
         deps[f.entity_id] = [id_of[d] for d in f.depends_on if d in id_of]
         gv = f.explanation.inputs.get("goal_value")
+        prd_of.append(str(e.prd.id) if e is not None and e.prd is not None else None)
         o = active.get(f.override.id) if f.override is not None else None
         rows.append(
             SimplePriorityRow(
@@ -471,9 +498,14 @@ async def build(
     _after(rows, deps)
     this_quarter, inside = await plan_quarter(db, read_)
     buckets, total = _buckets(rows, inside)
+    _, plan_out = await plan_in_play(db, read_)
+    if plan_out is not None:
+        for r, pid in zip(rows, prd_of, strict=True):
+            r.in_plan = pid == str(plan_out.prd.id)
     return SimplePrioritiesOut(
         today=read_.today,
         quarter=this_quarter,
+        plan=plan_out,
         method=METHOD,
         formula=ranking.formula,
         rows=rows,

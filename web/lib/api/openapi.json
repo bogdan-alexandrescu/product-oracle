@@ -116053,6 +116053,16 @@
             "type": "array",
             "title": "Lines",
             "default": []
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePlanOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -116491,6 +116501,11 @@
           "no_goal": {
             "type": "boolean",
             "title": "No Goal",
+            "default": false
+          },
+          "in_plan": {
+            "type": "boolean",
+            "title": "In Plan",
             "default": false
           },
           "can_reorder": {

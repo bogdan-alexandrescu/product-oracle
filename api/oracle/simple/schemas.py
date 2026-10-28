@@ -710,6 +710,9 @@ class SimplePriorityRow(BaseModel):
     end_estimated: bool = False
     # Serves no confirmed goal.
     no_goal: bool = False
+    # plan-charts: the item is the PRD's whose plan "this quarter" is (Goal buckets lists the
+    # rest outside the plan).
+    in_plan: bool = False
     can_reorder: bool = False
     # The caller's change applies (else it is proposed).
     applies: bool = False
@@ -909,6 +912,9 @@ class SimplePrioritiesOut(BaseModel):
     # Roadmap-plus: the line drawn, and the lines offered (Pick a date aside).
     line: SimpleLine | None = None
     lines: list[SimpleLine] = []
+    # plan-charts: the plan "this quarter" is (Goal buckets by milestone); none with no
+    # dated plan.
+    plan: SimplePlanOut | None = None
 
 
 SimpleRoadmapItem.model_rebuild()

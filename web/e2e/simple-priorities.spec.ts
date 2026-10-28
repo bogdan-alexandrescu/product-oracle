@@ -169,7 +169,8 @@ test.describe("desktop", () => {
     const point = admin.locator('[data-testid="vxe-point"][data-code="setup-import"]');
     const plot = (await admin.getByTestId("vxe-plot").boundingBox())!;
     const at = (await point.boundingBox())!;
-    // maxE is 5 weeks across the plot's inner 92%: two weeks to the left.
+    // The log effort axis spans 3.8 doublings (0.38 to 6.6 weeks) across the plot's inner 92%:
+    // this distance (1.52 doublings) takes 3 weeks to 1.
     await admin.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
     await admin.mouse.down();
     await admin.mouse.move(at.x + at.width / 2 - (plot.width * 0.92 * 2) / 5, at.y + at.height / 2 + 3, { steps: 10 });
