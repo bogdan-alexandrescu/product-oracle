@@ -374,7 +374,8 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
   );
 }
 
-type ActionRow = { title: string; owner_id: string; due_date: string };
+// action_item_id: one recorded in the meeting, kept so Send does not add it again.
+type ActionRow = { title: string; owner_id: string; due_date: string; action_item_id?: string | null };
 
 function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
   const zone = useCompanyZone();
@@ -383,7 +384,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
   const editable = m.can.end && m.minutes_state !== "sent";
   const [summary, setSummary] = useState(minutes?.summary ?? "");
   const [questions, setQuestions] = useState((minutes?.open_questions ?? []).join("\n"));
-  const [actions, setActions] = useState<ActionRow[]>((minutes?.action_items ?? []).map((a) => ({ title: a.title, owner_id: a.owner_id ?? "", due_date: a.due_date ?? "" })));
+  const [actions, setActions] = useState<ActionRow[]>((minutes?.action_items ?? []).map((a) => ({ title: a.title, owner_id: a.owner_id ?? "", due_date: a.due_date ?? "", action_item_id: a.action_item_id ?? null })));
   const [dirty, setDirty] = useState(false);
   // Oracle's minutes landing (Draft again, a slow job) fill the fields a person has not touched.
   const written = `${minutes?.written_by ?? ""}|${minutes?.summary ?? ""}`;
@@ -392,7 +393,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
     setShown(written);
     setSummary(minutes?.summary ?? "");
     setQuestions((minutes?.open_questions ?? []).join("\n"));
-    setActions((minutes?.action_items ?? []).map((a) => ({ title: a.title, owner_id: a.owner_id ?? "", due_date: a.due_date ?? "" })));
+    setActions((minutes?.action_items ?? []).map((a) => ({ title: a.title, owner_id: a.owner_id ?? "", due_date: a.due_date ?? "", action_item_id: a.action_item_id ?? null })));
   }
   // Until the minutes job ends, read again every few seconds and when the tab comes back
   // (a hidden tab's timers are throttled): it answers (the minutes, Send), slows down or
@@ -420,7 +421,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
   const minutesIn = (): Schemas["SimpleMinutesIn"] => ({
     summary,
     open_questions: questions.split("\n").map((x) => x.trim()).filter(Boolean),
-    action_items: actions.filter((a) => a.title.trim()).map((a) => ({ title: a.title.trim(), owner_id: a.owner_id || null, due_date: a.due_date || null })),
+    action_items: actions.filter((a) => a.title.trim()).map((a) => ({ title: a.title.trim(), owner_id: a.owner_id || null, due_date: a.due_date || null, action_item_id: a.action_item_id ?? null })),
   });
   const save = () => act(async () => {
     await unwrap(api.PUT("/v1/simple/meetings/{meeting_id}/minutes", { ...path, body: minutesIn() }));

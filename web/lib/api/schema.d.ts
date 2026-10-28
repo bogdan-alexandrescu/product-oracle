@@ -36854,6 +36854,8 @@ export interface components {
             owner_id?: string | null;
             /** Due Date */
             due_date?: string | null;
+            /** Action Item Id */
+            action_item_id?: string | null;
         };
         /** SimpleActionItemOut */
         SimpleActionItemOut: {
@@ -36863,6 +36865,8 @@ export interface components {
             owner_id?: string | null;
             /** Due Date */
             due_date?: string | null;
+            /** Action Item Id */
+            action_item_id?: string | null;
             /** Owner Name */
             owner_name?: string | null;
         };

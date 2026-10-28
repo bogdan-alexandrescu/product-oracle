@@ -796,7 +796,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
       open_questions: (b.open_questions ?? []).map((x) => x.trim()).filter(Boolean),
       action_items: (b.action_items ?? []).filter((a) => a.title?.trim()).map((a) => {
         const owner = a.owner_id && members.has(a.owner_id) ? a.owner_id : m.ended_by;
-        return { title: a.title.trim(), owner_id: owner, owner_name: owner ? nameOf(ctx, owner) : null, due_date: a.due_date ?? null };
+        return { title: a.title.trim(), owner_id: owner, owner_name: owner ? nameOf(ctx, owner) : null, due_date: a.due_date ?? null, action_item_id: a.action_item_id ?? null };
       }),
       waits: m.minutes?.waits ?? [],
       written_by: "edited",
