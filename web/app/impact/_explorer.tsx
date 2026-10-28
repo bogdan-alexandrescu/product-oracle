@@ -318,7 +318,7 @@ function Lineage({
       key: keyOf(o), label: outputTitle(o), sub: statusLabel(o.status), freshness: o.freshness, output: o,
       ups: new Set(upstreamsOfIn(o, names).map((u) => u.key)),
     }));
-  }, [report, grouped, openCategory]);
+  }, [report, grouped, openCategory, names]);
   const shownUps = ups.filter((u) => nodes.some((n) => n.ups.has(u.key)));
   const path = new Set(selected ? upstreamsOf(selected).map((u) => u.key) : []);
   const rows = Math.max(shownUps.length, nodes.length, 1);
