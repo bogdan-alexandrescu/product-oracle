@@ -169,7 +169,7 @@ test("priorities: a score step's arithmetic is true, confidence a percent in eve
     "Score = 9 × 90% ÷ 1 = 8.1",
   ]);
   expect(await f2("WSJF")).toEqual(["Cost of delay = 5 + 8 + 2 = 15", "Score = 15 ÷ 2 = 7.5"]);
-  expect(await f2("MoSCoW")).toEqual(["Should = 3; ties broken by goal value 9"]);
+  expect(await f2("MoSCoW")).toEqual(["Should have = 3; ties broken by goal value 9"]);
 
   await stepsAddUp(page);
 });
