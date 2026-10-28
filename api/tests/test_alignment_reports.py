@@ -385,9 +385,7 @@ def test_report_prose_names_days_in_words_not_iso():
     (slip,) = tracker.drift_of(item, [record], date(2026, 11, 30), date(2026, 10, 28))
     assert slip.detail == "ENG-405 targets Dec 9, after the milestone date Nov 30."
     overdue = tracker.drift_of(item, [record], date(2026, 10, 20), date(2026, 10, 28))
-    assert overdue[-1].detail == (
-        "The milestone date Oct 20 has passed and the work is not done."
-    )
+    assert overdue[-1].detail == ("The milestone date Oct 20 has passed and the work is not done.")
     content = _content(1)
     content["tracks"][0]["dates"] = {
         "verified": [{"reference": "ENG-412", "supports_date": "2026-11-30"}],
