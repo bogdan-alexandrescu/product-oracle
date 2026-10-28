@@ -331,7 +331,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {item.looks_like.length > 0 && (
             <p className="mt-1 text-sm text-warn" data-testid="board-looks-like">
-              Looks like {item.looks_like[0].code} {item.looks_like[0].title}
+              Looks like {`${item.looks_like[0].code} ${item.looks_like[0].title}`.trim()}
             </p>
           )}
           {red && (

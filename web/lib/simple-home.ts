@@ -50,14 +50,16 @@ export function figure(value: number, unit: string, locale?: string): string {
 /**
  * The goal's target in words, each figure with its unit (H1: never a bare number): "From 50
  * teams · now 100 teams · target 200 teams with weekly alerts on" (the metric names a counted
- * unit's target when it starts with that unit).
+ * unit's target when it starts with that unit; with no unit, each figure reads with the metric).
  */
 export function targetPath(attrs: Record<string, unknown>): string | null {
   const unit = typeof attrs.unit === "string" ? attrs.unit : "";
   const target = num(attrs.target);
   if (target == null) return typeof attrs.target_text === "string" ? attrs.target_text : null;
-  const plain = (v: number) => (unit && !["%", "USD", "EUR", "GBP", "ms", "s", "min", "h", "days"].includes(unit) ? `${grouped(v)} ${unit}` : figure(v, unit));
-  const metric = typeof attrs.metric === "string" ? attrs.metric : "";
+  const metric = typeof attrs.metric === "string" ? attrs.metric.trim() : "";
+  // With no unit, each figure reads with the metric ("10 teams muting alerts"), never bare.
+  const plain = (v: number) =>
+    !unit && metric ? `${grouped(v)} ${metric}` : unit && !["%", "USD", "EUR", "GBP", "ms", "s", "min", "h", "days"].includes(unit) ? `${grouped(v)} ${unit}` : figure(v, unit);
   const goal = unit && metric.toLowerCase().startsWith(`${unit.toLowerCase()} `) ? `${grouped(target)} ${metric}` : plain(target);
   const start = num(attrs.start);
   const current = num(attrs.current);

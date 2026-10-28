@@ -136,12 +136,12 @@ for (const scheme of ["light", "dark"] as const) {
       const c = boardCard(page, TWIN_KEY);
       await expect(column(page, "later").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
       await expect(c.getByTestId("draft-tag")).toHaveText("Draft");
-      await expect(c.getByTestId("board-looks-like")).toHaveText("Looks like alert-digest Weekly alert digest");
+      await expect(c.getByTestId("board-looks-like")).toHaveText("Looks like F-06 Weekly alert digest");
 
       await page.getByTestId("needs-decision").click();
       const tray = page.getByTestId("decision-tray");
       const twin = tray.getByTestId("tray-twin").filter({ hasText: TWIN });
-      await expect(twin.getByTestId("looks-like-match").first()).toContainText("Looks like alert-digest Weekly alert digest");
+      await expect(twin.getByTestId("looks-like-match").first()).toContainText("Looks like F-06 Weekly alert digest");
       await twin.getByTestId("looks-like-match").first().getByRole("button", { name: "Merge" }).click();
       await expect(toastWith(page, `Merged '${TWIN}' into alert-digest in your working draft`)).toBeVisible();
       await tray.getByRole("button", { name: "Close" }).click();
@@ -157,7 +157,7 @@ for (const scheme of ["light", "dark"] as const) {
       await c.click();
       const card = page.getByTestId("floating-card");
       await card.getByRole("button", { name: "Keep both" }).click();
-      await expect(toastWith(page, /Kept 'Alert digest for admins' and alert-digest/)).toBeVisible();
+      await expect(toastWith(page, /Kept 'Alert digest for admins' and F-06 Weekly alert digest/)).toBeVisible();
       await expect(c.getByTestId("board-looks-like")).toHaveCount(0);
       await expect(c.getByTestId("draft-tag")).toBeVisible();
     });

@@ -142,7 +142,9 @@ DECIDED_PER_ITEM = frozenset(
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
 # Simple (#723): a goal's suggestions are asked for and filed by any commenter, and accepted or
-# rejected (final) by an owner or whoever decides the goal's roadmap (S7); a meeting's chat
+# rejected (final) by an owner or whoever decides the goal's roadmap (S7: drafts.can_edit, so
+# with no decider its owners who are approvers; "owner" here, the suggestion's can_accept /
+# can_reject below it); a meeting's chat
 # thread, a card and the meeting's change mode are decided by the item: its attendees, the card's
 # author, the presenter (S9); the Ask panel's thread is every person's own. A visual is commented
 # on by any commenter who reads it, and asked for or revised by who changes its subject directly;

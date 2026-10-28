@@ -16,7 +16,7 @@ import type { Schemas } from "@/lib/api/client";
 import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
-import { closed, GOALS, goalId, lookalikes, matchesOf, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
+import { canEditRoadmap, closed, GOALS, goalId, lookalikes, matchesOf, type GoalSuggestionRow, type SimpleDb } from "./simple-roadmap";
 
 type Role = Schemas["Me"]["role"];
 
@@ -104,19 +104,26 @@ function settle(db: SimpleDb): void {
   }
 }
 
-type Ctx = { id: string; role: Role; names: Record<string, string>; owners?: string[] };
+type Ctx = { id: string; role: Role; names: Record<string, string>; owners?: string[]; roles?: Record<string, Role> };
 
 /** The roadmap a goal's suggestions belong to: the one holding its items, else the first. */
 function roadmapOf(db: SimpleDb, goal: string): string | null {
   return db.items.find((x) => !closed(x) && (x.goal === goal || (x.goals ?? []).includes(goal)))?.roadmap ?? db.items[0]?.roadmap ?? null;
 }
 
-/** Who decides a goal's suggestions (the decider of its roadmap, else the company's first owner) and whether it is the caller. */
+/**
+ * Who decides a goal's suggestions and whether it is the caller (additions.deciding): the
+ * caller when drafts.can_edit lets them change its roadmap (an owner; its decider; with none,
+ * its track owners who are approvers); named, the decider, else its approving track owner,
+ * else the company's first owner.
+ */
 export function goalDecider(db: SimpleDb, goal: string, ctx: Ctx): { id: string | null; mine: boolean } {
   const rm = roadmapOf(db, goal);
   const named = rm ? (db.deciders?.[rm] ?? null) : null;
-  const id = named ?? ctx.owners?.[0] ?? null;
-  return { id, mine: ctx.role === "owner" || (!!named && named === ctx.id) };
+  const tracks = new Set(db.items.filter((s) => s.roadmap === rm && s.track).map((s) => s.track!));
+  const approving = [...tracks].map((t) => db.track_owners?.[t]).find((p) => !!p && (ctx.roles?.[p] === "approver" || ctx.roles?.[p] === "owner")) ?? null;
+  const id = named ?? approving ?? ctx.owners?.[0] ?? null;
+  return { id, mine: rm ? canEditRoadmap(db, rm, ctx) : ctx.role === "owner" };
 }
 
 const norm = (t: string): string => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();

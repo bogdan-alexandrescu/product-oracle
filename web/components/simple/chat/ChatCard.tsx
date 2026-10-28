@@ -31,7 +31,7 @@ export function actionWords(p: ActionPreview): string[] {
       // Filed as the person's own suggestion: it lands under People in the goal's drawer.
       return [
         `Suggests ${p.title} for ${p.goal_title}: ${p.outcome}`,
-        ...p.looks_like.map((m) => `Looks like ${m.code} ${m.title}`),
+        ...p.looks_like.map((m) => `Looks like ${`${m.code} ${m.title}`.trim()}`),
         "Under People in the goal's suggestions; the decider accepts or rejects it",
       ];
   }

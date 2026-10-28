@@ -180,6 +180,7 @@ class SimpleRoadmapItem(BaseModel):
 class SimpleMatch(BaseModel):
     kind: Literal["item", "feature"]
     id: str
+    # Its display code ("F-06"), "" when it has none (never its key).
     code: str
     title: str
 

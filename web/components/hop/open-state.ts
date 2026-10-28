@@ -10,6 +10,8 @@ export const OPEN_KEY = "oracle.hop-panel.open";
 
 let open: boolean | null = null;
 const listeners = new Set<() => void>();
+let draft = "";
+const draftListeners = new Set<() => void>();
 
 function read(): boolean {
   if (open === null) {
@@ -24,6 +26,11 @@ function read(): boolean {
 
 export function setPanelOpen(next: boolean) {
   open = next;
+  // Words no box took while it was open are dropped, never shown typed in later.
+  if (!next && draft) {
+    draft = "";
+    draftListeners.forEach((l) => l());
+  }
   try {
     window.localStorage.setItem(OPEN_KEY, next ? "1" : "0");
   } catch {
@@ -45,10 +52,9 @@ export function usePanelOpen(): boolean {
 
 /**
  * Words typed into the Ask panel's box for the reader ("Suggest from the chat": a goal's
- * drawer opens Ask with "Suggest a feature for <goal>: " typed in). The box takes them once.
+ * drawer opens Ask with "Suggest a feature for <goal>: " typed in). The box takes them once;
+ * the panel shows its box for them (./HopPanel.tsx) and closing it drops them.
  */
-let draft = "";
-const draftListeners = new Set<() => void>();
 
 export function askWith(text: string) {
   draft = text;

@@ -21,7 +21,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { stableUuid } from "./ids";
 import { routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
-import { GOALS, goalId, itemDeciderId, itemOwnerId, lookalikes, roadmapOut, storedDates, type SimpleDb } from "./simple-roadmap";
+import { GOALS, goalId, itemDeciderId, itemOwnerId, lookalikes, prdCode, roadmapOut, storedDates, type SimpleDb } from "./simple-roadmap";
 import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
 type Values = Record<string, unknown>;
@@ -508,8 +508,9 @@ function suggestDraft(db: SimpleDb, goalWords: string, what: string): Reply {
   const title = suggestionTitle(outcome);
   const looks = lookalikes(db, title, null)
     .map((k) => db.items.find((x) => x.key === k)!)
-    .map((x) => ({ code: x.key, title: x.title, why: x.why ? `which already ${x.why.charAt(0).toLowerCase()}${x.why.slice(1).replace(/\.$/, "")}` : "which has a similar name" }));
-  const said = looks.map((l, n) => ` ${n ? "It also looks like" : "It looks like"} ${l.code} ${l.title}, ${l.why}.`).join("");
+    // As chat_actions.build_suggest_feature: the display code (none: the name alone) and what the item does (its outcome).
+    .map((x) => ({ code: prdCode(x.section) ?? "", title: x.title, why: x.outcome ? `which already ${x.outcome.charAt(0).toLowerCase()}${x.outcome.slice(1).replace(/\.$/, "")}` : "which has a similar name" }));
+  const said = looks.map((l, n) => ` ${n ? "It also looks like" : "It looks like"} ${`${l.code} ${l.title}`.trim()}, ${l.why}.`).join("");
   const draft = actionDraft(`Suggest ${title} for ${GOALS[goal]}`, "suggest_feature", null, { goal_id: goalId(goal) }, {}, { title, outcome }, {
     kind: "suggestion", goal_id: goalId(goal), goal_title: GOALS[goal], title, outcome, looks_like: looks,
   });

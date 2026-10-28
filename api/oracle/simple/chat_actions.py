@@ -248,7 +248,8 @@ def build_suggest_feature(c: chat.Ctx, args: dict[str, Any]) -> dict | chat.Repl
                       "why": _why(said if isinstance(said, str) else None)})  # fmt: skip
     body = f"{UNDERSTOOD} suggest {title} for {goal.title}."
     for i, x in enumerate(looks):
-        body += f" It {'also ' if i else ''}looks like {x['code']} {x['title']}, {x['why']}."
+        named = f"{x['code']} {x['title']}".strip()
+        body += f" It {'also ' if i else ''}looks like {named}, {x['why']}."
     card = {"summary": f"Suggest {title} for {goal.title}", "op": "suggest_feature",
             "item_id": None, "target": {"goal_id": str(goal.id)}, "before": {},
             "after": {"title": title, "outcome": text},

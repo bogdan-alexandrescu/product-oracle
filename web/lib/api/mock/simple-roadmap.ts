@@ -676,7 +676,8 @@ export function matchesOf(db: SimpleDb, keys: string[]): Schemas["SimpleMatch"][
     .map((k) => db.items.find((x) => x.key === k))
     .filter((x): x is SeedItem => !!x && !closed(x))
     .slice(0, 2)
-    .map((x) => ({ kind: "item" as const, id: db.ids[x.key], code: x.key, title: x.title }));
+    // Its display code (F-06) or none, never its key, as additions.reconcile.
+    .map((x) => ({ kind: "item" as const, id: db.ids[x.key], code: prdCode(x.section) ?? "", title: x.title }));
 }
 
 const WORDS = (t: string): Set<string> => new Set(t.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4));

@@ -8,6 +8,7 @@ import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { isHidden, type DiscussionRow, type DiscussionSummary } from "@/components/discuss/DiscussionList";
 import { Button, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
 import { InlineError, TEXTAREA } from "@/components/review/parts";
+import { useAskDraft } from "@/components/hop/open-state";
 import { AskChat, askInChat } from "@/components/simple/chat/AskChat";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -243,6 +244,12 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
   // S9: on Simple's pages the panel's one box also changes the plan by chat (Detailed is unchanged).
   const pathname = usePathname() ?? "";
   const simple = pathname.startsWith("/simple");
+  // "Suggest from the chat": words typed in for the box bring the panel back to it from a thread.
+  const typedIn = useAskDraft();
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (typedIn) setView({ kind: "list" });
+  }, [typedIn]);
   const started = (id: string) => {
     setView({ kind: "thread", id });
     setTick((t) => t + 1);

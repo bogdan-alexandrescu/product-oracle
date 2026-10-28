@@ -163,6 +163,10 @@ function RejectDialog({ s, onReject, onClose }: { s: GoalSuggestion; onReject: (
 
 /** One suggestion: title, outcome, why, evidence, flow, looks-like; Accept / Reject by its own can_* fields. */
 export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi }) {
+  const { can } = useMe();
+  // PER_ITEM says owners; the suggestion's own can_accept / can_reject (its decider, an approver too) decides.
+  const accepts = s.can_accept && can("accept_goal_suggestion", true);
+  const rejects = s.can_reject && can("reject_goal_suggestion", true);
   const phone = usePhone();
   const [wide, setWide] = useState(false);
   const [rejecting, setRejecting] = useState(false);
@@ -224,18 +228,18 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
           )}
           {s.looks_like.map((m) => (
             <p key={m.id} className="mt-1 text-warn" data-testid="suggestion-looks-like">
-              Looks like {m.code} {m.title}
+              Looks like {`${m.code} ${m.title}`.trim()}
             </p>
           ))}
         </div>
-        {(s.can_accept || s.can_reject) && (
+        {(accepts || rejects) && (
           <span className="flex flex-none gap-2">
-            {s.can_accept && (
+            {accepts && (
               <Button variant="solid" disabled={busy} onClick={() => void run(() => a.accept(s))}>
                 Accept
               </Button>
             )}
-            {s.can_reject && (
+            {rejects && (
               <Button disabled={busy} onClick={() => setRejecting(true)}>
                 Reject
               </Button>
@@ -358,6 +362,10 @@ function SuggestForm({ goal, decider, folded, onSent }: { goal: GoalBrief; decid
 
 /** A person's suggestion: who sent it and when, what it does, the look-alikes; Accept / Reject for the decider. */
 function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi }) {
+  const { can } = useMe();
+  // PER_ITEM says owners; the suggestion's own can_accept / can_reject (its decider, an approver too) decides.
+  const accepts = s.can_accept && can("accept_goal_suggestion", true);
+  const rejects = s.can_reject && can("reject_goal_suggestion", true);
   const zone = useCompanyZone();
   const [rejecting, setRejecting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -382,18 +390,18 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
           </p>
           {s.looks_like.map((m) => (
             <p key={m.id} className="mt-1 text-warn" data-testid="suggestion-looks-like">
-              Looks like {m.code} {m.title}
+              Looks like {`${m.code} ${m.title}`.trim()}
             </p>
           ))}
         </div>
-        {(s.can_accept || s.can_reject) && (
+        {(accepts || rejects) && (
           <span className="flex flex-none gap-2">
-            {s.can_accept && (
+            {accepts && (
               <Button variant="solid" disabled={busy} onClick={() => void run(() => a.accept(s))}>
                 Accept
               </Button>
             )}
-            {s.can_reject && (
+            {rejects && (
               <Button disabled={busy} onClick={() => setRejecting(true)}>
                 Reject
               </Button>
@@ -422,7 +430,7 @@ export function GoalSuggestionList({ goal, api: a, onChat }: { goal: GoalBrief; 
   const { people, oracle } = goalRows(a, goal);
   const [tab, setTab] = useState<"people" | "oracle">("people");
   const [asking, setAsking] = useState(false);
-  const suggests = can("create_simple_change");
+  const suggests = can("create_goal_suggestion");
   const tabs = [
     { key: "people" as const, label: `People · ${people.length}` },
     { key: "oracle" as const, label: `✦ Oracle · ${oracle.length}` },

@@ -539,6 +539,8 @@ def reconcile(
     roadmap: uuid.UUID | None = None,
 ) -> list[SimpleMatch]:
     """The items (first) and baseline features whose titles look like ``title``."""
+    from oracle.simple.priorities import prd_code
+
     items: list[tuple[float, SimpleMatch]] = []
     with_item = set()
     for e in entries:
@@ -550,7 +552,8 @@ def reconcile(
             continue
         score = _like(title, e.row.title)
         if score >= LOOKS_LIKE:
-            code = e.code or e.row.item_key
+            # Its display code (F-06) or none, never its key: the name says the rest.
+            code = e.code or ""
             items.append((score, SimpleMatch(kind="item", id=str(e.row.id), code=code,
                                              title=e.row.title)))  # fmt: skip
     feats: list[tuple[float, SimpleMatch]] = []
@@ -559,7 +562,8 @@ def reconcile(
             continue
         score = _like(title, f.title)
         if score >= LOOKS_LIKE:
-            feats.append((score, SimpleMatch(kind="feature", id=str(f.id), code=f.key,
+            code = prd_code(f.key) or ""
+            feats.append((score, SimpleMatch(kind="feature", id=str(f.id), code=code,
                                              title=f.title)))  # fmt: skip
     ranked = sorted(items, key=lambda t: -t[0]) + sorted(feats, key=lambda t: -t[0])
     return [m for _, m in ranked][:MAX_MATCHES]

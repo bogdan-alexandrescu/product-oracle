@@ -237,7 +237,7 @@ export function LooksLike({ item, act, canChange }: { item: Item; act: Act; canC
         </div>
       ))}
       {canChange && (
-        <Button className="!h-7" variant="ghost" onClick={() => void act(`Kept '${item.title}' and ${item.looks_like.map((m) => m.code).join(", ")}`, { op: "keep_both", target: { item_id: item.id }, before: { kept_both: false }, after: {} })}>
+        <Button className="!h-7" variant="ghost" onClick={() => void act(`Kept '${item.title}' and ${item.looks_like.map((m) => `${m.code} ${m.title}`.trim()).join(", ")}`, { op: "keep_both", target: { item_id: item.id }, before: { kept_both: false }, after: {} })}>
           Keep both
         </Button>
       )}
