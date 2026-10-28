@@ -12570,11 +12570,54 @@ export interface paths {
         };
         /**
          * Get Simple Chat
-         * @description The caller's Ask-panel thread on ``page`` (the Simple page the panel was opened
-         *     from; Home without one): their requests, Oracle's replies and cards.
+         * @description The caller's Ask chat ``chat`` (ask-fresh: one of theirs, 404 for anyone else's or a
+         *     meeting's); without it, their first Ask-panel thread on ``page`` (Home without one):
+         *     their requests, Oracle's replies and cards.
          */
         get: operations["get_simple_chat"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple Chats
+         * @description Recent chats (ask-fresh): the caller's last ten Ask chats from any Simple page,
+         *     newest first, each named by its page; meeting chats stay in their meeting.
+         */
+        get: operations["list_simple_chats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/chats/{chat_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Link Simple Chat Ask
+         * @description Link the caller's own Oracle's Ask chat to their Ask chat ``chat_id`` (the panel
+         *     handed it a question), so the chat reopened from Recent shows both.
+         */
+        put: operations["link_simple_chat_ask"];
         post?: never;
         delete?: never;
         options?: never;
@@ -17546,6 +17589,14 @@ export interface components {
             card: components["schemas"]["ChatCardOut"];
             result?: components["schemas"]["SimpleChangeResult"] | null;
         };
+        /** ChatAskIn */
+        ChatAskIn: {
+            /**
+             * Ask Id
+             * Format: uuid
+             */
+            ask_id: string;
+        };
         /** ChatCardOut */
         ChatCardOut: {
             /**
@@ -17650,6 +17701,18 @@ export interface components {
              * @default false
              */
             only_understood: boolean;
+            /** Chat Id */
+            chat_id?: string | null;
+            /**
+             * New Chat
+             * @default false
+             */
+            new_chat: boolean;
+        };
+        /** ChatListOut */
+        ChatListOut: {
+            /** Items */
+            items: components["schemas"]["ChatSummaryOut"][];
         };
         /** ChatMessageOut */
         ChatMessageOut: {
@@ -17734,6 +17797,28 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * ChatSummaryOut
+         * @description ask-fresh: one of the person's Ask chats on Recent chats, named by its page.
+         */
+        ChatSummaryOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Page */
+            page: string;
+            /** Page Name */
+            page_name: string;
+            /**
+             * Last At
+             * Format: date-time
+             */
+            last_at: string;
+            /** Ask Id */
+            ask_id?: string | null;
+        };
         /** ChatThreadOut */
         ChatThreadOut: {
             /** Id */
@@ -17748,6 +17833,8 @@ export interface components {
              * @default true
              */
             understood: boolean;
+            /** Ask Id */
+            ask_id?: string | null;
         };
         /** CheckOut */
         CheckOut: {
@@ -68586,6 +68673,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: string | null;
+                chat?: string | null;
             };
             header?: never;
             path?: never;
@@ -68600,6 +68688,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_chats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatListOut"];
+                };
+            };
+        };
+    };
+    link_simple_chat_ask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatAskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSummaryOut"];
                 };
             };
             /** @description Validation Error */
