@@ -64,12 +64,15 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
   const { can } = useMe();
   const [chat, setChat] = useState<Chat>({ id: null, askId: null, page: pathname, general: false });
   const [recent, setRecent] = useState<ChatSummary[] | null>(null);
+  // Each chat opened (new, from Recent, or switched to General) is its own view; a chat getting its id stays the same one.
+  const [session, setSession] = useState(0);
   // An empty chat is about the page shown; a chat started stays about its own page.
   const fresh = !chat.id && !chat.askId;
   if (fresh && chat.page !== pathname) setChat({ ...chat, page: pathname });
   const name = chat.general ? "General" : chat.page === pathname && screen.label && !screen.label.startsWith("/") ? screen.label : pageName(chat.page);
   const startNew = () => {
     setChat({ id: null, askId: null, page: pathname, general: false });
+    setSession((n) => n + 1);
     setRecent(null);
   };
   const openRecent = async () => {
@@ -121,7 +124,10 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
                 label="About"
                 size="sm"
                 value={chat.general ? "general" : "page"}
-                onChange={(v) => setChat({ ...chat, general: v === "general" })}
+                onChange={(v) => {
+                  setChat({ ...chat, general: v === "general" });
+                  setSession((n) => n + 1);
+                }}
                 items={[
                   { value: "page", label: "This page" },
                   { value: "general", label: "General" },
@@ -139,18 +145,20 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
         </p>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
+      {/* On a phone the sheet sits under the tab bar: room below so the box and Send are never covered. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3 max-[600px]:pb-[calc(var(--phone-tab-bar)+12px)]">
         {recent !== null ? (
           <RecentChats
             items={recent}
             onOpen={(c) => {
               setChat({ id: c.id, askId: c.ask_id ?? null, page: c.page, general: false });
+              setSession((n) => n + 1);
               setRecent(null);
             }}
           />
         ) : (
           <ChatView
-            key={`${chat.id ?? "new"}:${chat.general}`}
+            key={session}
             chat={chat}
             name={name}
             subject={chat.general ? GENERAL : chat.page === pathname ? screen : { kind: "screen", subject: { path: chat.page }, label: name }}
