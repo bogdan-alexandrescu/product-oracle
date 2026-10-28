@@ -507,5 +507,6 @@ export function FlowPanel({
 
 /** A flow's live thumbnail: its real shapes (boxes, decision diamonds, step numbers). */
 export function FlowMini({ flow }: { flow: { nodes?: Flow["nodes"] | null; steps: string[] } }) {
-  return <FlowDiagram flow={flow} layout="mini" />;
+  // A line's thumbnail stays narrow: the line's words keep the room.
+  return <FlowDiagram flow={flow} layout="mini" className="block h-auto w-20 text-text" />;
 }

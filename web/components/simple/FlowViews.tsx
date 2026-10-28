@@ -51,7 +51,7 @@ const LINE = 17;
  * The diagram: `across` (the opened view, fitted to the width), `down` (the viewer's left
  * column) or `mini` (the row's thumbnail: the shapes and numbers, no words).
  */
-export function FlowDiagram({ flow, layout, testId }: { flow: { nodes?: FlowStep[] | null; steps: string[] }; layout: "across" | "down" | "mini"; testId?: string }) {
+export function FlowDiagram({ flow, layout, testId, className }: { flow: { nodes?: FlowStep[] | null; steps: string[] }; layout: "across" | "down" | "mini"; testId?: string; className?: string }) {
   const steps = stepsOf(flow);
   const mini = layout === "mini";
   const down = layout === "down";
@@ -72,7 +72,7 @@ export function FlowDiagram({ flow, layout, testId }: { flow: { nodes?: FlowStep
       aria-label={label}
       data-testid={testId}
       viewBox={`0 0 ${width} ${height}`}
-      className={mini ? "h-12 w-auto max-w-[180px] text-text" : down ? "mx-auto w-full max-w-[220px] text-text" : "w-full text-text"}
+      className={className ?? (mini ? "h-12 w-auto max-w-[180px] text-text" : down ? "mx-auto w-full max-w-[220px] text-text" : "w-full text-text")}
       preserveAspectRatio="xMidYMin meet"
     >
       {placed.map(({ s, lines, h, at }, i) => {
