@@ -3,6 +3,10 @@ Postgres; jobs run with fakes.
 
 Test cards (protects / fails_when / no_claim):
 
+- test_visual_reads_are_never_cached: protects=a visual's read (the panel's poll while
+  Oracle draws) and the request's answer say ``Cache-Control: no-store``, so no browser
+  or proxy answers a poll with the "drawing" read it kept from before the job ended;
+  fails_when=a poll can be answered from a cache; no_claim=the job's run.
 - test_item_code_is_the_features_code: protects=Home's item code is the feature's code
   (a feature keyed F-12 with no PRD section reads F-12, as on Priorities); fails_when=it
   reads null; no_claim=initials (no code on Home).
@@ -35,9 +39,27 @@ from tests.test_simple_additions_api import World as AdditionsWorld
 from tests.test_simple_meetings_api import start, uid
 from tests.test_simple_meetings_api import world as meeting_world
 from tests.test_simple_meetings_walk import ritual
+from tests.test_simple_one_pager_api import world as prd_world
 from tests.test_simple_priorities_api import World as PriorityWorld
 from tests.test_simple_priorities_api import make_people
 from tests.test_simple_roadmap_api import Seed
+from tests.test_simple_visuals_api import URL as VISUALS
+from tests.test_simple_visuals_api import roadmap_world
+
+
+async def test_visual_reads_are_never_cached(client):
+    ctx = await prd_world(client)
+    _, item = await roadmap_world(ctx)
+    path = f"{VISUALS}/feature/{item.id}"
+    r = await client.post(f"{path}/request", json={"brief": "The checklist"},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.status_code == 202, r.text
+    assert "no-store" in r.headers.get("cache-control", "")
+    for who in ("owner", "commenter", "viewer"):
+        got = await client.get(path, headers=ctx.as_(who))
+        assert got.status_code == 200, got.text
+        assert got.json()["pending"] is True
+        assert "no-store" in got.headers.get("cache-control", ""), who
 
 
 async def test_item_code_is_the_features_code(client):

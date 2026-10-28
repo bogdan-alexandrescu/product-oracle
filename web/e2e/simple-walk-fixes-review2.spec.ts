@@ -40,9 +40,13 @@ test("the next review lists who was present until the ritual's attendees are edi
   const panel = page.getByTestId("ritual-inspector").filter({ visible: true });
   await panel.getByRole("checkbox", { name: "viewer@example.com" }).check();
   await panel.getByRole("button", { name: "Save" }).click();
-  await expect(panel.getByRole("checkbox", { name: "viewer@example.com" })).toBeChecked();
 
-  await page.goto("/simple");
-  await expect(page.getByTestId("home-meeting-next")).toContainText("Viewer");
+  // Read Home until the save has landed (the box this test ticked proves nothing about the save).
+  await expect
+    .poll(async () => {
+      await page.goto("/simple");
+      return page.getByTestId("home-meeting-next").innerText();
+    })
+    .toContain("Viewer");
   await expect(page.getByTestId("home-meeting-next")).not.toContainText("Commenter");
 });
