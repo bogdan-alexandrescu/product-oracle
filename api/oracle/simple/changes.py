@@ -37,6 +37,8 @@ Ops and the fields they write (``before`` must name the key fields):
 - ``edit_title``: title. ``edit_outcome``: outcome.
 - ``set_milestone`` (S9): the item's own milestone, ``{"milestone": {name, date,
   date_source: "typed"}}`` (date optional), or null to clear it.
+- ``set_owner`` / ``set_decider`` (chat-actions): the item's own owner_id / decider_id, a
+  member of the company (null: back to its track's owner / its roadmap's decider).
 - ``accept_risk``: the risk accepted on one flag (``target.flag``, ``target.subject``),
   ``{"risk": {"note"}}``; ``before`` ``{"risk": null}`` when none is.
 - ``shift_dependents``: the flagged item (``target.item_id``) starts the day after its
@@ -103,6 +105,8 @@ FIELDS: dict[str, tuple[str, ...]] = {
     "confirm_item": ("draft",),
     "keep_both": ("kept_both",),
     "set_milestone": ("milestone",),
+    "set_owner": ("owner_id",),
+    "set_decider": ("decider_id",),
 }
 FIXES = ("shift_dependents", "move_dependency")
 # The ops that key ``before``/``after`` by item id.
@@ -574,6 +578,20 @@ async def _plan(
             day = _day(m.get("date"), "after.milestone.date")
             after = {"milestone": {"name": name, "date": _iso(day),
                                    "date_source": "typed" if day else None}}  # fmt: skip
+    elif op in ("set_owner", "set_decider"):
+        field = FIELDS[op][0]
+        raw = a.get(field)
+        person = None
+        if raw is not None:
+            person = _uuid(raw, f"after.{field}")
+            if (
+                await db.scalar(
+                    select(User.id).where(User.id == person, User.disabled_at.is_(None))
+                )
+                is None
+            ):
+                raise ChangeError(422, f"after.{field}: a member of this company")
+        after = {field: str(person) if person else None}
     elif op == "edit_outcome":
         outcome = a.get("outcome")
         outcome = str(outcome).strip() if outcome is not None else None

@@ -8,6 +8,7 @@ import { MeetingChat } from "@/components/simple/chat/MeetingChat";
 import { OnePager } from "@/components/simple/OnePager";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import type { MeetingAgenda, MeetingNote } from "@/lib/api/simple-chat";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -15,7 +16,8 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { opWords } from "../../roadmap/_card";
 import { DecidedItem } from "../_flow";
 
-type Meeting = Schemas["SimpleMeetingOut"];
+// Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
+type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[]; agenda?: MeetingAgenda };
 type Mode = Meeting["change_mode"];
 
 const STEPS = ["One-pager", "Roadmap", "Decisions"] as const;
@@ -184,6 +186,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
         </p>
       ))}
       {error && <div className="px-4 pt-2"><ErrorNote>{error}</ErrorNote></div>}
+      <AgendaStrip agenda={m.agenda} />
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
         <main aria-label="Stage" className="min-w-0">
           {/* Read again whenever the meeting moves on (Approve, Undo, a change by chat): its
@@ -200,7 +203,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           {step === 2 && <DecisionsStep m={m} reload={reload} />}
         </main>
         <aside aria-label="Chat column" className="flex min-w-0 flex-col gap-4">
-          <MeetingChat meetingId={m.id} sessionId={m.session_id} />
+          <MeetingChat meetingId={m.id} sessionId={m.session_id} onCardChanged={() => void reload()} />
+          <NotesSoFar notes={m.notes ?? []} />
           <section aria-label="All decisions" className="simple-card">
             <h2 className="simple-h2">All decisions</h2>
             {m.meeting_decisions.length === 0 ? (
@@ -219,6 +223,46 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
         </aside>
       </div>
     </div>
+  );
+}
+
+/** The agenda as the meeting's chat changed it ("next: …", "skip …"): every attendee sees it. */
+function AgendaStrip({ agenda }: { agenda?: MeetingAgenda }) {
+  if (!agenda || (!agenda.next && agenda.skipped.length === 0)) return null;
+  return (
+    <div role="status" aria-label="Agenda" data-testid="agenda-strip" className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-border px-4 py-2 text-base [overflow-wrap:anywhere]">
+      {agenda.next && (
+        <p data-testid="agenda-next">
+          <span className="font-semibold">Next:</span> {agenda.next.title}
+        </p>
+      )}
+      {agenda.skipped.length > 0 && (
+        <p data-testid="agenda-skipped" className="text-text2">
+          <span className="font-semibold">Skipped:</span> {agenda.skipped.map((x) => x.title).join(", ")}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** The notes and open questions typed in the chat so far (they go into the minutes when the meeting ends). */
+function NotesSoFar({ notes }: { notes: MeetingNote[] }) {
+  return (
+    <section aria-label="Notes so far" className="simple-card" data-testid="meeting-notes">
+      <h2 className="simple-h2">Notes so far</h2>
+      {notes.length === 0 ? (
+        <p className="simple-small">None yet. Type “note: …” or “open question: …” in the chat.</p>
+      ) : (
+        <ul className="mt-2 space-y-2">
+          {notes.map((n) => (
+            <li key={n.card_id} data-testid="meeting-note" data-kind={n.kind} className="[overflow-wrap:anywhere]">
+              <span className="font-semibold">{n.kind === "question" ? "Open question:" : "Note:"}</span> {n.text}
+              <span className="block text-sm text-text-faint">{n.by_name}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

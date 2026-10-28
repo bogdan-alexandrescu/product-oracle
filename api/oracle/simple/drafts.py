@@ -104,8 +104,11 @@ FIELDS = (
     "kept_both",
     # S9: set_milestone.
     "milestone",
+    # chat-actions: set_owner, set_decider.
+    "owner_id",
+    "decider_id",
 )
-UUID_FIELDS = ("feature_id",)
+UUID_FIELDS = ("feature_id", "owner_id", "decider_id")
 DATES = ("start_date", "end_date")
 # Blockers of review_problems that the approval itself resolves.
 APPROVAL_CODES = ("version_not_approved", "mandatory_reviewer_pending")
