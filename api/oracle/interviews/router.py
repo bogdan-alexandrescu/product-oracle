@@ -2,7 +2,8 @@
 Every route is an MCP tool.
 
 Viewers read; commenters create; the interview's creator or an approver edits a Draft,
-redrafts its guide, creates its private link (shown once) and withdraws it. The
+redrafts its guide, creates its private link (shown once), makes a new one (the old
+link stops working) and withdraws it. The
 customer's own routes are in :mod:`oracle.interviews.public`. A member's team interview
 on an intake (:mod:`oracle.interviews.team`) is theirs alone to answer in.
 """
@@ -126,6 +127,25 @@ async def create_interview_link(
     """Create the private link: shown once, works once, expires after 7 days."""
     try:
         link = await service.create_link(db, principal, interview_id)
+    except service.InterviewError as e:
+        raise _http(e) from e
+    await db.commit()
+    return link
+
+
+@router.post(
+    "/interviews/{interview_id}/new-link",
+    response_model=InterviewLinkOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(same_origin)],
+)
+async def make_new_interview_link(
+    interview_id: uuid.UUID, db: TenantDB, principal: Commenter
+) -> InterviewLinkOut:
+    """Make a new link for an invited or in-progress interview: shown once; the old link
+    stops working at once and says it was replaced. Not for a finished or closed one."""
+    try:
+        link = await service.new_link(db, principal, interview_id)
     except service.InterviewError as e:
         raise _http(e) from e
     await db.commit()

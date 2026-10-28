@@ -155,6 +155,8 @@ class InterviewOut(BaseModel):
     interviewee_name: str | None = None
     interviewee_company: str | None = None
     link_expires_at: datetime | None = None
+    # When the current link was made (a new link replaces it).
+    link_created_at: datetime | None = None
     link_opened_at: datetime | None = None
     created_by: uuid.UUID
     created_by_name: str | None = None
@@ -168,7 +170,7 @@ class InterviewOut(BaseModel):
     snapshot_job: InterviewJobState | None = None
     # The requests its snapshot created.
     request_ids: list[uuid.UUID]
-    # The caller may edit, link or withdraw it (its creator or an approver).
+    # The caller may edit, link, make a new link or withdraw it (its creator or an approver).
     can_manage: bool
 
 
@@ -192,6 +194,7 @@ class InterviewLinkOut(BaseModel):
 
     url: str
     expires_at: datetime
+    created_at: datetime
 
 
 # --- team turns (lane 2) ------------------------------------------------------------
@@ -255,4 +258,4 @@ class PublicInterviewDone(BaseModel):
 
 
 class PublicInterviewRefusal(BaseModel):
-    reason: Literal["used", "expired", "withdrawn"]
+    reason: Literal["used", "expired", "withdrawn", "replaced"]
