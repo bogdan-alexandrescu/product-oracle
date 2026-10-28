@@ -21,6 +21,23 @@ PrioritiesLine = Annotated[
 ]
 
 
+# The Simple roadmap's Roadmap filter: "all" or one roadmap's id (#723).
+SimpleRoadmapPick = Annotated[str, StringConstraints(pattern=r"^(all|[0-9a-f-]{36})$")]
+# One of the Simple roadmap's PRD, Goal and Track picks: a PRD's slug, a goal's key or a
+# track's id; empty for all.
+SimpleFilterPick = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_.-]{0,200}$")]
+
+
+class SimpleFilters(BaseModel):
+    """The Simple roadmap's PRD, Goal and Track picks, remembered like its Roadmap filter."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prd: SimpleFilterPick = ""
+    goal: SimpleFilterPick = ""
+    track: SimpleFilterPick = ""
+
+
 class SlackPings(BaseModel):
     """Which Slack pings the member gets (oracle.slack.pings): ``review_requested`` and
     ``draft_ready`` on by default, the rest off."""
@@ -51,7 +68,9 @@ class Preferences(BaseModel):
     ``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).
     ``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they
     last switched to (#723); unset, they land by role (viewers and commenters in Simple).
-    ``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``)."""
+    ``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).
+    ``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);
+    unset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all."""
 
     document_view: DocumentView = "brief"
     setup_hidden: bool = False
@@ -59,6 +78,8 @@ class Preferences(BaseModel):
     slack_pings: SlackPings = SlackPings()
     experience: Experience | None = None
     priorities_line: str | None = None
+    simple_roadmap: str | None = None
+    simple_filters: SimpleFilters | None = None
 
 
 class PreferencesUpdate(BaseModel):
@@ -68,6 +89,8 @@ class PreferencesUpdate(BaseModel):
     slack_pings: SlackPingsUpdate | None = None
     experience: Experience | None = None
     priorities_line: PrioritiesLine | None = None
+    simple_roadmap: SimpleRoadmapPick | None = None
+    simple_filters: SimpleFilters | None = None
 
 
 router = APIRouter(prefix="/v1/me", tags=["auth"])

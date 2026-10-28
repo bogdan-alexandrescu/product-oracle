@@ -38,6 +38,8 @@ async function board(page: Page) {
 /** Types a title in Quick add and drags its chip onto `target` with the mouse, as a person does. */
 async function dragAdd(page: Page, title: string, target: Locator, at: "top" | "middle" = "middle") {
   await page.getByLabel("Add an item").fill(title);
+  // All roadmaps and more than one: quick add asks which (the Roadmap filter's spec).
+  await page.getByTestId("quick-add-roadmap").selectOption({ label: "Alerts roadmap" });
   const chip = page.getByTestId("quick-add-chip");
   await expect(chip).toContainText(title);
   // The chip and the target's top on screen together (the page's top).
@@ -57,6 +59,7 @@ async function sheetAdd(page: Page, title: string, where: string, button: "Add" 
   const sheet = page.getByRole("dialog", { name: "Add an item" });
   await expect(sheet).toBeVisible();
   await sheet.getByLabel("Title").fill(title);
+  await sheet.getByLabel("Roadmap").selectOption({ label: "Alerts roadmap" });
   await sheet.getByLabel("Where").selectOption({ label: where });
   await sheet.getByRole("button", { name: button, exact: true }).click();
   await expect(sheet).toBeHidden();

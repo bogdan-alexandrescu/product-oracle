@@ -37,6 +37,7 @@ import {
   lookalikes,
   ownDates,
   ROADMAP_SLUGS,
+  readsRoadmap,
   roadmapId,
   roadmapOut,
   seesDraft,
@@ -507,7 +508,14 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   if (S7_OPS.includes(body.op)) return createS7(db, ctx, body);
   const now = iso(mockNowMs());
   if (KEY_DATE_OPS.includes(body.op)) {
+    // The Roadmap filter names the roadmap as roadmap_id (as add_item does); either works.
+    const named = [...new Set([body.target.document_id, body.target.roadmap_id].filter(Boolean))];
+    if (named.length > 1) return json(422, { detail: "target: document_id and roadmap_id name different roadmaps" });
+    const target: Record<string, unknown> = { ...body.target, document_id: named[0] };
+    delete target.roadmap_id;
+    body = { ...body, target };
     const rm = roadmapOfDoc(db, body.target.document_id);
+    if (rm && !readsRoadmap(rm, ctx.role)) return json(404, { detail: "No such roadmap" });
     const applies = !!rm && canEditRoadmap(db, rm, ctx);
     let session: Session | undefined;
     if (applies) session = openEditing(db, ctx.id) ?? newSession(db, ctx.id, "editing");

@@ -8,7 +8,7 @@ import { GoalPanel, SuggestionCard, useGoalSuggestions, type GoalBrief, type Goa
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
-import { api, unwrap } from "@/lib/api/client";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { shownDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -61,8 +61,8 @@ async function brandOf(): Promise<Brand | null> {
 }
 
 type Group = Roadmap["group"];
-type Filters = { group: Group; prd: string; goal: string; track: string; from: string; to: string };
-const NO_FILTERS: Filters = { group: "goal", prd: "", goal: "", track: "", from: "", to: "" };
+type Filters = { group: Group; roadmap: string; prd: string; goal: string; track: string; from: string; to: string };
+const NO_FILTERS: Filters = { group: "goal", roadmap: "", prd: "", goal: "", track: "", from: "", to: "" };
 
 const PHONE = "(max-width: 640px)";
 function usePhone(): boolean {
@@ -136,12 +136,12 @@ function GoalCounters({ items, suggestions, onGoal }: { items: Item[]; suggestio
   );
 }
 
-function Select({ label, value, options, onChange }: { label: string; value: string; options: [string, string][]; onChange: (v: string) => void }) {
+function Select({ label, value, options, onChange, all = "All", testId }: { label: string; value: string; options: [string, string][]; onChange: (v: string) => void; all?: string; testId?: string }) {
   return (
     <label className="flex items-center gap-1.5 text-sm text-text2">
       {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)} className="h-8 max-w-[11rem] rounded-lg border border-line-strong bg-surface px-2 text-sm text-text">
-        <option value="">All</option>
+      <select value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} className="h-8 max-w-[11rem] rounded-lg border border-line-strong bg-surface px-2 text-sm text-text">
+        <option value="">{all}</option>
         {options.map(([v, t]) => (
           <option key={v} value={v}>
             {t}
@@ -360,9 +360,10 @@ function DecisionTray({
 export function SimpleRoadmap() {
   const { me, can } = useMe();
   const phone = usePhone();
-  // A link may open the roadmap filtered to one PRD (the plan strip's rows: ?prd=<slug>).
+  // A link may open the roadmap filtered to one PRD (the plan strip's rows: ?prd=<slug>)
+  // or to one roadmap (?roadmap=<id or slug>).
   const params = useSearchParams();
-  const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "" }));
+  const [f, setF] = useState<Filters>(() => ({ ...NO_FILTERS, prd: params.get("prd") ?? "", roadmap: params.get("roadmap") ?? "" }));
   const [format, setFormat] = useState<Format>("timeline");
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
@@ -376,7 +377,7 @@ export function SimpleRoadmap() {
 
   const qs = useMemo(() => {
     const q: Record<string, string> = { group: f.group };
-    for (const k of ["prd", "goal", "track", "from", "to"] as const) if (f[k]) q[k] = f[k];
+    for (const k of ["roadmap", "prd", "goal", "track", "from", "to"] as const) if (f[k]) q[k] = f[k];
     return q;
   }, [f]);
   // The items as last fetched, set when the call returns (before React draws them): a
@@ -407,6 +408,44 @@ export function SimpleRoadmap() {
     const t = window.setTimeout(() => void reloadRoadmap(), 800);
     return () => window.clearTimeout(t);
   }, [drafting, roadmap.data, reloadRoadmap]);
+
+  // The Roadmap filter: landing without ?roadmap=, the person's remembered pick (preferences)
+  // once the roadmaps they may read are known (a roadmap they no longer read is dropped);
+  // their PRD (unless a link names one), Goal and Track picks come back with it.
+  const prefs = useQuery("me-preferences", () => unwrap(api.GET("/v1/me/preferences")));
+  const [restored, setRestored] = useState(false);
+  const known = roadmap.data?.roadmaps;
+  if (!restored && known && (prefs.data || prefs.error)) {
+    setRestored(true);
+    const pick = prefs.data?.simple_roadmap;
+    const kept = prefs.data?.simple_filters;
+    const next = { ...f, goal: kept?.goal || f.goal, track: kept?.track || f.track };
+    if (!params.get("prd")) next.prd = kept?.prd || f.prd;
+    if (!params.get("roadmap") && pick && pick !== "all" && known.some((r) => r.roadmap.id === pick)) next.roadmap = pick;
+    if (next.roadmap !== f.roadmap || next.prd !== f.prd || next.goal !== f.goal || next.track !== f.track) setF(next);
+  }
+  // A pick is saved for next time; one the server could not save says so.
+  const remember = async (body: Schemas["PreferencesUpdate"], failed: string) => {
+    try {
+      const saved = await unwrap(api.PATCH("/v1/me/preferences", { body }));
+      prefs.setData(() => saved);
+    } catch {
+      toast({ message: failed });
+    }
+  };
+  const pickRoadmap = (id: string) => {
+    setRestored(true);
+    setCard(null);
+    setPop(null);
+    setF({ ...f, roadmap: id });
+    void remember({ simple_roadmap: id || "all" }, "Could not remember this roadmap for next time");
+  };
+  const pickFilter = (k: "prd" | "goal" | "track", v: string) => {
+    setRestored(true);
+    const next = { ...f, [k]: v };
+    setF(next);
+    void remember({ simple_filters: { prd: next.prd, goal: next.goal, track: next.track } }, "Could not remember these filters for next time");
+  };
 
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
   const data = roadmap.data;
@@ -558,7 +597,8 @@ export function SimpleRoadmap() {
     if (f.track) parts.push(`Track: ${named(seen.track, f.track)}`);
     if (f.from) parts.push(`From ${qName(f.from)}`);
     if (f.to) parts.push(`To ${qName(f.to)}`);
-    if (!f.prd && !f.goal && !f.track && !f.from && !f.to) parts.push("every roadmap");
+    if (data?.roadmap) parts.push(`Roadmap: ${data.roadmap.title}`);
+    if (!f.roadmap && !f.prd && !f.goal && !f.track && !f.from && !f.to) parts.push("every roadmap");
     return parts.join(" · ");
   };
 
@@ -599,17 +639,26 @@ export function SimpleRoadmap() {
     ...HORIZONS.map((h) => ({ kind: "horizon" as const, value: h.key, label: h.label })),
     ...[...goalsKnown].map(([id, title]) => ({ kind: "goal" as const, value: id, label: title })),
   ];
+  // The Roadmap filter: one roadmap chosen (or the only one there is) is where an item goes;
+  // with all roadmaps and more than one, quick add asks which (never a guess).
+  const readable = data.roadmaps ?? [];
+  const addable = readable.filter((r) => r.can_change);
+  const target = data.roadmap ?? (addable.length === 1 ? addable[0].roadmap : null);
+  const askRoadmap = !target && addable.length > 1;
   const roadmapFor = (w: Where): string | undefined =>
+    target?.id ??
     (w.kind === "goal" ? data.items.find((i) => i.goal_ids.includes(w.value) || i.goal?.id === w.value)?.roadmap.id : undefined) ??
     data.items.find((i) => i.can_decide)?.roadmap.id ??
     data.items[0]?.roadmap.id;
-  const addVerb = (w: Where): "Add" | "Propose" => {
-    const rm = roadmapFor(w);
+  const addVerb = (w: Where, rmId?: string): "Add" | "Propose" => {
+    const rm = rmId ?? roadmapFor(w);
+    const known = readable.find((r) => r.roadmap.id === rm);
+    if (known) return known.applies ? "Add" : "Propose";
     return data.items.some((i) => i.roadmap.id === rm && i.can_decide) ? "Add" : "Propose";
   };
-  const onAdd = async (title: string, w: Where): Promise<boolean> => {
+  const onAdd = async (title: string, w: Where, rmId?: string): Promise<boolean> => {
     try {
-      const r = await propose({ op: "add_item", target: { roadmap_id: null, where: { kind: w.kind, value: w.value } }, before: {}, after: { title } });
+      const r = await propose({ op: "add_item", target: { roadmap_id: rmId ?? target?.id ?? null, where: { kind: w.kind, value: w.value } }, before: {}, after: { title } });
       const c = r.change;
       if (c.status === "applied")
         toast({
@@ -644,6 +693,17 @@ export function SimpleRoadmap() {
     <div className="simple-mode space-y-3 px-4 py-4 min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
       <header className="relative flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Roadmap</h1>
+        {data.roadmap ? (
+          <span data-testid="roadmap-scope" className="rounded-full bg-accent-soft px-3 py-0.5 text-[15px] font-semibold text-accent-ink">
+            {data.roadmap.title}
+          </span>
+        ) : (
+          readable.length > 1 && (
+            <span data-testid="roadmap-scope" className="text-[15px] text-text2">
+              All roadmaps
+            </span>
+          )
+        )}
         <div className={phone ? "order-last w-full" : ""} data-testid="format-switch">
           <SegmentedControl<Format>
             label="Format"
@@ -664,7 +724,7 @@ export function SimpleRoadmap() {
           />
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {phone && canChange && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} />}
+          {phone && canChange && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
           {decides && (
             <Button data-testid="needs-decision" onClick={() => setTray(true)} className={waiting ? "border-warn" : ""}>
               Needs a decision · {waiting}
@@ -689,12 +749,12 @@ export function SimpleRoadmap() {
             Export PDF
           </Button>
         </div>
-        {keyDates && <KeyDatesEditor data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
+        {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
       </header>
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
       </p>
-      {!phone && canChange && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} />}
+      {!phone && canChange && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       <GoalCounters items={data.items} suggestions={suggestions} onGoal={setGoalPanel} />
       <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" />
       <DraftBanner
@@ -720,9 +780,12 @@ export function SimpleRoadmap() {
         }}
       />
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
-        <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => setF({ ...f, prd })} />
-        <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => setF({ ...f, goal })} />
-        <Select label="Track" value={f.track} options={seen.track} onChange={(track) => setF({ ...f, track })} />
+        {readable.length > 1 && (
+          <Select label="Roadmap" all="All roadmaps" testId="filter-roadmap" value={data.roadmap?.id ?? ""} options={readable.map((r) => [r.roadmap.id, r.roadmap.title])} onChange={pickRoadmap} />
+        )}
+        <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => pickFilter("prd", prd)} />
+        <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => pickFilter("goal", goal)} />
+        <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
         <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setF({ ...f, from })} />
         <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setF({ ...f, to })} />
         <SegmentedControl<Group>
