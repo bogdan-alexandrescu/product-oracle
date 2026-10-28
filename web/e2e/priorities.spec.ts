@@ -29,7 +29,7 @@ test("priorities: method switch changes the ranking and the formula", async ({ p
   await expect(page.getByTestId("formula")).toContainText("reach × impact × confidence");
   await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400");
   // F-4 has no reach: unscored and flagged.
-  await expect(page.getByTestId("priority-row-F-4")).toContainText("Missing inputs");
+  await expect(page.getByTestId("priority-row-F-4")).toContainText("Not scored: no Reach");
   await expect(page.getByTestId("priority-row-F-4").getByTestId("score")).toHaveText("—");
 });
 

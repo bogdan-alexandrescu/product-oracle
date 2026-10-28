@@ -43,7 +43,9 @@ test("a commenter on the Plan sees no track controls", async ({ page }) => {
 test("an approver on the Plan sees the track controls", async ({ page }) => {
   await openPlan(page, "approver@example.com");
   const t = track(page);
-  for (const name of TRACK_CONTROLS) await expect(t.getByRole("button", { name })).toBeEnabled();
+  // Push to tracker waits for two-way sync, which is off in the mock (qa-plan-8): shown, disabled, with the reason.
+  for (const name of TRACK_CONTROLS.filter((n) => n !== "Push to tracker")) await expect(t.getByRole("button", { name })).toBeEnabled();
+  await expect(t.getByRole("button", { name: "Push to tracker" })).toBeDisabled();
   await expect(t.getByRole("group", { name: "Track status" })).toBeVisible();
 });
 

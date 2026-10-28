@@ -33,6 +33,8 @@ async function open(page: Page, email = APPROVER) {
 /** ▲ ▼ ⋯ show on the row under the pointer (always on a phone): point at it, then press. */
 async function rowAction(page: Page, key: string, name: "Move up" | "Move down" | "More actions") {
   const row = page.getByTestId(`priority-row-${key}`);
+  // Rows with every goal whole are taller: bring the row to the middle, as a person scrolls, so its menu opens on screen.
+  await row.evaluate((e) => e.scrollIntoView({ block: "center" }));
   await row.hover();
   await row.getByRole("button", { name, exact: true }).click();
 }

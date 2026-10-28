@@ -158,8 +158,8 @@ for (const width of [1280, 390]) {
     const name = planGoal(page, "Budgets per team").getByTestId("code-name");
     await expect(name).toBeVisible();
     if (width === 1280) {
-      expect(await name.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
-      expect(await overflows(name)).toBe(true);
+      // Two lines first, then "…" (qa-plan-5): a line clamp, or a one-line ellipsis.
+      expect(await name.evaluate((el) => getComputedStyle(el).textOverflow === "ellipsis" || getComputedStyle(el).webkitLineClamp !== "none")).toBe(true);
     }
     expect(await overflows(table)).toBe(false);
     const t = (await table.boundingBox())!;
