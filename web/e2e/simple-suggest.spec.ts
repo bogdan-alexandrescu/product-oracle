@@ -186,7 +186,8 @@ for (const phone of [false, true]) {
         const panel = page.getByTestId("hop-panel").filter({ visible: true });
         await panel.getByRole("textbox", { name: "Message Oracle" }).fill("What should we cut first?");
         await panel.getByRole("button", { name: "Send" }).click();
-        await expect(panel.getByTestId("discussion-thread")).toBeVisible();
+        // ask-fresh: the panel's chat thread (SimpleAsk) shows the question asked.
+        await expect(panel.getByTestId("ask-chat-thread").getByTestId("chat-message").first()).toBeVisible();
         if (phone) await page.keyboard.press("Escape");
         const drawer = await openDrawer(page);
         await drawer.getByRole("button", { name: "Suggest from the chat" }).click();

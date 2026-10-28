@@ -1236,7 +1236,8 @@ function roadmapCorrect(d: Draft): Draft {
 }
 
 function storeCards(db: SimpleDb, chat: ChatDb, drafts: Draft[], messageId: string, key: string, meeting: Meeting | null): string[] {
-  const onRoadmap = !meeting && /:\/simple\/roadmap(\/|$)/.test(key);
+  // As the API (roadmap_talk.on_roadmap: the thread's page starts /simple/roadmap); a new chat's key ends "#<id>".
+  const onRoadmap = !meeting && /:\/simple\/roadmap(\/|#|$)/.test(key);
   return (onRoadmap ? drafts.map(roadmapCorrect) : drafts).map((d) => {
     const c: StoredCard = { ...d, id: crypto.randomUUID(), message_id: messageId, thread: key, meeting_id: meeting?.id ?? null, status: "open", change_id: null, decided_by_name: null, decided_at: null, decision_id: null };
     c.fixes = asIf(db, c).fixes;

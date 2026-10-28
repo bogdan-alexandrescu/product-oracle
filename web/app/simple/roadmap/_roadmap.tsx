@@ -230,17 +230,18 @@ function DecisionTray({
   const suggested = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject);
   const brokenItems = items.filter((i) => i.can_decide && broken(i).length);
   const dates = items.filter((i) => i.suggestion?.can_decide);
-  // roadmap-gantt: an item the plan places has one date to confirm per slice, inside its milestone.
+  // One row per item (BGD, 2026-10-28): its suggestion (for a planned item, the span of its open slices, which Accept applies
+  // whole), with a muted line per slice inside its milestone, from the open per-slice suggestions.
   const open = useQuery(`simple-date-suggestions:${dates.map((i) => i.suggestion!.id).join(",")}`, () =>
     dates.some((i) => i.suggestion!.slice_code) ? unwrap(api.GET("/v1/simple/roadmap/date-suggestions", { params: { query: { status: "open" } } })) : Promise.resolve([]),
   );
-  const dateRows = dates.flatMap((i) => {
+  const dateRows = dates.map((i) => {
     const sliced = (open.data ?? []).filter((x) => x.item_id === i.id && x.slice_code).sort((a, b) => (a.start_date < b.start_date ? -1 : 1));
-    const rows = sliced.length ? sliced : [i.suggestion!];
-    return rows.map((x, k) => {
-      const sl = x.slice_code ? i.slices.find((y) => y.code === x.slice_code) : undefined;
-      return { item: i, s: x, words: sl ? `${sl.code} ${sl.name} · ${sl.milestone} ${sl.milestone_name}` : i.title, last: sliced.length > 1 && k === rows.length - 1 };
+    const parts = sliced.flatMap((x) => {
+      const sl = i.slices.find((y) => y.code === x.slice_code);
+      return sl ? [{ code: sl.code, start: x.start_date, end: x.end_date, milestone: `${sl.milestone} ${sl.milestone_name}` }] : [];
     });
+    return { item: i, s: i.suggestion!, parts: parts.length > 1 ? parts : [] };
   });
   const mine = proposals.filter((c) => c.can_decide);
   const pulled = mine.filter((c) => c.op === "change_horizon");
@@ -311,12 +312,22 @@ function DecisionTray({
         <h3 className="font-semibold">Dates to confirm</h3>
         {dateRows.length ? (
           <ul>
-            {dateRows.map(({ item: i, s, words, last }) => (
-              <li key={s.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-date" data-slice={s.slice_code ?? undefined}>
-                <span className="min-w-0 flex-1 text-[15px]">
-                  {words}: {shortDay(s.start_date)} – {shortDay(s.end_date)}
-                  {last && <span className="block text-sm text-text2">Accepting one dates all of {i.title}&rsquo;s slices.</span>}
-                </span>
+            {dateRows.map(({ item: i, s, parts }) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-date" data-item={i.id}>
+                <div className="min-w-0 flex-1 text-[15px]">
+                  <span>
+                    {i.title}: {shortDay(s.start_date)} – {shortDay(s.end_date)}
+                  </span>
+                  {parts.length > 0 && (
+                    <span className="block" data-testid="tray-date-slices">
+                      {parts.map((x) => (
+                        <span key={x.code} className="block text-sm text-text2" data-testid="tray-date-slice" data-slice={x.code}>
+                          {x.code} {shortDay(x.start)} – {shortDay(x.end)} · {x.milestone}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </div>
                 <Button onClick={() => onSuggestion(i, "accept", s.id)}>Accept</Button>
                 <Button variant="ghost" onClick={() => onSuggestion(i, "dismiss", s.id)}>
                   Dismiss
