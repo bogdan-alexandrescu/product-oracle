@@ -123,6 +123,9 @@ class DateSuggestionOut(BaseModel):
 class SimpleRoadmapItem(BaseModel):
     id: uuid.UUID
     key: str
+    # The PRD's own code of the section the item was imported from ("f-06" -> "F-06");
+    # null when that section key is no code.
+    code: str | None = None
     title: str
     outcome: str | None = None
     horizon: Literal["now", "next", "later"]
@@ -307,6 +310,14 @@ ChangeOp = Literal[
     # Oracle's Requests (non-versioned), both made by chat as well.
     "set_milestone",
     "add_feature_ask",
+    # chat-actions: the item's own owner and decider (into the working draft).
+    "set_owner",
+    "set_decider",
+]
+# chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
+# the change engine (oracle.simple.chat_actions).
+ChatActionOp = Literal[
+    "record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip"
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -667,6 +678,10 @@ class SimpleVisualOut(BaseModel):
     comments: list[SimpleVisualCommentOut]
     # Oracle is drawing it (a queued or running job).
     pending: bool
+    # Oracle's newest drawing job ended without a drawing (it failed, or its answer did
+    # not check out): the panel says so and offers Retry. ``failure``: why, in words.
+    failed: bool = False
+    failure: str | None = None
     # Commenters and up comment on a drawn visual; who changes the subject directly asks
     # for a drawing and revises.
     can_comment: bool
@@ -1054,7 +1069,7 @@ class ChatFix(BaseModel):
 class ChatCardOut(BaseModel):
     id: uuid.UUID
     message_id: uuid.UUID | None
-    op: ChangeOp
+    op: ChangeOp | ChatActionOp
     target: dict[str, Any]
     before: dict[str, Any]
     after: dict[str, Any]
@@ -1080,6 +1095,11 @@ class ChatCardOut(BaseModel):
     decision_id: uuid.UUID | None
 
 
+class ChatChoiceOut(BaseModel):
+    index: int
+    label: str
+
+
 class ChatMessageOut(BaseModel):
     id: uuid.UUID
     author_kind: Literal["person", "oracle"]
@@ -1087,8 +1107,15 @@ class ChatMessageOut(BaseModel):
     author_name: str
     body: str
     at: dt.datetime
-    kind: Literal["request", "cards", "question", "answer", "note"]
+    # pending: Oracle's reader is reading the line; failed: it could not (``retry``); ask:
+    # a question for Oracle's Ask (the Ask panel's one box hands the line there).
+    kind: Literal["request", "cards", "question", "answer", "note", "pending", "failed", "ask"]
     cards: list[ChatCardOut]
+    reply_to: uuid.UUID | None = None
+    # A question's clickable choices ("Neither" last); ``picked``: the one taken.
+    choices: list[ChatChoiceOut] = Field(default_factory=list)
+    picked: int | None = None
+    retry: bool = False
 
 
 class ChatRulesOut(BaseModel):
@@ -1110,6 +1137,23 @@ class ChatThreadOut(BaseModel):
     understood: bool = True
 
 
+class ChatChooseIn(BaseModel):
+    index: int = Field(ge=0, le=10)
+
+
+class ChatStopOut(BaseModel):
+    card_id: uuid.UUID
+    summary: str
+    reason: str
+
+
+class ChatApplyAllOut(BaseModel):
+    thread: ChatThreadOut
+    applied: list[uuid.UUID]
+    # The first card that could not apply, and why (the rest stay open); None: all applied.
+    stopped: ChatStopOut | None
+
+
 class ChatModeIn(BaseModel):
     change_mode: ChangeMode
     change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)
@@ -1122,7 +1166,8 @@ class ChatApplyIn(BaseModel):
 
 class ChatApplyOut(BaseModel):
     card: ChatCardOut
-    result: SimpleChangeResult
+    # None for chat-actions' direct ops (no change-engine change).
+    result: SimpleChangeResult | None = None
 
 
 class WalkDecision(BaseModel):
@@ -1191,6 +1236,8 @@ class SimpleActionItemIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     owner_id: uuid.UUID | None = None
     due_date: dt.date | None = None
+    # An action item recorded in the meeting (its row): Send adds only the new ones.
+    action_item_id: uuid.UUID | None = None
 
 
 class SimpleActionItemOut(SimpleActionItemIn):
@@ -1268,6 +1315,28 @@ class SimpleMeetingCan(BaseModel):
     redraft: bool = False
 
 
+class SimpleMeetingNote(BaseModel):
+    """chat-actions: a minutes note or open question added during the meeting."""
+
+    id: str
+    kind: Literal["note", "question"]
+    text: str
+    by_name: str
+    card_id: uuid.UUID | None = None
+
+
+class SimpleAgendaItem(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleAgenda(BaseModel):
+    """chat-actions: the item the meeting takes next and the items it skips."""
+
+    next: SimpleAgendaItem | None = None
+    skipped: list[SimpleAgendaItem] = []
+
+
 class SimpleMeetingOut(SimpleMeetingBrief):
     session_id: uuid.UUID
     occurrence_id: uuid.UUID | None = None
@@ -1290,6 +1359,9 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     can: SimpleMeetingCan
     # Approve's answer: the roadmaps left for their own decider.
     not_approved: list[SimpleNotApproved] = []
+    # chat-actions: the notes and open questions so far, and the agenda's changes.
+    notes: list[SimpleMeetingNote] = []
+    agenda: SimpleAgenda = SimpleAgenda()
 
 
 class SimpleUpcomingMeeting(BaseModel):

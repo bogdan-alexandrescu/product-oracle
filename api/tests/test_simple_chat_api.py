@@ -141,6 +141,8 @@ class FakeMeetings:
         self.module.one = self.one  # type: ignore[attr-defined]
         self.titles: dict[uuid.UUID, str] = {}
         self.agenda: dict[uuid.UUID, list[Decision]] = {}
+        self.next: dict[uuid.UUID, str] = {}
+        self.prd: str | None = None
 
     async def meeting_rules(self, db, meeting_id):
         return self.rules.get(meeting_id)
@@ -172,10 +174,24 @@ class FakeMeetings:
         return SimpleNamespace(upcoming=[], live=live, past=[])
 
     async def one(self, db, principal, meeting_id):
-        return SimpleNamespace(open_decisions=[
-            SimpleNamespace(id=d.id, number=d.number, title=d.title)
-            for d in self.agenda.get(meeting_id, [])
-        ])  # fmt: skip
+        """S8's ``one``: its open decisions newest first (by number, as
+        meetings._open_decisions), the agenda the meeting keeps (chat-actions' "take X
+        next" / "skip X") and the PRD under review."""
+        nxt = self.next.get(meeting_id)
+        # The agenda's item as S8's _agenda_out gives it: the roadmap item's own id.
+        by_title = select(RoadmapItem.id).where(RoadmapItem.title == nxt)
+        nid = await db.scalar(by_title) if nxt else None
+        return SimpleNamespace(
+            title=self.titles.get(meeting_id, "Review"),
+            open_decisions=[
+                SimpleNamespace(id=d.id, number=d.number, title=d.title)
+                for d in sorted(self.agenda.get(meeting_id, []), key=lambda d: -d.number)
+            ],
+            agenda=SimpleNamespace(
+                next=SimpleNamespace(id=nid or uuid.uuid4(), title=nxt) if nxt else None, skipped=[]
+            ),
+            prd=SimpleNamespace(title=self.prd) if self.prd else None,
+        )  # fmt: skip
 
 
 @pytest.fixture
@@ -301,10 +317,14 @@ async def test_requests_become_cards_for_each_op_family(client):
 async def test_ambiguous_or_unknown_gets_one_question(client):
     ctx = await make_people()
     await World(ctx).build()
-    for line in ("move alert to Q2", "move Nothing like it to Q2", "make it better"):
+    m = await say(client, ctx, "owner", "move alert to Q2")
+    assert m["kind"] == "question"
+    assert m["cards"] == []
+    # chat-reader: a line parse() does not know, or one naming no item, goes to Oracle's
+    # reader (pending; test_simple_chat_reader).
+    for line in ("move Nothing like it to Q2", "make it better"):
         m = await say(client, ctx, "owner", line)
-        assert m["kind"] == "question", line
-        assert m["cards"] == []
+        assert m["kind"] == "pending" and m["cards"] == [], line
     m = await say(client, ctx, "owner", "move alert to Q2")
     assert m["body"] == "Which one: Alert digest or Alert export?"
     r = await client.get("/v1/simple/chat", headers=ctx.as_("owner"))

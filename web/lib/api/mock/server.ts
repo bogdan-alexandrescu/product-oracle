@@ -153,10 +153,10 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
-import { ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
-import { routeSimpleChat, seedSimpleChat, type ChatDb } from "./simple-chat";
+import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -2640,6 +2640,8 @@ function load(): Db {
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
+                    // chat-reader: the two "Delivery …" items its rules talk about.
+                    if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
                     return db;
                   }
               : scenario === "simple-500"
@@ -4336,6 +4338,22 @@ async function onePagerOf(db: Db, req: Request, p: string[]): Promise<OnePagerDb
   return seeded;
 }
 
+/** Oracle's Ask on one of Simple's pages answers from the plan first, as the API's. */
+function simplePlanReply(db: Db, me: MemberRow, d: DiscussionRow, question: string): { pieces: string[]; citations: Record<string, unknown>[] } | null {
+  const path = d.subject_kind === "screen" ? String((d.subject as { path?: string }).path ?? "") : "";
+  if (path !== "/simple" && !path.startsWith("/simple/")) return null;
+  const live = db.members.filter((x) => x.status !== "disabled");
+  const ctx = {
+    id: me.id,
+    role: me.role,
+    roles: Object.fromEntries(live.map((x) => [x.id, x.role])),
+    owners: live.filter((x) => x.role === "owner").map((x) => x.id),
+    names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
+  };
+  const answer = planAnswer((db.simple_roadmap ??= seedSimpleRoadmap()), ctx, question);
+  return answer ? { pieces: [answer], citations: [] } : null;
+}
+
 async function route(db: Db, req: Request): Promise<Response> {
   const url = new URL(req.url);
   const p = url.pathname.split("/").filter(Boolean).map(decodeURIComponent);
@@ -4543,7 +4561,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       },
       current: () => load().discussions ?? emptyDiscussions(),
       // B6: the scripted Oracle of a goals interview.
-      replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)),
+      // Simple's Ask reads the company's plan first (./simple-chat.ts planAnswer).
+      replyScript: (d, asked) => goalInterviewReply(db.baseline, d, asked.body, (id) => activeMember(db, id)) ?? simplePlanReply(db, me, d, asked.body),
       // #710: Oracle reads the asker's Fireflies live in a private chat (./live.ts).
       liveReply: (asked, alone) => liveReply(asked.body, alone),
       // G8: the link to a Slack thread needs Oracle's Slack install (./slack.ts).
@@ -5149,6 +5168,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       roadmap: db.simple_roadmap,
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
+      chatLines: (id) =>
+        Object.values(db.simple_chat?.threads ?? {})
+          .filter((t) => t.meeting_id === id)
+          .flatMap((t) => t.messages.filter((x) => x.author_kind === "person").map((x) => x.body)),
     };
     const meetingsDb = ensureMeetings(db, meetingsCtx);
     const meetingsRes = (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
@@ -5159,7 +5182,33 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S9: change by chat and "Walk me through it", through the change engine above.
   if (p[1] === "simple" && ["chat", "meetings", "walk"].includes(p[2] ?? "")) {
     db.simple_chat ??= seedSimpleChat(db.members);
-    const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, req, p);
+    // S8's review meetings host the chat too (their notes, agenda and decisions), read and seeded on first use.
+    const roadmapDb = db.simple_roadmap;
+    const onePagerDb = db.simple_one_pager;
+    let reviewsCtx: MeetingsCtx | null = null;
+    const reviews = chatMeetings(() => {
+      const ctx: MeetingsCtx = (reviewsCtx ??= {
+        me: { id: me.id, role: me.role },
+        members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
+        roadmap: roadmapDb,
+        onePager: onePagerDb,
+        rituals: ensureRituals(db, me),
+      });
+      return { db: ensureMeetings(db, ctx), ctx };
+    });
+    // A commenter's decision on Ask: an open decision of the decision log (Home's "Decisions waiting for you"), shown on Decisions too.
+    const proposeDecision = async (b: Schemas["DecisionCreate"]) => {
+      const dctx = decisionsContext(db, me);
+      const post = new Request("http://mock/v1/decisions", { method: "POST", body: JSON.stringify(b) });
+      const res = (await routeDecisions(dctx, ensureDecisions(db, dctx), post, ["v1", "decisions"], new URLSearchParams()))!;
+      if (!res.ok) return null;
+      const doc = b.subjects?.find((x) => x.kind === "document")?.id ?? null;
+      const id = ((await res.json()) as Schemas["DecisionOut"]).id;
+      reviews.propose(b.title, b.approver_id, doc, id);
+      return id;
+    };
+    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d) };
+    const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, chatCtx, req, p, reviews);
     if (chatRes) return chatRes;
   }
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
@@ -5202,6 +5251,12 @@ async function route(db: Db, req: Request): Promise<Response> {
   const decisionsCtx = decisionsContext(db, me);
   ensureDecisions(db, decisionsCtx);
   const decided = await routeDecisions(decisionsCtx, db.decisions!, req, p, q);
+  if (decided?.ok && req.method === "POST" && p[1] === "decisions" && (p[3] === "decide" || p[3] === "withdraw")) {
+    // An Ask proposal's Decide or Decline (withdraw) shows on Simple's Decisions page (one decisions row in the API).
+    const logged = db.decisions!.decisions.find((d) => String(d.number) === p[2] || d.id === p[2]);
+    const copy = logged && db.simple_meetings?.decisions.find((d) => d.id === logged.id);
+    if (copy && (logged.status === "decided" || logged.status === "withdrawn")) copy.status = logged.status;
+  }
   if (decided) return decided;
   // Rituals (H2): the built-ins in every company; occurrences in the "rituals" scenario only.
   const ritualsCtx = ritualsContext(db, me);
@@ -5751,7 +5806,9 @@ export async function mockFetch(req: Request): Promise<Response> {
     if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
     // S9: a meeting chat's poll (every 2 s, in each attendee's tab) writes nothing, so it never
     // saves a stale copy over another tab's line, card or sign-in.
-    if (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname))) save(db);
+    // chat-reader: unless it read a pending line (the reader's job ended).
+    const readerWrote = takeReaderWrote();
+    if (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)) || readerWrote) save(db);
     return res;
   });
   queue = next.catch(() => undefined);

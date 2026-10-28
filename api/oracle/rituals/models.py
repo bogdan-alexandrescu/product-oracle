@@ -63,6 +63,9 @@ class Ritual(TenantScoped, Base):
     prep_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     owner_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
     attendee_ids: Mapped[list[uuid.UUID]] = _uuids()
+    # When an owner last edited the attendee list (not ``updated_at``, which the scheduler
+    # bumps as it moves ``next_due_at``): the next review's past attendees count until then.
+    attendees_edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
     next_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)

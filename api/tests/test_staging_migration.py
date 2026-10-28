@@ -73,7 +73,7 @@ def _has_table() -> bool:
 
 def test_the_chain_ends_here_after_segment_skipped():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0086_simple_meetings"]
+    assert script.get_heads() == ["0089_ritual_attendees_edited_at"]
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 

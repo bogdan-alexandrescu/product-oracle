@@ -306,7 +306,7 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
             ) : writes ? (
               <NewChat subject={subject} onStarted={started} />
             ) : null}
-            {here !== null && here.length === 0 && recent !== null && recent.length === 0 && (
+            {here !== null && here.length === 0 && recent !== null && (simple || recent.length === 0) && (
               <p className="text-[15px] text-text2" data-testid="hop-empty">
                 Ask why something is ranked, what to cut, or what is missing.
               </p>
@@ -317,7 +317,8 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
                 <ul className="flex flex-col">{here.map((row) => <ChatRow key={row.id} row={row} onOpen={(id) => setView({ kind: "thread", id })} />)}</ul>
               </section>
             )}
-            {!!recent?.length && (
+            {/* The walk: on Simple's pages the panel shows this page's chats only, never another page's. */}
+            {!simple && !!recent?.length && (
               <section aria-label="Recent" className="flex flex-col gap-1">
                 <h3 className="text-[13px] font-semibold tracking-wide text-text2 uppercase">Recent</h3>
                 <ul className="flex flex-col">{recent.map((row) => <ChatRow key={row.id} row={row} onOpen={(id) => setView({ kind: "thread", id })} />)}</ul>
@@ -338,7 +339,7 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
                 setTick((t) => t + 1);
               }}
               onChanged={() => setTick((t) => t + 1)}
-              say={simple && isPanelChat ? (text) => askInChat(text, pathname) : undefined}
+              say={simple && isPanelChat ? (text, handOff) => askInChat(text, pathname, handOff) : undefined}
             />
             {isPanelChat && d.me.can_manage && writes && (
               <div>

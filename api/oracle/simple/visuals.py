@@ -341,6 +341,24 @@ async def _live_job(db: AsyncSession, v: SimpleVisual) -> LlmJob | None:
     )
 
 
+async def _last_failure(db: AsyncSession, v: SimpleVisual) -> str | None:
+    """Why Oracle's newest drawing job for the visual ended without a drawing; None when
+    it drew, is still drawing or never ran."""
+    job = await db.scalar(
+        select(LlmJob)
+        .where(LlmJob.visual_id == v.id)
+        .order_by(LlmJob.created_at.desc(), LlmJob.id.desc())
+        .limit(1)
+    )
+    if job is None or job.status in ("queued", "running", "cancelled"):
+        return None
+    if job.status == "failed":
+        return "Oracle could not draw it"
+    if (job.output or {}).get("drawn") is False:
+        return "Oracle's drawing did not check out"
+    return None
+
+
 async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
     from oracle.simple import changes
 
@@ -406,6 +424,8 @@ async def read(
         db, {c.author_id for c in comments} | {x.made_by for x in vers if x.made_by}
     )
     open_count = {x.number: sum(1 for c in comments if c.addressed_in == x.number) for x in vers}
+    pending = await _live_job(db, v) is not None
+    failure = None if pending else await _last_failure(db, v)
     return SimpleVisualOut(
         subject_kind=v.subject_kind,
         subject_id=v.subject_id,
@@ -433,7 +453,9 @@ async def read(
             )
             for c in comments
         ],
-        pending=await _live_job(db, v) is not None,
+        pending=pending,
+        failed=failure is not None,
+        failure=failure,
         can_comment=bool(vers)
         and has_role(principal.role, "commenter")
         and _me(principal) is not None,

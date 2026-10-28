@@ -85,6 +85,7 @@ export const JOB_KIND_LABEL: Record<LlmJobKind, string> = {
   goal_suggestions: "Goal suggestions",
   simple_visual: "Proposal visual",
   meeting_minutes: "Meeting minutes",
+  chat_reader: "Chat request read",
 };
 
 /** Each per-document switch in plain words (History > Oracle's work); the keys stay the API's JobSettings. */

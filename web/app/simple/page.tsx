@@ -15,6 +15,7 @@ import { useMe } from "@/lib/me";
 import {
   beforeAfter,
   brokenLinks,
+  changeWords,
   goalTiles,
   greeting,
   NEW_FLOW_OPS,
@@ -228,6 +229,14 @@ export default function SimpleHome() {
 
   function decide(d: Decision, key: string) {
     const option = d.options.find((o) => o.key === key)!;
+    if (key === "declined" && d.can_withdraw) {
+      // A proposal's Decline (a commenter's decision from the Ask panel) ends it: withdrawn, never decided.
+      void act(
+        () => unwrap(api.POST("/v1/decisions/{decision}/withdraw", { params: { path: { decision: String(d.number) } }, body: { reason: "Declined on Simple's Home" } })),
+        `Declined: ${d.title}`,
+      );
+      return;
+    }
     void act(
       () =>
         unwrap(
@@ -558,7 +567,7 @@ export default function SimpleHome() {
               const recent = [
                 ...rows
                   .filter((c) => c.status !== "proposed" && (!seen || (c.decided_at ?? c.at) > seen))
-                  .map((c) => ({ key: c.id, at: c.decided_at ?? c.at, icon: "roadmap" as const, title: `${OP_WORDS[c.op] ?? c.op}: ${itemTitle(c.target.item_id)}`, who: c.by_name, status: c.status })),
+                  .map((c) => ({ key: c.id, at: c.decided_at ?? c.at, icon: "roadmap" as const, title: changeWords(c, roadmap.data?.items.find((i) => i.id === c.target.item_id)), who: c.by_name, status: c.status })),
                 ...(inbox.data?.decisions ?? [])
                   .filter((d) => (d.reason === "oracle_decided" || d.reason === "informed") && (!seen || d.since > seen))
                   .map((d) => ({ key: d.id, at: d.since, icon: "flag" as const, title: d.title, who: "Decision", status: "decided" })),

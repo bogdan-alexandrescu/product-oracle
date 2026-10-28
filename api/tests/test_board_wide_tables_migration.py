@@ -32,7 +32,7 @@ def _migration():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0086_simple_meetings"]
+    assert script.get_heads() == ["0089_ritual_attendees_edited_at"]
 
 
 def test_the_new_css_is_the_packaged_theme():

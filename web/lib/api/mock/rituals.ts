@@ -19,7 +19,8 @@ type Role = "viewer" | "commenter" | "approver" | "owner";
 type Member = { id: string; email: string; role: Role; status?: string };
 
 /** A stored ritual: the API's record without what is derived on the way out. */
-type Ritual = Omit<RitualOut, "last_pre_read" | "schedule"> & { schedule: Schedule; created_at: string };
+/** `attendees_edited_at`: when an owner last edited the attendees (the API's column; not on the way out). */
+type Ritual = Omit<RitualOut, "last_pre_read" | "schedule"> & { schedule: Schedule; created_at: string; attendees_edited_at?: string | null };
 /** A stored occurrence; the summary run finishes on its owner's `summary_reads`-th read. */
 type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me" | "decisions" | "summary_offered"> & {
   summary_reads?: number;
@@ -681,7 +682,10 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
         if (input.duration_min != null) r.duration_min = input.duration_min;
         if (input.prep_hours != null) r.prep_hours = input.prep_hours;
         if (input.owner_id) r.owner_id = input.owner_id;
-        if (input.attendee_ids) r.attendee_ids = input.attendee_ids;
+        if (input.attendee_ids) {
+          if (input.attendee_ids.join() !== r.attendee_ids.join()) r.attendees_edited_at = now().toISOString();
+          r.attendee_ids = input.attendee_ids;
+        }
         r.lock_version += 1;
         return json(200, ritualOut(db, r));
       }

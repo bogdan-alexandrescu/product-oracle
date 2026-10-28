@@ -12,6 +12,7 @@ from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     Date,
     DateTime,
@@ -494,6 +495,39 @@ class SimpleChatCard(TenantScoped, Base):
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class SimpleChatRead(TenantScoped, Base):
+    """Simple chat-reader: Oracle's reply to one line, while and after its reader reads it
+    (oracle.simple.chat). ``message_id``: Oracle's line (pending while ``job_id``, the
+    ``chat_reader`` job, runs); ``ask_id``: the person's line; ``choices``: a clarify
+    question's choices ({label, op, args}; "Neither" last, with no op), ``picked`` the one
+    taken; ``ask_box``: asked in the Ask panel's one box (a plain question goes to Ask)."""
+
+    __tablename__ = "simple_chat_reads"
+
+    discussion_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("discussions.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    message_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("discussion_messages.id", ondelete="CASCADE"), nullable=False,
+        unique=True,
+    )  # fmt: skip
+    ask_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("discussion_messages.id", ondelete="CASCADE")
+    )
+    meeting_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    by: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False)
+    line: Mapped[str] = mapped_column(Text, nullable=False)
+    page: Mapped[str | None] = mapped_column(Text)
+    ask_box: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    job_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("llm_jobs.id", ondelete="SET NULL")
+    )
+    choices: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, server_default="[]"
+    )
+    picked: Mapped[int | None] = mapped_column(Integer)
+
+
 MEETING_ORIGINS = ("one_pager", "roadmap", "ritual")
 MEETING_STATUSES = ("live", "ended")
 CHANGE_MODES = ("everyone", "presenter", "named")
@@ -552,6 +586,11 @@ class SimpleMeeting(TenantScoped, Base):
     minutes_job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     delivery: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # chat-actions: [{id, kind: note|question, text, by, at}] added during the meeting, and
+    # {next: item id | None, skipped: [item ids]}.
+    notes: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False,
+                                                        server_default="[]")  # fmt: skip
+    agenda: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
 
 
 class SimpleMeetingDecision(TenantScoped, Base):

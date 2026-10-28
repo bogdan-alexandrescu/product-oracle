@@ -91,6 +91,12 @@ class Entry:
     owner_role: str | None = None
     # S4: the track owner's name (or e-mail) when enabled.
     owner_name: str | None = None
+    # The heading of the PRD section the item was imported from (the walk: "F-06 Loop
+    # and blast-radius guards" in the card's reasons).
+    prd_heading: str | None = None
+    # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
+    # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
+    code: str | None = None
 
 
 @dataclass
@@ -117,7 +123,7 @@ def owner_decides(entry: Entry) -> uuid.UUID | None:
 def decider_ids(entry: Entry, deciders: dict[uuid.UUID, uuid.UUID | None]) -> list[uuid.UUID]:
     """Who decides on this item, the company's owners apart (D-a): the roadmap's decider,
     else its deciding track owner; [] when the company's owners decide."""
-    decider = deciders.get(entry.roadmap.id)
+    decider = entry.row.decider_id or deciders.get(entry.roadmap.id)
     if decider is not None:
         return [decider]
     owner = owner_decides(entry)
@@ -136,7 +142,7 @@ def can_decide(principal: Any, entry: Entry, deciders: dict[uuid.UUID, uuid.UUID
     user_id = getattr(principal, "user_id", None)
     if user_id is None:
         return False
-    decider = deciders.get(entry.roadmap.id)
+    decider = entry.row.decider_id or deciders.get(entry.roadmap.id)
     if decider is not None:
         return decider == user_id
     return (
@@ -225,6 +231,15 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         if role is not None:
             owner_roles[t.id] = role
             owner_names[t.id] = name or email
+    # chat-actions: an item's own owner (set_owner) is named over its track's.
+    people = {
+        u: (role, name or email)
+        for u, role, name, email in (
+            await db.execute(
+                select(User.id, User.role, User.name, User.email).where(User.disabled_at.is_(None))
+            )
+        ).all()
+    }
     track_of_prd = {t.prd_document_id: t for t in tracks.values()}
     milestones = list(
         await db.scalars(
@@ -315,9 +330,12 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 blockers=[blockers[b] for b in row.blocker_ids or [] if b in blockers],
                 suggestion=suggestions.get(row.id),
                 owner_role=owner_roles.get(track.id) if track is not None else None,
-                owner_name=owner_names.get(track.id) if track is not None else None,
+                owner_name=people[row.owner_id][1]
+                if row.owner_id in people
+                else (owner_names.get(track.id) if track is not None else None),
             )
         )
+    await _prd_headings(db, entries)
     # Dependencies within each roadmap version, by item key.
     by_version: dict[tuple[Any, str], Entry] = {
         (e.row.roadmap_version_id, e.row.item_key): e for e in entries
@@ -509,6 +527,69 @@ def suggestion_out(s: RoadmapDateSuggestion, row: RoadmapItem, may: bool) -> Dat
     )
 
 
+async def _prd_headings(db: AsyncSession, entries: list[Entry]) -> None:
+    """Each entry's PRD section heading, in one statement."""
+    from oracle.docs.models import Section
+
+    wanted = {
+        (e.row.prd_version_id, e.row.prd_section_key)
+        for e in entries
+        if e.row.prd_version_id and e.row.prd_section_key
+    }
+    if not wanted:
+        return
+    heads = {
+        (x.version_id, x.section_key): x.heading
+        for x in await db.scalars(
+            select(Section).where(Section.version_id.in_({v for v, _ in wanted}))
+        )
+    }
+    for e in entries:
+        e.prd_heading = heads.get((e.row.prd_version_id, e.row.prd_section_key))
+
+
+def _prd_code(section_key: str | None) -> str | None:
+    from oracle.simple.priorities import prd_code
+
+    return prd_code(section_key)
+
+
+async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
+    """Each entry's ``code``: its feature's short code when that is a code (the feature's
+    key, F-12, or its PRD section's, F-06; the same as Priorities reads), else the PRD
+    code of its own section; None for an item with neither (no initials outside
+    Priorities)."""
+    from oracle.simple.priorities import FEATURE_CODE, _short_codes
+
+    fids = {e.row.feature_id for e in entries if e.row.feature_id}
+    codes: dict[str, str] = {}
+    keys: dict[uuid.UUID, str] = {}
+    if fids:
+        codes = await _short_codes(db)
+        keys = dict(
+            (await db.execute(select(Entity.id, Entity.key).where(Entity.id.in_(fids)))).all()
+        )
+    for e in entries:
+        code = codes.get(keys.get(e.row.feature_id, "")) if e.row.feature_id else None
+        e.code = code if code and FEATURE_CODE.fullmatch(code.split(".")[0]) else None
+        e.code = e.code or _prd_code(e.row.prd_section_key)
+
+
+def prd_section_label(section_key: str, heading: str | None) -> str:
+    """How the card names the PRD section an item came from: the PRD's code and the
+    section's heading ("F-06 Loop and blast-radius guards"); "section <key>" when the
+    key is no code and the heading is unknown."""
+    from oracle.simple.priorities import prd_code
+
+    code = prd_code(section_key)
+    words = (heading or "").strip()
+    if code and words.upper().startswith(code):
+        words = words[len(code) :].lstrip(" :.-·–—")
+    if code:
+        return f"{code} {words}".strip()
+    return words or f"section {section_key}"
+
+
 def _reasons(e: Entry) -> list[str]:
     """S4: up to 3 one-line reasons, from the item's evidence: its priority's rationale,
     the goal its feature supports, the PRD section it was drawn from."""
@@ -519,7 +600,8 @@ def _reasons(e: Entry) -> list[str]:
     if e.goal is not None:
         out.append(f"Serves the goal {e.goal.title}.")
     if e.prd is not None and e.row.prd_section_key:
-        out.append(f"From {e.prd.title}, section {e.row.prd_section_key}.")
+        label = prd_section_label(e.row.prd_section_key, e.prd_heading)
+        out.append(f"From {e.prd.title}, {label}.")
     return out[:3]
 
 
@@ -566,6 +648,7 @@ def item_out(
     return SimpleRoadmapItem(
         id=row.id,
         key=row.item_key,
+        code=e.code or _prd_code(row.prd_section_key),
         title=row.title,
         outcome=row.outcome,
         horizon=row.horizon,  # type: ignore[arg-type]
@@ -731,6 +814,7 @@ async def build(
     decisions = await _open_decisions(db, {e.row.id for e in shown})
     from oracle.simple import additions
 
+    await item_codes(db, read.entries)
     extra = await additions.item_extras(db, read, shown)
     decided = await _decided(db, shown)
     ids = {e.row.id for e in read.entries}

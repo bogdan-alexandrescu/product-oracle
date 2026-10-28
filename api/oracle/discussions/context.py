@@ -6,7 +6,8 @@ is on first, then the rest, within ``MAX_DOCUMENT_CHARS``, #406; for a goal, B6'
 block: its check, latest measurements, the company's horizons and the other goals'
 targets), the baseline slice
 (confirmed goals, then the entities linked to the subject with their top evidence), the
-conversation, and the earlier pushbacks in this discussion (C1b: once).
+conversation, and the earlier pushbacks in this discussion (C1b: once). On one of Simple's
+pages the company's plan comes before all of it (oracle.discussions.plan).
 
 S6 (G1 §3.4) and AUD-9: findings are read only as ``sharing.EVERYONE`` sees them, or as
 their author sees them in the author's own discussion (rule 3.4.3). Nothing here calls
@@ -26,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from oracle.baseline import goals
 from oracle.baseline.models import Conflict, Edge, Entity, Evidence, GoalMeasurement
 from oracle.confidence import merged
-from oracle.discussions import access
+from oracle.discussions import access, plan
 from oracle.discussions.models import Discussion, DiscussionMessage
 from oracle.intake import sharing
 from oracle.tenant_settings import TenantSetting
@@ -57,6 +58,8 @@ class Context:
     size: int = 0
     # No person has written yet: Oracle opens the thread (B6's opening turn).
     opening: bool = False
+    # The company's plan opens the data (oracle.discussions.plan, Simple's Ask).
+    plan: bool = False
 
     def add(self, kind: str, ref: str, title: str, text: str, **extra: Any) -> int | None:
         n = len(self.entries) + 1
@@ -312,6 +315,11 @@ PAGES = {
     "runs": "Runs", "inbox": "Inbox", "company": "Company", "sources": "Sources",
     "settings": "Settings",
 }  # fmt: skip
+# The walk: Simple's pages by their segment after ``/simple`` ("Home" for ``/simple``).
+SIMPLE_PAGES = {
+    "": "Home", "roadmap": "Roadmap", "priorities": "Priorities", "decisions": "Decisions",
+    "meetings": "Meetings", "prds": "One-pager", "one-pagers": "One-pager",
+}  # fmt: skip
 OPEN_RUNS = ("awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
 
 
@@ -322,6 +330,8 @@ def page_name(path: str) -> str:
     if not parts:
         return "General"
     head = parts[0]
+    if head == "simple" and (name := SIMPLE_PAGES.get(parts[1] if len(parts) > 1 else "")):
+        return "One-pagers" if name == "One-pager" and len(parts) < 3 else name
     if head not in PAGES:
         return path
     name = PAGES[head]
@@ -494,6 +504,8 @@ async def member_view(db: AsyncSession, d: Discussion) -> bool:
 async def build(db: AsyncSession, d: Discussion, reply_id: uuid.UUID) -> Context:
     weights = await _thresholds(db)
     ctx = Context(low=float(weights.get("low", 0.4)), pushback=float(weights["pushback"]))
+    if plan.simple_page(d):  # Simple's Ask reads the company's plan first
+        await plan.add(db, ctx)
     linked = await _subject(db, ctx, d)
     if d.subject_kind != "screen":  # a screen's own builder says what it reads (3.4)
         await _baseline(db, ctx, linked)

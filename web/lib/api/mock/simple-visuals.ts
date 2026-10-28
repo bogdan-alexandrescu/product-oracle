@@ -5,10 +5,12 @@ import { stableUuid } from "./ids";
 /**
  * Simple S10 (#723, D26): proposals' visuals (oracle.simple.visuals), with INVENTED
  * drawings. Each visual is held against its subject (kind, id) with its versions (newest
- * last) and comments. The mock's Oracle draws at once: asking for a drawing or pressing
- * Revise answers with the next version (the API queues the simple_visual job). A one-pager
- * bet asked for with its PRD (document_id) stays pending (the job running) until the
- * panel's next read, which draws it.
+ * last) and comments. Pressing Revise answers with the next version at once (the API queues
+ * the simple_visual job); asking for a drawing stays pending (the job running) until the
+ * panel's next read, which draws it, or, for a subject in `failOnce`, ends without one
+ * (`failed`, Retry asks again). A test may keep the job running for a while
+ * (MOCK_VISUAL_JOB_MS_KEY, ms in localStorage): until then every read still answers
+ * "drawing", as the API does while the simple_visual job runs.
  *
  * Who: everyone reads; commenters and up comment on a drawn visual; owners (who change
  * the subject directly) ask for a drawing and revise.
@@ -26,11 +28,22 @@ interface MockVisual {
   made_by: (string | null)[];
   /** Oracle is drawing it (the simple_visual job is queued or running). */
   pending?: boolean;
+  /** Oracle's newest drawing job ended without a drawing: why (the API's `failure`). */
+  failure?: string | null;
+  /** When the drawing job was queued (the browser's clock, ms). */
+  queued_at?: number;
 }
 
 export interface VisualsDb {
   visuals: Record<string, MockVisual>;
+  /** Subjects whose next drawing fails (the job ends without one), then draw on Retry. */
+  failOnce?: string[];
 }
+
+/** Tests set this localStorage key to how long (ms) a requested drawing's job runs. */
+export const MOCK_VISUAL_JOB_MS_KEY = "po-mock-visual-job-ms";
+
+const jobMs = (): number => (typeof localStorage === "undefined" ? 0 : Number(localStorage.getItem(MOCK_VISUAL_JOB_MS_KEY) ?? 0) || 0);
 
 interface Ctx {
   id: string;
@@ -108,7 +121,8 @@ function draft(kind: string, id: string, brief: string): Flow {
 }
 
 export function seedVisuals(): VisualsDb {
-  const db: VisualsDb = { visuals: {} };
+  // The walk: Oracle's first drawing of Alert history export fails; Retry draws it.
+  const db: VisualsDb = { visuals: {}, failOnce: [`feature:${stableUuid("simple-item/alert-export")}`] };
   const bet = betSubject("A setup checklist that shows the next step");
   add(db, "one_pager_line", bet, "A setup checklist that shows the next step", flowOf("one_pager_line", bet, 1, 1, {
     title: "Finish setup from the checklist",
@@ -130,7 +144,7 @@ export function seedVisuals(): VisualsDb {
     steps: [step("s1", "Get the push", "Mobile alert push", "new"), step("s2", "Open the alert", null, "same"), step("s3", "See what crossed the line", "Alert rules", "changed"), step("s4", "Snooze or assign it", null, "new", "decision")],
     screen: { title: "Alert on a phone", regions: ["Header: rule and time", "What crossed the line", "Chart of the last day", "Snooze and Assign buttons"] },
     notes: [{ n: 1, target: "s1", note: "The push names the rule", section_key: "alerts", requirement: "R4" }],
-  }));
+  })).failure = "Oracle could not draw it"; // The walk-fixes review: its redraw failed, no comment open.
   return db;
 }
 
@@ -170,7 +184,7 @@ export function requestVisual(db: VisualsDb | undefined, kind: string, id: strin
 function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx, documentId?: string | null): Schemas["SimpleVisualOut"] {
   const owner = (RANK[ctx.role] ?? 0) >= RANK.owner;
   const askable = !UNASKABLE.includes(kind) && (kind !== "one_pager_line" || !!documentId);
-  if (!v) return { subject_kind: kind, subject_id: id, flow: null, versions: [], comments: [], pending: false, can_comment: false, can_revise: owner && askable };
+  if (!v) return { subject_kind: kind, subject_id: id, flow: null, versions: [], comments: [], pending: false, failed: false, failure: null, can_comment: false, can_revise: owner && askable };
   const n = v.versions.length;
   return {
     subject_kind: kind,
@@ -182,6 +196,8 @@ function out(v: MockVisual | undefined, kind: string, id: string, ctx: Ctx, docu
       .reverse(),
     comments: v.comments,
     pending: !!v.pending,
+    failed: !v.pending && !!v.failure,
+    failure: v.pending ? null : (v.failure ?? null),
     can_comment: n > 0 && (RANK[ctx.role] ?? 0) >= RANK.commenter,
     can_revise: owner,
   };
@@ -199,11 +215,18 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
   const v = db.visuals[key];
   const m = req.method;
   if (m === "GET" && p.length === 5) {
-    if (v?.pending) {
-      // The job has run: version 1 lands.
-      v.versions.push(draft(kind, id, v.brief));
-      v.made_by.push(null);
+    if (v?.pending && Date.now() - (v.queued_at ?? 0) >= jobMs()) {
       v.pending = false;
+      if (db.failOnce?.includes(key)) {
+        // The job has ended without a drawing: the panel says so and offers Retry.
+        db.failOnce = db.failOnce.filter((k) => k !== key);
+        v.failure = "Oracle's drawing did not check out";
+      } else {
+        // The job has run: version 1 lands.
+        v.versions.push(draft(kind, id, v.brief));
+        v.made_by.push(null);
+        v.failure = null;
+      }
     }
     return json(200, out(v, kind, id, ctx, new URL(req.url).searchParams.get("document_id")));
   }
@@ -225,7 +248,10 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
     if ((RANK[ctx.role] ?? 0) < RANK.owner) return json(403, { detail: "Only who changes this directly revises its visual" });
     if (!v?.versions.length) return json(409, { detail: "Oracle has not drawn this visual yet" });
     const open = v.comments.filter((c) => c.addressed_in === null);
-    if (!open.length) return json(409, { detail: "Nothing to revise from: comment first" });
+    const note = String(b.note ?? "").trim();
+    // As the API: a note (Retry after a failed redraw) revises with no open comment.
+    if (!open.length && !note) return json(409, { detail: "Nothing to revise from: comment first" });
+    v.failure = null;
     const cur = v.versions.at(-1)!;
     const n = cur.version + 1;
     const nodes = [...cur.nodes, ...open.map((c, i) => step(`c${n}-${i + 1}`, c.body.slice(0, 40), null, "new"))];
@@ -242,10 +268,12 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
       if (!doc) return json(422, { detail: "A one-pager line's visual is asked for with its PRD" });
       // Queued once: a visual with no drawing (its job drew nothing) is drawn again.
       const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "A bet of the one-pager");
-      if (!cur.versions.length) cur.pending = true;
+      if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
       return json(202, out(db.visuals[key], kind, id, ctx, doc));
     }
-    requestVisual(db, kind, id, String(b.brief ?? "") || "The new flow");
+    // The job is queued: the panel reads "drawing" until its next read lands the drawing.
+    const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "The new flow");
+    if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
     return json(202, out(db.visuals[key], kind, id, ctx));
   }
   return null;

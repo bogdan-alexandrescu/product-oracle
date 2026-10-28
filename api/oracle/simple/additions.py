@@ -546,7 +546,8 @@ def reconcile(
             continue
         score = _like(title, e.row.title)
         if score >= LOOKS_LIKE:
-            items.append((score, SimpleMatch(kind="item", id=str(e.row.id), code=e.row.item_key,
+            code = e.code or e.row.item_key
+            items.append((score, SimpleMatch(kind="item", id=str(e.row.id), code=code,
                                              title=e.row.title)))  # fmt: skip
     feats: list[tuple[float, SimpleMatch]] = []
     for f in features:
@@ -597,7 +598,7 @@ async def item_extras(
         kept = by_key.get((e.roadmap.id, e.row.merged_into))
         out.setdefault(e.row.id, {})["merged_into"] = SimpleMergedInto(
             id=str(kept.row.id) if kept else "",
-            code=e.row.merged_into,  # type: ignore[arg-type]
+            code=(kept.code if kept else None) or e.row.merged_into,  # type: ignore[arg-type]
             title=kept.row.title if kept else e.row.merged_into,  # type: ignore[arg-type]
         )
     return out

@@ -49,6 +49,8 @@ interface SeedItem {
   /** S4 (the floating card): the priority's rationale and the PRD section it came from. */
   why?: string;
   section?: string;
+  /** The walk: the heading of that PRD section ("F-06 ..." names it by the PRD's code). */
+  heading?: string;
   /** S7: goals linked directly besides `goal` (merges add the draft's). */
   goals?: string[];
   /** S7: the items this draft looks like (keys, best first), until kept both or merged. */
@@ -157,6 +159,21 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
 };
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
+/** The PRD's own code of a section an item came from ("f-06" -> "F-06"); null when the key is no code (service.py). */
+export function prdCode(section: string | null | undefined): string | null {
+  const m = /^([a-z]{1,3})-(\d+)$/i.exec((section ?? "").trim());
+  return m ? `${m[1].toUpperCase()}-${m[2]}` : null;
+}
+
+/** "F-06 Loop guards" for a coded section, else "section <key>" (service.prd_section_label). */
+function sectionLabel(section: string, heading?: string): string {
+  const code = prdCode(section);
+  let words = (heading ?? "").trim();
+  if (code && words.toUpperCase().startsWith(code)) words = words.slice(code.length).replace(/^[\s:.\-·–—]+/, "");
+  if (code) return `${code} ${words}`.trim();
+  return words || `section ${section}`;
+}
+
 /** S4: each goal's metric (the goal counters' line). */
 const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert", "quiet-alerts": "Teams muting alerts" };
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
@@ -173,7 +190,7 @@ const TRACKS: Record<string, string> = { alerts: "Usage alerts track", onboardin
 
 const SEED: SeedItem[] = [
   { key: "alert-rules", title: "Alert rules engine", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", start: 0, end: 40, source: "typed", status: "in_progress", gates: [{ phase: "discover", day: 6 }, { phase: "build", day: 28 }], why: "Admins asked for it most this quarter.", section: "bets" },
-  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 } },
+  { key: "alert-digest", title: "Weekly alert digest", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "medium", start: 30, end: 70, source: "accepted", depends: ["alert-rules"], milestone: { name: "Beta", day: 60 }, section: "f-06", heading: "F-06 Weekly digest of fired alerts" },
   { key: "alert-mobile", title: "Mobile alert push", horizon: "now", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "high", end: 80, source: "engineering", depends: ["alert-rules"] },
   { key: "alert-export", title: "Alert history export", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", end: 50, source: "tracker" },
   { key: "alert-sso", title: "Alert routing by team", horizon: "next", roadmap: "alerts-roadmap", goal: "grow-retention", track: "alerts", confidence: "low", depends: ["alert-export"] },
@@ -372,8 +389,30 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
 
 /** S4: the item's track owner, by name (service: an enabled track owner). */
 function ownerOf(db: SimpleDb, s: SeedItem): Item["owner"] {
-  const id = s.track ? db.track_owners?.[s.track] : undefined;
+  const id = itemOwnerId(db, s.key);
   return id ? { id, name: db.people?.[id] ?? "Track owner" } : null;
+}
+
+/** A chat card's set_owner / set_decider (the targets kept by item id), if any: the item's own owner or decider. */
+const namedOn = (db: SimpleDb, key: string, field: "owner_id" | "decider_id"): string | null | undefined => {
+  const t = db.targets?.[db.ids[key]];
+  return t && field in t ? ((t[field] as string | null) ?? null) : undefined;
+};
+
+/** The item's owner: the one a chat card named, else its track's owner. */
+export function itemOwnerId(db: SimpleDb, key: string): string | null {
+  const named = namedOn(db, key, "owner_id");
+  if (named !== undefined) return named;
+  const track = db.items.find((x) => x.key === key)?.track;
+  return (track ? db.track_owners?.[track] : undefined) ?? null;
+}
+
+/** The item's own decider (a chat card's set_decider), else the first of deciderIds. */
+export function itemDeciderId(db: SimpleDb, key: string, roles?: Record<string, Role>): string | null {
+  const named = namedOn(db, key, "decider_id");
+  if (named !== undefined) return named;
+  const s = db.items.find((x) => x.key === key);
+  return s ? (deciderIds(db, s, roles)[0] ?? null) : null;
 }
 
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
@@ -382,6 +421,8 @@ const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner
  * approver or owner; [] when the company's owners decide. The default seed names none;
  * the "simple-deciders" scenario (seedSimpleDeciders) names both. */
 export function deciderIds(db: SimpleDb, s: SeedItem, roles?: Record<string, Role>): string[] {
+  const named = namedOn(db, s.key, "decider_id");
+  if (named) return [named];
   const decider = db.deciders?.[s.roadmap];
   if (decider) return [decider];
   const owner = s.track ? db.track_owners?.[s.track] : undefined;
@@ -391,6 +432,8 @@ export function deciderIds(db: SimpleDb, s: SeedItem, roles?: Record<string, Rol
 /** service.can_decide (D-a): an owner; the decider; with none, the item's track owner while an approver or owner. */
 export function canDecideItem(db: SimpleDb, s: SeedItem, me: { id: string; role: Role }): boolean {
   if (me.role === "owner") return true;
+  const named = namedOn(db, s.key, "decider_id");
+  if (named) return named === me.id;
   const decider = db.deciders?.[s.roadmap];
   if (decider) return decider === me.id;
   return !!s.track && db.track_owners?.[s.track] === me.id && RANK[me.role] >= RANK.approver;
@@ -517,6 +560,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     const suggestion = db.suggestions.find((x) => x.item_id === db.ids[s.key] && x.status === "open");
     return {
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
+      code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: { id: stableUuid(`simple-prd/${s.roadmap}`), slug: rm.prd.toLowerCase().replace(/ /g, "-"), title: rm.prd },
       goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
@@ -542,7 +586,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         ...(s.notes ?? []),
         ...(s.why ? [s.why] : []),
         ...(s.goal ? [`Serves the goal ${GOALS[s.goal]}.`] : []),
-        ...(s.section ? [`From ${rm.prd}, section ${s.section}.`] : []),
+        ...(s.section ? [`From ${rm.prd}, ${sectionLabel(s.section, s.heading)}.`] : []),
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],

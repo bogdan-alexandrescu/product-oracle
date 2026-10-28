@@ -65,7 +65,7 @@ for (const [phone, dark] of [
     });
 
     test(`one box: plan lines get S9's answer, any other line goes to Oracle's Ask (${where})`, async ({ page }) => {
-      // protects: the Simple Ask panel shows exactly one question box and one Send, with the This page / General switch; "who owns <item>" is answered in the panel's plan thread; "What should we cut first?" opens Oracle's Ask chat about the page (the old box's thread) with the line in it; in that thread's one box a change line gets S9's move card and the next other line goes on to Ask in the same thread; New chat lists it under Recent
+      // protects: the Simple Ask panel shows exactly one question box and one Send, with the This page / General switch; "who owns <item>" is answered in the panel's plan thread; "What should we cut first?" opens Oracle's Ask chat about the page (the old box's thread) with the line in it; in that thread's one box a change line gets S9's move card and the next other line goes on to Ask in the same thread; New chat lists it under Here (this page's chats only)
       // fails_when: two boxes show, a plan question goes to the model's Ask (in the list or in a started thread), or an other line gets "I did not understand"
       // no_claim: the model's answer itself (the mock streams a canned reply); Detailed's panel (hop-panel.spec.ts)
       await signIn(page, EMAILS.commenter, "/simple/roadmap");
@@ -98,7 +98,8 @@ for (const [phone, dark] of [
       await expect(discussion.getByTestId("discussion-message").filter({ hasText: "And what is missing?" })).toHaveCount(1);
       await expect(page.getByText("I did not understand that.")).toHaveCount(0);
       await tap(panel.getByRole("button", { name: "New chat" }));
-      await expect(panel.getByRole("region", { name: "Recent" }).getByTestId("hop-chat-row")).not.toHaveCount(0);
+      await expect(panel.getByRole("region", { name: "Here" }).getByTestId("hop-chat-row")).not.toHaveCount(0);
+      await expect(panel.getByRole("region", { name: "Recent" })).toHaveCount(0);
       await expect(panel.getByRole("textbox")).toHaveCount(1);
     });
 
@@ -135,7 +136,7 @@ for (const [phone, dark] of [
 }
 
 test("a viewer's one box still answers the plan and changes nothing (desktop)", async ({ page, context }) => {
-  // protects: a viewer (who starts no Ask chats) still has the one box: "move <item> to H1" gives a card they may not apply, with why; a line the plan reader does not know gets its reply in the same thread (no second box, no chat started)
+  // protects: a viewer (who starts no Ask chats) still has the one box: "move <item> to H1" gives a card they may not apply, with why; a line the plan reader does not know gets the reader's reply in the same thread (no second box, no chat started)
   // fails_when: a viewer loses the box, their card is actionable, or a second box appears
   // no_claim: Oracle's Ask for viewers (they start no chats, as before)
   await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
@@ -147,7 +148,8 @@ test("a viewer's one box still answers the plan and changes nothing (desktop)", 
   await expect(card.getByRole("button", { name: "Apply" })).toBeDisabled();
   await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
   await say(panel, "Summarise this page for me");
-  await expect(panel.getByTestId("chat-message").last()).toContainText("I did not understand that.");
+  // chat-reader: Oracle's reader reads the line; with no change in it, a plain refusal.
+  await expect(panel.getByTestId("chat-message").last()).toContainText("I could not tell what to change. Say it another way.");
   await expect(panel.getByTestId("discussion-thread")).toHaveCount(0);
   await expect(panel.getByRole("textbox")).toHaveCount(1);
 });

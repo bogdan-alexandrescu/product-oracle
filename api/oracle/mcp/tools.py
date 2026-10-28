@@ -8,6 +8,7 @@ role checks) with the caller's credentials, so MCP can do exactly what REST allo
 import base64
 import copy
 import json
+import logging
 import re
 import uuid
 from collections.abc import Iterable
@@ -50,6 +51,11 @@ PUBLIC_OPERATIONS = {
     "public_share_status",
 }
 INTERNAL_BASE_URL = "http://oracle.internal"
+# The live tools' routes (oracle.live.router): a failure reaches Oracle's answer plainly.
+LIVE_PATH = "/v1/live/"
+SOURCE_DOWN = "Meeting notes could not be searched just now."
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -469,8 +475,15 @@ async def call_operation(
     )
 
 
-def to_result(resp: RestResponse, data: Any = None) -> types.CallToolResult:
-    """An MCP result for a REST response; ``data`` replaces the parsed JSON body."""
+def to_result(resp: RestResponse, data: Any = None, *, plain: bool = False) -> types.CallToolResult:
+    """An MCP result for a REST response; ``data`` replaces the parsed JSON body.
+    ``plain``: the caller is an Ask reply's live token (oracle.mcp.server.plain_for)."""
+    if plain and not resp.ok and resp.path.startswith(LIVE_PATH) and resp.status_code >= 500:
+        # A live source that failed reaches Oracle's answer as one plain line: no HTTP
+        # code, no connector's name (the owner's production walk, 2026-10-27). Another
+        # MCP caller of the live routes keeps the HTTP answer (the review).
+        log.info("live read %s failed: HTTP %s", resp.path, resp.status_code)
+        return types.CallToolResult(content=[types.TextContent(text=SOURCE_DOWN)], is_error=True)
     if not resp.ok:
         text = resp.content.decode("utf-8", "replace")
         return types.CallToolResult(
