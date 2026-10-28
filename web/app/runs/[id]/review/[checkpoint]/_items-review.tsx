@@ -11,6 +11,8 @@ import { RawFileSheet } from "@/components/review/RawFileSheet";
 import type { Horizon, ItemRow as TableRow } from "@/components/roadmap/item-row";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatCount } from "@/lib/format";
+import { docLabel, runLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -18,18 +20,24 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import {
   AGENT_KINDS,
   answersReason,
+  datesInWords,
   day,
+  decidersText,
   describe,
   doneText,
   EDIT_KINDS,
+  fieldWords,
   horizonLabel,
   HORIZONS,
+  itemsText,
   openReasons,
+  openText,
   plural,
   resolutionText,
   mayWaive,
+  reviewCounts,
   rowFixes,
-  show,
+  showValue,
   type Action,
   type Fix,
   type Item,
@@ -69,8 +77,25 @@ function confidenceOf(c: string | null | undefined): TableRow["confidence"] {
   return n <= 1 ? n : n / 100;
 }
 
+/** The PRD the file was drawn from, and its sections' headings by key (empty until read, or when it cannot be). */
+type PrdRef = { slug: string; version: number; headings: Map<string, string> };
+
+/** A section key in words when the PRD does not name it: "alerts-slack" is "Alerts slack". */
+const keyWords = (key: string) => {
+  const words = key.replace(/[-_.]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+const wordSet = (text: string) => [...new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean))].sort().join(" ");
+/**
+ * A PRD section by its heading ("Slack alerts"), never its key (qa-work-33). When the PRD does
+ * not name it: the item's title when the key is the title's words ("alerts-slack" for Slack
+ * alerts), else the key in words.
+ */
+export const sectionTitle = (key: string, prd: PrdRef | null, itemTitle?: string | null) =>
+  prd?.headings.get(key) ?? (itemTitle && wordSet(itemTitle) === wordSet(key) ? itemTitle : keyWords(key));
+
 /** A file item as E2's table row: the review's states in its row fields (muted, struck, date removed). */
-function toRow(it: Item, prd: { slug: string; version: number } | null): TableRow {
+function toRow(it: Item, prd: PrdRef | null): TableRow {
   const staged = it.actions.filter((a) => a.state === "staged" && a.kind !== "question");
   const m = it.milestone;
   return {
@@ -82,7 +107,7 @@ function toRow(it: Item, prd: { slug: string; version: number } | null): TableRo
     milestone: m ? { name: m.name ?? null, date: m.date ? day(m.date) : null, refused_date: null, refused: null, verified: false, date_removed: dateRemoved(it) } : null,
     confidence: confidenceOf(it.confidence),
     depends_on: it.depends_on,
-    prd: it.prd_section ? { label: it.prd_section, href: prd ? `/documents/${prd.slug}/v/${prd.version}#${it.prd_section}` : "#" } : null,
+    prd: it.prd_section ? { label: sectionTitle(it.prd_section, prd, it.title), href: prd ? `/documents/${prd.slug}/v/${prd.version}#${it.prd_section}` : "#" } : null,
     ghost: it.position == null,
     muted: it.state === "handled",
     struck: staged.some((a) => a.kind === "drop"),
@@ -105,7 +130,7 @@ function usePhone(): boolean {
 function waitChip(review: Review, mode: Mode) {
   const who = mode === "approver" ? "Waiting for you" : "Waiting for an approver";
   const w = review.wait;
-  if (w.state === "ended") return <Chip kind="warn">Wait ended · deciding continues the run as a new workflow</Chip>;
+  if (w.state === "ended") return <Chip kind="na">The run stopped waiting; your decision starts a follow-up run</Chip>;
   if (w.state !== "open" || w.seconds_left == null)
     return (
       <Chip kind="warn" dot>
@@ -125,7 +150,7 @@ function waitChip(review: Review, mode: Mode) {
 function decidedText(cp: Schemas["CheckpointOut"]): string {
   const review = (cp.review ?? {}) as { kind?: string; edits?: number; items?: unknown[] };
   if (cp.status === "approved") return review.kind === "edits" && review.edits ? `Approved with ${plural(review.edits, "edit")}` : "Approved";
-  if (cp.status === "changes_requested") return Array.isArray(review.items) ? `Sent back · ${plural(review.items.length, "entry").replace("entrys", "entries")}` : "Sent back";
+  if (cp.status === "changes_requested") return Array.isArray(review.items) ? `Sent back · ${plural(review.items.length, "entry", "entries")}` : "Sent back";
   return "Skipped";
 }
 
@@ -152,6 +177,20 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const [raw, setRaw] = useState<"file" | "agents" | null>(null);
   // Enter on a row asks to confirm its first fix here (criterion 16: no single-key decisions).
   const [confirm, setConfirm] = useState<string | null>(null);
+  const source = run.source;
+  // qa-work-33: the PRD's section headings, so "From the PRD" names a section by its title.
+  const headingsQ = useQuery(source ? `prd-headings|${source.slug}|${source.version}` : "prd-headings|none", () =>
+    source
+      ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: source.slug, n: source.version } } }))
+          .then((v) => new Map(v.sections.map((x) => [x.section_key, x.heading.replace(/^[\d.]+\s+/, "")] as const)))
+          .catch(() => new Map<string, string>())
+      : Promise.resolve(new Map<string, string>()),
+  );
+  const headings = headingsQ.data;
+  const prdRef = useMemo<PrdRef | null>(
+    () => (source ? { slug: source.slug, version: source.version, headings: headings ?? new Map() } : null),
+    [source, headings],
+  );
 
   // D8: the draft is read again every 10 s while the page is visible (a teammate's suggestion).
   useEffect(() => {
@@ -191,7 +230,8 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const removed = review?.diff?.removed ?? [];
   const changed = (it: Item) => it.diff.length > 0 || removed.includes(it.key) || (!!it.resolution && it.resolution.outcome !== "done");
   const showChanged = (review?.attempt ?? 1) > 1 && !!review?.diff;
-  const needing = items.filter((it) => it.reasons.length > 0);
+  // qa-work-3/4: one count of items, blocking and to confirm for the whole page (and the run page).
+  const counts = useMemo(() => reviewCounts({ items }), [items]);
   const rows = useMemo(() => {
     const list = filter === "needs" ? items.filter((it) => it.reasons.length > 0) : filter === "changed" ? items.filter(changed) : items;
     return [...list].sort((a, b) => (a.position ?? 1e9) - (b.position ?? 1e9));
@@ -205,7 +245,6 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
 
   const titleOf = (key: string) => items.find((x) => x.key === key)?.title ?? key;
   const byKey = new Map(items.map((x) => [x.key, x]));
-  const prdRef = run.source ? { slug: run.source.slug, version: run.source.version } : null;
   const tableRows = rows.map((it) => toRow(it, prdRef));
   // Group: by horizon (Now, Next, Later, then items not in the file), or by the first open reason.
   const reasonOf = (it: Item) => openReasons(it)[0]?.label ?? (it.reasons.length ? "Handled" : "Nothing open");
@@ -220,18 +259,17 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   };
 
   const tally = review.tally;
-  const handled = needing.filter((x) => x.state === "handled").length;
   const staged = items.flatMap((it) => it.actions.filter((a) => a.state === "staged"));
   const questions = staged.filter((a) => a.kind === "question");
   const edits = staged.filter((a) => EDIT_KINDS.includes(a.kind)).length;
   const agentOnly = staged.find((a) => AGENT_KINDS.includes(a.kind));
-  const waitingOn = tally.waiting_on.map((w) => `${w.count} waiting on ${w.name}`);
-  const blockingLeft = review.gate ? review.gate.blocking_open + review.gate.file_problems : tally.blocking_open;
+  const waitingOn = tally.waiting_on.map((w) => `${formatCount(w.count)} waiting on ${w.name}`);
+  const blockingLeft = counts.blocking + review.file_problems.length;
   const tallyNode = (
     <>
-      {handled} of {needing.length} handled
+      {counts.handled} of {counts.needYou} handled
       <span className="block text-sm font-normal text-text2" data-testid="tally-second">
-        {[blockingLeft > 0 ? `${blockingLeft} blocking left` : null, ...waitingOn].filter(Boolean).join(" · ") || "Nothing blocking"}
+        {[blockingLeft > 0 ? `${formatCount(blockingLeft)} blocking left` : null, ...waitingOn].filter(Boolean).join(" · ") || "Nothing blocking"}
       </span>
     </>
   );
@@ -251,8 +289,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     return order || ra.position - rb.position;
   });
   const selectedItem = items.find((x) => x.key === selected) ?? shownRows.find((x) => x.state === "needs_you") ?? shownRows[0] ?? null;
-  const source = run.source;
-  const prd = source ? `${source.title} v${source.version}` : "the PRD";
+  const prd = source ? `${docLabel(source)} v${source.version}` : "the PRD";
 
   const pick = (it: Item) => {
     setSelected(it.key);
@@ -286,20 +323,28 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       align: "right",
       wrap: true,
       phone: "meta",
+      // On a phone the call spans the row, so its ⋯ sits at the row's right edge on every row.
+      className: "max-[600px]:w-full max-[600px]:basis-full",
       cell: (r) => {
         const it = byKey.get(r.key)!;
         return (
           // A row action is not a selection: the click stays in the cell.
-          <div className="flex flex-col items-end gap-1 max-[600px]:items-start" onClick={(e) => e.stopPropagation()}>
-            <span className="flex min-w-0 flex-wrap items-center justify-end gap-1 max-[600px]:justify-start" data-testid="your-call">
-              {confirm === it.key && rowFixes(openReasons(it))[0] ? (
-                <ConfirmFix {...rowFixes(openReasons(it))[0]} ops={ops} onDone={() => leaveConfirm(it.key)} />
-              ) : (
-              <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
-              )}
-              {mode !== "viewer" && it.position != null && (
-                <RowMenu it={it} open={openReasons(it)} mode={mode} ops={ops} menuOpen={menu === it.key} setMenu={(o) => setMenu(o ? it.key : null)} setForm={setForm} onSelect={() => pick(it)} />
-              )}
+          <div className="flex min-w-0 flex-1 flex-col items-stretch gap-1" onClick={(e) => e.stopPropagation()}>
+            {/* qa-work-18: the buttons right-aligned in their own column, the ⋯ in a fixed last one (an empty slot when there is no menu). */}
+            <span className={`grid min-w-0 items-center gap-1 ${mode !== "viewer" ? "grid-cols-[minmax(0,1fr)_2rem] max-[600px]:grid-cols-[minmax(0,1fr)_2.5rem]" : "grid-cols-1"}`} data-testid="your-call">
+              <span className="flex min-w-0 flex-wrap items-center justify-end gap-1" data-testid="your-call-buttons">
+                {confirm === it.key && rowFixes(openReasons(it))[0] ? (
+                  <ConfirmFix {...rowFixes(openReasons(it))[0]} ops={ops} onDone={() => leaveConfirm(it.key)} />
+                ) : (
+                  <YourCall it={it} open={openReasons(it)} staged={it.actions.filter((a) => a.state === "staged" && a.kind !== "question")} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
+                )}
+              </span>
+              {mode !== "viewer" &&
+                (it.position != null ? (
+                  <RowMenu it={it} open={openReasons(it)} mode={mode} ops={ops} menuOpen={menu === it.key} setMenu={(o) => setMenu(o ? it.key : null)} setForm={setForm} onSelect={() => pick(it)} />
+                ) : (
+                  <span aria-hidden />
+                ))}
             </span>
             <Suggestions it={it} mode={mode} ops={ops} titleOf={titleOf} meId={me?.user_id ?? null} />
           </div>
@@ -314,7 +359,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       item={selectedItem}
       items={items}
       rows={items.map((x) => toRow(x, prdRef))}
-      count={items.filter((x) => x.position != null).length}
+      count={counts.inFile}
       review={review}
       mode={mode}
       ops={ops}
@@ -335,7 +380,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
             </Link>{" "}
             /{" "}
             <Link href={`/runs/${run.id}`} className="hover:underline">
-              {run.flow_title} from {prd}
+              {runLabel(run)}
             </Link>
           </span>
         }
@@ -357,7 +402,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
       />
       <p className="-mt-2 mb-3 flex flex-wrap items-center gap-2 text-sm text-text2" data-testid="review-context">
         <span>
-          {run.document_slug ?? "Roadmap"} · draft from{" "}
+          Draft from{" "}
           {source ? (
             <Link href={`/documents/${source.slug}/v/${source.version}`} className="text-accent-ink hover:underline">
               {prd}
@@ -367,9 +412,9 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           )}
           {review.attempt && review.attempt > 1 ? ` · attempt ${review.attempt}` : ""}
         </span>
-        <Chip kind="line" title={`The ${cp.approver_role} role or above decides`}>
-          {cp.approver_role}+
-        </Chip>
+        <span data-testid="review-deciders">
+          <Chip kind="line">{decidersText(cp.approver_role)}</Chip>
+        </span>
       </p>
       {error && (
         <p className="mb-2 text-sm text-crit" role="alert">
@@ -393,19 +438,21 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
         ) : (
           <>
             <div className="flex min-w-0 flex-wrap items-center gap-3">
-              <span className="font-semibold">{plural(items.filter((x) => x.position != null).length, "item")}</span>
+              <span className="font-semibold" data-testid="review-items-count">
+                {itemsText(counts)}
+              </span>
               <FilterChips<Filter>
                 label="Show"
                 value={filter}
                 onChange={setFilter}
                 items={[
-                  { value: "needs", label: "Needs you", count: needing.length },
-                  { value: "all", label: "All", count: items.length },
+                  { value: "needs", label: "Needs you", count: counts.needYou },
+                  { value: "all", label: "All", count: counts.total },
                   ...(showChanged ? [{ value: "changed" as const, label: "Changed", count: items.filter(changed).length }] : []),
                 ]}
               />
               <span className="text-sm text-text2" data-testid="review-summary">
-                {tally.blocking_open} blocking · {tally.to_confirm_open} to confirm
+                {openText(counts)}
               </span>
               <span className="ml-auto flex items-center gap-2 text-sm text-text2">
                 Group
@@ -418,8 +465,10 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               selected={selectedItem?.key ?? null}
               onSelect={(k) => pick(byKey.get(k)!)}
               onActivate={activate}
-              hide={["depends_on", "prd", "state"]}
-              widths={{ position: "36px", horizon: "72px", milestone: "112px" }}
+              // qa-work-32: no file position (the rows are grouped, so it reads out of order); one horizon chip style.
+              hide={["position", "depends_on", "prd", "state"]}
+              widths={{ horizon: "72px", milestone: "112px" }}
+              plainHorizons
               extraColumns={columns}
               rowDecorations={(r) => ({ "data-state": byKey.get(r.key)?.state })}
               groupBy={groupBy}
@@ -448,7 +497,7 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
           sendBackSummary={
             fileProblems.length
               ? `${plural(fileProblems.length, "problem")} of the file for the agents`
-              : `${plural(entries, "entry").replace("entrys", "entries")} · ${plural(unchanged, "unchanged item")} · ${plural(tally.blocking_open, "problem")} left for the agents`
+              : `${plural(entries, "entry", "entries")} · ${plural(unchanged, "unchanged item")} · ${plural(counts.blocking, "blocking item")} left for the agents`
           }
           decidedBy={cp.status === "pending" && mode !== "approver" ? "An approver decides" : null}
           onReload={reload}
@@ -476,7 +525,7 @@ function ReasonsCell({ it, showDiff }: { it: Item; showDiff: boolean }) {
       <span className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
         {shown.slice(0, 2).map((r) => (
           <span key={r.code} data-testid="reason-chip" className="max-w-full">
-            <Chip kind={!open.includes(r) ? "na" : r.severity === "blocking" ? "crit" : "warn"} title={r.text} wrap>
+            <Chip kind={!open.includes(r) ? "na" : r.severity === "blocking" ? "crit" : "warn"} title={datesInWords(r.text)} wrap>
               {r.label}
             </Chip>
           </span>
@@ -499,7 +548,7 @@ function ReasonsCell({ it, showDiff }: { it: Item; showDiff: boolean }) {
         <ul className="text-sm text-text2" data-testid="row-diff">
           {it.diff.map((d) => (
             <li key={d.field} className="break-words">
-              {d.field}: <s>{show(d.from)}</s> → {show(d.to)}
+              {fieldWords(d.field)}: <s>{showValue(d.field, d.from)}</s> → {showValue(d.field, d.to)}
             </li>
           ))}
         </ul>
@@ -785,7 +834,7 @@ function ReviewInspector({
   ops: Ops;
   form: Form;
   setForm: (f: Form) => void;
-  prd: { slug: string; version: number } | null;
+  prd: PrdRef | null;
   meId: string | null;
 }) {
   const [editing, setEditing] = useState(false);
@@ -813,7 +862,7 @@ function ReviewInspector({
                   <Chip kind={!isOpen ? "na" : r.severity === "blocking" ? "crit" : "warn"} wrap>
                     {r.severity === "blocking" ? "Blocking" : "To confirm"} · {r.label}
                   </Chip>
-                  <p className="mt-1.5 text-sm break-words">{r.text}</p>
+                  <p className="mt-1.5 text-sm break-words">{datesInWords(r.text)}</p>
                   {!isOpen && by ? (
                     <p className="mt-1.5 flex items-center gap-2 text-sm font-medium text-pass">
                       ✓ {doneText(by, titleOf)}
@@ -972,7 +1021,7 @@ function History({ item, review, titleOf }: { item: Item; review: Review; titleO
           <ul className="flex flex-col gap-1">
             {item.diff.map((d) => (
               <li key={d.field} className="break-words">
-                {d.field}: <s>{show(d.from)}</s> → {show(d.to)}
+                {fieldWords(d.field)}: <s>{showValue(d.field, d.from)}</s> → {showValue(d.field, d.to)}
               </li>
             ))}
           </ul>

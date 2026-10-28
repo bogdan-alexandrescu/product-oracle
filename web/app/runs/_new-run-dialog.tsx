@@ -126,6 +126,9 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
   }
 
   const ownerApproves = can("approve_run") && !!estimate?.needs_approval;
+  // qa-work-7: with no flow to start here, the dialog is a guide to where each run starts:
+  // its lines and Close, no Estimate or Start run that could never be used.
+  const guide = !!catalog.data && !flow;
   const docOptions = documents.data ?? [];
   const inputCls = `${INPUT} h-10 placeholder:text-text2`;
   const legendCls = "mb-1.5 flex items-center gap-1.5 text-[13px] font-semibold tracking-[0.02em] text-text2";
@@ -140,7 +143,7 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
       >
         <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
           <h2 id="new-run-title" className="font-display text-xl font-bold tracking-heading">
-            {startFrom?.title ?? (catalog.data && !flows.length ? "Start a run" : "New run")}
+            {startFrom?.title ?? (guide ? "Where to start a run" : "New run")}
           </h2>
           {catalog.data && (
             <InfoTip label="where runs execute" align="start" side="bottom">
@@ -153,7 +156,14 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
         <div className="space-y-5 px-5 py-4 text-[15px] max-[600px]:px-4">
           {catalog.error && <ErrorNote>{catalog.error}</ErrorNote>}
           {!catalog.data && !catalog.error && <Loading />}
-          {catalog.data && !flow && <FlowPointers flows={pointers} />}
+          {guide && (
+            <>
+              <p className="text-text2" data-testid="flow-guide">
+                Each kind of run starts from the page it works on. Open one of these to start it there.
+              </p>
+              <FlowPointers flows={pointers} />
+            </>
+          )}
           {catalog.data && flow && (
             <>
               {catalog.data.runtime_notes.length > 0 && (
@@ -226,7 +236,7 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
                   <select className={inputCls} value={depth} onChange={(e) => change(setDepth)(e.target.value as Depth)}>
                     {Object.entries(catalog.data.depths).map(([k, mult]) => (
                       <option key={k} value={k}>
-                        {k} (×{mult})
+                        {k.charAt(0).toUpperCase() + k.slice(1)} (×{mult})
                       </option>
                     ))}
                   </select>
@@ -292,15 +302,32 @@ export function NewRunDialog({ onClose, start: startFrom }: { onClose: () => voi
           )}
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4">
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={runEstimate} disabled={busy || !flow}>
-            {estimate ? "Re-estimate" : "Estimate"}
-          </Button>
-          <Button variant="primary" onClick={start} disabled={busy || !estimate || !estimate.within_budget}>
-            {ownerApproves ? `Approve ${usd(estimate!.total_usd)} and start` : estimate?.needs_approval ? "Ask an owner to approve" : "Start run"}
-          </Button>
+          {guide ? (
+            <Button onClick={onClose}>Close</Button>
+          ) : (
+            <>
+              {/* qa-work-7: why Start run waits, said where it is, not only on hover. */}
+              {!estimate && (
+                <span className="mr-auto text-sm text-text2" data-testid="start-hint">
+                  Estimate the run first, then start it.
+                </span>
+              )}
+              <Button variant="ghost" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button onClick={runEstimate} disabled={busy || !flow}>
+                {estimate ? "Re-estimate" : "Estimate"}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={start}
+                disabled={busy || !estimate || !estimate.within_budget}
+                title={!estimate ? "Estimate the run first" : !estimate.within_budget ? "Over the budget: lower the depth or roles, or raise the budget" : undefined}
+              >
+                {ownerApproves ? `Approve ${usd(estimate!.total_usd)} and start` : estimate?.needs_approval ? "Ask an owner to approve" : "Start run"}
+              </Button>
+            </>
+          )}
         </div>
       </div>
     </div>

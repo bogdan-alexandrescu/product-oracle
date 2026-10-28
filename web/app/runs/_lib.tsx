@@ -1,5 +1,8 @@
-import { Chip, CostFigure, Icon, InfoTip, type ChipKind } from "@/components/ds";
-import type { Schemas } from "@/lib/api/client";
+import { Chip, Icon, InfoTip, type ChipKind } from "@/components/ds";
+import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatMoney, formatMoneyOf } from "@/lib/format";
+import { runLabel } from "@/lib/labels";
+import { useQuery } from "@/lib/use-query";
 
 export type RunOut = Schemas["RunOut"];
 export type RunSummary = Schemas["RunSummary"];
@@ -63,12 +66,32 @@ export function RunStatusBadge({ run }: { run: RunState }) {
  */
 export const COST_DECISION_STATUSES: RunStatus[] = ["awaiting_approval", "paused_overrun"];
 
-/** P3d Cost prominence: a run's cost, prominent only on cost approvals and overruns. */
+/**
+ * A run's cost in one format (qa-work-25): "$4.90 of $14.50 estimated" (spent of the estimate),
+ * "$53.00 estimated" before it starts, "$4.90 spent" with no estimate.
+ */
+export function costText(run: Pick<RunSummary, "status" | "spent_usd" | "estimate_usd">): string {
+  const est = run.estimate_usd;
+  if (run.status === "awaiting_approval" || run.status === "draft") return est == null ? "No estimate yet" : `${formatMoney(est)} estimated`;
+  return est == null ? `${formatMoney(run.spent_usd)} spent` : `${formatMoneyOf(run.spent_usd, est)} estimated`;
+}
+
+/** P3d Cost prominence: a run's cost, prominent only on cost approvals and overruns; normal font everywhere. */
 export function RunCost({ run }: { run: RunSummary }) {
-  if (run.status === "awaiting_approval") return <CostFigure usd={run.estimate_usd} est prominent />;
-  if (run.status === "paused_overrun") return <CostFigure usd={run.spent_usd} of={run.estimate_usd} prominent />;
-  if (run.status === "draft") return <CostFigure usd={run.estimate_usd} est />;
-  return <CostFigure usd={run.spent_usd} of={run.estimate_usd} />;
+  const prominent = COST_DECISION_STATUSES.includes(run.status);
+  const over = run.status === "paused_overrun";
+  return (
+    <span
+      data-cost={prominent ? "prominent" : "small"}
+      className={
+        prominent
+          ? `tnum inline-flex min-h-7 items-center rounded-lg px-2 text-[15px] font-medium ${over ? "bg-crit-bg text-crit" : "bg-warn-bg text-warn"}`
+          : "tnum text-sm text-text2"
+      }
+    >
+      {costText(run)}
+    </span>
+  );
 }
 
 /** Runs that wait on a person: a checkpoint, a cost approval or an overrun. */
@@ -200,14 +223,76 @@ export const STOP_CANCELLING_CONFIRM = "Stop cancelling? The run ends; its spend
 /** Asked before Cancel again on a stopped workflow over the run's ceiling: Oracle's cancel calls resume; nothing restarts. */
 export const CANCEL_AGAIN_CONFIRM = "Cancel again? Oracle cancels this workflow again; nothing restarts.";
 
-const usdFmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-
 export function usd(value: number | null | undefined): string {
-  return value == null ? "—" : usdFmt.format(value);
+  return value == null ? "—" : formatMoney(value);
 }
 
 /** A run's short id, as B1 shows it ("0412"). */
 export const shortId = (id: string) => id.replace(/-/g, "").slice(0, 4);
+
+/**
+ * The document a run writes, in words (qa-work-8/9): "Usage alerts roadmap", from runLabel
+ * without its flow; null for a run that names no document.
+ */
+export function runDocName(run: Pick<RunSummary, "flow_title" | "document_slug" | "document_kind">): string | null {
+  if (!run.document_slug) return null;
+  const label = runLabel(run);
+  const tail = ` · ${run.flow_title}`;
+  return label.endsWith(tail) ? label.slice(0, -tail.length) : label;
+}
+
+/** What a run is for, in a list or a heading: its document, else its flow. */
+export const runName = (run: Pick<RunSummary, "flow_title" | "document_slug" | "document_kind">) => runDocName(run) ?? run.flow_title;
+
+/**
+ * qa-work-4: a Roadmap items stop's open counts before its shared draft is read, counted as the
+ * review screen counts them (reviewCounts: items, never reasons): an item with an open blocking
+ * reason is blocking, one with only reasons to confirm is to confirm.
+ */
+export function checkCounts(reasons: { item: string; severity: string }[]): { blocking: number; toConfirm: number } {
+  const worst = new Map<string, boolean>();
+  for (const r of reasons) worst.set(r.item, (worst.get(r.item) ?? false) || r.severity === "blocking");
+  let blocking = 0;
+  for (const b of worst.values()) if (b) blocking += 1;
+  return { blocking, toConfirm: worst.size - blocking };
+}
+
+/** A key in words, for a name the catalog does not give: "roadmap_items" is "Roadmap items". */
+const keyWords = (key: string) => {
+  const words = key.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+/** A file the agents wrote, in words (qa-work-8): "roadmap_items.yaml" is "Roadmap items". */
+const FILE_WORDS: Record<string, string> = {
+  "prd.md": "PRD draft",
+  "roadmap.md": "Roadmap draft",
+  "update.md": "Update draft",
+  "pricing.md": "Pricing memo",
+  "spec.md": "Spec draft",
+  "design.md": "Design notes",
+  "design.json": "Design data",
+  "summary.md": "Summary",
+  "review.yaml": "Review",
+};
+export const fileLabel = (name: string) => FILE_WORDS[name] ?? keyWords(name.replace(/\.[a-z]+$/i, ""));
+
+/** A template's and a theme's names (qa-work-8): "Template: Now / Next / Later, theme Roadmap board". */
+export function useTemplateText(template: string | null | undefined, theme: string | null | undefined): string | null {
+  const t = useQuery(template ? "run-templates" : "run-templates|none", () => (template ? unwrap(api.GET("/v1/templates")) : Promise.resolve([] as Schemas["TemplateSummary"][])));
+  const th = useQuery(theme ? "run-themes" : "run-themes|none", () => (theme ? unwrap(api.GET("/v1/themes")) : Promise.resolve([] as Schemas["ThemeOut"][])));
+  if (!template) return null;
+  const name = t.data?.find((x) => x.key === template)?.name ?? keyWords(template);
+  const themeName = theme ? (th.data?.find((x) => x.key === theme)?.name ?? keyWords(theme)) : null;
+  return `Template: ${name}${themeName ? `, theme ${themeName}` : ""}`;
+}
+
+/** Agent role keys to their names for people (the flow catalog's titles): "prioritizer" is "Prioritizer". */
+export function useRoleNames(): (role: string) => string {
+  const q = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
+  const roles = q.data?.roles ?? [];
+  return (role: string) => roles.find((r) => r.key === role)?.title ?? keyWords(role);
+}
 
 /**
  * A decision recorded in Oracle that SwarmCloud has not taken yet (owner, 2026-10-20): final,
@@ -246,7 +331,7 @@ export function EstimateSummary({ estimate }: { estimate: EstimateOut }) {
                 {/* E1 part B: Build roadmap reuses the approved version's draft items. */}
                 {s.reused_from_version != null ? `${s.title} · reused from v${s.reused_from_version}` : s.title}
               </td>
-              <td className="tnum py-0.5 text-right font-mono text-sm text-text2">{usd(s.estimate_usd)}</td>
+              <td className="tnum py-0.5 text-right text-sm text-text2">{usd(s.estimate_usd)}</td>
             </tr>
           ))}
           <tr className="border-t border-line font-semibold">
@@ -258,7 +343,7 @@ export function EstimateSummary({ estimate }: { estimate: EstimateOut }) {
                 </InfoTip>
               </span>
             </td>
-            <td className="tnum pt-1.5 text-right font-mono" data-testid="estimate-total">
+            <td className="tnum pt-1.5 text-right" data-testid="estimate-total">
               {usd(estimate.total_usd)}
             </td>
           </tr>

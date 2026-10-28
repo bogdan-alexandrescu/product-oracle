@@ -162,6 +162,8 @@ export function DataTable<T>({
             <col key={c.key} style={c.width ? { width: c.width } : undefined} className={phone(c)} />
           ))}
         </colgroup>
+        {/* On a phone the header is for screen readers only, and its words wrap: a row of
+            nowrap headings would draw it wider than the screen (qa-work-31). */}
         <thead className={hideHeader ? "sr-only" : "max-[600px]:sr-only"} role="rowgroup">
           <tr role="row">
             {columns.map((c) => (
@@ -169,7 +171,7 @@ export function DataTable<T>({
                 key={c.key}
                 scope="col"
                 role="columnheader"
-                className={`sticky top-0 z-[1] h-9 bg-surface2 px-2 text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3 ${align(c)} ${phone(c)}`}
+                className={`sticky top-0 z-[1] h-9 bg-surface2 px-2 text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3 max-[600px]:whitespace-normal max-[600px]:[overflow-wrap:anywhere] ${align(c)} ${phone(c)}`}
               >
                 {c.header}
               </th>

@@ -13,7 +13,10 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 /**
  * One customer interview (C3): what it was about, the approved guide, the transcript, Oracle's
  * snapshot and the requests it created. Withdraw link: its creator or an approver, while the
- * link is open.
+ * link is open. The Requests tabs above are its way back (qa-work-45: no breadcrumb as well).
+ * The link itself is shown once, when it is made, and only its hash is kept, so it cannot be
+ * shown or copied again here (qa-work-43): the page says so, and what to do if it was lost.
+ * An empty section says why it is empty and what comes next (qa-work-44).
  */
 export function InterviewDetail({ id }: { id: string }) {
   const q = useQuery(`interview:${id}`, () => interviewsCall<InterviewOut>("GET", `/v1/interviews/${encodeURIComponent(id)}`));
@@ -44,15 +47,10 @@ export function InterviewDetail({ id }: { id: string }) {
     }
   }
 
-  const back = (
-    <Link href="/requests/interviews" className="font-semibold text-accent-ink hover:underline">
-      Interviews
-    </Link>
-  );
   if (!iv) {
     return (
       <Page>
-        <PageHeader title="Interview" back={back} />
+        <PageHeader title="Interview" />
         {q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}
       </Page>
     );
@@ -68,12 +66,13 @@ export function InterviewDetail({ id }: { id: string }) {
   const insights = snap.insights ?? [];
   const hasSnapshot = facts.length + quotes.length + needs.length + insights.length > 0;
   const transcript = iv.messages.filter((m) => m.kind !== "intro");
+  const name = iv.interviewee_name ?? "The customer";
+  const finished = iv.status === "finished";
 
   return (
     <Page>
       <PageHeader
         title={who}
-        back={back}
         status={
           <Chip kind={INTERVIEW_STATUS_KIND[iv.status]} dot data-testid="interview-status">
             {INTERVIEW_STATUS_LABEL[iv.status]}
@@ -98,6 +97,15 @@ export function InterviewDetail({ id }: { id: string }) {
             </Fact>
             {iv.link_expires_at && open && <Fact label="Link expires">{formatDateTime(iv.link_expires_at)}</Fact>}
             {iv.finished_at && <Fact label="Finished">{formatDateTime(iv.finished_at)}</Fact>}
+            {open && (
+              <Fact label="Link">
+                <span data-testid="interview-link-note">
+                  {iv.link_opened_at ? `Opened ${formatDateTime(iv.link_opened_at)}. ` : "Not opened yet. "}
+                  For safety the link is shown only once, when it is made, so it can&apos;t be shown or copied again.
+                  {iv.can_manage && ` If ${name} lost it, withdraw it and interview them again for a new link.`}
+                </span>
+              </Fact>
+            )}
           </dl>
         </Panel>
 
@@ -132,7 +140,7 @@ export function InterviewDetail({ id }: { id: string }) {
               ))}
             </ol>
           ) : (
-            <Empty>Nothing said yet</Empty>
+            <Empty testId="interview-transcript-empty">{transcriptEmpty(iv, name)}</Empty>
           )}
         </Panel>
 
@@ -180,7 +188,9 @@ export function InterviewDetail({ id }: { id: string }) {
               )}
             </div>
           ) : (
-            <Empty>{iv.status === "finished" ? "Oracle is writing the snapshot" : "No snapshot yet"}</Empty>
+            <Empty testId="interview-snapshot-empty">
+              {finished ? "Oracle is writing the snapshot" : `Oracle writes a snapshot here once ${name} finishes the interview.`}
+            </Empty>
           )}
         </Panel>
 
@@ -189,19 +199,43 @@ export function InterviewDetail({ id }: { id: string }) {
             <ul className="flex flex-col gap-1.5 px-4 py-3 text-[15px]">
               {iv.request_ids.map((rid, i) => (
                 <li key={rid}>
-                  <Link href={`/requests/new#request-${rid}`} className="font-semibold text-accent-ink hover:underline">
+                  <Link href={`/requests?request=${encodeURIComponent(rid)}`} className="font-semibold text-accent-ink hover:underline">
                     {requests.data?.[i]?.title ?? "Request"}
                   </Link>
                 </li>
               ))}
             </ul>
           ) : (
-            <Empty>None yet</Empty>
+            <Empty testId="interview-requests-empty">
+              {finished
+                ? `Oracle found no requests in what ${name} said.`
+                : `The requests ${name} makes show here, to decide, once they finish the interview.`}
+            </Empty>
           )}
         </Panel>
       </div>
     </Page>
   );
+}
+
+/** Why the transcript is empty, and what to do (qa-work-44). */
+function transcriptEmpty(iv: InterviewOut, name: string): string {
+  switch (iv.status) {
+    case "draft":
+      return "No link has been made yet, so nobody has been asked.";
+    case "invited":
+      return iv.link_opened_at
+        ? `${name} opened the link but hasn't answered yet.`
+        : `${name} hasn't opened the link yet. Send it to them if you haven't.`;
+    case "in_progress":
+      return `${name} has started but hasn't answered yet.`;
+    case "expired":
+      return `The link expired before ${name} answered. Interview them again for a new link.`;
+    case "revoked":
+      return `The link was withdrawn before ${name} answered.`;
+    default:
+      return `${name} finished without answering.`;
+  }
 }
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {

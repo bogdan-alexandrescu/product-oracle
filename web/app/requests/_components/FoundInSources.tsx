@@ -5,6 +5,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { Button, Chip, Notice, Panel, SegmentedControl, useFocusTrap } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { plural } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Candidate = Schemas["CandidateOut"];
@@ -61,7 +62,7 @@ export function FoundInSources({ refresh }: { refresh: string }) {
         </Notice>
       )}
       {open.length > 0 && (
-        <Panel testId="found-in-sources" title={`Oracle found ${open.length} possible request${open.length === 1 ? "" : "s"} in your sources`}>
+        <Panel testId="found-in-sources" title={`Oracle found ${plural(open.length, "possible request")} in your sources`}>
           <p className="px-4 pt-3 text-sm text-text2">Only you see these until you file one.</p>
           {error && (
             <div className="px-4 pt-2">

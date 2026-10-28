@@ -105,6 +105,27 @@ export function DecisionBar({
   const canSend = (changes > 0 || !!note.trim()) && !tooLong;
   const approveLabel = held ? "Confirm" : edits > 0 ? `Approve with ${plural(edits, "edit")}` : "Approve";
 
+  // qa-work-14/31: the page's scroll padding at the bottom is the bar's height (and, on a phone,
+  // the tab bar's under it), so a row scrolled or tabbed into view stops clear of both bars.
+  const bar = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    const root = document.documentElement;
+    const before = root.style.scrollPaddingBottom;
+    const fit = () => {
+      const tab = phone ? parseFloat(getComputedStyle(root).getPropertyValue("--phone-tab-bar")) || 0 : 0;
+      root.style.scrollPaddingBottom = `${Math.ceil(el.getBoundingClientRect().height + tab)}px`;
+    };
+    fit();
+    const watch = new ResizeObserver(fit);
+    watch.observe(el);
+    return () => {
+      watch.disconnect();
+      root.style.scrollPaddingBottom = before;
+    };
+  }, [phone]);
+
   // Saving one's own note bumps the draft's revision: the decision that follows expects that
   // revision, not the one the screen loaded, or it is refused as "the review changed" by its
   // own note. Only our own bump (one past what we read) is taken; anyone else's still refuses.
@@ -266,7 +287,7 @@ export function DecisionBar({
     return (
       <>
         {confirmSheet}
-        <div className="sticky bottom-[68px] z-20 -mx-2.5 border-t border-line bg-surface px-2.5 py-2" data-testid="decision-bar" data-collapsed="true">
+        <div ref={bar} className="sticky bottom-[68px] z-20 -mx-2.5 border-t border-line bg-surface px-2.5 py-2" data-testid="decision-bar" data-collapsed="true">
           <Button className="w-full justify-center" variant={canDecide ? "solid" : "secondary"} onClick={() => setOpen(true)}>
             {canDecide ? `${plural(changes, "change")} · ${held ? "Confirm" : "Approve"}` : `${plural(changes, "change")} · Details`}
           </Button>
@@ -280,7 +301,7 @@ export function DecisionBar({
   return (
     <>
       {confirmSheet}
-      <div className="sticky bottom-0 z-20 border-t border-line bg-surface px-1 py-3 shadow-panel" data-testid="decision-bar">
+      <div ref={bar} className="sticky bottom-0 z-20 border-t border-line bg-surface px-4 py-3 shadow-panel" data-testid="decision-bar">
         {body}
       </div>
     </>

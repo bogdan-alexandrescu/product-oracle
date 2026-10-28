@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 import { Button, Chip, InfoTip } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { failedAt } from "@/lib/format";
+import { failedAt, formatAge, plural } from "@/lib/format";
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
 
 type Status = Schemas["TriageStatus"];
@@ -12,15 +12,10 @@ type Status = Schemas["TriageStatus"];
 /** How often the header re-reads a triage run under way. */
 const POLL_MS = 2_000;
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
-/** "just now", "2 min ago", "3 h ago". */
+/** "just now", "2m ago", "3h ago": the app's one way to write an age (formatAge). */
 function ago(at: string | null | undefined, now: number): string {
-  if (!at) return "just now";
-  const min = Math.floor((now - Date.parse(at)) / 60_000);
-  if (min < 1) return "just now";
-  if (min < 60) return `${min} min ago`;
-  return `${Math.floor(min / 60)} h ago`;
+  const age = at ? formatAge(at, now) : "now";
+  return !age || age === "now" ? "just now" : `${age} ago`;
 }
 
 /** Oracle's latest triage run, re-read every few seconds while it is under way. */
@@ -46,18 +41,25 @@ function Started({ at }: { at: string | null | undefined }) {
   return <>started {ago(at, now)}</>;
 }
 
-/** The daily triage's part of the status line: off, or who the 07:00 PT run acts as. */
-function daily(status: Status): string {
-  if (!status.daily_on) return "Daily triage is off";
-  if (status.daily_as) return `Daily triage at 07:00 PT runs as ${status.daily_as}`;
-  return "Daily triage is on, but no active approver or owner can run it";
+/** What the daily triage switch says beside its name: off, or who the 07:00 PT run acts as (qa-work-38). */
+function daily(status: Status): { text: string; warn: boolean } {
+  if (!status.daily_on) return { text: "Off", warn: false };
+  if (status.daily_as) return { text: `On, runs as ${status.daily_as}`, warn: false };
+  return { text: "On, but no active approver or owner can run it", warn: true };
+}
+
+/** What Oracle's last finished run did: the requests it left suggestions on, and what was new in your sources (qa-work-5). */
+function lastRun(status: Status): string {
+  const found = status.found ? `found ${plural(status.found, "new possible request")} in your sources` : "found nothing new in your sources";
+  return `Oracle's last triage left suggestions on ${plural(status.suggestions, "request")} and ${found}`;
 }
 
 /**
  * The header's status line (C1 "Classify now"): "Oracle is classifying · started 2 min ago"
- * while a run is under way, then what it suggested and found in your own sources, followed by
- * whether the daily triage is off or who it runs as; or why Oracle's daily run did not start,
- * until a later run.
+ * while a run is under way, then what the last run did ("left suggestions on 4 requests and
+ * found nothing new in your sources", so its count never reads as the found panel's); or why
+ * Oracle's daily run did not start, until a later run. The daily triage's state is the
+ * switch's own (qa-work-38), not repeated here.
  */
 export function TriageStatusLine({ status }: { status: Status | undefined }) {
   if (!status) return null;
@@ -67,29 +69,24 @@ export function TriageStatusLine({ status }: { status: Status | undefined }) {
         {status.daily_skipped}
       </span>
     );
+  if (!status.run_id) return null;
   return (
     <span data-testid="triage-status" className="text-sm text-text2" role="status">
-      {status.run_id && (
+      {status.active ? (
         <>
-          {status.active ? (
-            <>
-              Oracle is classifying · <Started at={status.started_at} />
-            </>
-          ) : status.status === "succeeded" ? (
-            `${plural(status.suggestions, "suggestion")}, ${status.found} found in your sources`
-          ) : (
-            // When it failed, then what was so then (#633 re-review).
-            <>
-              {/* The ". " follows the sentence whenever more follows it: a when, a why or both. */}
-              Oracle&apos;s last triage did not finish{status.error || (status.status === "failed" && status.finished_at) ? ". " : ""}
-              {status.status === "failed" && status.finished_at && <span data-testid="failed-at">{failedAt(status.finished_at)}. </span>}
-              {status.error}
-            </>
-          )}
-          {" · "}
+          Oracle is classifying · <Started at={status.started_at} />
+        </>
+      ) : status.status === "succeeded" ? (
+        lastRun(status)
+      ) : (
+        // When it failed, then what was so then (#633 re-review).
+        <>
+          {/* The ". " follows the sentence whenever more follows it: a when, a why or both. */}
+          Oracle&apos;s last triage did not finish{status.error || (status.status === "failed" && status.finished_at) ? ". " : ""}
+          {status.status === "failed" && status.finished_at && <span data-testid="failed-at">{failedAt(status.finished_at)}. </span>}
+          {status.error}
         </>
       )}
-      {daily(status)}
     </span>
   );
 }
@@ -102,6 +99,7 @@ export function DailyTriageSwitch({ triage, canChange }: { triage: Query<Status>
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const status = triage.data;
+  const said = status ? daily(status) : null;
 
   async function turn(on: boolean) {
     setBusy(true);
@@ -117,29 +115,37 @@ export function DailyTriageSwitch({ triage, canChange }: { triage: Query<Status>
   }
 
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex items-center gap-1.5 max-[600px]:w-full max-[600px]:flex-wrap">
       {error && (
-        <span role="alert" className="text-sm text-crit">
+        <span role="alert" className="text-sm text-crit max-[600px]:basis-full">
           {error}
         </span>
       )}
       {canChange ? (
-        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-text">
+        <label className="inline-flex min-h-8 cursor-pointer items-center gap-2 text-sm font-semibold text-text max-[600px]:min-h-11 max-[600px]:flex-1">
           <input
             type="checkbox"
             role="switch"
-            className="size-4 accent-[var(--accent)]"
+            className="size-4 flex-none accent-[var(--accent)] max-[600px]:size-5"
             checked={status?.daily_on ?? false}
             disabled={busy || !status}
             onChange={(e) => void turn(e.target.checked)}
             data-testid="daily-triage-switch"
           />
-          Daily triage at 07:00 PT
+          <span>
+            Daily triage at 07:00 PT
+            {said && (
+              <span data-testid="daily-triage-said" className={`font-medium ${said.warn ? "text-warn" : "text-text2"}`}>
+                {" · "}
+                {said.text}
+              </span>
+            )}
+          </span>
         </label>
       ) : (
         // #370: commenters and viewers can never turn it, so they read its state, no switch.
         status && (
-          <Chip kind={status.daily_on ? "pass" : "na"} data-testid="daily-triage-state">
+          <Chip kind={status.daily_on ? "pass" : "na"} data-testid="daily-triage-state" title={said?.text}>
             Daily triage {status.daily_on ? "on" : "off"}
           </Chip>
         )
@@ -173,13 +179,14 @@ export function ClassifyNow({ triage }: { triage: Query<Status> }) {
   }
 
   return (
-    <span className="flex items-center gap-1.5">
+    <span className="flex items-center gap-1.5 max-[600px]:w-full max-[600px]:flex-wrap">
       {error && (
-        <span role="alert" className="text-sm text-crit">
+        <span role="alert" className="text-sm text-crit max-[600px]:basis-full">
           {error}
         </span>
       )}
       <Button
+        className="max-[600px]:h-11 max-[600px]:flex-1"
         variant="secondary"
         disabled={busy || active}
         title={active ? "Oracle is classifying now" : undefined}

@@ -7,6 +7,7 @@ import { Avatar, Button, Chip, Empty, InfoTip, Mark, Panel, SegmentedControl } f
 import { PersonPicker, findPeople, peopleByIds, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, SELECT, TEXTAREA } from "@/components/review/parts";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { plural } from "@/lib/format";
 import { useMe, type Role } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
@@ -122,7 +123,9 @@ function AnswerBubble({ answer, people, me }: { answer: Card["answers"][number];
       <div className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text2">
           <span className="font-semibold text-text">{who}</span>
-          <time dateTime={answer.created_at}>{when(answer.created_at)}</time>
+          <time dateTime={answer.created_at} title={when(answer.created_at)}>
+            {dayMonth(answer.created_at)}
+          </time>
           <Chip kind={kind}>{knowledgeLabel(answer, mine, who)}</Chip>
         </div>
         <p className="mt-1 text-[15px] leading-[22px] break-words whitespace-pre-wrap text-text">
@@ -365,13 +368,21 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
   }
 
   const n = preview?.remaining ?? 0;
+  // qa-work-47: the batch size says what it is ("Ask 5 at a time"), and only while there is more to ask.
+  const sizes = preview && (n === 0 || preview.held) ? undefined : (
+    <span data-testid="batch-size" className="inline-flex items-center gap-1.5 text-sm text-text2">
+      <span aria-hidden>Ask</span>
+      <SegmentedControl label={`Ask ${size} at a time`} size="sm" items={SIZES.map((v) => ({ value: v, label: v }))} value={size} onChange={setSize} />
+      <span aria-hidden>at a time</span>
+    </span>
+  );
   return (
-    <Panel title="Next questions" testId="next-questions" tools={<SegmentedControl label="Batch size" size="sm" items={SIZES.map((v) => ({ value: v, label: v }))} value={size} onChange={setSize} />}>
+    <Panel title="Next questions" testId="next-questions" tools={sizes}>
       <div className="flex flex-col gap-3 p-4 max-[600px]:p-3">
         {!preview && !error && <p className="text-sm text-text2">Reading Oracle&apos;s next questions…</p>}
         {preview && (
           <p className="text-[15px] font-semibold text-text">
-            {n === 0 ? "Oracle has no more questions." : `Oracle has ${n} more question${n === 1 ? "" : "s"}`}
+            {n === 0 ? "Oracle has no more questions." : `Oracle has ${plural(n, "more question")}`}
           </p>
         )}
         {preview?.held && (
@@ -418,7 +429,7 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
 
 /**
  * The Questions tab: the interview thread, one group per batch ("Batch 1 · 5 questions ·
- * asked 20 Oct"), each question an Oracle bubble with its answers under it; then Next
+ * asked Oct 20"), each question an Oracle bubble with its answers under it; then Next
  * questions for the author or an approver.
  */
 export function QuestionsTab({
@@ -514,7 +525,7 @@ export function QuestionsTab({
         {batches.map((b) => (
           <section key={b.batch} data-testid="batch" aria-label={`Batch ${b.batch}`} className="flex min-w-0 flex-col gap-3">
             <h2 className="text-[13px] font-semibold tracking-[0.02em] text-text2">
-              Batch {b.batch} · {b.questions.length} question{b.questions.length === 1 ? "" : "s"}
+              Batch {b.batch} · {plural(b.questions.length, "question")}
               {askedOn(b) ? ` · asked ${askedOn(b)}` : ""}
             </h2>
             <ul className="flex min-w-0 flex-col gap-4">
