@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 import { Button, Chip, Empty, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";

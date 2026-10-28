@@ -95,6 +95,8 @@ export function zoneName(zone: string): string {
   const city = (zone.split("/").pop() ?? zone).replace(/_/g, " ");
   let name: string | undefined;
   try {
+    // The zone's name, not a date: nothing here is shown in another zone.
+    // eslint-disable-next-line no-restricted-syntax
     name = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longGeneric" })
       .formatToParts(new Date())
       .find((p) => p.type === "timeZoneName")?.value;
