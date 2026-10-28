@@ -11,7 +11,7 @@ import { useMe, type Role } from "@/lib/me";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CATEGORY_LABEL, DECIDED_GAP, HARD_BLOCKERS, criticalCount, type Gap, type Summary } from "./_lib";
+import { DECIDED_GAP, categoryNote, HARD_BLOCKERS, criticalCount, type Gap, type Summary } from "./_lib";
 
 type Decision = Schemas["DecisionIn"]["decision"];
 
@@ -157,10 +157,19 @@ export function IntakeInspector({
   const archived = s.intake.status === "archived";
   // Critical questions still open that hold nothing (none is a blocker): what the draft lacks.
   const missing = blocking.length ? [] : s.gaps.filter((g) => g.importance === "critical" && !DECIDED_GAP.has(g.status));
+  // qa-docs-19: the title answers the question, in the same words as what follows it (and,
+  // #307, never "Ready to draft" while a critical question is open).
+  const title = archived
+    ? "Not drafting"
+    : gate.gate !== "clear"
+      ? "Not ready to draft"
+      : missing.length > 0
+        ? "Can draft, with gaps"
+        : "Ready to draft";
   return (
     <Inspector
       eyebrow="Before drafting"
-      title="Ready to draft?"
+      title={title}
       testId="intake-inspector"
       label="Before drafting"
       stats={[
@@ -182,12 +191,15 @@ export function IntakeInspector({
             <Chip kind="warn" dot>
               {criticalCount(missing.length)} open
             </Chip>
-            <p className="text-[13px] text-text2">None of them holds the draft, but the draft has no answer for them yet.</p>
+            <p data-testid="missing-note" className="text-[13px] text-text2">
+              Draft with Oracle works now; the draft marks {missing.length === 1 ? "this" : "these"} as not known yet until someone
+              answers {missing.length === 1 ? "it" : "them"}.
+            </p>
             <ul className="flex flex-col gap-2">
               {missing.map((g) => (
                 <li key={g.id} className="flex min-w-0 flex-col gap-0.5" data-testid="missing-gap">
                   <span className="text-sm break-words text-text">{g.statement}</span>
-                  <span className="text-[13px] text-text2">{CATEGORY_LABEL[g.category]}</span>
+                  {categoryNote(g) && <span className="text-[13px] text-text2">{categoryNote(g)}</span>}
                 </li>
               ))}
             </ul>
@@ -208,7 +220,7 @@ export function IntakeInspector({
                     <span className="min-w-0 flex-1 text-sm break-words text-text">{g.statement}</span>
                     <Chip kind="crit">{g.importance === "critical" ? "Critical" : g.importance}</Chip>
                   </div>
-                  <span className="text-[13px] text-text2">{CATEGORY_LABEL[g.category]}</span>
+                  {categoryNote(g) && <span className="text-[13px] text-text2">{categoryNote(g)}</span>}
                   {/* #370: an approver may still reject a critical gap; the form says what needs an owner. */}
                   {can("decide_knowledge_gap", true) && deciding !== g.id && (
                     <div>

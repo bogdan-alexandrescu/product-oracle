@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { ArtifactMenu } from "@/components/ArtifactMenu";
@@ -10,6 +10,8 @@ import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Chip,
   DataTable,
+  FilterChips,
+  Icon,
   InfoTip,
   Inspector,
   InspectorRow,
@@ -26,64 +28,125 @@ import {
 import { peopleByIds } from "@/components/PersonPicker";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type DocumentSummary, type Schemas } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, plural } from "@/lib/format";
+import { docLabel } from "@/lib/labels";
 import { useArtifactsChanged } from "@/lib/artifacts";
 import { useMe } from "@/lib/me";
+import { useTemplateNames, type TemplateNames } from "@/lib/template-names";
 import { useQuery } from "@/lib/use-query";
 
-const COLUMNS: Column<DocumentSummary>[] = [
-  {
-    key: "title",
-    header: "Document",
-    cell: (d) => (
-      <Link href={`/documents/${d.slug}`} className="font-medium text-text hover:underline">
-        {d.title}
-      </Link>
-    ),
-  },
-  { key: "status", header: "Status", width: "128px", cell: (d) => <DocStatusChip status={d.status} dot /> },
-  {
-    key: "latest",
-    header: "Latest",
-    width: "76px",
-    className: "tnum",
-    cell: (d) =>
-      d.latest_version != null ? (
-        <Link href={`/documents/${d.slug}/v/${d.latest_version}`} className="text-accent-ink hover:underline">
-          v{d.latest_version}
+/** The one empty marker on this page (qa-docs-42). */
+const NONE = "–";
+
+type SortKey = "title" | "status" | "latest" | "updated";
+type Sort = { key: SortKey; desc: boolean };
+
+const STATUS_ORDER: Record<DocumentSummary["status"], number> = { draft: 0, in_review: 1, approved: 2 };
+
+/** qa-docs-41: the columns sort, each by what it shows. */
+function sortDocs(docs: DocumentSummary[], { key, desc }: Sort): DocumentSummary[] {
+  const by = (a: DocumentSummary, b: DocumentSummary): number => {
+    if (key === "title") return a.title.localeCompare(b.title);
+    if (key === "status") return STATUS_ORDER[a.status] - STATUS_ORDER[b.status];
+    if (key === "latest") return (a.latest_version ?? 0) - (b.latest_version ?? 0);
+    return a.updated_at.localeCompare(b.updated_at);
+  };
+  return [...docs].sort((a, b) => (desc ? -by(a, b) : by(a, b)) || b.updated_at.localeCompare(a.updated_at));
+}
+
+/** A column header that sorts its column: a second click reverses it. */
+function SortHeader({ label, k, sort, onSort }: { label: string; k: SortKey; sort: Sort; onSort: (s: Sort) => void }) {
+  const on = sort.key === k;
+  return (
+    <button
+      type="button"
+      data-testid={`sort-${k}`}
+      aria-label={`Sort by ${label}${on ? (sort.desc ? ", newest or highest first" : ", oldest or lowest first") : ""}`}
+      onClick={() => onSort({ key: k, desc: on ? !sort.desc : k === "updated" || k === "latest" })}
+      className={`inline-flex items-center gap-1 rounded hover:text-text ${on ? "text-text" : ""}`}
+    >
+      {label}
+      {on && <Icon name={sort.desc ? "chevron-down" : "chevron-up"} size={14} />}
+    </button>
+  );
+}
+
+function docColumns(sort: Sort, onSort: (s: Sort) => void, names: TemplateNames): Column<DocumentSummary>[] {
+  return [
+    {
+      key: "title",
+      header: <SortHeader label="Document" k="title" sort={sort} onSort={onSort} />,
+      cell: (d) => (
+        <Link href={`/documents/${d.slug}`} className="font-medium text-text hover:underline" title={docLabel({ ...d, kind: "prd" })}>
+          {d.title}
         </Link>
-      ) : (
-        "–"
       ),
-  },
-  {
-    key: "template",
-    header: "Template",
-    width: "22%",
-    hideOnPhone: true,
-    className: "font-mono text-[13px] text-text2",
-    cell: (d) => d.template ?? "–",
-  },
-  {
-    key: "updated",
-    header: "Updated",
-    width: "120px",
-    hideOnPhone: true,
-    align: "right",
-    className: "tnum text-text2",
-    cell: (d) => <span title={formatDateTime(d.updated_at)}>{formatDate(d.updated_at)}</span>,
-  },
-  {
-    // #482: Edit, Regenerate… and Delete… by role; kept on a phone (right of the title).
-    key: "actions",
-    header: <span className="sr-only">Actions</span>,
-    width: "56px",
-    align: "right",
-    phone: "action",
-    className: "overflow-visible",
-    cell: (d) => <ArtifactMenu doc={{ ...d, kind: "prd" }} />,
-  },
-];
+    },
+    {
+      key: "status",
+      header: <SortHeader label="Status" k="status" sort={sort} onSort={onSort} />,
+      width: "128px",
+      cell: (d) => <DocStatusChip status={d.status} dot />,
+    },
+    {
+      key: "latest",
+      header: <SortHeader label="Latest" k="latest" sort={sort} onSort={onSort} />,
+      width: "84px",
+      className: "tnum",
+      cell: (d) =>
+        d.latest_version != null ? (
+          <Link href={`/documents/${d.slug}/v/${d.latest_version}`} className="text-accent-ink hover:underline">
+            v{d.latest_version}
+          </Link>
+        ) : (
+          NONE
+        ),
+    },
+    {
+      key: "template",
+      header: "Template",
+      width: "22%",
+      hideOnPhone: true,
+      className: "text-text2",
+      cell: (d) => {
+        const name = names.template(d.template);
+        return name ? <span title={name}>{name}</span> : NONE;
+      },
+    },
+    {
+      key: "updated",
+      header: <SortHeader label="Updated" k="updated" sort={sort} onSort={onSort} />,
+      width: "120px",
+      hideOnPhone: true,
+      align: "right",
+      className: "tnum text-text2",
+      cell: (d) => <span title={formatDateTime(d.updated_at)}>{formatDate(d.updated_at)}</span>,
+    },
+    {
+      // #482: Open v<n>, Regenerate… and Delete… by role; kept on a phone (right of the title).
+      key: "actions",
+      header: <span className="sr-only">Actions</span>,
+      width: "56px",
+      align: "right",
+      phone: "action",
+      className: "overflow-visible",
+      cell: (d) => <ArtifactMenu doc={{ ...d, kind: "prd" }} />,
+    },
+  ];
+}
+
+/** Phone width (the DataTable's stacked rows): a tapped row opens its PRD, as there is no room for a panel beside it. */
+const PHONE = "(max-width: 600px)";
+
+function subscribePhone(onChange: () => void) {
+  const mq = window.matchMedia(PHONE);
+  mq.addEventListener("change", onChange);
+  return () => mq.removeEventListener("change", onChange);
+}
+
+function useIsPhone(): boolean {
+  return useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+}
 
 /** A brief waiting to be drafted (C4 "Ideas"): no PRD yet, not converted or archived. */
 type Idea = { intake: Schemas["ProductIntakeOut"]; author: string; open: number };
@@ -121,7 +184,7 @@ const IDEA_COLUMNS: Column<Idea>[] = [
     header: "Questions",
     width: "150px",
     cell: (d) =>
-      d.open > 0 ? <Chip kind="warn">{`${d.open} question${d.open === 1 ? "" : "s"} open`}</Chip> : <Chip kind="pass">Ready to draft</Chip>,
+      d.open > 0 ? <Chip kind="warn">{`${plural(d.open, "question")} open`}</Chip> : <Chip kind="pass">Ready to draft</Chip>,
   },
   {
     key: "created",
@@ -134,7 +197,13 @@ const IDEA_COLUMNS: Column<Idea>[] = [
   },
 ];
 
-function DocInspector({ d, canPublish }: { d: DocumentSummary; canPublish: boolean }) {
+/** The approved version in words: "v5, the latest", "v3", or "Not approved". */
+function approvedText(d: DocumentSummary): string {
+  if (d.approved_version == null) return "Not approved";
+  return d.approved_version === d.latest_version ? `v${d.approved_version}, the latest` : `v${d.approved_version}`;
+}
+
+function DocInspector({ d, canPublish, names }: { d: DocumentSummary; canPublish: boolean; names: TemplateNames }) {
   return (
     <Inspector
       testId="document-inspector"
@@ -152,14 +221,12 @@ function DocInspector({ d, canPublish }: { d: DocumentSummary; canPublish: boole
           Open
         </LinkButton>
       }
-      stats={[
-        { label: "Latest", value: d.latest_version != null ? `v${d.latest_version}` : "–" },
-        { label: "Approved", value: d.approved_version != null ? `v${d.approved_version}` : "–" },
-      ]}
     >
       <InspectorSection label="Details">
-        <InspectorRow value={<span className="font-mono text-[13px] font-medium">{d.template ?? "–"}</span>}>Template</InspectorRow>
-        <InspectorRow value={<span className="font-mono text-[13px] font-medium">{d.theme ?? "–"}</span>}>Theme</InspectorRow>
+        <InspectorRow value={d.latest_version != null ? `v${d.latest_version}` : NONE}>Latest version</InspectorRow>
+        <InspectorRow value={<span data-testid="inspector-approved">{approvedText(d)}</span>}>Approved version</InspectorRow>
+        <InspectorRow value={<span data-testid="inspector-template">{names.template(d.template) ?? NONE}</span>}>Template</InspectorRow>
+        <InspectorRow value={<span data-testid="inspector-theme">{names.theme(d.theme) ?? NONE}</span>}>Theme</InspectorRow>
         <InspectorRow value={formatDate(d.created_at)}>Created</InspectorRow>
         <InspectorRow value={formatDateTime(d.updated_at)}>Updated</InspectorRow>
       </InspectorSection>
@@ -190,35 +257,40 @@ function DocInspector({ d, canPublish }: { d: DocumentSummary; canPublish: boole
 }
 
 export default function DocumentsPage() {
-  // PRDs only: roadmaps have their own screen (/roadmap).
+  // PRDs only: roadmaps have their own screen (Plan).
   const q = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   useArtifactsChanged(q.reload);
-  const documents = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const router = useRouter();
+  const phone = useIsPhone();
+  const names = useTemplateNames();
   const { can, capsReady } = useMe();
   // #370: New PRD creates an intake not linked to a PRD (the handler only asks an approver to
   // link one), so the item lets a commenter in, as in NewPrd.
   const canPropose = can("create_intake", true);
+  const [sort, setSort] = useState<Sort>({ key: "updated", desc: true });
+  // qa-docs-41: In review filters the list.
+  const [filter, setFilter] = useState<"all" | "in_review">("all");
+  const all = q.data ?? [];
+  const inReview = all.filter((d) => d.status === "in_review").length;
+  const documents = sortDocs(filter === "in_review" ? all.filter((d) => d.status === "in_review") : all, sort);
   const [picked, setPicked] = useState<string | null>(null);
   const selected = documents.find((d) => d.slug === picked) ?? documents[0] ?? null;
-  const inReview = documents.filter((d) => d.status === "in_review").length;
   // C4: briefs waiting to be drafted, so an approver finds the one a commenter wrote.
   const ideasQ = useQuery("documents|ideas", loadIdeas);
   const [view, setView] = useState<"prds" | "ideas">("prds");
+  const columns = docColumns(sort, setSort, names);
 
   return (
     <Page>
       <PageHeader
         title="PRDs"
-        status={
-          q.data && (
-            <>
-              {capsReady && !canPropose && <ViewOnly />}
-              <Chip kind="acc">{documents.length} PRDs</Chip>
-              {inReview > 0 && <Chip kind="line">{inReview} in review</Chip>}
-            </>
-          )
+        info={
+          <InfoTip label="PRDs">
+            Every PRD and the briefs (Ideas) waiting to become one. Roadmaps live under Plan. Open a PRD to read its
+            versions, review it and publish it.
+          </InfoTip>
         }
+        status={capsReady && !canPropose ? <ViewOnly /> : undefined}
         action={
           // #370: a commenter writes the brief, an approver drafts; a viewer has no New PRD.
           canPropose && (
@@ -229,20 +301,32 @@ export default function DocumentsPage() {
         }
       />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      <div className="mb-3">
+      <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         <SegmentedControl
           label="Show"
           size="sm"
           value={view}
           onChange={setView}
           items={[
-            { value: "prds", label: "PRDs", count: q.data ? documents.length : null },
-            { value: "ideas", label: "Ideas", count: ideasQ.data?.length ?? 0, title: "Briefs waiting to be drafted" },
+            { value: "prds", label: "PRDs", count: q.data ? all.length : null },
+            { value: "ideas", label: "Ideas", count: ideasQ.data?.length ?? null, title: "Briefs waiting to be drafted" },
           ]}
         />
+        {view === "prds" && inReview > 0 && (
+          <FilterChips
+            label="Filter PRDs"
+            testId="prd-filter"
+            value={filter}
+            onChange={setFilter}
+            items={[
+              { value: "all", label: "All" },
+              { value: "in_review", label: "In review", count: inReview },
+            ]}
+          />
+        )}
       </div>
       {view === "ideas" ? (
-        <Panel title="Ideas" count={ideasQ.data?.length}>
+        <Panel>
           {ideasQ.error && <ErrorNote>{ideasQ.error}</ErrorNote>}
           <DataTable
             label="Ideas"
@@ -252,37 +336,48 @@ export default function DocumentsPage() {
             loading={ideasQ.loading}
             rowKey={(d) => d.intake.id}
             onActivate={(k) => router.push(`/intakes/${k}`)}
-            empty="No ideas waiting to be drafted"
+            empty={
+              // qa-docs-44: where ideas come from, and the way to start one.
+              <span data-testid="ideas-empty" className="inline-block max-w-prose whitespace-normal">
+                No ideas waiting. An idea is a brief for a PRD: write one with{" "}
+                {canPropose ? (
+                  <Link href="/documents/new?kind=prd" className="font-medium text-accent-ink hover:underline">
+                    New PRD
+                  </Link>
+                ) : (
+                  "New PRD"
+                )}
+                , or turn a customer request into one from{" "}
+                <Link href="/requests" className="font-medium text-accent-ink hover:underline">
+                  Requests
+                </Link>
+                .
+              </span>
+            }
             rowProps={() => ({ "data-testid": "idea-row" })}
           />
         </Panel>
       ) : (
-      <Split inspector={selected ? <DocInspector d={selected} canPublish={can("publish_version")} /> : undefined}>
-        <Panel
-          title="PRDs"
-          count={q.data ? documents.length : undefined}
-          tools={
-            <InfoTip label="PRDs">
-              Roadmaps live under Roadmap. Import a draft with <code>POST /v1/documents/&#123;doc&#125;/versions</code> or{" "}
-              <code>oracle push draft.md</code>.
-            </InfoTip>
-          }
+        <Split
+          // qa-docs-16: on a phone a tapped row opens its PRD, so no panel waits below the list.
+          inspector={selected && !phone ? <DocInspector d={selected} canPublish={can("publish_version")} names={names} /> : undefined}
         >
-          <DataTable
-            label="PRDs"
-            testId="documents-table"
-            columns={COLUMNS}
-            rows={q.data ? documents : undefined}
-            loading={q.loading}
-            rowKey={(d) => d.slug}
-            selected={selected?.slug ?? null}
-            onSelect={(k) => setPicked(k)}
-            onActivate={(k) => router.push(`/documents/${k}`)}
-            empty="No PRDs yet"
-            rowProps={() => ({ "data-testid": "document-row" })}
-          />
-        </Panel>
-      </Split>
+          <Panel>
+            <DataTable
+              label="PRDs"
+              testId="documents-table"
+              columns={columns}
+              rows={q.data ? documents : undefined}
+              loading={q.loading}
+              rowKey={(d) => d.slug}
+              selected={phone ? null : (selected?.slug ?? null)}
+              onSelect={(k) => (phone ? router.push(`/documents/${k}`) : setPicked(k))}
+              onActivate={(k) => router.push(`/documents/${k}`)}
+              empty={filter === "in_review" ? "No PRDs in review" : "No PRDs yet"}
+              rowProps={() => ({ "data-testid": "document-row" })}
+            />
+          </Panel>
+        </Split>
       )}
     </Page>
   );

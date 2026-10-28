@@ -140,10 +140,11 @@ def dates_refusal(marks: list[doc_dates.Mark], headings: dict[str, str]) -> tupl
         Block(
             key="unverified_date",
             id=f"{m.section_key}:{m.text}",
-            title=m.text,
+            # qa-docs-2: the date as people read it ("Dec 15, 2026"); as written in ``id``.
+            title=doc_dates.shown(m),
             rationale=doc_dates.problem_message(m, None, heading=headings.get(m.section_key))
             if m.status == "withdrawn"
-            else f"{m.text} ({where(m)}) is marked {m.label}",
+            else f"{doc_dates.shown(m)} ({where(m)}) is not backed by a confirmed schedule",
         )
         for m in marks
     ]

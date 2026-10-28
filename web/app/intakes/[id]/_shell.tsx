@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 
-import { DeleteMenu } from "@/components/ArtifactMenu";
-import { Button, Chip, confirmInPage, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
+import { DeleteDialog } from "@/components/ArtifactMenu";
+import { Button, Chip, confirmInPage, Icon, Notice, Page, PageHeader, Sheet, Split } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { Menu, TabBar } from "@/components/review/parts";
 import { api, unwrap } from "@/lib/api/client";
@@ -63,6 +64,7 @@ export function BeforeDrafting({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>("questions");
   const [sheet, setSheet] = useState(false);
   const [drafting, setDrafting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,17 +126,21 @@ export function BeforeDrafting({ id }: { id: string }) {
   const openGaps = s.gaps.filter((g) => OPEN_GAP.has(g.status)).length;
   const fresh = s.new_evidence.visible ? (s.new_evidence.count ?? 0) : 0;
 
+  // #482: owners delete a brief (and the PRD it became) to Trash.
+  const mayDelete = can("delete_intake");
   const inspector = <IntakeInspector summary={s} role={role} onChanged={changed} />;
-  const more = (mayAnalyze || mayRepin || (mayArchive && !archived)) && !converted && (
-    <Menu label="More actions" icon="more" iconOnly>
+  const live = !converted && (mayAnalyze || mayRepin || (mayArchive && !archived));
+  // qa-docs-65: one ⋯ menu holds every secondary action, Delete… last.
+  const more = (live || mayDelete) && (
+    <Menu label={`Actions for ${s.intake.title}`} icon="more" iconOnly>
       {(close) => (
         <div className="flex min-w-48 flex-col gap-1" role="menu">
-          {mayAnalyze && (
+          {!converted && mayAnalyze && (
             <Button variant="ghost" role="menuitem" className="justify-start" disabled={busy} onClick={() => (close(), act(() => unwrap(api.POST("/v1/intakes/{intake_id}/analyze", { params: { path: { intake_id: id } } }))))}>
               Re-analyse
             </Button>
           )}
-          {mayRepin && (
+          {!converted && mayRepin && (
             <Button variant="ghost" role="menuitem" className="justify-start" disabled={busy} onClick={() => (close(), act(() => unwrap(api.POST("/v1/intakes/{intake_id}/repin", { params: { path: { intake_id: id } } }))))}>
               Pin new sources
               {fresh > 0 && (
@@ -144,7 +150,7 @@ export function BeforeDrafting({ id }: { id: string }) {
               )}
             </Button>
           )}
-          {mayArchive && !archived && (
+          {!converted && mayArchive && !archived && (
             <Button
               variant="ghost"
               role="menuitem"
@@ -153,6 +159,11 @@ export function BeforeDrafting({ id }: { id: string }) {
               onClick={() => (close(), archive())}
             >
               Archive
+            </Button>
+          )}
+          {mayDelete && (
+            <Button variant="ghost" role="menuitem" className="justify-start" disabled={busy} onClick={() => (close(), setDeleting(true))}>
+              Delete…
             </Button>
           )}
         </div>
@@ -164,8 +175,9 @@ export function BeforeDrafting({ id }: { id: string }) {
     <Page>
       <PageHeader
         back={
-          <Link href="/documents" className="hover:text-text hover:underline">
-            ‹ PRDs
+          <Link href="/documents" className="inline-flex items-center gap-1 hover:text-text hover:underline">
+            <Icon name="back" size={16} />
+            PRDs
           </Link>
         }
         title={s.intake.title}
@@ -192,14 +204,6 @@ export function BeforeDrafting({ id }: { id: string }) {
               </Button>
             )}
             {more}
-            {/* #482: owners delete a brief (and the PRD it became) to Trash. */}
-            <DeleteMenu
-              op="delete_intake"
-              title={s.intake.title}
-              dependents={() => unwrap(api.GET("/v1/intakes/{intake_id}/dependents", { params: { path: { intake_id: id } } }))}
-              remove={(query) => unwrap(api.DELETE("/v1/intakes/{intake_id}", { params: { path: { intake_id: id }, query } }))}
-              onDeleted={() => router.push("/documents")}
-            />
           </>
         }
       />
@@ -257,6 +261,17 @@ export function BeforeDrafting({ id }: { id: string }) {
       </Split>
       {/* C4: Draft with Oracle opens its sheet (template, baseline, depth, stops, estimate). Closed,
           the summary is read again: the brief's draft run, if the sheet made one, is taken up next time. */}
+      {deleting &&
+        createPortal(
+          <DeleteDialog
+            title={s.intake.title}
+            dependents={() => unwrap(api.GET("/v1/intakes/{intake_id}/dependents", { params: { path: { intake_id: id } } }))}
+            remove={(query) => unwrap(api.DELETE("/v1/intakes/{intake_id}", { params: { path: { intake_id: id }, query } }))}
+            onClose={() => setDeleting(false)}
+            onDeleted={() => router.push("/documents")}
+          />,
+          document.body,
+        )}
       {drafting && <DraftSheet summary={s} onClose={() => (setDrafting(false), changed())} />}
       {phone && (
         <Sheet open={sheet} title="Before drafting" onClose={() => setSheet(false)} testId="intake-sheet">

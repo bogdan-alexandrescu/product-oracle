@@ -29,15 +29,37 @@ import { RequestSpecDialog, SPEC_STATE, specHref, useSpecs } from "@/components/
 import { Campaigns, ReviewSettingsButton, SectionAssignments } from "@/components/ReviewSetup";
 import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type VersionSummary } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { api, unwrap, type Schemas, type VersionSummary } from "@/lib/api/client";
+import { formatDate, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
+import { useTemplateNames } from "@/lib/template-names";
 import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
-/** A template or theme key beside the title: small mono, hairline pill. */
-const META = "inline-flex h-[26px] shrink-0 items-center whitespace-nowrap rounded-full border border-line-strong px-2.5 font-mono text-[13px] text-text2";
+/** A template or theme beside the title, by its name: a small hairline pill. */
+const META = "inline-flex min-h-[26px] max-w-full items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2";
+
+/** The one empty marker on this page (qa-docs-42). */
+const NONE = "–";
+
+type SectionState = Schemas["SectionStateOut"];
+
+/**
+ * The sections a person assigns (qa-docs-45): not the document's title (the level-1 heading
+ * that names it), and not a subsection that only repeats its parent's heading ("Sources"
+ * under "Sources and data points").
+ */
+export function assignableSections(states: SectionState[], title: string): SectionState[] {
+  const norm = (h: string) => h.replace(/^[\d.]+\s+/, "").trim().toLowerCase();
+  const t = norm(title);
+  return states.filter((s, i) => {
+    const h = norm(s.heading);
+    if (h === t || `${h} prd` === t || h === `${t} prd`) return false;
+    const prev = i > 0 ? norm(states[i - 1]!.heading) : "";
+    return !(prev && prev !== h && prev.startsWith(`${h} `));
+  });
+}
 
 function versionColumns(doc: string, kind: string | null | undefined, latest: number | null | undefined): Column<VersionSummary>[] {
   return [
@@ -65,7 +87,7 @@ function versionColumns(doc: string, kind: string | null | undefined, latest: nu
           ) : null}
           {v.warnings.length > 0 && (
             <Chip kind="warn" title={v.warnings.map((w) => w.message).join("\n")}>
-              {v.warnings.length} warning{v.warnings.length > 1 ? "s" : ""}
+              {plural(v.warnings.length, "warning")}
             </Chip>
           )}
         </span>
@@ -91,7 +113,7 @@ function versionColumns(doc: string, kind: string | null | undefined, latest: nu
             Diff from v{v.number - 1}
           </Link>
         ) : (
-          <span className="text-text2">–</span>
+          <span className="text-text2">{NONE}</span>
         ),
     },
   ];
@@ -122,16 +144,19 @@ function VersionInspector({
         </>
       }
       action={
-        <LinkButton variant="hero" href={versionHref(doc, kind, v.number)}>
-          Open
-        </LinkButton>
+        // qa-docs-46: the header's Open latest opens the latest; an earlier version opens here.
+        v.number !== latest && (
+          <LinkButton variant="hero" href={versionHref(doc, kind, v.number)}>
+            {`Open v${v.number}`}
+          </LinkButton>
+        )
       }
-      stats={[
-        { label: "Warnings", value: v.warnings.length, tone: v.warnings.length ? "warn" : undefined },
-        { label: "Approved", value: v.approved_at ? "Yes" : "No" },
-      ]}
     >
       <InspectorSection label="Details">
+        <InspectorRow value={<span data-testid="version-approved">{v.approved_at ? formatDate(v.approved_at) : "Not approved"}</span>}>
+          Approved
+        </InspectorRow>
+        <InspectorRow value={v.warnings.length ? plural(v.warnings.length, "warning") : "None"}>Warnings</InspectorRow>
         <InspectorRow value={formatDateTime(v.created_at)}>Imported</InspectorRow>
         {v.imported_by_name && (
           <InspectorRow
@@ -141,15 +166,13 @@ function VersionInspector({
               </span>
             }
           >
-            By
+            Imported by
           </InspectorRow>
         )}
         {v.imported_again && (
           // A run's refused draft a person imported again: who and when (Company time zone).
           <InspectorRow value={<span data-testid="version-imported-again">{v.imported_again}</span>}>Retried</InspectorRow>
         )}
-        {v.approved_at && <InspectorRow value={formatDate(v.approved_at)}>Approved</InspectorRow>}
-        <InspectorRow value={<span className="font-mono text-[13px] font-medium">{v.content_hash.slice(0, 8)}</span>}>Hash</InspectorRow>
       </InspectorSection>
       {v.source && (
         <InspectorSection label="Source">
@@ -225,6 +248,10 @@ function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean })
     open ? unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })) : Promise.resolve(null),
   );
   const items = (plan.data?.items ?? []).filter((i) => i.prd?.slug === doc && i.origin === "approved");
+  // qa-docs-66: a spec opens on its document's latest version (an edit after the run adds one
+  // the spec's own record does not count).
+  const specDocs = useQuery(`documents|spec`, () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "spec" } } })));
+  const latestOf = (slug: string | null | undefined) => specDocs.data?.find((x) => x.slug === slug)?.latest_version ?? null;
   const specs = q.data ?? [];
   return (
     <Panel
@@ -257,8 +284,12 @@ function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean })
                   {state.label}
                 </Chip>
                 {fresh && <Chip kind={fresh.kind}>{fresh.label}</Chip>}
-                <Link href={specHref(s)} className="text-sm font-medium text-accent-ink hover:underline">
-                  Open
+                <Link
+                  href={latestOf(s.document_slug) != null ? `/documents/${s.document_slug}/v/${latestOf(s.document_slug)}` : specHref(s)}
+                  aria-label={`Open ${s.request.title}`}
+                  className="text-sm font-medium text-accent-ink hover:underline"
+                >
+                  Open spec
                 </Link>
               </li>
             );
@@ -285,7 +316,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
       ? Promise.resolve(null)
       : unwrap(api.GET("/v1/documents/{doc}/versions/{n}/section-states", { params: { path: { doc, n: latest } } })),
   );
-  const states = statesQ.data?.sections ?? [];
+  const states = assignableSections(statesQ.data?.sections ?? [], d?.title ?? "");
+  const names = useTemplateNames();
   const templateOnly = isTemplateOnly(d?.kind, d?.versions ?? []);
   // G7 3.3: the panel is about this document (its latest version).
   useScreenSubject(d && versions[0] ? { kind: "document", subject: { document_id: d.id, version: versions[0].number } } : null, d?.title);
@@ -304,13 +336,14 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 <>
                   <DocStatusChip status={d.status} />
                   {d.template && (
-                    <span className={META}>
-                      template {d.template}
-                      {d.template_version ? ` v${d.template_version}` : ""}
+                    <span className={META} data-testid="doc-template" title={d.template_version ? `Template, its version ${d.template_version}` : "Template"}>
+                      Template: {names.template(d.template)}
                     </span>
                   )}
                   {d.theme && (
-                    <span className={META}>theme {d.theme}</span>
+                    <span className={META} data-testid="doc-theme" title="Theme">
+                      Theme: {names.theme(d.theme)}
+                    </span>
                   )}
                   {d.source && (
                     <span className="text-sm text-text2">

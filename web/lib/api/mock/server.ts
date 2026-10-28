@@ -649,7 +649,8 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     warnings: [],
     notes: [],
     imported_by: (seed.by ?? AGENT_TRACK).id,
-    imported_by_name: (seed.by ?? AGENT_TRACK).name,
+    // As the API names a token's import: "API token agent-track".
+    imported_by_name: seed.by ? seed.by.name : `API token ${AGENT_TRACK.name}`,
     approved_at: null,
     approval_lapses: [],
     created_at: seed.created_at,
@@ -4866,7 +4867,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       role: me.role,
       document: (ref) => {
         const doc = findDocument(db, ref);
-        return doc && doc.kind === "prd" ? { id: doc.id, slug: doc.slug, template: doc.template ?? null } : null;
+        if (!doc || doc.kind !== "prd") return null;
+        // The newest version's sections stand in for the template's (the brief ones flagged).
+        const latest = db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => b.number - a.number)[0];
+        const sections = latest?.sections.map((s) => ({ key: s.section_key, heading: s.heading, level: s.level, brief: s.layer === "brief" }));
+        return { id: doc.id, slug: doc.slug, template: doc.template ?? null, sections };
       },
       approvedVersion: (documentId, n) =>
         db.versions.find((v) => v.document_id === documentId && v.number === n && v.approved_at)?.id ?? null,
@@ -5041,8 +5046,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   // approver role records, verifies, rejects and withdraws them. So do Simple's routes
   // (./simple-changes.ts: commenters propose, D-a track owners decide as approvers).
   const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
+  // As the API: any member asks for a template recommendation or a theme's preview (they write nothing).
+  const readOnlyPost = (p[1] === "drafts" && p[2] === "recommend") || (p[1] === "themes" && (p[2] === "preview" || p[2] === "validate"));
   const need: Role | null =
-    m === "GET" || draftWrite || p[1] === "decisions" || p[1] === "schedule-bases" || p[1] === "simple"
+    m === "GET" || draftWrite || readOnlyPost || p[1] === "decisions" || p[1] === "schedule-bases" || p[1] === "simple"
       ? null
       : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
           // As the API: commenters propose a blocker's solution options.

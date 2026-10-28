@@ -29,11 +29,13 @@ import { useRiskPolicy } from "@/lib/risk-policy";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
+import { formatDate, plural } from "@/lib/format";
 
 type Readiness = Schemas["ReadinessDashboard"];
 type Item = Schemas["ReadinessItem"];
 type Strategy = Schemas["BlockerStrategy"];
 type Question = Schemas["StakeholderQuestionOut"];
+type DateMark = Schemas["DateMarkOut"];
 /** Why the confirm dialog's Publish was refused: the API's 409, a newer version, or an error. */
 type Refusal = { detail: string; blocking: Schemas["PublishBlock"][]; stale?: boolean };
 
@@ -44,6 +46,8 @@ const CHECK_KIND: Record<string, string> = {
   third_party_support: "Third-party",
 };
 const PHONE = "(max-width: 600px)";
+/** The kinds whose approve checks the dates the text writes, not the PRD checks (api/oracle/review/publish_gate.py). */
+const DATED_KINDS = new Set(["roadmap", "update"]);
 const DAY = 86_400_000;
 
 /** One reason the API refuses the publish: a gating blocker, or another critical hard check. */
@@ -92,6 +96,26 @@ function blocksOf(doc: string, n: number, readiness: Readiness, strategy: Schema
       },
     ];
   });
+}
+
+/**
+ * qa-docs-2: a roadmap's (or an update's) approve refuses each date its text writes that no
+ * confirmed schedule backs (the version's ``date_marks`` with a label), as the 409 lists them.
+ */
+export function dateBlocksOf(marks: DateMark[] | undefined, headings: Map<string, string>): Block[] {
+  return (marks ?? [])
+    .filter((m) => m.label)
+    .map((m) => {
+      const heading = m.where === "title" ? "the title" : headings.get(m.section_key);
+      return {
+        id: `${m.section_key}:${m.text}`,
+        title: `${formatDate(m.date)}${heading ? ` in “${heading}”` : ""}: ${
+          m.status === "withdrawn" ? "its schedule basis was withdrawn" : "not backed by a confirmed schedule"
+        }`,
+        kind: "Unconfirmed date",
+        href: "/plan/dates",
+      };
+    });
 }
 
 const STATUS: Record<Item["status"], { kind: ChipKind; label: string }> = {
@@ -259,7 +283,7 @@ function BlockInspector({
       chips={
         <>
           <Chip hero>{block.kind}</Chip>
-          <Chip hero>Hard check</Chip>
+          {(block.check || block.blocker) && <Chip hero>Hard check</Chip>}
         </>
       }
       action={
@@ -372,8 +396,14 @@ function HardRow({ item }: { item: Item }) {
       title={item.rationale}
       className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)_170px_96px] items-center gap-x-2 border-t border-line px-4 max-[600px]:grid-cols-[22px_minmax(0,1fr)_auto_auto] max-[600px]:px-3"
     >
-      <Icon name={fail ? "x" : "check"} size={16} className={fail ? "text-crit" : item.status === "pass" ? "text-pass" : "text-text2"} />
-      <span className="min-w-0 truncate font-medium max-[600px]:whitespace-normal">{item.title}</span>
+      {item.status === "not_applicable" ? (
+        <span aria-hidden="true" data-testid="hard-na" className="text-center text-text2">
+          –
+        </span>
+      ) : (
+        <Icon name={fail ? "x" : "check"} size={16} className={fail ? "text-crit" : item.status === "pass" ? "text-pass" : "text-text2"} />
+      )}
+      <span className="min-w-0 py-2 font-medium break-words">{item.title}</span>
       <span>
         <Chip kind={chip.kind}>{chip.label}</Chip>
       </span>
@@ -395,7 +425,7 @@ function AdvisoryRow({ item, index }: { item: Item; index: number }) {
       className="grid min-h-[44px] grid-cols-[22px_minmax(0,1fr)_auto] items-center gap-x-2 border-t border-line px-4 max-[600px]:px-3"
     >
       <b className="tnum font-semibold text-text2">{index}</b>
-      <span className="min-w-0 truncate max-[600px]:whitespace-normal">{item.title}</span>
+      <span className="min-w-0 py-2 break-words">{item.title}</span>
       <Chip kind={s.kind}>
         {item.status === "pass" && <Icon name="check" size={16} />}
         {s.label}
@@ -447,7 +477,18 @@ export function PublishView({ doc }: { doc: string }) {
   const dialogRef = useRef<HTMLDivElement>(null);
 
   const readiness = readinessQ.data;
-  const blocks = readiness && n != null ? blocksOf(doc, n, readiness, strategyQ.data) : [];
+  // qa-docs-2: a roadmap's approve refuses its unconfirmed dates (not the PRD checks), so the
+  // page lists those, from the version the approve checks.
+  const dated = d != null && DATED_KINDS.has(d.kind);
+  const headings = new Map(sections.map((s) => [s.section_key, s.heading]));
+  const blocks =
+    readiness && n != null
+      ? dated
+        ? versionQ.data
+          ? dateBlocksOf(versionQ.data.date_marks, headings)
+          : []
+        : blocksOf(doc, n, readiness, strategyQ.data)
+      : [];
   const selected = blocks.find((b) => b.id === picked) ?? blocks[0] ?? null;
   const published = n != null && d?.approved_version === n;
   // #370: Publish is POST .../approve; anyone who may not call it never sees the button. A
@@ -521,11 +562,27 @@ export function PublishView({ doc }: { doc: string }) {
   }
 
   // Enabled only when the API's verdict refuses nothing; never a count made here.
-  const reason = !readiness
+  const checking = !readiness || (dated && !versionQ.data);
+  const reason = checking
     ? "Checking"
-    : readiness.blocked
-      ? `${blocks.length} block${blocks.length === 1 ? "" : "s"}`
+    : (dated ? blocks.length > 0 : readiness.blocked)
+      ? plural(blocks.length, "block")
       : null;
+  // qa-docs-3: publishable, but say what is still open (the confirm dialog says the same).
+  const critical = tally("critical");
+  const caveats = [
+    unreviewed > 0 ? `${plural(unreviewed, "section")} ${unreviewed === 1 ? "is" : "are"} not reviewed` : null,
+    critical > 0 ? `${plural(critical, "advisory check")} ${critical === 1 ? "is" : "are"} critical` : null,
+  ].filter((x): x is string => !!x);
+  // qa-docs-23: who may publish, from can(): a vision, strategy or update is an owner's.
+  const whoPublishes = d && OWNER_APPROVES[d.kind] ? "Only an owner can publish" : "Only an approver or owner can publish";
+  const headline = published
+    ? `Published v${n}`
+    : !canPublish
+      ? `${whoPublishes} v${n}`
+      : caveats.length > 0
+        ? `Publishable, but ${caveats.join(" and ")}`
+        : `Ready to publish v${n}`;
   const action =
     n == null ? null : published ? (
       <Chip kind="pass" className="h-10 px-4 text-[15px]" data-testid="published-chip">
@@ -553,7 +610,7 @@ export function PublishView({ doc }: { doc: string }) {
       </>
     );
 
-  const blocksChip = readiness && (
+  const blocksChip = !checking && (
     <span id="publish-blocks" className="inline-flex">
       <Chip kind={blocks.length ? "crit" : "pass"} data-testid="blocks-chip">
         {blocks.length} block{blocks.length === 1 ? "" : "s"}
@@ -586,6 +643,12 @@ export function PublishView({ doc }: { doc: string }) {
       {readiness && n != null && (
         <Split inspector={phone && selected ? undefined : inspector}>
           <Panel testId="publish-readiness" className="overflow-hidden">
+            {!canPublish && !published && blocks.length > 0 && (
+              <p data-testid="publish-role" className="flex min-h-12 items-center gap-2.5 border-b border-line px-4 font-medium text-text2 max-[600px]:px-3">
+                <Icon name="lock" size={16} className="flex-none" />
+                {whoPublishes} v{n}
+              </p>
+            )}
             {blocks.length > 0 ? (
               <section aria-label="Blocks">
                 <div className="flex min-h-12 items-center gap-2.5 px-4 py-2 max-[600px]:px-3">
@@ -600,9 +663,16 @@ export function PublishView({ doc }: { doc: string }) {
                 ))}
               </section>
             ) : (
-              <p data-testid="publish-ready" className="flex min-h-12 items-center gap-2.5 px-4 font-display text-lg font-bold tracking-heading max-[600px]:px-3">
-                <Icon name="check" size={20} className="text-pass" />
-                {published ? `Published v${n}` : `Ready to publish v${n}`}
+              <p
+                data-testid="publish-ready"
+                className="flex min-h-12 items-center gap-2.5 px-4 py-2 font-display text-lg font-bold tracking-heading max-[600px]:px-3"
+              >
+                <Icon
+                  name={!published && !canPublish ? "lock" : !published && caveats.length > 0 ? "alert" : "check"}
+                  size={20}
+                  className={`flex-none ${!published && !canPublish ? "text-text2" : !published && caveats.length > 0 ? "text-warn" : "text-pass"}`}
+                />
+                <span className="min-w-0">{headline}</span>
               </p>
             )}
 

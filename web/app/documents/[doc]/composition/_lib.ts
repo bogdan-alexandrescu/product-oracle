@@ -163,7 +163,42 @@ export function diffOf(before: Module[], after: Module[]): Diff {
   return { added, removed, versionChanged, reordered, material: touched.size > 0, affectedSections };
 }
 
-/** A revision's added and removed modules in one line ("+ a · − b"). */
-export function diffLine(d: Schemas["RevisionDiff"]): string {
-  return [...d.added.map((k) => `+ ${k}`), ...d.removed.map((k) => `− ${k}`), ...d.version_changed.map((v) => `~ ${v.key} ${v.before} → ${v.after}`)].join(" · ");
+/** A revision's added and removed modules in one line, by name ("+ Risks · − Tool policies"). */
+export function diffLine(d: Schemas["RevisionDiff"], titleOf: (key: string) => string): string {
+  return [...d.added.map((k) => `+ ${titleOf(k)}`), ...d.removed.map((k) => `− ${titleOf(k)}`), ...d.version_changed.map((v) => `~ ${titleOf(v.key)} (newer version)`)].join(" · ");
 }
+
+/** A module key's name from the modules at hand, else the key in words ("tool policies"). */
+export function titler(...lists: (Module[] | null | undefined)[]): (key: string) => string {
+  const names = new Map<string, string>();
+  for (const list of lists) for (const m of list ?? []) if (!names.has(m.key)) names.set(m.key, m.title);
+  return (key) => names.get(key) ?? key.split(".").pop()!.replace(/[-_]/g, " ");
+}
+
+/** The modules a change touches, by name, for "approvals on … will be invalidated". */
+export function touchedNames(added: string[], removed: string[], changed: string[], titleOf: (key: string) => string): string {
+  const names = [...new Set([...added, ...removed, ...changed].map(titleOf))];
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** The pack policy in words. */
+export const PACK_POLICY: Record<string, string> = {
+  required: "Required",
+  conditional: "When it applies",
+  optional: "Optional",
+};
+
+/** Where a module comes from, in words. */
+export const ORIGIN: Record<string, string> = {
+  builtin: "Built-in",
+  company: "Company module",
+  override: "Company version",
+};
+
+/** How the packs were picked, in words. */
+export const PACKS_SOURCE: Record<string, string> = {
+  chosen: "chosen by a person",
+  default: "company default",
+  category: "from the product category",
+};

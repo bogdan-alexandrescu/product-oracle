@@ -55,7 +55,7 @@ async function undo(entry: Schemas["TrashEntryOut"]) {
 }
 
 /**
- * A document's ⋮ menu (#482): Edit and Regenerate… for approvers (deciders approve) and owners,
+ * A document's ⋮ menu (#482): Open v<n> (the latest version, where its sections are edited) and Regenerate… for approvers (deciders approve) and owners,
  * Delete… for owners. Commenters and viewers can use none of these, so it is not drawn (#370).
  */
 export function ArtifactMenu({ doc, onDeleted }: { doc: ArtifactDoc; onDeleted?: () => void }) {
@@ -81,7 +81,7 @@ export function ArtifactMenu({ doc, onDeleted }: { doc: ArtifactDoc; onDeleted?:
                   router.push(edit);
                 }}
               >
-                Edit
+                {`Open v${doc.latest_version}`}
               </RowMenuItem>
             )}
             {regenerate && (
@@ -208,6 +208,7 @@ export function DeleteDialog({
       .catch((e) => setError(errorMessage(e)));
   }, []);
   const working = (deps?.working_runs.length ?? 0) > 0;
+  const runs = deps?.items.filter((i) => i.type === "run") ?? [];
   const ready = !!deps && !working && (!deps.published || external);
 
   async function submit() {
@@ -251,12 +252,24 @@ export function DeleteDialog({
             <>
               <p className="font-semibold">These go to Trash with it, and come back with it:</p>
               <ul className="mt-1.5 flex flex-col gap-1">
-                {deps.items.map((i) => (
-                  <li key={i.id} className="flex min-w-0 items-baseline gap-2">
-                    <span className="flex-none text-[13px] font-semibold text-text2">{itemKind(i)}</span>
-                    <span className="min-w-0 break-words">{i.title}</span>
+                {deps.items
+                  .filter((i) => i.type !== "run")
+                  .map((i) => (
+                    <li key={i.id} className="flex min-w-0 items-baseline gap-2">
+                      <span className="flex-none text-[13px] font-semibold text-text2">{itemKind(i)}</span>
+                      <span className="min-w-0 break-words">{i.title}</span>
+                    </li>
+                  ))}
+                {runs.length > 0 && (
+                  // qa-docs-43: the runs in words, not by their flow's internal name (that is on hover).
+                  <li data-testid="delete-runs" className="min-w-0 break-words" title={runs.map((r) => r.title).join("\n")}>
+                    {runs.length === 1 && deps.items.length === 1
+                      ? "The draft run that created it"
+                      : runs.length === 1
+                        ? "The draft run that created one of these"
+                        : `The ${runs.length} draft runs that created these`}
                   </li>
-                ))}
+                )}
               </ul>
             </>
           )}

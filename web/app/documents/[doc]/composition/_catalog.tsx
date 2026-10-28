@@ -5,12 +5,14 @@ import { useState } from "react";
 import { Chip, DataTable, Inspector, InspectorRow, InspectorSection, Panel, Sheet, Split, type Column } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { formatDate, plural } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
+
+import { ORIGIN, PACK_POLICY } from "./_lib";
 
 type Entry = Schemas["CatalogModuleOut"];
 
-const MONO = "font-mono text-[13px]";
+const ROLE: Record<string, string> = { viewer: "Viewer", commenter: "Commenter", approver: "Approver", owner: "Owner" };
 
 export const COMPANY_POLICY: Record<NonNullable<Entry["company_policy"]>, string> = {
   required: "Required",
@@ -18,32 +20,45 @@ export const COMPANY_POLICY: Record<NonNullable<Entry["company_policy"]>, string
   disabled: "Disabled",
 };
 
+/** A module key's name from the catalogue, else the key in words. */
+function useNames() {
+  const catalog = useQuery("module-catalog", () => unwrap(api.GET("/v1/module-catalog")));
+  const packs = useQuery("module-packs", () => unwrap(api.GET("/v1/module-packs")));
+  return {
+    module: (key: string) => catalog.data?.find((c) => c.key === key)?.title ?? key.split(".").pop()!.replace(/[-_]/g, " "),
+    pack: (id: string) => packs.data?.find((p) => p.id === id)?.title ?? null,
+  };
+}
+
 export function CatalogFacts({ e }: { e: Entry }) {
-  const list = (xs: string[]) => (xs.length ? <span className={`${MONO} font-normal [overflow-wrap:anywhere] whitespace-normal`}>{xs.join(" ")}</span> : "—");
+  const names = useNames();
+  const list = (xs: (string | null)[]) => {
+    const shown = xs.filter((x): x is string => !!x);
+    return shown.length ? <span className="font-normal whitespace-normal [overflow-wrap:anywhere]">{shown.join(", ")}</span> : "None";
+  };
   return (
     <>
       <InspectorSection label="Catalog facts">
-        <InspectorRow value={list(e.applies_to)}>Applies to packs</InspectorRow>
-        <InspectorRow value={list(e.depends_on)}>Depends on</InspectorRow>
-        <InspectorRow value={list(e.conflicts_with)}>Conflicts with</InspectorRow>
-        <InspectorRow value={list(e.section_ids)}>Sections</InspectorRow>
-        <InspectorRow value={[e.brief_layer && "brief", e.full_layer && "full"].filter(Boolean).join(" · ") || "—"}>Layers</InspectorRow>
-        <InspectorRow value={e.required_review_role}>Review role</InspectorRow>
+        <InspectorRow value={list(e.applies_to.map(names.pack))}>Applies to packs</InspectorRow>
+        <InspectorRow value={list(e.depends_on.map(names.module))}>Depends on</InspectorRow>
+        <InspectorRow value={list(e.conflicts_with.map(names.module))}>Conflicts with</InspectorRow>
+        <InspectorRow value={plural(e.section_ids.length, "section")}>Sections</InspectorRow>
+        <InspectorRow value={[e.brief_layer && "Brief", e.full_layer && "Full"].filter(Boolean).join(" and ") || "None"}>Layers</InspectorRow>
+        <InspectorRow value={ROLE[e.required_review_role] ?? e.required_review_role}>Review role</InspectorRow>
       </InspectorSection>
       <InspectorSection label="Versions">
         <ul className="space-y-1.5 text-sm">
-          {e.versions.map((v) => (
+          {e.versions.map((v, i) => (
             <li key={v.version} className="flex flex-wrap items-center gap-2">
-              <span className="tnum font-semibold">{v.version}</span>
-              <span>{v.origin}</span>
+              <span>{ORIGIN[v.origin] ?? "Company module"}</span>
               {v.version === e.version && <Chip kind="acc">In effect</Chip>}
               <span className="text-text2">
-                {formatDate(v.created_at)} · sha <span className={MONO}>{v.contract_hash.slice(0, 8)}</span>
+                {i === 0 ? "Added" : "Updated"} {formatDate(v.created_at)}
               </span>
             </li>
           ))}
         </ul>
-        {e.upgrade_available && <p className="mt-1 text-sm text-text2">Upgrade available: {e.upgrade_available}</p>}
+        {e.upgrade_available && <p className="mt-1 text-sm text-text2">A newer version is available.</p>}
       </InspectorSection>
     </>
   );
@@ -62,23 +77,19 @@ function CatalogDetail({ entryKey, bare }: { entryKey: string; bare: boolean }) 
         </InspectorSection>
       )}
       <CatalogFacts e={e} />
-      <InspectorSection label={`Contract (${e.version})`}>
-        <pre data-testid="catalog-contract" className={`${MONO} max-h-80 overflow-auto rounded-lg bg-surface2 p-3 whitespace-pre-wrap [overflow-wrap:anywhere]`}>
-          {JSON.stringify(e.contract, null, 2)}
-        </pre>
-      </InspectorSection>
     </>
   );
   if (bare) return <div data-testid="catalog-inspector">{body}</div>;
   return (
     <Inspector
       testId="catalog-inspector"
-      eyebrow={`Catalog module · ${e.builtin ? "built-in" : "company"}`}
+      eyebrow={`Catalog module · ${e.builtin ? "Built-in" : "Company module"}`}
       title={e.title}
       chips={
         <>
-          <Chip kind="line" hero>v{e.version}</Chip>
-          <Chip kind="line" hero>Pack: {e.policy}</Chip>
+          <Chip kind="line" hero>
+            Pack policy: {PACK_POLICY[e.policy] ?? e.policy}
+          </Chip>
           {e.company_policy && <Chip kind="acc" hero>Company: {COMPANY_POLICY[e.company_policy]}</Chip>}
           {e.archived && <Chip kind="na" hero>Archived</Chip>}
         </>
@@ -106,15 +117,16 @@ export function CatalogTab({ phone }: { phone: boolean }) {
       header: "Module",
       phone: "title",
       cell: (e) => (
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate font-medium">{e.title}</span>
-          <span className={`${MONO} truncate text-text2`}>{e.key}</span>
-        </span>
+        <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{e.title}</span>
       ),
     },
-    { key: "policy", header: "Pack policy", width: "130px", cell: (e) => e.policy },
-    { key: "company", header: "Company policy", width: "150px", cell: (e) => (e.company_policy ? COMPANY_POLICY[e.company_policy] : "No policy") },
-    { key: "version", header: "Version", width: "100px", align: "right", cell: (e) => <span className="tnum">{e.version}</span> },
+    { key: "policy", header: "Pack policy", width: "150px", cell: (e) => PACK_POLICY[e.policy] ?? e.policy },
+    {
+      key: "company",
+      header: "Company policy",
+      width: "150px",
+      cell: (e) => (e.company_policy ? COMPANY_POLICY[e.company_policy] : <span className="text-text2">Not set</span>),
+    },
   ];
   if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
   return (

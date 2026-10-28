@@ -27,12 +27,21 @@ export interface ModulesDb {
 export interface ModulesContext {
   userId: string;
   role: Role;
-  /** Resolves a document id or slug to its id and slug (null: not found, or not a PRD). */
-  document: (ref: string) => { id: string; slug: string; template: string | null } | null;
+  /** Resolves a document id or slug to its id and slug (null: not found, or not a PRD), with
+   * its newest version's sections standing in for the template's (brief ones flagged). */
+  document: (ref: string) => { id: string; slug: string; template: string | null; sections?: TemplateSection[] } | null;
   /** The approved version's id for a document version number, else null. */
   approvedVersion: (documentId: string, n: number) => string | null;
   /** Kept learnings about modules: a module they recommend that nothing else brings in is suggested. */
   learned?: () => Nudges;
+}
+
+/** A section of the document's template, as the API reads it from the template body. */
+export interface TemplateSection {
+  key: string;
+  heading: string;
+  level: number;
+  brief: boolean;
 }
 
 const AT = "2026-10-19T09:00:00Z";
@@ -394,6 +403,35 @@ function outlineOf(modules: Composed[]): Schemas["OutlineEntry"][] {
     ]);
 }
 
+/** As oracle.modules.composer.outline: the template's own sections first (brief and full,
+ * owned by the included module its manifest maps them to), then the sections modules add
+ * that the template lacks, before Sources and data points. Confirming keeps the brief. */
+function templateOutline(db: ModulesDb, rec: Schemas["RecommendationOut"], sections: TemplateSection[] | undefined): Schemas["OutlineEntry"][] {
+  if (!sections?.length) return outlineOf(rec.modules);
+  const manifest = rec.template ? db.manifests[rec.template] : undefined;
+  const included = rec.modules.filter((m) => m.included);
+  const owners = new Map<string, string>();
+  for (const e of manifest?.modules ?? []) {
+    if (included.some((m) => m.key === e.module_key)) for (const s of e.section_ids) owners.set(s, e.module_key);
+  }
+  const keys = new Set(sections.map((s) => s.key));
+  const entries: Schemas["OutlineEntry"][] = sections.map((s) => ({
+    section_id: s.key,
+    heading: s.heading,
+    level: s.level,
+    layer: s.brief ? "brief" : "full",
+    module: owners.get(s.key) ?? null,
+    origin: "template",
+  }));
+  const mapped = new Set(manifest?.modules.map((e) => e.module_key) ?? []);
+  const added = outlineOf(included.filter((m) => !mapped.has(m.key))).filter((o) => !keys.has(o.section_id));
+  const sourcesNew = added.filter((o) => o.section_id.startsWith("sources"));
+  const rest = added.filter((o) => !sourcesNew.includes(o));
+  const at = entries.findIndex((e) => e.section_id === "sources");
+  const cut = at < 0 ? entries.length : at;
+  return [...entries.slice(0, cut), ...rest, ...entries.slice(cut), ...sourcesNew];
+}
+
 function inspected(m: Composed, db: ModulesDb): Schemas["InspectedModule"] {
   const entry = db.catalog.find((c) => c.key === m.key);
   return { ...m, sections_present: [], sections_missing: [], versions: entry?.versions ?? [], latest_version: entry?.version ?? null, upgrade_available: null };
@@ -456,13 +494,14 @@ function inForce(revisions: Revision[]): Revision | null {
   return [...revisions].reverse().find((r) => r.status === "confirmed" || r.status === "published") ?? null;
 }
 
-function inspector(db: ModulesDb, doc: { id: string; slug: string; template: string | null }, role: Role, learned?: Nudges): Schemas["InspectorOut"] {
+function inspector(db: ModulesDb, doc: { id: string; slug: string; template: string | null; sections?: TemplateSection[] }, role: Role, learned?: Nudges): Schemas["InspectorOut"] {
   const revisions = db.revisions[doc.id] ?? [];
   const head = revisions[revisions.length - 1] ?? null;
   const inForceRev = inForce(revisions);
   const current = inForceRev && { ...inForceRev, modules: withCanChange(inForceRev.modules, role) };
   const working = head?.status === "working" ? { ...head, modules: withCanChange(head.modules, role) } : null;
   const rec = current ? null : recommend(db, PACK_A, {}, doc.template, learned);
+  if (rec) rec.outline = templateOutline(db, rec, doc.sections);
   // The company policy saved after the revision in force was decided.
   const saved = db.policy.updated_at;
   const policyChanged = current?.decided_at && saved && saved > current.decided_at ? saved : null;
@@ -616,6 +655,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const extra = data.inputs && Object.keys(data.inputs).length ? data.inputs : head ? { scope: head.inputs.scope } : {};
     const rec = { ...recommend(db, pack, extra, data.template ?? doc?.template ?? "oracle-default", ctx.learned?.()), document_id: doc?.id ?? null };
     applyChanges(db, rec, head, data.changes, ctx, null);
+    rec.outline = templateOutline(db, rec, doc?.sections);
     return json(200, { ...rec, modules: withCanChange(rec.modules, ctx.role) });
   }
 

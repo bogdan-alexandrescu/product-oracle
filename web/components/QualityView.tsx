@@ -24,8 +24,8 @@ import {
 } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { useCompanyZone, zoneDateTime, zoneDay } from "@/lib/dates";
-import { formatUsd, JOB_STATUS_LABEL, NO_ACCOUNT_REASON } from "@/lib/format";
+import { dayIn, useCompanyZone, zoneDateTime, zoneDay } from "@/lib/dates";
+import { formatTime, formatUsd, JOB_STATUS_LABEL, NO_ACCOUNT_REASON, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
@@ -81,6 +81,19 @@ function agreed(item: Item): { k: number; n: number } | null {
 
 function shortId(id: string) {
   return id.slice(0, 8);
+}
+
+/** "4:47 AM PDT" today, "Oct 27, 4:47 AM PDT" another day. */
+function when(iso: string, zone: string): string {
+  return dayIn(new Date(iso), zone) === dayIn(Date.now(), zone) ? formatTime(iso, zone) : zoneDateTime(iso, zone);
+}
+
+/** A section by its heading, never its anchor: "Problem"; an unknown key in words. */
+function sectionName(key: string, sections: { section_key: string; heading: string }[]): string {
+  const heading = sections.find((s) => s.section_key === key)?.heading;
+  if (heading) return heading;
+  const words = key.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** Why a quality review job failed, in the pool's words when no account could take it. */
@@ -154,6 +167,8 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   const mayQueue = can("queue_quality_review");
   const mayRetry = can("retry_llm_job");
   const mayCancel = can("cancel_llm_job");
+  // Model, tokens, cost and report ids are for the people who run Oracle's model accounts.
+  const admin = can("add_claude_account");
   const readOnly = !mayRate && !maySnapshot;
 
   const latestJob = jobs[0];
@@ -249,10 +264,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
         return next;
       });
       const people = agreed(fresh.items.find((i) => i.key === item.key) ?? item);
-      setStored(
-        `Rating stored as human report ${shortId(out.id)} · ${zoneDateTime(out.created_at, zone)}` +
-          (people ? `; people agreement is now ${people.k}/${people.n}.` : "."),
-      );
+      setStored(`Rating saved at ${when(out.created_at, zone)}` + (people ? `; people agreement is now ${people.k}/${people.n}.` : "."));
     });
 
   const select = (key: string) => {
@@ -273,10 +285,13 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
       key: "criterion",
       header: "Criterion",
       phone: "title",
+      wrap: true,
       cell: (i) => (
         <span className="flex min-w-0 flex-col py-0.5">
-          <span className="truncate font-medium">{i.title}</span>
-          <span className="truncate text-sm text-text2 max-[600px]:hidden">{i.question}</span>
+          <span className="font-medium" data-testid="criterion-title">
+            {i.title}
+          </span>
+          <span className="text-sm text-text2 max-[600px]:hidden">{i.question}</span>
         </span>
       ),
     },
@@ -350,7 +365,8 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
     {
       key: "agreement",
       header: "Agreement",
-      width: "176px",
+      width: "136px",
+      wrap: true,
       phone: "hide",
       cell: (i) => {
         if (i.hard) return <span data-testid="agreement-cell"><Dash>—</Dash></span>;
@@ -375,7 +391,8 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
     },
   ];
 
-  const tally = (s: Status) => advisory.filter((i) => !hidden(i) && i.status === s).length;
+  // Every check, hard ones too: the same numbers a saved check stores (summary.counts).
+  const tally = (s: Status) => items.filter((i) => !hidden(i) && i.status === s).length;
   const filterItems = [
     { value: "all" as const, label: "All", count: items.length },
     { value: "disagrees" as const, label: "Model disagrees", count: items.filter(tests.disagrees).length },
@@ -436,12 +453,12 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
           <>
             {maySnapshot && (
               <Button disabled={busy != null || !readiness} onClick={snapshot}>
-                Store rules snapshot
+                Save this check
               </Button>
             )}
             {mayQueue && (
               <Button variant="primary" data-testid="page-queue-review" disabled={busy != null || !!active || !readiness} onClick={queueReview}>
-                Queue model review
+                Ask Oracle to review
               </Button>
             )}
           </>
@@ -482,36 +499,58 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
         )}
         {readiness?.model_review ? (
           <Notice testId="model-disclaimer">
-            {readiness.model_review.disclaimer}{" "}
-            <span className="font-mono text-[13px]">
-              {[readiness.model_review.model, zoneDateTime(readiness.model_review.created_at, zone)].filter(Boolean).join(" · ")}
-            </span>
+            {readiness.model_review.disclaimer} Oracle reviewed this at {when(readiness.model_review.created_at, zone)}.
+            {admin && readiness.model_review.model && (
+              <details className="mt-1 text-[13px] text-text2" data-testid="model-details">
+                <summary className="cursor-pointer">Details</summary>
+                Model {readiness.model_review.model}
+              </details>
+            )}
           </Notice>
         ) : (
           readiness && <Notice testId="no-model-review">No model review for v{n} yet.{mayQueue ? "" : " An approver can queue one."}</Notice>
         )}
         {done && (
           <Notice tone="pass" testId="job-done">
-            Model review done: {String(done.output?.criteria ?? 0)} criteria judged
+            Oracle reviewed this at {when(done.finished_at ?? done.created_at, zone)}: {plural(Number(done.output?.criteria ?? 0), "criterion", "criteria")} judged
             {countsLine(done.output?.counts) && ` · ${countsLine(done.output?.counts)}`}
-            {done.input_tokens != null && (
-              <span className="font-mono text-[13px]">
-                {" "}
-                {tokens(done.input_tokens)} in · {tokens(done.output_tokens ?? 0)} out · {formatUsd(done.cost_usd)}
-              </span>
+            {admin && (
+              <details className="mt-1 text-[13px] text-text2" data-testid="job-details">
+                <summary className="cursor-pointer">Details</summary>
+                {[
+                  done.model && `Model ${done.model}`,
+                  done.input_tokens != null && `${tokens(done.input_tokens)} tokens in · ${tokens(done.output_tokens ?? 0)} out`,
+                  done.cost_usd != null && `Cost ${formatUsd(done.cost_usd)}`,
+                  typeof done.output?.report_id === "string" && `Report ${shortId(String(done.output.report_id))}`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </details>
             )}
           </Notice>
         )}
       </div>
 
-      <Split inspector={!phone && selected && readiness ? detail(selected) : undefined}>
+      <Split
+        inspector={
+          phone || !readiness ? undefined : selected ? (
+            detail(selected)
+          ) : items.length > 0 ? (
+            <Panel title="Criterion" testId="inspector-none">
+              <p className="px-4 py-3 text-sm text-text2">
+                No criteria match this filter. Pick another filter, or All, to see a criterion here.
+              </p>
+            </Panel>
+          ) : undefined
+        }
+      >
         <Panel
           title="Criteria"
           count={readiness ? items.length : undefined}
           testId="criteria-panel"
           tools={
             readiness && (
-              <span className="flex flex-wrap gap-1.5">
+              <span className="flex flex-wrap gap-1.5" data-testid="criteria-tally">
                 {ORDER.filter((s) => tally(s)).map((s) => (
                   <Chip key={s} kind={STATUS[s].kind}>
                     {tally(s)} {STATUS[s].word}
@@ -546,23 +585,10 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
           />
           {readiness && (
             <p className="border-t border-line px-4 py-2.5 text-[13px] text-text2 max-[600px]:px-3" data-testid="latest-report">
-              Evaluated {zoneDateTime(readiness.evaluated_at, zone)}
-              {readiness.composition_revision != null && (
-                <>
-                  {" "}
-                  · composition rev <span className="font-mono">r{readiness.composition_revision}</span>
-                </>
-              )}
-              {" · "}
-              {readiness.latest_report ? (
-                <>
-                  Latest stored report <span className="font-mono">{shortId(readiness.latest_report.id)}</span> ·{" "}
-                  {zoneDateTime(readiness.latest_report.created_at, zone)}
-                </>
-              ) : (
-                "No stored report"
-              )}
-              {" · "}no numeric score: the policy is advisory and only a critical hard check blocks.
+              {/* The rules run each time the page opens (evaluated_at is the request's clock): the time shown is the last saved check's. */}
+              {readiness.latest_report ? `Last saved check ${zoneDateTime(readiness.latest_report.created_at, zone)}` : "No saved check yet"}
+              {" · "}the rules check this version each time you open the page. No numeric score: the policy is advisory and only a
+              critical hard check blocks.
             </p>
           )}
         </Panel>
@@ -570,6 +596,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
         <HistoryPanel
           n={n}
           reports={reports}
+          admin={admin}
           loading={reportsQ.loading || !readiness}
           error={reportsQ.error}
           jobs={jobs}
@@ -640,14 +667,17 @@ function CriterionInspector({
           ? { label: "People agree with rules", value: people.k, of: people.n, testId: "stat-people-agree" }
           : { label: "No human ratings yet", value: "—", testId: "stat-people-agree" },
       ];
-  const tags = (keys: string[]) =>
-    keys.length > 0 && (
+  const tags = (keys: string[], evidence = 0) =>
+    (keys.length > 0 || evidence > 0) && (
       <span className="flex flex-wrap gap-1">
         {keys.map((k) => (
-          <span key={k} className="rounded-goal bg-surface2 px-1.5 font-mono text-[13px] text-text2">
-            {k}
+          <span key={k} data-testid="section-tag" className="rounded-goal bg-surface2 px-1.5 text-[13px] text-text2">
+            {sectionName(k, sections)}
           </span>
         ))}
+        {evidence > 0 && (
+          <span className="rounded-goal bg-surface2 px-1.5 text-[13px] text-text2">{plural(evidence, "piece of evidence", "pieces of evidence")}</span>
+        )}
       </span>
     );
 
@@ -657,7 +687,7 @@ function CriterionInspector({
       label={item.title}
       eyebrow={
         <>
-          {item.hard ? "Hard check" : `Advisory criterion ${index}`} · <span className="font-mono">{item.key}</span>
+          {item.hard ? "Hard check" : `Advisory criterion ${index}`}
         </>
       }
       title={item.title}
@@ -708,7 +738,7 @@ function CriterionInspector({
                 </span>
               )}
               <p>{item.rationale}</p>
-              {tags([...item.section_keys, ...item.evidence_ids.map(shortId)])}
+              {tags(item.section_keys, item.evidence_ids.length)}
             </Said>
             {!item.hard && (
               <Said who="Model">
@@ -795,6 +825,7 @@ function RatingForm({
 }) {
   const left = sections.filter((s) => !draft.sections.includes(s.section_key));
   const ready = !!draft.status && draft.rationale.trim().length > 0;
+  const hint = !draft.status ? "Pick a status and add a reason to submit" : !ready ? "Add a reason to submit" : "Submits one rating for this criterion";
   return (
     <div data-testid="rating-form" className="flex flex-col gap-3">
       <label className="flex min-h-8 items-center gap-2 text-sm">
@@ -820,7 +851,7 @@ function RatingForm({
         })}
       </div>
       <label className="flex flex-col gap-1.5">
-        <span className="text-[13px] font-semibold text-text2">Rationale</span>
+        <span className="text-[13px] font-semibold text-text2">Reason</span>
         <textarea
           className={`${INPUT} min-h-20`}
           value={draft.rationale}
@@ -835,11 +866,11 @@ function RatingForm({
             <button
               key={k}
               type="button"
-              aria-label={`Remove section ${k}`}
+              aria-label={`Remove section ${sectionName(k, sections)}`}
               onClick={() => onDraft({ ...draft, sections: draft.sections.filter((x) => x !== k) })}
-              className="inline-flex h-7 items-center gap-1 rounded-goal bg-surface2 px-2 font-mono text-[13px] text-text2 hover:text-text"
+              className="inline-flex h-7 items-center gap-1 rounded-goal bg-surface2 px-2 text-[13px] text-text2 hover:text-text"
             >
-              <span data-testid="picked-section">{k}</span>
+              <span data-testid="picked-section">{sectionName(k, sections)}</span>
               <span aria-hidden>×</span>
             </button>
           ))}
@@ -861,7 +892,9 @@ function RatingForm({
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="min-w-0 flex-1 text-[13px] text-text2">Submits one human report for this criterion</span>
+        <span data-testid="rating-hint" className="min-w-0 flex-1 text-[13px] text-text2">
+          {hint}
+        </span>
         <Button variant="primary" disabled={!ready || busy} onClick={onSubmit}>
           Submit rating
         </Button>
@@ -874,11 +907,12 @@ type HistoryRow =
   | { kind: "report"; id: string; at: string; report: Report; job: Job | undefined }
   | { kind: "job"; id: string; at: string; job: Job };
 
-const EVALUATOR_LABEL: Record<string, string> = { rules: "Rules snapshot", human: "Human rating", llm_job: "Model review" };
+const EVALUATOR_LABEL: Record<string, string> = { rules: "Saved check", human: "Human rating", llm_job: "Oracle review" };
 
 function HistoryPanel({
   n,
   reports,
+  admin,
   loading,
   error,
   jobs,
@@ -892,6 +926,7 @@ function HistoryPanel({
 }: {
   n: number;
   reports: Report[] | undefined;
+  admin: boolean;
   loading: boolean;
   error: string | null;
   jobs: Job[];
@@ -937,8 +972,8 @@ function HistoryPanel({
               {EVALUATOR_LABEL[ev] ?? ev} · {nameOf(by)}
             </span>
             <span className="text-sm text-text2">
-              {zoneDateTime(r.at, zone)} · <span className="font-mono">{shortId(r.id)}</span>
-              {model && <> · {model}</>}
+              {zoneDateTime(r.at, zone)}
+              {admin && model && <> · {model}</>}
               {r.kind === "report" && typeof r.report.summary.note === "string" && r.report.summary.note && <> · “{r.report.summary.note}”</>}
             </span>
           </span>
@@ -992,7 +1027,7 @@ function HistoryPanel({
             <Chip kind={kind} dot={ACTIVE.includes(job.status)}>
               {JOB_STATUS_LABEL[job.status]}
             </Chip>
-            {job.status === "succeeded" && job.cost_usd != null && <span className="text-sm text-text2">{formatUsd(job.cost_usd)}</span>}
+            {admin && job.status === "succeeded" && job.cost_usd != null && <span className="text-sm text-text2">{formatUsd(job.cost_usd)}</span>}
             {mayCancel && ACTIVE.includes(job.status) && (
               <Button variant="ghost" disabled={busy} onClick={() => onCancel(job.id)}>
                 Cancel
