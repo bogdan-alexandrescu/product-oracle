@@ -120,7 +120,7 @@ export function clearsOf(account: Account, now: number): Clears {
   const win = windowWord(binding.key);
   if (binding.window.reset) {
     return {
-      text: "cleared",
+      text: "Reset",
       tilde: false,
       unmeasured: false,
       title: `The ${win} window, the binding one, has passed its reset; no reading taken since has arrived.`,
@@ -130,7 +130,7 @@ export function clearsOf(account: Account, now: number): Clears {
   const resetsAt = new Date(binding.window.resets_at).getTime();
   if (Number.isFinite(resetsAt) && resetsAt <= now) {
     return {
-      text: "now",
+      text: "Now",
       tilde: true,
       unmeasured: false,
       title: `The ${win} window's reset instant is already in the past; reload and the server answers.`,

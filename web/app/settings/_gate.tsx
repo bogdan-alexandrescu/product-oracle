@@ -29,8 +29,14 @@ export function SettingsGate({ children, back }: { children: ReactNode; back?: G
   // A failed read says so in the shell, with Retry (#370 fixes 4); no Loading forever.
   if (capsError) return null;
   if (!ready) return <Loading />;
+  // Already in Settings: name the tab it opens, not "Open Settings".
   const way: GateBack | null =
-    back ?? (readable ? { href: tab.href, label: `Back to ${tab.label}` } : tabs[0] ? { href: tabs[0].href, label: "Open Settings" } : null);
+    back ??
+    (readable
+      ? { href: tab.href, label: `Back to ${tab.label}` }
+      : tabs[0]
+        ? { href: tabs[0].href, label: `Open ${tabs[0].label}` }
+        : null);
   return (
     <>
       <PageHeader title={tab.label} />

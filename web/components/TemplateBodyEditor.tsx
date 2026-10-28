@@ -7,6 +7,7 @@ import { Chip, InfoTip, Label } from "@/components/ds";
 import { TEXTAREA } from "@/app/settings/_components/fields";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { problemText, type Problem } from "@/lib/api/problems";
+import { plural } from "@/lib/format";
 import { useLive, type Live } from "@/lib/use-live";
 import { useQuery } from "@/lib/use-query";
 
@@ -183,7 +184,7 @@ export function TemplateBodyEditor({
           <div className="flex flex-col gap-1.5">
             <p className="flex items-center gap-2">
               <Chip kind="crit" dot>
-                <span className="tnum">{check.problems.length}</span> problem{check.problems.length > 1 ? "s" : ""}
+                <span className="tnum">{plural(check.problems.length, "problem")}</span>
                 {live.pending ? " · checking…" : ""}
               </Chip>
             </p>

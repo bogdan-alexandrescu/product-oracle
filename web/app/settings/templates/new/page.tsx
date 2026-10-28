@@ -11,8 +11,8 @@ import { api } from "@/lib/api/client";
 import { ProblemsError, unwrapProblems, type Problem } from "@/lib/api/problems";
 import { errorMessage } from "@/lib/use-query";
 
-/** The API's key rule (a 2-char minimum, as the mock and the field's pattern). */
-const KEY = /^[a-z0-9][a-z0-9-]{1,62}$/;
+/** The API's key rule (KEY_PATTERN in api/oracle/templates/schemas.py). */
+const KEY = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 export default function NewTemplatePage() {
   const router = useRouter();
@@ -92,17 +92,17 @@ export default function NewTemplatePage() {
             htmlFor="template-key"
             tip={
               <InfoTip label="allowed characters" align="start">
-                Lowercase letters, digits and hyphens. It cannot change later.
+                Lowercase letters, numbers and dashes. It cannot change later.
               </InfoTip>
             }
           >
             <input
               id="template-key"
-              className={`${INPUT} font-mono`}
+              className={`${INPUT} font-mono placeholder:font-sans placeholder:italic`}
               value={key}
               onChange={(e) => setKey(e.target.value.toLowerCase())}
               placeholder="e.g. launch-brief"
-              pattern="[a-z0-9][a-z0-9-]{1,62}"
+              pattern="[a-z0-9][a-z0-9-]{0,62}"
               title="Lowercase letters, numbers and dashes"
               aria-invalid={keyWrong || undefined}
               aria-describedby={keyWrong ? "template-key-error" : undefined}
@@ -110,12 +110,18 @@ export default function NewTemplatePage() {
             />
             {keyWrong && (
               <p id="template-key-error" data-testid="key-error" className="text-sm text-crit">
-                Use lowercase letters, numbers and dashes, at least 2 characters, starting with a letter or number.
+                Use only lowercase letters, numbers and dashes, starting with a letter or number (no spaces).
               </p>
             )}
           </Field>
           <Field label="Name">
-            <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Launch brief" required />
+            <input
+              className={`${INPUT} placeholder:italic`}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Launch brief"
+              required
+            />
           </Field>
           <fieldset className="flex flex-col gap-1.5">
             <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Kind</legend>
@@ -137,7 +143,7 @@ export default function NewTemplatePage() {
           <Field label="Description">
             <textarea
               rows={3}
-              className={TEXTAREA}
+              className={`${TEXTAREA} placeholder:italic`}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="What this template is for"

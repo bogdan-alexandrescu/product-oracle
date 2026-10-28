@@ -335,7 +335,12 @@ function Pool({
             owner={owner}
             signin={signin(shown.account_id)}
             setSignin={(s) => setSignin(shown.account_id, s)}
-            reload={reload}
+            // qa-settings-11: a change pins the account in view. Pausing the account the page
+            // opened on would otherwise hand the inspector to the next most urgent one.
+            reload={() => {
+              if (chosen !== shown.account_id) choose(shown.account_id);
+              return reload();
+            }}
           />
         )}
       </div>
@@ -650,7 +655,7 @@ function Detail({
             </StatFig>
           ) : (
             <StatFig title="No job has ever been handed it." dim>
-              never
+              Never
             </StatFig>
           ),
         },
@@ -672,7 +677,7 @@ function Detail({
         <Fact label="Jobs on it">{account.assigned}</Fact>
         <Fact label="Last read">
           {account.observed_at === null
-            ? "not measured"
+            ? "Not measured"
             : `${timeAgo(account.observed_at, now)}${account.stale ? " (old: figures are projected)" : ""}`}
         </Fact>
         <Fact label="Token expires">
@@ -685,7 +690,7 @@ function Detail({
         <Fact label="Last refresh">
           {account.last_refresh_at
             ? `${account.last_refresh_reason ? `${reasonLabel(account.last_refresh_reason)} · ` : ""}${timeAgo(account.last_refresh_at, now)}`
-            : "No sweep yet"}
+            : "Not checked yet"}
         </Fact>
       </InspectorSection>
       <Holding account={account} now={now} />
@@ -899,6 +904,12 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
   useEffect(() => {
     if (asking) reasonRef.current?.focus();
   }, [asking]);
+  // After a move the pressed button is disabled and the confirm gone: focus goes back to a
+  // state button once the new state is drawn, not to the page's body.
+  const [moved, setMoved] = useState(0);
+  useEffect(() => {
+    if (moved) buttons.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [moved]);
 
   /** Closes the confirm and gives focus back to the state buttons (the one pressed may now be disabled). */
   function close() {
@@ -923,6 +934,7 @@ function StateControls({ account, reload }: { account: Account; reload: () => Pr
       setAsking(null);
       setReason("");
       await reload();
+      setMoved((n) => n + 1);
     } catch (e) {
       setError(errorMessage(e));
     } finally {

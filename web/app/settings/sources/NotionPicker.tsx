@@ -410,7 +410,7 @@ export function NotionPicker({
           />
         </span>
         <span className="tnum flex-none text-[13px] font-semibold text-accent-ink" aria-live="polite" data-testid="notion-picked-count">
-          {toRead} page{toRead === 1 ? "" : "s"} to read
+          {plural(toRead, "page")} to read
         </span>
       </div>
       {absorbed && (

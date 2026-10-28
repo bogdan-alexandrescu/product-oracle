@@ -243,7 +243,7 @@ function Section({ title, count, children, action }: { title: string; count?: nu
     <section className="flex min-w-0 flex-col gap-2" aria-label={title}>
       <div className="flex min-h-9 items-center gap-2">
         <h3 className="text-[15px] font-semibold">{title}</h3>
-        {count != null && <span className="tnum text-sm text-text2">{count}</span>}
+        {count != null && <span className="tnum text-sm text-text2">{formatCount(count)}</span>}
         <span className="ml-auto flex items-center">{action}</span>
       </div>
       {children}
@@ -562,7 +562,7 @@ export function FirefliesPicker({
                 <Button onClick={undoTickAll}>Undo tick all</Button>
               ) : (meetings.next || tickable.some((m) => !pickedMeetings.has(m.id))) && !meetingsFull ? (
                 <Button onClick={() => void tickAll()} disabled={!settled}>
-                  {`Tick all ${tickable.length}${meetings.next ? "+" : ""} result${tickable.length === 1 && !meetings.next ? "" : "s"}`}
+                  {`Tick all ${formatCount(tickable.length)}${meetings.next ? "+" : ""} result${tickable.length === 1 && !meetings.next ? "" : "s"}`}
                 </Button>
               ) : null
             }

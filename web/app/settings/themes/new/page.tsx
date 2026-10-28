@@ -15,8 +15,8 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 type ThemeKind = Schemas["ThemeOut"]["kind"];
 
-/** The API's key rule (a 2-char minimum, as the mock and the field's pattern). */
-const KEY = /^[a-z0-9][a-z0-9-]{1,62}$/;
+/** The API's key rule (KEY_PATTERN in api/oracle/templates/schemas.py). */
+const KEY = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 /** New theme: a key and a name, starting from a copy of an existing theme; then the editor. */
 export default function NewThemePage() {
@@ -74,7 +74,13 @@ export default function NewThemePage() {
         }
         title="New theme"
         action={
-          <Button type="submit" form="new-theme" variant="primary" icon="plus" disabled={busy || !base || missing.length > 0 || keyWrong}>
+          <Button
+            type="submit"
+            form="new-theme"
+            variant="primary"
+            icon="plus"
+            disabled={busy || !base || missing.length > 0 || keyWrong}
+          >
             {busy ? "Creating…" : "Create theme"}
           </Button>
         }
@@ -94,17 +100,17 @@ export default function NewThemePage() {
                 htmlFor="theme-key"
                 tip={
                   <InfoTip label="allowed characters" align="start">
-                    Lowercase letters, digits and hyphens. It cannot change later.
+                    Lowercase letters, numbers and dashes. It cannot change later.
                   </InfoTip>
                 }
               >
                 <input
                   id="theme-key"
-                  className={`${INPUT} font-mono`}
+                  className={`${INPUT} font-mono placeholder:font-sans placeholder:italic`}
                   value={key}
                   onChange={(e) => setKey(e.target.value.toLowerCase())}
                   placeholder="e.g. company-brand"
-                  pattern="[a-z0-9][a-z0-9-]{1,62}"
+                  pattern="[a-z0-9][a-z0-9-]{0,62}"
                   title="Lowercase letters, numbers and dashes"
                   aria-invalid={keyWrong || undefined}
                   aria-describedby={keyWrong ? "theme-key-error" : undefined}
@@ -112,12 +118,18 @@ export default function NewThemePage() {
                 />
                 {keyWrong && (
                   <p id="theme-key-error" data-testid="key-error" className="text-sm text-crit">
-                    Use lowercase letters, numbers and dashes, at least 2 characters, starting with a letter or number.
+                    Use only lowercase letters, numbers and dashes, starting with a letter or number (no spaces).
                   </p>
                 )}
               </Field>
               <Field label="Name">
-                <input className={INPUT} value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Company brand" required />
+                <input
+                  className={`${INPUT} placeholder:italic`}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Company brand"
+                  required
+                />
               </Field>
               <Field label="For">
                 <select className={`${SELECT} h-9 w-full`} value={kind} onChange={(e) => setKind(e.target.value as ThemeKind)}>

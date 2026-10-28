@@ -666,7 +666,7 @@ function SourceRow({
       {!drive && unavailable.length > 0 && (
         <ul aria-label={`Unreadable files of ${source.name}`} className="mt-2 flex flex-col gap-1">
           {unavailable.map((u) => {
-            const name = picked.find((f) => f.id === u.external_id)?.name ?? u.external_id;
+            const name = picked.find((f) => f.id === u.external_id)?.name ?? u.name ?? names[u.external_id] ?? u.external_id;
             return (
               <li key={u.external_id} className="flex min-w-0 items-center gap-2 text-sm">
                 <Chip kind="warn" title={u.reason}>
@@ -970,9 +970,9 @@ export default function SourceSettingsPage() {
         </>
       }
       stats={[
-        { label: list.length === 1 ? "Source" : "Sources", value: sources.data ? formatCount(list.length) : "—" },
-        { label: items === 1 ? "Item" : "Items", value: sources.data ? formatCount(items) : "—" },
-        { label: errors === 1 ? "Error" : "Errors", value: sources.data ? formatCount(errors) : "—", tone: errors > 0 ? "crit" : undefined },
+        { label: list.length === 1 ? "Source" : "Sources", value: sources.data ? formatCount(list.length) : "—", testId: "stat-sources" },
+        { label: items === 1 ? "Item" : "Items", value: sources.data ? formatCount(items) : "—", testId: "stat-items" },
+        { label: errors === 1 ? "Error" : "Errors", value: sources.data ? formatCount(errors) : "—", tone: errors > 0 ? "crit" : undefined, testId: "stat-errors" },
       ]}
     >
       <InspectorSection>

@@ -161,6 +161,7 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
   const dirty = draft !== null && draft !== latest.body;
   // qa-settings-19: the version shown is what the editor holds: say so, not print it twice.
   const sameAsEditor = canEdit && shown.body === body;
+  const suggestWhen = latest.suggest_when ?? t.suggest_when;
 
   const inspector = (
     <Inspector
@@ -217,17 +218,18 @@ export function TemplateDetail({ templateKey: key }: { templateKey: string }) {
           <p className="text-[15px] text-text">{t.description}</p>
         </InspectorSection>
       )}
-      {latest.suggest_when && (
+      {/* qa-settings-19: the text itself, not an (i) with no value beside it. */}
+      {suggestWhen && (
         <InspectorSection label="Suggested when" testId="suggest-when">
-          <p className="text-[15px] text-text">{latest.suggest_when}</p>
+          <p className="text-[15px] text-text">{suggestWhen}</p>
         </InspectorSection>
       )}
-      <InspectorSection label="Facts">
+      <InspectorSection label="Facts" testId="template-facts">
         <InspectorRow value={<ThemeName themeKey={t.suggested_theme} names={themes} />}>Suggested theme</InspectorRow>
         <InspectorRow value={formatDate(t.created_at)}>Added</InspectorRow>
         {t.archived_at && <InspectorRow value={formatDate(t.archived_at)}>Archived</InspectorRow>}
       </InspectorSection>
-      <InspectorSection label="For developers">
+      <InspectorSection label="For developers" testId="template-developers">
         <InspectorRow value={<span className="font-mono text-sm font-medium">{t.key}</span>}>Key</InspectorRow>
       </InspectorSection>
       {canEdit && (

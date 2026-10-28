@@ -451,7 +451,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
         <>
           <ActiveCount rows={query.data} />
           <InfoTip label="personal tokens" align="end">
-          A personal token acts as you from scripts and agents. Read only acts as a viewer; with write it has your role.
+            A personal token acts as you from scripts and agents. Read only acts as a viewer; with write it has your role.
             The secret is shown once, when you create it. It expires after the time you choose; an expired token is refused.
           </InfoTip>
         </>

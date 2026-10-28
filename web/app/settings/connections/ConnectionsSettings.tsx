@@ -72,7 +72,8 @@ export function ConnectionsSettings() {
         status={
           <>
             {q.data && (
-              <Chip kind="pass" data-testid="active-count">
+              // A count chip, filled like every page header's (no outline): green once one is active.
+              <Chip kind={active > 0 ? "pass" : "na"} data-testid="active-count">
                 <span className="tnum">{formatCount(active)}</span> active
               </Chip>
             )}
@@ -279,7 +280,8 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
           )}
         </span>
       </div>
-      {c.endpoint_url && (
+      {/* Fireflies' own API goes unsaid; an owner-set endpoint is named. */}
+      {c.endpoint_url && c.endpoint_url !== FIREFLIES_DEFAULT_ENDPOINT && (
         <p className="mt-0.5 truncate text-sm text-text2" title={c.endpoint_url}>
           Endpoint: <span className="font-mono">{c.endpoint_url}</span>
         </p>

@@ -119,11 +119,10 @@ export function AutonomySettings() {
 
 function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (level: Level) => void }) {
   const showLimits = item.level === "act" && item.limits_summary;
-  // The steps sit in a column as wide as the widest (locked steps carry an icon), so their left edges line up.
   return (
     <li
       data-testid={`autonomy-row-${item.key}`}
-      className={`grid ${owner ? "grid-cols-[minmax(0,1fr)_minmax(23rem,auto)]" : "grid-cols-[minmax(0,1fr)_auto]"} items-center gap-x-4 gap-y-1.5 border-t border-line px-4 py-3 first:border-t-0 max-[600px]:grid-cols-1 max-[600px]:px-3`}
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 border-t border-line px-4 py-3 first:border-t-0 max-[900px]:grid-cols-1 max-[600px]:px-3"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="font-semibold">{item.title}</span>
@@ -157,10 +156,19 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
   );
 }
 
-/** Observe · Draft · Recommend · Act: one line, steps above the ceiling locked. */
+/**
+ * Observe · Draft · Recommend · Act: one line, steps above the ceiling locked. Every step is
+ * the same width, lock or not, so the controls of all rows line up on both edges (on a narrow
+ * screen, under the title, they fill the row).
+ */
 function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void }) {
   return (
-    <div role="group" aria-label={`${item.title}: level`} className="inline-flex flex-none justify-self-start rounded-button border border-line-strong bg-surface">
+    <div
+      role="group"
+      aria-label={`${item.title}: level`}
+      data-testid="autonomy-steps"
+      className="inline-flex flex-none rounded-button border border-line-strong bg-surface max-[900px]:flex max-[900px]:w-full"
+    >
       {LEVELS.map((l) => {
         const on = item.level === l.value;
         const locked = !item.allowed.includes(l.value);
@@ -174,7 +182,7 @@ function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void })
             disabled={locked}
             title={locked ? `Stays with people: ${item.ceiling_reason ?? "above this responsibility's ceiling"}` : on ? `Now ${l.label}` : undefined}
             onClick={() => !on && onPick(l.value)}
-            className={`flex h-8 items-center gap-1 border-r border-line px-3 text-sm font-medium whitespace-nowrap last:border-r-0 max-[600px]:px-2 ${
+            className={`flex h-8 w-[7.5rem] items-center justify-center gap-1 border-r border-line px-2 text-sm font-medium whitespace-nowrap last:border-r-0 max-[900px]:w-auto max-[900px]:flex-auto ${
               on ? "cursor-default bg-accent text-on-accent" : "text-text hover:bg-surface2"
             } disabled:cursor-not-allowed disabled:hover:bg-transparent ${on ? "" : "disabled:text-text2"}`}
           >
