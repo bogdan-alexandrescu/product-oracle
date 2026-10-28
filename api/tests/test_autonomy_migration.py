@@ -62,7 +62,7 @@ def test_chains_on_mains_head_with_one_head():
     no_claim=that the integrator's merge order keeps it last."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0089_ritual_attendees_edited_at"]
+    assert script.get_heads() == ["0090_whole_prd_stale_cleared"]
 
 
 def test_upgrade_creates_oracle_actions_and_downgrade_drops_it(scratch_db):

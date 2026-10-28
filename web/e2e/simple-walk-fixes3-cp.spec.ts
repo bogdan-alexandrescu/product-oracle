@@ -17,6 +17,11 @@ import { login } from "./helpers";
  * "· undone", or the undo shows as a row of its own; no_claim = every op's sentence (the API
  * test test_simple_walk_fixes3_cp_api covers each op).
  *
+ * Card walk3-since-undo (review minor): protects = an undo made after the last visit (a visit
+ * to the Inbox) of a change made before it shows as its own row ("<who> undid: ..."); fails_when
+ * = it is hidden because the change it undid falls before the last visit; no_claim = which
+ * visit counts as the last one.
+ *
  * Card walk3-pre-read (M1): protects = Home's "Open pre-read" stays in Simple (Meetings, the
  * review's pre-read) and the pre-read lists the open product decisions as Simple's Decisions
  * page reads them, each opening there; fails_when = the link goes to Detailed's ritual page, the
@@ -68,6 +73,35 @@ for (const phone of [false, true]) {
           expect(text).not.toContain("_");
           expect(text).not.toContain("Dependents moved after");
         }
+        if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
+      });
+
+      test(`Home's since-your-last-visit says an undo of a change made before the last visit (${where})`, async ({ page }) => {
+        await setUp(page, "simple-home", scheme);
+        await login(page);
+        await page.goto("/simple");
+        const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" });
+        await broken.getByRole("button", { name: "Move dependents" }).click();
+        await expect(page.getByText("Move dependents: applied to your working draft")).toBeVisible();
+        // A visit to the Inbox: the change is now from before the last visit.
+        await expect(async () => {
+          await page.goto("/inbox");
+          await expect(page).toHaveURL(/\/inbox$/);
+          await page.waitForLoadState("networkidle");
+          await page.goto("/simple");
+          const since = page.getByTestId("home-since");
+          await expect(since.getByTestId("home-since-row").or(since.getByTestId("home-since-empty")).first()).toBeVisible({ timeout: 2_000 });
+          await expect(since.getByTestId("home-since-row").filter({ hasText: "Weekly alert digest" })).toHaveCount(0, { timeout: 2_000 });
+        }).toPass({ timeout: 20_000 });
+        // The person undoes it from the roadmap's working draft, after that visit.
+        await page.goto("/simple/roadmap");
+        await page.getByTestId("draft-banner").getByRole("button", { name: "Undo" }).click();
+        await expect(page.getByText("Undone", { exact: true })).toBeVisible();
+        await page.goto("/simple");
+        const rows = page.getByTestId("home-since").getByTestId("home-since-row").filter({ hasText: "Weekly alert digest" });
+        await expect(rows).toHaveCount(1);
+        await expect(rows).toContainText(/undid: moved (F-\d+ )?Weekly alert digest and its dependents after what it depends on/);
+        await expect(rows).not.toContainText("_");
         if (phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(PHONE.width);
       });
 
