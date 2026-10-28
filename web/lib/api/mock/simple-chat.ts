@@ -798,9 +798,9 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): 
 const TALK_KEY = /:\/simple\/roadmap\/items\/([^/]+)$/;
 
 /** "Nov 30" (the talk's day words, as the roadmap's). */
-const usDay = (day: string) => new Date(msOf(day)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+// roadmap-talk: the API's company-day words ("30 Nov – 11 Dec").
+const usDay = (day: string) => dayWords(day);
 const usSpan = (a: string, b: string) => `${usDay(a)} – ${usDay(b)}`;
-const yearOf = (day: string) => day.slice(0, 4);
 
 /** The "roadmap-talk" scenario's milestones: name and days from this quarter's start. */
 export const TALK_MILESTONES: { name: string; day: number }[] = [
@@ -853,7 +853,7 @@ function talkMove(db: SimpleDb, i: Item, start: string, end: string, how = ""): 
   const d = moveDraft(db, i, start, end);
   return {
     ...d,
-    summary: `Move ${about(i)}${how ? ` ${how},` : ""} to ${usSpan(start, end)}, ${yearOf(end)}`,
+    summary: `Move ${about(i)}${how ? ` ${how},` : ""} to ${usSpan(start, end)}`,
     change_words: { before: usSpan(i.start.date, i.end.date), after: usSpan(start, end) },
     correct: { fields: ["start_date", "end_date"], values: { start_date: start, end_date: end } },
   };
@@ -876,7 +876,7 @@ function buildAdd(title: string, goal: string | null, milestone: string | null, 
   return {
     op: "add_item", target: { where: { kind: goal ? "goal" : "horizon", value: goal ?? "now" } }, before: {},
     after: { title, start_date: start, end_date: end, milestone, goal },
-    summary: `Add ${title}${goal ? ` under ${GOALS[goal]}` : ""}${milestone ? ` to ${milestone}` : ""}, ${usSpan(start, end)}, ${yearOf(end)}`,
+    summary: `Add ${title}${goal ? ` under ${GOALS[goal]}` : ""}${milestone ? ` to ${milestone}` : ""}, ${usSpan(start, end)}`,
     item_id: null, item_title: null, preview: null, flow: null, fixes: [],
     change_words: null,
     correct: { fields: ["title", "goal", "milestone", "start_date", "end_date"], values: { title, goal: goal ? GOALS[goal] : null, milestone, start_date: start, end_date: end } },
@@ -897,7 +897,7 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
     if (/\bwho\b.*\bown/i.test(t)) return { kind: "answer", body: i.owner ? `${i.owner.name} owns ${i.title}.` : `${i.title} has no owner yet.`, cards: [], source };
     const why = i.reasons[0] ? ` ${i.reasons[0]}` : "";
     const outcome = i.outcome ? ` Its outcome: ${i.outcome}.` : "";
-    return { kind: "answer", body: `${i.title} runs ${usSpan(i.start.date, i.end.date)}, ${yearOf(i.end.date)}; it is ${i.status.replace("_", " ")}.${outcome}${why}`, cards: [], source };
+    return { kind: "answer", body: `${i.title} runs ${usSpan(i.start.date, i.end.date)}; it is ${i.status.replace("_", " ")}.${outcome}${why}`, cards: [], source };
   }
   if (ctx.role === "viewer") return { kind: "note", body: "Viewers ask questions here; changes need a commenter or above.", cards: [] };
   const one = (d: Draft): Reply => ({ kind: "cards", body: `I understood: ${d.summary.replace(/^./, (c) => c.toLowerCase())}.`, cards: [d] });
