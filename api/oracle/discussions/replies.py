@@ -57,6 +57,7 @@ from oracle.company_time import DEFAULT_ZONE
 from oracle.config import get_settings
 from oracle.connections import service as connections
 from oracle.discussions import changes, context
+from oracle.discussions import plan as plan_ctx
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.docs import visibility
 from oracle.jobs import prompting
@@ -289,7 +290,8 @@ def live_block(sources: list[Any]) -> str:
         "Every tool result carries cite.ref (l:1, l:2, ...). Cite every fact you take from "
         "a tool result with its ref as [l:n], for example [l:1]. Never state a count, a "
         "meeting or any detail of one that did not come from a tool result in this answer; "
-        "when a tool answers with an error, say what it said.",
+        f'when a tool answers with an error, say only "{plan_ctx.SOURCE_DOWN}", never its '
+        "code or the source's name.",
     ]
     return "\n".join(lines)
 
@@ -549,6 +551,8 @@ async def _produce(
         plan = await live_plan(db, d, reply, mint=False)
         await db.commit()
         notes = await changes.prompt_notes(db, d)
+    if ctx.plan:  # Simple's Ask: the plan first, the sources only after (and plainly)
+        system = f"{system.rstrip()}\n\n{plan_ctx.PLAN_FIRST}"
     mcp = None
     if plan.live or plan.mcp_line:
         # Only a run on Claude Code asks: its token is minted then (2.1).
@@ -649,6 +653,11 @@ async def _produce(
     text, versions = goal_interview.take_changes(text) if goal is not None else (text, [])
     reads = await live_citations(tenant_id, reply_id) if "[l:" in text else None
     body, cites = citations_of(text, ctx, reads)
+    # A source that failed is never shown raw: at most one plain line.
+    plain = plan_ctx.plain_failures(body) if ctx.plan or plan.live else body
+    if plain != body:
+        log.info("discussion reply %s: a source's failure shown plainly", reply_id)
+        body = plain
     inp, out = _tokens(done.usage)
     await _save(
         tenant_id, reply_id, body=body[:8000], status="complete", citations=cites,
