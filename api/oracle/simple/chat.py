@@ -27,6 +27,7 @@ reverses that decision. The presenter changes the mode through S8's ``set_rules`
 flow or feature carries the stored flow and requests a visual when it has none.
 """
 
+import difflib
 import importlib
 import re
 import uuid
@@ -207,7 +208,7 @@ def parse_period(text: str, today: date) -> tuple[date, date] | None:
 
 class Reply:
     """``understood``: the line is one Oracle's reader knows (the Ask panel's one box sends
-    any other line to Oracle's Ask); ``missing``: no item has the name it gave."""
+    any other line to Oracle's Ask); ``missing``: no item (or person) has the name it gave."""
 
     def __init__(self, kind: str, body: str, cards: list[dict[str, Any]] | None = None,
                  understood: bool = True, missing: bool = False, reader: bool = False,
@@ -220,6 +221,9 @@ class Reply:
         self.choices = choices or []
         # The items an ambiguous name matched (ChatOp builds turn them into choices).
         self.candidates: list[service.Entry] = []
+        # The people an unknown or ambiguous name may mean (build turns them into choices).
+        self.people: list[str] = []
+        self.person_text: str | None = None
 
 
 class Ctx:
@@ -230,11 +234,19 @@ class Ctx:
         self.read: service.Read | None = None
         self.overlays: dict[uuid.UUID, dict[str, Any]] = {}
         self.people: list[User] = []
+        # chat-actions: the Ask panel's page and the document it shows.
+        self.page: str | None = None
+        self.page_document: Any = None
+        self.meeting_decider_name: str | None = None
 
     async def load(self) -> "Ctx":
+        from oracle.simple import chat_actions
+
+        self.page_document = await chat_actions.page_document(self.db, self.page)
         self.overlays = await drafts.overlays_for(self.db, self.principal)
         self.read = await service.load(self.db, self.overlays)
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
+        self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
         return self
 
     @property
@@ -284,9 +296,18 @@ class Ctx:
         if len(hits) == 1:
             return hits[0]
         if hits:
-            return Reply("question", f"Which {_unquote(text)}: "
-                         f"{_or([display_name(u.email, u.name) for u in hits[:5]])}?")  # fmt: skip
-        return Reply("question", f"Who is “{_unquote(text)}”? Name a person of the company.")
+            shown = [display_name(u.email, u.name) for u in hits[:5]]
+            q = Reply("question", f"Which {_unquote(text)}: {_or(shown)}?")
+            q.people, q.person_text = shown, text
+            return q
+        # No one by that name: offer the people whose names come closest.
+        near = {n: u for u in self.people for n in names(u)}
+        close = difflib.get_close_matches(x, list(near), n=5, cutoff=0.6)
+        shown = list(dict.fromkeys(display_name(near[n].email, near[n].name) for n in close))
+        q = Reply("question", f"Who is “{_unquote(text)}”? Name a person of the company.",
+                  missing=True)  # fmt: skip
+        q.people, q.person_text = shown, text
+        return q
 
 
 def _kw(summary: str, op: str, e: service.Entry | None, target: dict, before: dict,
@@ -306,6 +327,8 @@ def _dates(e: service.Entry) -> dict[str, Any]:
 
 
 def _owner_words(c: Ctx, e: service.Entry) -> str:
+    if e.owner_name and any(u.id == e.row.owner_id for u in c.people):
+        return f"{e.owner_name} owns {e.row.title}."
     if e.owner_name:
         return f"{e.owner_name} owns {e.row.title} (its track's owner)."
     return f"{e.row.title} has no owner yet."
@@ -575,6 +598,18 @@ for _op in (
     register(_op)
 
 
+# The joined actions' own apply (chat_actions.ACTIONS): op -> async (db, principal, card).
+APPLIERS: dict[str, Callable[..., Any]] = {}
+
+
+def join(actions: list[dict[str, Any]]) -> None:
+    """chat-join: chat-actions' ACTIONS become ops the reader offers and parse() builds
+    (through ChatOp.build), and chat.apply applies their cards through their own apply."""
+    for a in actions:
+        register(ChatOp(a["op"], a["describe"], dict(a["args"]), a["build"]))
+        APPLIERS[a["op"]] = a["apply"]
+
+
 def _count(n: int) -> str:
     words = {1: "one change", 2: "two changes", 3: "three changes"}
     return f"I understood {words.get(n, f'{n} changes')}:"
@@ -599,6 +634,12 @@ def build(c: Ctx, op: str, args: dict[str, Any], body: str | None = None) -> Rep
                 {"label": x.row.title, "op": op, "args": {**args, "item": str(x.row.id)}}
                 for x in out.candidates[:5]
             ] + [NEITHER]
+        elif out.people:
+            # An unknown or ambiguous person: the people the name may mean, as choices.
+            key = next((k for k, v in args.items() if v == out.person_text), None)
+            if key is not None:
+                out.choices = [{"label": n, "op": op, "args": {**args, key: n}}
+                               for n in out.people] + [NEITHER]  # fmt: skip
         return out
     return Reply("cards", body or HERE, [out])
 
@@ -637,17 +678,19 @@ def parse(c: Ctx, text: str) -> Reply:
             return e
         return Reply("answer", f"{e.row.title} is {e.status.replace('_', ' ')} ({e.row.horizon}).")
 
-    asks = _phrase(c, t)
+    asks = _phrase(c, t) or _actions().phrase(t)
     if asks is None:
         return Reply("question", f"I did not understand that. {EXAMPLES}", understood=False,
                      reader=True)  # fmt: skip
     if viewer_in_meeting:
         return Reply("note", VIEWER_NOTE)
-    out = build(c, *asks)
+    # The joined actions restate what was understood ("I understood one change:").
+    out = build(c, *asks, body=_count(1) if asks[0] in APPLIERS else None)
     if out.missing:
         # A phrase it knows naming no item ("move the alert thing to Q2"): the reader reads
         # the name in context.
-        return Reply("question", out.body, understood=False, reader=True)
+        return Reply("question", out.body, understood=False, reader=True,
+                     choices=out.choices)  # fmt: skip
     return out
 
 
@@ -875,7 +918,9 @@ async def post(
         rules = await rules_of(db, meeting_id)
         if not _attends(principal, rules):
             raise ChatError(403, "Only the meeting's attendees use its chat")
-    ctx = await Ctx(db, principal, rules).load()
+    ctx = Ctx(db, principal, rules)
+    ctx.page = page
+    await ctx.load()
     reply = parse(ctx, text)
     if only_understood and not reply.understood and not reply.reader:
         out = await thread(db, principal, meeting_id)
@@ -1079,7 +1124,8 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
             if r.kind != "cards":
                 if r.choices:
                     # An action naming an item that matches several: ask which.
-                    return Reply("question", "Which item?", choices=r.choices)
+                    return Reply("question", "Which item?" if r.candidates else "Who do you mean?",
+                                 choices=r.choices)  # fmt: skip
                 if r.kind == "question" and not r.missing:
                     # An unknown person, a day it cannot read: ask (the next line answers).
                     return Reply("question", r.body)
@@ -1266,7 +1312,7 @@ async def _flow(db: AsyncSession, card: SimpleChatCard) -> Any:
 
 def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
     """Whether the caller's Apply applies (else proposes): the change engine's rule."""
-    if card.op == "add_feature_ask":
+    if card.op == "add_feature_ask" or card.op in _actions().DIRECT_OPS:
         return True
     if card.item_id is None:
         return has_role(principal.role, "owner")
@@ -1274,7 +1320,15 @@ def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
     return e is not None and service.can_decide(principal, e, read_.deciders)
 
 
+def _actions() -> Any:
+    from oracle.simple import chat_actions
+
+    return chat_actions
+
+
 def _card_bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
+    if card.op in _actions().DIRECT_OPS:
+        return _actions().bar(principal, card, rules)
     if rules is not None:
         return meeting_bar(principal, rules)
     if not has_role(principal.role, "commenter"):
@@ -1413,6 +1467,8 @@ async def apply(
     bar = _card_bar(principal, card, rules)
     if bar is not None:
         raise ChatError(403, bar)
+    if card.op in _actions().DIRECT_OPS:
+        return await _apply_direct(db, principal, card_id, rules, fix)
     if fix is not None:
         fixes = (await one(db, principal, card, rules)).fixes
         if fix >= len(fixes):
@@ -1469,6 +1525,22 @@ async def apply(
     return await one(db, principal, card, rules), result
 
 
+async def _apply_direct(
+    db: AsyncSession, principal: Any, card_id: uuid.UUID, rules: Any, fix: int | None
+) -> tuple[ChatCardOut, SimpleChangeResult | None]:
+    """chat-actions' ops: applied through the meetings module or Oracle's decisions (no
+    change-engine change), in one transaction with the card."""
+    if fix is not None:
+        raise ChatError(422, "fix: one of the card's fixes")
+    card = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
+    if card is None or card.status != "open":
+        raise ChatError(409, f"This card is {card.status if card else 'gone'} already")
+    await APPLIERS[card.op](db, principal, card)
+    card.status, card.decided_by, card.decided_at = "applied", _me(principal), company_time.now()
+    await db.commit()
+    return await one(db, principal, card, rules), None
+
+
 async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCardOut:
     card, rules = await _get(db, principal, card_id)
     if card.status != "open":
@@ -1486,6 +1558,11 @@ async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatC
 
 async def undo(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCardOut:
     card, rules = await _get(db, principal, card_id)
+    if card.status == "applied" and card.op in _actions().DIRECT_OPS:
+        await _actions().undo(db, principal, card, rules)
+        card.status = "undone"
+        await db.commit()
+        return await one(db, principal, card, rules)
     if card.status != "applied" or card.change_id is None:
         raise ChatError(409, "Only an applied card undoes")
     await changes.undo(db, principal, card.change_id)
@@ -1498,13 +1575,13 @@ async def undo(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCard
     return await one(db, principal, card, rules)
 
 
-async def _reverse(db: AsyncSession, principal: Any, decision_id: uuid.UUID) -> None:
-    """The card's meeting decision no longer holds: reversed, with a review saying why, so
-    the Decisions log and the minutes stop showing it as decided."""
+async def _reverse(db: AsyncSession, principal: Any, decision_id: uuid.UUID,
+                   note: str = "Undone in the meeting chat") -> None:  # fmt: skip
+    """The card's decision no longer holds: reversed, with a review saying why (``note``),
+    so the Decisions log and the minutes stop showing it as decided."""
     d = await db.get(Decision, decision_id, with_for_update=True)
     if d is None or d.status != "decided":
         return
-    note = "Undone in the meeting chat"
     d.status = "reversed"
     db.add(DecisionReview(decision_id=d.id, verdict="reversed", note=note,
                           reviewed_by=_me(principal)))  # fmt: skip
@@ -1610,3 +1687,6 @@ async def walk(db: AsyncSession, principal: Any) -> WalkOut:
         for (i, _), o in zip(cards, outs, strict=True):
             steps[i].card = o
     return WalkOut(steps=steps)
+
+
+import oracle.simple.chat_actions  # noqa: E402, F401  (chat-join: registers its ACTIONS)

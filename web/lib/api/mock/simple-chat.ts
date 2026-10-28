@@ -21,7 +21,7 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { stableUuid } from "./ids";
 import { routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
-import { roadmapOut, storedDates, type SimpleDb } from "./simple-roadmap";
+import { itemDeciderId, itemOwnerId, roadmapOut, storedDates, type SimpleDb } from "./simple-roadmap";
 
 type Values = Record<string, unknown>;
 type Item = Schemas["SimpleRoadmapItem"];
@@ -32,6 +32,10 @@ type Preview =
   | { kind: "title"; item_id: string; title: string }
   | { kind: "milestone"; item_id: string; name: string; date: string }
   | { kind: "cut"; item_id: string }
+  | { kind: "owner" | "decider"; item_id: string; person_id: string; person_name: string; before_name: string | null }
+  | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page" }
+  | { kind: "note" | "question"; text: string }
+  | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string }
   | null;
 type Fix = { label: string; op: string; target: Values; before: Values; after: Values };
 type Mode = "everyone" | "presenter" | "named";
@@ -58,6 +62,8 @@ interface StoredCard {
   decided_by_name: string | null;
   decided_at: string | null;
   decision_id: string | null;
+  /** Chat actions: what Undo restores (the agenda before, the decision made). */
+  undo?: Values;
 }
 
 interface StoredMessage {
@@ -78,7 +84,7 @@ interface StoredMessage {
   /** Private: each choice's card (Neither: null). */
   choice_drafts?: (Draft | null)[];
   /** Private: the reader's job for a pending (or failed) line. */
-  reading?: { text: string; role: Role; meeting_id: string | null; attempts: number; ask: boolean };
+  reading?: { text: string; role: Role; meeting_id: string | null; attempts: number; ask: boolean; document_id?: string | null };
 }
 
 interface Thread {
@@ -98,6 +104,35 @@ interface Meeting {
   ended: boolean;
   agenda: { id: string; title: string; url: string }[];
   decisions: { id: string; title: string; card_id: string; at: string }[];
+  /** Chat actions in the chat's own meeting: its notes and open questions, and the agenda's next and skipped items. */
+  notes?: MeetingNote[];
+  agenda_state?: MeetingAgenda;
+  /** A review meeting of S8's (./simple-meetings.ts), mirrored here from `ChatMeetings.find` on each call. */
+  s8?: boolean;
+}
+
+/** The meeting's live notes and open questions (SimpleMeetingOut.notes). */
+export type MeetingNote = Schemas["SimpleMeetingNote"];
+/** The meeting's agenda changes (SimpleMeetingOut.agenda). */
+export type MeetingAgenda = Schemas["SimpleAgenda"];
+
+/**
+ * S8's review meetings as the chat reads and writes them (server.ts builds it over
+ * ./simple-meetings.ts): a meeting's rules, its notes, agenda and decisions, and the
+ * decisions an Ask line records on a page's document (the Decisions page).
+ */
+export interface ChatMeetings {
+  find(id: string): Pick<Meeting, "title" | "presenter_id" | "attendee_ids" | "change_mode" | "change_people" | "ended"> | null;
+  setMode(id: string, mode: Mode, people: string[]): void;
+  note(id: string, n: MeetingNote): void;
+  unnote(id: string, cardId: string): void;
+  agenda(id: string): MeetingAgenda;
+  setAgenda(id: string, a: MeetingAgenda): void;
+  /** A decision: the meeting's (meeting_decisions) or, with no meeting, on the page's document. Its id. */
+  decide(meetingId: string | null, title: string, deciderId: string, documentId: string | null): string;
+  undecide(decisionId: string): void;
+  /** The document a page shows (Ask on /simple/prds/{slug}), or null. */
+  documentOf(page: string): string | null;
 }
 
 export interface ChatDb {
@@ -227,7 +262,7 @@ function dated(i: Item): boolean {
 }
 
 /** Oracle's reply to one line (deterministic; the contract's list). */
-function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null, items: Item[], names: string[]): Reply {
+function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null, items: Item[], names: string[], documentId: string | null = null): Reply {
   const t = text.trim().replace(/\s+/g, " ");
   const viewerInMeeting = !!meeting && ctx.role === "viewer";
   let m: RegExpExecArray | null;
@@ -382,9 +417,121 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
       return card(`Cut ${i.title}`, "cut", i, { item_id: i.id }, { cut: false }, { cut: true }, { kind: "cut", item_id: i.id });
     });
   }
+  const acted = chatAction(db, ctx, t, meeting, items, documentId, change);
+  if (acted) return acted;
   return { kind: "question", body: `I did not understand that. ${EXAMPLES}`, cards: [], understood: false };
 }
 
+
+type Person = { id: string; name: string };
+
+/** The company's person a name means (their full or first name), or null. */
+function personNamed(ctx: ChatCtx, x: string): Person | null {
+  const n = unquote(x).toLowerCase();
+  const all = Object.entries(ctx.names);
+  const hit = all.find(([, v]) => v.toLowerCase() === n) ?? all.find(([, v]) => v.toLowerCase().split(" ")[0] === n);
+  return hit ? { id: hit[0], name: hit[1] } : null;
+}
+
+const words = (x: string) => x.trim().replace(/^["'“‘]|["'”’]$/g, "").trim();
+
+const actionDraft = (summary: string, op: string, item: Item | null, target: Values, before: Values, after: Values, preview: Preview): Draft => ({
+  op, target, before, after, summary, item_id: item?.id ?? null, item_title: item?.title ?? null, preview, flow: null, fixes: [],
+});
+
+/** chat-actions' cards, for its phrases and Oracle's reader alike: a new owner or decider. */
+function whoDraft(db: SimpleDb, ctx: ChatCtx, who: Person, i: Item, word: "owner" | "decider"): Draft {
+  if (word === "owner") {
+    const before = itemOwnerId(db, i.key);
+    return actionDraft(`Make ${who.name} the owner of ${i.title}`, "set_owner", i, { item_id: i.id }, { owner_id: before }, { owner_id: who.id }, {
+      kind: "owner", item_id: i.id, person_id: who.id, person_name: who.name, before_name: before ? (ctx.names[before] ?? i.owner?.name ?? null) : null,
+    });
+  }
+  const before = itemDeciderId(db, i.key, ctx.roles);
+  return actionDraft(`Make ${who.name} the decider of ${i.title}`, "set_decider", i, { item_id: i.id }, { decider_id: before }, { decider_id: who.id }, {
+    kind: "decider", item_id: i.id, person_id: who.id, person_name: who.name, before_name: before ? (ctx.names[before] ?? null) : null,
+  });
+}
+
+function noteDraft(meeting: Meeting, kind: "note" | "question", text: string): Draft {
+  const t = words(text);
+  return kind === "note"
+    ? actionDraft(`Add to the minutes: ${t}`, "minutes_note", null, { meeting_id: meeting.id }, {}, { text: t }, { kind: "note", text: t })
+    : actionDraft(`Add the open question: ${t}`, "open_question", null, { meeting_id: meeting.id }, {}, { text: t }, { kind: "question", text: t });
+}
+
+function agendaDraft(meeting: Meeting, i: Item, move: "next" | "skip"): Draft {
+  return actionDraft(move === "next" ? `Take ${i.title} next` : `Skip ${i.title}`, `agenda_${move}`, i, { meeting_id: meeting.id, item_id: i.id }, {}, { move }, { kind: "agenda", item_id: i.id, move, item_title: i.title });
+}
+
+function decisionDraft(meeting: Meeting | null, documentId: string | null, who: Person, text: string): Draft {
+  const t = words(text);
+  const target: Values = meeting ? { meeting_id: meeting.id } : documentId ? { document_id: documentId } : {};
+  return actionDraft(`Record the decision: ${t}`, "record_decision", null, target, {}, { text: t, decider_id: who.id }, { kind: "decision", text: t, decider_name: who.name, where: meeting ? "meeting" : "page" });
+}
+/** Chat actions' cards: "I understood one change:" (the contract's reply line). */
+const ONE_CHANGE = "I understood one change:";
+/** The meeting-only phrases' answer outside a meeting (no card). */
+export const MEETING_ONLY = "Minutes notes, open questions and agenda changes belong to a meeting.";
+/** Ops applied here, not through the change engine: a decision, the minutes' notes and the agenda. */
+const LOCAL_OPS = new Set(["record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip"]);
+
+/**
+ * The chat actions' phrases (the contract's): "<person> owns <item>", "<person> decides
+ * <item>", "decision[ by <person>]: <text>", and in a meeting only "note: <text>", "open
+ * question: <text>", "next: <item>" and "skip <item>". Null: none of them.
+ */
+function chatAction(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting | null, items: Item[], documentId: string | null, change: (build: () => Reply) => Reply): Reply | null {
+  // A phrase claims its line only when its item and person resolve (as the API's parse()):
+  // an unknown one is `understood: false`, for the Ask panel's one box to send to Oracle's Ask.
+  const r = chatActionReply(db, ctx, t, meeting, items, documentId, change);
+  return r && r.missing ? { ...r, understood: false } : r;
+}
+
+function chatActionReply(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting | null, items: Item[], documentId: string | null, change: (build: () => Reply) => Reply): Reply | null {
+  // "skip …", "<person> owns …" and "<person> decides …" leave a question ("…?") to the reader.
+  const asks = t.trim().endsWith("?");
+  const one = (d: Draft): Reply => ({ kind: "cards", body: ONE_CHANGE, cards: [d] });
+  const person = (x: string): Person | Reply =>
+    personNamed(ctx, x) ?? { kind: "question", body: `Who is “${unquote(x)}”? Name a person of the company.`, cards: [], missing: true };
+  const isPerson = (x: Person | Reply): x is Person => "id" in x;
+  let m: RegExpExecArray | null;
+
+  if ((m = /^(note|open question):\s*(.+)$/i.exec(t)) || (m = /^(next):\s*(.+)$/i.exec(t)) || (!asks && (m = /^(skip)\s+(.+)$/i.exec(t)))) {
+    const [, verb, rest] = m;
+    if (!meeting) {
+      // Outside a meeting, the note for a known item only ("skip the intro" is not one).
+      const i = /^(next|skip)$/i.test(verb) ? findItem(items, rest) : null;
+      return i && !isItem(i) ? i : { kind: "note", body: MEETING_ONLY, cards: [] };
+    }
+    return change(() => {
+      const v = verb.toLowerCase();
+      if (v === "note" || v === "open question") return one(noteDraft(meeting, v === "note" ? "note" : "question", rest));
+      const i = findItem(items, rest);
+      if (!isItem(i)) return i;
+      return one(agendaDraft(meeting, i, v === "next" ? "next" : "skip"));
+    });
+  }
+  if ((m = /^decision(?: by (.+?))?:\s*(.+)$/i.exec(t))) {
+    const [, by, what] = m;
+    return change(() => {
+      const who = by ? person(by) : { id: ctx.id, name: ctx.names[ctx.id] ?? "someone" };
+      if (!isPerson(who)) return who;
+      return one(decisionDraft(meeting, documentId, who, what));
+    });
+  }
+  if (!asks && (m = /^(.+?) (owns|decides) (.+)$/i.exec(t)) && !/^who$/i.test(m[1])) {
+    const [, x, verb, y] = m;
+    return change(() => {
+      const who = person(x);
+      if (!isPerson(who)) return who;
+      const i = findItem(items, y);
+      if (!isItem(i)) return i;
+      return one(whoDraft(db, ctx, who, i, verb.toLowerCase() === "owns" ? "owner" : "decider"));
+    });
+  }
+  return null;
+}
 
 /*
  * Oracle's reader (chat-reader), as a deterministic stand-in: a line the fixed parser above
@@ -424,12 +571,14 @@ function moveDraft(db: SimpleDb, i: Item, start: string, end: string): Draft {
   };
 }
 
-export type ReaderArgs = { db: SimpleDb; ctx: ChatCtx; item: Item; months?: number; period?: [string, string]; rest?: string };
+/** A builder's args: `item` is null for an op about no item (a decision, a minutes note). */
+export type ReaderArgs = { db: SimpleDb; ctx: ChatCtx; item: Item | null; months?: number; period?: [string, string]; rest?: string; meeting: Meeting | null; documentId: string | null };
 export type ReaderOut = { card: Draft } | { refusal: string };
 
 /** The reader's ops: op -> builder (its args) -> a card or a refusal. An op not here is skipped. */
 export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
   move_dates: ({ db, item, months: n, period }) => {
+    if (!item) return { refusal: "Which item?" };
     if (period) {
       const len = Math.round((msOf(item.end.date) - msOf(item.start.date)) / DAY);
       return { card: moveDraft(db, item, period[0], dated(item) ? addDays(period[0], len) : period[1]) };
@@ -437,10 +586,33 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
     return { card: moveDraft(db, item, plusMonths(item.start.date, n ?? 3), plusMonths(item.end.date, n ?? 3)) };
   },
   cut: ({ item }) =>
-    item.status === "cut"
+    !item
+      ? { refusal: "Which item?" }
+      : item.status === "cut"
       ? { refusal: `${item.title} is cut already.` }
       : { card: { op: "cut", target: { item_id: item.id }, before: { cut: false }, after: { cut: true }, summary: `Cut ${item.title}`, item_id: item.id, item_title: item.title, preview: { kind: "cut", item_id: item.id }, flow: null, fixes: [] } },
+  // chat-join: chat-actions' ops, built by the same drafts as its phrases.
+  set_owner: (a) => who(a, "owner"),
+  set_decider: (a) => who(a, "decider"),
+  record_decision: ({ ctx, meeting, documentId, rest }) => {
+    if (!rest) return { refusal: "What was decided?" };
+    return { card: decisionDraft(meeting, documentId, { id: ctx.id, name: ctx.names[ctx.id] ?? "someone" }, rest) };
+  },
+  minutes_note: ({ meeting, rest }) => (!meeting ? { refusal: MEETING_ONLY } : !rest ? { refusal: "What should the minutes say?" } : { card: noteDraft(meeting, "note", rest) }),
+  open_question: ({ meeting, rest }) => (!meeting ? { refusal: MEETING_ONLY } : !rest ? { refusal: "What should the minutes say?" } : { card: noteDraft(meeting, "question", rest) }),
+  agenda_next: ({ meeting, item }) => (!meeting ? { refusal: MEETING_ONLY } : !item ? { refusal: "Which item?" } : { card: agendaDraft(meeting, item, "next") }),
+  agenda_skip: ({ meeting, item }) => (!meeting ? { refusal: MEETING_ONLY } : !item ? { refusal: "Which item?" } : { card: agendaDraft(meeting, item, "skip") }),
 };
+
+/** set_owner / set_decider: the person `rest` names (a person the company does not have: a refusal). */
+function who({ db, ctx, item, rest }: ReaderArgs, word: "owner" | "decider"): ReaderOut {
+  if (!item) return { refusal: "Which item?" };
+  const p = personNamed(ctx, rest ?? "");
+  return p ? { card: whoDraft(db, ctx, p, item, word) } : { refusal: `Who is “${unquote(rest ?? "")}”? Name a person of the company.` };
+}
+
+/** The ops about no item: their clause carries only its words (`rest`). */
+const ITEMLESS = new Set(["record_decision", "minutes_note", "open_question"]);
 
 type Clause = { op: string; x: string; months?: number; period?: [string, string]; rest?: string };
 
@@ -448,12 +620,37 @@ type Clause = { op: string; x: string; months?: number; period?: [string, string
 function clauses(text: string): Clause[] {
   const t = text.trim().replace(/\s+/g, " ").replace(/[?.!]+$/, "");
   const out: Clause[] = [];
-  for (const part of t.split(/,?\s+and\s+(?:then\s+)?(?=(?:push|move|shift|slip|cut|drop|make)\b)/i)) {
+  for (const part of t.split(/,?\s+and\s+(?:then\s+)?(?=(?:push|move|shift|slip|cut|drop|make|let'?s|skip|note|we decided)\b)/i)) {
     let m: RegExpExecArray | null;
+    // chat-join: chat-actions' ops in free words.
+    if ((m = /^(?:ok(?:ay)?,?\s+)?(?:so\s+)?we(?:'ve| have)?\s+decided\s+(?:to\s+|that\s+)?(.+)$/i.exec(part))) {
+      out.push({ op: "record_decision", x: "", rest: m[1] });
+      continue;
+    }
+    if ((m = /^(?:please\s+)?(?:note|write down)\s+(?:that\s+)?(.+)$/i.exec(part))) {
+      out.push({ op: "minutes_note", x: "", rest: m[1] });
+      continue;
+    }
+    if ((m = /^we\s+(?:still\s+)?need to find out\s+(?:whether\s+|if\s+)?(.+)$/i.exec(part))) {
+      out.push({ op: "open_question", x: "", rest: m[1] });
+      continue;
+    }
+    if ((m = /\b(?:let'?s\s+)?(?:do|take|discuss|cover)\s+(.+?)\s+next$/i.exec(part))) {
+      out.push({ op: "agenda_next", x: m[1] });
+      continue;
+    }
+    if ((m = /^(?:let'?s\s+)?skip\s+(.+)$/i.exec(part))) {
+      out.push({ op: "agenda_skip", x: m[1] });
+      continue;
+    }
+    if ((m = /\bmake\s+(.+?)\s+(?:the\s+)?(?:decider (?:of|for)|decide)\s+(.+)$/i.exec(part))) {
+      out.push({ op: "set_decider", x: m[2], rest: m[1] });
+      continue;
+    }
     if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:by\s+)?(?:a|one)\s+quarter$/i.exec(part))) out.push({ op: "move_dates", x: m[1], months: 3 });
     else if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:to|into)\s+(.+)$/i.exec(part)) && parsePeriod(m[2])) out.push({ op: "move_dates", x: m[1], period: parsePeriod(m[2])! });
     else if ((m = /\b(?:cut|drop)\s+(.+)$/i.exec(part))) out.push({ op: "cut", x: m[1] });
-    else if ((m = /\bmake\s+(.+?)\s+own\s+(.+)$/i.exec(part))) out.push({ op: "set_owner", x: m[2], rest: m[1] });
+    else if ((m = /\bmake\s+(.+?)\s+(?:the\s+owner\s+of|own)\s+(.+)$/i.exec(part))) out.push({ op: "set_owner", x: m[2], rest: m[1] });
   }
   return out;
 }
@@ -469,7 +666,7 @@ function named(items: Item[], x: string): Item[] {
 }
 
 /** The reader's reply to one line (deterministic). */
-function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["reading"]>, items: Item[]): Reply {
+function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["reading"]>, items: Item[], meeting: Meeting | null): Reply {
   const cs = clauses(r.text);
   // "What should we cut first?" is a question, whatever verbs it holds.
   if (!cs.length || QUESTION.test(r.text.trim())) {
@@ -481,26 +678,28 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
   const drafts: Draft[] = [];
   const refusals: string[] = [];
   let last: Item | null = null;
+  const documentId = r.document_id ?? null;
   for (const c of cs) {
     const build = mockReaderOps[c.op];
-    let item: Item;
-    if (/^(it|that)$/i.test(c.x.trim()) && last) item = last;
+    let item: Item | null;
+    if (ITEMLESS.has(c.op)) item = null;
+    else if (/^(it|that)$/i.test(c.x.trim()) && last) item = last;
     else {
       const hits = named(items, c.x);
       if (!hits.length) return { kind: "note", body: `I could not find “${unquote(c.x)}” on the roadmap. Say it another way.`, cards: [] };
       if (hits.length > 1) {
         if (cs.length > 1 || !build) return { kind: "note", body: `“${unquote(c.x)}” names more than one item. Say one change at a time.`, cards: [] };
         const choices = hits.slice(0, 5).map((h) => {
-          const o = build({ db, ctx, item: h, months: c.months, period: c.period, rest: c.rest });
+          const o = build({ db, ctx, item: h, months: c.months, period: c.period, rest: c.rest, meeting, documentId });
           return { label: h.title, draft: "card" in o ? o.card : null };
         });
         return { kind: "question", body: "Which item?", cards: [], choices: [...choices, { label: "Neither", draft: null }] };
       }
       item = hits[0];
     }
-    last = item;
+    last = item ?? last;
     if (!build) continue;
-    const o = build({ db, ctx, item, months: c.months, period: c.period, rest: c.rest });
+    const o = build({ db, ctx, item, months: c.months, period: c.period, rest: c.rest, meeting, documentId });
     if ("card" in o) drafts.push(o.card);
     else refusals.push(o.refusal);
   }
@@ -533,8 +732,8 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): 
       Object.assign(msg, { kind: "failed", body: "I couldn't read that just now.", retry: true });
       continue;
     }
-    const reply = readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx));
     const meeting = r.meeting_id ? (chat.meetings[r.meeting_id] ?? null) : null;
+    const reply = readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx), meeting);
     Object.assign(msg, {
       kind: reply.kind, body: reply.body, retry: false, at: now(),
       card_ids: storeCards(db, chat, reply.cards, msg.id, key, meeting),
@@ -612,15 +811,20 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   const m = meetingOf(chat, c);
   const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
   if (bar) return { may: null, why_not: bar };
+  // As the API (chat_actions.bar): on Ask, approvers and owners record decisions.
+  if (!m && c.op === "record_decision" && ctx.role !== "approver" && ctx.role !== "owner")
+    return { may: null, why_not: "Approvers and owners record decisions; ask one of them" };
   const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
-  // Filing a feature ask is every commenter's right (Requests); else the item's rule.
-  const decides = c.op === "add_feature_ask" ? true : c.item_id ? !!item?.can_decide : ctx.role === "owner";
+  // Filing a feature ask is every commenter's right (Requests), as are a meeting's notes, agenda
+  // and decisions (the meeting's rules came first) and a decision on Ask; else the item's rule.
+  const decides = c.op === "add_feature_ask" || LOCAL_OPS.has(c.op) ? true : c.item_id ? !!item?.can_decide : ctx.role === "owner";
   return { may: decides ? "apply" : "propose", why_not: null };
 }
 
 function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   const check = c.flag !== undefined ? { flags: c.flag ? [c.flag] : [] } : asIf(db, c);
-  const { flag: _flag, thread: _thread, meeting_id: _meeting, ...rest } = c;
+  const { flag: _flag, thread: _thread, meeting_id: _meeting, undo: _undo, ...rest } = c;
+  void _undo;
   void _flag;
   void _thread;
   void _meeting;
@@ -668,8 +872,8 @@ const line = (ctx: ChatCtx, body: string, at: string): StoredMessage => ({
  * Oracle line is "pending" until the thread's next read. `onlyUnderstood` (the Ask panel's one
  * box): a question the reader finds comes back kind "ask", for the panel to hand to Ask.
  */
-function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string, onlyUnderstood = false): boolean {
-  const reply = parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names));
+function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string, onlyUnderstood = false, documentId: string | null = null): boolean {
+  const reply = parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names), documentId);
   // A question about something not on the roadmap is Ask's (the one box writes nothing); a
   // change phrase naming no item is read by the reader in context, as the API does.
   const asksElsewhere = reply.understood === false && !!reply.missing;
@@ -682,7 +886,7 @@ function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, c
   const id = crypto.randomUUID();
   const base = { id, author_kind: "oracle" as const, author_id: null, author_name: "Oracle", at, reply_to: person.id, picked: null, retry: false };
   if (reply.understood === false && !asksElsewhere) {
-    t.messages.push({ ...base, kind: "pending", body: "Reading that…", card_ids: [], choices: [], reading: { text, role: ctx.role, meeting_id: meeting?.id ?? null, attempts: 0, ask: onlyUnderstood } });
+    t.messages.push({ ...base, kind: "pending", body: "Reading that…", card_ids: [], choices: [], reading: { text, role: ctx.role, meeting_id: meeting?.id ?? null, attempts: 0, ask: onlyUnderstood, document_id: documentId } });
     return true;
   }
   t.messages.push({
@@ -705,8 +909,17 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
 }
 
 /** One card through the change engine (or its fix n): the card out and the result, or the engine's refusal. */
-async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
+async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
   const use = n == null ? c : c.fixes[n];
+  if (LOCAL_OPS.has(c.op)) {
+    const result = applyLocal(c, meetingOf(chat, c), ctx, s8);
+    return { card: cardOut(db, chat, c, ctx), result };
+  }
+  // The new owner or decider's name, for the roadmap's owner line.
+  if (c.op === "set_owner" || c.op === "set_decider") {
+    const id = String(c.after.owner_id ?? c.after.decider_id ?? "");
+    if (id && ctx.names[id]) (db.people ??= {})[id] = ctx.names[id];
+  }
   const res = await engine(db, ctx, "POST", "/v1/simple/changes", { op: use.op, target: use.target, before: use.before, after: use.after });
   if (!res.ok) return res;
   const result = (await res.json()) as Schemas["SimpleChangeResult"];
@@ -717,7 +930,8 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
   if (n != null) Object.assign(c, { op: use.op, target: use.target, before: use.before, after: use.after });
   const meeting = meetingOf(chat, c);
   if (meeting && (c.status as StoredCard["status"]) === "applied") {
-    c.decision_id = crypto.randomUUID();
+    // In an S8 review meeting the applied card is one of its meeting decisions (meeting_decisions).
+    c.decision_id = meeting.s8 && s8 ? s8.decide(meeting.id, n == null ? c.summary : c.fixes[n].label, ctx.id, null) : crypto.randomUUID();
     meeting.decisions.push({ id: c.decision_id, title: n == null ? c.summary : c.fixes[n].label, card_id: c.id, at: c.decided_at! });
   }
   return { card: cardOut(db, chat, c, ctx), result };
@@ -784,11 +998,76 @@ async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
   return { steps };
 }
 
+const EMPTY_AGENDA: MeetingAgenda = { next: null, skipped: [] };
+
+/** A local op's Apply: the note, the agenda move or the decision; the result as the change engine's (applied). */
+function applyLocal(c: StoredCard, meeting: Meeting | null, ctx: ChatCtx, s8?: ChatMeetings): Schemas["SimpleChangeResult"] {
+  const by = ctx.names[ctx.id] ?? "someone";
+  const at = now();
+  const remote = meeting?.s8 && s8 ? s8 : null;
+  const undo: Values = {};
+  let decision: string | null = null;
+  if (c.op === "minutes_note" || c.op === "open_question") {
+    const n: MeetingNote = { id: `note-${c.id}`, kind: c.op === "minutes_note" ? "note" : "question", text: String(c.after.text ?? ""), by_name: by, card_id: c.id };
+    if (remote) remote.note(meeting!.id, n);
+    else if (meeting) (meeting.notes ??= []).push(n);
+  } else if (c.op === "agenda_next" || c.op === "agenda_skip") {
+    const was = remote ? remote.agenda(meeting!.id) : (meeting?.agenda_state ?? EMPTY_AGENDA);
+    undo.agenda = structuredClone(was);
+    const it = { id: String(c.item_id), title: c.item_title ?? "" };
+    const next: MeetingAgenda =
+      c.op === "agenda_next"
+        ? { next: it, skipped: was.skipped.filter((x) => x.id !== it.id) }
+        : { next: was.next?.id === it.id ? null : was.next, skipped: [...was.skipped.filter((x) => x.id !== it.id), it] };
+    if (remote) remote.setAgenda(meeting!.id, next);
+    else if (meeting) meeting.agenda_state = next;
+  } else if (c.op === "record_decision") {
+    const text = String(c.after.text ?? "");
+    const decider = String(c.after.decider_id ?? ctx.id);
+    if (remote) decision = remote.decide(meeting!.id, text, decider, null);
+    else if (meeting) {
+      decision = crypto.randomUUID();
+      meeting.decisions.push({ id: decision, title: text, card_id: c.id, at });
+    } else if (s8) undo.decision_id = s8.decide(null, text, decider, (c.target.document_id as string | undefined) ?? null);
+  }
+  Object.assign(c, { status: "applied", change_id: crypto.randomUUID(), decided_by_name: by, decided_at: at, decision_id: decision, undo });
+  const change = {
+    id: c.change_id, session_id: null, document_id: null, draft_ids: [], op: c.op, target: c.target, before: c.before, after: c.after, status: "applied", by: ctx.id, by_name: by, at,
+    decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: true,
+  };
+  return { change, flags: [] } as unknown as Schemas["SimpleChangeResult"];
+}
+
+/** A local op's Undo: the note out, the agenda as it was, the decision gone. */
+function unapplyLocal(c: StoredCard, meeting: Meeting | null, s8?: ChatMeetings): void {
+  const remote = meeting?.s8 && s8 ? s8 : null;
+  if (c.op === "minutes_note" || c.op === "open_question") {
+    if (remote) remote.unnote(meeting!.id, c.id);
+    else if (meeting) meeting.notes = (meeting.notes ?? []).filter((x) => x.card_id !== c.id);
+  } else if (c.op === "agenda_next" || c.op === "agenda_skip") {
+    const was = (c.undo?.agenda as MeetingAgenda | undefined) ?? EMPTY_AGENDA;
+    if (remote) remote.setAgenda(meeting!.id, was);
+    else if (meeting) meeting.agenda_state = was;
+  } else if (c.op === "record_decision") {
+    const id = c.decision_id ?? (c.undo?.decision_id as string | undefined);
+    if (remote && id) remote.undecide(id);
+    else if (!meeting && id) s8?.undecide(id);
+  }
+}
+
 /** The S9 routes; null for any other path. */
-export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, req: Request, p: string[]): Promise<Response | null> {
+export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, req: Request, p: string[], s8?: ChatMeetings): Promise<Response | null> {
   if (p[1] !== "simple") return null;
   const m = req.method;
   const body = async () => (await req.json().catch(() => ({}))) as Values;
+  // S8's review meetings host the chat too: mirror the asked one, and those cards were made in, from S8's rules.
+  if (s8) {
+    const ids = new Set([...Object.values(chat.meetings).filter((x) => x.s8).map((x) => x.id), ...(p[2] === "meetings" && p[3] && !chat.meetings[p[3]] ? [p[3]] : [])]);
+    for (const id of ids) {
+      const found = s8.find(id);
+      if (found) chat.meetings[id] = { ...(chat.meetings[id] ?? { agenda: [], decisions: [] }), ...found, id, s8: true };
+    }
+  }
 
   if (p[2] === "walk" && !p[3] && m === "GET") return json(200, await walkOut(db, chat, ctx));
 
@@ -835,7 +1114,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
           stopped = { card_id: c.id, summary: c.summary, reason: why_not ?? "You may not apply this change" };
           break;
         }
-        const r = await applyOne(db, chat, c, ctx, null);
+        const r = await applyOne(db, chat, c, ctx, null, s8);
         if (r instanceof Response) {
           const d = ((await r.json().catch(() => ({}))) as { detail?: unknown }).detail;
           const reason = typeof d === "string" ? d : d && typeof d === "object" && "message" in d ? String((d as { message: unknown }).message) : "The change engine refused it";
@@ -852,7 +1131,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     const b = await body();
     const text = String(b.text ?? "").trim();
     if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
-    const understood = say(db, chat, `ask:${ctx.id}`, null, ctx, text, b.only_understood === true);
+    const understood = say(db, chat, `ask:${ctx.id}`, null, ctx, text, b.only_understood === true, typeof b.page === "string" ? (s8?.documentOf(b.page) ?? null) : null);
     return json(200, { ...threadOut(db, chat, chat.threads[`ask:${ctx.id}`] ?? null, ctx, null), understood });
   }
 
@@ -881,6 +1160,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       if (people.some((id) => !meeting.attendee_ids.includes(id))) return json(422, { detail: "change_people: attendees of the meeting" });
       meeting.change_mode = mode;
       meeting.change_people = mode === "named" ? people : [];
+      if (meeting.s8) s8?.setMode(meeting.id, mode, meeting.change_people);
       return json(200, rulesOut(meeting, ctx));
     }
     return null;
@@ -899,10 +1179,16 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     }
     if (p[5] === "undo") {
       if (c.status !== "applied" || !c.change_id) return json(409, { detail: `Only an applied card undoes; this one is ${c.status}` });
-      const res = await engine(db, ctx, "POST", `/v1/simple/changes/${c.change_id}/undo`);
-      if (!res.ok) return res;
-      c.status = "undone";
       const meeting = meetingOf(chat, c);
+      if (LOCAL_OPS.has(c.op)) {
+        if (meeting?.ended) return json(409, { detail: "The meeting has ended" });
+        unapplyLocal(c, meeting, s8);
+      } else {
+        const res = await engine(db, ctx, "POST", `/v1/simple/changes/${c.change_id}/undo`);
+        if (!res.ok) return res;
+        if (meeting?.s8 && c.decision_id) s8?.undecide(c.decision_id);
+      }
+      c.status = "undone";
       if (meeting) meeting.decisions = meeting.decisions.filter((d) => d.card_id !== c.id);
       return json(200, cardOut(db, chat, c, ctx));
     }
@@ -913,7 +1199,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const b = await body();
       const n = b.fix == null ? null : Number(b.fix);
       if (n != null && !c.fixes[n]) return json(422, { detail: "fix: one of the card's fixes" });
-      const out = await applyOne(db, chat, c, ctx, n);
+      const out = await applyOne(db, chat, c, ctx, n, s8);
       return out instanceof Response ? out : json(200, out);
     }
   }

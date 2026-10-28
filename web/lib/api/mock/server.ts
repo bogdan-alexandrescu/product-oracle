@@ -153,7 +153,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
-import { ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { routeSimpleChat, seedReaderItems, seedSimpleChat, takeReaderWrote, type ChatDb } from "./simple-chat";
@@ -5161,7 +5161,21 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S9: change by chat and "Walk me through it", through the change engine above.
   if (p[1] === "simple" && ["chat", "meetings", "walk"].includes(p[2] ?? "")) {
     db.simple_chat ??= seedSimpleChat(db.members);
-    const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, req, p);
+    // S8's review meetings host the chat too (their notes, agenda and decisions), read and seeded on first use.
+    const roadmapDb = db.simple_roadmap;
+    const onePagerDb = db.simple_one_pager;
+    let reviewsCtx: MeetingsCtx | null = null;
+    const reviews = chatMeetings(() => {
+      const ctx: MeetingsCtx = (reviewsCtx ??= {
+        me: { id: me.id, role: me.role },
+        members: db.members.filter((x) => x.status !== "disabled").map((x) => ({ id: x.id, name: displayName(x.email, x.name), role: x.role, email: x.email })),
+        roadmap: roadmapDb,
+        onePager: onePagerDb,
+        rituals: ensureRituals(db, me),
+      });
+      return { db: ensureMeetings(db, ctx), ctx };
+    });
+    const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, req, p, reviews);
     if (chatRes) return chatRes;
   }
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
