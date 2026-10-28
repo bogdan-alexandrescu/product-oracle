@@ -60,6 +60,8 @@ MAX_TEXT = 60_000
 LETTERS = "abcdefghij"
 _MS = re.compile(r"\bM(\d{1,2})\b", re.I)
 _CODE = re.compile(r"\b([A-Z]{1,3}-\d{1,3})\b")
+# An open decision's code ("Q7").
+_QCODE = re.compile(r"\b([A-Z]{1,2}-?\d{1,3})\b")
 _NUM = re.compile(r"\d+(?:\.\d+)?")
 _MONTHS = {
     m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())
@@ -152,7 +154,13 @@ def _is_ms_table(h: list[str]) -> bool:
         _col(h, "milestone", "code") is not None
         and _col(h, "feature") is None
         and _col(h, "goal") is None
+        and _part_col(h) is None
     )
+
+
+def _part_col(h: list[str]) -> int | None:
+    """prd-timeline: an open questions / decisions table's or a risks table's column."""
+    return _col(h, "question", "open question", "decision", "risk")
 
 
 def _milestones(header: list[str], rows: list[list[str]], ref: date) -> list[dict[str, Any]]:
@@ -188,6 +196,7 @@ def _features(header: list[str], rows: list[list[str]], known: set[str]) -> list
     c_eff = _col(header, "effort", "engineer", contains="week")
     c_goal, c_order = _col(header, "goal"), _col(header, "when", "order", "placement", "timing")
     c_owner = _col(header, "owner")
+    c_kind, c_what = _col(header, "kind", "type"), _col(header, "what")
     out = []
     for r in rows:
         head = _cell(r, c_code)
@@ -217,8 +226,33 @@ def _features(header: list[str], rows: list[list[str]], known: set[str]) -> list
             "goals": _list(_cell(r, c_goal), ","),
             "order": (order + [""] * len(mss))[: len(mss)],
             "pm_owned": pm,
+            "kind": _cell(r, c_kind)[:80] or None, "what": _cell(r, c_what)[:200] or None,
         })  # fmt: skip
     return out
+
+
+def _part(header: list[str], rows: list[list[str]], by_code: dict[str, Any]) -> None:
+    """prd-timeline: a milestone's open decisions (a questions / decisions table: its code,
+    "Q7", and title) and its risks (a risks table), each row under the milestones it names."""
+    c_ms, c_q = _col(header, "milestone"), _part_col(header)
+    risk = header[c_q].startswith("risk")  # type: ignore[index]
+    c_title = _col(header, "title", "name", "what", "description")
+    for r in rows:
+        codes = [f"M{int(x)}" for x in _MS.findall(_cell(r, c_ms))]
+        text = _cell(r, c_q)
+        if risk:
+            item: Any = (_cell(r, c_title) if c_title not in (None, c_q) else "") or text
+            key = "risks"
+        else:
+            m = _QCODE.search(text)
+            title = _cell(r, c_title) if c_title not in (None, c_q) else ""
+            title = title or (text[m.end() :].strip(" ·:-–—") if m else "")
+            if not m or not title:
+                continue
+            item, key = {"code": m[1], "title": title[:200]}, "decisions"
+        for code in dict.fromkeys(codes):
+            if code in by_code and item:
+                by_code[code].setdefault(key, []).append(item)
 
 
 def _holidays(text: str, ref: date) -> list[dict[str, Any]]:
@@ -252,7 +286,9 @@ def parse(text: str, ref: date) -> dict[str, Any] | None:
     features: list[dict[str, Any]] = []
     goals: list[str] = []
     for h, rows in found:
-        if _col(h, "feature") is not None and _col(h, "milestone") is not None:
+        if _part_col(h) is not None and _col(h, "milestone") is not None:
+            _part(h, rows, by_code)
+        elif _col(h, "feature") is not None and _col(h, "milestone") is not None:
             features += _features(h, rows, known)
         elif h and h[0].startswith("goal"):
             cols = {i: f"M{int(m[1])}" for i, x in enumerate(h) if (m := _MS.fullmatch(x))}
@@ -299,6 +335,11 @@ def clean(answer: Any) -> dict[str, Any] | None:
             "targets": [{"goal": str(t["goal"])[:80], "target": str(t["target"])[:160]}
                         for t in m.get("targets") or []
                         if isinstance(t, dict) and t.get("goal") and t.get("target")],
+            "decisions": [{"code": str(d["code"]).strip()[:12], "title": str(d["title"])[:200]}
+                          for d in m.get("decisions") or []
+                          if isinstance(d, dict) and str(d.get("code") or "").strip()
+                          and str(d.get("title") or "").strip()][:8],
+            "risks": [str(x)[:200] for x in m.get("risks") or [] if str(x).strip()][:8],
         })  # fmt: skip
     if not milestones:
         return None
@@ -318,6 +359,8 @@ def clean(answer: Any) -> dict[str, Any] | None:
             "milestones": mss, "effort": (effort + [None] * len(mss))[: len(mss)],
             "goals": [str(g)[:80] for g in f.get("goals") or [] if str(g).strip()],
             "order": (order + [""] * len(mss))[: len(mss)], "pm_owned": pm,
+            "kind": str(f["kind"])[:80] if f.get("kind") else None,
+            "what": str(f["what"])[:200] if f.get("what") else None,
         })  # fmt: skip
     goals = [str(g)[:80] for g in answer.get("goals") or [] if str(g).strip()]
     for f in features:
@@ -538,6 +581,77 @@ def current_span(views: list[View], today: date) -> SimplePlanSpan | None:
     return max(spans, key=lambda s: (s.end, s.start))
 
 
+# --------------------------------------------------------------------------- what Oracle has
+
+
+def _current_milestone(view: View, today: date) -> SimplePlanMilestone | None:
+    """The milestone running today, else the next to start, else the last."""
+    dated = [m for m in view.milestones if m.start_date and m.end_date]
+    running = next((m for m in dated if m.start_date <= today <= m.end_date), None)  # type: ignore[operator]
+    ahead = [m for m in dated if m.start_date > today]  # type: ignore[operator]
+    return (
+        running
+        or (min(ahead, key=lambda m: m.start_date) if ahead else None)
+        or (  # type: ignore[arg-type, return-value]
+            dated[-1] if dated else None
+        )
+    )
+
+
+def _measure(value: float, unit: str | None) -> str:
+    v = f"{value:,.0f}" if value == int(value) else f"{value:,g}"
+    return f"{v}%" if unit == "%" else f"{v} {unit}".strip()
+
+
+async def enrich(db: AsyncSession, document_id: uuid.UUID, view: View) -> View:
+    """prd-timeline review: what Oracle already has for the plan's part: each slice's flow
+    (the newest drawn flow of the PRD's roadmap item with the feature's code) and each goal's
+    measured value (a goal Oracle tracks by that name: its current value with its unit),
+    on track or behind against its target at the milestone running today, else the next."""
+    from oracle.baseline.goals import COMPARISONS, company_today, meets
+    from oracle.baseline.models import Entity
+    from oracle.roadmap.models import RoadmapItem
+    from oracle.simple import visuals
+    from oracle.simple.priorities import prd_code
+
+    if view.slices:
+        items = list(
+            await db.scalars(select(RoadmapItem).where(RoadmapItem.prd_document_id == document_id))
+        )
+        flows = await visuals.flows_for(db, "feature", [i.id for i in items])
+        steps: dict[str, list[str]] = {}
+        for i in items:
+            code = prd_code(i.prd_section_key)
+            if code and i.id in flows and code not in steps:
+                steps[code] = list(flows[i.id].steps)
+        for s in view.slices:
+            if not s.flow_steps and s.feature_code in steps:
+                s.flow_steps = list(steps[s.feature_code])
+    if not view.goals:
+        return view
+    names = {g.name.strip().lower() for g in view.goals}
+    tracked: dict[str, Entity] = {}
+    for e in await db.scalars(select(Entity).where(Entity.type == "goal")):
+        name = (e.title or "").strip().lower()
+        if name not in names or e.status == "rejected":
+            continue
+        if name not in tracked or e.status == "confirmed":
+            tracked[name] = e
+    current = _current_milestone(view, await company_today(db))
+    for g in view.goals:
+        e = tracked.get(g.name.strip().lower())
+        value = _float((e.attrs or {}).get("current")) if e is not None else None
+        if e is None or value is None:
+            continue
+        g.measured = _measure(value, e.attrs.get("unit"))
+        want = next((t.target for t in g.targets if current and t.milestone == current.code), None)
+        target = _number((want or "").replace(",", ""))
+        comparison = e.attrs.get("comparison") or "at_least"
+        if target is not None and comparison in COMPARISONS:
+            g.on_track = meets(value, comparison, target)
+    return view
+
+
 # --------------------------------------------------------------------------- storage
 
 
@@ -621,7 +735,8 @@ async def views(db: AsyncSession, prd_ids: set[uuid.UUID]) -> dict[uuid.UUID, Vi
     return out
 
 
-def plan_out(
+async def plan_out(
+    db: AsyncSession,
     document: Document,
     row: SimplePrdPlan | None,
     v: DocumentVersion | None,
@@ -637,7 +752,7 @@ def plan_out(
     if row.status != "ready":
         msg = {"reading": READING, "failed": FAILED}.get(row.status, NO_PLAN)
         return SimplePlanOut(status=row.status, message=msg, **base)  # type: ignore[arg-type]
-    view = compute({**row.data, "source": row.source})
+    view = await enrich(db, document.id, compute({**row.data, "source": row.source}))
     return SimplePlanOut(
         status="ready", source=row.source, dated=view.dated, message=view.message,  # type: ignore[arg-type]
         milestones=view.milestones, slices=view.slices, goals=view.goals,

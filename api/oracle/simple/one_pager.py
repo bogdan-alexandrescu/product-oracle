@@ -1588,6 +1588,21 @@ ul { margin: 0; padding-left: 16px; } li { margin: 1px 0; }
 TONES = [("#dce8ff", "#3b6fd8", "#173d8a"), ("#ece3ff", "#7a4fd6", "#432088"),
          ("#fdeccb", "#c27c0e", "#6b4300")]  # fmt: skip
 PM_LANE = "PM-owned · no engineering"
+# prd-timeline review: the lanes' width on the page (70% of A4's 178 mm between margins, in
+# CSS px) and a 7pt bold character's, to fit a bar's codes as the web's fitCodes does.
+TL_PX = 0.70 * 178 / 25.4 * 96
+TL_CH = 5.2
+
+
+def fit_codes(codes: list[str], px: float) -> str:
+    """As many whole codes as fit the bar, then "+N"; never a code cut mid-way (a bar too
+    narrow for even its first code and "+N" shows its first code, as wide as the bar is)."""
+    for k in range(len(codes), 0, -1):
+        text = " · ".join(codes[:k]) + (f" +{len(codes) - k}" if k < len(codes) else "")
+        if len(text) * TL_CH + 10 <= px:
+            return text
+    return codes[0] if codes else ""
+
 
 # The plan strip shows this many rows; the rest are "+N more on the roadmap".
 PLAN_ROWS = 8
@@ -1676,6 +1691,9 @@ def _timeline_html(view: Any, today: Any) -> str:
     def pct(d: Any, end_of_day: bool = False) -> str:
         return f"{((d - start).days + (1 if end_of_day else 0)) / days * 100:.2f}%"
 
+    def px(a: Any, b: Any) -> float:
+        return ((b - a).days + 1) / days * TL_PX
+
     out = ["<div class='tl'><div class='r'><div class='n'></div><div class='t ax'>"]
     for m in view.milestones:
         fill, edge, ink = tone[m.code]
@@ -1724,7 +1742,8 @@ def _timeline_html(view: Any, today: Any) -> str:
             pm_cls = " pm" if of[0].pm_owned else ""
             out.append(f"<span class='bar{pm_cls}' style='left:{pct(a)};width:calc({pct(b, True)}"
                        f" - {pct(a)});top:{2 + row * 17}px;background:{fill};border-color:{edge};"
-                       f"color:{ink}'>{escape(' · '.join(x.code for x in of))}</span>")  # fmt: skip
+                       f"color:{ink};min-width:{len(of[0].code) * TL_CH + 10:.0f}px'>"
+                       f"{escape(fit_codes([x.code for x in of], px(a, b)))}</span>")  # fmt: skip
         out.append("</div></div>")
     return "".join(out) + "</div>"
 
@@ -1775,6 +1794,8 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     brand = await load_brand(db)
     # prd-timeline: a PRD with a dated plan prints its timeline page, then a page per milestone.
     view = (await plan_model.views(db, {out.document.id})).get(out.document.id)
+    if view is not None:
+        view = await plan_model.enrich(db, out.document.id, view)
     timeline = view if view is not None and view.dated and view.span else None
     parts = [
         "<!doctype html><html><head><meta charset='utf-8'>",
