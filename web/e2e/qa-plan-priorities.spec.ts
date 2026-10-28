@@ -40,9 +40,12 @@ test("qa-plan-7: the row's ▲ ▼ ⋯ never cover its flags", async ({ page }) 
   await open(page);
   for (const key of ["F-4", "F-7", "F-6"]) {
     const row = rowOf(page, key);
-    await row.hover();
     const actions = row.getByTestId("row-actions");
-    await expect(actions.getByRole("button", { name: "More actions" })).toBeVisible();
+    // Hover again if the rows were still settling when the mouse first arrived.
+    await expect(async () => {
+      await row.hover();
+      await expect(actions.getByRole("button", { name: "More actions" })).toBeVisible({ timeout: 1000 });
+    }).toPass();
     const flags = row.getByRole("gridcell").filter({ has: page.getByTestId("row-flags") });
     await expect(flags.getByTestId("row-flags").locator(":scope > *").first()).toBeVisible();
     const [a, c] = [(await actions.boundingBox())!, (await flags.boundingBox())!];
