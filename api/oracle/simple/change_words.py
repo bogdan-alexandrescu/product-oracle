@@ -117,6 +117,11 @@ def phrase(op: str, target: dict, before: dict, after: dict, item: str | None) -
             return f"changed the owner of {x}"
         case "set_decider":
             return f"changed the decider of {x}"
+        # prd-questions: a PRD question (a decision) answered, or its decider named.
+        case "decide_question":
+            return f"decided {x}"
+        case "name_decider":
+            return f"named who decides {x}"
     return f"changed {x}"
 
 

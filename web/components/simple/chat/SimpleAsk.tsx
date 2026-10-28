@@ -13,7 +13,7 @@ import { openStream } from "@/lib/stream";
 import { GENERAL, pageName, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
 import { errorMessage } from "@/lib/use-query";
 
-import { ChatComposer, ChatLine, shownLines, useCorrections, usePendingPoll } from "./ChatThread";
+import { ChatComposer, ChatLine, shownLines, useCorrections, usePendingPoll, type Typed } from "./ChatThread";
 
 type AskMessage = Schemas["DiscussionMessageOut"];
 
@@ -63,6 +63,13 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
   const { can } = useMe();
   const [chat, setChat] = useState<Chat>({ id: null, askId: null, page: pathname, general: false });
   const [recent, setRecent] = useState<ChatSummary[] | null>(null);
+  // Words typed in from outside (Suggest from the chat, a PRD question's Ask Oracle) bring back the chat from Recent chats.
+  const asked = useAskDraft();
+  const [seenAsk, setSeenAsk] = useState(asked);
+  if (asked !== seenAsk) {
+    setSeenAsk(asked);
+    if (asked && recent !== null) setRecent(null);
+  }
   // Each chat opened (new, from Recent, or switched to General) is its own view; a chat getting its id stays the same one.
   const [session, setSession] = useState(0);
   // An empty chat is about the page shown; a chat started stays about its own page.
@@ -324,11 +331,13 @@ function ChatView({
   const corrected = useCorrections();
   // "Suggest from the chat": the words a goal's drawer typed in, taken once by the box a person sees.
   const waiting = useAskDraft();
-  const [typed, setTyped] = useState("");
+  const [typed, setTyped] = useState<Typed>({ text: "", n: 0 });
   const here = useRef<HTMLElement>(null);
   useEffect(() => {
     // Only the box a person sees takes them (the dock's panel is hidden on a phone): a DOM check.
-    if (waiting && here.current?.getClientRects().length) setTyped(takeAskDraft());
+    if (!waiting || !here.current?.getClientRects().length) return;
+    const text = takeAskDraft();
+    setTyped((t) => ({ text, n: t.n + 1 }));
   }, [waiting]);
 
   return (

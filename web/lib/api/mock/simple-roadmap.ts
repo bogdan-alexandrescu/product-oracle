@@ -848,7 +848,11 @@ export async function routeSimpleRoadmap(db: SimpleDb, me: Who, req: Request, p:
   if (!s || !item) return json(404, { detail: "No such date suggestion" });
   if (!canDecideItem(db, item, me)) return json(403, { detail: "Only an owner or the roadmap's decider (with no decider, its owner) decides date suggestions" });
   if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
-  Object.assign(s, { status: "dismissed", decided_by: me.id, decided_at: new Date(mockNowMs()).toISOString() });
+  const at = new Date(mockNowMs()).toISOString();
+  // As the API: dismissing a planned item's row dismisses every open slice of the item.
+  for (const x of db.suggestions) {
+    if (x === s || (s.slice_code != null && x.item_id === s.item_id && x.status === "open" && x.slice_code != null)) Object.assign(x, { status: "dismissed", decided_by: me.id, decided_at: at });
+  }
   return json(200, { ...s, can_decide: true });
 }
 

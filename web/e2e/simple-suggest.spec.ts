@@ -197,6 +197,35 @@ for (const phone of [false, true]) {
       });
 
       /**
+       * Card simple-suggest-chat-again (train Z review): protects = "Suggest from the chat"
+       * pressed a second time with the same words fills the box again after the person cleared
+       * it, and pressed while the Ask panel shows Recent chats brings back the chat with the
+       * words in its box; fails_when = the second press leaves the box empty, or the panel stays
+       * on Recent chats; no_claim = the thread's own answer.
+       */
+      test(`"Suggest from the chat" again, and from Recent chats (${where})`, async ({ page }) => {
+        await signIn(page, EMAILS.commenter);
+        let drawer = await openDrawer(page);
+        await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
+        const box = page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true });
+        await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
+        await box.fill("");
+        if (phone) await page.keyboard.press("Escape");
+        drawer = await openDrawer(page);
+        await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
+        await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
+        const panel = page.getByTestId("hop-panel").filter({ visible: true });
+        await panel.getByTestId("ask-recent").click();
+        await expect(panel.getByTestId("ask-recent-list")).toBeVisible();
+        if (phone) await page.keyboard.press("Escape");
+        drawer = await openDrawer(page);
+        await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
+        await expect(page.getByTestId("hop-panel").filter({ visible: true }).getByTestId("ask-recent-list")).toHaveCount(0);
+        await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
+        await noSidewaysScroll(page, phone);
+      });
+
+      /**
        * Card simple-suggest-approver-decider: protects = with no named decider, the approver who
        * owns the goal roadmap's track decides its suggestions (as the API's drafts.can_edit):
        * the drawer names them ("Avery Lane decides."), they see Accept / Reject with the form

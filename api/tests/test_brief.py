@@ -622,6 +622,8 @@ async def test_document_view_is_remembered_per_user(client, tenant_id):
         "simple_roadmap": None,
         # Its PRD, Goal and Track picks; unset, all.
         "simple_filters": None,
+        # prd-questions: Simple's Decisions as List, Board or By meeting; unset, List.
+        "simple_decisions_view": None,
     }  # fmt: skip
     resp = await client.patch("/v1/me/preferences", json={"document_view": "full"}, headers=viewer)
     assert resp.status_code == 200 and resp.json()["document_view"] == "full"

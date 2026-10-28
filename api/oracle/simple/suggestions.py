@@ -235,9 +235,21 @@ async def decide(
     if action != "dismiss":
         raise SuggestionError(422, "Accept and edit go through the change engine")
     item = entry.row
-    s.status = "dismissed"
-    s.decided_by = getattr(principal, "user_id", None) or getattr(principal, "id", None)
-    s.decided_at = company_time.now()
+    by = getattr(principal, "user_id", None) or getattr(principal, "id", None)
+    now = company_time.now()
+    s.status, s.decided_by, s.decided_at = "dismissed", by, now
+    if s.slice_code is not None:
+        # The tray shows one row per item (BGD, 2026-10-28): dismissing it dismisses every
+        # open slice of the item, so the next slice's dates never take the row's place.
+        for other in await db.scalars(
+            select(RoadmapDateSuggestion).where(
+                RoadmapDateSuggestion.item_id == s.item_id,
+                RoadmapDateSuggestion.status == "open",
+                RoadmapDateSuggestion.slice_code.is_not(None),
+                RoadmapDateSuggestion.id != s.id,
+            )
+        ):
+            other.status, other.decided_by, other.decided_at = "dismissed", by, now
     await audit.record(
         db, principal, "roadmap_date_suggestion.dismiss", "roadmap_date_suggestion", s.id,
         data={"item_id": str(item.id), "start_date": _iso(s.start_date),

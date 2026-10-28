@@ -343,6 +343,34 @@ async def test_accept_a_slice_per_role(client, role, status):
     )
 
 
+async def test_dismissing_a_slice_dismisses_the_item(client):
+    """Train Z review: the tray shows one row per item (BGD, 2026-10-28), so Dismiss on its
+    first slice's suggestion dismisses every open slice of the item; the roadmap then shows
+    no suggestion for it (never the next slice's dates), and a refresh does not reopen one."""
+    ctx = await make_ctx()
+    await seed(ctx, items=("f-03",))
+    async with tenant_session(ctx.tenant_id) as s:
+        await suggestions.regenerate(s)
+        await s.commit()
+    rows = (await client.get("/v1/simple/roadmap/date-suggestions",
+                             headers=ctx.as_("owner"))).json()  # fmt: skip
+    first = next(r for r in rows if r["slice_code"] == "F-03a")
+    r = await client.post(
+        f"/v1/simple/roadmap/date-suggestions/{first['id']}/dismiss", headers=ctx.as_("owner")
+    )
+    assert r.status_code == 200, r.text
+    async with tenant_session(ctx.tenant_id) as s:
+        states = {x.slice_code: x.status for x in await s.scalars(select(RoadmapDateSuggestion))}
+    assert states == {"F-03a": "dismissed", "F-03b": "dismissed"}
+    roadmap = (await client.get("/v1/simple/roadmap", headers=ctx.as_("owner"))).json()
+    item = next(i for i in roadmap["items"] if i["key"] == "f-03")
+    assert item["suggestion"] is None
+    async with tenant_session(ctx.tenant_id) as s:
+        await suggestions.regenerate(s)
+        await s.commit()
+        assert {x.status for x in await s.scalars(select(RoadmapDateSuggestion))} == {"dismissed"}
+
+
 PROSE_ANSWER = {
     "milestones": [
         {"code": "M1", "name": "Prove it", "start": "2026-11-09", "end": "2026-12-04",
