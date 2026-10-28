@@ -71,6 +71,8 @@ test("qa-settings-11: a state confirm opens on its Reason, Escape cancels it, an
   await expect(pause).toHaveCount(0);
   await expect(row(page, "personal")).toContainText("Paused");
   await expect(pane.getByRole("button", { name: "Pause", exact: true })).toBeDisabled();
+  // Focus lands on a state button still enabled, not on the page's body.
+  await expect(pane.getByRole("button", { name: "Make available" })).toBeFocused();
   await expect(pane.getByRole("button", { name: "Pause", exact: true })).toHaveAttribute("title", "Already paused.");
 
   // The page still answers at once: Make available opens on its Reason and goes through.
@@ -82,6 +84,23 @@ test("qa-settings-11: a state confirm opens on its Reason, Escape cancels it, an
   await pane.getByRole("button", { name: "Make available" }).click({ timeout: 5_000 });
   await back.getByRole("button", { name: "Make available" }).click({ timeout: 5_000 });
   await expect(row(page, "personal")).toContainText("Available", { timeout: 5_000 });
+});
+
+test("qa-settings-11: pausing the account the page opened on keeps it in the inspector", async ({ page }) => {
+  await openAccounts(page);
+  const pane = detail(page);
+  // The page opens on the account that needs a person; nothing chosen by hand.
+  await expect(pane.getByRole("heading", { name: "old-laptop" })).toBeVisible();
+  await pane.getByRole("button", { name: "Pause", exact: true }).click();
+  const pause = pane.getByRole("dialog", { name: "Pause old-laptop?" });
+  await expect(pause.getByLabel("Reason (required)")).toBeFocused();
+  await page.keyboard.type("lost laptop");
+  await page.keyboard.press("Enter");
+  await expect(row(page, "old-laptop")).toContainText("Paused");
+  // Paused, it no longer needs a person; the inspector stays on it rather than jumping away.
+  await expect(pane.getByRole("heading", { name: "old-laptop" })).toBeVisible();
+  await expect(pane.getByRole("button", { name: "Pause", exact: true })).toBeDisabled();
+  await expect(pane.getByRole("button", { name: "Make available" })).toBeFocused();
 });
 
 test("qa-settings-14: the inspector shows no id, names Anthropic, and the header says when usage was checked", async ({ page }) => {

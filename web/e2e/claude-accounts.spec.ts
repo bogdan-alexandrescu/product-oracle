@@ -67,7 +67,7 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
     expect(Math.abs(l.y + l.height / 2 - (t.y + t.height / 2))).toBeLessThan(3);
     expect(t.x).toBeGreaterThan(l.x + l.width - 1);
   }
-  await expect(detail(page).getByTestId("tile-Last given out")).toContainText("never");
+  await expect(detail(page).getByTestId("tile-Last given out")).toContainText("Never");
 });
 
 test("claude accounts: holders and history tabs load when opened", async ({ page }) => {
