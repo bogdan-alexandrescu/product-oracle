@@ -80,9 +80,10 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
     run(async () => {
       stopPreview();
       const r = await applyCard(card.id, fix);
-      if (r.result.change.status === "proposed" && r.result.change.routed_to.length) {
+      if (r.result && r.result.change.status === "proposed" && r.result.change.routed_to.length) {
         const people = await unwrap(api.GET("/v1/people", { params: { query: { ids: r.result.change.routed_to } } })).catch(() => []);
-        setRoutedTo(r.result.change.routed_to.map((id) => people.find((p) => p.user_id === id)?.name ?? "the decider"));
+        const routed = r.result.change.routed_to;
+        setRoutedTo(routed.map((id) => people.find((p) => p.user_id === id)?.name ?? "the decider"));
       }
       return r.card;
     });

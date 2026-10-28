@@ -552,6 +552,11 @@ class SimpleMeeting(TenantScoped, Base):
     minutes_job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     delivery: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # chat-actions: [{id, kind: note|question, text, by, at}] added during the meeting, and
+    # {next: item id | None, skipped: [item ids]}.
+    notes: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False,
+                                                        server_default="[]")  # fmt: skip
+    agenda: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
 
 
 class SimpleMeetingDecision(TenantScoped, Base):

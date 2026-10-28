@@ -85,7 +85,8 @@ export type ChatRules = {
 
 /** `understood`: false when Oracle's plan reader did not know the last line (with only_understood, nothing was written). */
 export type ChatThread = { id: string | null; meeting_id: string | null; messages: ChatMessage[]; rules: ChatRules | null; understood?: boolean };
-export type ChatApply = { card: ChatCard; result: Schemas["SimpleChangeResult"] };
+// chat-actions: null for the direct ops (minutes notes, agenda, decisions).
+export type ChatApply = { card: ChatCard; result: Schemas["SimpleChangeResult"] | null };
 
 export type WalkStep = {
   id: string;
