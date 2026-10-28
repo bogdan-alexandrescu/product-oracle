@@ -27,7 +27,7 @@ test("priorities: method switch changes the ranking and the formula", async ({ p
 
   await methods.getByRole("radio", { name: "RICE" }).click();
   await expect(page.getByTestId("formula")).toContainText("reach × impact × confidence");
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5400");
+  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400");
   // F-4 has no reach: unscored and flagged.
   await expect(page.getByTestId("priority-row-F-4")).toContainText("Missing inputs");
   await expect(page.getByTestId("priority-row-F-4").getByTestId("score")).toHaveText("—");
@@ -41,7 +41,7 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   const noGoal = page.getByTestId("priority-row-F-6");
   await expect(noGoal).toContainText("Serves no confirmed goal");
   await expect(page.getByTestId("priority-row-F-7")).toContainText("Dependency cycle");
-  await expect(page.getByTestId("priority-row-F-5")).toContainText("Moved for a dependency");
+  await expect(page.getByTestId("priority-row-F-5")).toContainText("Ranked higher: Shipping cost shown in the cart depends on it");
   await expect(page.getByTestId("priority-row-F-4")).toContainText("Low confidence");
 
   // Select: the inspector shows steps, inputs, confidence and goals.
@@ -50,11 +50,11 @@ test("priorities: flags, cycles and the explanation of a row", async ({ page }) 
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
   const ex = page.getByTestId("explanation-F-1");
-  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("goal value = 3×2 (Raise activation) = 6");
-  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("score = 6 × 75% ÷ 2 = 2.25");
+  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Goal value = 3×2 (Raise activation) = 6");
+  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Score = 6 × 75% ÷ 2 = 2.25");
   await expect(ex).toContainText("from evidence");
   await expect(ex).toContainText("Interview 07");
-  await expect(ex.getByRole("cell", { name: "attrs.effort" })).toBeVisible();
+  await expect(ex.getByRole("cell", { name: "Effort (from the feature)" })).toBeVisible();
 
   // Assumed goal weight, and an order note.
   await page.getByTestId("priority-row-F-3").getByRole("button", { name: "Shared projects" }).click();
@@ -74,7 +74,7 @@ test("priorities: save a snapshot", async ({ page }) => {
   await expect(page.getByText("No snapshots yet.")).toBeVisible();
 
   await page.getByRole("radio", { name: "MoSCoW" }).click();
-  await expect(page.getByTestId("formula")).toContainText("must (4)");
+  await expect(page.getByTestId("formula")).toContainText("Must have (4)");
   await page.getByLabel("Snapshot note").fill("Before planning");
   await page.getByRole("button", { name: "Save snapshot" }).click();
   await expect(page.getByRole("status")).toContainText("Snapshot saved: MoSCoW ranking of 8 features");

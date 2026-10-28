@@ -28,8 +28,8 @@ test("impact: an owner sees the lineage, picks an output and settles it, then pr
   await expect(page.getByText("Preview: nothing has been marked stale.")).toBeVisible();
 
   const graph = page.getByRole("region", { name: "Lineage" });
-  await expect(graph.getByTestId("lineage-subject")).toContainText("checkout-redesign@2");
-  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "scope" })).toBeVisible();
+  await expect(graph.getByTestId("lineage-subject")).toContainText("Checkout redesign PRD v2");
+  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Scope" })).toBeVisible();
   await expect(graph.getByTestId("lineage-output")).toHaveCount(7);
 
   // The plan: counts, one row per proposal, and the superseded output with no proposal.
@@ -43,9 +43,9 @@ test("impact: an owner sees the lineage, picks an output and settles it, then pr
   // Choosing an output highlights its path and opens its plan row.
   await graph.getByTestId("lineage-output").filter({ hasText: "Checkout flow" }).click();
   await expect(graph.getByTestId("lineage-output").filter({ hasText: "Checkout flow" })).toHaveAttribute("aria-pressed", "true");
-  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "scope" })).toHaveAttribute("data-on-path", "true");
+  await expect(graph.getByTestId("lineage-upstream").filter({ hasText: "Scope" })).toHaveAttribute("data-on-path", "true");
   const flow = row(page, "Checkout flow");
-  await expect(flow.getByTestId("plan-how")).toContainText("Propose a new version of this user flow covering only sections scope");
+  await expect(flow.getByTestId("plan-how")).toContainText("Propose a new version of this user flow covering only the “Scope” section");
   await expect(flow.getByText("1 · Settle staleness")).toBeVisible();
 
   await flow.getByRole("button", { name: "Accept regeneration" }).click();
@@ -73,7 +73,7 @@ test("impact: a roadmap row gets an estimate with its threshold, then starts its
   await openImpact(page);
   await page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-output").filter({ hasText: "Usage alerts roadmap" }).click();
   const r = row(page, "Usage alerts roadmap");
-  await expect(r.getByTestId("plan-how")).toContainText("Start a roadmap run from the approved PRD version (flow prd_to_roadmap)");
+  await expect(r.getByTestId("plan-how")).toContainText("Start a roadmap run from the approved PRD version, focused on the “Scope” section");
   await r.getByRole("button", { name: "Estimate" }).click();
   await expect(r.getByTestId("plan-estimate")).toContainText("$6.00");
   await expect(r.getByTestId("plan-estimate")).toContainText(/Owner approval over\s*\$50\.00/);
@@ -89,7 +89,7 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await expect(table).toContainText("Wireframe");
   await table.getByText("Acceptance tests", { exact: false }).first().click();
   const inspector = page.getByRole("complementary", { name: /Acceptance tests/ });
-  await expect(inspector.getByTestId("dependency").filter({ hasText: "risks" })).toBeVisible();
+  await expect(inspector.getByTestId("dependency").filter({ hasText: "Risks and open questions" })).toBeVisible();
   // The table view keeps the plan list below the table, and C's stages in the inspector.
   await expect(page.getByRole("region", { name: "Regeneration plan" }).getByRole("listitem")).toHaveCount(7);
   await expect(inspector.getByText("1 · Settle staleness")).toBeVisible();
@@ -103,7 +103,7 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await page.getByRole("grid", { name: "Affected outputs" }).getByText("Acceptance tests").first().click();
   const tests = page.getByRole("complementary", { name: /Acceptance tests/ });
   await expect(tests.getByTestId("dependency").filter({ hasText: "R-90" })).toContainText("Deleted");
-  await expect(tests.getByText("requirement R-90 was deleted")).toBeVisible();
+  await expect(tests.getByText("Requirement R-90 was deleted")).toBeVisible();
   await page.goBack();
   await page.getByRole("button", { name: "Table" }).click();
 
@@ -112,7 +112,7 @@ test("impact: the table view lists outputs by category with the inspector's depe
   await page.getByRole("complementary", { name: /Saved addresses tech brief/ }).getByRole("link", { name: "Recorded change" }).click();
   await expect(page).toHaveURL(/\/impact\/changes\/[^/]+$/);
   await expect(page.getByText("Recorded: this change marked these outputs Potentially stale.").filter({ visible: true })).toBeVisible();
-  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("checkout-redesign@2#metrics");
+  await expect(page.getByTestId("lineage-subject").filter({ visible: true })).toContainText("Checkout redesign PRD v2 › Success metrics section edited");
 });
 
 test("impact: a what-if from a baseline item's drawer", async ({ page }) => {
@@ -184,7 +184,7 @@ test.describe("phone", () => {
     await page.goto("/documents/checkout-redesign/v/2/impact");
     await expect(page.getByRole("region", { name: "Lineage" }).getByTestId("lineage-subject")).toBeHidden();
     const list = page.getByRole("region", { name: "Affected outputs" });
-    await expect(list.getByText("From scope", { exact: false }).first()).toBeVisible();
+    await expect(list.getByText("From Scope", { exact: false }).first()).toBeVisible();
     await list.getByRole("button", { name: /Checkout flow/ }).click();
     const sheet = page.getByRole("dialog", { name: /Checkout flow/ });
     await expect(sheet.getByText("Built from")).toBeVisible();

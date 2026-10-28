@@ -51,7 +51,7 @@ test("Plan, Baseline and Priorities draw names, never a place code or a slug", a
   await expect(page.getByTestId("priority-row-F-2")).toContainText("Address lookup service");
   await row.getByRole("button", { name: /Saved addresses at checkout/ }).click();
   const ex = page.getByTestId("explanation-F-1");
-  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("goal value = 3×2 (G-A Activation) = 6");
+  await expect(ex.getByRole("list", { name: "Steps" })).toContainText("Goal value = 3×2 (G-A Activation) = 6");
   expect(await mainText(page)).not.toMatch(BARE);
 });
 
@@ -116,7 +116,7 @@ test.describe("on a phone", () => {
   });
 });
 
-test("the Confidence panel shows source titles, the id inside the card; a citation chip opens its card", async ({ page }) => {
+test("the Confidence panel shows source titles, no id in the card either; a citation chip opens its card", async ({ page }) => {
   await login(page);
   await page.goto("/priorities");
   await page.getByTestId("priority-row-F-1").getByRole("button", { name: /Saved addresses at checkout/ }).click();
@@ -128,7 +128,7 @@ test("the Confidence panel shows source titles, the id inside the card; a citati
   await ev.click();
   const card = page.getByTestId("code-card");
   await expect(card).toContainText("Interview 07");
-  await expect(card).toContainText("ev-1");
+  await expect(card).not.toContainText("ev-1");
   await expect(card.getByRole("link", { name: /Open source/ })).toHaveAttribute("href", "https://example.com/research/interview-07");
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);

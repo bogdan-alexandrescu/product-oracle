@@ -166,11 +166,11 @@ test("a dependency holds a pin below its prerequisite and offers to move it too"
   await sheet(page).getByLabel("Why?").fill("Cart abandonment spikes on shipping surprises");
   await sheet(page).getByRole("button", { name: "Save", exact: true }).click();
   const held = page.getByTestId("priority-row-F-2");
-  await expect(held.getByTestId("held-chip")).toHaveText("Held below F-5");
+  await expect(held.getByTestId("held-chip")).toHaveText("Held below Address lookup service");
   await held.getByRole("button", { name: "Shipping cost shown in the cart" }).click();
   const change = page.getByTestId("your-change");
-  await expect(change).toContainText("Held below F-5: it depends on it");
-  await change.getByRole("button", { name: "Move F-5 too" }).click();
+  await expect(change).toContainText("Held below Address lookup service: it depends on it");
+  await change.getByRole("button", { name: "Move Address lookup service too" }).click();
   await expect(sheet(page).getByLabel("Why?")).toHaveValue("Cart abandonment spikes on shipping surprises");
 });
 
