@@ -20,9 +20,10 @@ Test cards (protects / fails_when / no_claim):
 - test_item_talk_move_restated_per_role: protects="move it two weeks later" in the item's
   talk is restated in one line ("I understood: move … two weeks later, to 15 Oct – 29
   Nov.") with one card showing before -> after, what it breaks and its Correct fields;
-  Apply applies for the owner and the decider, proposes for approvers and commenters; a viewer gets a note
-  and no card; fails_when=the card is built for a viewer, the restatement is missing or
-  Apply bypasses the change engine's rights; no_claim=the web's layout.
+  Apply applies for the owner and the decider, proposes for approvers and commenters; a
+  viewer gets a note and no card; fails_when=the card is built for a viewer, the
+  restatement is missing or Apply bypasses the change engine's rights; no_claim=the web's
+  layout.
 - test_new_actions_per_role: protects=each new action (move to another milestone, move
   after another item, add an item with goal, milestone and dates, split into slices)
   read by the reader on the roadmap page becomes engine cards that apply for the owner
