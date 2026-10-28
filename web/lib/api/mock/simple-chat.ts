@@ -1156,8 +1156,24 @@ function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, m
 }
 
 /** The new cards of Oracle's line `messageId`. */
+/** roadmap-talk: as the API, every open card on the roadmap's pages may be corrected (its fields, Oracle's reading). */
+function roadmapCorrect(d: Draft): Draft {
+  if (d.correct !== undefined && d.correct !== null) return d;
+  const a = d.after as Record<string, unknown>;
+  const b = d.before as Record<string, unknown>;
+  const p = (d.preview ?? {}) as Record<string, unknown>;
+  if (d.op === "move_dates" && typeof a.start_date === "string" && typeof a.end_date === "string") {
+    const words = typeof b.start_date === "string" && typeof b.end_date === "string" ? { before: usSpan(b.start_date, b.end_date), after: usSpan(a.start_date, a.end_date) } : null;
+    return { ...d, change_words: d.change_words ?? words, correct: { fields: ["start_date", "end_date"], values: { start_date: a.start_date, end_date: a.end_date } } };
+  }
+  if (d.op === "edit_title" && typeof a.title === "string") return { ...d, change_words: d.change_words ?? { before: String(b.title ?? ""), after: a.title }, correct: { fields: ["title"], values: { title: a.title } } };
+  if (d.op === "set_owner" && typeof p.person_name === "string") return { ...d, change_words: d.change_words ?? { before: typeof p.before_name === "string" ? p.before_name : "No owner", after: p.person_name }, correct: { fields: ["owner"], values: { owner: p.person_name } } };
+  return d;
+}
+
 function storeCards(db: SimpleDb, chat: ChatDb, drafts: Draft[], messageId: string, key: string, meeting: Meeting | null): string[] {
-  return drafts.map((d) => {
+  const onRoadmap = !meeting && /:\/simple\/roadmap(\/|$)/.test(key);
+  return (onRoadmap ? drafts.map(roadmapCorrect) : drafts).map((d) => {
     const c: StoredCard = { ...d, id: crypto.randomUUID(), message_id: messageId, thread: key, meeting_id: meeting?.id ?? null, status: "open", change_id: null, decided_by_name: null, decided_at: null, decision_id: null };
     c.fixes = asIf(db, c).fixes;
     chat.cards[c.id] = c;
