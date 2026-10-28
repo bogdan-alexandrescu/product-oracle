@@ -342,7 +342,8 @@ async def test_end_and_minutes_job(client):
         "Who owns QA?"
     ]
     assert mins["action_items"][0] == {"title": "Write the QA plan", "owner_id": uid(w, "approver"),
-                                       "due_date": "2026-11-02", "owner_name": None}  # fmt: skip
+                                       "due_date": "2026-11-02", "owner_name": None,
+                                       "action_item_id": None}  # fmt: skip
     # Nobody said it (the meeting's record does not hold it): dropped.
     assert len(mins["action_items"]) == 1
     body = {"summary": "Edited summary", "open_questions": [], "action_items": []}
