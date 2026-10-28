@@ -986,6 +986,21 @@ function seedSimplePlanScenario(): Db {
 }
 
 /**
+ * roadmap-gantt, the "simple-plan-two" scenario: "simple-plan" with a second planned PRD (Usage
+ * alerts: its Weekly alert digest, F-06, is in the same plan's M1) whose plan this reader
+ * cannot open, and Public signup (F-13) under a goal of its own named Growth, the goal the
+ * plan's other Growth features move. Invented data.
+ */
+function seedSimplePlanTwoScenario(): Db {
+  const db = seedSimplePlanScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = { ...rm.plan!, prds: ["usage-alerts"], hidden: ["usage-alerts"] };
+  const signup = rm.items.find((x) => x.key === "plan-f-13");
+  if (signup) signup.goal = "growth";
+  return db;
+}
+
+/**
  * #723 S1 Home's "simple-home" scenario: the default company whose confirmed goals are those
  * Simple's roadmap items serve (Grow retention, Faster activation) plus a guardrail goal, each
  * with a weight and a metric path; two proposals the commenter made (routed to the owners);
@@ -2688,6 +2703,8 @@ function load(): Db {
                 ? seedSimpleWalkScenario
               : scenario === "simple-plan"
                 ? seedSimplePlanScenario
+              : scenario === "simple-plan-two"
+                ? seedSimplePlanTwoScenario
               : scenario === "simple-chat"
                 ? () => {
                     const db = seedSimpleHomeScenario();

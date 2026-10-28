@@ -127,6 +127,10 @@ export interface PlanDb {
   /** When the PRD's plan was last read (ISO time). */
   read_at: string;
   version: number;
+  /** roadmap-gantt ("simple-plan-two"): other PRDs whose items carry this plan's slices too. */
+  prds?: string[];
+  /** roadmap-gantt: PRDs whose plan the reader cannot open (404, as for a PRD they cannot read). */
+  hidden?: string[];
 }
 
 export const seedPlan = (): PlanDb => ({ read_at: "2026-10-20T15:05:00Z", version: 3 });
@@ -181,6 +185,7 @@ export function routeSimplePlan(
   p: string[],
 ): Response | null {
   if (p[1] !== "simple" || p[2] !== "prds" || !p[3] || p[4] !== "plan") return null;
+  if (plan?.hidden?.includes(p[3])) return json(404, { detail: "No such PRD" });
   const prd = prdOf(p[3]);
   if (!prd) return json(404, { detail: "No such PRD" });
   const mine = prd.slug === PLAN_PRD_SLUG ? plan : undefined;
