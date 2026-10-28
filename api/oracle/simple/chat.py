@@ -224,6 +224,8 @@ class Reply:
         # The people an unknown or ambiguous name may mean (build turns them into choices).
         self.people: list[str] = []
         self.person_text: str | None = None
+        # roadmap-talk: where an item talk's answer comes from (the message's citations).
+        self.citations: list[dict[str, Any]] = []
 
 
 class Ctx:
@@ -242,6 +244,9 @@ class Ctx:
         self.ask_decider: User | None = None
         # Only a line that may build a decision card resolves it (False: the line is not one).
         self.wants_decider = True
+        # roadmap-talk: the item whose talk this is ("it"), the company's goals.
+        self.item: service.Entry | None = None
+        self.goals: list[Any] = []
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -250,6 +255,7 @@ class Ctx:
         self.overlays = await drafts.overlays_for(self.db, self.principal)
         self.read = await service.load(self.db, self.overlays)
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
+        await _talk().load(self)
         self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
         if self.meeting is None and self.wants_decider and chat_actions.proposes(self.principal):
             self.ask_decider = await chat_actions.ask_decider(self.db, self.page_document)
@@ -266,6 +272,8 @@ class Ctx:
 
     def find(self, text: str) -> service.Entry | Reply:
         x = _unquote(text).lower()
+        if self.item is not None and x in _talk().IT:
+            return self.item
         es = self.entries()
         by_id = [e for e in es if str(e.row.id) == x or (e.row.item_key or "").lower() == x]
         if len(by_id) == 1:
@@ -684,7 +692,7 @@ def parse(c: Ctx, text: str) -> Reply:
             return e
         return Reply("answer", f"{e.row.title} is {e.status.replace('_', ' ')} ({e.row.horizon}).")
 
-    asks = _phrase(c, t) or _actions().phrase(t)
+    asks = _phrase(c, t) or _actions().phrase(t) or _talk().phrase(c, t)
     if asks is None:
         return Reply("question", f"I did not understand that. {EXAMPLES}", understood=False,
                      reader=True)  # fmt: skip
@@ -933,6 +941,7 @@ async def thread(
                 body=body, at=m.created_at, kind=kind,  # type: ignore[arg-type]
                 cards=by_msg.get(m.id, []), reply_to=m.reply_to, choices=choices,
                 picked=r.picked if r is not None else None, retry=kind == "failed",
+                source=_talk().source_label(m.citations),
             ))  # fmt: skip
     return ChatThreadOut(
         id=d.id if d is not None else None,
@@ -964,7 +973,9 @@ async def post(
     ctx.page = page
     ctx.wants_decider = _decision_line(text)
     await ctx.load()
-    reply = parse(ctx, text)
+    reply = _talk().restate(ctx, parse(ctx, text))
+    if ctx.item is not None and reply.kind == "answer":
+        reply.citations = _talk().source_of(ctx, "roadmap")
     if only_understood and not reply.understood and not reply.reader:
         out = await thread(db, principal, meeting_id, page)
         out.understood = False
@@ -1003,6 +1014,7 @@ async def _write(
     answer = DiscussionMessage(discussion_id=d.id, author_kind="oracle", body=reply.body,
                                status="pending" if reply.kind == "pending" else "complete",
                                reply_to=None, model=ENGINE, prompt=reply.kind,
+                               citations=reply.citations,
                                created_at=at + timedelta(microseconds=1))  # fmt: skip
     db.add_all([asked, answer])
     d.last_message_at = at
@@ -1122,12 +1134,15 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             )
     else:
         context["page"] = read.page
+        if c.item is not None:
+            # roadmap-talk: the item's own talk ("it" is this item).
+            context["item"] = _talk().item_context(c)
     items = []
     for e in c.entries()[:200]:
         r_ = e.resolved
         deciders = service.decider_ids(e, c.read.deciders)
         items.append({
-            "id": str(e.row.id), "key": e.row.item_key, "title": e.row.title,
+            "id": str(e.row.id), "key": e.row.item_key, "code": e.code, "title": e.row.title,
             "start": r_.start.date.isoformat(), "end": r_.end.date.isoformat(),
             "estimated": r_.undated, "milestone": (e.milestone.name if e.milestone else None),
             "owner": e.owner_name, "decider": _or([names[i] for i in deciders if i in names])
@@ -1146,6 +1161,8 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
         "context": context,
         "items": items,
         "people": [{"name": display_name(u.email, u.name), "email": u.email} for u in c.people],
+        "goals": [g.title for g in c.goals],
+        "milestones": [n for n, _ in _talk().milestones(c).values()],
         "today": c.today.isoformat(),
         "ops": [{"op": o.op, "describe": o.describe, "args": o.args} for o in OPS.values()],
     }
@@ -1246,10 +1263,14 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     principal = await drafts.principal_for(s, job.tenant_id, read.by)
     visibility.bind(s, principal)
     rules = await rules_of(s, read.meeting_id) if read.meeting_id is not None else None
-    c = await Ctx(s, principal, rules).load()
+    c = Ctx(s, principal, rules)
+    c.page = read.page
+    await c.load()
     answer = await ask(READER_JOB, await _payload(c, read))
-    reply = interpret(c, answer, read.ask_box)
+    reply = _talk().restate(c, interpret(c, answer, read.ask_box))
     msg.body, msg.prompt, msg.status = reply.body, reply.kind, "complete"
+    if reply.kind == "answer" and isinstance(answer, dict):
+        msg.citations = _talk().source_of(c, answer.get("source"))
     read.choices = _jsonable(reply.choices)
     await _attach(s, principal, msg, read.meeting_id, reply)
     await s.flush()
@@ -1386,6 +1407,12 @@ def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
     return e is not None and service.can_decide(principal, e, read_.deciders)
 
 
+def _talk() -> Any:
+    from oracle.simple import roadmap_talk
+
+    return roadmap_talk
+
+
 def _actions() -> Any:
     from oracle.simple import chat_actions
 
@@ -1487,6 +1514,7 @@ async def cards_out(
                 ]
                 fixes = [x for i in (ae.row.id, *ae.needed_by) if i in by_id
                          for x in _fixes(by_id[i], by_id)]  # fmt: skip
+        change_words, correct = _talk().correct_out(c)
         may: str | None = None
         bar = None
         if c.status == "open":
@@ -1500,7 +1528,8 @@ async def cards_out(
             may=may, why_not=bar, flags=flags, fixes=fixes, preview=c.preview,  # type: ignore[arg-type]
             flow=await _flow(db, c), change_id=c.change_id,
             decided_by_name=names.get(c.decided_by) if c.decided_by else None,  # type: ignore[arg-type]
-            decided_at=c.decided_at, decision_id=c.decision_id,
+            decided_at=c.decided_at, decision_id=c.decision_id, change_words=change_words,
+            correct=correct if c.status == "open" else None,
         ))  # fmt: skip
     return outs
 
@@ -1524,15 +1553,25 @@ async def one(db: AsyncSession, principal: Any, card: SimpleChatCard, rules: Any
 
 
 async def apply(
-    db: AsyncSession, principal: Any, card_id: uuid.UUID, fix: int | None = None
+    db: AsyncSession,
+    principal: Any,
+    card_id: uuid.UUID,
+    fix: int | None = None,
+    values: dict[str, Any] | None = None,
 ) -> tuple[ChatCardOut, SimpleChangeResult]:
     """Apply a card (or one of its fixes) through the change engine with the caller's own
-    rights; in a meeting an applied card is a meeting decision."""
+    rights; in a meeting an applied card is a meeting decision. ``values`` (roadmap-talk's
+    Correct): the card is rebuilt from them first, so the corrected values apply."""
     me = _me(principal)
     card, rules = await _get(db, principal, card_id)
     bar = _card_bar(principal, card, rules)
     if bar is not None:
         raise ChatError(403, bar)
+    if values:
+        if fix is not None:
+            raise ChatError(422, "values: a fix takes no corrections")
+        await _talk().correct(db, principal, card, values)
+        await db.flush()
     if card.op in _actions().DIRECT_OPS:
         return await _apply_direct(db, principal, card_id, rules, fix)
     if fix is not None:
@@ -1758,3 +1797,4 @@ async def walk(db: AsyncSession, principal: Any) -> WalkOut:
 
 
 import oracle.simple.chat_actions  # noqa: E402, F401  (chat-join: registers its ACTIONS)
+import oracle.simple.roadmap_talk  # noqa: E402, F401  (roadmap-talk: registers its actions)

@@ -298,6 +298,21 @@ async def _plan(db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: s
     }
     if span is not None:
         after["quarter"] = {"start": span[0].isoformat(), "end": span[1].isoformat()}
+    # roadmap-talk: an item added from the talk may come with its dates and milestone.
+    start = changes._day(body.after.get("start_date"), "after.start_date")
+    end = changes._day(body.after.get("end_date"), "after.end_date")
+    if (start is None) != (end is None) or (start and end and end < start):
+        raise ChangeError(422, "after.start_date and after.end_date: both, the end not first")
+    if start is not None and end is not None:
+        after["start_date"], after["end_date"] = start.isoformat(), end.isoformat()
+    m = body.after.get("milestone")
+    if m is not None:
+        name = " ".join(str(m.get("name") or "").split()) if isinstance(m, dict) else ""
+        if not name or len(name) > changes.TITLE_MAX:
+            raise ChangeError(422, f"after.milestone.name: 1 to {changes.TITLE_MAX} characters")
+        day = changes._day(m.get("date"), "after.milestone.date")
+        after["milestone"] = {"name": name, "date": changes._iso(day),
+                              "date_source": "typed" if day else None}  # fmt: skip
     return doc, target, after
 
 
@@ -354,6 +369,10 @@ async def _place(
         prd_document_id=track.prd_document_id if track is not None else None,
         prd_version_id=track.current_version_id if track is not None else None,
         note="added in Simple",
+        start_date=date.fromisoformat(c.after["start_date"]) if c.after.get("start_date") else None,
+        end_date=date.fromisoformat(c.after["end_date"]) if c.after.get("end_date") else None,
+        date_source="typed" if c.after.get("start_date") else None,
+        milestone=c.after.get("milestone"),
     )
     db.add(row)
     await db.flush()
