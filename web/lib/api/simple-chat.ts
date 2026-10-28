@@ -30,9 +30,9 @@ const ACTION_KINDS = new Set(["owner", "decider", "decision", "note", "question"
 export const isActionPreview = (p: CardPreview): p is ActionPreview => !!p && ACTION_KINDS.has(p.kind);
 
 /** A meeting's live notes and open questions typed in its chat (SimpleMeetingOut.notes). */
-export type MeetingNote = { kind: "note" | "question"; text: string; by_name: string; card_id: string };
+export type MeetingNote = Schemas["SimpleMeetingNote"];
 /** A meeting's agenda changes made in its chat (SimpleMeetingOut.agenda). */
-export type MeetingAgenda = { next: { id: string; title: string } | null; skipped: { id: string; title: string }[] };
+export type MeetingAgenda = Schemas["SimpleAgenda"];
 
 export type ChatFix = { label: string; op: string; target: Record<string, unknown>; before: Record<string, unknown>; after: Record<string, unknown> };
 

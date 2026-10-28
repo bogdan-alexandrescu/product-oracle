@@ -102,9 +102,9 @@ interface Meeting {
 }
 
 /** The meeting's live notes and open questions (SimpleMeetingOut.notes). */
-export type MeetingNote = { kind: "note" | "question"; text: string; by_name: string; card_id: string };
+export type MeetingNote = Schemas["SimpleMeetingNote"];
 /** The meeting's agenda changes (SimpleMeetingOut.agenda). */
-export type MeetingAgenda = { next: { id: string; title: string } | null; skipped: { id: string; title: string }[] };
+export type MeetingAgenda = Schemas["SimpleAgenda"];
 
 /**
  * S8's review meetings as the chat reads and writes them (server.ts builds it over
@@ -546,6 +546,9 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   const m = meetingOf(chat, c);
   const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
   if (bar) return { may: null, why_not: bar };
+  // As the API (chat_actions.bar): on Ask, approvers and owners record decisions.
+  if (!m && c.op === "record_decision" && ctx.role !== "approver" && ctx.role !== "owner")
+    return { may: null, why_not: "Approvers and owners record decisions; ask one of them" };
   const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
   // Filing a feature ask is every commenter's right (Requests), as are a meeting's notes, agenda
   // and decisions (the meeting's rules came first) and a decision on Ask; else the item's rule.
@@ -671,7 +674,7 @@ function applyLocal(c: StoredCard, meeting: Meeting | null, ctx: ChatCtx, s8?: C
   const undo: Values = {};
   let decision: string | null = null;
   if (c.op === "minutes_note" || c.op === "open_question") {
-    const n: MeetingNote = { kind: c.op === "minutes_note" ? "note" : "question", text: String(c.after.text ?? ""), by_name: by, card_id: c.id };
+    const n: MeetingNote = { id: `note-${c.id}`, kind: c.op === "minutes_note" ? "note" : "question", text: String(c.after.text ?? ""), by_name: by, card_id: c.id };
     if (remote) remote.note(meeting!.id, n);
     else if (meeting) (meeting.notes ??= []).push(n);
   } else if (c.op === "agenda_next" || c.op === "agenda_skip") {

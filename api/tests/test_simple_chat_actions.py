@@ -214,6 +214,7 @@ async def test_record_decision_in_a_meeting_and_on_ask(client):
     [d] = [x for x in mt["meeting_decisions"] if x["id"] == did]
     assert d["title"] == "Ship it weekly" and d["approver"]["id"] == uid(w, "approver")
     c2 = await one_card(client, w, "commenter", "decision: Keep five steps", mid)
+    assert c2["preview"]["decider_name"] == "Dee Cider"
     r = await apply(client, w, "commenter", c2["id"])
     did2 = r.json()["card"]["decision_id"]
     [d2] = [x for x in (await get(client, w, mid))["meeting_decisions"] if x["id"] == did2]

@@ -104,7 +104,13 @@ def build_record_decision(c: chat.Ctx, args: dict[str, Any]) -> dict | chat.Repl
     elif (doc := _page_document(c)) is not None:
         target["document_id"] = str(doc.id)
     where = "meeting" if c.meeting is not None else "page"
-    decider_name = _name(decider) if decider else getattr(c, "default_decider_name", None)
+    if decider is not None:
+        decider_name = _name(decider)
+    elif c.meeting is not None:
+        decider_name = getattr(c, "meeting_decider_name", None) or "the meeting's decider"
+    else:
+        me = chat._me(c.principal)
+        decider_name = next((_name(u) for u in c.people if u.id == me), "you")
     return {"summary": f"Record the decision: {text}", "op": "record_decision", "item_id": None,
             "target": target, "before": {},
             "after": {"text": text, "decider_id": str(decider.id) if decider else None},
@@ -211,6 +217,14 @@ async def _meeting_decider(db: AsyncSession, meeting_id: uuid.UUID) -> uuid.UUID
     m = await db.get(SimpleMeeting, meeting_id)
     doc = await db.get(Document, m.prd_document_id) if m is not None else None
     return (await meetings.prd_who(db, doc)).decider if doc is not None else None
+
+
+async def meeting_decider_name(db: AsyncSession, c: chat.Ctx) -> str | None:
+    """The name of the meeting PRD's decider (an unnamed decision is theirs)."""
+    if c.meeting is None:
+        return None
+    decider = await _meeting_decider(db, c.meeting.meeting_id)
+    return next((_name(u) for u in c.people if u.id == decider), None) if decider else None
 
 
 async def apply_record_decision(db: AsyncSession, principal: Any, card: SimpleChatCard) -> None:

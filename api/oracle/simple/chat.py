@@ -215,6 +215,7 @@ class Ctx:
         # chat-actions: the Ask panel's page and the document it shows.
         self.page: str | None = None
         self.page_document: Any = None
+        self.meeting_decider_name: str | None = None
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -223,6 +224,7 @@ class Ctx:
         self.overlays = await drafts.overlays_for(self.db, self.principal)
         self.read = await service.load(self.db, self.overlays)
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
+        self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
         return self
 
     @property
