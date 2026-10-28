@@ -154,7 +154,13 @@ async def capture(
         reversibility=reversibility,
         status="decided",
         approver_id=approver_id,
-        driver="oracle",
+        # A call a person made (an approval, a review meeting) is driven by them; Oracle
+        # only wrote the record. Oracle drives its own calls and autonomy's.
+        driver=(
+            f"user:{decided_by or approver_id}"
+            if decided_actor == "user" and origin not in ("oracle", "autonomy")
+            else "oracle"
+        ),
         evidence_ids=list(dict.fromkeys(evidence_ids)),
         entity_ids=list(dict.fromkeys(entity_ids)),
         subjects=list(subjects)[:10],

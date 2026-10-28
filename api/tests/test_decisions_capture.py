@@ -81,6 +81,8 @@ async def test_first_version_approval_is_captured_once(client):
     assert d.expected_outcome == "See the document's success metrics"
     assert d.review_at == today() + timedelta(days=90)
     assert {"kind": "document_version", "id": str(version_id)}.items() <= d.subjects[0].items()
+    # fix-company review (prod-3): the person who approved drives it; Oracle only wrote it.
+    assert d.driver == f"user:{admin}"
 
 
 async def test_accepted_gap_risk_is_captured_with_its_review_date(client):

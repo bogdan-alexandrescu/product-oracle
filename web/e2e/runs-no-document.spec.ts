@@ -94,7 +94,7 @@ async function noRowInTheInbox(page: Page) {
   await page.getByTestId("nav-inbox").click();
   await expect(page).toHaveURL(/\/inbox$/);
   const tabs = page.getByTestId("inbox-state-tabs").filter({ visible: true });
-  for (const tab of [/^New/, /^Open/]) {
+  for (const tab of [/^New/, /^Seen/]) {
     await tabs.getByRole("tab", { name: tab }).click();
     await expect(tabs.getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("inbox-no-document")).toHaveCount(0);
@@ -112,7 +112,7 @@ test("a run that finished with no document: an Inbox row says why and what to do
 
   // The runs list: Succeeded, with no Draft rejected chip.
   await page.getByTestId("nav-runs").click();
-  const listed = page.getByTestId("run-row").filter({ hasText: "guest-checkout" });
+  const listed = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
   await expect(listed).toContainText("Succeeded");
   await expect(listed.getByTestId("run-draft-rejected")).toHaveCount(0);
 

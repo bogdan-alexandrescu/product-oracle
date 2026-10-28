@@ -2,13 +2,15 @@
 
 import { useRef, useState, type FormEvent } from "react";
 
-import { Button, Chip, DataTable, Empty, InfoTip, Inspector, InspectorSection, Panel, Split, useFocusTrap, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, InfoTip, Inspector, InspectorSection, Panel, Split, useFocusTrap, type Column } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { calendarDay, useCompanyZone } from "@/lib/dates";
+import { useCompanyZone } from "@/lib/dates";
+import { formatDay } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { CompanyEmpty } from "../../_empty";
 import { FindingCard } from "./FindingCard";
 import {
   KIND_LABEL,
@@ -47,6 +49,7 @@ export function Alternatives({
   onAdding: (open: boolean) => void;
 }) {
   const zone = useCompanyZone();
+  const mayAdd = useMe().can("create_competitor");
   const list = useQuery("competitors", () => unwrap(api.GET("/v1/competitors")));
   const rows = list.data ?? [];
   const selected = rows.find((c) => c.id === picked) ?? rows[0] ?? null;
@@ -78,7 +81,7 @@ export function Alternatives({
       width: "112px",
       phone: "meta",
       phoneLabel: "Last change",
-      cell: (c) => <span className="tnum text-sm">{c.last_change_on ? calendarDay(c.last_change_on) : "—"}</span>,
+      cell: (c) => <span className="tnum text-sm">{c.last_change_on ? formatDay(c.last_change_on) : "—"}</span>,
     },
     {
       key: "month",
@@ -131,7 +134,20 @@ export function Alternatives({
           }
         >
           {list.data && rows.length === 0 ? (
-            <Empty testId="alternatives-empty">No alternatives yet</Empty>
+            <CompanyEmpty
+              testId="alternatives-empty"
+              title="No alternatives yet"
+              action={
+                mayAdd ? (
+                  <Button icon="plus" onClick={() => onAdding(true)}>
+                    Add your first alternative
+                  </Button>
+                ) : undefined
+              }
+            >
+              Add what a customer could use instead of you: a competitor, a different kind of product, or a spreadsheet and habit. Oracle then
+              reads their public pages every week and lists what changed.{mayAdd ? "" : " Approvers and owners add them."}
+            </CompanyEmpty>
           ) : (
             <DataTable
               label="Alternatives"

@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { Chip, DataTable, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
 
+import { Explained } from "./Cards";
 import { FindingRow } from "./DriftList";
 import { findingsAbout, plural, type Choice, type Finding, type Stack } from "./lib";
 
@@ -130,16 +131,26 @@ export function StackTable({
       ),
     },
   ];
+  // qa-company-36: an empty stack says what it holds and what fills it, not a header row
+  // over "No approved strategy yet".
+  if (stack && rows.length === 0) {
+    return (
+      <Explained testId="stack-empty" title="Nothing in the stack yet">
+        Each goal shows here under the focus choice it follows from, with the roadmap items serving it. It fills in once a product
+        strategy is approved.
+      </Explained>
+    );
+  }
   return (
     <DataTable
       label="Strategy stack"
       testId="strategy-stack"
       columns={columns}
-      rows={rows}
+      rows={stack ? rows : undefined}
+      loading={!stack}
       rowKey={(r) => r.key}
       selected={selected}
       onSelect={onSelect}
-      empty="No approved strategy yet"
       group={(r) => r.group}
       groupLabel={(g) =>
         g === UNALIGNED ? (

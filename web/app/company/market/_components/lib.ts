@@ -1,6 +1,7 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { calendarDay, zoneDay } from "@/lib/dates";
+import { zoneDay } from "@/lib/dates";
+import { formatDay } from "@/lib/format";
 
 export type Competitor = Schemas["CompetitorOut"];
 export type CompetitorDetail = Schemas["CompetitorDetail"];
@@ -60,7 +61,7 @@ export function originOf(c: Change): string {
 
 /** A finding's date: when it was published, else when Oracle found it ("found Nov 2"). */
 export function findingDate(f: Finding): string {
-  return f.published_on ? calendarDay(f.published_on) : `found ${calendarDay(f.found_on)}`;
+  return f.published_on ? formatDay(f.published_on) : `found ${formatDay(f.found_on)}`;
 }
 
 /** An instant's day in the Company time zone ("Oct 23"). */

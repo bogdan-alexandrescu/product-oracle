@@ -1,11 +1,22 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { shownDay } from "@/lib/dates";
+import { formatDate } from "@/lib/format";
+import { displayName } from "@/lib/names";
 
 export type Decision = Schemas["DecisionOut"];
 export type DecisionSummary = Schemas["DecisionSummary"];
 export type DecisionOption = Schemas["DecisionOption"];
-export type Person = Schemas["DecisionPerson"];
+/** A member for the pickers, with the name the company knows them by (GET /v1/people). */
+export type Person = Schemas["DecisionPerson"] & { name?: string };
+
+/** A person's name; without a member record, the name their email gives ("first.last@" reads "First Last"). */
+export const personName = (p: Pick<Person, "email"> & { name?: string }) => p.name?.trim() || displayName(p.email);
+
+/** A picker option's words: the name first, the email after it. */
+export const personOption = (p: Person) => {
+  const name = personName(p);
+  return name === p.email ? name : `${name} · ${p.email}`;
+};
 export type DecisionState = DecisionSummary["state"];
 
 export const STATE_LABEL: Record<DecisionState, string> = {
@@ -36,7 +47,7 @@ export type ClassFilter = "judgement" | "checkpoint" | "all";
 export const CLASS_FILTERS: { value: ClassFilter; label: string }[] = [
   { value: "judgement", label: "Judgement calls" },
   { value: "checkpoint", label: "Checkpoints" },
-  { value: "all", label: "All" },
+  { value: "all", label: "All kinds" },
 ];
 
 /** State chips; Needs me (the default when I have any) is what waits on me to decide or review. */
@@ -46,7 +57,7 @@ export const STATE_FILTERS: { value: StateFilter; label: string }[] = [
   { value: "proposed", label: "Proposed" },
   { value: "review_due", label: "Review due" },
   { value: "decided", label: "Decided" },
-  { value: "all", label: "All" },
+  { value: "all", label: "Any state" },
 ];
 
 /** The From menu: where a decision came from. The two checkpoint entries split by the choice. */
@@ -126,10 +137,9 @@ export function isoDay(days = 0): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** "18 Jan 2027" from a date or a timestamp; "—" for none. */
+/** "Jan 18, 2027" from a date or a timestamp (the shell's formatDate); "—" for none. */
 export function shortDate(value: string | null | undefined): string {
-  if (!value) return "—";
-  return shownDay(value, { day: "numeric", month: "short", year: "numeric" }, "en-GB");
+  return value ? formatDate(value) : "—";
 }
 
 /** A slug key from an option's label, unique among `taken`. */

@@ -24,7 +24,7 @@ async function seeded(page: Page, scenario = "baseline-review", email?: string) 
 async function fromInbox(page: Page) {
   await page.goto("/inbox");
   const row = page.locator("tr[data-row]").filter({ has: page.locator(`a[href="/baseline?run=${RUN}"]`) }).filter({ visible: true });
-  await expect(row).toContainText("Confirm the baseline · 4 need you · 2 not decided");
+  await expect(row).toContainText("Confirm the baseline: 4 need you, 2 not decided");
   await row.getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(new RegExp(`/baseline\\?run=${RUN}$`));
 }
@@ -81,7 +81,8 @@ test("the Inbox's Review opens the run's rows, and Approve baseline waits until 
   await why.locator("xpath=..").getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByTestId("band-not-decided")).toHaveText("1 not decided");
   await leaveProposed(page, "Bring buyers back", "Revisit after the board meeting");
-  await expect(page.getByTestId("band-not-decided")).toHaveText("0 not decided");
+  // Nothing left undecided: the band says no "0 not decided" (qa-company-12).
+  await expect(page.getByTestId("band-not-decided")).toHaveCount(0);
   await expect(bar(page).getByTestId("bar-tally")).toHaveText("3 of 5 handled · 0 not decided");
   await expect(approve).toBeEnabled();
   await approve.click();
@@ -208,7 +209,8 @@ test("a console approval is held while a goal is undecided, and deciding the las
   await expect(confirm).toBeDisabled();
   await page.goto(`/baseline?run=${RUN}`);
   await row(page, "Bring buyers back").getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByTestId("band-not-decided")).toHaveText("0 not decided");
+  // Nothing left undecided: the band says no "0 not decided" (qa-company-12).
+  await expect(page.getByTestId("band-not-decided")).toHaveCount(0);
   await page.goto(`/runs/${RUN}`);
   await expect(confirm).toBeEnabled();
 });
@@ -247,4 +249,17 @@ test("at 390 px rows are cards and the bottom bar shows the tally and Approve", 
   await expect(bar(page).getByTestId("bar-tally")).toHaveText("1 of 5 handled · 2 not decided");
   await expect(bar(page).getByRole("button", { name: "Approve baseline" })).toBeVisible();
   await expect(bar(page).getByRole("button", { name: "Send back to agents" })).toBeHidden();
+});
+
+// fix-company review: a run that wrote nothing to the baseline says so; never "All 0 items handled".
+test("a run with no items says it has none, not that all of them are handled", async ({ page }) => {
+  await page.clock.setSystemTime(new Date("2026-10-27T12:00:00Z"));
+  await seeded(page, "no-document");
+  // guest-checkout's Baseline to PRD run (the "no-document" scenario) created no baseline items.
+  await page.goto("/baseline?run=7a11c0de-0000-4000-8000-0000000000e1");
+  const band = page.getByTestId("from-run-band");
+  await expect(band).toContainText("From run · Baseline to PRD");
+  await expect(band).toContainText("No items");
+  await expect(band.getByTestId("band-all-handled")).toHaveCount(0);
+  await expect(band).not.toContainText("0 items");
 });

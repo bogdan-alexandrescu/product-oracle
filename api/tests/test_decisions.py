@@ -1079,6 +1079,9 @@ async def test_list_filters_reach_decisions_older_than_the_newest_200(client, ct
     assert await numbers("class=judgement&status=review_due") == [1]
     assert await numbers("class=judgement&status=proposed&approver=me") == [2]
     assert await numbers("class=judgement&status=decided") == [5, 1]
+    # fix-company review: due=false leaves out the review-due rows, so the web's Decided
+    # list pages through decided calls only (no rows dropped in the browser).
+    assert await numbers("class=judgement&status=decided&due=false") == [5]
     assert await numbers("class=all&origin=checkpoint&chosen=approve") == [3]
     assert await numbers("class=all&origin=checkpoint&chosen=request_changes") == [4]
     first = await numbers("class=all")

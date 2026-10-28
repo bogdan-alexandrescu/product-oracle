@@ -20,7 +20,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Text, and_, any_, cast, func, inspect, or_, select, text
+from sqlalchemy import Text, and_, any_, cast, func, inspect, not_, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -375,6 +375,9 @@ async def list_decisions(
             raise DecisionError(422, "approver is me or a member id") from None
     if f.due:
         query = query.where(_due(day))
+    elif f.due is False:
+        # Decided calls whose review has not come: the Decided list, paged in the API.
+        query = query.where(not_(func.coalesce(_due(day), False)))  # no review date: not due
     if f.origin:
         query = query.where(Decision.origin.in_([o for o in f.origin.split(",") if o]))
     if f.chosen:

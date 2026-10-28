@@ -57,7 +57,7 @@ test("an approver decides a proposal from Needs me; the chip reads Decided and t
   await form.getByRole("button", { name: "Record decision" }).click();
 
   await expect(inspector).toContainText("Caps alone meet the goal; detection follows.");
-  await chip(page, "State", "All").click();
+  await chip(page, "State", "Any state").click();
   await expect(row(page, "Ship usage caps before anomaly detection")).toContainText("Decided");
   await expect(badge(page)).toHaveText(String(before - 1));
 });
@@ -80,7 +80,7 @@ test("a commenter proposes but never decides; one option is refused before it is
   await dialog.getByLabel("Decision", { exact: true }).fill("Offer annual billing at launch");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Annual at launch");
   await dialog.getByRole("button", { name: "Remove option 2" }).click();
-  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: APPROVER });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Approver · ${APPROVER}` });
   await dialog.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(dialog).toContainText("Add at least two options");
   await expect(dialog).toBeVisible();
@@ -140,18 +140,18 @@ test("the class switch keeps checkpoint records apart; From and the URL keep the
   await login(page);
   await seedDecidedRun(page);
   await page.goto("/company/decisions");
-  await expect(chip(page, "Class", "Judgement calls")).toHaveAttribute("aria-pressed", "true");
+  await expect(chip(page, "Kind", "Judgement calls")).toHaveAttribute("aria-pressed", "true");
   await expect(row(page, "Price the team plan per seat")).toBeVisible();
   await expect(row(page, /Approve Feature set · /)).toHaveCount(0);
 
-  await chip(page, "Class", "Checkpoints").click();
+  await chip(page, "Kind", "Checkpoints").click();
   await expect(row(page, "Approve Feature set · Checkout redesign PRD run")).toBeVisible();
   await expect(row(page, "Send back Feature set · Checkout redesign PRD run")).toBeVisible();
   await expect(row(page, "Price the team plan per seat")).toHaveCount(0);
   await expect(row(page, "Approve Feature set · Checkout redesign PRD run")).toContainText("—");
 
   // Two quick picks: From is picked before All has taken, and both stay.
-  await chip(page, "Class", "All").click();
+  await chip(page, "Kind", "All kinds").click();
   await page.getByLabel("From").selectOption({ label: "Pushback overrides" });
   await expect(rows(page)).toHaveCount(1);
   await expect(rows(page).first()).toContainText("Keep the reviewer's call over Oracle's pushback");
@@ -159,7 +159,7 @@ test("the class switch keeps checkpoint records apart; From and the URL keep the
 
   await page.reload();
   await expect(page.getByLabel("From")).toHaveValue("pushback_override");
-  await expect(chip(page, "Class", "All")).toHaveAttribute("aria-pressed", "true");
+  await expect(chip(page, "Kind", "All kinds")).toHaveAttribute("aria-pressed", "true");
   await expect(rows(page)).toHaveCount(1);
 
   await page.getByLabel("From").selectOption({ label: "Checkpoint send-backs" });
@@ -180,7 +180,7 @@ test("the run page's Decisions in this run opens the log on Checkpoints with tha
   await page.goto(`/runs/${id}`);
   await page.getByTestId("run-decision-log").click();
   await expect(page).toHaveURL(new RegExp(`/company/decisions\\?run=${id}`));
-  await expect(chip(page, "Class", "Checkpoints")).toHaveAttribute("aria-pressed", "true");
+  await expect(chip(page, "Kind", "Checkpoints")).toHaveAttribute("aria-pressed", "true");
   await expect(rows(page)).toHaveCount(5);
   for (const title of [
     "Approve Baseline confirm",
@@ -208,7 +208,7 @@ test("a section's Record a decision opens Propose decision about that section", 
   await dialog.getByLabel("Decision", { exact: true }).fill("Trace the retention goal to repeat orders");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Repeat orders in 30 days");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Monthly active buyers");
-  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: APPROVER });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Approver · ${APPROVER}` });
   await dialog.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(rows(page)).toHaveCount(1);
@@ -230,7 +230,7 @@ test("with 250 newer decisions, Needs me and Review due still find an old one; S
   await chip(page, "State", "Review due").click();
   await expect(row(page, "Price the team plan per seat")).toBeVisible();
   await expect(rows(page)).toHaveCount(1);
-  await chip(page, "State", "All").click();
+  await chip(page, "State", "Any state").click();
   await expect(rows(page)).toHaveCount(200);
   await page.getByRole("button", { name: "Show more" }).click();
   await expect(rows(page)).toHaveCount(255);

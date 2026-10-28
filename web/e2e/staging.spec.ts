@@ -128,7 +128,7 @@ async function seedHeld(page: Page, open: () => Promise<void>, shown: () => Prom
 /** Opens the seeded roadmap review run from the runs list, as a person would. */
 async function openRun(page: Page) {
   await page.goto("/runs");
-  const row = page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" });
+  const row = page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap"]');
   await expect(row.first()).toBeVisible();
   await row.getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();

@@ -3,14 +3,15 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Chip, DataTable, Empty, InfoTip, Panel, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, InfoTip, Panel, type Column } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
-import { formatDate } from "@/lib/format";
+import { formatDate, zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+import { CompanyEmpty } from "../../_empty";
 import { MEMOS_KEY, MEMO_STATE, type Memo } from "./lib";
 import { NewPricingMemo } from "./NewPricingMemo";
 
@@ -66,7 +67,7 @@ export function Pricing() {
           <span className="text-sm text-text2">—</span>
         ),
     },
-    { key: "updated", header: `Updated (${zone})`, width: "200px", phone: "hide", cell: (m) => <span className="tnum text-sm">{formatDate(m.updated_at)}</span> },
+    { key: "updated", header: `Updated, ${zoneName(zone)}`, width: "264px", phone: "hide", cell: (m) => <span className="tnum text-sm">{formatDate(m.updated_at)}</span> },
   ];
 
   return (
@@ -90,7 +91,20 @@ export function Pricing() {
         }
       >
         {q.data && q.data.length === 0 ? (
-          <Empty testId="pricing-empty">No pricing memos yet</Empty>
+          <CompanyEmpty
+            testId="pricing-empty"
+            title="No pricing memos yet"
+            action={
+              mayCreate ? (
+                <Button icon="plus" onClick={() => setCreating(true)}>
+                  Write a pricing memo
+                </Button>
+              ) : undefined
+            }
+          >
+            A memo sets out one pricing question, two to four options and the evidence for each, before the pricing owner decides the price.
+            {mayCreate ? " Start one when a pricing question comes up." : " Owners and approvers write them."}
+          </CompanyEmpty>
         ) : (
           <DataTable
             label="Pricing memos"

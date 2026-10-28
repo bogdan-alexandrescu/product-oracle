@@ -44,7 +44,7 @@ test("the run page and the Inbox open the review screen; Back returns to the run
   await expect(page).toHaveURL(new RegExp(`${SCREEN}$`));
   await page.goto("/runs");
   // The runs list's Decide opens it too.
-  await page.getByTestId("run-row").filter({ hasText: /usage-alerts-roadmap(?!-)/ }).getByRole("button", { name: "Decide" }).click();
+  await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap"]').getByRole("button", { name: "Decide" }).click();
   await expect(page).toHaveURL(new RegExp(`${SCREEN}$`));
   await page.goto(`/runs/${RUN}`);
   await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();

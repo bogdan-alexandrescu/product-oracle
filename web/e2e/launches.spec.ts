@@ -51,9 +51,9 @@ async function notesToSend(page: Page): Promise<string> {
   let text = "";
   await expect
     .poll(async () => {
-      for (const name of ["New", "Open"]) {
+      for (const [name, id] of [["New", "new"], ["Seen", "open"]]) {
         await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: new RegExp(`^${name}`) }).click();
-        const panel = page.getByTestId(`inbox-tab-${name.toLowerCase()}`);
+        const panel = page.getByTestId(`inbox-tab-${id}`);
         await expect(panel).toBeVisible();
         const row = panel.getByTestId("launch-need").filter({ hasText: "Notes to send" });
         if (await row.count()) {

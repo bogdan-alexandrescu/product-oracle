@@ -10,14 +10,15 @@ import { errorMessage } from "@/lib/use-query";
 import type { Update } from "./lib";
 
 /**
- * Who sees an update (owners only; H8 §5): Open to the company, or back to owners and
+ * Who sees an update (owners only; H8 §5): Share with the whole company, or back to owners and
  * approvers, always with a reason (the change is audited with it).
  */
 export function VisibilityDialog({ update, onClose, onChanged }: { update: Update; onClose: () => void; onChanged: (u: Update) => void }) {
   const panel = useRef<HTMLDivElement>(null);
   useFocusTrap(panel, true, onClose);
   const opening = update.visibility === "approvers";
-  const action = opening ? "Open to the company" : "Limit to owners and approvers";
+  // qa-company-17: a sharing action, said as one.
+  const action = opening ? "Share with the whole company" : "Limit to owners and approvers";
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,7 +73,7 @@ export function VisibilityDialog({ update, onClose, onChanged }: { update: Updat
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={busy}>
-              {action}
+              {opening ? "Share" : action}
             </Button>
           </div>
         </form>

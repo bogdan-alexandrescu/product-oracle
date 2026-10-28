@@ -1,6 +1,7 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { addDays, calendarDay, dayIn } from "@/lib/dates";
+import { addDays, dayIn } from "@/lib/dates";
+import { formatDay } from "@/lib/format";
 
 export type Metric = Schemas["MetricOut"];
 export type MetricDetail = Schemas["MetricDetail"];
@@ -33,7 +34,7 @@ export function changeText(value: number, pct: number | null | undefined): strin
 }
 
 /** "Oct 12": a week's Monday (a calendar day, the same in every zone). */
-export const weekText = (day: string) => calendarDay(day);
+export const weekText = (day: string) => formatDay(day);
 
 /** The Monday of the last complete week in the Company time zone, and the 12 before it. */
 export function recentWeeks(zone: string, n = 13): string[] {

@@ -341,6 +341,54 @@ async def test_the_goals_block_shows_homes_distance(client, ctx, at):
     assert by_title["Lift NPS"]["distance"] == "No current value"
 
 
+async def test_the_goals_block_writes_values_as_home_does(client, ctx, at):
+    """protects=qa-company-6: a typed goal (9.4 of 12, unit %) reads "9.4% of 12% · 2.6 pts
+    to go" in the pre-read, as Home shows it; fails_when="No current value", or the units
+    are dropped; no_claim=goals still on text (the test above)."""
+    from oracle.baseline.models import Entity
+
+    async with tenant_session(ctx.tenant_id) as db:
+        db.add(Entity(type="goal", key="paid", title="Grow paid conversion",
+                      attrs={"metric": "Trial to paid rate", "unit": "%", "comparison": "at_least",
+                             "target": 12, "current": 9.4},
+                      status="confirmed", origin="user"))  # fmt: skip
+        await db.commit()
+    occ = await ready_occurrence(client, ctx, at, "goals_checkin")
+    goals = next(b for b in occ["pre_read"]["blocks"] if b["key"] == "goals")
+    (row,) = [r for r in goals["rows"] if r["title"] == "Grow paid conversion"]
+    assert row["distance"] == "2.6 pts to go"
+    assert row["text"] == "Grow paid conversion: 9.4% of 12% · 2.6 pts to go"
+
+
+async def test_prepare_now_keeps_the_meeting_next_until_it_is_held(client, ctx, at):
+    """protects=qa-company-7: Prepare now on the weekly check-in keeps its meeting as Next
+    (with its ready pre-read) and does not call it the Last pre-read before its time; once
+    the meeting time comes it is the Last and Next moves on; fails_when=Next jumps a week or
+    Last names a meeting not yet held; no_claim=the screen (Playwright)."""
+    await tick(ctx.tenant_id)
+    ritual = (await rituals_of(ctx.tenant_id))["goals_checkin"]
+    due = ritual.next_due_at
+    resp = await client.post(f"/v1/rituals/{ritual.id}/prepare", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    occ = resp.json()
+    assert rituals.parse_time(occ["due_at"]) == due
+
+    def listed(rows):
+        return next(r for r in rows if r["id"] == str(ritual.id))
+
+    r = listed((await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json())
+    assert rituals.parse_time(r["next_due_at"]) == due
+    assert r["next_pre_read"]["id"] == occ["id"]
+    assert r["last_pre_read"] is None
+
+    at(due + timedelta(minutes=1))
+    r = listed((await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json())
+    assert r["last_pre_read"]["id"] == occ["id"]
+    assert r["next_pre_read"] is None
+    # A week on (an hour off across the change from summer time).
+    assert rituals.parse_time(r["next_due_at"]) - due >= timedelta(days=6, hours=23)
+
+
 async def test_pre_read_and_record_notes_rows_in_the_inbox(client, ctx, at):
     """protects=criterion 6: an attendee has a counted pre_read row while ready and
     unread; reading it turns it done and lowers needs_me by 1; after the end the owner

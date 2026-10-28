@@ -12,7 +12,7 @@ import { login, seedRoadmapAttempt2 } from "./helpers";
 /** Opens a seeded run from the runs list by its document, as a person would. */
 async function openRun(page: Page, slug: string) {
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: new RegExp(`${slug}(?!-)`) }).getByRole("link").first().click();
+  await page.locator(`[data-testid="run-row"][data-document="${slug}"]`).getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 }
 

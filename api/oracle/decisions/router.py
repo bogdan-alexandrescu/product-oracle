@@ -71,7 +71,10 @@ async def list_decisions(
         ),
     ] = None,
     approver: Annotated[str | None, Query(description="me or a member id")] = None,
-    due: bool | None = None,
+    due: Annotated[
+        bool | None,
+        Query(description="true: only those whose review has come; false: none of them"),
+    ] = None,
     origin: Annotated[
         str | None,
         Query(description=f"one or more of {', '.join(Origin.__args__)}, comma-separated"),

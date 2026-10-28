@@ -1,13 +1,14 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState, type KeyboardEvent } from "react";
 
-import { Button, PageHeader, SegmentedControl, ViewOnly } from "@/components/ds";
+import { Button, ScrollStrip, ViewOnly } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
 
+import { CompanyHeader } from "../_nav";
 import { Alternatives } from "./_components/Alternatives";
 import { ChangeDiff } from "./_components/ChangeDiff";
 import { ChangeLog, type ChangeView } from "./_components/ChangeLog";
@@ -65,8 +66,7 @@ function Market() {
 
   return (
     <>
-      <PageHeader
-        title="Company"
+      <CompanyHeader
         status={capsReady && !mayWrite ? <ViewOnly /> : undefined}
         action={
           mayWrite &&
@@ -77,14 +77,7 @@ function Market() {
           )
         }
       />
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <SegmentedControl<Tab>
-          label="Market"
-          items={allowed}
-          value={tab}
-          onChange={(v) => setParams({ tab: v === "alternatives" ? null : v, view: null, alternative: null })}
-        />
-      </div>
+      <MarketTabs tabs={allowed} value={tab} onChange={(v) => setParams({ tab: v === "alternatives" ? null : v, view: null, alternative: null })} />
       {tab === "alternatives" && (
         <Alternatives
           picked={alternative}
@@ -101,6 +94,14 @@ function Market() {
           alternative={alternative}
           onAlternative={(id) => setParams({ alternative: id })}
           onOpenChange={(id) => setParams({ change: id })}
+          onAddAlternative={
+            mayWrite
+              ? () => {
+                  setParams({ tab: null, view: null, alternative: null });
+                  setAdding(true);
+                }
+              : undefined
+          }
         />
       )}
       {tab === "positioning" && <Positioning />}
@@ -108,5 +109,48 @@ function Market() {
       {tab === "win-loss" && <WinLoss />}
       {change && <ChangeDiff key={change} id={change} onClose={() => setParams({ change: null })} />}
     </>
+  );
+}
+
+/**
+ * Market's own sub-tabs, a second level under the Company tabs: underlined, not the Company
+ * pills (qa-company-38), their labels lined up with the cards' content (16 px in, 12 px on a
+ * phone). On a phone they scroll sideways in a ScrollStrip, with no native scrollbar and no
+ * label cut (qa-shell-34).
+ */
+function MarketTabs({ tabs, value, onChange }: { tabs: { value: Tab; label: string; testId: string }[]; value: Tab; onChange: (v: Tab) => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+    const els = [...(ref.current?.querySelectorAll<HTMLElement>("[role=tab]") ?? [])];
+    const at = els.indexOf(document.activeElement as HTMLElement);
+    if (at < 0) return;
+    e.preventDefault();
+    els[(at + (e.key === "ArrowRight" ? 1 : -1) + els.length) % els.length]?.focus();
+  };
+  return (
+    <div data-testid="market-tabs" className="mb-3 border-b border-line">
+      <ScrollStrip ref={ref} role="tablist" aria-label="Market" onKeyDown={onKey} stripClassName="gap-1 px-1 max-[600px]:px-0">
+        {tabs.map((t) => {
+          const on = t.value === value;
+          return (
+            <button
+              key={t.value}
+              type="button"
+              role="tab"
+              data-testid={t.testId}
+              aria-selected={on}
+              tabIndex={on ? 0 : -1}
+              onClick={() => onChange(t.value)}
+              className={`flex h-10 flex-none items-center border-b-2 px-3 text-[15px] whitespace-nowrap max-[639px]:h-11 ${
+                on ? "border-accent font-semibold text-text" : "border-transparent font-medium text-text2 hover:text-text"
+              }`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </ScrollStrip>
+    </div>
   );
 }

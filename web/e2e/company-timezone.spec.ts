@@ -38,7 +38,7 @@ test("Company time zone: set on Settings › Company, read by the weekly report"
   await expect(report.getByRole("link", { name: "Change" })).toHaveAttribute("href", "/settings/company#timezone");
 
   await page.goto("/home");
-  await expect(page.getByTestId("setup-row-timezone")).toContainText("Asia/Tokyo");
+  await expect(page.getByTestId("setup-row-timezone")).toContainText("(Tokyo)");
 });
 
 // protects: the goal form's Horizon tip gives the company's horizons from Settings ›

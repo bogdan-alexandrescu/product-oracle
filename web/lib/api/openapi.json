@@ -18082,8 +18082,10 @@
                   "type": "null"
                 }
               ],
+              "description": "true: only those whose review has come; false: none of them",
               "title": "Due"
-            }
+            },
+            "description": "true: only those whose review has come; false: none of them"
           },
           {
             "name": "origin",
@@ -104644,6 +104646,16 @@
             "title": "Replaced By"
           },
           "last_pre_read": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OccurrenceSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_pre_read": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/OccurrenceSummary"

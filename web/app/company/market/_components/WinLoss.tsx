@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 
-import { Button, DataTable, Empty, InfoTip, Panel, confirmInPage, type Column } from "@/components/ds";
+import { Button, DataTable, InfoTip, Panel, confirmInPage, type Column } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { addDays, todayIn, useCompanyZone } from "@/lib/dates";
-import { formatDate } from "@/lib/format";
+import { formatDate, zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { CompanyEmpty } from "../../_empty";
 import { RowMenu, RowMenuItem } from "../../updates/_components/RowMenu";
 import { DealDialog } from "./DealDialog";
 import { ImportDialog } from "./ImportDialog";
@@ -68,7 +69,7 @@ export function WinLoss() {
   }
 
   const columns: Column<Deal>[] = [
-    { key: "decided", header: `Decided on (${zone})`, width: "200px", phone: "hide", cell: (d) => <span className="tnum text-sm">{formatDate(d.decided_on)}</span> },
+    { key: "decided", header: `Decided on, ${zoneName(zone)}`, width: "284px", phone: "hide", cell: (d) => <span className="tnum text-sm">{formatDate(d.decided_on)}</span> },
     { key: "result", header: "Result", width: "120px", phone: "title", cell: (d) => <span className="font-medium" data-testid="deal-result">{RESULTS[d.result]}</span> },
     { key: "account", header: "Account", phone: "hide", cell: (d) => <span className="truncate text-sm" data-testid="deal-account">{d.account}</span> },
     { key: "plan", header: "Plan", width: "120px", phone: "hide", cell: (d) => <span className="text-sm">{d.plan ?? "—"}</span> },
@@ -181,7 +182,46 @@ export function WinLoss() {
           )}
         </div>
         {q.data && q.data.length === 0 ? (
-          <Empty testId="deals-empty">No win or loss records{result || reason || alternative || period !== "all" ? " match" : " yet"}</Empty>
+          result || reason || alternative || period !== "all" ? (
+            <CompanyEmpty
+              testId="deals-empty"
+              title="No win or loss records match"
+              action={
+                <Button
+                  onClick={() => {
+                    setResult("");
+                    setReason("");
+                    setPeriod("all");
+                    setAlternative("");
+                  }}
+                >
+                  Clear the filters
+                </Button>
+              }
+            >
+              Nothing has this result, reason, period or alternative. Change or clear a filter to see more.
+            </CompanyEmpty>
+          ) : (
+            <CompanyEmpty
+              testId="deals-empty"
+              title="No win or loss records yet"
+              action={
+                mayAdd || mayImport ? (
+                  <>
+                    {mayAdd && (
+                      <Button icon="plus" onClick={() => setEditing("new")}>
+                        Add a record
+                      </Button>
+                    )}
+                    {mayImport && <Button onClick={() => setImporting(true)}>Import a CSV file</Button>}
+                  </>
+                ) : undefined
+              }
+            >
+              Record why each deal was won, lost or churned, one at a time or from a CSV file of your deals. Pricing memos count these
+              records as evidence.
+            </CompanyEmpty>
+          )
         ) : (
           <DataTable
             label="Win and loss"

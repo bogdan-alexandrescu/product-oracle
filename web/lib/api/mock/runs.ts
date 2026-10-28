@@ -1571,7 +1571,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
       .filter((c) => c.status === "pending" && mine(c, r))
       .map((c) => ({
         ...gated(ctx, c),
-        can_decide: true,
+        // As the API's may_decide: by the stop's role (an engineering stop as `mine` says).
+        can_decide: ctx.userRole == null || atLeast(ctx.userRole, c.approver_role) || (!!ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind)),
         flow: r.flow,
         flow_title: r.flow_title,
         document_slug: r.document_slug,

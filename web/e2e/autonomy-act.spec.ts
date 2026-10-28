@@ -42,7 +42,7 @@ test("autonomy: at Act Oracle decides a reversible call and Undo hands it back",
   await setLevel(page, "decisions", "Decide reversible calls", "Act");
   await signOutAndIn(page, APPROVER);
   await page.goto("/company/decisions");
-  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^All/ }).click();
+  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^Any state/ }).click();
   await page.getByTestId("decision-row").filter({ hasText: "Ship usage caps before anomaly detection" }).click();
   const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
   await inspector.getByRole("button", { name: "Ask Oracle for options" }).click();
@@ -58,7 +58,7 @@ test("autonomy: at Act Oracle decides a reversible call and Undo hands it back",
   await expect(did).toHaveCount(0);
 
   await page.goto("/company/decisions");
-  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^All/ }).click();
+  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^Any state/ }).click();
   const calls = page.getByTestId("decision-row").filter({ hasText: "Ship usage caps before anomaly detection" });
   await expect(calls).toHaveCount(2);
   await calls.filter({ hasText: /Proposed|Needs/ }).first().click();
@@ -121,7 +121,7 @@ test("autonomy: at Act Oracle saves a run's order within the limits and tells it
   await login(page);
   await setLevel(page, "priorities", "Order priorities", "Act");
   await rail(page).getByTestId("nav-runs").click();
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   await page.getByRole("button", { name: "Check agents now" }).click();

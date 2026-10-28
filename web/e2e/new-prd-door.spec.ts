@@ -140,7 +140,7 @@ test("baseline choice: reuse is preselected; Rebuild costs the baseline segment 
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
   await expect(page.getByTestId("run-row")).toHaveCount(6);
-  await expect(page.getByTestId("run-row").filter({ hasText: "faster-repeat-checkout" })).toHaveCount(1);
+  await expect(page.locator('[data-testid="run-row"][data-document="faster-repeat-checkout"]')).toHaveCount(1);
 });
 
 test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet takes up the same draft run", async ({ page }) => {
@@ -174,7 +174,7 @@ test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet 
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
-  await expect(page.getByTestId("run-row").filter({ hasText: "saved-addresses-for-guests" })).toHaveCount(1);
+  await expect(page.locator('[data-testid="run-row"][data-document="saved-addresses-for-guests"]')).toHaveCount(1);
 
   // Started: the brief is drafting, so Draft with Oracle is gone.
   await page.goto(`/intakes/${id}`);

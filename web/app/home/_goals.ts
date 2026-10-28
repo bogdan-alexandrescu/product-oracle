@@ -338,7 +338,18 @@ export function measurementPoints(rows: { measured_on: string; value: number }[]
     .slice(-12);
 }
 
-/** Whole months the series spans, at least one: the "6m" after a change. */
+/**
+ * A trend's change in words (qa-company-44): "+7 pts in 6 months", "−1.2k sign-ups in 1 month",
+ * "+$300k in 3 months"; points for a percentage, the goal's unit otherwise.
+ */
+export function changeText(change: number, f: Figure | null, months: number): string {
+  const sign = change > 0 ? "+" : "−";
+  const n = `${f?.currency ?? ""}${amount(Math.abs(change), !!f?.compact)}`;
+  const unit = !f ? "" : f.unit === "%" ? "pts" : f.unit;
+  return `${sign}${n}${unit ? ` ${unit}` : ""} in ${months} ${months === 1 ? "month" : "months"}`;
+}
+
+/** Whole months the series spans, at least one: the months after a change. */
 export function spanMonths(points: Point[]): number {
   if (points.length < 2) return 0;
   const ms = Date.parse(points.at(-1)!.at) - Date.parse(points[0].at);

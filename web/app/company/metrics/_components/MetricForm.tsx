@@ -128,13 +128,20 @@ export function MetricForm({
             <input className={INPUT} value={description} maxLength={200} onChange={(e) => setDescription(e.target.value)} placeholder="Teams with 3 or more sessions in the week" />
           </label>
           <div className="grid grid-cols-3 gap-3 max-[600px]:grid-cols-1">
-            <label className={LABEL}>
-              Kind
-              <select className={INPUT} value={kind} disabled={!!metric} onChange={(e) => setKind(e.target.value as Metric["kind"])}>
-                <option value="output">Output</option>
-                <option value="input">Input</option>
+            <div className={LABEL}>
+              <label htmlFor="metric-kind">Kind</label>
+              <select
+                id="metric-kind"
+                aria-describedby="metric-kind-help"
+                className={INPUT}
+                value={kind}
+                disabled={!!metric}
+                onChange={(e) => setKind(e.target.value as Metric["kind"])}
+              >
+                <option value="output">Output: a result</option>
+                <option value="input">Input: a lever</option>
               </select>
-            </label>
+            </div>
             <label className={LABEL}>
               Unit
               <input className={INPUT} list="metric-units" value={unit} maxLength={40} onChange={(e) => setUnit(e.target.value)} placeholder="% or teams" />
@@ -152,6 +159,12 @@ export function MetricForm({
               </select>
             </label>
           </div>
+          {/* qa-company-39: Output and Input in plain words. */}
+          <p id="metric-kind-help" data-testid="metric-kind-help" className="-mt-1 text-[13px] text-text2">
+            {kind === "output"
+              ? "An output is a result the company wants, such as paying customers. It can keep a goal's value up to date."
+              : "An input is a number the team can move directly, such as invites sent. It sits under the output it drives."}
+          </p>
           {kind === "input" ? (
             <label className={LABEL}>
               Drives
@@ -224,7 +237,9 @@ export function MetricForm({
                   placeholder="select count(distinct team_id) from events where timestamp between {period_start} and {period_end}"
                 />
                 <span id="metric-query-help" className="text-[13px] font-normal">
-                  HogQL returning one number. {"{period_start}"} and {"{period_end}"} become the week&apos;s bounds in the Company time zone.
+                  A PostHog query that returns one number for a week. Where it should count only that week, write {"{period_start}"} and{" "}
+                  {"{period_end}"}: Oracle fills in the week&apos;s first and last moment in the Company time zone. Test shows what it reads for
+                  the last 4 weeks.
                 </span>
               </div>
               <div className="flex flex-wrap items-center gap-2">

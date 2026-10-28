@@ -1,8 +1,11 @@
 "use client";
 
-import { Button, Chip, Empty, LinkButton, Panel } from "@/components/ds";
+import type { ReactNode } from "react";
+
+import { Button, Chip, LinkButton, Panel } from "@/components/ds";
 import { assess, type GoalView } from "@/app/home/_goals";
 
+import { CompanyEmpty } from "../../_empty";
 import { BELIEF, DOC, plural, shortDate, type Choice, type DocKind, type DocRef, type Stack } from "./lib";
 
 /** The card's document buttons: Open, and for owners New (none yet) or Draft next version. */
@@ -34,12 +37,43 @@ function DocButtons({
   );
 }
 
-/** A vision or strategy in progress with nothing approved yet, or nothing at all. */
-function NotApproved({ kind, doc }: { kind: DocKind; doc: DocRef | null }) {
+/** An empty state that says what the piece is and what to do (qa-company-36). */
+export function Explained({ title, children, testId }: { title: string; children: ReactNode; testId?: string }) {
   return (
-    <Empty testId={`${kind}-empty`}>
-      {doc ? `The ${DOC[kind].name} is not approved yet` : `No ${DOC[kind].name} yet`}
-    </Empty>
+    <CompanyEmpty testId={testId} title={title}>
+      {children}
+    </CompanyEmpty>
+  );
+}
+
+/** What each piece is, in a line. */
+const ABOUT: Record<DocKind, string> = {
+  vision: "Where the company is headed in the next few years, and the beliefs that bet rests on.",
+  strategy: "The few things the product focuses on and what it stops doing; each goal should follow from a focus choice.",
+};
+
+/** A vision or strategy in progress with nothing approved yet, or nothing at all. */
+function NotApproved({ kind, doc, owner }: { kind: DocKind; doc: DocRef | null; owner: boolean }) {
+  const name = DOC[kind].name;
+  if (doc) {
+    return (
+      <Explained testId={`${kind}-empty`} title={`The ${name} is not approved yet`}>
+        {ABOUT[kind]} Open the draft to review it; an owner approves it.
+      </Explained>
+    );
+  }
+  const next =
+    kind === "vision"
+      ? owner
+        ? "Write a vision to start the strategy stack."
+        : "An owner writes it to start the strategy stack."
+      : owner
+        ? "Write a product strategy to line up the goals under it."
+        : "An owner writes it to line up the goals under it.";
+  return (
+    <Explained testId={`${kind}-empty`} title={`No ${name} yet`}>
+      {ABOUT[kind]} {next}
+    </Explained>
   );
 }
 
@@ -88,7 +122,7 @@ export function VisionCard({
           </ul>
         </div>
       ) : (
-        <NotApproved kind="vision" doc={doc} />
+        <NotApproved kind="vision" doc={doc} owner={owner} />
       )}
       <div className="mt-auto border-t border-line px-4 py-3 max-[600px]:px-3">
         <DocButtons kind="vision" doc={doc} owner={owner} onDraft={onDraft} />
@@ -215,7 +249,7 @@ export function StrategyCard({
           <p className="text-sm text-text2">Next review {shortDate(s.review_on)}</p>
         </div>
       ) : (
-        <NotApproved kind="strategy" doc={doc} />
+        <NotApproved kind="strategy" doc={doc} owner={owner} />
       )}
       <div className="mt-auto border-t border-line px-4 py-3 max-[600px]:px-3">
         <DocButtons kind="strategy" doc={doc} owner={owner} onDraft={onDraft} />

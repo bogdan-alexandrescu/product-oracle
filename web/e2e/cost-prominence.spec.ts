@@ -25,7 +25,7 @@ async function openRuns(page: Page) {
 /** Opens the run page of the row for `slug`. */
 async function openRun(page: Page, slug: string, heading: string) {
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: slug }).getByRole("link", { name: slug }).click();
+  await page.locator(`[data-testid="run-row"][data-document="${slug}"]`).getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: heading })).toBeVisible();
   return page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
 }
@@ -42,15 +42,15 @@ for (const size of SIZES) {
       await expect(rows).toHaveCount(5);
       // Waiting, running and finished rows carry no cost.
       for (const slug of ["team-onboarding", "checkout-redesign", "saved-carts"]) {
-        const row = rows.filter({ hasText: slug });
+        const row = rows.and(page.locator(`[data-document="${slug}"]`));
         await expect(row).toBeVisible();
         await expect(row).not.toContainText(DOLLARS);
         await expect(row.locator("[data-cost]")).toHaveCount(0);
       }
       // The decisions: the estimate awaiting approval, spent of estimate on the overrun, both prominent.
-      const approval = rows.filter({ hasText: "usage-alerts-v2" });
+      const approval = rows.and(page.locator('[data-document="usage-alerts-v2"]'));
       await expect(approval.locator('[data-cost="prominent"]')).toHaveText(/^\$[\d,.]+ est\.$/);
-      const overrun = rows.filter({ hasText: "team-workspaces" });
+      const overrun = rows.and(page.locator('[data-document="team-workspaces"]'));
       await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 / $9.00");
     });
 

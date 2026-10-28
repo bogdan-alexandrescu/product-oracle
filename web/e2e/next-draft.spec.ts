@@ -156,7 +156,7 @@ test("Inbox: tabs by state with counts, New by default, and the badge counts onl
   await expect(tab("New")).toHaveAttribute("aria-selected", "true");
   // The seed's 10 and the pending access request (A5, #203 part 3).
   await expect(tab("New")).toHaveText("New11");
-  await expect(tab("Open")).toHaveText("Open0");
+  await expect(tab("Seen")).toHaveText("Seen");
   await expect(tab("Staged")).toHaveText("Staged2");
   await expect(tab("Declined")).toHaveText("Declined1");
   await expect(tab("Done")).toHaveText("Done5");
@@ -205,12 +205,13 @@ test("Inbox: arriving marks items seen; they stay New for this visit, Open on th
   await page.goto("/documents");
   await page.goto("/inbox");
   await page.reload();
-  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New0");
-  await expect(tabs.getByRole("tab", { name: /^Open/ })).toHaveText("Open11");
-  // New is still the default tab; the badge still counts open items.
-  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveAttribute("aria-selected", "true");
+  await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New");
+  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveText("Seen11");
+  // Nothing is new: the Inbox opens on Seen, where the items wait (qa-company-2); the badge
+  // still counts them.
+  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
-  await tabs.getByRole("tab", { name: /^Open/ }).click();
+  await tabs.getByRole("tab", { name: /^Seen/ }).click();
   await expect(page.getByTestId("inbox-tab-open").getByTestId("inbox-feedback").locator("tr[data-row]")).toHaveCount(5);
 });
 
@@ -259,6 +260,8 @@ test("staged changes carry into the next draft: an approval that closes their it
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Staged/ }).click();
   const rows = page.getByTestId("inbox-tab-staged").locator("tr[data-row]").filter({ hasText: "Clinic outreach" });
   await expect(rows.getByTestId("staged-row-label")).toHaveText("2 changes staged for draft 6");
-  await expect(rows.filter({ hasText: "#goal-trace" })).toContainText("Draft 6");
-  await expect(rows.filter({ hasText: "#f-38" })).toContainText("Draft 6");
+  // Each item by its words, with no section key (qa-company-11).
+  await expect(rows.filter({ hasText: "G2 retention" })).toContainText("Draft 6");
+  await expect(rows.filter({ hasText: "before the call is placed" })).toContainText("Draft 6");
+  await expect(page.getByTestId("inbox-tab-staged")).not.toContainText("#goal-trace");
 });

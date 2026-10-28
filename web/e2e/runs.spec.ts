@@ -18,22 +18,22 @@ test("runs list shows each run with its status, and cost only on the approval an
   await openRuns(page);
   const rows = page.getByTestId("run-row");
   await expect(rows).toHaveCount(5);
-  const waiting = rows.filter({ hasText: "team-onboarding" });
+  const waiting = rows.and(page.locator('[data-document="team-onboarding"]'));
   await expect(waiting).toContainText("Waiting for review");
   await expect(waiting).toContainText("Confirm the baseline");
   // P3d Cost prominence: no figure on a row that needs no cost decision.
   await expect(waiting).not.toContainText("$");
-  const approval = rows.filter({ hasText: "usage-alerts-v2" });
+  const approval = rows.and(page.locator('[data-document="usage-alerts-v2"]'));
   await expect(approval).toContainText("Awaiting cost approval");
   await expect(approval.locator('[data-cost="prominent"]')).toContainText("est.");
-  const overrun = rows.filter({ hasText: "team-workspaces" });
+  const overrun = rows.and(page.locator('[data-document="team-workspaces"]'));
   await expect(overrun).toContainText("Paused: over budget");
   await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 / $9.00");
 });
 
 test("run detail: approve each checkpoint through to the imported PRD", async ({ page }) => {
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await expect(page.getByTestId("run-notes")).toContainText("Local agent runtime");
   // P3d Cost prominence: the cost is one small line in Details.
@@ -299,10 +299,10 @@ test("a rejected draft reads Draft rejected, with one summary line and every pro
 
   // The runs list says it too.
   await page.getByTestId("nav-runs").click();
-  const row = page.getByTestId("run-row").filter({ hasText: "guest-checkout" });
+  const row = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
   await expect(row.getByTestId("run-draft-rejected")).toHaveText("Draft rejected");
   await expect(row.getByTestId("run-draft-rejected")).toHaveAttribute("title", SUMMARY);
-  await expect(page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByTestId("run-draft-rejected")).toHaveCount(0);
+  await expect(page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByTestId("run-draft-rejected")).toHaveCount(0);
 });
 
 test("a rejected draft: Send back to writer pre-fills Request changes with the summary", async ({ page }) => {
@@ -359,7 +359,7 @@ test("the in-page ask makes the page behind it inert, and gives focus back on cl
   // be clicked or read by assistive technology while it is open, or stays inert after it;
   // no_claim=the ask's own keys (the cancel test above).
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   const cancel = page.getByTestId("run-cancel").filter({ visible: true });
   const ask = page.getByRole("alertdialog", { name: "Cancel run" });
@@ -404,7 +404,7 @@ test("cancel a run: it asks in the page, never in a browser dialog; going back d
     void d.dismiss();
   });
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   const before = await status(page).textContent();
   const cancel = page.getByTestId("run-cancel").filter({ visible: true });
@@ -452,25 +452,26 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await expect(rows).toHaveCount(5);
     const byRun: Record<string, string> = {};
     for (const row of await rows.all()) {
-      const slug = (await row.getByRole("link").first().innerText()).trim();
+      const slug = (await row.getAttribute("data-document"))!;
       byRun[slug] = (await row.getByRole("link").first().getAttribute("href"))!;
     }
     ids.push(byRun);
 
     // The started run's dates, in its inspector.
-    await rows.filter({ hasText: "team-onboarding" }).locator("td").nth(2).click();
+    await rows.and(page.locator('[data-document="team-onboarding"]')).locator("td").nth(2).click();
     const inspector = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
-    await expect(inspector).toContainText("team-onboarding");
+    await expect(inspector).toContainText("Team onboarding PRD");
     await expect(inspector).toContainText("Started");
     dates.push(await inspector.innerText());
 
-    // The inbox shows the same short ids as the list; run detail the same id.
+    // The Inbox and the run page name a run in words, never a short id (qa-company-11).
     const short = (slug: string) => byRun[slug]!.split("/").pop()!.slice(0, 4);
     await page.goto("/inbox");
-    await expect(page.getByTestId("inbox-approvals")).toContainText(short("usage-alerts-v2"));
-    await expect(page.getByTestId("inbox-checkpoints")).toContainText(short("team-onboarding"));
+    await expect(page.getByTestId("inbox-state-tabs")).toBeVisible();
+    await expect(page.getByTestId("inbox-needs")).not.toContainText(` ${short("usage-alerts-v2")}`);
     await page.goto(byRun["team-onboarding"]!);
-    await expect(page.getByText(`Run ${short("team-onboarding")}`)).toBeVisible();
+    await expect(page.getByTestId("run-name")).toContainText("Team onboarding");
+    await expect(page.getByText(`Run ${short("team-onboarding")}`)).toHaveCount(0);
     await context.close();
   }
   expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "saved-carts", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
@@ -483,7 +484,7 @@ test("a decision SwarmCloud has not taken yet: recorded, shown as delivering, fi
   // SwarmCloud takes nothing until the next tick, so the decide call answers 503.
   await page.addInitScript((key) => localStorage.setItem(key, "undelivered"), MOCK_SCENARIO_KEY);
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Waiting");
   // A second tab on the same run, still showing the open review (another approver, say).
   const other = await page.context().newPage();
@@ -525,7 +526,7 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
   // Owner decision 2026-10-20: amber, with a clock, as other in-progress states.
   await page.addInitScript((key) => localStorage.setItem(key, "undelivered"), MOCK_SCENARIO_KEY);
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   await expect(page.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toBeVisible();
 
@@ -540,7 +541,7 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
   await expect(panel).not.toContainText("waiting for review");
   // The runs list: the row's chip.
   await page.getByTestId("nav-runs").click();
-  const row = page.getByTestId("run-row").filter({ hasText: "team-onboarding" });
+  const row = page.locator('[data-testid="run-row"][data-document="team-onboarding"]');
   await expect(row.getByTestId("run-status")).toHaveText("Delivering decision");
   await expect(amber(row).locator("svg")).toHaveCount(1);
   await expect(row).not.toContainText("Waiting for review");

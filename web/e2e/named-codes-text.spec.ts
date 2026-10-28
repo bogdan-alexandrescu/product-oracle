@@ -34,7 +34,7 @@ test("a PRD section's known codes are underlined; unknown codes, URLs and code s
   await expect(s.locator("code")).toHaveText("F-28");
 });
 
-test("hover and Tab open the card; a range lists its members; Go to section opens the section", async ({ page }) => {
+test("hover and Enter open the card; a range lists its members; Go to section opens the section", async ({ page }) => {
   const s = await summary(page);
   const card = page.getByTestId("code-card");
 
@@ -47,16 +47,15 @@ test("hover and Tab open the card; a range lists its members; Go to section open
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
 
-  // Tab from the section heading to the range. Tab on an open card goes into it (#304), so
-  // a keyboard user leaves each earlier card with Escape and tabs on.
+  // Tab from the section heading to the range: Tab passes each code without opening its card
+  // (qa-company-4); Enter opens it.
   await page.mouse.move(0, 0);
   const range = s.getByTestId("named-code").filter({ hasText: "R1–R3" });
   await s.getByRole("heading", { name: "Summary" }).click();
-  for (let i = 0; i < 60 && !(await range.evaluate((el) => el === document.activeElement)); i++) {
-    if (await card.count()) await page.keyboard.press("Escape");
-    await page.keyboard.press("Tab");
-  }
+  for (let i = 0; i < 60 && !(await range.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
   await expect(range).toBeFocused();
+  await expect(card).toHaveCount(0);
+  await page.keyboard.press("Enter");
   await expect(card).toBeVisible();
   await expect(card).toContainText("Requirement · this PRD");
   await expect(card.getByTestId("card-members")).toContainText("R1 Notes save offline");

@@ -3,12 +3,14 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
-import { Button, Chip, DataTable, Empty, InfoTip, PageHeader, Panel, Sheet, Sparkline, Split, ViewOnly, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, InfoTip, Panel, Sheet, Sparkline, Split, ViewOnly, type Column } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+import { CompanyEmpty } from "../_empty";
+import { CompanyHeader } from "../_nav";
 import { KIND_LABEL, SOURCE_LABEL, STATUS_KIND, STATUS_LABEL, VARIANCE_KIND, VARIANCE_LABEL, changeText, valueText, type Metric } from "./_components/lib";
 import { MetricForm } from "./_components/MetricForm";
 import { MetricInspector } from "./_components/MetricInspector";
@@ -146,8 +148,7 @@ function Metrics() {
 
   return (
     <>
-      <PageHeader
-        title="Company"
+      <CompanyHeader
         status={!writer && !records && <ViewOnly />}
         action={
           writer && (
@@ -177,7 +178,22 @@ function Metrics() {
           }
         >
           {listQ.data && rows.length === 0 ? (
-            <Empty testId="metrics-empty">No metrics yet</Empty>
+            // qa-company-16: how this page relates to the goal values on Home, and what to add.
+            <CompanyEmpty
+              testId="metrics-empty"
+              title="No metrics yet"
+              action={
+                writer ? (
+                  <Button icon="plus" onClick={() => setForm("add")}>
+                    Add your first metric
+                  </Button>
+                ) : undefined
+              }
+            >
+              The goal values on Home come from each goal. Add a metric here to track a number every week, read from your product
+              analytics, typed by hand or sent by API. A metric linked to a goal keeps that goal&apos;s current value up to date, and Oracle
+              flags a week that changes more than usual.{writer ? "" : " Approvers and owners add metrics."}
+            </CompanyEmpty>
           ) : (
             <DataTable
               label="Metrics"

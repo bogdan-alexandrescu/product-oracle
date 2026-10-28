@@ -93,7 +93,7 @@ test("answer from the Inbox: Oracle asks, Answer in place, the badge drops, then
 test("the other paths: I don't know, Defer and Ask someone leave Open; the delegate sees it", async ({ page }) => {
   await login(page);
   await openInbox(page);
-  await tab(page, "Open").click();
+  await tab(page, "Seen").click();
   await tab(page, "New").click();
 
   await questionRow(page, METRIC).getByRole("button", { name: "Answer" }).click();
@@ -113,7 +113,7 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
   await expect(badge(page)).toHaveText("10");
 
   // Neither under New nor under Open any more: all three are Done.
-  for (const name of ["New", "Open"]) {
+  for (const name of ["New", "Seen"]) {
     await tab(page, name).click();
     for (const text of [METRIC, REFUND, TIERS]) await expect(questionRow(page, text)).toHaveCount(0);
   }
@@ -205,7 +205,7 @@ test("private finding: Ask someone is refused until it is shared, and the questi
   // Still mine after a reload (under Open, as a question already opened); the approver is
   // never asked it.
   await page.reload();
-  await tab(page, "Open").click();
+  await tab(page, "Seen").click();
   await expect(questionRow(page, hidden)).toContainText("Oracle asks");
   await signOut(page);
   await login(page, "approver@example.com");

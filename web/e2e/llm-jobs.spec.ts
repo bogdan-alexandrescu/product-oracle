@@ -95,6 +95,8 @@ test("an accepted suggestion goes into the next draft: one build, diff preview, 
   // no other build of the document starts (#574 review): the owner cancels it first.
   await page.goto("/inbox");
   await page.getByTestId("inbox-overruns").getByRole("button", { name: "Cancel run" }).click();
+  // Asked first, as the run page asks (qa-company-1).
+  await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
   await page.goto("/documents/team-workspaces/v/2");
   await openTab(page, "Feedback");

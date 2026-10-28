@@ -11,7 +11,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, markInboxSeen, waitingCh
 
 import { useAccessRequestRows } from "./_access";
 import { useActed } from "./_actions";
-import { allNeeds, NeedTable, sourceNeeds, STATE_TABS, useFixedHere, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
+import { allNeeds, NeedTable, sourceNeeds, STATE_TABS, useFixedHere, usePerms, waitingNeeds, type InboxState, type NeedGroup } from "./_needs";
 import { useQuestionRows } from "./_questions";
 import { useReminderRows } from "./_reminders";
 import { useWebhookRows } from "./_webhooks";
@@ -61,11 +61,13 @@ export default function InboxPage() {
   const seenBefore = arrived ? arrivalQ.data : inbox?.last_seen_at;
   // D9: the child rows I fixed on this visit stay, done with Undo.
   const fixed = useFixedHere();
+  // qa-company-3: each row draws only the actions the signed-in person's role can take.
+  const perms = usePerms();
   // I1: webhook notices (paused, failing, a changed address), from my notifications.
   const webhookRows = useWebhookRows(busy, act, seenBefore);
   // Remind on a one-pager: a PRD's owner or decider nudged me to review its draft.
   const reminderRows = useReminderRows(seenBefore);
-  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows), ...webhookRows, ...reminderRows] : null;
+  const rows = inbox ? [...allNeeds(inbox, asked.rows, busy, act, seenBefore, onActed, false, fixed, requests.rows, perms), ...webhookRows, ...reminderRows] : null;
   const waiting = rows ? waitingNeeds(rows).length : undefined;
 
   return (
@@ -158,8 +160,8 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
 
 /**
  * ONE Inbox (owner, 2026-10-20): every kind of item in a single list with state tabs, New
- * first (the default on arrival), each item drawn once. New + Open is what the rail badge
- * counts.
+ * first (the default on arrival when it has items, else Seen), each item drawn once. New +
+ * Seen is what the rail badge counts.
  */
 function InboxTabs({
   rows,
@@ -175,16 +177,23 @@ function InboxTabs({
   /** The tab changed: what was settled in place moves on. */
   onTabChange: () => void;
 }) {
-  const [tab, setTab] = useState<InboxState>("new");
   const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).length;
+  // qa-company-2: the Inbox opens on the tab that holds what waits: New when it has items,
+  // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
+  const [tab, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));
   const shown = rows.filter((r) => r.state === tab);
   const label = STATE_TABS.find((t) => t.id === tab)!.label;
   return (
     <Panel title="Needs you" count={waiting} testId="inbox-needs">
-      <div className="px-4 pt-1 max-[600px]:px-3" data-testid="inbox-state-tabs">
+      {/* qa-company-47: on a phone the five tabs keep one line: smaller tabs, no "0" counts. */}
+      <div
+        className="px-4 pt-1 max-[600px]:overflow-x-auto max-[600px]:px-2 max-[600px]:[&_[role=tab]]:px-1.5 max-[600px]:[&_[role=tablist]]:flex-nowrap"
+        data-testid="inbox-state-tabs"
+      >
         <TabBar
           label="Inbox by state"
-          tabs={STATE_TABS.map((t) => ({ id: t.id, label: t.label, count: count(t.id) }))}
+          size="sm"
+          tabs={STATE_TABS.map((t) => ({ id: t.id, label: t.label, count: count(t.id) || null }))}
           value={tab}
           onChange={(t) => {
             setTab(t);

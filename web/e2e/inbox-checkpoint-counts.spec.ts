@@ -101,7 +101,7 @@ test("a fixed item gives its row to the next item that needs me", async ({ page 
   await expect(child(page, "more").getByTestId("child-more")).toHaveText("+6 more · 1 handled");
   // Next visit: seen on the first, the checkpoint is under Open.
   await page.reload();
-  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
   await expect(childTitles(page)).toHaveText(["Slack alerts", "Usage export", "Anomaly detection"]);
   await expect(child(page, "budget-caps")).toHaveCount(0);
 });
