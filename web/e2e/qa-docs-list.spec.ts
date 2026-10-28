@@ -25,6 +25,11 @@ async function open(page: Page, role: Role = "owner", scenario?: string) {
 
 const row = (page: Page, title: string) =>
   page.getByTestId("document-row").filter({ hasText: title });
+/** Selects a row; a click on the row already selected would open it. */
+async function pick(page: Page, name: string) {
+  const r = row(page, name);
+  if ((await r.getAttribute("aria-selected")) !== "true") await r.locator("td").last().click({ position: { x: 4, y: 4 } });
+}
 const inspector = (page: Page) => page.getByTestId("document-inspector");
 
 test.describe("desktop", () => {
@@ -42,12 +47,12 @@ test.describe("desktop", () => {
     ).toBeVisible();
 
     // Usage alerts: its latest version is its approved one, said once, in words.
-    await row(page, "Usage alerts PRD").click();
+    await pick(page, "Usage alerts PRD");
     await expect(inspector(page).getByTestId("inspector-approved")).toHaveText(
       /^v\d+, the latest$/,
     );
     // A PRD with nothing approved says so, not 'No' or a dash.
-    await row(page, "Saved carts PRD").click();
+    await pick(page, "Saved carts PRD");
     await expect(inspector(page).getByTestId("inspector-approved")).toHaveText(
       "Not approved",
     );
@@ -84,7 +89,7 @@ test.describe("desktop", () => {
     await expect(tip).toContainText("Plan");
     await expect(tip).not.toContainText("POST");
     await expect(tip).not.toContainText("oracle push");
-    await expect(tip).not.toContainText("Roadmap");
+    await expect(tip).not.toContainText(/\bRoadmap\b/);
   });
 
   test("qa-docs-41: In review filters the list and the column headers sort", async ({

@@ -87,7 +87,7 @@ test.describe("desktop", () => {
     await expect(page.getByTestId("model-disclaimer")).toContainText(/Oracle reviewed this at \d{1,2}:\d{2} [AP]M/);
     await expect(page.getByTestId("model-disclaimer").locator(".font-mono")).toHaveCount(0);
     // The details are folded away until the owner opens them.
-    await expect(done.getByText(/tokens in/)).toBeHidden();
+    await expect(done.getByTestId("job-details")).not.toHaveAttribute("open", /.*/);
     await done.getByText("Details").click();
     await expect(done.getByTestId("job-details")).toContainText(/\d+(\.\d)?k? tokens in · \d+ out/);
     await expect(done.getByTestId("job-details")).toContainText("$");

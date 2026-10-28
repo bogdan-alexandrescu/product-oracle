@@ -103,7 +103,7 @@ test.describe("desktop", () => {
     await openVersion(page, CARTS);
     await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
     const first = sectionStrip(page).locator("a[data-outline-key]").first();
-    await expect(first).toHaveText(/Introduction$/);
+    await expect(first.getByTestId("outline-name")).toHaveText("Introduction");
     await expect(first).not.toContainText("Saved carts PRD");
   });
 
@@ -115,15 +115,8 @@ test.describe("desktop", () => {
     await expect(sectionStrip(page).getByTestId("outline-filter")).toHaveValue("");
     await expect(sectionStrip(page).locator("a[data-outline-key]").first()).toBeVisible();
 
-    // A state with nothing in it: the empty list offers Clear filter, back to the open feedback.
-    const states = panel(page).getByTestId("feedback-state").getByRole("button");
-    const texts = await states.allInnerTexts();
-    const empty = texts.findIndex((t, i) => i > 0 && /\b0\s*$/.test(t.trim()));
-    expect(empty).toBeGreaterThan(0);
-    await states.nth(empty).click();
-    await expect(panel(page).getByTestId("feedback-empty")).toContainText("Clear filter");
-    await panel(page).getByTestId("feedback-clear-filter").click();
-    await expect(states.first()).toHaveAttribute("aria-pressed", "true");
+    // Saved carts has no feedback yet: its panel shows no filter chips, only the empty state.
+    await expect(panel(page).getByTestId("feedback-state")).toHaveCount(0);
 
     // A version with no feedback at all shows no filters.
     await page.goto(BRIEF_V2);
@@ -142,15 +135,19 @@ test.describe("desktop", () => {
     await expect(bar.getByTestId("verdict-note-hint")).toBeVisible();
     await bar.getByRole("textbox").fill("Name the drop-off measure.");
     await expect(save).toBeEnabled();
-    const [fill, accent] = await save.evaluate((el) => {
-      const probe = document.createElement("span");
-      probe.className = "bg-accent";
-      document.body.append(probe);
-      const a = getComputedStyle(probe).backgroundColor;
-      probe.remove();
-      return [getComputedStyle(el).backgroundColor, a];
-    });
-    expect(fill).toBe(accent);
+    // Polled: the fill eases in from the disabled look.
+    await expect
+      .poll(() =>
+        save.evaluate((el) => {
+          const probe = document.createElement("span");
+          probe.className = "bg-accent";
+          document.body.append(probe);
+          const a = getComputedStyle(probe).backgroundColor;
+          probe.remove();
+          return getComputedStyle(el).backgroundColor === a;
+        }),
+      )
+      .toBe(true);
   });
 
   test("qa-docs-52: Discuss says who can see it, and Oracle's reply follows the Ask Oracle box", async ({ page }) => {

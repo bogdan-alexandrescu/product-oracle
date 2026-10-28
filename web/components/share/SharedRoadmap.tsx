@@ -106,8 +106,12 @@ export function SharedRoadmap({ token }: { token: string }) {
     // qa-docs-70: the shared page is the company's light document, so the bar is light too
     // (fixed colours, whatever the app's theme), and the frame grows to its content: one scroll.
     return (
-      <main className="flex min-h-dvh flex-col bg-white text-[#0f172a]" style={{ colorScheme: "light" }} data-testid="shared-page">
-        <header data-testid="shared-header" className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#e2e8f0] bg-white px-4 py-3">
+      <main className="flex min-h-dvh flex-col text-[#0f172a]" style={{ colorScheme: "light", backgroundColor: "#ffffff" }} data-testid="shared-page">
+        <header
+          data-testid="shared-header"
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-[#e2e8f0] px-4 py-3"
+          style={{ backgroundColor: "#ffffff" }}
+        >
           <div className="min-w-0 flex-1">
             {title && <h1 className="font-display text-xl font-bold tracking-heading break-words">{title}</h1>}
             {(shared_by || expires_at) && (
@@ -172,25 +176,41 @@ export function SharedRoadmap({ token }: { token: string }) {
 function Frame({ title, html }: { title: string; html: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState<number | null>(null);
-  const fit = () => {
-    const doc = ref.current?.contentDocument;
-    if (doc?.documentElement) setHeight(doc.documentElement.scrollHeight);
-  };
   useEffect(() => {
+    const fit = () => {
+      const doc = ref.current?.contentDocument;
+      if (doc?.documentElement) setHeight(doc.documentElement.scrollHeight);
+    };
+    // The frame may load before React listens to it: fit once it is there, and as it grows.
+    const el = ref.current;
+    let watch: ResizeObserver | null = null;
+    const attach = () => {
+      const body = el?.contentDocument?.body;
+      if (!body) return;
+      fit();
+      watch?.disconnect();
+      watch = new ResizeObserver(fit);
+      watch.observe(body);
+    };
+    attach();
+    el?.addEventListener("load", attach);
     window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, []);
+    return () => {
+      watch?.disconnect();
+      el?.removeEventListener("load", attach);
+      window.removeEventListener("resize", fit);
+    };
+  }, [html]);
   return (
     <iframe
       ref={ref}
       title={title}
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       srcDoc={html}
-      onLoad={fit}
       scrolling="no"
       data-testid="shared-frame"
-      className="block w-full flex-1 border-0 bg-white"
-      style={height != null ? { height } : { minHeight: "80dvh" }}
+      className="block w-full border-0"
+      style={{ backgroundColor: "#ffffff", ...(height != null ? { height } : { minHeight: "80dvh" }) }}
     />
   );
 }
