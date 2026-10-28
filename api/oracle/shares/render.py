@@ -113,8 +113,9 @@ async def company(db) -> str | None:
 
 def day_with_year(moment: datetime, zone: str) -> str:
     """The company's day at ``moment`` as "Nov 11, 2026" (the link holder's header)."""
-    local = company_time.day(moment, zone)
-    return f"{local:%b} {local.day}, {local.year}"
+    from oracle.roadmap.doc_dates import shown_day
+
+    return shown_day(company_time.day(moment, zone))
 
 
 def _footer(sender: str | None, ctx: ShareContext, zone: str) -> str:

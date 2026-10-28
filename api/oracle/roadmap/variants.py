@@ -578,7 +578,9 @@ def _shown_day(value: Any) -> str:
         day = value if isinstance(value, date) else date.fromisoformat(str(value)[:10])
     except ValueError:
         return str(value)
-    return f"{day:%b} {day.day}, {day.year}"
+    from oracle.roadmap.doc_dates import shown_day
+
+    return shown_day(day)
 
 
 def _milestone(item: ItemView) -> str | None:

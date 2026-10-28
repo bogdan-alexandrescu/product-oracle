@@ -413,9 +413,9 @@ async def test_confirming_keeps_the_brief_sections_of_the_outline(client):
     approver = ctx.as_("approver")
 
     async def brief() -> list[str]:
-        resp = await client.post(
-            "/v1/compositions/recommend", json={"document": SLUG}, headers=approver
-        )
+        # The template's latest version marks a brief (its first, as the draft names, has none).
+        body = {"document": SLUG, "template": "oracle-default"}
+        resp = await client.post("/v1/compositions/recommend", json=body, headers=approver)
         assert resp.status_code == 200, resp.text
         return [(o["section_id"], o["layer"]) for o in resp.json()["outline"]]
 
