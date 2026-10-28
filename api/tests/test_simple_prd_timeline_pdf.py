@@ -10,6 +10,9 @@ Test cards (protects / fails_when / no_claim):
   order, each with its Done when, targets, what it builds by kind, decisions and risks;
   fails_when=a milestone's page is missing or out of order, or the strip is printed;
   no_claim=the PDF engine's layout (test_export.py).
+- test_pdf_bar_codes_fit_the_bar: protects=a short bar prints as many whole codes as fit
+  its width, then "+N" (as the web's fitCodes), never a code cut mid-way ("F-05b · F-0");
+  fails_when=a bar's label is wider than the bar; no_claim=the PDF engine's font metrics.
 - test_pdf_without_a_dated_plan_stays_one_page: protects=a PRD with no plan keeps the one
   page and its strip; fails_when=milestone pages appear; no_claim=the web.
 """
@@ -94,6 +97,29 @@ async def test_pdf_prints_the_timeline_then_a_page_per_milestone(client):
     assert "Q3 Which sample data to ship" in m1 and "Pilot teams may be busy" in m1
     assert "F-13" not in m1 and "F-13 Public signup" in parts[2]
     assert "No open decisions" in parts[1]
+
+
+async def test_pdf_bar_codes_fit_the_bar(client):
+    import re
+
+    data = {**DATA, "features": [
+        {"code": c, "name": c, "milestones": ["M2"], "effort": [2], "goals": ["Growth"],
+         "order": ["weeks 1-2"]}
+        for c in ("F-06", "F-08", "F-12")
+    ]}  # fmt: skip
+    ctx = await world(client)
+    async with tenant_session(ctx.tenant_id) as s:
+        doc = await s.scalar(select(Document).where(Document.slug == "guided-setup"))
+        v = await s.scalar(select(DocumentVersion).where(DocumentVersion.document_id == doc.id))
+        s.add(SimplePrdPlan(document_id=doc.id, version_id=v.id, status="ready", source="prd",
+                            data=data))  # fmt: skip
+        await s.commit()
+    html = await pdf(ctx)
+    tl = html[html.index("<div class='tl'>") : html.index("<section class='part'>")]
+    (label,) = re.findall(r"<span class='bar'[^>]*>([^<]*)</span>", tl)
+    # Two weeks of a 15-week span in the lanes' 70% of A4's 178 mm: about 45 px.
+    assert label == "F-06 +2"
+    assert "F-08" not in label
 
 
 async def test_pdf_without_a_dated_plan_stays_one_page(client):

@@ -115,6 +115,22 @@ for (const phone of [false, true]) {
           // Each bar names what it builds; a bar too narrow for its codes ends with "+N".
           await expect(m2).toHaveAttribute("aria-label", /F-05b Team invites, part 2 of 2|F-05b Team invites/);
           await expect(m2).toHaveText(/^F-05b( · F-08)*( · F-12a)?( \+\d)?$/);
+          // prd-timeline review: the mock's other two-milestone features stack too (F-11 in
+          // Revenue, F-12 in Growth): each one's two slices sit in different rows.
+          for (const [goal, code] of [["Revenue", "F-11"], ["Growth", "F-12"]] as const) {
+            const row = tl.getByTestId("timeline-lane").filter({ hasText: goal });
+            const first = row.locator(`[data-testid="timeline-bar"][aria-label*="${code}a "]`);
+            const second = row.locator(`[data-testid="timeline-bar"][aria-label*="${code}b "]`);
+            await expect(first).toHaveAttribute("data-milestone", "M2");
+            await expect(second).toHaveAttribute("data-milestone", "M3");
+            const [x, y] = [(await first.boundingBox())!, (await second.boundingBox())!];
+            expect(Math.abs(x.y - y.y)).toBeGreaterThan(x.height / 2);
+          }
+          // No bar's label spills past the bar: it is fitted, never wider than the bar.
+          for (const bar of await tl.getByTestId("timeline-bar").all()) {
+            const [inner, outer] = await bar.evaluate((el) => [el.scrollWidth, el.clientWidth]);
+            expect(inner).toBeLessThanOrEqual(outer + 1);
+          }
           const pm = tl.getByTestId("timeline-lane").last().locator('[data-testid="timeline-bar"]');
           await expect(pm).toHaveCount(3);
           await expect(pm.first()).toHaveAttribute("data-pm", "true");
@@ -180,10 +196,29 @@ for (const phone of [false, true]) {
         const edit = line.getByRole("button", { name: /^Edit line/ });
         await expect(edit).toHaveCSS("opacity", "0");
         if (!phone) await line.hover();
-        else await line.getByTestId("one-pager-line-text").tap();
+        else {
+          // A tap on the line (not on its words) shows Edit and does not open the line.
+          const box = (await line.boundingBox())!;
+          const words = (await line.getByTestId("one-pager-line-text").boundingBox())!;
+          await page.touchscreen.tap(words.x + words.width + 2 < box.x + box.width ? words.x + words.width + 2 : box.x + 2, box.y + box.height - 2);
+          await expect(line.getByTestId("one-pager-line-text")).toHaveAttribute("aria-expanded", "false");
+        }
         await expect(edit).toHaveCSS("opacity", "1");
         await edit.click();
         await expect(article.getByRole("textbox")).toBeVisible();
+      });
+
+      test(`work with no goal named adds no lane of its own (${where})`, async ({ page }) => {
+        // Card timeline-no-goal-lane: protects = slices whose feature names no goal add no
+        // "No goal named" lane (one lane per goal, then the PM-owned lane); fails_when = that
+        // lane is drawn; no_claim = the milestone part, which still lists the work.
+        await open(page, scheme, "owner", "simple-plan-goalless");
+        const tl = page.getByRole("region", { name: "Timeline" });
+        await expect(tl).toBeVisible();
+        await expect(tl).not.toContainText("No goal named");
+        if (!phone) await expect(tl.getByTestId("timeline-lane")).toHaveCount(5);
+        await tl.getByRole("button", { name: /^M2 / }).first().click();
+        await expect(page.getByTestId("milestone-part")).toContainText("F-21 Docs refresh");
       });
 
       test(`a PRD whose milestones have no dates says so (${where})`, async ({ page }) => {
