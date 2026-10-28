@@ -307,6 +307,14 @@ ChangeOp = Literal[
     # Oracle's Requests (non-versioned), both made by chat as well.
     "set_milestone",
     "add_feature_ask",
+    # chat-actions: the item's own owner and decider (into the working draft).
+    "set_owner",
+    "set_decider",
+]
+# chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
+# the change engine (oracle.simple.chat_actions).
+ChatActionOp = Literal[
+    "record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip"
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -1054,7 +1062,7 @@ class ChatFix(BaseModel):
 class ChatCardOut(BaseModel):
     id: uuid.UUID
     message_id: uuid.UUID | None
-    op: ChangeOp
+    op: ChangeOp | ChatActionOp
     target: dict[str, Any]
     before: dict[str, Any]
     after: dict[str, Any]
@@ -1122,7 +1130,8 @@ class ChatApplyIn(BaseModel):
 
 class ChatApplyOut(BaseModel):
     card: ChatCardOut
-    result: SimpleChangeResult
+    # None for chat-actions' direct ops (no change-engine change).
+    result: SimpleChangeResult | None = None
 
 
 class WalkDecision(BaseModel):
@@ -1268,6 +1277,28 @@ class SimpleMeetingCan(BaseModel):
     redraft: bool = False
 
 
+class SimpleMeetingNote(BaseModel):
+    """chat-actions: a minutes note or open question added during the meeting."""
+
+    id: str
+    kind: Literal["note", "question"]
+    text: str
+    by_name: str
+    card_id: uuid.UUID | None = None
+
+
+class SimpleAgendaItem(BaseModel):
+    id: uuid.UUID
+    title: str
+
+
+class SimpleAgenda(BaseModel):
+    """chat-actions: the item the meeting takes next and the items it skips."""
+
+    next: SimpleAgendaItem | None = None
+    skipped: list[SimpleAgendaItem] = []
+
+
 class SimpleMeetingOut(SimpleMeetingBrief):
     session_id: uuid.UUID
     occurrence_id: uuid.UUID | None = None
@@ -1290,6 +1321,9 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     can: SimpleMeetingCan
     # Approve's answer: the roadmaps left for their own decider.
     not_approved: list[SimpleNotApproved] = []
+    # chat-actions: the notes and open questions so far, and the agenda's changes.
+    notes: list[SimpleMeetingNote] = []
+    agenda: SimpleAgenda = SimpleAgenda()
 
 
 class SimpleUpcomingMeeting(BaseModel):

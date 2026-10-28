@@ -20,9 +20,10 @@ function rulesLine(r: ChatRules): string {
 /**
  * A meeting's shared change-by-chat thread (Simple S9): every attendee's lines and Oracle's
  * cards, polled so each tab sees the others; the rules line (who may apply) and, for the
- * presenter, the control that changes it. Viewers ask questions only.
+ * presenter, the control that changes it. Viewers ask questions only. `onCardChanged`: a card
+ * here was applied, discarded or undone (the host reads its meeting again).
  */
-export function MeetingChat({ meetingId, sessionId }: { meetingId: string; sessionId: string }) {
+export function MeetingChat({ meetingId, sessionId, onCardChanged }: { meetingId: string; sessionId: string; onCardChanged?: () => void }) {
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(async () => {
@@ -81,7 +82,11 @@ export function MeetingChat({ meetingId, sessionId }: { meetingId: string; sessi
           placeholder={rules?.ask_only ? "Ask a question about the plan…" : "Ask a question or ask for a change…"}
           hint={rules?.ask_only ? "You can ask questions here; viewers don't change the plan." : undefined}
           send={async (text) => setThread(await meetingSay(meetingId, text))}
-          onCardChanged={() => void load()}
+          onCardChanged={() => {
+            void load();
+            // The meeting screen reads the meeting again: its notes, agenda and decisions follow the card.
+            onCardChanged?.();
+          }}
         />
       )}
     </section>

@@ -117,7 +117,7 @@ def owner_decides(entry: Entry) -> uuid.UUID | None:
 def decider_ids(entry: Entry, deciders: dict[uuid.UUID, uuid.UUID | None]) -> list[uuid.UUID]:
     """Who decides on this item, the company's owners apart (D-a): the roadmap's decider,
     else its deciding track owner; [] when the company's owners decide."""
-    decider = deciders.get(entry.roadmap.id)
+    decider = entry.row.decider_id or deciders.get(entry.roadmap.id)
     if decider is not None:
         return [decider]
     owner = owner_decides(entry)
@@ -136,7 +136,7 @@ def can_decide(principal: Any, entry: Entry, deciders: dict[uuid.UUID, uuid.UUID
     user_id = getattr(principal, "user_id", None)
     if user_id is None:
         return False
-    decider = deciders.get(entry.roadmap.id)
+    decider = entry.row.decider_id or deciders.get(entry.roadmap.id)
     if decider is not None:
         return decider == user_id
     return (
@@ -225,6 +225,15 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
         if role is not None:
             owner_roles[t.id] = role
             owner_names[t.id] = name or email
+    # chat-actions: an item's own owner (set_owner) is named over its track's.
+    people = {
+        u: (role, name or email)
+        for u, role, name, email in (
+            await db.execute(
+                select(User.id, User.role, User.name, User.email).where(User.disabled_at.is_(None))
+            )
+        ).all()
+    }
     track_of_prd = {t.prd_document_id: t for t in tracks.values()}
     milestones = list(
         await db.scalars(
@@ -315,7 +324,9 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 blockers=[blockers[b] for b in row.blocker_ids or [] if b in blockers],
                 suggestion=suggestions.get(row.id),
                 owner_role=owner_roles.get(track.id) if track is not None else None,
-                owner_name=owner_names.get(track.id) if track is not None else None,
+                owner_name=people[row.owner_id][1]
+                if row.owner_id in people
+                else (owner_names.get(track.id) if track is not None else None),
             )
         )
     # Dependencies within each roadmap version, by item key.

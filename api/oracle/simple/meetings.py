@@ -882,7 +882,101 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
             redraft=job_state == "failed" and _presenter_or_decider(principal, m, w),
         ),
         not_approved=not_approved or [],
+        notes=await _notes_out(db, m),
+        agenda=await _agenda_out(db, m),
     )
+
+
+# --------------------------------------------------------------------------- chat-actions
+
+
+async def _live(db: AsyncSession, meeting_id: uuid.UUID) -> SimpleMeeting:
+    m = await db.get(SimpleMeeting, meeting_id, with_for_update=True)
+    if m is None:
+        raise MeetingError(404, "No such meeting")
+    if m.status == "ended":
+        raise MeetingError(409, "This meeting has ended")
+    return m
+
+
+async def add_note(db: AsyncSession, principal: Any, meeting_id: uuid.UUID, kind: str,
+                   text_: str, card_id: uuid.UUID | None = None) -> str:  # fmt: skip
+    """A minutes note or open question added during the meeting (chat-actions); it shows on
+    the meeting's screen and goes into Oracle's drafted minutes. The caller commits."""
+    m = await _live(db, meeting_id)
+    note = {"id": str(uuid.uuid4()), "kind": kind, "text": text_.strip()[:1000],
+            "by": str(_me(principal)), "at": company_time.now().isoformat(),
+            "card_id": str(card_id) if card_id else None}  # fmt: skip
+    m.notes = [*(m.notes or []), note]
+    await db.flush()
+    return note["id"]
+
+
+async def remove_note(db: AsyncSession, meeting_id: uuid.UUID, note_id: str) -> None:
+    m = await _live(db, meeting_id)
+    m.notes = [n for n in m.notes or [] if n.get("id") != note_id]
+    await db.flush()
+
+
+async def set_agenda(db: AsyncSession, meeting_id: uuid.UUID, item_id: uuid.UUID | None,
+                     move: str) -> dict:  # fmt: skip
+    """Take an item next or skip it (``move``: next, skip), or put back an agenda
+    (``move`` restore with ``item_id`` None is the caller's: :func:`restore_agenda`).
+    Returns the agenda as it was, for Undo."""
+    m = await _live(db, meeting_id)
+    was = dict(m.agenda or {})
+    skipped = [i for i in was.get("skipped") or [] if i != str(item_id)]
+    nxt = was.get("next")
+    if move == "next":
+        nxt = str(item_id)
+    else:
+        skipped.append(str(item_id))
+        if nxt == str(item_id):
+            nxt = None
+    m.agenda = {"next": nxt, "skipped": skipped}
+    await db.flush()
+    return {"next": was.get("next"), "skipped": list(was.get("skipped") or [])}
+
+
+async def restore_agenda(db: AsyncSession, meeting_id: uuid.UUID, agenda: dict) -> None:
+    m = await _live(db, meeting_id)
+    m.agenda = {"next": agenda.get("next"), "skipped": list(agenda.get("skipped") or [])}
+    await db.flush()
+
+
+async def _notes_out(db: AsyncSession, m: SimpleMeeting) -> list:
+    from oracle.simple.schemas import SimpleMeetingNote
+
+    notes = list(m.notes or [])
+    names = await _names(db, {uuid.UUID(n["by"]) for n in notes if n.get("by")})
+    return [
+        SimpleMeetingNote(
+            id=n["id"],
+            kind=n["kind"],
+            text=n["text"],
+            by_name=names.get(uuid.UUID(n["by"]), "someone") if n.get("by") else "someone",
+            card_id=n.get("card_id"),
+        )  # fmt: skip
+        for n in notes
+    ]
+
+
+async def _agenda_out(db: AsyncSession, m: SimpleMeeting) -> Any:
+    from oracle.simple.schemas import SimpleAgenda, SimpleAgendaItem
+
+    a = m.agenda or {}
+    ids = [i for i in [a.get("next"), *(a.get("skipped") or [])] if i]
+    rows = {
+        str(r.id): r
+        for r in await db.scalars(select(RoadmapItem).where(RoadmapItem.id.in_(ids)))
+    } if ids else {}  # fmt: skip
+
+    def item(i: str | None) -> Any:
+        r = rows.get(i) if i else None
+        return SimpleAgendaItem(id=r.id, title=r.title) if r is not None else None
+
+    return SimpleAgenda(next=item(a.get("next")),
+                        skipped=[x for x in map(item, a.get("skipped") or []) if x])  # fmt: skip
 
 
 async def _draft_outs(db: AsyncSession, principal: Any, ds: list) -> list:
@@ -1075,6 +1169,12 @@ async def extract(db: AsyncSession, m: SimpleMeeting) -> dict[str, Any]:
     document = await db.get(Document, m.prd_document_id)
     item_ids, _ = await _prd_items(db, document)
     questions = [f"D-{d.number}: {d.title}" for d in await _open_decisions(db, document, item_ids)]
+    # chat-actions: the notes and open questions added during the meeting.
+    notes = [n["text"] for n in m.notes or [] if n.get("kind") == "note"]
+    if notes:
+        summary += "".join(f"\nNotes: {t}" for t in notes)
+    asked = [n["text"] for n in m.notes or [] if n.get("kind") == "question"]
+    questions = [*asked, *questions]
     return {
         "summary": summary[:SUMMARY_MAX],
         "open_questions": questions[:MAX_QUESTIONS],

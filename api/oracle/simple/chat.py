@@ -212,11 +212,19 @@ class Ctx:
         self.read: service.Read | None = None
         self.overlays: dict[uuid.UUID, dict[str, Any]] = {}
         self.people: list[User] = []
+        # chat-actions: the Ask panel's page and the document it shows.
+        self.page: str | None = None
+        self.page_document: Any = None
+        self.meeting_decider_name: str | None = None
 
     async def load(self) -> "Ctx":
+        from oracle.simple import chat_actions
+
+        self.page_document = await chat_actions.page_document(self.db, self.page)
         self.overlays = await drafts.overlays_for(self.db, self.principal)
         self.read = await service.load(self.db, self.overlays)
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
+        self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
         return self
 
     @property
@@ -502,6 +510,10 @@ def parse(c: Ctx, text: str) -> Reply:
                          {"kind": "cut", "item_id": str(e.row.id)})  # fmt: skip
 
         return change(cut)
+    from oracle.simple import chat_actions
+
+    if (r := chat_actions.parse(c, t)) is not None:
+        return Reply("note", VIEWER_NOTE) if viewer_in_meeting and r.kind == "cards" else r
     return Reply("question", f"I did not understand that. {EXAMPLES}", understood=False)
 
 
@@ -675,6 +687,7 @@ async def post(
     text: str,
     meeting_id: uuid.UUID | None = None,
     only_understood: bool = False,
+    page: str | None = None,
 ) -> ChatThreadOut:
     """The person's line and Oracle's reply, in one go. ``only_understood`` (the Ask
     panel's one box): a line Oracle's reader does not know writes nothing and answers
@@ -685,7 +698,9 @@ async def post(
         rules = await rules_of(db, meeting_id)
         if not _attends(principal, rules):
             raise ChatError(403, "Only the meeting's attendees use its chat")
-    ctx = await Ctx(db, principal, rules).load()
+    ctx = Ctx(db, principal, rules)
+    ctx.page = page
+    await ctx.load()
     reply = parse(ctx, text)
     if only_understood and not reply.understood:
         out = await thread(db, principal, meeting_id)
@@ -738,7 +753,7 @@ async def _flow(db: AsyncSession, card: SimpleChatCard) -> Any:
 
 def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
     """Whether the caller's Apply applies (else proposes): the change engine's rule."""
-    if card.op == "add_feature_ask":
+    if card.op == "add_feature_ask" or card.op in _actions().DIRECT_OPS:
         return True
     if card.item_id is None:
         return has_role(principal.role, "owner")
@@ -746,7 +761,15 @@ def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
     return e is not None and service.can_decide(principal, e, read_.deciders)
 
 
+def _actions() -> Any:
+    from oracle.simple import chat_actions
+
+    return chat_actions
+
+
 def _card_bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
+    if card.op in _actions().DIRECT_OPS:
+        return _actions().bar(principal, card, rules)
     if rules is not None:
         return meeting_bar(principal, rules)
     if not has_role(principal.role, "commenter"):
@@ -885,6 +908,8 @@ async def apply(
     bar = _card_bar(principal, card, rules)
     if bar is not None:
         raise ChatError(403, bar)
+    if card.op in _actions().DIRECT_OPS:
+        return await _apply_direct(db, principal, card_id, rules, fix)
     if fix is not None:
         fixes = (await one(db, principal, card, rules)).fixes
         if fix >= len(fixes):
@@ -941,6 +966,22 @@ async def apply(
     return await one(db, principal, card, rules), result
 
 
+async def _apply_direct(
+    db: AsyncSession, principal: Any, card_id: uuid.UUID, rules: Any, fix: int | None
+) -> tuple[ChatCardOut, SimpleChangeResult | None]:
+    """chat-actions' ops: applied through the meetings module or Oracle's decisions (no
+    change-engine change), in one transaction with the card."""
+    if fix is not None:
+        raise ChatError(422, "fix: one of the card's fixes")
+    card = await db.get(SimpleChatCard, card_id, with_for_update=True, populate_existing=True)
+    if card is None or card.status != "open":
+        raise ChatError(409, f"This card is {card.status if card else 'gone'} already")
+    await _actions().apply(db, principal, card)
+    card.status, card.decided_by, card.decided_at = "applied", _me(principal), company_time.now()
+    await db.commit()
+    return await one(db, principal, card, rules), None
+
+
 async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCardOut:
     card, rules = await _get(db, principal, card_id)
     if card.status != "open":
@@ -958,6 +999,11 @@ async def discard(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatC
 
 async def undo(db: AsyncSession, principal: Any, card_id: uuid.UUID) -> ChatCardOut:
     card, rules = await _get(db, principal, card_id)
+    if card.status == "applied" and card.op in _actions().DIRECT_OPS:
+        await _actions().undo(db, principal, card, rules)
+        card.status = "undone"
+        await db.commit()
+        return await one(db, principal, card, rules)
     if card.status != "applied" or card.change_id is None:
         raise ChatError(409, "Only an applied card undoes")
     await changes.undo(db, principal, card.change_id)
