@@ -159,6 +159,18 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
 };
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
+/** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
+export const TALK_GOALS: Record<string, string> = { reliability: "Reliability", growth: "Growth", activation: "Activation", revenue: "Revenue" };
+const TALK_ITEM = "adaptive-pacing";
+/** The goals TALK_GOALS adds, when the roadmap holds roadmap-talk's items (the scenario's seed, or a reload of it). */
+export function knowTalkGoals(db: { items: { key: string }[] }): void {
+  if (!(TALK_ITEM in GOALS_KNOWN) && db.items.some((x) => x.key === TALK_ITEM)) {
+    Object.assign(GOALS, TALK_GOALS);
+    GOALS_KNOWN[TALK_ITEM] = true;
+  }
+}
+const GOALS_KNOWN: Record<string, boolean> = {};
+
 /** The PRD's own code of a section an item came from ("f-06" -> "F-06"); null when the key is no code (service.py). */
 export function prdCode(section: string | null | undefined): string | null {
   const m = /^([a-z]{1,3})-(\d+)$/i.exec((section ?? "").trim());
@@ -541,6 +553,7 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
 }
 
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
+  knowTalkGoals(db);
   const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
   const deciders = (s: SeedItem) => {
     const ids = deciderIds(db, s, me?.roles);

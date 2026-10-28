@@ -269,3 +269,9 @@ report shows both items addressed -> approve -> export PDF.
 - Lanes run as SwarmCloud lanes (claude-code tasks) on this repo (R2 Who builds:
   answered 2026-10-16). Lane 0 first; lanes 1–4 start from Lane 0's merged result.
 - Markdown + YAML front matter is the import contract the agent track writes to.
+
+## Roadmap item talk and action cards (roadmap-talk)
+
+- **The card's talk.** On `/simple/roadmap` an item's card has **Talk to Oracle**. It widens the card in place: the details on the left, the talk on the right, headed "Talk about <code> <title>", with **Hide the talk**. Under the message box: "Just you and Oracle · kept with this item". On a phone the bottom sheet has two tabs, **Details** and **Talk to Oracle**. The talk uses the Ask chat endpoints with the page `/simple/roadmap/items/<item id>`, so there is one thread per item and person. In it, "it" and "this" mean the item. Oracle's answers can carry a `source` line, for example "From the PRD · F-16 Adaptive pacing".
+- **Action cards.** Oracle restates each change ("I understood: move … two weeks later, to Nov 30 – Dec 11, 2026.") and adds one card per change: moving dates, moving to another milestone, adding an item, splitting an item, setting the owner, renaming or cutting it. A card shows **Before → After** (`change_words`) and its red reasons. A card with `correct` has **Apply** (**Propose** for commenters and approvers), **Reject** and **Correct**. Correct opens the card's fields (Title, Goal, Milestone, Start, End, Owner), filled in with Oracle's reading. Apply then sends `{values}`, the server rebuilds the card from them, and the restatement updates. Viewers get a note and no cards.
+- **After Apply.** The item's bar flashes on the timeline for about 2.5 s (`simple:applied`), and the roadmap reloads (`simple:card-changed`). The same cards show in the roadmap's Ask panel. A line with two or more open cards keeps **Apply all**.

@@ -57,7 +57,17 @@ export type ChatCard = {
   decided_by_name: string | null;
   decided_at: string | null;
   decision_id: string | null;
+  /** roadmap-talk: the change in plain words ("Nov 16 – Nov 27" → "Nov 30 – Dec 11"); null when none. */
+  change_words?: ChangeWords | null;
+  /** roadmap-talk: the fields Correct opens, prefilled with Oracle's reading; null: no Correct. */
+  correct?: CardCorrect | null;
 };
+
+export type ChangeWords = { before: string; after: string };
+/** The fields a card's Correct opens, in this order when present. */
+export const CORRECT_FIELDS = ["title", "goal", "milestone", "start_date", "end_date", "owner"] as const;
+export type CorrectField = (typeof CORRECT_FIELDS)[number];
+export type CardCorrect = { fields: string[]; values: Record<string, string | null> };
 
 export type ChatMessage = {
   id: string;
@@ -77,6 +87,8 @@ export type ChatMessage = {
   picked: number | null;
   /** A failed line: Retry reads it again. */
   retry: boolean;
+  /** roadmap-talk: where Oracle's answer comes from ("From the PRD · F-06 Adaptive pacing"); null otherwise. */
+  source?: string | null;
 };
 
 export type ChatChoice = { index: number; label: string };
@@ -162,8 +174,29 @@ export function setChatMode(meetingId: string, change_mode: ChangeMode, change_p
 }
 
 /** POST /v1/simple/chat/cards/{card_id}/apply: the card (or its fix n) through the change engine. */
-export function applyCard(cardId: string, fix: number | null = null): Promise<ChatApply> {
-  return unwrap(loose.POST("/v1/simple/chat/cards/{card_id}/apply", { params: { path: { card_id: cardId } }, body: { fix } })) as Promise<ChatApply>;
+export function applyCard(cardId: string, fix: number | null = null, values?: Record<string, string | null>): Promise<ChatApply> {
+  return unwrap(
+    loose.POST("/v1/simple/chat/cards/{card_id}/apply", { params: { path: { card_id: cardId } }, body: values ? { fix, values } : { fix } }),
+  ) as Promise<ChatApply>;
+}
+
+/** roadmap-talk: an item's own talk with Oracle (one thread per item and person). */
+export const itemTalkPage = (itemId: string): string => `/simple/roadmap/items/${itemId}`;
+
+/** roadmap-talk: an applied card's item flashes its bar on the timeline. */
+export const APPLIED_EVENT = "simple:applied";
+export type AppliedDetail = { item_id: string };
+
+/** roadmap-talk: a chat card was applied, proposed, rejected or undone (the roadmap reads again). */
+export const CARD_CHANGED_EVENT = "simple:card-changed";
+
+export function sendCardChanged(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CARD_CHANGED_EVENT));
+}
+
+export function sendApplied(itemId: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<AppliedDetail>(APPLIED_EVENT, { detail: { item_id: itemId } }));
 }
 
 /** POST /v1/simple/chat/cards/{card_id}/discard. */

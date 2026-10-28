@@ -15,10 +15,13 @@ export function ChatThreadView({
   send,
   placeholder,
   hint,
+  note,
   testId,
   onCardChanged,
   onThread,
 }: {
+  /** A line under the message box (the item's talk: "Just you and Oracle · kept with this item"). */
+  note?: string;
   thread: Thread | null;
   send: (text: string) => Promise<unknown>;
   placeholder: string;
@@ -93,6 +96,11 @@ export function ChatThreadView({
             Send
           </button>
         </div>
+        {note && (
+          <p className="simple-small text-text2" data-testid="chat-note">
+            {note}
+          </p>
+        )}
       </form>
     </div>
   );
@@ -135,6 +143,11 @@ export function ChatMessages({ messages, onCardChanged, onThread }: { messages: 
             ) : (
               <p className="whitespace-pre-wrap" data-testid="chat-message-body">
                 {m.body}
+              </p>
+            )}
+            {m.source && (
+              <p className="simple-small text-text2 [overflow-wrap:anywhere]" data-testid="chat-message-source">
+                {m.source}
               </p>
             )}
           </div>

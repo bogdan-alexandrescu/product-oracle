@@ -9,6 +9,7 @@ import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
 import { shownDay } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -397,6 +398,12 @@ export function SimpleRoadmap() {
   const reload = useCallback(async () => {
     await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
   }, [roadmap, proposals, drafts]);
+  // roadmap-talk: a chat card applied, proposed, rejected or undone (the item's talk, the Ask panel) reads the roadmap again.
+  useEffect(() => {
+    const on = () => void reload();
+    window.addEventListener(CARD_CHANGED_EVENT, on);
+    return () => window.removeEventListener(CARD_CHANGED_EVENT, on);
+  }, [reload]);
   // S7: Oracle's suggested features by goal; an accept (or its undo) changes the roadmap.
   const suggestions = useGoalSuggestions(reload);
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);

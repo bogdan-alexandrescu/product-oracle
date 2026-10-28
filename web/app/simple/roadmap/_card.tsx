@@ -4,9 +4,9 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
-import { setPanelOpen } from "@/components/hop/open-state";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
+import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
@@ -268,7 +268,9 @@ function FlowThumb({ onOpen, label = "Open the flow", testId = "flow-thumb" }: {
 /**
  * D8 as amended: a floating card by the bar (phones: a bottom sheet) with the item's
  * outcome, owner, dates and their source, status, confidence, dependencies, top 3 reasons,
- * open decisions, the proposals on it, "Open the detailed view" and Ask Oracle.
+ * open decisions, the proposals on it, "Open the detailed view" and "Talk to Oracle"
+ * (roadmap-talk: the card widens in place, the details left and the item's talk right; a
+ * phone's sheet has two tabs, Details and Talk to Oracle).
  */
 export function FloatingCard({
   item,
@@ -301,6 +303,13 @@ export function FloatingCard({
   const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
   // The walk: the item's flow drawn while its card is open names itself here at once.
   const [drawn, setDrawn] = useState<{ id: string; title: string } | null>(null);
+  // roadmap-talk: the item's talk with Oracle, open beside the details (a phone: its tab).
+  const [talk, setTalk] = useState(false);
+  const openFlow = (w: FlowSubject | "item" | null) => {
+    setWide(w);
+    if (w && !phone) setTalk(false);
+  };
+  const about = item.code ? `${item.code} ${item.title}` : item.title;
   const drawnTitle = drawn?.id === item.id ? drawn.title : null;
   const ref = useRef<HTMLDivElement>(null);
   useScreenSubject({ kind: "roadmap_item", subject: { item_id: item.id, key: item.key } }, item.title);
@@ -318,7 +327,8 @@ export function FloatingCard({
     ? wide
       ? "fixed inset-0 z-50 h-dvh"
       : "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl"
-    : `absolute z-40 rounded-xl ${wide ? "w-[760px]" : "w-[380px]"}`;
+    : `absolute z-40 rounded-xl ${talk ? "w-[820px]" : wide ? "w-[760px]" : "w-[380px]"}`;
+  const showDetails = !phone || !talk;
   return (
     <div
       ref={ref}
@@ -328,6 +338,7 @@ export function FloatingCard({
       data-testid="floating-card"
       data-sheet={phone ? "bottom" : "float"}
       data-wide={wide ? "true" : "false"}
+      data-talk={talk ? "true" : "false"}
       style={phone ? undefined : style}
       className={`${place} max-w-[calc(100vw-16px)] overflow-y-auto border border-line bg-surface p-4 shadow-tip outline-none`}
     >
@@ -344,6 +355,24 @@ export function FloatingCard({
           ×
         </button>
       </div>
+      {phone && (
+        <div role="tablist" aria-label="The item" className="mt-2 flex gap-1 border-b border-line">
+          {([false, true] as const).map((t) => (
+            <button
+              key={String(t)}
+              type="button"
+              role="tab"
+              aria-selected={talk === t}
+              onClick={() => setTalk(t)}
+              className={`-mb-px border-b-2 px-3 py-2 text-[15px] font-semibold ${talk === t ? "border-accent text-accent-ink" : "border-transparent text-text2"}`}
+            >
+              {t ? "Talk to Oracle" : "Details"}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className={talk && !phone ? "mt-2 grid grid-cols-2 gap-5" : ""}>
+      {showDetails && (<div role={phone ? "tabpanel" : undefined} aria-label={phone ? "Details" : undefined} className="min-w-0">
       {item.drafting && (
         <p className="mt-1 text-sm text-accent-ink" role="status" data-testid="item-drafting">
           Oracle is drafting…
@@ -359,7 +388,7 @@ export function FloatingCard({
         <div className="mt-2 flex items-center gap-2 text-sm">
           <span className="text-text2">Flow</span>
           {item.flow ? (
-            <button type="button" data-testid="item-flow-thumb" aria-label="Open the flow" onClick={() => setWide(wide === "item" ? null : "item")} className="rounded-md border border-line bg-surface p-1">
+            <button type="button" data-testid="item-flow-thumb" aria-label="Open the flow" onClick={() => openFlow(wide === "item" ? null : "item")} className="rounded-md border border-line bg-surface p-1">
               <FlowPicture flow={item.flow} />
             </button>
           ) : (
@@ -449,7 +478,7 @@ export function FloatingCard({
           {!item.draft && (<section className="mt-3">
             <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Flow</h3>
             <div className="mt-1 flex items-center gap-2 text-[15px]" data-testid="card-flow">
-              <FlowThumb label="Open the item's flow" testId="item-flow-thumb" onOpen={() => setWide(wide !== "item" && wide?.id === item.id ? null : { kind: "feature", id: item.id })} />
+              <FlowThumb label="Open the item's flow" testId="item-flow-thumb" onOpen={() => openFlow(wide !== "item" && wide?.id === item.id ? null : { kind: "feature", id: item.id })} />
               <span className="min-w-0 flex-1">{item.flow ? item.flow.title : drawnTitle ?? <span className="text-text2">No flow yet</span>}</span>
             </div>
           </section>)}
@@ -475,7 +504,7 @@ export function FloatingCard({
               <ul className="mt-1 space-y-2" data-testid="card-proposals">
                 {proposals.map((c) => (
                   <li key={c.id} className="flex items-center gap-2 text-[15px]">
-                    {featureProposal(c, items) && <FlowThumb onOpen={() => setWide(wide !== "item" && wide?.id === c.id ? null : { kind: "change", id: c.id })} />}
+                    {featureProposal(c, items) && <FlowThumb onOpen={() => openFlow(wide !== "item" && wide?.id === c.id ? null : { kind: "change", id: c.id })} />}
                     <span className="min-w-0 flex-1">
                       {opWords(c.op)} · <span className="text-text2">{c.by_name}</span>
                     </span>
@@ -507,12 +536,12 @@ export function FloatingCard({
                   No flow yet: Oracle has not drawn a user flow or a wireframe for this proposal.
                 </p>
               )}
-              <Button variant="ghost" className="mt-2" onClick={() => setWide(null)}>
+              <Button variant="ghost" className="mt-2" onClick={() => openFlow(null)}>
                 Close the flow
               </Button>
               </>
             ) : (
-              <FlowPanel key={`${wide.kind}-${wide.id}`} subject={wide} onClose={() => setWide(null)} onDrawn={wide.kind === "feature" && wide.id === item.id ? (f) => setDrawn({ id: item.id, title: f.title }) : undefined} />
+              <FlowPanel key={`${wide.kind}-${wide.id}`} subject={wide} onClose={() => openFlow(null)} onDrawn={wide.kind === "feature" && wide.id === item.id ? (f) => setDrawn({ id: item.id, title: f.title }) : undefined} />
             )}
           </section>
         )}
@@ -521,9 +550,18 @@ export function FloatingCard({
         <Link href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}`} className="inline-flex h-8 items-center rounded-lg border border-line-strong px-3 text-sm font-semibold hover:bg-surface2">
           Open the detailed view
         </Link>
-        <Button variant="ghost" onClick={() => setPanelOpen(true)}>
-          Ask Oracle
-        </Button>
+        {!talk && (
+          <Button variant="ghost" onClick={() => setTalk(true)}>
+            Talk to Oracle
+          </Button>
+        )}
+      </div>
+      </div>)}
+      {talk && (
+        <div role={phone ? "tabpanel" : undefined} aria-label={phone ? "Talk to Oracle" : undefined} className={`min-w-0 ${phone ? "mt-3" : "border-l border-line pl-5"}`}>
+          <ItemTalk itemId={item.id} about={about} onHide={() => setTalk(false)} hideLabel={phone ? "Back to the details" : "Hide the talk"} />
+        </div>
+      )}
       </div>
     </div>
   );

@@ -4,12 +4,15 @@ import { useEffect, useState } from "react";
 
 import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
 import { api, unwrap } from "@/lib/api/client";
-import { applyCard, discardCard, FLOW_OPS, isActionPreview, sendPreview, undoCard, type ActionPreview, type ChatCard as Card } from "@/lib/api/simple-chat";
+import { applyCard, CORRECT_FIELDS, discardCard, FLOW_OPS, isActionPreview, sendApplied, sendCardChanged, sendPreview, undoCard, type ActionPreview, type ChatCard as Card } from "@/lib/api/simple-chat";
 import { errorMessage } from "@/lib/use-query";
 
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 
 const proposedWords = (to: string) => `Proposed to ${to}; they decide`;
+
+/** roadmap-talk: Correct's labelled fields. */
+const FIELD_LABELS: Record<(typeof CORRECT_FIELDS)[number], string> = { title: "Title", goal: "Goal", milestone: "Milestone", start_date: "Start", end_date: "End", owner: "Owner" };
 
 /** A chat action's Preview in words: what Apply changes (it has no roadmap ghost). */
 export function actionWords(p: ActionPreview): string[] {
@@ -48,6 +51,8 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
   const [described, setDescribed] = useState(false);
   const [wide, setWide] = useState(false);
   const [routedTo, setRoutedTo] = useState<string[] | null>(null);
+  // roadmap-talk: Correct opens the card's fields, prefilled with Oracle's reading.
+  const [fields, setFields] = useState<Record<string, string> | null>(null);
   useEffect(
     () => () => {
       // Closing the card (or its panel) clears its ghost.
@@ -59,6 +64,7 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
   const changed = (c: Card) => {
     setLocal({ from: initial, card: c });
     onChanged?.(c);
+    sendCardChanged();
   };
   const stopPreview = () => {
     setDescribed(false);
@@ -83,7 +89,10 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
   const apply = (fix: number | null = null) =>
     run(async () => {
       stopPreview();
-      const r = await applyCard(card.id, fix);
+      const corrected = fix == null && fields ? Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.trim() || null])) : undefined;
+      const r = await applyCard(card.id, fix, corrected);
+      setFields(null);
+      if (r.card.status === "applied" && r.card.item_id) sendApplied(r.card.item_id);
       if (r.result && r.result.change.status === "proposed" && r.result.change.routed_to.length) {
         const people = await unwrap(api.GET("/v1/people", { params: { query: { ids: r.result.change.routed_to } } })).catch(() => []);
         const routed = r.result.change.routed_to;
@@ -95,6 +104,9 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
   const open = card.status === "open";
   const label = card.may === "propose" ? "Propose" : "Apply";
   const action = isActionPreview(card.preview) ? card.preview : null;
+  const correct = card.correct ?? null;
+  const shown = correct ? CORRECT_FIELDS.filter((f) => correct.fields.includes(f)) : [];
+  const startCorrect = () => setFields(fields ? null : Object.fromEntries(shown.map((f) => [f, correct?.values[f] ?? ""])));
   const red = card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red").map((x) => ({ item: f.item_id, ...x })));
 
   return (
@@ -103,6 +115,11 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
         {card.summary}
       </p>
       {card.item_title && <p className="simple-small text-text2">Item: {card.item_title}</p>}
+      {card.change_words && (
+        <p className="simple-small [overflow-wrap:anywhere]" data-testid="chat-card-change">
+          <span className="text-text2">Before:</span> {card.change_words.before} → <span className="text-text2">After:</span> {card.change_words.after}
+        </p>
+      )}
       {open && action?.kind === "decision" && action.proposed_to && (
         <p className="simple-small text-text2" data-testid="chat-card-proposed-to">
           Goes to {action.proposed_to}; they decide
@@ -150,6 +167,21 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
           ))}
         </div>
       )}
+      {open && fields && (
+        <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2" role="group" aria-label="Correct the change" data-testid="chat-card-correct">
+          {shown.map((f) => (
+            <label key={f} className="flex min-w-0 flex-col gap-1 simple-small text-text2">
+              {FIELD_LABELS[f]}
+              <input
+                type={f === "start_date" || f === "end_date" ? "date" : "text"}
+                value={fields[f] ?? ""}
+                onChange={(e) => setFields({ ...fields, [f]: e.target.value })}
+                className="h-10 min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-text"
+              />
+            </label>
+          ))}
+        </div>
+      )}
       {open ? (
         <div className="flex flex-wrap items-center gap-2">
           {action ? (
@@ -187,8 +219,13 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
               })
             }
           >
-            Discard
+            {correct ? "Reject" : "Discard"}
           </button>
+          {correct && (
+            <button type="button" className="simple-button" aria-expanded={!!fields} disabled={busy || !card.may} onClick={startCorrect}>
+              {fields ? "Keep Oracle's reading" : "Correct"}
+            </button>
+          )}
           {!card.may && card.why_not && (
             <span className="simple-small text-text2" data-testid="chat-card-why-not">
               {card.why_not}
@@ -203,7 +240,7 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
               (action?.kind === "decision" && action.proposed_to
                 ? proposedWords(action.proposed_to)
                 : `Proposed to ${routedTo?.length ? routedTo.join(", ") : "the decider"} by ${card.decided_by_name ?? "someone"}`)}
-            {card.status === "discarded" && "Discarded: nothing changed"}
+            {card.status === "discarded" && (correct ? "Rejected: nothing changed" : "Discarded: nothing changed")}
             {card.status === "undone" && "Undone"}
           </span>
           {card.decision_id && card.status === "applied" && (
