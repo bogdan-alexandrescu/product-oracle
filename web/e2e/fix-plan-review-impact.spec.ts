@@ -207,7 +207,16 @@ test("priorities: with a track record, the confidence step and the formula read 
  */
 async function confidenceReads(page: Page, key: string, title: string, shown: string) {
   const row = page.getByTestId(`priority-row-${key}`);
-  await expect(row.getByRole("meter", { name: `Confidence ${shown}` })).toContainText(shown);
+  // The bar's figure beside it, in the Confidence column.
+  await expect(row.getByRole("meter", { name: `Confidence ${shown}` }).locator("..")).toHaveText(shown);
+  // Whole, not clipped by its column ("46." for "46.2%").
+  const cell = row.getByRole("meter", { name: `Confidence ${shown}` }).locator("xpath=ancestor::td[1]");
+  const fit = await cell.evaluate((td) => {
+    const figure = td.querySelector("b")!.getBoundingClientRect();
+    const box = td.getBoundingClientRect();
+    return figure.right <= box.right + 0.5 && td.scrollWidth <= td.clientWidth + 1;
+  });
+  expect(fit, "the Confidence figure fits its column").toBe(true);
   await row.getByRole("button", { name: title, exact: true }).click();
   const inspector = page.getByTestId("priority-inspector");
   const ring = inspector.getByRole("img", { name: `Confidence ${shown}` });
@@ -223,6 +232,8 @@ async function confidenceReads(page: Page, key: string, title: string, shown: st
 }
 
 test("priorities: confidence reads as one percent in the ring, the section, the Inputs and the steps", async ({ page }) => {
+  // A laptop's width, where the table keeps its Confidence column beside the inspector.
+  await page.setViewportSize({ width: 1512, height: 900 });
   await login(page, "approver@example.com");
   await page.goto("/priorities");
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
@@ -231,6 +242,8 @@ test("priorities: confidence reads as one percent in the ring, the section, the 
 });
 
 test("priorities: with a track record, confidence reads as the same percent to the tenth everywhere", async ({ page }) => {
+  // A laptop's width, where the table keeps its Confidence column beside the inspector.
+  await page.setViewportSize({ width: 1512, height: 900 });
   await scenario(page, "outcomes");
   await login(page, "approver@example.com");
   await page.goto("/priorities");

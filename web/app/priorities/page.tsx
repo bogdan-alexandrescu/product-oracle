@@ -1035,7 +1035,8 @@ function Priorities() {
     {
       key: "confidence",
       header: "Confidence",
-      width: "80px",
+      // The bar and its figure to the tenth ("57.8%").
+      width: "112px",
       hideOnPhone: true,
       // Kept at 1440 px and up with the inspector docked; only a table under 820 px drops it.
       narrow: "laptop",
