@@ -273,10 +273,11 @@ export function planPrds(data: Roadmap): Map<string, string> {
   return new Map(data.items.flatMap((i) => (i.slices.length && i.prd ? [[i.prd.slug, i.prd.title] as [string, string]] : [])));
 }
 
-/** A dated milestone's PRD: the PRD of the items it names (null when it names none). */
+/** A dated milestone's PRD: the PRD of the planned items it names, else of its track's (null: none). */
 export function milestonePrd(data: Roadmap, m: Milestone): { slug: string; title: string } | null {
   const ids = new Set(m.item_ids);
-  const prd = data.items.find((i) => ids.has(i.id) && i.prd)?.prd;
+  const planned = data.items.filter((i) => i.slices.length && i.prd);
+  const prd = (planned.find((i) => ids.has(i.id)) ?? planned.find((i) => i.track?.id === m.track_id))?.prd;
   return prd ? { slug: prd.slug, title: prd.title } : null;
 }
 
