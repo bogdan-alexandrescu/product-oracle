@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
-import { FlowMini, FlowPanel } from "@/components/simple/FlowVisual";
+import { FlowPanel } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -69,8 +69,6 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const [open, setOpen] = useState<string | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
   const [wide, setWide] = useState<string | null>(null);
-  // The walk: a bet's flow drawn while its card was open shows on its thumbnail at once.
-  const [drawn, setDrawn] = useState<Record<string, { steps: string[] }>>({});
   // Lines shortened with "…" shown whole, in place (CLD's production walk, 2026-10-27).
   const [whole, setWhole] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
@@ -253,18 +251,6 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                                 </button>
                               )}
                             </span>
-                            {l.flow_subject && (
-                              <button
-                                type="button"
-                                aria-label={`Flow for bet ${numbers.get(l.id)}`}
-                                aria-expanded={wide === l.id}
-                                data-testid="bet-flow-thumb"
-                                className="simple-noprint flex-none rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-0.5"
-                                onClick={() => setWide(wide === l.id ? null : l.id)}
-                              >
-                                {l.flow ?? drawn[l.flow_subject] ? <FlowMini flow={(l.flow ?? drawn[l.flow_subject])!} /> : <span className="block px-2 py-2 text-xs">No flow yet</span>}
-                              </button>
-                            )}
                             {(v.can_edit || v.can_propose) && (
                               <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}>
                                 {v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}
@@ -272,10 +258,11 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                             )}
                           </div>
                         )}
-                        {wide === l.id && l.flow_subject && (
-                          // A phone's widened card is a full-height sheet.
-                          <div className="simple-noprint fixed inset-0 z-40 overflow-auto bg-[var(--simple-paper)] p-4 md:static md:z-auto md:bg-transparent md:p-0" data-widened="true" aria-label={`User flow of bet ${numbers.get(l.id)}`} role="group">
-                            <FlowPanel subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} onClose={() => setWide(null)} onDrawn={(f) => setDrawn((d) => ({ ...d, [l.flow_subject!]: f }))} />
+                        {l.flow_subject && (
+                          // The flows review: a bet's flow is the same row as a roadmap card's
+                          // (the live thumbnail and its states), opened in place.
+                          <div className="simple-noprint" aria-label={`User flow of bet ${numbers.get(l.id)}`} role="group">
+                            <FlowPanel row subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} openLabel={`Flow for bet ${numbers.get(l.id)}`} />
                           </div>
                         )}
                         {l.decisions.length > 0 && (

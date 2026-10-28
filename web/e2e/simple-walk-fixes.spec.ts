@@ -16,7 +16,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * job's queueing and the drawing's lines (api/tests/test_simple_walk_fixes_api.py).
  *
  * Card walk-flow-failed: protects = a drawing job that ends without a drawing turns the
- * card's drawing state into "Oracle could not draw the flow" with Retry, and Retry draws
+ * card's drawing state into "Oracle could not draw this flow" with Retry, and Retry draws
  * version 1; fails_when = a failed job leaves "Oracle is drawing…" forever or offers no
  * Retry; no_claim = why the model's drawing failed (the job's tests).
  *
@@ -72,27 +72,23 @@ for (const phone of [false, true]) {
         await bar(page, "alert-digest").click();
         const card = page.getByTestId("floating-card");
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
-        await tap(card.getByRole("button", { name: "Open the item's flow" }));
         await tap(card.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(card.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
-        await expect(card.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await expect(card.getByTestId("flow-svg")).toBeVisible();
-        await tap(card.getByRole("button", { name: "Close the flow" }));
+        await expect(card.getByTestId("flow-meta")).toContainText("version 1");
         await expect(card.getByTestId("card-flow")).not.toContainText("No flow yet");
+        await tap(card.getByRole("button", { name: "Open the flow" }));
+        await expect(card.getByTestId("flow-svg")).toBeVisible();
       });
 
       test(`a one-pager bet's thumbnail shows its drawn flow without a reload (${where})`, async ({ page }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        const thumb = page.getByRole("button", { name: "Flow for bet 3" });
-        await expect(thumb).toContainText("No flow yet");
-        await tap(thumb);
         const wide = page.getByRole("group", { name: "User flow of bet 3" });
+        await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await tap(wide.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
-        await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await tap(wide.getByRole("button", { name: "Close the flow" }));
-        await expect(thumb).not.toContainText("No flow yet");
+        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
+        await expect(wide.getByTestId("flow-meta")).toContainText("version 1");
+        await expect(wide.getByRole("button", { name: "Flow for bet 3" })).toBeVisible();
+        await expect(wide).not.toContainText("No flow yet");
       });
 
       test(`a drawing that fails says so and Retry draws it (${where})`, async ({ page }) => {
@@ -101,12 +97,12 @@ for (const phone of [false, true]) {
         await expect(bar(page, "alert-export")).toBeVisible();
         await bar(page, "alert-export").click();
         const card = page.getByTestId("floating-card");
-        await tap(card.getByRole("button", { name: "Open the item's flow" }));
         await tap(card.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(card.getByTestId("flow-empty")).toContainText("Oracle could not draw the flow");
+        await expect(card.getByTestId("flow-empty")).toContainText("Oracle could not draw this flow");
         await expect(card.getByTestId("flow-empty")).not.toContainText("Oracle is drawing");
         await tap(card.getByRole("button", { name: "Retry" }));
-        await expect(card.getByTestId("flow-version")).toHaveText("Version 1 of 1");
+        await expect(card.getByTestId("flow-meta")).toContainText("version 1");
+        await tap(card.getByRole("button", { name: "Open the flow" }));
         await expect(card.getByTestId("flow-svg")).toBeVisible();
       });
 

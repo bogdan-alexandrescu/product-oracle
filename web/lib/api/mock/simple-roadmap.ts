@@ -167,6 +167,15 @@ export function prdCode(section: string | null | undefined): string | null {
   return m ? `${m[1].toUpperCase()}-${m[2]}` : null;
 }
 
+/** An item named as the API's visuals name it (subject_name): "F-06 Weekly alert digest", or its title with no code. */
+export function itemSubjectName(db: Pick<SimpleDb, "items" | "ids"> | undefined, id: string): string | null {
+  const key = db && Object.keys(db.ids).find((k) => db.ids[k] === id);
+  const item = key ? db!.items.find((s) => s.key === key) : undefined;
+  if (!item) return null;
+  const code = prdCode(item.section);
+  return code ? `${code} ${item.title}` : item.title;
+}
+
 /** "F-06 Loop guards" for a coded section, else "section <key>" (service.prd_section_label). */
 function sectionLabel(section: string, heading?: string): string {
   const code = prdCode(section);

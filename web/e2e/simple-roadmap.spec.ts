@@ -111,7 +111,7 @@ for (const [where, use] of [
         await expect(card.getByTestId("card-decisions")).toContainText("Send the digest weekly or daily?");
         await expect(card.getByTestId("card-flags")).toContainText("which it depends on, ends");
         await expect(card.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", /^\/plan\?item=alert-digest&prd=[0-9a-f-]{36}$/);
-        await expect(card.getByRole("button", { name: "Ask Oracle" })).toBeVisible();
+        await expect(card.getByRole("button", { name: "Ask Oracle", exact: true })).toBeVisible();
         if (where === "desktop") {
           const c = (await card.boundingBox())!;
           const b = (await body(page, "alert-digest").boundingBox())!;

@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
+
+import { FlowDiagram, FlowScreen, FlowStepList, FlowStoryboard, usePhone, ViewSwitch } from "./FlowViews";
 
 type Flow = Schemas["SimpleFlow"];
 type Visual = Schemas["SimpleVisualOut"];
@@ -15,75 +18,178 @@ export function subjectOf(flow: { subject_kind?: string | null; subject_id?: str
   return flow?.subject_kind && flow.subject_id ? { kind: flow.subject_kind, id: flow.subject_id } : null;
 }
 
-const svgSrc = (svg: string): string => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-
-/** The drawing: the user flow (sanitised SVG shown as an image: nothing in it runs), the
- * steps in words (decision points, the feature of each, NEW/CHANGED versus today), and the
- * screen's low-fi wireframe in a sandboxed frame; the numbered annotations under it. */
-function Drawing({ flow, big }: { flow: Flow; big?: boolean }) {
-  return (
-    <div className={`grid gap-4 ${big ? "lg:grid-cols-[3fr_2fr]" : "sm:grid-cols-2"}`}>
-      <div>
-        <h3 className="font-semibold">User flow: {flow.title}</h3>
-        {flow.goal && <p className="text-[length:var(--simple-small)] text-text2" data-testid="flow-goal">Goal: {flow.goal}</p>}
-        {flow.svg && (
-          <div className="mt-2 overflow-x-auto rounded-lg border border-line bg-white p-2">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={svgSrc(flow.svg)} alt={`User flow: ${flow.steps.join(", then ")}`} data-testid="flow-svg" className={big ? "max-w-none" : "max-w-none h-28"} />
-          </div>
-        )}
-        <ol className="mt-2 list-decimal pl-5" data-testid="flow-steps">
-          {(flow.nodes?.length ? flow.nodes : flow.steps.map((s, i) => ({ id: `s${i + 1}`, label: s, kind: "step" as const, feature: null, change: "same" as const }))).map((s) => (
-            <li key={s.id}>
-              {s.kind === "decision" ? <span className="font-semibold">Decision: </span> : null}
-              {s.label}
-              {s.feature ? <span className="text-text2"> · {s.feature}</span> : null}
-              {s.change !== "same" && (
-                <span className="ml-1 rounded bg-accent-soft px-1 text-[length:var(--simple-small)] font-semibold text-accent-ink">{s.change === "new" ? "New" : "Changed"}</span>
+/** The opened drawing (the owner's pick A): the whole diagram fitted to the width with short
+ * labels, then every step in full words, then the screen it touches as a labelled wireframe
+ * (Oracle's sanitised wireframe in a sandboxed frame, nothing in it runs) with its numbered
+ * annotations. In the full-screen viewer (C, `big`): the diagram top to bottom on the left,
+ * the steps on the right, the wireframe below; on a phone three tabs, Diagram | Steps | Screen. */
+function Drawing({ flow, big, phone }: { flow: Flow; big?: boolean; phone: boolean }) {
+  const [tab, setTab] = useState<"diagram" | "steps" | "screen">("diagram");
+  const diagram = <FlowDiagram flow={flow} layout={big ? "down" : "across"} testId="flow-svg" />;
+  const steps = (
+    <div>
+      <h3 className="font-semibold">Steps</h3>
+      {flow.goal && <p className="text-[length:var(--simple-small)] text-text2" data-testid="flow-goal">Goal: {flow.goal}</p>}
+      <div className="mt-2">
+        <FlowStepList flow={flow} />
+      </div>
+    </div>
+  );
+  const screen = (
+    <div>
+      <h3 className="font-semibold">Screen: {flow.touches_screen ? flow.screen.title : "none (it touches no screen)"}</h3>
+      {flow.wireframe ? (
+        <>
+          <p className="text-[length:var(--simple-small)] text-text2" data-testid="flow-regions">
+            Regions: {flow.screen.regions.join(" · ")}
+          </p>
+          <iframe title={`Wireframe of ${flow.screen.title}`} sandbox="" srcDoc={flow.wireframe} data-testid="flow-wireframe" className={`mt-2 w-full rounded-lg border border-line bg-white ${big ? "h-[420px]" : "h-56"}`} />
+        </>
+      ) : flow.touches_screen ? (
+        <div className="mt-1">
+          <FlowScreen flow={flow} />
+        </div>
+      ) : null}
+      {(flow.annotations?.length ?? 0) > 0 && (
+        <ol className="mt-3 space-y-1 text-[length:var(--simple-small)]" aria-label="Annotations" data-testid="flow-annotations">
+          {flow.annotations!.map((a) => (
+            <li key={a.n}>
+              <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text text-[11px] font-bold text-surface">{a.n}</span>
+              {a.note}
+              {(a.section_key || a.requirement) && (
+                <span className="text-text2">
+                  {" "}
+                  · {a.section_key ? `PRD § ${a.section_key}` : ""}
+                  {a.section_key && a.requirement ? ", " : ""}
+                  {a.requirement ? `requirement ${a.requirement}` : ""}
+                </span>
               )}
             </li>
           ))}
         </ol>
-      </div>
-      <div>
-        <h3 className="font-semibold">Screen: {flow.touches_screen ? flow.screen.title : "none (it touches no screen)"}</h3>
-        {flow.wireframe ? (
-          <>
-            <p className="text-[length:var(--simple-small)] text-text2" data-testid="flow-regions">
-              Regions: {flow.screen.regions.join(" · ")}
-            </p>
-            <iframe title={`Wireframe of ${flow.screen.title}`} sandbox="" srcDoc={flow.wireframe} data-testid="flow-wireframe" className={`mt-2 w-full rounded-lg border border-line bg-white ${big ? "h-[420px]" : "h-56"}`} />
-          </>
-        ) : flow.touches_screen ? (
-          <div aria-label={`Wireframe of ${flow.screen.title}`} role="img" className="mt-1 flex flex-col gap-1 rounded-lg border border-line-strong bg-surface p-2">
-            {flow.screen.regions.map((r) => (
-              <div key={r} className="rounded border border-dashed border-line-strong px-2 py-1 text-[length:var(--simple-small)] text-text2">
-                {r}
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {(flow.annotations?.length ?? 0) > 0 && (
-          <ol className="mt-3 space-y-1 text-[length:var(--simple-small)]" aria-label="Annotations" data-testid="flow-annotations">
-            {flow.annotations!.map((a) => (
-              <li key={a.n}>
-                <span className="mr-1 inline-flex h-5 w-5 items-center justify-center rounded-full bg-text text-[11px] font-bold text-surface">{a.n}</span>
-                {a.note}
-                {(a.section_key || a.requirement) && (
-                  <span className="text-text2">
-                    {" "}
-                    · {a.section_key ? `PRD § ${a.section_key}` : ""}
-                    {a.section_key && a.requirement ? ", " : ""}
-                    {a.requirement ? `requirement ${a.requirement}` : ""}
-                  </span>
-                )}
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
+      )}
     </div>
   );
+  if (big && phone) {
+    return (
+      <div>
+        <div role="tablist" aria-label="Parts of the flow" className="flex w-full overflow-hidden rounded-button border border-line-strong">
+          {(["diagram", "steps", "screen"] as const).map((t) => (
+            <button key={t} type="button" role="tab" aria-selected={tab === t} onClick={() => setTab(t)} className={`h-11 flex-1 font-medium ${tab === t ? "bg-accent text-on-accent" : "bg-surface text-text"}`}>
+              {t === "diagram" ? "Diagram" : t === "steps" ? "Steps" : "Screen"}
+            </button>
+          ))}
+        </div>
+        <div role="tabpanel" className="mt-3">
+          {tab === "diagram" ? diagram : tab === "steps" ? steps : screen}
+        </div>
+      </div>
+    );
+  }
+  if (big) {
+    return (
+      <div className="space-y-4">
+        <div className="grid gap-6 md:grid-cols-[minmax(200px,1fr)_2fr]">
+          <div className="rounded-lg border border-line bg-surface p-3">{diagram}</div>
+          {steps}
+        </div>
+        {screen}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="font-semibold">User flow: {flow.title}</h3>
+        <div className="mt-2 rounded-lg border border-line bg-surface p-2">{diagram}</div>
+      </div>
+      {steps}
+      {screen}
+    </div>
+  );
+}
+
+/** How long a running drawing job reads as "Draw the steps" before "Draw the screen". */
+const RUN_SCREEN_MS = 15000;
+/** A drawing made this recently carries "New" (the row need not have watched it land). */
+const NEW_MS = 15 * 60 * 1000;
+
+/** What the row says while there is no drawing: none yet, Oracle drawing it (its stages, a
+ * bar, when it started), or Oracle could not draw it. */
+function NoDrawing({ v, busy, onAsk, phone }: { v: Visual; busy: boolean; onAsk: () => void; phone?: boolean }) {
+  const zone = useCompanyZone();
+  // The API says queued (0) or running (1): Oracle draws the steps, then the screen, in one
+  // run, so a run past RUN_SCREEN_MS reads as drawing the screen (the bar fills past half).
+  const running = v.pending && (v.stage ?? 0) >= 1;
+  const [longRun, setLongRun] = useState(false);
+  useEffect(() => {
+    if (!running) return;
+    const t = window.setTimeout(() => setLongRun(true), RUN_SCREEN_MS);
+    return () => {
+      window.clearTimeout(t);
+      setLongRun(false);
+    };
+  }, [running]);
+  if (v.pending) {
+    const stages = [`Read ${v.subject_name || "the PRD"}`, "Draw the steps", "Draw the screen"];
+    const ran = running && longRun;
+    const at = Math.min(stages.length - 1, Math.max(0, v.stage ?? 0) + (ran ? 1 : 0));
+    return (
+      <div className="space-y-2" data-testid="flow-empty" data-state="drawing">
+        <p className="font-semibold">Oracle is drawing the flow</p>
+        <ol className={`flex flex-wrap gap-x-2 gap-y-1 ${phone ? "flex-col" : ""}`} aria-label="Stages">
+          {stages.map((s, i) => (
+            <li key={s} className={i === at ? "font-semibold text-accent-ink" : i < at ? "text-text" : "text-text2"} aria-current={i === at ? "step" : undefined}>
+              {i > 0 && !phone ? <span aria-hidden className="mr-2 text-text2">→</span> : null}
+              {s}
+            </li>
+          ))}
+        </ol>
+        <div role="progressbar" aria-label="Drawing" aria-valuemin={0} aria-valuemax={stages.length} aria-valuenow={at + 1} className="h-2 w-full overflow-hidden rounded-full bg-surface2">
+          <div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${((at + 1) / (stages.length + 1)) * 100}%` }} />
+        </div>
+        <p className="text-[length:var(--simple-small)] text-text2">
+          Updates here by itself; you can close the card.
+          {v.started_at ? ` Started ${formatInZone(v.started_at, zone, { hour: "numeric", minute: "2-digit" })}.` : ""}
+        </p>
+      </div>
+    );
+  }
+  if (v.failed) {
+    return (
+      <div className="space-y-2" data-testid="flow-empty" data-state="failed">
+        <p className="text-danger">Oracle could not draw this flow. Nothing changed on the item.</p>
+        {v.can_revise && (
+          <Button onClick={onAsk} disabled={busy}>
+            Retry
+          </Button>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2" data-testid="flow-empty" data-state="none">
+      <p className="font-semibold">No flow yet</p>
+      {v.can_revise ? (
+        <>
+          <p className="text-[length:var(--simple-small)] text-text2">Oracle draws the steps and the screen they touch, from the PRD.</p>
+          <Button onClick={onAsk} disabled={busy}>
+            Ask Oracle to draw it
+          </Button>
+        </>
+      ) : (
+        <p className="text-[length:var(--simple-small)] text-text2">Oracle has not drawn a user flow or a screen for this yet.</p>
+      )}
+    </div>
+  );
+}
+
+/** "6 steps · 1 screen · version 1 · drawn 7:04 PM" (the time in the company's zone). */
+export function flowMeta(flow: Flow, zone: string): string {
+  const n = flow.nodes?.length || flow.steps.length;
+  const parts = [`${n} step${n === 1 ? "" : "s"}`, flow.touches_screen ? "1 screen" : "no screen", `version ${flow.version}`];
+  if (flow.made_at) parts.push(`drawn ${formatInZone(flow.made_at, zone, { hour: "numeric", minute: "2-digit" })}`);
+  return parts.join(" · ");
 }
 
 /**
@@ -95,7 +201,41 @@ function Drawing({ flow, big }: { flow: Flow; big?: boolean }) {
  * line names its PRD (`documentId`): the API looks the bet up on that page. While Oracle
  * draws (the simple_visual job), the panel says so and reads again until the drawing lands.
  */
-export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: FlowSubject; documentId?: string; onClose?: () => void; onDrawn?: (flow: Flow) => void }) {
+export function FlowPanel({
+  subject,
+  documentId,
+  onClose,
+  onDrawn,
+  row = false,
+  openLabel = "Open the flow",
+  onOpenChange,
+}: {
+  subject: FlowSubject;
+  documentId?: string;
+  onClose?: () => void;
+  onDrawn?: (flow: Flow) => void;
+  /** The owner's pick A: start as the row (the live thumbnail and its states), "Open the flow" spreads it. */
+  row?: boolean;
+  /** The row thumbnail's name (a roadmap card's: "Open the item's flow"). */
+  openLabel?: string;
+  /** The row was opened or closed (a card widens for the opened view). */
+  onOpenChange?: (open: boolean) => void;
+}) {
+  const zone = useCompanyZone();
+  const phone = usePhone();
+  const [opened, setOpened] = useState(!row);
+  const [view, setView] = useState<"diagram" | "storyboard">("diagram");
+  // A drawing this row watched land (it was drawing, now it is drawn) carries "New", as does
+  // one made in the last NEW_MS (it landed while the card was closed).
+  const [fresh, setFresh] = useState(false);
+  const sawPending = useRef(false);
+  const onOpenRef = useRef(onOpenChange);
+  useEffect(() => {
+    onOpenRef.current = onOpenChange;
+  });
+  useEffect(() => {
+    if (row) onOpenRef.current?.(opened);
+  }, [row, opened]);
   const key = `simple-visual|${subject.kind}|${subject.id}`;
   const q = useQuery(key, () =>
     unwrap(
@@ -123,7 +263,13 @@ export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: 
   const drawnFlow = q.data?.flow ?? null;
   const told = useRef<string | null>(null);
   useEffect(() => {
+    if (pending) sawPending.current = true;
     if (!drawnFlow || pending) return;
+    const age = drawnFlow.made_at ? Date.now() - Date.parse(drawnFlow.made_at) : -1;
+    if (sawPending.current || (age >= 0 && age < NEW_MS)) {
+      sawPending.current = false;
+      setFresh(true);
+    }
     const mark = `${drawnFlow.version}`;
     if (told.current === mark) return;
     told.current = mark;
@@ -137,11 +283,38 @@ export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const viewer = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!full) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setFull(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // The viewer is modal: the focus moves into it, Tab stays in it, and on leaving it goes
+    // back to what opened it.
+    const opener = document.activeElement as HTMLElement | null;
+    viewer.current?.querySelector<HTMLElement>("[data-exit-full]")?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Tab" && viewer.current) {
+        const all = [...viewer.current.querySelectorAll<HTMLElement>('button, [href], input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])')].filter((el) => !el.hasAttribute("disabled") && el.getClientRects().length > 0);
+        if (!all.length) return;
+        const [first, last] = [all[0], all[all.length - 1]];
+        const inside = viewer.current.contains(document.activeElement);
+        if (e.shiftKey && (!inside || document.activeElement === first)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && (!inside || document.activeElement === last)) {
+          e.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+      // Escape leaves the viewer only: caught first, so the card under it stays open.
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setFull(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      if (opener?.isConnected) opener.focus();
+    };
   }, [full]);
 
   async function post(run: () => Promise<{ data?: Visual; error?: unknown; response: Response }>, after?: () => void) {
@@ -229,13 +402,14 @@ export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: 
             </label>
           )}
           <span className="flex-1" />
+          <ViewSwitch value={view} onChange={setView} />
           {!big && (
             <Button variant="ghost" onClick={() => setFull(true)}>
               Full screen
             </Button>
           )}
         </div>
-        <Drawing flow={flow} big={big} />
+        {view === "storyboard" ? <FlowStoryboard flow={flow} phone={phone} /> : <Drawing flow={flow} big={big} phone={phone} />}
         <section aria-label="Comments on the flow" className="border-t border-line pt-2">
           <h3 className="font-semibold">Comments</h3>
           {v.comments.length === 0 ? (
@@ -291,21 +465,75 @@ export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: 
         </section>
       </div>
     ) : (
-      <div className="space-y-2">
-        <p data-testid="flow-empty">
-          {v.pending
-            ? "Oracle is drawing the user flow and the screen it touches…"
-            : v.failed
-              ? `Oracle could not draw the flow${v.failure ? `: ${v.failure}` : ""}.`
-              : "No flow yet: Oracle has not drawn a user flow or a wireframe for this proposal."}
+      <NoDrawing v={v} busy={busy} onAsk={() => void ask()} phone={phone} />
+    );
+
+  // The owner's pick C: the viewer over the page; Escape or Exit full screen goes back.
+  const fullView = (f: Flow) => (
+    <div ref={viewer} role="dialog" aria-modal="true" aria-label={`Full screen: ${f.title}`} data-testid="flow-fullscreen" className="fixed inset-0 z-[60] overflow-auto bg-surface p-4 sm:p-8">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <h2 className="min-w-0 flex-1 text-xl font-semibold break-words">{f.title}</h2>
+        <Button data-exit-full onClick={() => setFull(false)}>
+          Exit full screen
+        </Button>
+      </div>
+      {body(true)}
+    </div>
+  );
+
+  const rowView = v.flow ? (
+    <div className="flex flex-wrap items-center gap-3" data-testid="flow-row-drawn">
+      <button type="button" aria-label={openLabel} aria-expanded={opened} data-testid="flow-row-thumb" onClick={() => setOpened((o) => !o)} className="flex-none rounded-md border border-line bg-surface p-1 hover:border-line-strong">
+        <FlowDiagram flow={v.flow} layout="mini" />
+      </button>
+      <div className="min-w-[12rem] flex-1">
+        <p className="font-semibold break-words">
+          {v.flow.title}
+          {fresh && (
+            <span className="ml-2 inline-block rounded-full bg-accent-soft px-2 align-middle text-[length:var(--simple-small)] font-semibold text-accent-ink" data-testid="flow-new">
+              New
+            </span>
+          )}
         </p>
-        {v.can_revise && !v.pending && (
-          <Button onClick={() => void ask()} disabled={busy}>
-            {v.failed ? "Retry" : "Ask Oracle to draw it"}
-          </Button>
+        <p className="text-[length:var(--simple-small)] text-text2" data-testid="flow-meta">
+          {flowMeta(v.flow, zone)}
+        </p>
+        {v.pending && (
+          <p className="text-[length:var(--simple-small)] text-text2" data-testid="flow-pending">
+            Oracle is drawing the next version…
+          </p>
         )}
       </div>
+      {!opened && (
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setOpened(true)}>Open the flow</Button>
+          <Button variant="ghost" onClick={() => setFull(true)}>
+            Full screen
+          </Button>
+        </div>
+      )}
+    </div>
+  ) : (
+    <NoDrawing v={v} busy={busy} onAsk={() => void ask()} phone={phone} />
+  );
+
+  if (row) {
+    return (
+      <section data-testid="flow-row" aria-label="Flow" className="mt-1">
+        {rowView}
+        {opened && flow && (
+          <div data-testid="flow-detail" className="mt-3 rounded-lg border border-line p-3 sm:p-4">
+            {body(false)}
+            <Button variant="ghost" className="mt-2" onClick={() => setOpened(false)}>
+              Close the flow
+            </Button>
+          </div>
+        )}
+        {error && <p className="mt-2 text-[length:var(--simple-small)] text-danger">{error}</p>}
+        {full && flow && fullView(flow)}
+      </section>
     );
+  }
 
   return (
     <section data-testid="flow-detail" className="mt-3 rounded-lg border border-dashed border-line-strong p-4">
@@ -316,29 +544,7 @@ export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: 
           Close the flow
         </Button>
       )}
-      {full && flow && (
-        <div role="dialog" aria-modal="true" aria-label={`Full screen: ${flow.title}`} data-testid="flow-fullscreen" className="fixed inset-0 z-[60] overflow-auto bg-surface p-4 sm:p-8">
-          <div className="mb-3 flex items-center gap-2">
-            <h2 className="flex-1 text-xl font-semibold">{flow.title}</h2>
-            <Button onClick={() => setFull(false)}>Exit full screen</Button>
-          </div>
-          {body(true)}
-        </div>
-      )}
+      {full && flow && fullView(flow)}
     </section>
-  );
-}
-
-/** A flow's thumbnail: as many boxes as it has steps (at most 4). */
-export function FlowMini({ flow }: { flow: Pick<Flow, "steps"> }) {
-  return (
-    <svg width="64" height="40" viewBox="0 0 64 40" aria-hidden className="text-text2">
-      {flow.steps.slice(0, 4).map((_, i) => (
-        <g key={i}>
-          <rect x={2 + i * 16} y={12} width={11} height={16} rx={2} fill="none" stroke="currentColor" />
-          {i > 0 && <line x1={i * 16 - 3} y1={20} x2={i * 16 + 2} y2={20} stroke="currentColor" />}
-        </g>
-      ))}
-    </svg>
   );
 }

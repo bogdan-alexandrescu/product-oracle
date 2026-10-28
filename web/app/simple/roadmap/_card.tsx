@@ -300,8 +300,8 @@ export function FloatingCard({
   // The widened card's visual: a draft's own flow ("item", S7) or a proposal's or the item's feature visual (S10).
   const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
   // The walk: the item's flow drawn while its card is open names itself here at once.
-  const [drawn, setDrawn] = useState<{ id: string; title: string } | null>(null);
-  const drawnTitle = drawn?.id === item.id ? drawn.title : null;
+  // The owner's flow picks: the item's flow row, opened in place (the card widens for it).
+  const [rowOpen, setRowOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useScreenSubject({ kind: "roadmap_item", subject: { item_id: item.id, key: item.key } }, item.title);
   useEffect(() => {
@@ -315,10 +315,10 @@ export function FloatingCard({
     : `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · ${sourceWord(item.source)}`;
   // A phone's widened card (the flow) is a full-height sheet.
   const place = phone
-    ? wide
+    ? wide || rowOpen
       ? "fixed inset-0 z-50 h-dvh"
       : "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl"
-    : `absolute z-40 rounded-xl ${wide ? "w-[760px]" : "w-[380px]"}`;
+    : `absolute z-40 rounded-xl ${wide || rowOpen ? "w-[760px]" : "w-[380px]"}`;
   return (
     <div
       ref={ref}
@@ -327,7 +327,7 @@ export function FloatingCard({
       aria-label={item.title}
       data-testid="floating-card"
       data-sheet={phone ? "bottom" : "float"}
-      data-wide={wide ? "true" : "false"}
+      data-wide={wide || rowOpen ? "true" : "false"}
       style={phone ? undefined : style}
       className={`${place} max-w-[calc(100vw-16px)] overflow-y-auto border border-line bg-surface p-4 shadow-tip outline-none`}
     >
@@ -368,6 +368,12 @@ export function FloatingCard({
             </span>
           )}
         </div>
+      )}
+      {!item.draft && (
+        <section className="mt-3" data-testid="card-flow">
+          <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Flow</h3>
+          <FlowPanel key={`row-${item.id}`} row subject={{ kind: "feature", id: item.id }} openLabel="Open the item's flow" onOpenChange={setRowOpen} />
+        </section>
       )}
       <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
         <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[15px]">
@@ -446,13 +452,6 @@ export function FloatingCard({
               <p className="text-sm text-text2">None open.</p>
             )}
           </section>
-          {!item.draft && (<section className="mt-3">
-            <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Flow</h3>
-            <div className="mt-1 flex items-center gap-2 text-[15px]" data-testid="card-flow">
-              <FlowThumb label="Open the item's flow" testId="item-flow-thumb" onOpen={() => setWide(wide !== "item" && wide?.id === item.id ? null : { kind: "feature", id: item.id })} />
-              <span className="min-w-0 flex-1">{item.flow ? item.flow.title : drawnTitle ?? <span className="text-text2">No flow yet</span>}</span>
-            </div>
-          </section>)}
           {item.decided_in.length > 0 && (
             <section className="mt-3">
               <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Decided</h3>
@@ -512,7 +511,7 @@ export function FloatingCard({
               </Button>
               </>
             ) : (
-              <FlowPanel key={`${wide.kind}-${wide.id}`} subject={wide} onClose={() => setWide(null)} onDrawn={wide.kind === "feature" && wide.id === item.id ? (f) => setDrawn({ id: item.id, title: f.title }) : undefined} />
+              <FlowPanel key={`${wide.kind}-${wide.id}`} subject={wide} onClose={() => setWide(null)} />
             )}
           </section>
         )}

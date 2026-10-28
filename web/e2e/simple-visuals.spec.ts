@@ -91,9 +91,8 @@ for (const [where, use] of [
         await full.getByRole("button", { name: "Exit full screen" }).click();
         await expect(full).toHaveCount(0);
         await wide.getByRole("button", { name: "Close the flow" }).click();
-        await expect(wide).toHaveCount(0);
-        // A bet Oracle has not drawn yet.
-        await page.getByRole("button", { name: "Flow for bet 3" }).click();
+        await expect(wide.getByTestId("flow-detail")).toHaveCount(0);
+        // A bet Oracle has not drawn yet: its row says so on the line.
         await expect(page.getByRole("group", { name: "User flow of bet 3" }).getByTestId("flow-empty")).toContainText("No flow yet");
       });
 
@@ -117,28 +116,31 @@ for (const [where, use] of [
       test("an owner asks Oracle to draw a bet's flow: pending, then version 1", async ({ page }) => {
         await login(page);
         await page.goto(ONE_PAGER);
-        await page.getByRole("button", { name: "Flow for bet 3" }).click();
         const wide = page.getByRole("group", { name: "User flow of bet 3" });
         await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
-        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
+        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
         await expect(wide.getByRole("button", { name: "Ask Oracle to draw it" })).toHaveCount(0);
+        await expect(wide.getByTestId("flow-meta")).toContainText("version 1");
+        await wide.getByRole("button", { name: "Flow for bet 3" }).click();
         await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
         await expect(wide.getByTestId("flow-svg")).toBeVisible();
         await wide.getByRole("button", { name: "Close the flow" }).click();
-        // The bet's thumbnail now shows its flow (no longer "No flow yet") after a reload.
+        // The bet's thumbnail still shows its flow (no longer "No flow yet") after a reload.
         await page.reload();
-        await expect(page.getByRole("button", { name: "Flow for bet 3" })).not.toContainText("No flow yet");
+        await expect(page.getByRole("button", { name: "Flow for bet 3" })).toBeVisible();
+        await expect(page.getByRole("group", { name: "User flow of bet 3" })).not.toContainText("No flow yet");
       });
 
       test("an owner asks again for a bet whose queued drawing never came: pending, then version 1", async ({ page }) => {
         await login(page);
         await page.goto(ONE_PAGER);
-        await page.getByRole("button", { name: "Flow for bet 4" }).click();
         const wide = page.getByRole("group", { name: "User flow of bet 4" });
         await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
-        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
+        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
+        await expect(wide.getByTestId("flow-meta")).toContainText("version 1");
+        await wide.getByRole("button", { name: "Flow for bet 4" }).click();
         await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
         await expect(wide.getByTestId("flow-svg")).toBeVisible();
       });
@@ -147,7 +149,6 @@ for (const [where, use] of [
         test(`${who.split("@")[0]} is not offered Ask on a bet Oracle has not drawn`, async ({ page }) => {
           await login(page, who);
           await page.goto(ONE_PAGER);
-          await page.getByRole("button", { name: "Flow for bet 3" }).click();
           const wide = page.getByRole("group", { name: "User flow of bet 3" });
           await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
           await expect(wide.getByRole("button", { name: "Ask Oracle to draw it" })).toHaveCount(0);
@@ -171,7 +172,7 @@ for (const [where, use] of [
         await expect(card.getByTestId("card-flow")).toContainText("Act on a pushed alert");
         await card.getByRole("button", { name: "Open the item's flow" }).click();
         await expect(card).toHaveAttribute("data-wide", "true");
-        const view = card.getByTestId("flow-view");
+        const view = card.getByTestId("flow-detail");
         await view.scrollIntoViewIfNeeded();
         await expect(view.getByRole("heading", { name: "User flow: Act on a pushed alert" })).toBeVisible();
         await expect(view.getByTestId("flow-regions")).toContainText("Snooze and Assign buttons");
@@ -184,10 +185,9 @@ for (const [where, use] of [
         await card.getByRole("button", { name: "Close", exact: true }).click();
         await bar(page, "alert-digest").click();
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
-        await card.getByRole("button", { name: "Open the item's flow" }).click();
         await expect(card.getByTestId("flow-empty")).toContainText("No flow yet");
         await card.getByRole("button", { name: "Ask Oracle to draw it" }).click();
-        await expect(card.getByTestId("flow-version")).toHaveText("Version 1 of 1");
+        await expect(card.getByTestId("flow-meta")).toContainText("version 1");
       });
     });
   }
@@ -214,14 +214,14 @@ test.describe("a drawing that takes a while lands without a reload", () => {
     await page.goto(ROADMAP);
     await bar(page, "alert-digest").click();
     const card = page.getByTestId("floating-card");
-    await card.getByRole("button", { name: "Open the item's flow" }).click();
     const loads = await noReloads(page);
     await card.getByRole("button", { name: "Ask Oracle to draw it" }).click();
-    await expect(card.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
+    await expect(card.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
     // The job is still running at the panel's first read again.
     await page.waitForTimeout(2500);
-    await expect(card.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
-    await expect(card.getByTestId("flow-version")).toHaveText("Version 1 of 1", { timeout: JOB_MS + 6000 });
+    await expect(card.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
+    await expect(card.getByTestId("flow-meta")).toContainText("version 1", { timeout: JOB_MS + 6000 });
+    await card.getByRole("button", { name: "Open the flow" }).click();
     await expect(card.getByTestId("flow-svg")).toBeVisible();
     expect(loads()).toBe(0);
   });
@@ -229,14 +229,15 @@ test.describe("a drawing that takes a while lands without a reload", () => {
   test("a one-pager bet line: drawing, then version 1", async ({ page }) => {
     await login(page);
     await page.goto(ONE_PAGER);
-    await page.getByRole("button", { name: "Flow for bet 3" }).click();
     const wide = page.getByRole("group", { name: "User flow of bet 3" });
     const loads = await noReloads(page);
     await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
-    await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
+    await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
     await page.waitForTimeout(2500);
-    await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
-    await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1", { timeout: JOB_MS + 6000 });
+    await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
+    await expect(wide.getByTestId("flow-meta")).toContainText("version 1", { timeout: JOB_MS + 6000 });
+    await wide.getByRole("button", { name: "Flow for bet 3" }).click();
+    await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
     await expect(wide.getByTestId("flow-svg")).toBeVisible();
     expect(loads()).toBe(0);
   });
