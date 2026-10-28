@@ -59,6 +59,19 @@ function emailProblem(email: string): string | null {
   return EMAIL_SHAPE.test(email.trim()) ? null : "Enter a valid email address, like name@company.com";
 }
 
+/** An email that wraps does so after its "@", not inside the name or the domain. */
+function EmailLines({ email }: { email: string }) {
+  const at = email.lastIndexOf("@");
+  if (at < 0) return <>{email}</>;
+  return (
+    <>
+      {email.slice(0, at + 1)}
+      <wbr />
+      {email.slice(at + 1)}
+    </>
+  );
+}
+
 const RESENT = ["", "resent once", "resent twice"];
 
 /** An invite row's tooltip: "Invited by Admin on Oct 21 · resent once". */
@@ -646,7 +659,7 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 {personName(m)}
               </span>
               <span data-testid="member-email" className="text-[13px] font-normal text-text2 [overflow-wrap:anywhere]">
-                {m.email}
+                <EmailLines email={m.email} />
               </span>
             </button>
             {/* The chips on their own line, so the email keeps its room. */}

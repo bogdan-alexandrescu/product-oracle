@@ -79,6 +79,8 @@ test.describe("dark theme", () => {
 test.describe("light theme", () => {
   test.use({ colorScheme: "light" });
 
+  // guard: passes on the base too (light mode was never wrong); it keeps light mode right
+  // beside the dark-mode fix above, which is the test that fails without that fix.
   test("qa-settings-1: the Branding preview keeps its colours in light mode", async ({ page }) => {
     await login(page);
     await page.goto("/settings/company");

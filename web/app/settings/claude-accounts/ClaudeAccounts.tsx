@@ -293,7 +293,8 @@ function Pool({
       key: "5h",
       header: "5-hour use",
       phoneLabel: "5-hour use",
-      width: "76px",
+      // The whole header and its paddings, clear of State.
+      width: "96px",
       align: "right",
       cell: (a) => <WindowFig reading={readingOf(a, FIVE_HOUR)} window="five-hour" />,
     },
