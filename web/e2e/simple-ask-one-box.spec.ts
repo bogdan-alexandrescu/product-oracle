@@ -65,7 +65,7 @@ for (const [phone, dark] of [
     });
 
     test(`one box: plan lines get S9's answer, any other line goes to Oracle's Ask (${where})`, async ({ page }) => {
-      // protects: the Simple Ask panel shows exactly one question box and one Send, with the This page / General switch; "who owns <item>" is answered in the panel's plan thread; "What should we cut first?" opens Oracle's Ask chat about the page (the old box's thread) with the line in it; in that thread's one box a change line gets S9's move card and the next other line goes on to Ask in the same thread; New chat lists it under Recent
+      // protects: the Simple Ask panel shows exactly one question box and one Send, with the This page / General switch; "who owns <item>" is answered in the panel's plan thread; "What should we cut first?" opens Oracle's Ask chat about the page (the old box's thread) with the line in it; in that thread's one box a change line gets S9's move card and the next other line goes on to Ask in the same thread; New chat lists it under Here (this page's chats only)
       // fails_when: two boxes show, a plan question goes to the model's Ask (in the list or in a started thread), or an other line gets "I did not understand"
       // no_claim: the model's answer itself (the mock streams a canned reply); Detailed's panel (hop-panel.spec.ts)
       await signIn(page, EMAILS.commenter, "/simple/roadmap");
@@ -98,7 +98,8 @@ for (const [phone, dark] of [
       await expect(discussion.getByTestId("discussion-message").filter({ hasText: "And what is missing?" })).toHaveCount(1);
       await expect(page.getByText("I did not understand that.")).toHaveCount(0);
       await tap(panel.getByRole("button", { name: "New chat" }));
-      await expect(panel.getByRole("region", { name: "Recent" }).getByTestId("hop-chat-row")).not.toHaveCount(0);
+      await expect(panel.getByRole("region", { name: "Here" }).getByTestId("hop-chat-row")).not.toHaveCount(0);
+      await expect(panel.getByRole("region", { name: "Recent" })).toHaveCount(0);
       await expect(panel.getByRole("textbox")).toHaveCount(1);
     });
 
