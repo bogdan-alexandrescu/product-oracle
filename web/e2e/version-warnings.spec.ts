@@ -40,7 +40,7 @@ test("the Warnings panel says what to do, and the date warning opens Plan › Da
 
   await date.getByRole("link", { name: "Open Plan › Dates" }).click();
   await expect(page).toHaveURL(/\/plan\/dates$/);
-  await expect(page.getByRole("heading", { name: "Dates" }).first()).toBeVisible();
+  await expect(page.getByTestId("plan-tabs").filter({ visible: true }).getByTestId("plan-tab-dates")).toHaveAttribute("aria-current", "page");
 });
 
 test("a viewer reads the same plain warnings", async ({ page }) => {

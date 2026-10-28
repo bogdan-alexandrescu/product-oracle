@@ -373,6 +373,29 @@ async def test_why_it_needs_you_names_one_count(client):
     assert stale == ["11 baseline items changed"]
 
 
+async def test_why_it_needs_you_says_changed_items_in_words(client):
+    """prod-6: reasons naming baseline items by ref read in words, one line per verb;
+    never "feature:delivery-x changed; goal:g-b changed; product:p was confirmed"."""
+    ctx = await make_ctx()
+    async with tenant_session(ctx.tenant_id) as s:
+        await Seed(s).approved_roadmap(
+            "prd-x",
+            ["it"],
+            freshness="potentially_stale",
+            stale_reasons=[
+                "feature:delivery-x changed",
+                "goal:g-b-signups changed",
+                "goal:g-c changed",
+                "product:p was confirmed",
+            ],
+        )
+        await s.commit()
+    (item,) = (await plan(client, ctx))["items"]
+    stale = [r["detail"] for r in item["reasons"] if r["kind"] == "stale"]
+    assert stale == ["The feature and 2 goals changed; the product was confirmed"]
+    assert ":" not in stale[0]
+
+
 async def draft_twin(client, ctx: Ctx, approved: dict[str, Any], draft: dict[str, Any]) -> dict:
     """An approved roadmap v1 with item ``it`` and a draft v2 with its twin."""
     async with tenant_session(ctx.tenant_id) as s:

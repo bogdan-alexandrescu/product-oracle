@@ -59,7 +59,7 @@ HEALTH_LABEL = {
     "paused": "Paused",
     "closed": "Closed",
 }
-SLIP_KINDS = ("date_slip", "overdue")
+HORIZON_LABEL = {"now": "Now", "next": "Next", "later": "Later"}
 DRIFT_KINDS = ("ahead", "unplanned")
 
 
@@ -333,7 +333,7 @@ async def _track_content(
         "alignment": counts,
         "needs_attention": needs,
         "drift": drift,
-        "slips": sum(1 for d in o.drift if d.kind in SLIP_KINDS),
+        "slips": slips_in(needs),
         "dates": dates,
         "prd_moved": o.prd_moved,
     }
@@ -397,8 +397,21 @@ async def content_for(
     }
 
 
+def _day(iso: str) -> str:
+    """ "Nov 30" from "2026-11-30"."""
+    return short_day(date.fromisoformat(iso[:10]))
+
+
 def _line(text: str | None) -> str:
     return " ".join((text or "").split())
+
+
+def slips_in(needs: list[dict[str, Any]]) -> int:
+    """How many of a track's needs-attention reasons are "slipping" (qa-plan-56): the same
+    count the page lists under Needs attention, not only the date_slip/overdue drift
+    entries - a track milestone that has passed with no tracker issue is "slipping" too,
+    but is not drift."""
+    return sum(1 for n in needs if n.get("kind") == "slipping")
 
 
 def _link_text(text: str | None) -> str:
@@ -433,7 +446,7 @@ def markdown(content: dict[str, Any]) -> str:
         lines += ["", f"## {_line(t['prd']['title'])} · {health}", "", _line(t["headline"]), ""]
         nxt = t.get("next_milestone")
         if nxt:
-            day = nxt["date"] or "no date"
+            day = short_day(date.fromisoformat(nxt["date"])) if nxt["date"] else "no date"
             basis = "verified basis" if nxt["verified"] else "no verified basis"
             lines.append(f"- Next milestone: {_line(nxt['name'])}, {day} ({basis})")
         a = t["alignment"]
@@ -446,7 +459,8 @@ def markdown(content: dict[str, Any]) -> str:
         if t["needs_attention"]:
             lines += ["", f"### Needs attention ({when})", ""]
             lines += [
-                f"- [{_link_text(n['title'])}]({n['link']}) ({n['horizon']}): {_line(n['detail'])}"
+                f"- [{_link_text(n['title'])}]({n['link']}) · "
+                f"{HORIZON_LABEL.get(n['horizon'], n['horizon'])}: {_line(n['detail'])}"
                 for n in t["needs_attention"]
             ]
         if t["drift"]:
@@ -456,11 +470,11 @@ def markdown(content: dict[str, Any]) -> str:
         if dates["verified"] or dates["withdrawn"]:
             lines += ["", "### Dates", ""]
             lines += [
-                f"- Verified: {_line(d['reference'])} supports {d['supports_date']}"
+                f"- Verified: {_line(d['reference'])} supports {_day(d['supports_date'])}"
                 for d in dates["verified"]
             ]
             lines += [
-                f"- Withdrawn: {_line(d['reference'])} ({d['supports_date']})"
+                f"- Withdrawn: {_line(d['reference'])} ({_day(d['supports_date'])})"
                 + (f": {_line(d['reason'])}" if d.get("reason") else "")
                 for d in dates["withdrawn"]
             ]

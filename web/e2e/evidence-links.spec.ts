@@ -30,7 +30,7 @@ test("evidence links: a commenter previews a public Notion page, saves and refre
   await expect(preview.getByTestId("link-preview-title")).toHaveText("Onboarding research summary");
   await expect(preview.getByTestId("link-preview-excerpt")).toContainText("We interviewed 24 new accounts");
   await expect(preview).toContainText("Notion");
-  await expect(preview.getByTestId("confidence")).toHaveText(/^0\.\d\d$/);
+  await expect(preview.getByTestId("confidence")).toHaveText(/^\d{1,3}%$/);
   await expect(preview.getByTestId("link-preview-factors")).toContainText("Source 0.70");
 
   await form.getByRole("button", { name: "Save evidence" }).click();

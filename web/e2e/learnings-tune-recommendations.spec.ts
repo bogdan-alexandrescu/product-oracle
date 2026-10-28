@@ -41,7 +41,7 @@ async function addLearning(page: Page, key = "effort_cost", text = LEARNT) {
   const form = page.getByTestId("learning-form");
   await form.getByLabel("Learning").fill(text);
   await form.getByLabel("Applies to").selectOption("question_category");
-  await form.getByLabel("Key").fill(key);
+  await form.getByLabel("Which topic").selectOption(key);
   await form.getByLabel("Direction").selectOption("recommend_more");
   await form.getByRole("button", { name: "Add learning" }).click();
   await expect(form).toHaveCount(0);
@@ -73,7 +73,7 @@ test("a kept learning moves its question into the next ones and says why", async
   await expect(nextPrompts(page).nth(4)).toHaveText(DIFFERENTIATION);
   await expect(next(page)).not.toContainText(EFFORT);
 
-  await expect(await addLearning(page)).toContainText("Question category · effort_cost");
+  await expect(await addLearning(page)).toContainText("Question topic · Effort and cost");
   await openIntake(page);
   await reanalyse(page);
   await expect(nextPrompts(page).nth(4)).toHaveText(EFFORT);

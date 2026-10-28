@@ -28,7 +28,7 @@ test("Inbox: the weekly report row opens the report, and moves to Done", async (
   const row = page.getByTestId("inbox-tab-new").getByTestId("inbox-reports").locator("tr[data-row]");
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("Weekly alignment · week of Oct 12");
-  await expect(row).toContainText("1 at risk · 2 slips");
+  await expect(row).toContainText("1 at risk · 1 slip");
   const badge = page.getByTestId("nav-inbox-badge");
   const before = Number(await badge.innerText());
   await row.getByRole("link", { name: "Open" }).click();
@@ -65,7 +65,7 @@ test("report page: the headline, a panel per track, needs attention linking to t
   await page.goto("/plan/reports");
   await page.getByRole("link", { name: /week of Oct 12/ }).first().click();
   await expect(page.getByTestId("report-headline").filter({ visible: true })).toHaveText(
-    "1 of 2 tracks at risk; 2 dates slipping as of now; 4 Now items have no issue.",
+    "1 of 2 tracks at risk; 1 date slipping as of now; 2 Now items have no issue.",
   );
   const tracks = page.getByTestId("report-track").filter({ visible: true });
   await expect(tracks).toHaveCount(2);

@@ -14,7 +14,7 @@ import { useQuery } from "@/lib/use-query";
 
 import { GoalsPanel } from "../home/_goals-panel";
 import { useGoals } from "../home/_use-goals";
-import { approvedRoadmaps, EditPlanButton, PlanChanges } from "./_edit-plan";
+import { approvedRoadmaps, EditPlanButton, PlanChanges, roadmapName, useRoadmapDocs } from "./_edit-plan";
 import { PlanInspector } from "./_inspector";
 import type { PlanItem } from "./_lib";
 import { PrdCards } from "./_prd-cards";
@@ -132,6 +132,8 @@ export default function PlanPage() {
   }, []);
   const counts = data?.counts;
   const roadmaps = approvedRoadmaps(data?.items);
+  // qa-plan-21: each roadmap by its title, never its slug (read again when the live version moves).
+  const roadmapDocs = useRoadmapDocs(roadmaps.map((r) => `${r.slug}@${r.version}`).join(","));
   const reload = q.reload;
   const onLink = useCallback(
     (i: PlanItem, term?: string) => {
@@ -154,6 +156,10 @@ export default function PlanPage() {
         const t = await unwrap(api.GET("/v1/tracks/{track_id}", { params: { path: { track_id: m.track_id } } }));
         putTrack(t);
         setMilestone({ trackId: m.track_id, id: m.id });
+      }}
+      onCancel={() => {
+        setMilestone(null);
+        setSheet(false);
       }}
     />
   ) : item ? (
@@ -214,6 +220,7 @@ export default function PlanPage() {
             key={`${r.slug}|${opened?.roadmap === r.slug ? opened.id : ""}`}
             roadmap={r}
             opened={opened?.roadmap === r.slug ? opened : null}
+            docs={roadmapDocs}
             me={userId}
             canWrite={canWrite}
             onPlanChanged={() => void q.reload()}
@@ -233,10 +240,10 @@ export default function PlanPage() {
                 <>
                   {roadmaps.map((r) => (
                     <span key={r.slug} data-testid="plan-live-version" className="text-sm text-text2 max-[600px]:hidden">
-                      {r.slug} v{r.version}
+                      {roadmapName(r.slug, roadmapDocs)} v{r.version}
                     </span>
                   ))}
-                  {canWrite && <EditPlanButton roadmaps={roadmaps} onOpened={setOpened} />}
+                  {canWrite && <EditPlanButton roadmaps={roadmaps} docs={roadmapDocs} onOpened={setOpened} />}
                   <span data-testid="plan-legend" className="text-sm text-text2 max-[600px]:hidden">
                     Dashed: proposed by a draft, not approved
                   </span>

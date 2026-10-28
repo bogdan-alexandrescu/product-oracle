@@ -26,8 +26,10 @@ export type Column<T> = {
    * "hide" drops the column when the table itself is under 760 px wide above phone width (the
    * docked Ask panel or an inspector beside it), so the other columns keep their room and the
    * last one is never cut off. A container query: the window's width does not tell.
+   * "laptop" drops it under 820 px (an inspector docked in a window under about 1400 px);
+   * "mid" drops it under 1000 px (a docked drawer); "wide" drops it already under 1320 px, for a wide table's least needed columns.
    */
-  narrow?: "hide";
+  narrow?: "hide" | "laptop" | "mid" | "wide";
   /** A sortable column's order, as its header's aria-sort. */
   ariaSort?: "ascending" | "descending" | "none";
   className?: string;
@@ -37,6 +39,11 @@ type PhoneRole = NonNullable<Column<unknown>["phone"]>;
 
 /** A `narrow: "hide"` column's cells and <col> in a table under 760 px wide; a phone keeps its own layout. */
 const NARROW_HIDE = "min-[601px]:@max-[760px]:hidden";
+const LAPTOP_HIDE = "min-[601px]:@max-[820px]:hidden";
+const MID_HIDE = "min-[601px]:@max-[1000px]:hidden";
+const WIDE_HIDE = "min-[601px]:@max-[1320px]:hidden";
+const narrowClass = (n: Column<unknown>["narrow"]) =>
+  n === "hide" ? NARROW_HIDE : n === "laptop" ? LAPTOP_HIDE : n === "mid" ? MID_HIDE : n === "wide" ? WIDE_HIDE : "";
 
 /** Phone-only classes per role; the row itself becomes a wrapping flex block. */
 const PHONE_CELL: Record<PhoneRole, string> = {
@@ -146,7 +153,7 @@ export function DataTable<T>({
   const align = (c: Column<T>) => (c.align === "right" ? "text-right" : c.align === "center" ? "text-center" : "text-left");
   const role = (c: Column<T>, i: number): PhoneRole => (c.hideOnPhone ? "hide" : (c.phone ?? (i === 0 ? "title" : "meta")));
   const phone = (c: Column<T>) =>
-    `${c.hideOnPhone || c.phone === "hide" ? "max-[600px]:hidden" : ""} ${c.narrow === "hide" ? NARROW_HIDE : ""}`.trim();
+    `${c.hideOnPhone || c.phone === "hide" ? "max-[600px]:hidden" : ""} ${narrowClass(c.narrow)}`.trim();
   const visibleCols = columns.length;
 
   const groups = group ? list.map(group) : [];
@@ -239,7 +246,7 @@ export function DataTable<T>({
                           key={c.key}
                           role={selectable ? "gridcell" : "cell"}
                           data-phone={r}
-                          className={`${c.wrap ? "break-words whitespace-normal" : "truncate"} px-2 py-1.5 first:pl-4 last:pr-4 max-[600px]:first:pl-0 max-[600px]:last:pr-0 ${align(c)} ${PHONE_CELL[r]} ${PHONE_WRAP} ${r === "meta" || r === "title" ? "max-[600px]:text-left" : ""} ${c.narrow === "hide" ? NARROW_HIDE : ""} ${c.className ?? ""}`}
+                          className={`${c.wrap ? "break-words whitespace-normal" : "truncate"} px-2 py-1.5 first:pl-4 last:pr-4 max-[600px]:first:pl-0 max-[600px]:last:pr-0 ${align(c)} ${PHONE_CELL[r]} ${PHONE_WRAP} ${r === "meta" || r === "title" ? "max-[600px]:text-left" : ""} ${narrowClass(c.narrow)} ${c.className ?? ""}`}
                         >
                           {c.phoneLabel && r === "meta" && (
                             <span className="hidden font-semibold max-[600px]:inline">{c.phoneLabel}</span>

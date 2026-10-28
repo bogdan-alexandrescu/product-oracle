@@ -1,6 +1,7 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 import { formatDay } from "@/lib/format";
+import { docLabel } from "@/lib/labels";
 
 export type PlanItem = Schemas["PlanItem"];
 export type PlanDrift = Schemas["PlanDrift"];
@@ -84,7 +85,13 @@ export function whoLabel(who: Schemas["PlanWho"] | null | undefined, me: string 
 export function prdLabel(i: PlanItem): string {
   if (!i.prd) return "—";
   const v = i.prd.version == null ? "" : i.prd.approved ? ` v${i.prd.version}` : ` draft ${i.prd.version}`;
-  return `${i.prd.title}${v}`;
+  return `${docLabel({ title: i.prd.title, kind: "prd" })}${v}`;
+}
+
+/** The PRD by its name alone, for a column headed PRD: "Usage alerts" (qa-plan-5). */
+export function prdName(i: PlanItem): string {
+  if (!i.prd) return "—";
+  return i.prd.title.replace(/[\s,·-]+PRD\b.*$/i, "").trim() || i.prd.title;
 }
 
 export const roadmapHref = (i: PlanItem) => `/documents/${i.roadmap.slug}/v/${i.roadmap.version}#${i.roadmap.anchor}`;

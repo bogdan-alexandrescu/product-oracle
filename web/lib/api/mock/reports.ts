@@ -68,7 +68,7 @@ function tracks(atRisk: boolean): Track[] {
     link: plan("usage-alerts"),
     health: atRisk ? "at_risk" : "on_track",
     health_before: "on_track",
-    headline: atRisk ? "At risk: 1 of 3 items need attention (1 slipping). Next: First release (2026-11-30)." : "On track: 3 items. Next: First release (2026-11-30).",
+    headline: atRisk ? "At risk: 1 of 3 items need attention (1 slipping). Next milestone: First release, Nov 30." : "On track: 3 items. Next milestone: First release, Nov 30.",
     next_milestone: { name: "First release", date: "2026-11-30", verified: true },
     alignment: atRisk ? { aligned: 1, drift: 1, untracked: 1, done: 0 } : { aligned: 2, drift: 0, untracked: 1, done: 0 },
     needs_attention: atRisk
@@ -78,7 +78,7 @@ function tracks(atRisk: boolean): Track[] {
             title: "Threshold alerts",
             horizon: "now",
             kind: "slipping",
-            detail: "ENG-405 targets 2026-12-09, after the milestone date 2026-11-30.",
+            detail: "ENG-405 targets Dec 9, after the milestone date Nov 30.",
             alert_id: null,
             link: plan("usage-alerts", "threshold-alerts"),
           },
@@ -90,7 +90,7 @@ function tracks(atRisk: boolean): Track[] {
             kind: "ahead",
             item_key: "digest-emails",
             tracker_ref: null,
-            detail: "Engineering has started work planned for next.",
+            detail: "Engineering has started work planned for Next.",
             title: "Digest emails",
             link: plan("usage-alerts", "digest-emails"),
           },
@@ -112,7 +112,7 @@ function tracks(atRisk: boolean): Track[] {
     link: plan("checkout-redesign"),
     health: "on_track",
     health_before: "on_track",
-    headline: "On track: 4 items. Next: Beta (2026-11-30).",
+    headline: "On track: 4 items. Next milestone: Beta, Nov 30.",
     next_milestone: { name: "Beta", date: "2026-11-30", verified: true },
     alignment: { aligned: 3, drift: 0, untracked: 1, done: 0 },
     needs_attention: [],
@@ -123,7 +123,13 @@ function tracks(atRisk: boolean): Track[] {
   return [alerts, checkout];
 }
 
-function summaryOf(ts: Track[], slips: number, untrackedNow: number): Schemas["ReportSummaryFigures"] {
+/**
+ * The figures, from the tracks as the API counts them (qa-plan-56): slips are the slipping
+ * items listed under Needs attention, and every untracked item of the mock's tracks is a Now item.
+ */
+function summaryOf(ts: Track[]): Schemas["ReportSummaryFigures"] {
+  const slips = ts.flatMap((t) => t.needs_attention).filter((n) => n.kind === "slipping").length;
+  const untrackedNow = ts.reduce((n, t) => n + t.alignment.untracked, 0);
   return {
     tracks: ts.length,
     at_risk: ts.filter((t) => t.health === "at_risk").length,
@@ -137,7 +143,7 @@ function summaryOf(ts: Track[], slips: number, untrackedNow: number): Schemas["R
 }
 
 function markdown(r: Omit<Report, "read" | "markdown">): string {
-  const parts = r.tracks.map((t) => [`## ${t.prd.title}`, "", t.headline, ...t.needs_attention.map((n) => `- [${n.title}](${n.link}): ${n.detail}`)].join("\n"));
+  const parts = r.tracks.map((t) => [`## ${t.prd.title}`, "", t.headline, ...t.needs_attention.map((n) => `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${n.detail}`)].join("\n"));
   return [`# ${r.title}`, "", r.headline, "", ...parts].join("\n") + "\n";
 }
 
@@ -148,12 +154,10 @@ function makeReport(input: {
   to: string;
   at: string;
   atRisk: boolean;
-  slips: number;
-  untrackedNow: number;
   slack: Schemas["ReportSlack"];
 }): Omit<Report, "read"> {
   const ts = tracks(input.atRisk);
-  const summary = summaryOf(ts, input.slips, input.untrackedNow);
+  const summary = summaryOf(ts);
   const base = {
     id: mockUuid(),
     kind: input.kind,
@@ -187,8 +191,6 @@ function seedReports(ownerId: string): ReportsDb {
       to: "2026-10-12T07:00:00Z",
       at: "2026-10-12T15:00:12Z",
       atRisk: false,
-      slips: 0,
-      untrackedNow: 3,
       slack: { status: "failed", channel: PLAN_CHANNEL, posted_at: null, attempts: 12, error: "channel_not_found", next_attempt_at: null },
     });
     const posted = makeReport({
@@ -198,8 +200,6 @@ function seedReports(ownerId: string): ReportsDb {
       to: "2026-10-19T07:00:00Z",
       at: "2026-10-19T15:00:12Z",
       atRisk: true,
-      slips: 2,
-      untrackedNow: 4,
       slack: { status: "posted", channel: PLAN_CHANNEL, posted_at: "2026-10-19T15:00:14Z", attempts: 1, error: null, next_attempt_at: null },
     });
     db.reports = [failed, posted];
@@ -332,8 +332,6 @@ export async function reportsRoute(holder: { reports?: ReportsDb; discussions?: 
         to: at,
         at,
         atRisk: true,
-        slips: 2,
-        untrackedNow: 4,
         slack: post_to_slack
           ? post(db, reportSetting().slack_channel)
           : { status: "not_requested", channel: null, posted_at: null, attempts: 0, error: null, next_attempt_at: null },

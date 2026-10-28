@@ -121,7 +121,7 @@ CASES = [
     (
         "entity-update-one-attr",
         upd(DARK, attrs={"status": "planned"}),
-        "Set Dark mode’s delivery status to planned (was idea)",
+        "Set Dark mode’s delivery status to Planned (was Idea)",
     ),
     (
         "one-attr-no-old-value",
@@ -142,13 +142,13 @@ CASES = [
     (
         "three-fields",
         upd(DARK, attrs={"effort": "L", "status": "planned", "weight": 2}),
-        "Change Dark mode: effort to L (was M), delivery status to planned (was idea), weight to 2",
+        "Change Dark mode: effort to L (was M), delivery status to Planned (was Idea), weight to 2",
     ),
     (
         "five-fields",
         upd(DARK, title="Night", attrs={"effort": "L", "status": "planned", "a": 1, "b": True}),
         "Change Dark mode: title to Night (was Dark mode), effort to L (was M), "
-        "delivery status to planned (was idea) and 2 more",
+        "delivery status to Planned (was Idea) and 2 more",
     ),
     *[
         (
@@ -203,7 +203,7 @@ CASES = [
             body="A dark theme.",
             attrs={"effort": "L", "status": "planned", "release_window": "Q2", "a": 1},
         ),
-        "Change Dark mode: effort to L (was M), delivery status to planned (was idea), "
+        "Change Dark mode: effort to L (was M), delivery status to Planned (was Idea), "
         "release window to Q2 (was Q1) and 1 more",
     ),
     ("no-change", upd(DARK, title="Dark mode", attrs={"effort": "M"}), "No change to Dark mode"),
@@ -278,7 +278,7 @@ def test_long_value_is_cut_at_60_and_snake_case_reads_in_words():
     long = describe(upd(DARK, attrs={"note": LONG}), ENTITIES, EDGES)
     assert long == f"Set Dark mode’s note to {'x' * 60}…"
     assert describe(upd(DARK, attrs={"status": "in_progress"}), ENTITIES, EDGES) == (
-        "Set Dark mode’s delivery status to in progress (was idea)"
+        "Set Dark mode’s delivery status to In progress (was Idea)"
     )
 
 
@@ -308,3 +308,15 @@ def test_summary_never_shows_a_field_path_or_an_id(p):
     sentence = describe(p, ENTITIES, EDGES)
     assert "attrs." not in sentence
     assert not _ID.search(sentence)
+
+
+def test_state_values_read_capitalized_as_the_app_shows_them():
+    """protects: a proposal title names a state as the screens do ("Planned (was Idea)").
+    fails_when: it reads "to planned (was idea)" or "in_progress".
+    no_claim: free-text values (they keep their own case)."""
+    assert describe(upd(DARK, attrs={"status": "shipped"}), ENTITIES, EDGES) == (
+        "Set Dark mode’s delivery status to Shipped (was Idea)"
+    )
+    assert describe(upd(DARK, attrs={"owner": "platform"}), ENTITIES, EDGES) == (
+        "Set Dark mode’s owner to platform"
+    )

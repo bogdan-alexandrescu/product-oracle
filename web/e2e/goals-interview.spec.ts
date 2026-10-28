@@ -210,7 +210,7 @@ test("Interview vague goals (2) steps Goal 1 of 2 · Next, creating each discuss
   await expect(stepper.getByTestId("stepper-position")).toHaveText("Goal 1 of 2");
   await expect(stepper.getByRole("button", { name: "Next" })).toBeVisible();
   await expect(stepper.getByRole("button", { name: "Skip" })).toBeVisible();
-  await expect(thread(page).getByRole("heading", { name: "Make “Grow paid conversion” measurable" })).toBeVisible();
+  await expect(thread(page).getByRole("heading", { name: "Who should own “Grow paid conversion”?" })).toBeVisible();
   await expect(chips(page)).toHaveText(["Owner"]);
   expect(await interviews(page)).toBe(1);
 

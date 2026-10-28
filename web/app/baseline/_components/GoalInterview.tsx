@@ -267,34 +267,30 @@ function VersionCard({
   );
 }
 
-/** "Goal 1 of 2 · Next · Skip": the vague goals interviewed one after another. */
+/** "Goal 1 of 2", then Next and Skip (Done on the last): the vague goals interviewed one after another. */
 export type Stepper = { at: number; of: number; next?: () => void; skip?: () => void; done: () => void; busy: boolean };
 
 function StepperBar({ s }: { s: Stepper }) {
+  // No separators between the buttons: they are buttons, not words of a sentence (qa-plan-48).
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg bg-surface2 px-3 py-2 text-sm" data-testid="interview-stepper">
       <span className="font-semibold" data-testid="stepper-position">
         Goal {s.at + 1} of {s.of}
       </span>
-      {s.next ? (
-        <>
-          <span aria-hidden>·</span>
-          <Button variant="ghost" disabled={s.busy} onClick={s.next}>
-            Next
-          </Button>
-          <span aria-hidden>·</span>
-          <Button variant="ghost" disabled={s.busy} onClick={s.skip} title={`Skip goal ${s.at + 2}: no discussion starts for it`}>
-            Skip
-          </Button>
-        </>
-      ) : (
-        <>
-          <span aria-hidden>·</span>
-          <Button variant="ghost" onClick={s.done}>
-            Done
-          </Button>
-        </>
-      )}
+      <span className="ml-auto flex flex-wrap items-center gap-2">
+        {s.next ? (
+          <>
+            <Button variant="ghost" disabled={s.busy} onClick={s.skip} title={`Skip goal ${s.at + 2}: no discussion starts for it`}>
+              Skip
+            </Button>
+            <Button disabled={s.busy} onClick={s.next}>
+              Next
+            </Button>
+          </>
+        ) : (
+          <Button onClick={s.done}>Done</Button>
+        )}
+      </span>
     </div>
   );
 }

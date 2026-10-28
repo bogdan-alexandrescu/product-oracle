@@ -1,5 +1,8 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
+import { formatMoney, formatPercent } from "@/lib/format";
+
+import type { Names } from "./_names";
 
 export type Report = Schemas["ImpactReport"];
 export type Output = Schemas["TraceOutput"];
@@ -58,43 +61,54 @@ export type Upstream = {
   entityKey: string | null;
 };
 
-export function upstreamOf(d: Dependency): Upstream {
+/** "Checkout redesign PRD v1": a dependency's document version in words. */
+function whereOf(u: Dependency["upstream"], names?: Names): string {
+  if (!u.document_slug) return "";
+  const doc = names ? names.doc(u.document_slug) : u.document_slug;
+  return `${doc}${u.version_number != null ? ` v${u.version_number}` : ""}`;
+}
+
+/** A section's heading, or its key where no names are given. */
+const sectionOf = (u: Dependency["upstream"], names?: Names) =>
+  u.section_key ? (names ? names.section(u.section_key, u.document_slug, u.version_number) : u.section_key) : "";
+
+export function upstreamOf(d: Dependency, names?: Names): Upstream {
   const u = d.upstream;
-  const where = u.document_slug ? `${u.document_slug}${u.version_number != null ? ` v${u.version_number}` : ""}` : "";
+  const where = whereOf(u, names);
   if (u.entity) {
     const e = u.entity;
-    const conf = e.locked ? "locked" : e.confidence != null ? e.confidence.toFixed(2) : null;
+    const conf = e.locked ? "locked" : e.confidence != null ? `${formatPercent(e.confidence)} confidence` : null;
     return {
-      key: `e:${e.id}`, kind: "entity", label: e.title, sub: [e.key, e.type.replaceAll("_", " "), conf].filter(Boolean).join(" · "),
-      short: u.deleted ? `${e.key} (deleted)` : e.key, deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null,
+      key: `e:${e.id}`, kind: "entity", label: e.title, sub: [statusLabel(e.type), conf].filter(Boolean).join(" · "),
+      short: u.deleted ? `${e.title} (deleted)` : e.title, deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null,
       entityId: e.id, entityKey: e.key,
     };
   }
   if (u.section_key) {
+    const section = sectionOf(u, names);
     return {
-      key: `s:${u.document_slug ?? ""}#${u.section_key}`, kind: "section", label: u.section_key, sub: `section · ${where}`,
-      short: u.section_key, deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null, entityId: null, entityKey: null,
+      key: `s:${u.document_slug ?? ""}#${u.section_key}`, kind: "section", label: section, sub: where ? `Section of ${where}` : "Section",
+      short: section, deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null, entityId: null, entityKey: null,
     };
   }
   return {
-    key: `v:${u.version_id ?? where}`, kind: "version", label: where || "Upstream version", sub: "all of it",
+    key: `v:${u.version_id ?? where}`, kind: "version", label: where || "Upstream version", sub: "All of it",
     short: where || "the version", deleted: Boolean(u.deleted), deletedAt: u.deleted_at ?? null, entityId: null, entityKey: null,
   };
 }
 
-/** "checkout-redesign v1 · scope": a dependency's upstream in one line. */
-export function upstreamLine(d: Dependency): string {
+/** "Checkout redesign PRD v1 · Scope": a dependency's upstream in one line. */
+export function upstreamLine(d: Dependency, names?: Names): string {
   const u = d.upstream;
-  const where = u.document_slug ? `${u.document_slug}${u.version_number != null ? ` v${u.version_number}` : ""}` : null;
   if (u.entity) return `${u.entity.key} · ${u.entity.title}`;
-  return [where, u.section_key].filter(Boolean).join(" · ") || "Upstream";
+  return [whereOf(u, names), sectionOf(u, names)].filter(Boolean).join(" · ") || "Upstream";
 }
 
 /** Each output's upstream nodes, in first-seen order. */
-export function upstreamsOf(o: Output): Upstream[] {
+export function upstreamsOf(o: Output, names?: Names): Upstream[] {
   const seen = new Map<string, Upstream>();
   for (const d of o.dependencies ?? []) {
-    const u = upstreamOf(d);
+    const u = upstreamOf(d, names);
     if (!seen.has(u.key)) seen.set(u.key, u);
   }
   return [...seen.values()];
@@ -106,4 +120,5 @@ export function proposalOf(report: Report, o: Output): Proposal | undefined {
   return report.plan.find((p) => keyOf(p) === k);
 }
 
-export const usd = (n: number) => `$${n.toFixed(2)}`;
+/** "$6.00": the shared money format. */
+export const usd = formatMoney;

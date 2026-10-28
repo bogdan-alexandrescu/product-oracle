@@ -33,7 +33,7 @@ import {
   ContributionPips,
   DEFAULT_LOW,
   DeliveryChip,
-  formatValue,
+  valueWords,
   goalCodes,
   LockBadge,
   NodeStatusBadge,
@@ -76,9 +76,9 @@ const ATTR_LABEL: Record<string, string> = {
   owner_confidence: "Owner confidence",
 };
 
+/** An attribute's key in words, capitalized: "status" -> "Status", "priority_note" -> "Priority note". */
 function attrLabel(key: string): string {
   if (ATTR_LABEL[key]) return ATTR_LABEL[key];
-  if (!key.includes("_")) return key;
   const words = key.replace(/_/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
@@ -86,7 +86,7 @@ function attrLabel(key: string): string {
 /** An attribute's value as a person reads it: a 0-1 confidence as a percentage. */
 function attrValue(key: string, value: unknown): string {
   if (key.endsWith("_confidence") && typeof value === "number" && value >= 0 && value <= 1) return `${Math.round(value * 100)}%`;
-  return formatValue(value);
+  return valueWords(key, value);
 }
 
 /** Attributes the edit form offers to add when the entry lacks them, per entity type. */
@@ -358,6 +358,8 @@ export function EntityDrawer({
     <div role="dialog" aria-label={title} aria-modal="false" data-testid="entity-drawer" ref={root} className="scroll-mt-4">
       <Inspector
         label={title}
+        // Two stats a row: four in a drawer's width cut "Confidence" to "Confide…" (qa-plan-46).
+        statColumns={2}
         eyebrow={
           <>
             {TYPE_LABEL[entity.type]}

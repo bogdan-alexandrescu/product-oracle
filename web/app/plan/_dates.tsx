@@ -8,14 +8,13 @@ import {
   KIND_LABEL,
   RejectBasisDialog,
   WithdrawBasisDialog,
-  shortDay,
   useDateRights,
   verifyBasis,
 } from "@/components/DateBasisDialog";
-import { useCompanyZone } from "@/lib/dates";
-import { Button, Chip, DataTable, FilterChips, Notice, Page, PageHeader, type ChipKind, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, FilterChips, InfoTip, Notice, Page, PageHeader, type ChipKind, type Column } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
 import { api, unwrap } from "@/lib/api/client";
+import { formatDay } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type Filter = "proposed" | "verified" | "withdrawn" | "all";
@@ -26,8 +25,8 @@ const STATUS: Record<Basis["status"], { label: string; kind: ChipKind }> = {
   rejected: { label: "Rejected", kind: "na" },
 };
 
-function forLabel(b: Basis): string {
-  if (b.item_key) return `Item ${b.item_key}`;
+function forLabel(b: Basis, itemTitle: (prd: string, key: string) => string | undefined): string {
+  if (b.item_key) return `Item: ${itemTitle(b.prd_document_id, b.item_key) ?? b.item_key}`;
   if (b.tracker_key) return `Items of ${b.tracker_key}`;
   return "Whole PRD";
 }
@@ -37,7 +36,8 @@ export function DatesTab() {
   const bases = useQuery("schedule-bases", () => unwrap(api.GET("/v1/schedule-bases")));
   const prds = useQuery("documents|prd", () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
   const rights = useDateRights();
-  const zone = useCompanyZone();
+  // The items' titles, so For names an item as people know it (not its key).
+  const plan = useQuery("plan|approved|basis", () => unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })));
   const [names, setNames] = useState<Map<string, string>>(new Map());
   const [picked, setPicked] = useState<Filter | null>(null);
   const [dialog, setDialog] = useState<{ kind: "record" } | { kind: "withdraw" | "reject"; basis: Basis } | null>(null);
@@ -56,6 +56,9 @@ export function DatesTab() {
   const waiting = (rows ?? []).filter((b) => b.status === "proposed").length;
   const filter: Filter = picked ?? (verifies && waiting ? "proposed" : "all");
   const shown = (rows ?? []).filter((b) => filter === "all" || b.status === filter);
+  // qa-plan-27: every filter chip carries its count.
+  const count = (s: Basis["status"]) => (rows ? rows.filter((b) => b.status === s).length : null);
+  const itemTitle = (prd: string, key: string) => plan.data?.items.find((i) => i.key === key && i.prd?.id === prd)?.title;
   const prdTitle = (id: string) => prds.data?.find((d) => d.id === id)?.title ?? "PRD";
   const who = (id: string | null | undefined) => (id ? (names.get(id) ?? "a member") : "a member");
 
@@ -75,22 +78,7 @@ export function DatesTab() {
       header: "Reference",
       phone: "title",
       wrap: true,
-      cell: (b) => (
-        <div>
-          <span className="font-semibold">{b.reference}</span>
-          {b.status === "withdrawn" && b.withdrawn_at && (
-            <p data-testid="withdrawn-reason" className="text-sm text-text2">
-              Withdrawn by {who(b.withdrawn_by)}, {shortDay(b.withdrawn_at, zone)}
-              {b.withdrawn_reason ? `: ${b.withdrawn_reason}` : ""}
-            </p>
-          )}
-          {b.status === "rejected" && b.rejected_at && (
-            <p className="text-sm text-text2">
-              Rejected by {who(b.rejected_by)}, {shortDay(b.rejected_at, zone)}: {b.rejected_reason}
-            </p>
-          )}
-        </div>
-      ),
+      cell: (b) => <span className="font-semibold">{b.reference}</span>,
     },
     {
       key: "kind",
@@ -102,9 +90,9 @@ export function DatesTab() {
       key: "date",
       header: "Supports",
       phone: "meta",
-      cell: (b) => shortDay(b.supports_date),
+      cell: (b) => formatDay(b.supports_date),
     },
-    { key: "for", header: "For", phone: "meta", cell: (b) => forLabel(b) },
+    { key: "for", header: "For", phone: "meta", wrap: true, cell: (b) => forLabel(b, itemTitle) },
     {
       key: "status",
       header: "Status",
@@ -120,12 +108,15 @@ export function DatesTab() {
       header: "By",
       phone: "meta",
       wrap: true,
+      // qa-plan-26: the last thing done to the basis, and who did it.
       cell: (b) =>
-        b.status === "proposed"
-          ? `Proposed by ${who(b.proposed_by)}`
-          : b.verified_at
-            ? `Verified by ${who(b.verified_by)}, ${shortDay(b.verified_at, zone)}`
-            : `Proposed by ${who(b.proposed_by)}`,
+        b.status === "withdrawn" && b.withdrawn_at
+          ? `Withdrawn by ${who(b.withdrawn_by)}, ${formatDay(b.withdrawn_at)}`
+          : b.status === "rejected" && b.rejected_at
+            ? `Rejected by ${who(b.rejected_by)}, ${formatDay(b.rejected_at)}`
+            : b.status !== "proposed" && b.verified_at
+              ? `Verified by ${who(b.verified_by)}, ${formatDay(b.verified_at)}`
+              : `Proposed by ${who(b.proposed_by)}`,
     },
     {
       key: "actions",
@@ -156,8 +147,15 @@ export function DatesTab() {
 
   return (
     <Page>
+      {/* qa-plan-25: every Plan tab is titled Plan; the open tab names the page. */}
       <PageHeader
-        title="Dates"
+        title="Plan"
+        info={
+          <InfoTip label="Dates" align="start" side="bottom">
+            Every date on the plan rests on an estimate, a capacity plan or a commitment. The engineering lead verifies
+            each one before a date rests on it.
+          </InfoTip>
+        }
         action={
           rights.data?.rights ? (
             <Button variant="primary" icon="plus" onClick={() => setDialog({ kind: "record" })}>
@@ -173,10 +171,10 @@ export function DatesTab() {
           value={filter}
           onChange={setPicked}
           items={[
-            { value: "proposed", label: "Proposed", count: waiting },
-            { value: "verified", label: "Verified" },
-            { value: "withdrawn", label: "Withdrawn" },
-            { value: "all", label: "All" },
+            { value: "proposed", label: "Proposed", count: count("proposed") },
+            { value: "verified", label: "Verified", count: count("verified") },
+            { value: "withdrawn", label: "Withdrawn", count: count("withdrawn") },
+            { value: "all", label: "All", count: rows ? rows.length : null },
           ]}
         />
       </div>
@@ -195,6 +193,7 @@ export function DatesTab() {
           "data-basis": b.reference,
           "data-status": b.status,
         })}
+        detail={(b) => (reasonOf(b) ? <Reason basis={b} /> : null)}
         empty="No date bases here yet."
       />
       {dialog?.kind === "record" && rights.data && (
@@ -203,5 +202,18 @@ export function DatesTab() {
       {dialog?.kind === "withdraw" && <WithdrawBasisDialog basis={dialog.basis} onClose={() => setDialog(null)} onDone={done} />}
       {dialog?.kind === "reject" && <RejectBasisDialog basis={dialog.basis} onClose={() => setDialog(null)} onDone={done} />}
     </Page>
+  );
+}
+
+/** qa-plan-26: why a basis was withdrawn or rejected, on its own full-width line under the row. */
+const reasonOf = (b: Basis) => (b.status === "withdrawn" ? b.withdrawn_reason : b.status === "rejected" ? b.rejected_reason : null) || null;
+
+function Reason({ basis: b }: { basis: Basis }) {
+  const reason = reasonOf(b);
+  if (!reason) return null;
+  return (
+    <p data-testid={b.status === "withdrawn" ? "withdrawn-reason" : "rejected-reason"} data-reason-for={b.reference} className="text-sm break-words text-text2">
+      {b.status === "withdrawn" ? "Why it was withdrawn" : "Why it was rejected"}: {reason}
+    </p>
   );
 }

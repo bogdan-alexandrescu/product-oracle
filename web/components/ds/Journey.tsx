@@ -72,10 +72,11 @@ export function JourneyTrack({
             />
           ))}
         </div>
-        <div className="mt-2 flex justify-between text-sm text-text2" aria-hidden>
-          <span>{steps[0]}</span>
-          <b className="font-semibold text-text">{steps[current - 1]}</b>
-          <span>{steps.at(-1)}</span>
+        <div data-testid="journey-labels" className="mt-2 flex justify-between text-sm text-text2" aria-hidden>
+          {/* The current step once: at either end it is that end's name, highlighted (qa-plan-32). */}
+          {current <= 1 ? <b className="font-semibold text-text">{steps[0]}</b> : <span>{steps[0]}</span>}
+          {current > 1 && current < steps.length && <b className="font-semibold text-text">{steps[current - 1]}</b>}
+          {current >= steps.length ? <b className="font-semibold text-text">{steps.at(-1)}</b> : <span>{steps.at(-1)}</span>}
         </div>
       </div>
     );

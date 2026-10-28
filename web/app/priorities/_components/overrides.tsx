@@ -9,6 +9,8 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { dayText, evidenceName, sourceName } from "./words";
+
 type RankedFeature = Schemas["RankedFeature"];
 type OverrideOut = Schemas["OverrideOut"];
 type PushbackOut = Schemas["PushbackOut"];
@@ -88,33 +90,49 @@ const pct = (n: number | null | undefined) => (n == null ? "—" : String(Math.r
 
 /** A cited piece of evidence: title, kind of source, date, confidence (as CitationChip shows them). */
 export function EvidenceChip({ e }: { e: Schemas["EvidenceChip"] }) {
+  const title = evidenceName(e);
+  const kind = sourceName(e.source_kind);
+  const date = dayText(e.date);
   return (
     <span
       data-testid="evidence-chip"
+      title={[title, kind, date].filter(Boolean).join(" · ")}
       className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-goal border border-line px-2 py-0.5 text-[13px]"
     >
-      <span className="min-w-0 truncate font-medium">{e.title}</span>
-      <span className="flex-none text-text2">{e.source_kind.replace(/_/g, " ")}</span>
-      {e.date && <span className="flex-none text-text2">{e.date}</span>}
-      <span className="tnum flex-none font-mono" title="Confidence">
+      <span className="min-w-0 truncate font-medium">{title}</span>
+      {kind && <span className="flex-none text-text2">{kind}</span>}
+      {date && <span className="tnum flex-none text-text2">{date}</span>}
+      <span className="tnum flex-none" title="Confidence">
         {pct(e.confidence)}
       </span>
     </span>
   );
 }
 
-/** Words for a change: "Moved above F-2" / "Pinned at #1". */
-export function changeLabel(o: {
-  kind: Kind;
-  above?: { key: string } | string | null;
-  position?: number | null;
-}): string {
-  const above = typeof o.above === "string" ? o.above : o.above?.key;
+/** A feature key as its name, where the caller knows the ranking. */
+export type NameOf = (key: string) => string;
+
+/**
+ * Words for a change: "Moved above Saved addresses" / "Pinned at #1". The feature it moved
+ * above by its name: the API's own title for it (the object form's `title`) over a lookup by key, which only works while the key is still in the
+ * ranking shown; either way, never the bare key.
+ */
+export function changeLabel(
+  o: {
+    kind: Kind;
+    above?: { key: string; title?: string } | string | null;
+    position?: number | null;
+  },
+  name?: NameOf,
+): string {
+  const key = typeof o.above === "string" ? o.above : o.above?.key;
+  const own = typeof o.above === "object" ? o.above?.title : undefined;
+  const above = key ? (own ?? name?.(key) ?? key) : null;
   return o.kind === "move" ? `Moved above ${above ?? "—"}` : `Pinned at #${o.position}`;
 }
 
 /** The chips on an overridden or held row. */
-export function RowChips({ f }: { f: RankedFeature }) {
+export function RowChips({ f, name }: { f: RankedFeature; name: NameOf }) {
   const o = f.override;
   return (
     <>
@@ -124,8 +142,8 @@ export function RowChips({ f }: { f: RankedFeature }) {
         </Chip>
       )}
       {f.held_below && (
-        <Chip kind="warn" title={`Held below ${f.held_below}: it depends on it`} data-testid="held-chip">
-          Held below {f.held_below}
+        <Chip kind="warn" wrap title={`Held below ${name(f.held_below)}: it depends on it`} data-testid="held-chip">
+          Held below {name(f.held_below)}
         </Chip>
       )}
     </>
@@ -190,7 +208,7 @@ export function RowActions({
     <div
       ref={box}
       data-testid="row-actions"
-      className={`absolute top-1/2 right-2 flex -translate-y-1/2 items-center gap-0.5 rounded-button border border-line bg-surface shadow-tip max-[600px]:static max-[600px]:translate-y-0 max-[600px]:border-0 max-[600px]:shadow-none ${
+      className={`flex items-center justify-end gap-0.5 ${
         menu
           ? "visible"
           : "invisible [tr:focus-within_&]:visible [tr:hover_&]:visible [tr[aria-selected=true]_&]:visible [@media(hover:none)]:visible max-[600px]:visible"
@@ -300,7 +318,7 @@ function MenuItem({ children, onClick }: { children: ReactNode; onClick: () => v
   );
 }
 
-function PushbackView({ p }: { p: PushbackOut }) {
+function PushbackView({ p, name }: { p: PushbackOut; name: NameOf }) {
   const rules = p.pushback.filter((m) => m.code !== "reason_contradicts_evidence");
   const reason = p.pushback.find((m) => m.code === "reason_contradicts_evidence");
   return (
@@ -310,15 +328,8 @@ function PushbackView({ p }: { p: PushbackOut }) {
         <ul className="flex flex-col gap-2">
           {rules.map((m) => (
             <li key={m.code} data-testid={`pushback-${m.code}`} className="rounded-button border border-line px-3 py-2">
+              {/* The message gives the numbers in words; the raw figures stay out of the view. */}
               <p>{m.message}</p>
-              {m.numbers && (
-                <p className="tnum mt-1 font-mono text-[13px] text-text2">
-                  {Object.entries(m.numbers)
-                    .filter(([, v]) => v != null && typeof v !== "object")
-                    .map(([k, v]) => `${k.replace(/_/g, " ")} ${String(v)}`)
-                    .join(" · ")}
-                </p>
-              )}
             </li>
           ))}
         </ul>
@@ -337,7 +348,7 @@ function PushbackView({ p }: { p: PushbackOut }) {
         </section>
       )}
       {!CHECKED.has(p.reason_check.status) && <p className="text-sm text-text2">{NUMBERS_ONLY}</p>}
-      {p.held_below && <p className="text-sm text-text2">Held below {p.held_below}: it depends on it.</p>}
+      {p.held_below && <p className="text-sm text-text2">Held below {name(p.held_below)}: it depends on it.</p>}
     </div>
   );
 }
@@ -418,7 +429,7 @@ export function OverrideSheet({
       <div className="mx-auto flex w-full max-w-[640px] flex-col gap-3 px-4 py-3 text-[15px]">
         {pushback ? (
           <>
-            <PushbackView p={pushback} />
+            <PushbackView p={pushback} name={(k) => features.find((x) => x.key === k)?.title ?? k} />
             {error && <Notice tone="error">{error}</Notice>}
             <div className="flex flex-wrap justify-end gap-2 pb-2">
               <Button variant="ghost" onClick={onClose}>
@@ -507,7 +518,7 @@ export function OverrideSheet({
                       <EvidenceChip
                         e={{
                           id: e.id,
-                          title: e.title ?? e.ref ?? e.id,
+                          title: evidenceName(e),
                           source_kind: e.source_kind ?? "link",
                           date: e.date ?? null,
                           confidence: e.confidence,
@@ -541,12 +552,14 @@ export function YourChange({
   canChange,
   onRemove,
   onMoveToo,
+  name,
 }: {
   f: RankedFeature;
   o: OverrideOut | undefined;
   canChange: boolean;
   onRemove: (id: string) => void;
   onMoveToo: (prerequisite: string) => void;
+  name: NameOf;
 }) {
   if (!f.override && !f.held_below) return null;
   return (
@@ -555,7 +568,7 @@ export function YourChange({
         {f.override && (
           <>
             <p className="flex flex-wrap items-center gap-1.5">
-              <b>{changeLabel(f.override)}</b>
+              <b>{changeLabel(f.override, name)}</b>
               {f.override.kept_after_pushback && <Chip kind="warn">kept after pushback</Chip>}
             </p>
             <p>“{f.override.reason}”</p>
@@ -592,10 +605,10 @@ export function YourChange({
         )}
         {f.held_below && (
           <div className="flex flex-wrap items-center gap-2">
-            <span>Held below {f.held_below}: it depends on it</span>
+            <span>Held below {name(f.held_below)}: it depends on it</span>
             {canChange && f.override && (
               <Button variant="ghost" onClick={() => onMoveToo(f.held_below!)}>
-                Move {f.held_below} too
+                Move {name(f.held_below)} too
               </Button>
             )}
           </div>
@@ -655,7 +668,7 @@ export function ChangesPanel({ reloadKey, features }: { reloadKey: number; featu
             className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 border-t border-line px-4 py-1.5 first:border-t-0 max-[600px]:px-3"
           >
             <span className="font-medium">{title(o.feature.key, o.feature.title)}</span>
-            <span className="text-text2">{changeLabel(o)}</span>
+            <span className="text-text2">{changeLabel(o, (k) => title(k, k))}</span>
             <span className="min-w-0 [overflow-wrap:anywhere]">“{o.reason}”</span>
             <span className="text-text2">
               {o.created_by.name} · {formatDateTime(o.created_at)}

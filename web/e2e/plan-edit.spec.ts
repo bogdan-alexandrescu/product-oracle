@@ -16,6 +16,11 @@ const rail = (page: Page) => page.getByRole("navigation", { name: "Oracle" });
 const changes = (page: Page) => page.getByTestId("plan-changes").filter({ visible: true });
 const lane = (page: Page, horizon: string) => changes(page).locator(`[data-testid="edit-lane"][data-horizon="${horizon}"]`);
 const editItem = (page: Page, title: string) => changes(page).getByTestId("edit-item").filter({ hasText: title });
+// qa-plan-17: Edit plan says "approved version 1" only when the roadmap document has it approved;
+// the mock's document is In review while its Plan treats version 1 as the approved plan.
+const BASE_1 = /Changes to (approved version 1|version 1 \(In review, not approved\)) of Usage alerts roadmap/;
+const proposedFrom1 = (n: number) =>
+  new RegExp(`Version ${n} proposed from (approved version 1|version 1 \\(In review, not approved\\)) · waiting for the decider`);
 const rows = (page: Page) => page.getByTestId("plan-row").filter({ visible: true });
 
 async function openPlan(page: Page, email?: string) {
@@ -44,9 +49,9 @@ async function horizonOf(page: Page): Promise<Record<string, string>> {
 test("Edit plan: move, cut and add, propose, the decider approves, the plan shows the new version", async ({ page }) => {
   await withDecider(page);
   await openPlan(page);
-  await expect(page.getByTestId("plan-live-version")).toHaveText("usage-alerts-roadmap v1");
+  await expect(page.getByTestId("plan-live-version")).toHaveText("Usage alerts roadmap v1");
   await page.getByTestId("plan-edit").click();
-  await expect(changes(page)).toContainText("Changes to approved version 1");
+  await expect(changes(page)).toContainText(BASE_1);
 
   // Move Usage dashboard from Now to Next.
   await expect(lane(page, "now")).toContainText("Usage dashboard");
@@ -72,7 +77,7 @@ test("Edit plan: move, cut and add, propose, the decider approves, the plan show
   // Propose: a new version, with its diff against the approved one, waiting for the decider.
   await changes(page).getByRole("button", { name: "Propose changes" }).click();
   const proposal = changes(page).getByTestId("plan-proposal");
-  await expect(proposal).toContainText("Version 2 proposed from approved version 1 · waiting for the decider");
+  await expect(proposal).toContainText(proposedFrom1(2));
   await expect(proposal.getByTestId("plan-diff-row")).toHaveText([
     "Moved · Usage dashboard · Now → Next",
     "Added · Spend alerts by email",
@@ -80,7 +85,7 @@ test("Edit plan: move, cut and add, propose, the decider approves, the plan show
   ]);
   await expect(proposal.getByRole("button", { name: /Approve/ })).toHaveCount(0);
   // Not approved yet: the plan is still version 1.
-  await expect(page.getByTestId("plan-live-version")).toHaveText("usage-alerts-roadmap v1");
+  await expect(page.getByTestId("plan-live-version")).toHaveText("Usage alerts roadmap v1");
 
   // The decider approves it on the Plan.
   await signOut(page);
@@ -92,7 +97,7 @@ test("Edit plan: move, cut and add, propose, the decider approves, the plan show
   await expect(page.getByTestId("plan-live")).toHaveText("Version 2 is the live plan.");
 
   // The plan shows the new version.
-  await expect(page.getByTestId("plan-live-version")).toHaveText("usage-alerts-roadmap v2");
+  await expect(page.getByTestId("plan-live-version")).toHaveText("Usage alerts roadmap v2");
   await expect(rows(page).filter({ hasText: "Spend alerts by email" })).toBeVisible();
   await expect(rows(page).filter({ hasText: "Budgets per team" })).toHaveCount(0);
   const where = await horizonOf(page);
@@ -121,7 +126,7 @@ test("Edit plan: a later proposal supersedes the waiting one, which can't be app
 
   // Edit the plan again while version 2 waits: version 3 cuts Budgets per team.
   await page.getByTestId("plan-edit").click();
-  await expect(changes(page)).toContainText("Changes to approved version 1");
+  await expect(changes(page)).toContainText(BASE_1);
   await editItem(page, "Budgets per team").getByRole("button", { name: "Cut", exact: true }).click();
   await page.getByLabel("Why cut Budgets per team").fill("Teams share one budget this year");
   await editItem(page, "Budgets per team").getByRole("button", { name: "Cut item" }).click();
@@ -133,7 +138,7 @@ test("Edit plan: a later proposal supersedes the waiting one, which can't be app
   await expect(superseded).toHaveCount(1);
   const waiting = changes(page).getByTestId("plan-proposal");
   await expect(waiting).toHaveCount(1);
-  await expect(waiting).toContainText("Version 3 proposed from approved version 1 · waiting for the decider");
+  await expect(waiting).toContainText(proposedFrom1(3));
   // The owner is not the decider: no Approve anywhere, not even a disabled one.
   await expect(changes(page).getByRole("button", { name: /Approve/ })).toHaveCount(0);
 
@@ -152,7 +157,7 @@ test("Edit plan: a later proposal supersedes the waiting one, which can't be app
   await expect(approveOld).toHaveAccessibleDescription("Superseded by version 3: approve version 3 instead.");
   await changes(page).getByTestId("plan-proposal").getByRole("button", { name: "Approve version 3" }).click();
   await expect(page.getByTestId("plan-live")).toHaveText("Version 3 is the live plan.");
-  await expect(page.getByTestId("plan-live-version")).toHaveText("usage-alerts-roadmap v3");
+  await expect(page.getByTestId("plan-live-version")).toHaveText("Usage alerts roadmap v3");
   await expect(changes(page).getByTestId("plan-superseded")).toHaveCount(0);
   await expect(rows(page).filter({ hasText: "Budgets per team" })).toHaveCount(0);
   expect((await horizonOf(page))["Usage dashboard"]).toBe("Now");

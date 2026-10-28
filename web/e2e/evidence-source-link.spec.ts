@@ -20,7 +20,8 @@ test("an evidence card links only an http(s) source; an upload's file name is no
   const upload = ex.getByTestId("evidence-chip").filter({ hasText: "Interview 11" });
   await upload.click();
   await expect(card).toContainText("Interview 11");
-  await expect(card).toContainText("ev-6");
+  // No id in the card: the source's title and date name it.
+  await expect(card).not.toContainText("ev-6");
   await expect(card.getByRole("link", { name: /Open source/ })).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);

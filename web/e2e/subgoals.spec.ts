@@ -70,17 +70,17 @@ async function churnWithSubgoal(page: Page) {
 // a feature to it, and sees the parent roll up from it on the Baseline and on Plan, then
 // picks the subgoal under its goal in New PRD.
 // fails_when: the subgoal shows as a separate top-level goal, the parent keeps "–" or
-// says "own", the link cannot be made, or the picker lists the subgoal without its parent.
+// says "of target", the link cannot be made, or the picker lists the subgoal without its parent.
 // no_claim: mock maths (pytest proves the API's roll-up and scoring).
 test("add a subgoal, set its target, link a feature, see the parent roll up, pick it in New PRD", async ({ page }) => {
   await openBaseline(page);
   const row = await churnWithSubgoal(page);
-  await expect(row.locator('[data-attr="progress"]')).toHaveText("60%own");
+  await expect(row.locator('[data-attr="progress"]')).toHaveText("60% of target");
   const churn = page.getByTestId("goal-g.early-churn");
-  await expect(churn.locator('[data-attr="progress"]')).toHaveText("60%subgoals");
+  await expect(churn.locator('[data-attr="progress"]')).toHaveText("60% from subgoals");
   await expect(churn.locator('[data-attr="progress"]')).toHaveAttribute("data-source", "subgoals");
   // A goal with its own value says so.
-  await expect(page.getByTestId("goal-g.activation").locator('[data-attr="progress"]')).toHaveText("50%own");
+  await expect(page.getByTestId("goal-g.activation").locator('[data-attr="progress"]')).toHaveText("50% of target");
 
   // The tree folds.
   await churn.getByRole("button", { name: "Hide subgoals of Cut early churn" }).click();

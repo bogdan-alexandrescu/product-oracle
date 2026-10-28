@@ -136,9 +136,9 @@ test("milestones are added and edited in the inspector, with dated titles", asyn
   await expect(m2.getByTestId("milestone-status")).toHaveText("Done");
 });
 
-// protects = Check now, Draft roadmap from this track and Push to tracker each work from the
-// panel, the push showing the tracker's answer; fails_when = a click does nothing or the push
-// result is hidden; no_claim = what the run then drafts (runs specs).
+// protects = Check now and Draft roadmap from this track each work from the panel, and Push to
+// tracker is disabled with the reason while two-way sync is off; fails_when = a click does
+// nothing or the push is offered while sync is off; no_claim = what the run then drafts (runs specs).
 test("check now, push to tracker and draft a roadmap from the track", async ({
   page,
 }) => {
@@ -146,10 +146,11 @@ test("check now, push to tracker and draft a roadmap from the track", async ({
   const t = track(page);
   await t.getByRole("button", { name: "Check now" }).click();
   await expect(t.getByTestId("track-result")).toContainText("Checked");
-  await t.getByRole("button", { name: "Push to tracker" }).click();
-  await expect(t.getByTestId("track-result")).toContainText(
-    "Two-way tracker sync is off",
-  );
+  // qa-plan-8: with two-way sync off, Push to tracker is disabled and says why.
+  await expect(t.getByRole("button", { name: "Push to tracker" })).toBeDisabled();
+  await expect(
+    t.getByRole("button", { name: "Push to tracker" }),
+  ).toHaveAccessibleDescription(/Two-way tracker sync is off/);
   await t
     .getByRole("button", { name: "Draft roadmap from this track" })
     .click();

@@ -1,13 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { peopleByIds, PersonPicker } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError } from "@/components/review/parts";
 import {
   Button,
   Chip,
+  confirmInPage,
   Inspector,
   InspectorSection,
   Notice,
@@ -17,8 +18,7 @@ import {
 } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { calendarDay } from "@/lib/dates";
-import { formatDay } from "@/lib/format";
+import { formatShortDate, plural } from "@/lib/format";
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
 
 import { HORIZON_LABEL, HORIZONS, type Horizon } from "./_lib";
@@ -69,7 +69,30 @@ export function useTracks(): Query<Track[]> {
   });
 }
 
-const day = (d: string) => calendarDay(d);
+const day = (d: string) => formatShortDate(d);
+
+/** A date basis's kind in words. */
+const BASIS_KIND: Record<"estimate" | "capacity" | "commitment", string> = {
+  estimate: "Estimate",
+  capacity: "Capacity",
+  commitment: "Commitment",
+};
+
+/** What a monitor check found changed (the API's field names), in words. */
+const CHANGED_LABEL: Record<string, string> = {
+  health: "health",
+  at_risk: "the at-risk items",
+  next_milestone: "the next milestone",
+  prd_moved: "the PRD's approved version",
+};
+
+/**
+ * What closing a track does (qa-plan-31), as the API does it: a closed track is no longer
+ * checked hourly and raises no alerts, the weekly alignment report leaves it out, and its PRD
+ * leaves the Plan unless a run is working on it. It can be made Active again.
+ */
+const CLOSE_MESSAGE =
+  "Oracle stops checking this track and raising its alerts, the weekly alignment report leaves it out, and its PRD leaves the Plan unless a run is working on it. You can make it Active again later.";
 
 /** A track's milestones in the API's order: dated first by date, then by when they were added. */
 export function sortedMilestones(t: Track): Milestone[] {
@@ -93,7 +116,7 @@ export function milestoneTitle(t: Track, id: string): string {
     .slice(0, at)
     .filter((x) => x.target_date)
     .pop()?.target_date;
-  return `${n} · ${prev ? day(prev) : formatDay(t.created_at)} – ${day(m.target_date)}`;
+  return `${n} · ${prev ? day(prev) : day(t.created_at)} – ${day(m.target_date)}`;
 }
 
 /** What the viewer's role may do to a track, one flag per operation (#370: `can()`). */
@@ -138,6 +161,12 @@ export function TrackPanel({
   const ownerName = track.owner_id
     ? owner.data?.get(track.owner_id)
     : undefined;
+  // qa-plan-8: Push to tracker only does something when two-way tracker sync allows writes.
+  const connector = useQuery(`plan|tracker-connector|${may.push ? "on" : "off"}`, () =>
+    may.push ? unwrap(api.GET("/v1/tracker/connector")) : Promise.resolve(null),
+  );
+  const pushOff = connector.data && !connector.data.writes_allowed ? connector.data.reason : null;
+  const pushWhy = useId();
   const health = HEALTH[track.health];
   const off = busy;
   const actions = may.check || may.draftRoadmap || may.push;
@@ -172,6 +201,20 @@ export function TrackPanel({
       },
     );
   const path = { params: { path: { track_id: track.id } } };
+  const changeStatus = async (status: Status) => {
+    if (status === track.status) return;
+    // qa-plan-31: closing asks first, saying what it does.
+    if (
+      status === "closed" &&
+      !(await confirmInPage({
+        action: "Close track",
+        message: `Close ${track.title}? ${CLOSE_MESSAGE}`,
+        destructive: true,
+      }))
+    )
+      return;
+    await patch({ status });
+  };
 
   return (
     <Panel
@@ -207,6 +250,14 @@ export function TrackPanel({
               if (title.trim())
                 void patch({ title: title.trim() }, () => setRenaming(false));
             }}
+            onKeyDown={(e) => {
+              // qa-plan-30: Escape cancels the rename.
+              if (e.key !== "Escape") return;
+              e.preventDefault();
+              e.stopPropagation();
+              setTitle(track.title);
+              setRenaming(false);
+            }}
           >
             <label className={`${FIELD_LABEL} min-w-0 flex-1`}>
               Track title
@@ -225,7 +276,13 @@ export function TrackPanel({
             >
               Save
             </Button>
-            <Button variant="ghost" onClick={() => setRenaming(false)}>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setTitle(track.title);
+                setRenaming(false);
+              }}
+            >
               Cancel
             </Button>
           </form>
@@ -237,6 +294,7 @@ export function TrackPanel({
             <span
               data-testid="track-owner"
               className="min-w-0 truncate font-semibold"
+              title={ownerName ? `${ownerName.name} · ${ownerName.email}` : undefined}
             >
               {ownerName
                 ? `${ownerName.name} · ${ownerName.email}`
@@ -259,9 +317,7 @@ export function TrackPanel({
               label="Track status"
               size="sm"
               value={track.status}
-              onChange={(status) =>
-                status !== track.status && void patch({ status })
-              }
+              onChange={(status) => void changeStatus(status)}
               items={(["active", "paused", "closed"] as const).map((s) => ({
                 value: s,
                 label: STATUS_LABEL[s],
@@ -333,10 +389,9 @@ export function TrackPanel({
                   >
                     {milestoneTitle(track, m.id)}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                  <span className="min-w-0 flex-1 truncate" title={m.name}>{m.name}</span>
                   <span className="flex-none text-sm text-text2">
-                    {HORIZON_LABEL[m.horizon]} · {m.item_keys.length}{" "}
-                    {m.item_keys.length === 1 ? "item" : "items"}
+                    {HORIZON_LABEL[m.horizon]} · {plural(m.item_keys.length, "item")}
                   </span>
                   <Chip kind={st.kind} data-testid="milestone-status">
                     {st.label}
@@ -364,7 +419,7 @@ export function TrackPanel({
                         onChange(out.overview);
                         setResult({
                           tone: "pass",
-                          text: `Checked: ${out.changed.length ? `changed ${out.changed.join(", ").replaceAll("_", " ")}` : "nothing changed"}.`,
+                          text: `Checked: ${out.changed.length ? `changed ${out.changed.map((c) => CHANGED_LABEL[c] ?? c.replaceAll("_", " ")).join(", ")}` : "nothing changed"}.`,
                         });
                       },
                     )
@@ -387,9 +442,20 @@ export function TrackPanel({
                   Draft roadmap from this track
                 </Button>
               )}
-              {may.push && (
+              {may.push && pushOff && (
+                <span className="flex basis-full flex-wrap items-center gap-2">
+                  <Button disabled aria-describedby={pushWhy} data-testid="track-push">
+                    Push to tracker
+                  </Button>
+                  <span id={pushWhy} className="text-sm text-text2">
+                    {pushOff}
+                  </span>
+                </span>
+              )}
+              {may.push && !pushOff && (
                 <Button
-                  disabled={off}
+                  data-testid="track-push"
+                  disabled={off || connector.loading}
                   onClick={async () => {
                     setBusy(true);
                     setError(null);
@@ -432,15 +498,18 @@ export function MilestoneEditor({
   milestoneId,
   canWrite,
   onSaved,
+  onCancel,
 }: {
   track: Track;
   milestoneId: string | null;
   canWrite: boolean;
   onSaved: (m: Milestone) => void;
+  /** Leaves the editor without saving (Cancel, Escape). */
+  onCancel?: () => void;
 }) {
   const m = track.milestones.find((x) => x.id === milestoneId) ?? null;
   if (!canWrite) return m ? <MilestoneView track={track} m={m} /> : null;
-  return <MilestoneForm track={track} m={m} onSaved={onSaved} />;
+  return <MilestoneForm track={track} m={m} onSaved={onSaved} onCancel={onCancel} />;
 }
 
 /** A milestone read only: its name, date and state as text. */
@@ -472,7 +541,7 @@ function MilestoneView({ track, m }: { track: Track; m: Milestone }) {
           </dd>
           <dt className="text-text2">Items</dt>
           <dd>
-            {m.item_keys.length} {m.item_keys.length === 1 ? "item" : "items"}
+            {plural(m.item_keys.length, "item")}
           </dd>
         </dl>
       </InspectorSection>
@@ -485,10 +554,12 @@ function MilestoneForm({
   track,
   m,
   onSaved,
+  onCancel,
 }: {
   track: Track;
   m: Milestone | null;
   onSaved: (m: Milestone) => void;
+  onCancel?: () => void;
 }) {
   const [name, setName] = useState(m?.name ?? "");
   const [horizon, setHorizon] = useState<Horizon>(m?.horizon ?? "now");
@@ -575,6 +646,13 @@ function MilestoneForm({
           e.preventDefault();
           void save();
         }}
+        onKeyDown={(e) => {
+          // qa-plan-30: Escape cancels the edit, as Cancel does.
+          if (e.key !== "Escape" || !onCancel) return;
+          e.preventDefault();
+          e.stopPropagation();
+          onCancel();
+        }}
       >
         <InspectorSection>
           <div className="flex flex-col gap-3">
@@ -633,7 +711,7 @@ function MilestoneForm({
                           )
                         }
                       />
-                      {b.reference} · {b.kind}
+                      {b.reference} · {BASIS_KIND[b.kind]}
                     </label>
                   ))}
                 </fieldset>
@@ -689,7 +767,7 @@ function MilestoneForm({
                     )
                   }
                 />
-                <span className="min-w-0 flex-1 truncate">{i.title}</span>
+                <span className="min-w-0 flex-1 truncate" title={i.title}>{i.title}</span>
                 <span className="flex-none text-sm text-text2">
                   {HORIZON_LABEL[i.horizon]}
                 </span>
@@ -699,14 +777,20 @@ function MilestoneForm({
         </InspectorSection>
         <InspectorSection>
           <div className="flex flex-col gap-2">
-            <Button
-              type="submit"
-              variant="solid"
-              className="self-start"
-              disabled={off || !name.trim()}
-            >
-              {m ? "Save milestone" : "Add milestone"}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="submit"
+                variant="solid"
+                disabled={off || !name.trim()}
+              >
+                {m ? "Save milestone" : "Add milestone"}
+              </Button>
+              {onCancel && (
+                <Button variant="ghost" disabled={off} onClick={onCancel}>
+                  Cancel
+                </Button>
+              )}
+            </div>
             {error && <InlineError>{error}</InlineError>}
           </div>
         </InspectorSection>

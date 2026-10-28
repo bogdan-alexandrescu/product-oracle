@@ -50,11 +50,17 @@ export function Frame({
   );
 }
 
-export function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+export function Field({ label, htmlFor, required = false, children }: { label: string; htmlFor: string; required?: boolean; children: ReactNode }) {
   return (
     <div>
       <label htmlFor={htmlFor} className="mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
         {label}
+        {required && (
+          <span data-required className="text-crit" aria-hidden="true">
+            {" "}
+            *
+          </span>
+        )}
       </label>
       {children}
     </div>
@@ -103,7 +109,15 @@ export function DateBasisDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const propose = rights.rights === "propose";
-  const ready = !!prd && !!reference.trim() && !!day && (scope === "prd" || !!key.trim());
+  // qa-plan-28: what is still missing, named under the fields (the submit stays disabled).
+  const missing = [
+    !prd && "a PRD",
+    !reference.trim() && "a reference",
+    !day && "the date it supports",
+    scope === "item" && !key.trim() && "the item",
+    scope === "tracker" && !key.trim() && "the tracker issue key",
+  ].filter((m): m is string => !!m);
+  const ready = missing.length === 0;
   // Anything the person changed: closing asks before it is thrown away.
   const dirty =
     prd !== (prefill.prd ?? "") ||
@@ -147,12 +161,12 @@ export function DateBasisDialog({
       dirty={dirty}
       actions={
         <Button variant="primary" disabled={!ready || busy} onClick={submit}>
-          {propose ? "Propose for verification" : "Verify"}
+          {propose ? "Propose for verification" : "Record and verify"}
         </Button>
       }
     >
       <p className="text-text2">{HELP}</p>
-      <Field label="PRD" htmlFor={`${id}-prd`}>
+      <Field label="PRD" htmlFor={`${id}-prd`} required>
         <select id={`${id}-prd`} className={INPUT} value={prd} onChange={(e) => setPrd(e.target.value)}>
           <option value="">Choose a PRD</option>
           {prefill.prd && !prds.data?.some((d) => d.slug === prefill.prd || d.id === prefill.prd) && (
@@ -175,7 +189,7 @@ export function DateBasisDialog({
             ))}
           </select>
         </Field>
-        <Field label="Reference" htmlFor={`${id}-ref`}>
+        <Field label="Reference" htmlFor={`${id}-ref`} required>
           <input
             id={`${id}-ref`}
             className={INPUT}
@@ -185,7 +199,7 @@ export function DateBasisDialog({
           />
         </Field>
       </div>
-      <Field label="Date it supports" htmlFor={`${id}-date`}>
+      <Field label="Date it supports" htmlFor={`${id}-date`} required>
         <input id={`${id}-date`} type="date" className={INPUT} value={day} onChange={(e) => setDay(e.target.value)} />
       </Field>
       <Field label="For" htmlFor={`${id}-for`}>
@@ -196,7 +210,7 @@ export function DateBasisDialog({
         </select>
       </Field>
       {scope === "item" && (
-        <Field label="Item" htmlFor={`${id}-item`}>
+        <Field label="Item" htmlFor={`${id}-item`} required>
           <select id={`${id}-item`} className={INPUT} value={key} onChange={(e) => setKey(e.target.value)}>
             <option value="">Choose an item</option>
             {key && !items.some((i) => i.key === key) && <option value={key}>{key}</option>}
@@ -209,7 +223,7 @@ export function DateBasisDialog({
         </Field>
       )}
       {scope === "tracker" && (
-        <Field label="Tracker issue key" htmlFor={`${id}-key`}>
+        <Field label="Tracker issue key" htmlFor={`${id}-key`} required>
           <input id={`${id}-key`} className={INPUT} value={key} onChange={(e) => setKey(e.target.value)} />
         </Field>
       )}
@@ -239,6 +253,14 @@ export function DateBasisDialog({
         <textarea id={`${id}-detail`} className={INPUT} rows={2} value={detail} onChange={(e) => setDetail(e.target.value)} />
       </Field>
       {propose && <p className="text-sm text-text2">{LEAD_VERIFIES}</p>}
+      {missing.length > 0 && (
+        <p data-testid="basis-missing" className="text-sm text-text2">
+          <span className="text-crit" aria-hidden="true">
+            *
+          </span>{" "}
+          Required. Still needed: {missing.join(", ")}.
+        </p>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
     </Dialog>
   );

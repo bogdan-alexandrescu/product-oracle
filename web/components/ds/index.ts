@@ -1,5 +1,5 @@
 /** Product Oracle v2 design system (I3: B1 Split). See /design for every part in every state. */
-export { AppShell, DESTINATIONS, useDocumentDestination } from "./AppShell";
+export { AppShell, DESTINATIONS, useChangeDestination, useDocumentDestination } from "./AppShell";
 export { Button, LinkButton, type ButtonVariant } from "./Button";
 export { FaviconMark, Mark, Wordmark } from "./Brand";
 export { Bars, Meter, Ring, Sparkline, type RingTone } from "./Charts";
