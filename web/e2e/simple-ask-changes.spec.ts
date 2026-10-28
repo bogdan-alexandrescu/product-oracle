@@ -50,8 +50,8 @@ for (const phone of [false, true]) {
     });
 
     test(`the owner previews, discards, applies and undoes from the Ask panel (${where})`, async ({ page }) => {
-      // protects: on the roadmap the owner's card ghosts the bar at the new dates on Preview (desktop: the chart beside the panel), Discard clears the ghost and writes nothing, Apply (the owner decides) applies with "Applied by", Undo undoes it
-      // fails_when: no ghost, the ghost stays after Discard, the owner's button says Propose, or Undo leaves the change
+      // protects: on the roadmap the owner's card ghosts the bar at the new dates on Preview (desktop: the chart beside the panel), Reject (roadmap-talk: every roadmap card) clears the ghost and writes nothing, Apply (the owner decides) applies with "Applied by", Undo undoes it
+      // fails_when: no ghost, the ghost stays after Reject, the owner's button says Propose, or Undo leaves the change
       // no_claim: the ghost's exact geometry; on a phone the full-height sheet hides the chart, so the ghost is checked on desktop only
       await signIn(page, EMAILS.owner, "/simple/roadmap");
       const bar = page.locator('[data-testid="bar"][data-item="alert-digest"]');
@@ -64,8 +64,8 @@ for (const phone of [false, true]) {
       if (!phone) {
         await expect(page.getByTestId("preview-ghost")).toHaveAttribute("data-start", "2027-04-01");
       }
-      await tap(card.getByRole("button", { name: "Discard" }));
-      await expect(card.getByTestId("chat-card-outcome")).toHaveText("Discarded: nothing changed");
+      await tap(card.getByRole("button", { name: "Reject" }));
+      await expect(card.getByTestId("chat-card-outcome")).toHaveText("Rejected: nothing changed");
       await expect(page.getByTestId("preview-ghost")).toHaveCount(0);
       await expect(bar).toHaveAttribute("data-start", start!);
 

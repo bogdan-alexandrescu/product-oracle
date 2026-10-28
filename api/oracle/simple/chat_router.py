@@ -142,7 +142,14 @@ async def apply_simple_chat_card(
     neither."""
     async with _one_commit(db):
         card, result = await _run(
-            db, chat.apply(db, principal, card_id, body.fix if body is not None else None)
+            db,
+            chat.apply(
+                db,
+                principal,
+                card_id,
+                body.fix if body is not None else None,
+                body.values if body is not None else None,
+            ),
         )
     return ChatApplyOut(card=card, result=result)
 

@@ -165,6 +165,18 @@ const ROADMAPS: Record<string, { title: string; visibility: "company" | "approve
 };
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
+/** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
+export const TALK_GOALS: Record<string, string> = { reliability: "Reliability", growth: "Growth", activation: "Activation", revenue: "Revenue" };
+const TALK_ITEM = "adaptive-pacing";
+/** The goals TALK_GOALS adds, when the roadmap holds roadmap-talk's items (the scenario's seed, or a reload of it). */
+export function knowTalkGoals(db: { items: { key: string }[] }): void {
+  if (!(TALK_ITEM in GOALS_KNOWN) && db.items.some((x) => x.key === TALK_ITEM)) {
+    Object.assign(GOALS, TALK_GOALS);
+    GOALS_KNOWN[TALK_ITEM] = true;
+  }
+}
+const GOALS_KNOWN: Record<string, boolean> = {};
+
 /** The PRD's own code of a section an item came from ("f-06" -> "F-06"); null when the key is no code (service.py). */
 export function prdCode(section: string | null | undefined): string | null {
   const m = /^([a-z]{1,3})-(\d+)$/i.exec((section ?? "").trim());
@@ -506,31 +518,10 @@ function regenerate(db: SimpleDb, today: string): number {
     durations.set(k, [...(durations.get(k) ?? []), span(r.start.date, r.end.date)]);
   }
   let open = 0;
-  const slices = db.plan ? planSlices() : [];
   for (const { s, r } of resolved.values()) {
     const id = db.ids[s.key];
     const current = db.suggestions.find((x) => x.item_id === id && x.status === "open");
     const undated = r.start.estimated && r.end.estimated && !closed(s) && s.status !== "done" && !s.drafting_until;
-    // plan-model (suggestions._planned): an item the PRD's plan places gets one suggestion per
-    // dated slice, inside its milestone, never packed from the window's start.
-    const code = prdCode(s.section);
-    const planned = undated && code && ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === PLAN_PRD_SLUG ? slices.filter((x) => x.feature_code === code && x.start_date && x.end_date) : [];
-    if (planned.length) {
-      db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open" && !x.slice_code));
-      for (const sl of planned) {
-        const mine = db.suggestions.filter((x) => x.item_id === id && x.slice_code === sl.code);
-        if (mine.some((x) => x.status !== "open")) continue;
-        open += 1;
-        if (mine.length) continue;
-        db.suggestions.push({
-          id: stableUuid(`simple-suggestion/${s.key}/${sl.code}`),
-          item_id: id, item_key: s.key, item_title: s.title, start_date: sl.start_date!, end_date: sl.end_date!,
-          basis: `Placed inside ${sl.milestone} ${sl.milestone_name} by the PRD's order (${word(sl.milestone_start!)} - ${word(sl.milestone_end!)}).`,
-          status: "open", created_at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, slice_code: sl.code, can_decide: false,
-        });
-      }
-      continue;
-    }
     if (!undated || db.suggestions.some((x) => x.item_id === id && x.status === "dismissed")) {
       db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open"));
       continue;
@@ -624,6 +615,7 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
 }
 
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
+  knowTalkGoals(db);
   const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
   const deciders = (s: SeedItem) => {
     const ids = deciderIds(db, s, me?.roles);

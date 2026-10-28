@@ -908,3 +908,23 @@ code .date-mark {
 @media print {
   .simple-noprint { display: none !important; }
 }
+
+/* roadmap-talk: a bar a chat card just changed pulses in Oracle's accent (both themes follow the tokens). */
+@keyframes simple-bar-flash {
+  0%,
+  100% {
+    filter: drop-shadow(0 0 0 var(--accent));
+  }
+  50% {
+    filter: drop-shadow(0 0 6px var(--accent)) drop-shadow(0 0 2px var(--accent-ink));
+  }
+}
+.simple-bar-flash {
+  animation: simple-bar-flash 0.8s ease-in-out 3;
+  filter: drop-shadow(0 0 3px var(--accent));
+}
+@media (prefers-reduced-motion: reduce) {
+  .simple-bar-flash {
+    animation: none;
+  }
+}

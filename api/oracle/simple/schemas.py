@@ -1261,6 +1261,10 @@ class ChatCardOut(BaseModel):
     decided_at: dt.datetime | None
     # The meeting decision an applied card became.
     decision_id: uuid.UUID | None
+    # roadmap-talk: the change in words ({before, after}) and, while open, what Correct
+    # opens ({fields, values}: Oracle's reading, prefilled); None off the roadmap.
+    change_words: dict[str, str | None] | None = None
+    correct: dict[str, Any] | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1284,6 +1288,8 @@ class ChatMessageOut(BaseModel):
     choices: list[ChatChoiceOut] = Field(default_factory=list)
     picked: int | None = None
     retry: bool = False
+    # roadmap-talk: where an item talk's answer comes from ("From the PRD · F-06 …").
+    source: str | None = None
 
 
 class ChatRulesOut(BaseModel):
@@ -1352,6 +1358,9 @@ class ChatModeIn(BaseModel):
 class ChatApplyIn(BaseModel):
     # Apply the card's fixes[fix] instead of its own op.
     fix: int | None = Field(default=None, ge=0)
+    # roadmap-talk's Correct: the card's fields as the person corrected them (its
+    # ``correct.fields``: title, goal, milestone, start_date, end_date, owner).
+    values: dict[str, str | None] | None = None
 
 
 class ChatApplyOut(BaseModel):

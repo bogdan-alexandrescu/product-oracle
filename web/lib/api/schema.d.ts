@@ -17643,6 +17643,10 @@ export interface components {
         ChatApplyIn: {
             /** Fix */
             fix?: number | null;
+            /** Values */
+            values?: {
+                [key: string]: string | null;
+            } | null;
         };
         /** ChatApplyOut */
         ChatApplyOut: {
@@ -17712,6 +17716,14 @@ export interface components {
             decided_at: string | null;
             /** Decision Id */
             decision_id: string | null;
+            /** Change Words */
+            change_words?: {
+                [key: string]: string | null;
+            } | null;
+            /** Correct */
+            correct?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {
@@ -17820,6 +17832,8 @@ export interface components {
              * @default false
              */
             retry: boolean;
+            /** Source */
+            source?: string | null;
         };
         /** ChatModeIn */
         ChatModeIn: {

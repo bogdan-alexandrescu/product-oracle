@@ -2,7 +2,7 @@
 
 import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
-import { lastPreview, PREVIEW_EVENT, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
+import { APPLIED_EVENT, lastPreview, PREVIEW_EVENT, type AppliedDetail, type ChatPreview, type PreviewDetail } from "@/lib/api/simple-chat";
 
 import {
   addDays,
@@ -180,6 +180,7 @@ declare global {
 export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, goalSuggestions, onGoal, lane = data.group, noWork = [] }: ChartProps) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(900);
+  const flash = useAppliedFlash();
   useEffect(() => {
     const el = box.current;
     if (!el) return;
@@ -542,7 +543,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               );
             })}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
-            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} canDrag={canDrag} phased={format === "waterfall"} {...bars} /> : null))}
+            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} flash={flash.has(r.item.id)} canDrag={canDrag} phased={format === "waterfall"} {...bars} /> : null))}
             <PreviewGhost l={l} sc={sc} items={items} />
             <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" pointerEvents="none" />
             <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600} pointerEvents="none">
@@ -647,6 +648,8 @@ type BarProps = {
   sc: Scale;
   span?: [string, string];
   open: boolean;
+  /** roadmap-talk: a change to it was just applied from a chat card (the bar flashes). */
+  flash?: boolean;
   canDrag: boolean;
   /** The waterfall: the bar drawn as its four phases. */
   phased: boolean;
@@ -658,7 +661,7 @@ type BarProps = {
   onSuggestion: (item: Item, anchor: { x: number; y: number }) => void;
 };
 
-const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: BarProps) {
+const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phased, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: BarProps) {
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
   const red = broken(item).length > 0;
@@ -689,11 +692,12 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
         data-start={start}
         data-end={end}
         data-open={open ? "true" : undefined}
+        data-flash={flash ? "true" : undefined}
         data-phased={phased ? "true" : undefined}
         role="button"
         tabIndex={0}
         aria-label={label}
-        className={`${canDrag && !fixed ? "cursor-grab" : "cursor-pointer"} data-[picked=true]:[filter:drop-shadow(0_3px_6px_rgb(0_0_0/0.35))]`}
+        className={`${canDrag && !fixed ? "cursor-grab" : "cursor-pointer"} ${flash ? "simple-bar-flash" : ""} data-[picked=true]:[filter:drop-shadow(0_3px_6px_rgb(0_0_0/0.35))]`}
         style={{ touchAction: canDrag && !fixed ? "none" : "auto" }}
         onPointerDown={(e) => onDown(e, item)}
         onKeyDown={(e) => {
@@ -843,6 +847,30 @@ function Slices({ item, y, h, sc }: { item: Item; y: number; h: number; sc: Scal
       })}
     </g>
   );
+}
+
+/** How long an applied change's bar flashes (ms). */
+const FLASH_MS = 2500;
+
+/** roadmap-talk: the items chat cards just applied to ("simple:applied"; Apply all sends several), each for ~2.5 s. */
+function useAppliedFlash(): ReadonlySet<string> {
+  const [flash, setFlash] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    let timer = 0;
+    const on = (e: Event) => {
+      const id = (e as CustomEvent<AppliedDetail>).detail?.item_id;
+      if (!id) return;
+      setFlash((f) => new Set(f).add(id));
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setFlash(new Set()), FLASH_MS);
+    };
+    window.addEventListener(APPLIED_EVENT, on);
+    return () => {
+      window.removeEventListener(APPLIED_EVENT, on);
+      window.clearTimeout(timer);
+    };
+  }, []);
+  return flash;
 }
 
 /** S9: a chat card's Preview, ghosted on its bar ("simple:preview"): new dates, horizon, title, milestone, or a cut strike. */

@@ -1070,10 +1070,10 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 // --------------------------------------------------------------------------- goal buckets
 
 function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
+  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
   if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} />;
   const buckets: Bucket[] = data.buckets;
-  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   // The rows' short codes, as the 2x2 and the lists show them.
   const short = new Map(data.rows.map((r) => [r.code, r.short_code || r.code]));
   return (
@@ -1122,6 +1122,7 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
   const goals = [...plan.goals.map((g) => g.name)];
   for (const w of plan.goal_weeks) if (!goals.includes(w.goal)) goals.push(w.goal);
   const noGoal = plan.slices.some((x) => !x.goal);
+  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   // A confirmed goal of the same name keeps its suggestions under its card.
   const bucketOf = (goal: string) => data.buckets.find((b) => !b.no_goal && b.title.toLowerCase() === goal.toLowerCase());
   // This quarter's roadmap items the plan does not hold (another PRD's, or none), by their goal.
@@ -1146,7 +1147,7 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
               <PlanFeatureList plan={plan} goal={g} />
               {b && (
                 <div className="mt-3 border-t border-line pt-3">
-                  <GoalSuggestionList goal={{ id: "", key: b.key, title: b.title }} api={suggestions} />
+                  <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} />
                 </div>
               )}
             </li>
@@ -1174,6 +1175,7 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
           </li>
         )}
       </ul>
+      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
     </section>
   );
 }

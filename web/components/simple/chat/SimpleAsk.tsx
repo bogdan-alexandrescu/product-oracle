@@ -13,7 +13,7 @@ import { openStream } from "@/lib/stream";
 import { GENERAL, pageName, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
 import { errorMessage } from "@/lib/use-query";
 
-import { ChatComposer, ChatLine, shownLines, usePendingPoll } from "./ChatThread";
+import { ChatComposer, ChatLine, shownLines, useCorrections, usePendingPoll } from "./ChatThread";
 
 type AskMessage = Schemas["DiscussionMessageOut"];
 
@@ -320,6 +320,8 @@ function ChatView({
   useEffect(() => {
     end.current?.scrollIntoView?.({ block: "nearest" });
   }, [lines.length]);
+  // roadmap-talk: the chat's open Correct forms, for Apply all.
+  const corrected = useCorrections();
   // "Suggest from the chat": the words a goal's drawer typed in, taken once by the box a person sees.
   const waiting = useAskDraft();
   const [typed, setTyped] = useState("");
@@ -339,7 +341,7 @@ function ChatView({
       <ol className="flex flex-col gap-3" aria-label="Messages" data-testid="ask-chat-thread">
         {lines.map((l) =>
           l.plan ? (
-            <ChatLine key={l.plan.id} message={l.plan} onCardChanged={() => void load()} onThread={setThread} />
+            <ChatLine key={l.plan.id} message={l.plan} onCardChanged={() => void load()} onThread={setThread} corrected={corrected} />
           ) : (
             <AskLine key={l.ask!.id} message={l.ask!} askId={chat.askId!} onEnded={() => void loadAsk()} />
           ),

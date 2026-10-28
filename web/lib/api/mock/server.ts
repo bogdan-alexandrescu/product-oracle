@@ -158,7 +158,7 @@ import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkO
 import { PLAN_PRD_SLUG, planFeatureName, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
-import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { itemSubjectName, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -2742,12 +2742,14 @@ function load(): Db {
                 ? seedSimplePlanScenario
               : scenario === "simple-plan-two"
                 ? seedSimplePlanTwoScenario
-              : scenario === "simple-chat"
+              : scenario === "simple-chat" || scenario === "roadmap-talk"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
                     // chat-reader: the two "Delivery …" items its rules talk about.
                     if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
+                    // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
+                    if (scenario === "roadmap-talk" && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
                     return db;
                   }
               : scenario === "simple-500"
