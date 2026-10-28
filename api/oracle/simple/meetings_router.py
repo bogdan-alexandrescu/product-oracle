@@ -220,7 +220,9 @@ async def get_simple_decisions(
     "/decisions/waiting", response_model=SimpleDecisionsWaitingOut,
     name="get_simple_decisions_waiting",
 )  # fmt: skip
-async def get_simple_decisions_waiting(principal: Reader, db: TenantDB) -> SimpleDecisionsWaitingOut:
+async def get_simple_decisions_waiting(
+    principal: Reader, db: TenantDB
+) -> SimpleDecisionsWaitingOut:
     """prd-questions: the product decisions waiting for this person (Home's card, the rail's
     count, the review's "Decisions due"); Oracle's run approvals only counted, for Detailed."""
     from oracle.simple import questions

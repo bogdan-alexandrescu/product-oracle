@@ -748,7 +748,7 @@ def _run(sql: str, **params):
 
 def test_the_chain_ends_here_after_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0090_simple_prd_plans"]
+    assert script.get_heads() == ["0091_prd_questions"]
     assert script.get_revision(REVISION).down_revision == "0022_priority_snapshot_runs"
 
 

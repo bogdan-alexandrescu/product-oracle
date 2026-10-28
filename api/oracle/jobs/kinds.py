@@ -65,6 +65,7 @@ MAX_TOKENS = {
     "meeting_minutes": 3000,
     # plan-model: one PRD version's milestones, features, goals and targets.
     "prd_plan": 4000,
+    "prd_questions": 4000,
     # Simple chat-reader: one free-form chat line read into actions, a question or an answer.
     "chat_reader": 1500,
 }
@@ -1103,6 +1104,13 @@ async def prd_plan_failed(s: AsyncSession, job: LlmJob) -> None:
     await plan.job_failed(s, job)
 
 
+async def prd_questions(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Reads a PRD version's open questions from its text (oracle.simple.questions)."""
+    from oracle.simple import questions
+
+    return await questions.run_job(s, job, ask)
+
+
 # Run when a job of the kind fails for good, in the transaction that records it.
 ON_FAILURE: dict[str, Callable[[AsyncSession, LlmJob], Awaitable[None]]] = {
     "why_not_reply": why_not_reply_failed,
@@ -1130,6 +1138,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "meeting_minutes": meeting_minutes,
     "chat_reader": chat_reader,
     "prd_plan": prd_plan,
+    "prd_questions": prd_questions,
 }
 
 

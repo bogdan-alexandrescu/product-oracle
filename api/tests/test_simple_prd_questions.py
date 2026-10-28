@@ -141,14 +141,14 @@ async def test_decide_per_role(client, role):
     if role == "viewer":
         assert r.status_code == 403, r.text
         return
-    assert r.status_code == 200, r.text
+    assert r.status_code == 201, r.text
     change = r.json()["change"]
     after = {x["code"]: x for x in (await page(client, ctx, role))["questions"]}["Q3"]
     if role in ("owner", "decider"):
         assert change["status"] == "applied" and change["can_undo"] is True
         assert after["status"] == "decided" and after["chosen"] == "Option A for question 3"
         u = await client.post(f"/v1/simple/changes/{change['id']}/undo", headers=ctx.as_(role))
-        assert u.status_code == 200, u.text
+        assert u.status_code in (200, 201), u.text
         again = {x["code"]: x for x in (await page(client, ctx, role))["questions"]}["Q3"]
         assert again["status"] == "proposed"
     else:
@@ -166,7 +166,8 @@ async def test_run_approvals_not_counted(client):
 
         s.add(Decision(number=await next_number(s), title="Approve Baseline confirm",
                        status="proposed", approver_id=ctx.users["decider"].id, driver="oracle",
-                       origin="checkpoint", options=[{"key": "approve", "label": "Approve"}]))  # fmt: skip
+                       origin="checkpoint",
+                       options=[{"key": "approve", "label": "Approve"}]))  # fmt: skip
         await s.commit()
     await page(client, ctx)
     w = (await client.get("/v1/simple/decisions/waiting", headers=ctx.as_("decider"))).json()

@@ -811,7 +811,7 @@ async def _prd_items(db: AsyncSession, document: Document) -> tuple[set, set]:
 
 async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
               not_approved: list | None = None) -> SimpleMeetingOut:  # fmt: skip
-    from oracle.simple import changes
+    from oracle.simple import changes, questions
 
     m, document = await _get(db, principal, meeting_id)
     w = await prd_who(db, document)
@@ -871,6 +871,7 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
             for link, d in links
         ],
         open_decisions=await _open_decisions(db, document, item_ids),
+        decisions_due=await questions.due_for(db, principal, document.id),
         pending_proposals=[await changes.one_out(db, principal, c) for c in seen],
         drafts=await _draft_outs(db, principal, ds),
         waiting_people=[_ref(i, waiting_names) for i in waiting],
@@ -1786,7 +1787,10 @@ async def decisions_page(
             decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
         ))  # fmt: skip
+    from oracle.simple import questions
+
     return SimpleDecisionsOut(
+        **await questions.page_fields(db, principal, readable),
         meetings=groups,
         other=[_row(d, names) for d in others],
         prds=[SimpleFilterOption(id=d.slug, title=d.title)

@@ -76,6 +76,11 @@ def day_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
     return f"{local:%b} {local.day}"
 
 
+def date_in_words(on: date) -> str:
+    """A calendar day (already the company's) as "Fri 6 Nov" (prd-questions' due days)."""
+    return f"{on:%a} {on.day} {on:%b}"
+
+
 def day_first_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
     """The company's day at ``moment`` as "25 Oct"."""
     local = _local(moment, zone)
