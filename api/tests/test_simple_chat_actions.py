@@ -14,9 +14,11 @@ Test cards (protects / fails_when / no_claim):
   back), the approver's and the commenter's propose (nothing changes), the viewer's is
   refused (403); fails_when=a role does more than its gesture, or the card writes before
   Apply; no_claim=the web's restatement (web spec).
-- test_new_decider_decides_the_item: protects=an item's own decider decides its proposals
-  and applies its changes (service.can_decide), over the roadmap's decider;
-  fails_when=the old decider still applies; no_claim=the roadmap's other items.
+- test_new_decider_decides_the_item: protects=an item's own decider replaces the roadmap's
+  for that item (service.can_decide) for readers of the working draft: the roadmap's
+  decider proposes on it, an owner still applies; fails_when=the old decider still
+  applies; no_claim=readers of the published version (they see it once the draft
+  publishes), the roadmap's other items.
 - test_unknown_person_gets_a_question: protects=an unknown person gets one question and no
   card; fails_when=Oracle guesses someone; no_claim=the question's choices row (chat-reader).
 - test_meeting_only_actions_refused_outside_a_meeting: protects=on the Ask panel minutes
@@ -117,10 +119,11 @@ async def test_new_decider_decides_the_item(client):
     w = await world()
     c = await one_card(client, w, "owner", "approver decides Cut B")
     assert (await apply(client, w, "owner", c["id"])).status_code == 200
-    # The item's own decider now applies; the roadmap's decider proposes.
-    for who, want in (("approver", "apply"), ("decider", "propose")):
-        c = await one_card(client, w, who, "rename Cut B to Cut B two")
-        assert c["may"] == want, who
+    # In the working draft (which the roadmap's decider reads) the item's own decider is
+    # the approver: the roadmap's decider now proposes on it; an owner still applies.
+    for who, want in (("decider", "propose"), ("owner", "apply")):
+        m = await say(client, w, who, "rename Cut B to Cut B two")
+        assert m["cards"][0]["may"] == want, who
 
 
 async def test_unknown_person_gets_a_question(client):

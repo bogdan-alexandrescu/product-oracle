@@ -44,7 +44,8 @@ SOURCE_KIND = "simple_chat_decision"
 
 
 def _text(args: dict[str, Any], key: str = "text") -> str:
-    return chat._unquote(" ".join(str(args.get(key) or "").split()))[:TEXT_MAX]
+    text = " ".join(str(args.get(key) or "").split())
+    return text.strip("\"'“”‘’").strip()[:TEXT_MAX]
 
 
 def _name(u: Any) -> str:
