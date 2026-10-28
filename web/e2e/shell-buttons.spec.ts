@@ -36,6 +36,8 @@ async function colours(button: Locator): Promise<{ bg: string; ratio: number }> 
       const f = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
       return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
     };
+    // Read the settled colours, not a frame of the colour transition.
+    el.getAnimations().forEach((a) => a.finish());
     const s = getComputedStyle(el);
     const [a, b] = [lum(rgb(s.color)), lum(rgb(s.backgroundColor))].sort((x, y) => y - x);
     return { bg: s.backgroundColor, ratio: (a + 0.05) / (b + 0.05) };

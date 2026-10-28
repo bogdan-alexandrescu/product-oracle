@@ -487,6 +487,8 @@ function h1Text(h1: Element | undefined, plain: boolean): string {
  * and kept in step as the page loads; the destination's label until the page draws one.
  * `plain`: the title without the suffix, for the browser tab ("Checkout PRD").
  */
+const noSubscribe = () => () => undefined;
+
 function usePageTitle(pathname: string): { title: string; plain: string } {
   const [read, setRead] = useState<{ title: string; plain: string } | null>(null);
   useEffect(() => {
@@ -505,8 +507,11 @@ function usePageTitle(pathname: string): { title: string; plain: string } {
     watch.observe(main, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style"] });
     return () => watch.disconnect();
   }, [pathname]);
+  // qa-shell-24: a not-found page renders on the server under another path than the
+  // browser's, so the path's fallback title waits for hydration (no #418 mismatch).
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
   if (read) return read;
-  const fallback = fallbackTitle(pathname);
+  const fallback = hydrated ? fallbackTitle(pathname) : "";
   return { title: fallback, plain: fallback };
 }
 
@@ -520,9 +525,9 @@ const ownTitle = (pathname: string) => pathname.startsWith("/i/") || pathname.st
 function DocumentTitle() {
   const pathname = usePathname();
   const { plain } = usePageTitle(pathname);
-  const text = plain === "Product Oracle" ? plain : `${plain} · Product Oracle`;
+  const text = !plain || plain === "Product Oracle" ? "Product Oracle" : `${plain} · Product Oracle`;
   useEffect(() => {
-    if (ownTitle(pathname)) return;
+    if (ownTitle(pathname) || !plain) return;
     document.title = text;
     // Next may write the layout's title back after a navigation: keep ours.
     const head = document.querySelector("head");
@@ -532,7 +537,7 @@ function DocumentTitle() {
     });
     keep.observe(head, { subtree: true, childList: true, characterData: true });
     return () => keep.disconnect();
-  }, [pathname, text]);
+  }, [pathname, plain, text]);
   return null;
 }
 
