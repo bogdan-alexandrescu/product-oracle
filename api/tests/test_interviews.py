@@ -661,6 +661,67 @@ async def test_the_ticker_expires_links_and_snapshots_what_was_said(client, ctx,
     assert one["snapshot_job"]["status"] == "queued" and two["snapshot_job"] is None
 
 
+async def test_a_new_link_replaces_the_old_one(client, ctx, fake, no_wait):
+    """protects=qa-work-43 Make a new link: a fresh link opens the same interview (its
+    answers kept), only its sha256 is stored, the old link says plainly it was replaced,
+    the change is audited; fails_when=the old link still works or reads as an unknown
+    404, the raw token is stored, a viewer makes one, or a finished or withdrawn
+    interview gets one; no_claim=delivery of the link to the customer."""
+    iv, old = await invited(client, ctx, fake)
+    _, cookie = await open_link(client, old)
+    ask(fake)
+    await say(client, old, cookie, LONG)
+    path = f"/v1/interviews/{iv['id']}/new-link"
+    viewer = await client.post(path, headers=ctx.as_("viewer"))
+    assert viewer.status_code == 403
+    resp = await client.post(path, headers=ctx.as_("commenter"))
+    assert resp.status_code == 201, resp.text
+    link = resp.json()
+    new = link["url"].rsplit("/i/", 1)[1]
+    assert new != old and set(link) >= {"url", "expires_at", "created_at"}
+    expires = datetime.fromisoformat(link["expires_at"])
+    assert timedelta(days=6, hours=23) < expires - datetime.now(UTC) <= timedelta(days=7)
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Interview, uuid.UUID(iv["id"]))
+        assert row.link_token_hash == public.hash_value(new) and row.link_opened_at is None
+        columns = str({c.name: getattr(row, c.name) for c in row.__table__.columns})
+        assert new not in columns and old not in columns
+        events = list(
+            await s.scalars(
+                select(AuditEvent).where(AuditEvent.action == "interview.link_replaced")
+            )
+        )
+        assert [str(e.entity_id) for e in events] == [iv["id"]]
+    got = await get(client, ctx, iv["id"])
+    assert got["status"] == "in_progress" and got["link_created_at"] == link["created_at"]
+    assert got["link_opened_at"] is None and new not in str(got)
+
+    for path_, method in (("", "get"), ("/messages", "post"), ("/finish", "post")):
+        kwargs = {"json": {"body": "hi"}} if path_ == "/messages" else {}
+        stale = await getattr(client, method)(
+            f"/v1/public/interviews/{old}{path_}", headers=cookie, **kwargs
+        )
+        assert stale.status_code == 410 and stale.json() == {"reason": "replaced"}, path_
+
+    page, cookie2 = await open_link(client, new)
+    assert page["status"] == "in_progress"
+    bodies = [m["body"] for m in page["messages"]]
+    assert bodies.count(GUIDE["questions"][0]["prompt"]) == 1 and LONG in bodies
+
+    other, _ = await invited(client, ctx, fake, interviewee_name="Ben Ode")
+    await client.post(f"/v1/interviews/{other['id']}/revoke", headers=ctx.as_("commenter"))
+    closed = await client.post(
+        f"/v1/interviews/{other['id']}/new-link", headers=ctx.as_("commenter")
+    )
+    assert closed.status_code == 409
+    assert closed.json()["detail"] == "This interview was withdrawn, so it can't get a new link."
+    done = await client.post(f"/v1/public/interviews/{new}/finish", headers=cookie2)
+    assert done.status_code == 200, done.text
+    finished = await client.post(path, headers=ctx.as_("approver"))
+    assert finished.status_code == 409
+    assert finished.json()["detail"] == "This interview is finished, so it can't get a new link."
+
+
 async def test_public_operations_are_not_mcp_tools(client):
     """protects=criterion 11: the customer's routes are never MCP tools and are listed as
     unavailable; fails_when=a public operation is offered over MCP; no_claim=the rest of
