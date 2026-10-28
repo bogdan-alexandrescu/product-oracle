@@ -82,9 +82,10 @@ test("phone runs: run names are whole, costs show on approvals and overruns, the
     await expectInViewport(page, row.locator('td[data-phone="title"]'));
   }
   const approval = rows.filter({ hasText: "Awaiting cost approval" });
-  await expect(approval.locator('td[data-phone="title"]')).toHaveText("usage-alerts-v2");
+  await expect(approval.locator('td[data-phone="title"]')).toHaveText(/^Usage alerts v2/);
   await expect(approval.locator('[data-cost="prominent"]')).toBeVisible();
-  await expect(approval.getByRole("button", { name: "Approve" })).toBeVisible();
+  // qa-work-17: the row's button says what it does (it opens the run, where Approve is).
+  await expect(approval.getByRole("button", { name: "Open" })).toBeVisible();
   const overrun = rows.filter({ hasText: "Paused" });
   await expect(overrun.locator('[data-cost="prominent"]')).toBeVisible();
   await expectNoSideScroll(page);

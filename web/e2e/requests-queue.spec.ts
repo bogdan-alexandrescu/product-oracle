@@ -256,7 +256,7 @@ test("Themes: create, rename and archive a theme", async ({ page }) => {
   // no_claim=the API's unique-title rule.
   await login(page);
   await openRequests(page);
-  await page.getByRole("button", { name: "Themes" }).click();
+  await page.getByTestId("requests-tab-themes").filter({ visible: true }).click();
   await page.getByLabel("New theme").fill("Payments");
   await page.getByRole("button", { name: "Create theme" }).click();
   const theme = page.getByTestId("theme-row").filter({ hasText: "Payments" });
@@ -270,7 +270,7 @@ test("Themes: create, rename and archive a theme", async ({ page }) => {
   await expect(renamed).toBeVisible();
   await renamed.getByRole("button", { name: "Archive" }).click();
   await expect(renamed).toContainText("Archived");
-  await page.getByRole("button", { name: "Queue" }).click();
+  await page.getByTestId("requests-tab-all").filter({ visible: true }).click();
   await expect(filter(page, "Theme").locator("option", { hasText: "Payments and billing" })).toHaveText("Payments and billing (archived)");
 });
 
@@ -280,7 +280,7 @@ test("Themes: restore an archived theme", async ({ page }) => {
   // it archived; no_claim=the API's unique-title rule on restore.
   await login(page);
   await openRequests(page);
-  await page.getByRole("button", { name: "Themes" }).click();
+  await page.getByTestId("requests-tab-themes").filter({ visible: true }).click();
   const theme = page.getByTestId("theme-row").filter({ hasText: "Reporting" });
   await theme.getByRole("button", { name: "Archive" }).click();
   await expect(theme).toContainText("Archived");
@@ -290,9 +290,9 @@ test("Themes: restore an archived theme", async ({ page }) => {
   await expect(theme.getByRole("button", { name: "Archive" })).toBeVisible();
   await expect(theme.getByRole("button", { name: "Rename" })).toBeVisible();
   await page.reload();
-  await page.getByRole("button", { name: "Themes" }).click();
+  await page.getByTestId("requests-tab-themes").filter({ visible: true }).click();
   await expect(page.getByTestId("theme-row").filter({ hasText: "Reporting" })).not.toContainText("Archived");
-  await page.getByRole("button", { name: "Queue" }).click();
+  await page.getByTestId("requests-tab-all").filter({ visible: true }).click();
   await expect(filter(page, "Theme").locator("option", { hasText: "Reporting" })).toHaveText("Reporting");
 });
 
@@ -302,10 +302,10 @@ test("Queue: the Theme filter lists archived themes, marked, and filters by them
   // by it drops its requests; no_claim=the API's theme_id filter.
   await login(page);
   await openRequests(page);
-  await page.getByRole("button", { name: "Themes" }).click();
+  await page.getByTestId("requests-tab-themes").filter({ visible: true }).click();
   await page.getByTestId("theme-row").filter({ hasText: "Reporting" }).getByRole("button", { name: "Archive" }).click();
   await expect(page.getByTestId("theme-row").filter({ hasText: "Reporting" })).toContainText("Archived");
-  await page.getByRole("button", { name: "Queue" }).click();
+  await page.getByTestId("requests-tab-all").filter({ visible: true }).click();
   await filter(page, "Theme").selectOption({ label: "Reporting (archived)" });
   await expect(page.getByTestId("request-row")).toHaveCount(2);
   await expect(row(page, "Weekly summary email")).toBeVisible();
@@ -322,7 +322,7 @@ test("A commenter sees no decisions, links or theme controls", async ({ page }) 
   for (const name of ["Qualify", "Merge", "Disqualify", "Save links", "Accept suggestion", "Edit"]) {
     await expect(panel.getByRole("button", { name, exact: true })).toHaveCount(0);
   }
-  await page.getByRole("button", { name: "Themes" }).click();
+  await page.getByTestId("requests-tab-themes").filter({ visible: true }).click();
   await expect(page.getByTestId("theme-row").first()).toBeVisible();
   await expect(page.getByRole("button", { name: "Create theme" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Rename" })).toHaveCount(0);

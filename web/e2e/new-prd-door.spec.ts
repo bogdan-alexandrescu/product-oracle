@@ -104,7 +104,7 @@ test("brief to draft: goals, out of scope and a template, then Draft with Oracle
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
-  await expect(page.getByText("template one-pager")).toBeVisible();
+  await expect(page.getByText(/^Template: /)).toBeVisible();
   // The current baseline was reused: its segment ran no step.
   await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(/^Reused \(approved [A-Z][a-z]{2} \d{1,2}\)$/);
 });
@@ -140,7 +140,7 @@ test("baseline choice: reuse is preselected; Rebuild costs the baseline segment 
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
   await expect(page.getByTestId("run-row")).toHaveCount(6);
-  await expect(page.getByTestId("run-row").filter({ hasText: "faster-repeat-checkout" })).toHaveCount(1);
+  await expect(page.getByTestId("run-row").filter({ hasText: "faster repeat checkout" })).toHaveCount(1);
 });
 
 test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet takes up the same draft run", async ({ page }) => {
@@ -174,7 +174,7 @@ test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet 
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await page.getByTestId("nav-runs").filter({ visible: true }).first().click();
-  await expect(page.getByTestId("run-row").filter({ hasText: "saved-addresses-for-guests" })).toHaveCount(1);
+  await expect(page.getByTestId("run-row").filter({ hasText: "saved addresses for guests" })).toHaveCount(1);
 
   // Started: the brief is drafting, so Draft with Oracle is gone.
   await page.goto(`/intakes/${id}`);
@@ -241,8 +241,8 @@ test("New run no longer offers Baseline to PRD and points at New PRD", async ({ 
   await login(page);
   await page.goto("/runs");
   await page.getByRole("button", { name: "New run" }).click();
-  // With no flow left to offer, the dialog is "Start a run": only the pointer lines (D12).
-  const dialog = page.getByRole("dialog", { name: "Start a run" });
+  // With no flow left to offer, the dialog is "Where to start a run": only the pointer lines and Close (D12, qa-work-7).
+  const dialog = page.getByRole("dialog", { name: "Where to start a run" });
   await expect(dialog.getByTestId("flow-pointers")).toBeVisible();
   await expect(dialog.getByRole("radio", { name: "Baseline to PRD" })).toHaveCount(0);
   const pointer = dialog.getByRole("link", { name: "New PRD · PRDs" });

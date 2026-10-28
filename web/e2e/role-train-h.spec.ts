@@ -47,7 +47,7 @@ for (const role of ROLES) {
     await expect(inspector.getByRole("button", { name: "Disqualify", exact: true })).toHaveCount(approver ? 1 : 0);
 
     // Themes: approvers create, rename and archive; others only read.
-    await page.getByRole("button", { name: "Themes" }).click();
+    await page.getByTestId("requests-tab-themes").filter({ visible: true }).click();
     await expect(page.getByTestId("theme-row").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Create theme" })).toHaveCount(approver ? 1 : 0);
     if (approver) await expect(page.getByRole("button", { name: "Rename" }).first()).toBeVisible();

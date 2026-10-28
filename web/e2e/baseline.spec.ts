@@ -418,7 +418,7 @@ test("baseline: the run page counts its open proposals and Review opens them", a
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   const count = page.getByTestId("run-proposals");
   await expect(count).toHaveText("2 open · Review");
-  await expect(page.getByTestId("run-proposals-row")).toContainText("Baseline proposals");
+  await expect(page.getByTestId("run-proposals-row")).toContainText("Changes it proposed");
 
   await count.getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(new RegExp(`/baseline\\?tab=proposals&run=${AGENT_RUN}$`));
@@ -430,7 +430,7 @@ test("baseline: the run page counts its open proposals and Review opens them", a
 
   await page.getByTestId("run-filter-line").getByRole("link", { name: "Open run" }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${AGENT_RUN}$`));
-  await expect(page.getByTestId("run-proposals")).toHaveText("1 open · Review");
+  await expect(page.getByTestId("run-proposals")).toHaveText("1 to review · Review");
 });
 
 /**

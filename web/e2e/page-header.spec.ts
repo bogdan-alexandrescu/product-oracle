@@ -78,17 +78,14 @@ for (const scheme of ["light", "dark"] as const) {
       await expectOneFilledPrimary(page, path);
       await expectOnePrimaryOnPage(page, path);
     }
-    // Sources is a search page: its one primary is the search form's Search; Manage in the
-    // header is a link to its settings, drawn outline.
+    // Sources is a search page: its one primary is the search form's Search. It sits under
+    // Settings › Sources already, so its header has no Manage link (qa-work-53).
     await page.goto("/sources");
     await expectOnePrimaryOnPage(page, "/sources");
-    await expect(page.locator("header[data-page-header]").filter({ visible: true }).getByRole("link", { name: "Manage" })).toHaveAttribute(
-      "data-variant",
-      "secondary",
-    );
+    await expect(page.locator("header[data-page-header]").filter({ visible: true }).getByRole("link", { name: "Manage" })).toHaveCount(0);
     // A run waiting at a checkpoint: Decide.
     await page.goto("/runs");
-    await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+    await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
     await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
     await expectOneFilledPrimary(page, "run waiting at a checkpoint");
   });

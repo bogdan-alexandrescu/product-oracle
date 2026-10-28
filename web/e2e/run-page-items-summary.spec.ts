@@ -20,7 +20,7 @@ test("the run page at a Roadmap items checkpoint shows the summary only; Review 
   await login(page);
   await openSeeded(page, seedRoadmapReview, `/runs/${RUN}`);
   const summary = page.getByTestId("items-review-line");
-  await expect(summary).toContainText("10 need you · 3 blocking");
+  await expect(summary.getByTestId("items-open")).toHaveText("3 blocking · 7 to confirm");
   await expect(summary.getByRole("link", { name: "Review items" })).toBeVisible();
   await expect(summary.getByRole("button", { name: "Raw file" })).toBeVisible();
 

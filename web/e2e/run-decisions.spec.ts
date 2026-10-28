@@ -8,7 +8,7 @@ import { login } from "./helpers";
 test("approvals with their notes are listed in the run's Decisions, as the agents read them", async ({ page }) => {
   await login(page);
   await page.getByTestId("nav-runs").click();
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
 
   const inspector = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });

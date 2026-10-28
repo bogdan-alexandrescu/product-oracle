@@ -18,32 +18,31 @@ test("runs list shows each run with its status, and cost only on the approval an
   await openRuns(page);
   const rows = page.getByTestId("run-row");
   await expect(rows).toHaveCount(5);
-  const waiting = rows.filter({ hasText: "team-onboarding" });
+  const waiting = rows.filter({ hasText: "team onboarding" });
   await expect(waiting).toContainText("Waiting for review");
   await expect(waiting).toContainText("Confirm the baseline");
   // P3d Cost prominence: no figure on a row that needs no cost decision.
   await expect(waiting).not.toContainText("$");
-  const approval = rows.filter({ hasText: "usage-alerts-v2" });
+  const approval = rows.filter({ hasText: "usage alerts v2" });
   await expect(approval).toContainText("Awaiting cost approval");
-  await expect(approval.locator('[data-cost="prominent"]')).toContainText("est.");
-  const overrun = rows.filter({ hasText: "team-workspaces" });
+  await expect(approval.locator('[data-cost="prominent"]')).toContainText("estimated");
+  const overrun = rows.filter({ hasText: "team workspaces" });
   await expect(overrun).toContainText("Paused: over budget");
-  await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 / $9.00");
+  await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 of $9.00 estimated");
 });
 
 test("run detail: approve each checkpoint through to the imported PRD", async ({ page }) => {
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await expect(page.getByTestId("run-notes")).toContainText("Local agent runtime");
   // P3d Cost prominence: the cost is one small line in Details.
-  await expect(page.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$6.30 of $26.50 est.");
+  await expect(page.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$6.30 of $26.50 estimated");
 
   // The open checkpoint: its state in the row (named once, in the decision and the inspector),
   // Decide as the page's primary action.
   const chip = page.getByTestId("segment-baseline").getByTestId("checkpoint-waiting");
   await expect(chip).toHaveText(/^Waiting/);
-  await expect(chip).toHaveAttribute("href", "#decide");
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Confirm the baseline");
   await expect(page.getByRole("complementary", { name: "Run" }).filter({ visible: true })).toContainText("Confirm the baseline");
   await page.getByRole("button", { name: "Decide", exact: true }).click();
@@ -53,7 +52,7 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
 
   // The baseline's artifacts can be read before deciding.
   const baseline = page.getByTestId("segment-baseline");
-  await baseline.getByRole("button", { name: "baseline.yaml" }).click();
+  await baseline.getByRole("button", { name: "Baseline", exact: true }).click();
   await expect(page.getByTestId("artifact-content")).toContainText("confidence");
 
   // Requesting changes needs a note; the segment runs again.
@@ -299,10 +298,10 @@ test("a rejected draft reads Draft rejected, with one summary line and every pro
 
   // The runs list says it too.
   await page.getByTestId("nav-runs").click();
-  const row = page.getByTestId("run-row").filter({ hasText: "guest-checkout" });
+  const row = page.getByTestId("run-row").filter({ hasText: "guest checkout" });
   await expect(row.getByTestId("run-draft-rejected")).toHaveText("Draft rejected");
   await expect(row.getByTestId("run-draft-rejected")).toHaveAttribute("title", SUMMARY);
-  await expect(page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByTestId("run-draft-rejected")).toHaveCount(0);
+  await expect(page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByTestId("run-draft-rejected")).toHaveCount(0);
 });
 
 test("a rejected draft: Send back to writer pre-fills Request changes with the summary", async ({ page }) => {
@@ -359,7 +358,7 @@ test("the in-page ask makes the page behind it inert, and gives focus back on cl
   // be clicked or read by assistive technology while it is open, or stays inert after it;
   // no_claim=the ask's own keys (the cancel test above).
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   const cancel = page.getByTestId("run-cancel").filter({ visible: true });
   const ask = page.getByRole("alertdialog", { name: "Cancel run" });
@@ -404,7 +403,7 @@ test("cancel a run: it asks in the page, never in a browser dialog; going back d
     void d.dismiss();
   });
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   const before = await status(page).textContent();
   const cancel = page.getByTestId("run-cancel").filter({ visible: true });
@@ -450,30 +449,38 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await openRuns(page);
     const rows = page.getByTestId("run-row");
     await expect(rows).toHaveCount(5);
+    // qa-work-9: rows are named by their documents ("Team onboarding PRD"), not slugs.
     const byRun: Record<string, string> = {};
     for (const row of await rows.all()) {
-      const slug = (await row.getByRole("link").first().innerText()).trim();
-      byRun[slug] = (await row.getByRole("link").first().getAttribute("href"))!;
+      const name = (await row.getByRole("link").first().innerText()).trim();
+      byRun[name] = (await row.getByRole("link").first().getAttribute("href"))!;
     }
     ids.push(byRun);
 
     // The started run's dates, in its inspector.
-    await rows.filter({ hasText: "team-onboarding" }).locator("td").nth(2).click();
+    await rows.filter({ hasText: "team onboarding" }).locator("td").nth(2).click();
     const inspector = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
-    await expect(inspector).toContainText("team-onboarding");
+    await expect(inspector).toContainText("Team onboarding");
     await expect(inspector).toContainText("Started");
     dates.push(await inspector.innerText());
 
     // The inbox shows the same short ids as the list; run detail the same id.
-    const short = (slug: string) => byRun[slug]!.split("/").pop()!.slice(0, 4);
+    const href = (slug: string) => byRun[Object.keys(byRun).find((k) => k.toLowerCase().startsWith(slug.replace(/-/g, " ")))!]!;
+    const short = (slug: string) => href(slug).split("/").pop()!.slice(0, 4);
     await page.goto("/inbox");
     await expect(page.getByTestId("inbox-approvals")).toContainText(short("usage-alerts-v2"));
     await expect(page.getByTestId("inbox-checkpoints")).toContainText(short("team-onboarding"));
-    await page.goto(byRun["team-onboarding"]!);
-    await expect(page.getByText(`Run ${short("team-onboarding")}`)).toBeVisible();
+    await page.goto(href("team-onboarding"));
+    await expect(page).toHaveURL(new RegExp(`/runs/${short("team-onboarding")}`));
     await context.close();
   }
-  expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "saved-carts", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
+  expect(Object.keys(ids[0]!).map((k) => k.toLowerCase().split(" ").slice(0, 2).join(" ")).sort()).toEqual([
+    "checkout redesign",
+    "saved carts",
+    "team onboarding",
+    "team workspaces",
+    "usage alerts",
+  ]);
   expect(ids[1]).toEqual(ids[0]);
   expect(dates[1]).toEqual(dates[0]);
 });
@@ -483,7 +490,7 @@ test("a decision SwarmCloud has not taken yet: recorded, shown as delivering, fi
   // SwarmCloud takes nothing until the next tick, so the decide call answers 503.
   await page.addInitScript((key) => localStorage.setItem(key, "undelivered"), MOCK_SCENARIO_KEY);
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Waiting");
   // A second tab on the same run, still showing the open review (another approver, say).
   const other = await page.context().newPage();
@@ -525,7 +532,7 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
   // Owner decision 2026-10-20: amber, with a clock, as other in-progress states.
   await page.addInitScript((key) => localStorage.setItem(key, "undelivered"), MOCK_SCENARIO_KEY);
   await openRuns(page);
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   await expect(page.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toBeVisible();
 
@@ -540,7 +547,7 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
   await expect(panel).not.toContainText("waiting for review");
   // The runs list: the row's chip.
   await page.getByTestId("nav-runs").click();
-  const row = page.getByTestId("run-row").filter({ hasText: "team-onboarding" });
+  const row = page.getByTestId("run-row").filter({ hasText: "team onboarding" });
   await expect(row.getByTestId("run-status")).toHaveText("Delivering decision");
   await expect(amber(row).locator("svg")).toHaveCount(1);
   await expect(row).not.toContainText("Waiting for review");

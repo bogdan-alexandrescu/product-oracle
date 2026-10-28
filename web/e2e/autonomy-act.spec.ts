@@ -121,7 +121,7 @@ test("autonomy: at Act Oracle saves a run's order within the limits and tells it
   await login(page);
   await setLevel(page, "priorities", "Order priorities", "Act");
   await rail(page).getByTestId("nav-runs").click();
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   await page.getByRole("button", { name: "Check agents now" }).click();

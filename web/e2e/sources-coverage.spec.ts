@@ -53,10 +53,10 @@ test("coverage: one row per source with items, a Fresh ring and uses, instead of
   const chat = row(page, "Product chat");
   await expect(chat).toContainText("Slack");
   await expect(chat.getByTestId("coverage-items")).toHaveText("2");
-  await expect(chat.getByRole("img", { name: "Fresh 50%" })).toBeVisible();
+  await expect(chat.getByTestId("coverage-fresh")).toHaveText("50% fresh");
   await expect(chat.getByTestId("coverage-used")).toHaveText("3");
   await expect(chat.getByTestId("coverage-not-read")).toHaveText("1");
-  await expect(row(page, "Legacy all-hands chat").getByTestId("coverage-fresh")).toHaveText("–");
+  await expect(row(page, "Legacy all-hands chat").getByTestId("coverage-fresh")).toHaveText("—");
 });
 
 test("coverage: the first source is selected; its inspector shows freshness and what was not read", async ({ page }) => {
@@ -72,7 +72,7 @@ test("coverage: the first source is selected; its inspector shows freshness and 
   await expect(fresh.getByTestId("freshness-fresh")).toHaveText(/Fresh\s*1/);
   await expect(fresh.getByTestId("freshness-aging")).toHaveText(/Aging\s*1/);
   await expect(fresh.getByTestId("freshness-stale")).toHaveText(/Stale\s*0/);
-  await expect(ins.getByTestId("coverage-kinds")).toContainText("message");
+  await expect(ins.getByTestId("coverage-kinds")).toContainText("Messages");
 
   const notRead = ins.getByRole("list", { name: "Not read" });
   const entry = notRead.getByRole("listitem");
@@ -159,9 +159,9 @@ test("coverage: Settings › Sources › More › Coverage opens that source", a
   await expect(inspector(page).getByRole("list", { name: "Not read" }).getByRole("listitem")).toHaveCount(6);
 });
 
-test("coverage at 390 px: Source, Items and Fresh only, the inspector below, no sideways scroll", async ({ page }) => {
-  // protects=the phone layout of the table and inspector
-  // fails_when=a hidden column shows, the inspector overlaps, or the page scrolls sideways
+test("coverage at 390 px: every column on the card, the inspector below, no sideways scroll", async ({ page }) => {
+  // protects=the phone layout of the table and inspector (qa-work-52: Not read, Used and Synced stay on each card)
+  // fails_when=a column is dropped, the inspector overlaps, or the page scrolls sideways
   // no_claim=tablet widths
   await page.setViewportSize({ width: 390, height: 844 });
   await openCoverage(page);
@@ -170,7 +170,7 @@ test("coverage at 390 px: Source, Items and Fresh only, the inspector below, no 
   await expect(chat.getByTestId("coverage-items")).toBeVisible();
   await expect(chat.getByTestId("coverage-fresh")).toBeVisible();
   for (const id of ["coverage-not-read", "coverage-used", "coverage-synced"]) {
-    await expect(chat.getByTestId(id)).toBeHidden();
+    await expect(chat.getByTestId(id)).toBeVisible();
   }
   const t = await table(page).boundingBox();
   const i = await inspector(page).boundingBox();
@@ -192,7 +192,7 @@ test("company: an owner sees members' setup and staleness, commenter without sou
   const groups = company.locator("tr[data-group]");
   await expect(groups.first()).toContainText("commenter@example.com");
   await expect(groups.first()).toContainText("No sources");
-  const drive = company.locator("tr[data-row]").filter({ hasText: "Google Docs" }).filter({ has: page.getByRole("img", { name: "Fresh 0%" }) });
+  const drive = company.locator("tr[data-row]").filter({ hasText: "Google Docs" }).filter({ has: page.getByTestId("company-fresh").filter({ hasText: /^0% fresh$/ }) });
   await expect(drive).toHaveCount(1);
 });
 

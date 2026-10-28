@@ -32,9 +32,9 @@ test("an approver creates a pricing interview and sees the six preset questions 
   await dialog.getByLabel("Company (optional)").fill("Northwind Example");
   await dialog.getByRole("button", { name: "A topic" }).click();
   await dialog.getByLabel("Topic in your words").fill("Pricing the supplier payments add-on");
-  await dialog.getByRole("button", { name: "Pricing", exact: true }).click();
-  await expect(dialog.getByRole("button", { name: "Pricing", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(dialog.getByTestId("interview-pricing-hint")).toBeVisible();
+  await dialog.getByRole("button", { name: "Use the pricing question set", exact: true }).click();
+  await expect(dialog.getByRole("button", { name: "Use the pricing question set", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByTestId("interview-questions-hint")).toContainText("Six fixed questions");
   await dialog.getByRole("button", { name: "Next" }).click();
 
   const guide = page.getByRole("dialog", { name: "Pricing questions" });

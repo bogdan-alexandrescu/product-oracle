@@ -40,7 +40,7 @@ test("Decide in the Inbox and the runs list opens the version with the run revie
   await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 0 of 3 sections reviewed");
 
   await page.goto("/runs");
-  const listed = page.getByRole("row").filter({ hasText: "usage-alerts" }).filter({ has: page.getByRole("button", { name: "Decide" }) });
+  const listed = page.getByRole("row").filter({ hasText: "usage alerts" }).filter({ has: page.getByRole("button", { name: "Decide" }) });
   await listed.getByRole("button", { name: "Decide" }).click();
   await expect(page).toHaveURL(new RegExp(`${VERSION}\\?run_review=`));
   await expect(bar(page)).toBeVisible();

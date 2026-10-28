@@ -290,7 +290,7 @@ for (const email of [APPROVER, COMMENTER]) {
   test(`the run page at the feature set renders for ${email.split("@")[0]} with one Review link`, async ({ page }) => {
     await seeded(page, email);
     await page.getByTestId("nav-runs").click();
-    await page.getByTestId("run-row").filter({ hasText: /saved-addresses(?!-)/ }).getByRole("link").first().click();
+    await page.getByTestId("run-row").filter({ hasText: /saved addresses(?! for)/i }).getByRole("link").first().click();
     await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
     const segment = page.getByTestId("segment-feature_set");
     await expect(segment.getByRole("link", { name: "Review feature set" })).toHaveCount(1);

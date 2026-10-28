@@ -138,7 +138,8 @@ test("an owner deletes a brief from its page, then restores it from Settings ›
   await page.addInitScript(([key]) => localStorage.setItem(key, "before-drafting"), [MOCK_SCENARIO_KEY] as const);
   await login(page);
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-  await page.getByRole("button", { name: `Actions for ${BEFORE_DRAFTING.title}` }).click();
+  // qa-work-11: Delete sits in the brief's one overflow menu.
+  await page.getByRole("button", { name: "More actions" }).click();
   await page.getByRole("menuitem", { name: "Delete…" }).click();
   await page.getByRole("dialog", { name: `Delete ${BEFORE_DRAFTING.title}` }).getByRole("button", { name: "Move to Trash" }).click();
   await expect(page).toHaveURL(/\/documents$/);
@@ -158,11 +159,9 @@ test("an owner deletes a run from its page and restores it", async ({ page }) =>
   await row.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   const url = page.url();
-  const menu = page.getByRole("button", { name: /^Actions for / });
-  const title = (await menu.getAttribute("aria-label"))!.replace("Actions for ", "");
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
-  await menu.click();
-  await page.getByRole("menuitem", { name: "Delete…" }).click();
+  // qa-work-27: a run's page has a plain Delete button (no menu holding one item).
+  const title = (await page.getByRole("heading", { level: 1 }).innerText()).trim();
+  await page.getByTestId("run-delete").click();
   await page.getByRole("dialog", { name: `Delete ${title}` }).getByRole("button", { name: "Move to Trash" }).click();
   await expect(page).toHaveURL(/\/runs$/);
   await page.goto("/settings/trash");
@@ -183,6 +182,7 @@ test("an approver sees no ⋮ menu on a run or a brief", async ({ page }) => {
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+  await expect(page.getByTestId("run-delete")).toHaveCount(0);
 });
 
 test("an owner sees Edit, Regenerate… and Delete…", async ({ page }) => {

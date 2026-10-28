@@ -31,7 +31,7 @@ test("run page: the sent-back review names the Company day it was sent back on",
     const held = await page.evaluate((id) => JSON.parse(localStorage.getItem("po-mock-db-v2")!).runs.runs.some((r: { id: string }) => r.id === id), runId);
     if (held) break;
   }
-  await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
+  await page.getByTestId("run-row").filter({ hasText: "usage alerts roadmap" }).getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 
   // D1 (#542): staged and decided on the Roadmap items review screen, then back to the run.
@@ -42,7 +42,7 @@ test("run page: the sent-back review names the Company day it was sent back on",
   await page.getByTestId("decision-bar").getByRole("button", { name: "Send back to agents" }).click();
   await page.getByTestId("sheet-send-back").getByRole("button", { name: "Send back", exact: true }).click();
   await expect(page.getByTestId("review-status")).toHaveText(/^Sent back/);
-  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
+  await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
 
   const sent = page.getByTestId("segment-roadmap_items").getByTestId("sent-review");
   await sent.getByRole("button", { name: "View review" }).click();

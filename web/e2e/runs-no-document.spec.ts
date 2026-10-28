@@ -112,7 +112,7 @@ test("a run that finished with no document: an Inbox row says why and what to do
 
   // The runs list: Succeeded, with no Draft rejected chip.
   await page.getByTestId("nav-runs").click();
-  const listed = page.getByTestId("run-row").filter({ hasText: "guest-checkout" });
+  const listed = page.getByTestId("run-row").filter({ hasText: "guest checkout" });
   await expect(listed).toContainText("Succeeded");
   await expect(listed.getByTestId("run-draft-rejected")).toHaveCount(0);
 

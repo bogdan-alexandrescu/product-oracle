@@ -48,7 +48,7 @@ for (const who of ["commenter", "viewer"]) {
     await expect(page.getByTestId("run-decision")).toHaveCount(1);
     // Another run's stop, on a company document, for contrast.
     await page.getByTestId("nav-runs").click();
-    await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").first().click();
+    await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").first().click();
     await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
     await expect(page.getByTestId("run-decision")).toHaveCount(1);
     await signOut(page);
