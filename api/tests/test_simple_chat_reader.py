@@ -44,6 +44,10 @@ Test cards (protects / fails_when / no_claim):
   one box comes back "ask" for Oracle's Ask; an answer from the data is an answer;
   fails_when=a question becomes a card or a role does more than its gesture;
   no_claim=Oracle's Ask's answer.
+- test_the_worker_claims_a_chat_reader_job: protects=the job worker claims a queued
+  chat_reader job (it has no document or other subject row to lock) and the gateway knows
+  its kind; fails_when=the job sits queued forever ("Reading that…" never ends);
+  no_claim=the live model call.
 - test_every_parse_op_is_registered: protects=every op parse() builds is in OPS and the
   reader's job is a registered runner and gateway job; fails_when=the reader cannot be
   offered an op parse() makes, or the job is unknown to the gateway; no_claim=chat-actions'
@@ -355,6 +359,20 @@ async def test_reader_roles_on_ask(client):
     await read(ctx, {"actions": [], "clarify": None, "answer": None})
     assert (await last(client, ctx, "commenter"))["kind"] == "note"
     assert await n_changes(ctx) == 0
+
+
+async def test_the_worker_claims_a_chat_reader_job(client):
+    from oracle.jobs import worker
+
+    ctx = await make_people()
+    await World(ctx).build()
+    await post(client, ctx, "owner", "nudge ledger a little later")
+    async with tenant_session(ctx.tenant_id) as s:
+        queued = await s.scalar(select(LlmJob.id).where(LlmJob.kind == "chat_reader"))
+    assert await worker.claim_next(ctx.tenant_id) == queued
+    async with tenant_session(ctx.tenant_id) as s:
+        job = await s.get(LlmJob, queued)
+        assert job is not None and job.status == "running"
 
 
 def test_every_parse_op_is_registered():
