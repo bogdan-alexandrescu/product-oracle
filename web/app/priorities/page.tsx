@@ -305,12 +305,17 @@ function EvidenceChip({ ev }: { ev: EvidenceUsed }) {
   );
 }
 
+/** Confidence 0-1 as a percent, to the tenth the API keeps it to: 0.578 reads "57.8%". */
+const pctText = (n: number) => `${Math.round(n * 1000) / 10}%`;
+
 /**
- * A score step with its confidence factor on the page's 0-100 scale: "score = 6 × 0.75 ÷ 2"
- * reads "score = 6 × 60 ÷ 2" (confidence shown the one way the page shows it everywhere, as in
- * the Confidence meter's "Confidence 60", never a fraction or a percent sign).
+ * A step with confidence as a percent wherever it is a factor, so its arithmetic stays true:
+ * "score = 6 × 0.75 ÷ 2" reads "score = 6 × 75% ÷ 2", and "confidence = 0.75 × track record
+ * 0.77 = 0.578" reads "confidence = 75% × track record 0.77 = 57.8%" (one way in every step).
  */
 function stepText(step: string, confidence: number | null | undefined): string {
+  const track = step.match(/^confidence = (\d+(?:\.\d+)?) × track record (\S+) = (\d+(?:\.\d+)?)$/);
+  if (track) return `confidence = ${pctText(Number(track[1]))} × track record ${track[2]} = ${pctText(Number(track[3]))}`;
   if (confidence == null || !/^score\b/.test(step)) return step;
   // The last "× c": confidence is the last factor in every formula (impact comes before it in RICE).
   const factor = [` × ${confidence}`, ` × ${fmt(confidence)}`].find((f) => step.includes(f));
@@ -318,7 +323,7 @@ function stepText(step: string, confidence: number | null | undefined): string {
   const at = step.lastIndexOf(factor);
   const end = at + factor.length;
   if (end < step.length && step[end] !== " ") return step;
-  return `${step.slice(0, at)} × ${pct(confidence)}${step.slice(end)}`;
+  return `${step.slice(0, at)} × ${pctText(confidence)}${step.slice(end)}`;
 }
 
 /** The ranking method: a radio group drawn as B1's segmented control. */
