@@ -37670,6 +37670,11 @@ export interface components {
             empty: boolean;
             /** Decider Name */
             decider_name?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
         };
         /**
          * SimpleGoalSuggestionIn

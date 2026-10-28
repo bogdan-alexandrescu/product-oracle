@@ -937,6 +937,7 @@ async def listing(
                 pending=str(g.id) in pending,
                 empty=g.id not in live,
                 decider_name=people.get(rule[g.id][1]) if rule[g.id][1] else None,
+                can_decide=rule[g.id][0],
             )  # fmt: skip
             for g in goals
         ],

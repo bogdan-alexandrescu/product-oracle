@@ -1024,6 +1024,8 @@ class SimpleGoalSuggestionGoal(BaseModel):
     empty: bool
     # Who decides the goal's suggestions (its roadmap's decider, else its approving owners).
     decider_name: str | None = None
+    # Whether the caller decides them (the drawer folds its form for the decider).
+    can_decide: bool = False
 
 
 # oracle.simple.changes.TITLE_MAX (changes imports this module).

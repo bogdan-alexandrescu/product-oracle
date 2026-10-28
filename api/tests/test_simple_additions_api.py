@@ -603,6 +603,7 @@ async def test_people_suggest_per_role(client):
         r = await client.get(SUGGESTIONS, headers=w.as_(who),
                              params={"goal_id": w.goals["quiet"]})  # fmt: skip
         mine = who in ("owner", "decider")
+        assert r.json()["goals"][0]["can_decide"] is mine, who
         assert all(x["can_accept"] is mine and x["can_reject"] is mine
                    for x in r.json()["suggestions"]), who  # fmt: skip
     # A rejected title stays refused.
@@ -630,6 +631,7 @@ async def test_no_decider_the_approving_owners_decide(client):
                              params={"goal_id": w.goals["quiet"]})  # fmt: skip
         [x] = r.json()["suggestions"]
         assert x["can_accept"] is (who == "owner"), who
+        assert r.json()["goals"][0]["can_decide"] is (who == "owner"), who
     r = await client.post(f"{SUGGESTIONS}/{out['id']}/accept", headers=w.as_("decider"), json={})
     assert r.status_code == 403
 

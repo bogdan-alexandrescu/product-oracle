@@ -113706,6 +113706,11 @@
               }
             ],
             "title": "Decider Name"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
           }
         },
         "type": "object",
