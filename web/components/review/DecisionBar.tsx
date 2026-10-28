@@ -18,10 +18,23 @@ export const CONSOLE_HELD_LINE = "Approved in the console: blocking problems are
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
+/**
+ * What still blocks Approve, counted as the review's tally counts it: the items with a blocking
+ * reason open (an item with two is one) and the file's own problems. The gate's blocking_open
+ * counts reasons, so it would read more than the tally beside it.
+ */
+export function blockingLeft(gate: Gate): number {
+  const items = gate.left?.length ? new Set(gate.left.map((x) => x.item)).size : gate.blocking_open;
+  return items + gate.file_problems;
+}
+
+/** "1 blocking problem left": the tally's line, and the gate's reason as Approve's tooltip and the line beside it. */
+export const blockingLeftText = (n: number) => `${plural(n, "blocking problem")} left`;
+
 /** The gate's reason, as the Approve button's tooltip and the line beside it ("1 blocking problem left"). */
 export function gateReason(gate: Gate | null | undefined): string | null {
   if (!gate || gate.open) return null;
-  return `${plural(gate.blocking_open + gate.file_problems, "blocking problem")} left`;
+  return blockingLeftText(blockingLeft(gate));
 }
 
 /** The phone's collapsed bar is one line: "N changes · Approve". */
@@ -107,9 +120,11 @@ export function DecisionBar({
 
   // qa-work-14/31: the page's scroll padding at the bottom is the bar's height (and, on a phone,
   // the tab bar's under it), so a row scrolled or tabbed into view stops clear of both bars.
-  const bar = useRef<HTMLDivElement>(null);
+  // The bar's element as state (a callback ref), not a ref read once: the effect follows the
+  // element itself, so a bar drawn later or swapped (desktop to phone) is measured too.
+  const [bar, setBar] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
-    const el = bar.current;
+    const el = bar;
     if (!el) return;
     const root = document.documentElement;
     const before = root.style.scrollPaddingBottom;
@@ -124,7 +139,7 @@ export function DecisionBar({
       watch.disconnect();
       root.style.scrollPaddingBottom = before;
     };
-  }, [phone]);
+  }, [bar, phone]);
 
   // Saving one's own note bumps the draft's revision: the decision that follows expects that
   // revision, not the one the screen loaded, or it is refused as "the review changed" by its
@@ -287,7 +302,7 @@ export function DecisionBar({
     return (
       <>
         {confirmSheet}
-        <div ref={bar} className="sticky bottom-[68px] z-20 -mx-2.5 border-t border-line bg-surface px-2.5 py-2" data-testid="decision-bar" data-collapsed="true">
+        <div ref={setBar} className="sticky bottom-[68px] z-20 -mx-2.5 border-t border-line bg-surface px-2.5 py-2" data-testid="decision-bar" data-collapsed="true">
           <Button className="w-full justify-center" variant={canDecide ? "solid" : "secondary"} onClick={() => setOpen(true)}>
             {canDecide ? `${plural(changes, "change")} · ${held ? "Confirm" : "Approve"}` : `${plural(changes, "change")} · Details`}
           </Button>
@@ -301,7 +316,7 @@ export function DecisionBar({
   return (
     <>
       {confirmSheet}
-      <div ref={bar} className="sticky bottom-0 z-20 border-t border-line bg-surface px-4 py-3 shadow-panel" data-testid="decision-bar">
+      <div ref={setBar} className="sticky bottom-0 z-20 border-t border-line bg-surface px-4 py-3 shadow-panel" data-testid="decision-bar">
         {body}
       </div>
     </>

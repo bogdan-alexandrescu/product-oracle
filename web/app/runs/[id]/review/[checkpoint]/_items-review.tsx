@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button, Chip, FilterChips, LinkButton, InspectorSection, Page, PageHeader, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";
-import { DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
+import { blockingLeftText, DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
 import { ItemInspector } from "@/components/review/ItemInspector";
 import { ItemsTable } from "@/components/review/ItemsTable";
 import { RawFileSheet } from "@/components/review/RawFileSheet";
@@ -264,12 +264,13 @@ export function ItemsReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const edits = staged.filter((a) => EDIT_KINDS.includes(a.kind)).length;
   const agentOnly = staged.find((a) => AGENT_KINDS.includes(a.kind));
   const waitingOn = tally.waiting_on.map((w) => `${formatCount(w.count)} waiting on ${w.name}`);
+  // Items, as the bar's gate line counts them (blockingLeft): an item with two blocking reasons is one.
   const blockingLeft = counts.blocking + review.file_problems.length;
   const tallyNode = (
     <>
       {counts.handled} of {counts.needYou} handled
       <span className="block text-sm font-normal text-text2" data-testid="tally-second">
-        {[blockingLeft > 0 ? `${formatCount(blockingLeft)} blocking left` : null, ...waitingOn].filter(Boolean).join(" · ") || "Nothing blocking"}
+        {[blockingLeft > 0 ? blockingLeftText(blockingLeft) : null, ...waitingOn].filter(Boolean).join(" · ") || "Nothing blocking"}
       </span>
     </>
   );

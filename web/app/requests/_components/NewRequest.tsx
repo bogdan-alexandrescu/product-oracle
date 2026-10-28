@@ -55,7 +55,7 @@ const CHANNELS = (Object.keys(CHANNEL_LABEL) as Request["channel"][]).filter((c)
 /**
  * Files a request, as New, through POST /v1/requests: a title, what it is and why, its goals
  * (the queue's Goal filter's list: a goal not confirmed yet shows, but cannot be picked, as the
- * API links confirmed goals only, qa-work-16), the channel it came in by (the queue's channels)
+ * API links confirmed goals only, qa-work-16; a rejected or archived goal is not offered), the channel it came in by (the queue's channels)
  * and the requester (in the In app channel the signed-in member, whom only an owner can change;
  * in another channel whoever asked). On a phone it is a full-height sheet.
  */
@@ -66,6 +66,8 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
   const goals = useQuery("new-request-goals", () =>
     unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })),
   );
+  // A rejected (or archived) goal has left the baseline: it is no goal to file a request under.
+  const offered = (goals.data ?? []).filter((g) => g.status !== "rejected");
   const myName = me?.email ? displayName(me.email) : "";
   const owner = can("create_request");
   const [title, setTitle] = useState("");
@@ -133,10 +135,10 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
           </label>
           <fieldset className="flex flex-col gap-1">
             <legend className="text-sm font-semibold text-text2">Goal (optional)</legend>
-            {(goals.data ?? []).length === 0 ? (
+            {offered.length === 0 ? (
               <p className="text-sm text-text2">{goals.loading ? "Loading goals…" : "No goals yet"}</p>
             ) : (
-              (goals.data ?? []).map((g) => {
+              offered.map((g) => {
                 const ready = g.status === "confirmed";
                 return (
                   <label

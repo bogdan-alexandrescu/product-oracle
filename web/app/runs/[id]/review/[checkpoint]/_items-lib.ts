@@ -21,11 +21,16 @@ export { plural };
 /** "Nov 30, 2026". */
 export const day = (d: string) => formatDate(d);
 
-/** A calendar day as the API writes it in a sentence ("2026-11-30", or "2026-11-30T…" with a time). */
-const ISO_DAY = /\b\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?\b/g;
+/** A calendar day as the API writes it ("2026-11-30", or "2026-11-30T…" with a time). */
+const ISO_DAY_SOURCE = String.raw`\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?`;
+/** Such a day standing alone in a sentence: never one inside a key, a slug or a path ("launch-2026-11-30"). */
+const ISO_DAY = new RegExp(String.raw`(?<![\w./-])${ISO_DAY_SOURCE}(?![\w/-])`, "g");
+/** A value that is a day and nothing else. */
+const ONLY_DAY = new RegExp(`^${ISO_DAY_SOURCE}$`);
 /**
  * A sentence of the API's (a reason's text) with its dates in words: "… supports 2026-11-30."
- * reads "… supports Nov 30, 2026." (qa-work-19).
+ * reads "… supports Nov 30, 2026." (qa-work-19). A date inside a key stays as it is:
+ * "launch-2026-11-30" is a name, not a date.
  */
 export const datesInWords = (text: string) => text.replace(ISO_DAY, (d) => formatDate(d));
 
@@ -166,6 +171,16 @@ export const fieldWords = (field: string) => {
   const words = FIELD_WORDS[field] ?? field.replace(/[-_.]+/g, " ").trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
-/** A changed field's value in words: a horizon by its name, a date as "Nov 30, 2026". */
-export const showValue = (field: string, v: unknown): string =>
-  field === "horizon" && typeof v === "string" ? horizonLabel(v) : datesInWords(show(v));
+/** Fields whose values are keys or names (an item's key, a PRD section): shown as written. */
+const KEY_FIELDS = ["depends_on", "prd_section", "key", "id"];
+/**
+ * A changed field's value in words: a horizon by its name, a value that is a date as
+ * "Nov 30, 2026", the dates in a sentence (a title, an outcome) in words; a key is shown as
+ * written ("launch-2026-11-30" stays).
+ */
+export function showValue(field: string, v: unknown): string {
+  if (field === "horizon" && typeof v === "string") return horizonLabel(v);
+  const text = show(v);
+  if (ONLY_DAY.test(text)) return formatDate(text);
+  return KEY_FIELDS.includes(field) ? text : datesInWords(text);
+}

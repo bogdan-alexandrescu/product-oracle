@@ -11,6 +11,12 @@ import { useQuery } from "@/lib/use-query";
 import { RequestsHeader } from "../_components/RequestsHeader";
 import { useTriage } from "../_components/Triage";
 
+/** "just now", "5m ago": the age the request rows and the triage line write (never "now ago"). */
+function finishedAgo(at: string): string {
+  const age = formatAge(at);
+  return !age || age === "now" ? "just now" : `${age} ago`;
+}
+
 const COLUMNS: Column<InterviewSummary>[] = [
   {
     key: "customer",
@@ -44,7 +50,7 @@ const COLUMNS: Column<InterviewSummary>[] = [
     cell: (r) =>
       r.finished_at ? (
         <span className="tnum" title={formatDateTime(r.finished_at)} data-testid="interview-finished">
-          {`${formatAge(r.finished_at)} ago`}
+          {finishedAgo(r.finished_at)}
         </span>
       ) : (
         "—"

@@ -39,6 +39,8 @@ import { CoverageInspector, CoverageTable, CoverageTabs, NoSources, type Coverag
 
 type Results = Schemas["SearchResults"];
 type Hit = Schemas["SearchHit"];
+/** How a sync that did not finish went, said as Settings > Sources says it on the source's row. */
+type SyncNotice = { sourceId: string; tone: "pass" | "warn"; text: string };
 
 
 /** ts_headline marks matches with <mark>; render them as React nodes, never as HTML. */
@@ -160,7 +162,7 @@ function SourcesSearchPage() {
   // #370: the Company coverage tab, for whoever may read the company's coverage (its
   // handler checks the role: an owner).
   const owner = can("get_company_source_coverage", false);
-  // qa-work-2: syncing and editing a source take a commenter or above; a viewer reads only.
+  // qa-work-2: syncing and editing a source follow the capabilities; a viewer reads only.
   const canSync = can("sync_source");
   const isPhone = useIsPhone();
   const tab: CoverageTab = owner && params.get("tab") === "company" ? "company" : "mine";
@@ -192,6 +194,7 @@ function SourcesSearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<SyncNotice | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const onAuth = useAuthRedirect();
   const names = new Map((sources.data ?? []).map((s) => [s.id, s.name]));
@@ -227,13 +230,23 @@ function SourcesSearchPage() {
     if (!currentId) return;
     setSyncing(true);
     setError(null);
+    setSyncNotice(null);
     try {
       const name = current?.name ?? "The source";
       toast({ message: `Sync started: ${name}` });
       const result = await unwrap(api.POST("/v1/sources/{source_id}/sync", { params: { path: { source_id: currentId } } }));
       await Promise.all([coverage.reload(), detail.reload()]);
       // qa-work-2: say how the sync went; a sync that did not finish says why.
+      // fix-work review: a rate-limited or superseded sync reads as on Settings > Sources.
       if (result.outcome === "completed") toast({ message: `${name} synced` });
+      else if (result.outcome === "rate_limited")
+        setSyncNotice({ sourceId: currentId, tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
+      else if (result.outcome === "superseded")
+        setSyncNotice({
+          sourceId: currentId,
+          tone: "warn",
+          text: "Not synced: this source was edited while it synced. Sync again to use the new selection.",
+        });
       else setError(result.error ?? result.source.last_error ?? `${name} did not finish syncing.`);
     } catch (err) {
       if (!onAuth(err)) setError(errorMessage(err));
@@ -289,6 +302,8 @@ function SourcesSearchPage() {
         detail={detail.data ?? undefined}
         busy={syncing}
         canSync={canSync}
+        capsReady={capsReady}
+        notice={syncNotice?.sourceId === current.source_id ? syncNotice : null}
         onSync={() => void syncNow()}
         onLoadMore={() => void loadMore()}
         loadingMore={loadingMore}

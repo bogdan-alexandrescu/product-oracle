@@ -528,7 +528,7 @@ export function RunDetail({ id }: { id: string }) {
 /**
  * #258: what "Check agents now" checked: "Checked 1 active run at 9:24 AM: 1 segment finished."
  * qa-work-20: with no agent at work, why, from this run's state: "No agents are working right
- * now; the run is waiting for your review."
+ * now; the run is waiting for your review." Runs the check could not read are still named.
  */
 function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): string {
   const at = formatTime(new Date().toISOString());
@@ -544,7 +544,9 @@ function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): string
           : run.status === "paused_overrun"
             ? "the run is paused over its budget"
             : "the run is between segments";
-    return `No agents are working right now; ${why}.`;
+    // fix-work review: the check's own trouble stays in view, whatever this run is waiting on.
+    const failed = out.errors.length ? ` ${plural(out.errors.length, "run")} could not be checked at ${at}.` : "";
+    return `No agents are working right now; ${why}.${failed}`;
   }
   const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
   if (out.runs_paused) parts.push(`${plural(out.runs_paused, "run")} paused over budget`);

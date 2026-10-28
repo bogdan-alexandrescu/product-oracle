@@ -14,6 +14,7 @@ import {
   InspectorRow,
   InspectorSection,
   LinkButton,
+  Notice,
   type Column,
 } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
@@ -269,6 +270,8 @@ export function CoverageInspector({
   summary,
   busy,
   canSync,
+  capsReady,
+  notice,
   onSync,
   onLoadMore,
   loadingMore,
@@ -279,6 +282,10 @@ export function CoverageInspector({
   busy: boolean;
   /** Whether the person may sync and edit sources (a viewer reads only). */
   canSync: boolean;
+  /** Whether the capabilities have loaded: until then neither Sync now nor the read-only note shows. */
+  capsReady: boolean;
+  /** How the last sync of this source went when it did not finish (rate limited, superseded). */
+  notice?: { tone: "pass" | "warn"; text: string } | null;
   onSync: () => void;
   onLoadMore: () => void;
   loadingMore: boolean;
@@ -366,8 +373,9 @@ export function CoverageInspector({
               const status = u.status ?? "unavailable";
               return (
                 <li key={u.external_id} className="flex min-w-0 flex-wrap items-center gap-x-2.5 border-t border-line py-1.5 first:border-t-0">
-                  <span className="min-w-0 flex-1 truncate" title={u.name ?? undefined}>
-                    {u.name ?? "Unnamed item"}
+                  {/* fix-work review: an item without a name reads by its id. */}
+                  <span className="min-w-0 flex-1 truncate" title={u.name ?? u.external_id}>
+                    {u.name ?? `Item ${u.external_id}`}
                   </span>
                   <Chip kind={status === "skipped" ? "na" : "warn"} title={u.reason}>
                     {NOT_READ_LABEL[status]}
@@ -400,25 +408,35 @@ export function CoverageInspector({
           </>
         )}
       </InspectorSection>
-      <InspectorSection>
-        {canSync ? (
-          <div className="flex flex-wrap items-center gap-2">
-            {c.kind !== "upload" && (
-              <Button onClick={onSync} disabled={busy || c.status === "paused"} icon="clock">
-                {busy ? "Syncing…" : "Sync now"}
-              </Button>
-            )}
-            <LinkButton href={`/settings/sources#source-${c.source_id}`} icon="settings">
-              Edit picks
-            </LinkButton>
-            {c.status === "paused" && c.kind !== "upload" && <span className="text-sm text-text2">Paused: resume it to sync</span>}
-          </div>
-        ) : (
-          <p className="text-sm text-text2" data-testid="sync-viewer-note">
-            Viewers can read coverage; a commenter or above syncs and edits sources.
-          </p>
-        )}
-      </InspectorSection>
+      {/* fix-work review: nothing until the capabilities answer; if they fail, the shell's Retry shows. */}
+      {capsReady && (
+        <InspectorSection>
+          {notice && (
+            <div className="mb-2">
+              <Notice tone={notice.tone} testId="sync-notice">
+                {notice.text}
+              </Notice>
+            </div>
+          )}
+          {canSync ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {c.kind !== "upload" && (
+                <Button onClick={onSync} disabled={busy || c.status === "paused"} icon="clock">
+                  {busy ? "Syncing…" : "Sync now"}
+                </Button>
+              )}
+              <LinkButton href={`/settings/sources#source-${c.source_id}`} icon="settings">
+                Edit picks
+              </LinkButton>
+              {c.status === "paused" && c.kind !== "upload" && <span className="text-sm text-text2">Paused: resume it to sync</span>}
+            </div>
+          ) : (
+            <p className="text-sm text-text2" data-testid="sync-viewer-note">
+              You can read coverage, but not sync or edit sources. Ask an owner if you need to.
+            </p>
+          )}
+        </InspectorSection>
+      )}
     </Inspector>
   );
 }
