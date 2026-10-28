@@ -475,11 +475,13 @@ async def call_operation(
     )
 
 
-def to_result(resp: RestResponse, data: Any = None) -> types.CallToolResult:
-    """An MCP result for a REST response; ``data`` replaces the parsed JSON body."""
-    if not resp.ok and resp.path.startswith(LIVE_PATH) and resp.status_code >= 500:
+def to_result(resp: RestResponse, data: Any = None, *, plain: bool = False) -> types.CallToolResult:
+    """An MCP result for a REST response; ``data`` replaces the parsed JSON body.
+    ``plain``: the caller is an Ask reply's live token (oracle.mcp.server.plain_for)."""
+    if plain and not resp.ok and resp.path.startswith(LIVE_PATH) and resp.status_code >= 500:
         # A live source that failed reaches Oracle's answer as one plain line: no HTTP
-        # code, no connector's name (the owner's production walk, 2026-10-27).
+        # code, no connector's name (the owner's production walk, 2026-10-27). Another
+        # MCP caller of the live routes keeps the HTTP answer (the review).
         log.info("live read %s failed: HTTP %s", resp.path, resp.status_code)
         return types.CallToolResult(content=[types.TextContent(text=SOURCE_DOWN)], is_error=True)
     if not resp.ok:

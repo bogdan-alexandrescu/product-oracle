@@ -1077,8 +1077,7 @@ async def extract(db: AsyncSession, m: SimpleMeeting) -> dict[str, Any]:
         summary = minutes.nothing(m.title)
     else:
         summary = f"{m.title}: no decision was taken."
-    actions = [{"title": a["title"], "owner_id": str(a["owner_id"]), "due_date": a["due_date"]}
-               for a in rec.actions]  # fmt: skip
+    actions = [minutes.recorded(a) for a in rec.actions]
     return {
         "summary": summary[:SUMMARY_MAX],
         "open_questions": rec.questions()[:MAX_QUESTIONS],
@@ -1136,8 +1135,11 @@ def _clean_actions(raw: Any, members: set[uuid.UUID], default: uuid.UUID | None)
             due = date.fromisoformat(str(a["due_date"])).isoformat() if a.get("due_date") else None
         except ValueError:
             due = None
-        out.append({"title": " ".join(str(a["title"]).split())[:200],
-                    "owner_id": str(owner) if owner else None, "due_date": due})  # fmt: skip
+        row = {"title": " ".join(str(a["title"]).split())[:200],
+               "owner_id": str(owner) if owner else None, "due_date": due}  # fmt: skip
+        if a.get("action_item_id"):  # one recorded in the meeting (Send skips it)
+            row["action_item_id"] = str(a["action_item_id"])
+        out.append(row)
     return out[:MAX_ACTIONS]
 
 
@@ -1292,6 +1294,8 @@ async def send(
     email and to Slack when chosen. Action items are added through the change engine
     (owners apply, others propose). Commits."""
     from oracle.simple import changes
+    from oracle.simple import minutes as minutes_mod
+    from oracle.simple.models import SimpleActionItem
     from oracle.simple.schemas import SimpleChangeIn
 
     m, document = await _get(db, principal, meeting_id, lock=True)
@@ -1332,8 +1336,21 @@ async def send(
                        data={"email": body.email, "slack": body.slack})  # fmt: skip
     await db.commit()
     # Action items through the change engine (each commits on its own), into a session
-    # of the sender's: the meeting's is closed.
+    # of the sender's: the meeting's is closed. One recorded in the meeting has its row
+    # already: by its id, or by its title when a person's edit dropped the id (the review).
+    have = list(
+        await db.execute(
+            select(SimpleActionItem.id, SimpleActionItem.title).where(
+                SimpleActionItem.meeting_id == m.id
+            )
+        )
+    )
+    ids = {str(i) for i, _ in have}
+    titles = {frozenset(minutes_mod.words(t)) for _, t in have}
     for a in minutes.get("action_items") or []:
+        same = frozenset(minutes_mod.words(a["title"]))
+        if str(a.get("action_item_id") or "") in ids or same in titles:
+            continue
         owner = a.get("owner_id") or str(_me(principal))
         try:
             await changes.create(db, principal, SimpleChangeIn(

@@ -6,9 +6,10 @@ plan in its context and went to a meeting-notes search instead. On a Simple page
 reply's context now opens with the plan, before anything else (:func:`add`):
 
 - each approved PRD's brief, from its latest approved version: the sections a one-pager
-  is made of first (summary and problem, goals and targets, milestones with dates,
-  outcomes, features per milestone, not doing, risks, open decisions), then the rest,
-  within ``PRD_CHARS`` per PRD and ``PLAN_CHARS`` in all;
+  is made of (summary and problem, goals and targets, milestones with dates, outcomes,
+  features per milestone, not doing, risks, open decisions) and nothing else (the review:
+  the block goes with every turn, so the PRD's detail stays out), within ``PRD_CHARS`` per
+  PRD and ``PLAN_CHARS`` in all;
 - the roadmap (oracle.simple.service's read: every roadmap's published items with their
   dates, horizon, status and PRD, and the tracks' milestones);
 - the open decisions (proposed, newest last).
@@ -84,8 +85,8 @@ async def _prds(db: AsyncSession, ctx: Any, start: int) -> None:
                 select(Section).where(Section.version_id == version.id).order_by(Section.ordinal)
             )
         )
-        # Stable: the brief's sections first, each part in reading order.
-        sections.sort(key=lambda s: not (s.layer == "brief" or BRIEF.search(s.heading or "")))
+        # The brief alone, in reading order.
+        sections = [s for s in sections if s.layer == "brief" or BRIEF.search(s.heading or "")]
         ctx.note(f"PRD: {doc.title} (approved version {version.number})")
         used = 0
         for sec in sections:
@@ -157,16 +158,19 @@ async def add(db: AsyncSession, ctx: Any) -> None:
     ctx.plan = True
 
 
+# A tool's failure, as a model repeats it: an HTTP code, or a search or read that failed.
+# Plan content naming a tool ("the Slack pilot failed its target") is not one (the review).
 _RAW = re.compile(
-    r"[^.!?\n]*(?:\bHTTP\s*\d{3}\b|\b(?:fireflies|notion|slack|google drive)\b[^.!?\n]*"
-    r"\b(?:error|failed|fail|did not answer|unavailable|down)\b)[^.!?\n]*[.!?]?",
+    r"[^.!?\n]*(?:\bHTTP\s*\d{3}\b|\b(?:search|read|lookup|query|request|call)(?:es|s)?\s+"
+    r"(?:failed|errored|returned an error|did not answer|timed out)\b)[^.!?\n]*[.!?]?",
     re.I,
 )
 
 
 def plain_failures(body: str) -> str:
     """A reply never shows a source's failure raw (no HTTP codes, no connector's name in an
-    error): each such sentence becomes the one plain line, said once."""
+    error): each such sentence becomes the one plain line, said once. The caller runs it
+    only on a Simple reply whose live read failed (oracle.discussions.replies)."""
     said = False
 
     def one(m: re.Match) -> str:

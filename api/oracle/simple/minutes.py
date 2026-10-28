@@ -8,14 +8,15 @@ with the meeting's id) and what still waits on whom.
 
 - Oracle's quick draft (oracle.simple.meetings.extract) lists the record's open questions
   (the chat's questions) and action items;
-- an empty record (no chat line, decision or action item) gives minutes saying plainly that
+- an empty record (no chat line, decision, action item or wait) gives minutes saying plainly that
   nothing was decided or recorded, with empty lists, and the ``meeting_minutes`` job asks
   no model;
 - the job's answer passes :func:`check`: an open question or action item the record does
   not support is dropped (and logged); an action item from the record keeps the record's
   owner and due date; one taken from a chat line keeps an owner only when that person wrote
   or is named in the line, and a due date only when the line says it; every recorded
-  action item is in the minutes.
+  action item is in the minutes, with its id (``action_item_id``): Send adds only the
+  minutes' new items (oracle.simple.meetings.send).
 """
 
 import logging
@@ -60,7 +61,7 @@ class Record:
 
     @property
     def empty(self) -> bool:
-        return not (self.chat or self.decisions or self.actions)
+        return not (self.chat or self.decisions or self.actions or self.waits)
 
     def lines(self) -> list[Line]:
         return [
@@ -112,6 +113,7 @@ async def record(
     )
     out.actions = [
         {
+            "id": a.id,
             "title": _clip(a.title),
             "owner_id": a.owner_id,
             "due_date": a.due_date.isoformat() if a.due_date else None,
@@ -186,8 +188,7 @@ def check(
         if hit is not None:
             used.add(hit)
             r = rec.actions[hit]
-            kept_a.append({"title": r["title"], "owner_id": str(r["owner_id"]),
-                           "due_date": r["due_date"]})  # fmt: skip
+            kept_a.append(recorded(r))
             continue
         same = words(title)
         if any(same == words(k["title"]) for k in kept_a):
@@ -215,9 +216,14 @@ def check(
         kept_a.append({"title": title, "owner_id": str(owner) if owner else None, "due_date": due})
     for i, r in enumerate(rec.actions):
         if i not in used:
-            kept_a.append({"title": r["title"], "owner_id": str(r["owner_id"]),
-                           "due_date": r["due_date"]})  # fmt: skip
+            kept_a.append(recorded(r))
     return kept_q, kept_a
+
+
+def recorded(a: dict[str, Any]) -> dict[str, Any]:
+    """A recorded action item as the minutes list it, with its id."""
+    return {"title": a["title"], "owner_id": str(a["owner_id"]), "due_date": a["due_date"],
+            "action_item_id": str(a["id"])}  # fmt: skip
 
 
 def nothing(title: str) -> str:

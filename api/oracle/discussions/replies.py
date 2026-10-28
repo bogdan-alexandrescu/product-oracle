@@ -372,6 +372,18 @@ async def live_citations(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> dict[int,
         }
 
 
+async def live_failed(tenant_id: uuid.UUID, reply_id: uuid.UUID) -> bool:
+    """Whether a live read of the reply failed (a settled ``error`` row: no ref, C1)."""
+    async with tenant_session(tenant_id) as db:
+        return bool(
+            await db.scalar(
+                select(func.count())
+                .select_from(LiveRead)
+                .where(LiveRead.message_id == reply_id, LiveRead.status == "error")
+            )
+        )
+
+
 async def _revoke(tenant_id: uuid.UUID, reply_ids: list[uuid.UUID]) -> None:
     try:
         async with tenant_session(tenant_id) as db:
@@ -653,8 +665,11 @@ async def _produce(
     text, versions = goal_interview.take_changes(text) if goal is not None else (text, [])
     reads = await live_citations(tenant_id, reply_id) if "[l:" in text else None
     body, cites = citations_of(text, ctx, reads)
-    # A source that failed is never shown raw: at most one plain line.
-    plain = plan_ctx.plain_failures(body) if ctx.plan or plan.live else body
+    # A source that failed is never shown raw: at most one plain line, on Simple's Ask
+    # only, and only when a live read of this reply failed (plan content naming a tool,
+    # "the Slack pilot failed its target", is kept; the review).
+    failed = ctx.plan and await live_failed(tenant_id, reply_id)
+    plain = plan_ctx.plain_failures(body) if failed else body
     if plain != body:
         log.info("discussion reply %s: a source's failure shown plainly", reply_id)
         body = plain
