@@ -7,7 +7,8 @@ Test cards (protects / fails_when / no_claim):
 - test_the_plan_opens_the_prompt (one case per role): protects=a person of each role asking
   "what is M2 about and when does it run?" in an Ask chat on Simple's Home gets a model call
   whose data opens with the company's plan: the approved PRD's brief (its milestones section
-  with M2's dates, outcomes and features, before its other sections), the roadmap's items
+  with M2's dates, outcomes and features; only the brief: a detail section such as an
+  appendix is left out, so the block stays small), the roadmap's items
   with their dates and the open decisions, all before the page's own lines and the
   conversation, and the system prompt says the plan comes first and sources only after;
   fails_when=the plan is missing, comes after the conversation, or the plan-first line is
@@ -24,15 +25,24 @@ Test cards (protects / fails_when / no_claim):
 - test_studio_pages_keep_their_context: protects=a panel chat on a Studio page (``/home``)
   gets no plan block and no plan-first line; fails_when=Detailed's Ask changes;
   no_claim=Simple's other subjects.
-- test_a_failing_source_is_one_plain_line: protects=a reply on a Simple page that repeats a
-  source's raw failure ("Fireflies search failed (HTTP 502)") is stored and shown with the
-  one plain line "Meeting notes could not be searched just now." instead, with no HTTP code
-  and no connector name; fails_when=the stored reply keeps "HTTP 502" or "Fireflies";
-  no_claim=the live tools' own routes (test_live_*).
+- test_a_failing_source_is_one_plain_line: protects=a reply on a Simple page whose live
+  read failed and that repeats the failure raw ("The Fireflies search failed (HTTP 502)")
+  is stored and shown with the one plain line "Meeting notes could not be searched just
+  now." instead, with no HTTP code and no connector name, while a plan sentence beside it
+  that names a tool ("The Slack pilot failed its adoption target") is kept as it is;
+  fails_when=the stored reply keeps "HTTP 502" or "Fireflies", or the plan sentence is
+  rewritten; no_claim=the live tools' own routes (test_live_*).
+- test_plan_content_naming_a_tool_is_kept: protects=when no live read of the reply failed,
+  a Simple reply naming Slack or Notion beside "failed" or "down" is the plan's own content
+  and is never rewritten, and a Studio reply is never rewritten even after a failed read;
+  fails_when=such a sentence becomes "Meeting notes could not be searched just now.";
+  no_claim=the model's wording.
 - test_live_tool_failure_reaches_the_model_plainly: protects=a live tool's 5xx answer (the
   source failed) becomes the plain line in the MCP result the model reads, while other
-  tools' errors and Oracle's own read cap (429) keep their text; fails_when=the model
-  reads "HTTP 502" or the connector's name; no_claim=Fireflies itself.
+  tools' errors and Oracle's own read cap (429) keep their text, and only an Ask reply's
+  live token (``live:sources``) gets the plain line: another MCP caller of the live routes
+  keeps the HTTP answer; fails_when=the model reads "HTTP 502" or the connector's name, or
+  an API token's caller loses the code; no_claim=Fireflies itself.
 - test_plain_failures_units: protects=the scrub replaces a failure sentence once and keeps
   plain text untouched; fails_when=an ordinary sentence naming a product is changed;
   no_claim=every phrasing a model might use.
@@ -40,15 +50,21 @@ Test cards (protects / fails_when / no_claim):
 
 import asyncio
 import hashlib
+import uuid
 from datetime import date
 
 import pytest
+from sqlalchemy import select
 
 from oracle.decisions.models import Decision
 from oracle.discussions import plan
+from oracle.discussions.models import DiscussionMessage
 from oracle.docs.models import Section
+from oracle.live import tokens as live_tokens
+from oracle.live.models import LiveRead
 from oracle.llm import gateway
 from oracle.llm.transports import TransportResult
+from oracle.mcp.auth import McpCaller
 from oracle.mcp.tools import RestResponse, to_result
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
@@ -135,8 +151,10 @@ async def test_the_plan_opens_the_prompt(client, fake, who):
     assert "Roadmap item: Ledger export" in data and "estimated" in data
     assert "Open decision D-1: Pick the ledger export format" in data
     at = data.index
-    # The brief before the rest of the PRD; the plan before the page and the conversation.
-    assert at("Ledgers Prd: Milestones") < at("Ledgers Prd: Appendix")
+    # The brief only (the appendix is not part of it); the plan before the page and the
+    # conversation.
+    assert "Ledgers Prd: Summary" in data and "Ledgers Prd: Not doing" in data
+    assert "Glossary of ledger terms" not in data
     assert at("The company's current plan") < at("The page:") < at(QUESTION)
     assert plan.PLAN_FIRST in request.system
 
@@ -175,40 +193,86 @@ async def test_studio_pages_keep_their_context(client, fake):
     assert plan.PLAN_FIRST not in request.system
 
 
+PLAN_LINE = "The Slack pilot failed its adoption target in Q3, so M2 drops it."
+TOOL_LINE = "The Notion import is down to one owner."
+
+
 class RawFailure(Fake):
-    """A model that repeats a source's raw error, as the production walk saw."""
+    """A model that repeats a source's raw error, as the production walk saw; with
+    ``tenant_id`` set, its live read of the reply failed first (a live_reads row)."""
+
+    def __init__(self, text: str, tenant_id=None):
+        super().__init__(pause=0)
+        self.text, self.tenant_id = text, tenant_id
 
     async def stream(self, token, request, on_text) -> TransportResult:
         self.calls += 1
         self.requests.append(request)
-        text = "I don't have anything on M2 to go on. The Fireflies search failed (HTTP 502)."
-        await on_text(text)
-        return TransportResult(text=text, model=request.model, usage={})
+        if self.tenant_id is not None:
+            async with tenant_session(self.tenant_id) as s:
+                reply = await s.scalar(
+                    select(DiscussionMessage)
+                    .where(DiscussionMessage.author_kind == "oracle")
+                    .order_by(DiscussionMessage.created_at.desc())
+                    .limit(1)
+                )
+                s.add(LiveRead(user_id=uuid.uuid4(), message_id=reply.id,
+                               tool="live_fireflies_search", source_label="Fireflies",
+                               status="error"))  # fmt: skip
+                await s.commit()
+        await on_text(self.text)
+        return TransportResult(text=self.text, model=request.model, usage={})
 
 
-async def test_a_failing_source_is_one_plain_line(client):
-    model = RawFailure(pause=0)
+async def answered(client, model: RawFailure, path: str, failed: bool):
     previous = gateway.set_transports(gateway.Transports(plan=model, api_key=model))
     try:
         ctx = await make_ctx()
         await with_key(ctx)
         await plan_world(ctx)
-        _, reply, _ = await ask_on(client, ctx, "commenter", "/simple", model)
+        if failed:
+            model.tenant_id = ctx.tenant_id
+        _, reply, _ = await ask_on(client, ctx, "commenter", path, model)
         await asyncio.sleep(0)
         done = await row(ctx, reply["id"])
     finally:
         gateway.set_transports(previous)
     assert done.status == "complete"
+    return done
+
+
+async def test_a_failing_source_is_one_plain_line(client):
+    raw = "I don't have anything on M2 to go on. The Fireflies search failed (HTTP 502)."
+    done = await answered(client, RawFailure(f"{PLAN_LINE} {raw}"), "/simple", failed=True)
     assert "HTTP" not in done.body and "502" not in done.body and "Fireflies" not in done.body
     assert done.body.count(plan.SOURCE_DOWN) == 1
+    assert done.body.startswith(PLAN_LINE)
+
+
+async def test_plan_content_naming_a_tool_is_kept(client):
+    text = f"{PLAN_LINE} {TOOL_LINE}"
+    done = await answered(client, RawFailure(text), "/simple", failed=False)
+    assert done.body == text
+    raw = "The Fireflies search failed (HTTP 502)."
+    done = await answered(client, RawFailure(raw), "/home", failed=True)
+    assert done.body == raw
 
 
 def test_live_tool_failure_reaches_the_model_plainly():
+    from oracle.mcp.server import plain_for
+
     raw = b'{"detail":"Fireflies did not answer (HTTP 502). Synced data is still available."}'
     for code in (500, 502, 503):
-        out = to_result(RestResponse(code, "application/json", raw, "/v1/live/fireflies/search"))
+        resp = RestResponse(code, "application/json", raw, "/v1/live/fireflies/search")
+        out = to_result(resp, plain=True)
         text = out.content[0].text
         assert out.is_error and text == plan.SOURCE_DOWN, code
+        # Another MCP caller of the live routes (an API token) keeps the HTTP answer.
+        assert to_result(resp).content[0].text.startswith(f"HTTP {code}")
+    live = McpCaller(tenant_id=uuid.uuid4(), kind="user", credentials={},
+                     scopes=frozenset({live_tokens.SCOPE}))  # fmt: skip
+    assert plain_for(live)
+    assert not plain_for(McpCaller(tenant_id=uuid.uuid4(), kind="token", credentials={}))
     other = to_result(RestResponse(404, "application/json", b'{"detail":"x"}', "/v1/goals/1"))
     assert other.content[0].text.startswith("HTTP 404")
     # Oracle's own cap on live reads is an instruction to the model, kept as it is.
@@ -222,6 +286,8 @@ def test_plain_failures_units():
     )
     out = plan.plain_failures("M2 runs in March. Notion search failed. Also (HTTP 500) here.")
     assert out == f"M2 runs in March. {plan.SOURCE_DOWN}"
+    for kept in (PLAN_LINE, TOOL_LINE, "Slack is unavailable to the field team."):
+        assert plan.plain_failures(kept) == kept
     assert plan.simple_page(type("D", (), {"subject_kind": "screen",
                                            "subject": {"path": "/simple/roadmap"}})())  # fmt: skip
     assert not plan.simple_page(type("D", (), {"subject_kind": "screen",

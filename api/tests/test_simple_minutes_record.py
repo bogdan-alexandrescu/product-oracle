@@ -23,6 +23,14 @@ Test cards (protects / fails_when / no_claim):
   fails_when=the minutes keep "Why did the session close without decisions?" or assign a
   task to someone the line does not name, or the same task twice; no_claim=the model's
   summary wording.
+- test_send_adds_no_second_copy_of_a_recorded_item: protects=an action item recorded in the
+  meeting (its own row) is in the minutes with its id, and Send adds through the change
+  engine only the minutes' new items, whether the minutes are Oracle's or a person's edit
+  (which may not carry the id); fails_when=Send proposes a second add_action_item for the
+  recorded item; no_claim=edits to a recorded item made in the minutes (it keeps its row).
+- test_waits_alone_are_not_an_empty_record: protects=a meeting with only something waiting
+  (a pending proposal) does not read "nothing was decided or recorded" beside its Waiting
+  list; fails_when=Record.empty ignores the waits; no_claim=the waits' own wording.
 - test_support_units: protects=the record check's word overlap, plural folding and date
   reading; fails_when=an unrelated line supports an item or "Nov 6" is not read as the
   6th of November; no_claim=every phrasing.
@@ -36,7 +44,7 @@ from sqlalchemy import select, update
 from oracle.auth.models import User
 from oracle.jobs.models import LlmJob
 from oracle.simple import meetings, minutes
-from oracle.simple.models import SimpleActionItem
+from oracle.simple.models import SimpleActionItem, SimpleChange
 from oracle.tenancy import tenant_session
 from tests.test_simple_meetings_api import MEETINGS, end, get, start, uid, world
 
@@ -170,6 +178,46 @@ async def test_chat_lines_support_questions_and_tasks(client, monkeypatch):
     ]
     text = " ".join(dropped)
     assert "missing decision-makers" in text and "follow-up session" in text
+
+
+async def test_send_adds_no_second_copy_of_a_recorded_item(client):
+    w = await world()
+    for edited in (False, True):
+        m = await start(client, w, title=f"Review {edited}")
+        async with tenant_session(w.ctx.tenant_id) as s:
+            item = SimpleActionItem(meeting_id=uuid.UUID(m["id"]), title="Send the pricing note",
+                                    owner_id=w.ctx.users["approver"].id,
+                                    due_date=date(2026, 11, 6),
+                                    created_by=w.ctx.users["decider"].id)  # fmt: skip
+            s.add(item)
+            await s.commit()
+            recorded = str(item.id)
+        quick = (await end(client, w, m["id"]))["minutes"]
+        [a] = quick["action_items"]
+        assert a["action_item_id"] == recorded
+        if edited:  # a person's edit, as today's form sends it: no ids
+            body = {"summary": "Edited.", "open_questions": [], "action_items": [
+                {"title": "Send the pricing note", "owner_id": uid(w, "approver"),
+                 "due_date": "2026-11-06"},
+                {"title": "Book the support training", "owner_id": uid(w, "commenter")},
+            ]}  # fmt: skip
+            r = await client.put(f"{MEETINGS}/{m['id']}/minutes", json=body,
+                                 headers=w.ctx.as_("decider"))  # fmt: skip
+            assert r.status_code == 200, r.text
+        r = await client.post(f"{MEETINGS}/{m['id']}/send", json={},
+                              headers=w.ctx.as_("decider"))  # fmt: skip
+        assert r.status_code == 200, r.text
+        async with tenant_session(w.ctx.tenant_id) as s:
+            added = [c.after["title"] for c in await s.scalars(
+                select(SimpleChange).where(SimpleChange.op == "add_action_item",
+                                           SimpleChange.target["meeting_id"].astext == m["id"])
+            )]  # fmt: skip
+        assert added == (["Book the support training"] if edited else []), (edited, added)
+
+
+def test_waits_alone_are_not_an_empty_record():
+    assert minutes.Record().empty
+    assert not minutes.Record(waits=["Proposal: Rename the ledger"]).empty
 
 
 def test_support_units():
