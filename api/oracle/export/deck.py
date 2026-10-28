@@ -150,11 +150,14 @@ def _mark_expand(html: str) -> str:
 
 
 def _moment(value, zone: str) -> str:
-    """A moment in the Company time zone in words: "Oct 18, 1:30 AM PDT" (a slide is read
-    by people, not parsed: no ISO date)."""
+    """A moment in the Company time zone in words: "Oct 18, 2026, 1:30 AM PDT" (a slide is
+    read by people, not parsed: no ISO date; the year, as a deck outlives its quarter)."""
     words = company_time.in_words(value, zone)
-    # in_words leads with the weekday ("Sun Oct 18, ..."); a footer needs only the day.
-    return words.split(" ", 1)[1]
+    # in_words leads with the weekday ("Sun Oct 18, 1:30 AM PDT"); a footer needs only the
+    # day, with its year.
+    day, time = words.split(" ", 1)[1].split(", ", 1)
+    year = company_time.day(value, zone).year
+    return f"{day}, {year}, {time}"
 
 
 def _banner(ev: ExportVersion) -> str:

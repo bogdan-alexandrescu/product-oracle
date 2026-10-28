@@ -530,7 +530,9 @@ async def public_share_status(token: str, request: Request) -> JSONResponse:
     (for every token, known or not, and nothing else), then ``active`` or ``ended`` with
     the link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF
     only when it is on); an active link also gives its document's ``title``, the company
-    that shared it (``shared_by``) and ``expires_at``, for the page's header."""
+    that shared it (``shared_by``, null when it has no name), the person who made the link
+    (``shared_by_name``), ``expires_at`` and ``expires_on`` (its day in the Company time
+    zone, as the page's footer), for the page's header."""
     if (busy := _client_allowed(request)) is not None:
         return busy  # type: ignore[return-value]
     link, claims = await _opened(token, request)
@@ -541,16 +543,25 @@ async def public_share_status(token: str, request: Request) -> JSONResponse:
     if state == "active":
         # qa-docs-71: the page's header names what was shared, by whom and until when (the
         # same facts the shared page's own footer gives), only once the passcode opened it.
+        from oracle import company_time
+        from oracle.auth.models import User
         from oracle.docs.models import Document
-        from oracle.roadmap.public import company_name
+        from oracle.members.names import display_name
 
         async with tenant_session(link.tenant_id) as db:
             document = await db.get(Document, link.document_id)
+            creator = await db.get(User, link.created_by)
+            zone = await company_time.company_time_zone(db)
             body.update(
                 title=document.title if document is not None else None,
-                shared_by=await company_name(db),
+                shared_by=await render.company(db),
+                shared_by_name=display_name(creator.email, creator.name)
+                if creator is not None
+                else None,
                 expires_at=link.expires_at.isoformat(),
+                expires_on=render.day_with_year(link.expires_at, zone),
             )
+            await db.commit()
     return _json(body, 200)
 
 

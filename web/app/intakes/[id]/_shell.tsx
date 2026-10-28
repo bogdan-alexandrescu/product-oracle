@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
 import { DeleteDialog } from "@/components/ArtifactMenu";
@@ -67,6 +67,33 @@ export function BeforeDrafting({ id }: { id: string }) {
   const [deleting, setDeleting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The question an inspector's Answer asked for: focused once the Questions tab shows it. */
+  const [focusing, setFocusing] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!focusing || tab !== "questions") return;
+    // The tab's panel renders after this commit (its list may still be loading): look for the
+    // question on each frame until it is there, for at most two seconds.
+    let frame = 0;
+    let tries = 0;
+    const find = () => {
+      const li = document.getElementById(`q-${focusing}`);
+      if (!li) {
+        if (++tries < 120) frame = window.requestAnimationFrame(find);
+        else setFocusing(null);
+        return;
+      }
+      setFocusing(null);
+      li.scrollIntoView({ block: "center" });
+      const button = [...li.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim() === "Answer");
+      if (button) return button.focus();
+      // Asked of someone else: the question itself takes the focus.
+      li.setAttribute("tabindex", "-1");
+      li.focus();
+    };
+    frame = window.requestAnimationFrame(find);
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusing, tab]);
 
   const summaryQ = useQuery(
     `intake|${id}|${version}`,
@@ -129,19 +156,17 @@ export function BeforeDrafting({ id }: { id: string }) {
   // #482: owners delete a brief (and the PRD it became) to Trash.
   const mayDelete = can("delete_intake");
   // qa-docs-19: an open critical question in the inspector opens its bubble in the thread.
-  const questionFor = (gapId: string) => batchesQ.data?.flatMap((b) => b.questions).find((c) => c.question.gap_id === gapId)?.question.id ?? null;
+  // The gap's newest question still open (asked or delegated), else its newest: an older,
+  // answered one is not what Answer is for.
+  const questionFor = (gapId: string) => {
+    const asked = (batchesQ.data ?? []).flatMap((b) => b.questions.map((c) => c.question)).filter((q) => q.gap_id === gapId);
+    const newest = [...asked].reverse();
+    return (newest.find((q) => q.status === "asked" || q.status === "delegated") ?? newest[0])?.id ?? null;
+  };
   const answer = (questionId: string) => {
     setSheet(false);
     setTab("questions");
-    window.setTimeout(() => {
-      const li = document.getElementById(`q-${questionId}`);
-      li?.scrollIntoView({ block: "center" });
-      const button = [...(li?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => b.textContent?.trim() === "Answer");
-      if (button) return button.focus();
-      // Asked of someone else: the question itself takes the focus.
-      li?.setAttribute("tabindex", "-1");
-      li?.focus();
-    }, 50);
+    setFocusing(questionId);
   };
   const inspector = <IntakeInspector summary={s} role={role} onChanged={changed} questionFor={questionFor} onAnswer={answer} />;
   const live = !converted && (mayAnalyze || mayRepin || (mayArchive && !archived));

@@ -8,11 +8,9 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate, plural } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 
-import { ORIGIN, PACK_POLICY } from "./_lib";
+import { ORIGIN, PACK_POLICY, ROLE } from "./_lib";
 
 type Entry = Schemas["CatalogModuleOut"];
-
-const ROLE: Record<string, string> = { viewer: "Viewer", commenter: "Commenter", approver: "Approver", owner: "Owner" };
 
 export const COMPANY_POLICY: Record<NonNullable<Entry["company_policy"]>, string> = {
   required: "Required",

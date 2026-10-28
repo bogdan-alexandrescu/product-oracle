@@ -156,11 +156,12 @@ type DeckInput = {
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
-/** "Oct 18, 1:30 AM PDT": the Company time zone, in words, as the API's deck banner (export/deck.py _moment). */
+/** "Oct 18, 2026, 1:30 AM PDT": the Company time zone, in words, as the API's deck banner (export/deck.py _moment). */
 function momentInWords(at: string): string {
   const p = Object.fromEntries(
     new Intl.DateTimeFormat("en-US", {
       timeZone: companyZone(),
+      year: "numeric",
       month: "short",
       day: "numeric",
       hour: "numeric",
@@ -171,7 +172,7 @@ function momentInWords(at: string): string {
       .formatToParts(new Date(at))
       .map((x) => [x.type, x.value]),
   );
-  return `${p.month} ${p.day}, ${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`;
+  return `${p.month} ${p.day}, ${p.year}, ${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`;
 }
 
 export function deckOut(d: DeckInput): Schemas["DeckOut"] {

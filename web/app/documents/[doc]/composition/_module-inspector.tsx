@@ -4,7 +4,7 @@ import { Button, Chip, Inspector, InspectorRow, InspectorSection } from "@/compo
 
 import { plural } from "@/lib/format";
 
-import { DECIDED_BY, KNOWLEDGE, ORIGIN, PACK_POLICY, POLICY_SOURCE, SELECTION_LABEL, type Changes, type Module } from "./_lib";
+import { DECIDED_BY, KNOWLEDGE, ORIGIN, PACK_POLICY, POLICY_SOURCE, ROLE, SELECTION_LABEL, missingInWords, reasonInWords, type Changes, type Module } from "./_lib";
 
 /** Modules by name under their label, wrapping (never cut, never squeezing the label). */
 function Names({ label, keys, titleOf }: { label: string; keys: string[]; titleOf: (key: string) => string }) {
@@ -113,7 +113,7 @@ export function ModuleDetail({
   const body = (
     <>
       <InspectorSection label="Why it is here">
-        <p className="text-[15px]">{m.reason}</p>
+        <p className="text-[15px]">{reasonInWords(m)}</p>
         <ul className="mt-2 space-y-1 text-sm text-text2">
           <li>
             Decided by: {DECIDED_BY[m.decided_by]} · {POLICY_SOURCE[m.policy_source]}
@@ -159,7 +159,7 @@ export function ModuleDetail({
             ))}
             {m.missing_information.map((x) => (
               <li key={x} className="text-text2">
-                {x}
+                {missingInWords(x)}
               </li>
             ))}
           </ul>
@@ -230,7 +230,7 @@ export function ModuleDetail({
                 Mandatory: it stays in the PRD. Change the company policy to make it optional first.
               </span>
             )}
-            {!mandatory && !m.can_change && <span className="text-sm text-text2">Your role cannot add or remove it: it needs the {m.required_review_role} role.</span>}
+            {!mandatory && !m.can_change && <span className="text-sm text-text2">Your role cannot add or remove it: it needs the {ROLE[m.required_review_role] ?? "Owner"} role.</span>}
           </div>
         </InspectorSection>
       )}

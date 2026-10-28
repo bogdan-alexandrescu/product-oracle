@@ -33,7 +33,7 @@ import { api, unwrap, type Schemas, type VersionSummary } from "@/lib/api/client
 import { formatDate, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
-import { useTemplateNames } from "@/lib/template-names";
+import { NAMES_FAILED, useTemplateNames } from "@/lib/template-names";
 import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
@@ -46,18 +46,20 @@ const NONE = "–";
 type SectionState = Schemas["SectionStateOut"];
 
 /**
- * The sections a person assigns (qa-docs-45): not the document's title (the level-1 heading
- * that names it), and not a subsection that only repeats its parent's heading ("Sources"
- * under "Sources and data points").
+ * The sections a person assigns (qa-docs-45): the opening section that carries the document's
+ * title reads as the Introduction, as the version page names it (and may be assigned, as it
+ * may be reviewed); not another heading that only repeats the title, and not a subsection
+ * that only repeats its parent's heading ("Sources" under "Sources and data points").
  */
 export function assignableSections(states: SectionState[], title: string): SectionState[] {
   const norm = (h: string) => h.replace(/^[\d.]+\s+/, "").trim().toLowerCase();
   const t = norm(title);
-  return states.filter((s, i) => {
+  return states.flatMap((s, i) => {
+    if (i === 0 && title && s.heading.trim() === title.trim()) return [{ ...s, heading: "Introduction" }];
     const h = norm(s.heading);
-    if (h === t || `${h} prd` === t || h === `${t} prd`) return false;
+    if (h === t || `${h} prd` === t || h === `${t} prd`) return [];
     const prev = i > 0 ? norm(states[i - 1]!.heading) : "";
-    return !(prev && prev !== h && prev.startsWith(`${h} `));
+    return prev && prev !== h && prev.startsWith(`${h} `) ? [] : [s];
   });
 }
 
@@ -248,11 +250,14 @@ function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean })
     open ? unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })) : Promise.resolve(null),
   );
   const items = (plan.data?.items ?? []).filter((i) => i.prd?.slug === doc && i.origin === "approved");
-  // qa-docs-66: a spec opens on its document's latest version (an edit after the run adds one
-  // the spec's own record does not count).
-  const specDocs = useQuery(`documents|spec`, () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "spec" } } })));
-  const latestOf = (slug: string | null | undefined) => specDocs.data?.find((x) => x.slug === slug)?.latest_version ?? null;
   const specs = q.data ?? [];
+  // qa-docs-66: a spec opens on its document's latest version (an edit after the run adds one
+  // the spec's own record does not count). Only fetched when the list shows a spec document.
+  const needDocs = specs.some((s) => s.document_slug);
+  const specDocs = useQuery(`documents|spec|${needDocs}`, () =>
+    needDocs ? unwrap(api.GET("/v1/documents", { params: { query: { kind: "spec" } } })) : Promise.resolve(null),
+  );
+  const latestOf = (slug: string | null | undefined) => specDocs.data?.find((x) => x.slug === slug)?.latest_version ?? null;
   return (
     <Panel
       title="Engineering specs"
@@ -367,6 +372,11 @@ export function DocumentOverview({ doc }: { doc: string }) {
                 </>
               }
             />
+            {names.failed && (d.template || d.theme) && (
+              <p data-testid="template-names-failed" role="status" className="mb-3 text-[13px] text-text2">
+                {NAMES_FAILED}
+              </p>
+            )}
             {d.kind === "roadmap" && <RoadmapSharing d={d} />}
             <Split inspector={selected ? <VersionInspector doc={doc} kind={d.kind} v={selected} latest={d.latest_version} /> : undefined}>
               <Panel title="Versions" count={versions.length}>

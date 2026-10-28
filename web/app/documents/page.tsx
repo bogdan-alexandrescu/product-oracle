@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { ArtifactMenu } from "@/components/ArtifactMenu";
@@ -32,7 +32,7 @@ import { formatDate, formatDateTime, plural } from "@/lib/format";
 import { docLabel } from "@/lib/labels";
 import { useArtifactsChanged } from "@/lib/artifacts";
 import { useMe } from "@/lib/me";
-import { useTemplateNames, type TemplateNames } from "@/lib/template-names";
+import { NAMES_FAILED, useTemplateNames, type TemplateNames } from "@/lib/template-names";
 import { useQuery } from "@/lib/use-query";
 
 /** The one empty marker on this page (qa-docs-42). */
@@ -54,14 +54,27 @@ function sortDocs(docs: DocumentSummary[], { key, desc }: Sort): DocumentSummary
   return [...docs].sort((a, b) => (desc ? -by(a, b) : by(a, b)) || b.updated_at.localeCompare(a.updated_at));
 }
 
+/** Each column's order in words, low to high then high to low (qa-docs-41). */
+const SORT_WORDS: Record<SortKey, [string, string]> = {
+  title: ["A to Z", "Z to A"],
+  status: ["drafts first", "approved first"],
+  latest: ["fewest versions first", "most versions first"],
+  updated: ["oldest first", "newest first"],
+};
+
+/** A sortable column's aria-sort: ascending, descending or none. */
+const ariaSort = (k: SortKey, sort: Sort): "ascending" | "descending" | "none" => (sort.key !== k ? "none" : sort.desc ? "descending" : "ascending");
+
 /** A column header that sorts its column: a second click reverses it. */
 function SortHeader({ label, k, sort, onSort }: { label: string; k: SortKey; sort: Sort; onSort: (s: Sort) => void }) {
   const on = sort.key === k;
+  const hint = on ? `, ${SORT_WORDS[k][sort.desc ? 1 : 0]}` : "";
   return (
     <button
       type="button"
       data-testid={`sort-${k}`}
-      aria-label={`Sort by ${label}${on ? (sort.desc ? ", newest or highest first" : ", oldest or lowest first") : ""}`}
+      aria-label={`Sort by ${label}${hint}`}
+      title={on ? `Sorted ${SORT_WORDS[k][sort.desc ? 1 : 0]}` : `Sort by ${label}`}
       onClick={() => onSort({ key: k, desc: on ? !sort.desc : k === "updated" || k === "latest" })}
       className={`inline-flex items-center gap-1 rounded hover:text-text ${on ? "text-text" : ""}`}
     >
@@ -76,6 +89,7 @@ function docColumns(sort: Sort, onSort: (s: Sort) => void, names: TemplateNames)
     {
       key: "title",
       header: <SortHeader label="Document" k="title" sort={sort} onSort={onSort} />,
+      ariaSort: ariaSort("title", sort),
       cell: (d) => (
         <Link href={`/documents/${d.slug}`} className="font-medium text-text hover:underline" title={docLabel({ ...d, kind: "prd" })}>
           {d.title}
@@ -85,12 +99,14 @@ function docColumns(sort: Sort, onSort: (s: Sort) => void, names: TemplateNames)
     {
       key: "status",
       header: <SortHeader label="Status" k="status" sort={sort} onSort={onSort} />,
+      ariaSort: ariaSort("status", sort),
       width: "128px",
       cell: (d) => <DocStatusChip status={d.status} dot />,
     },
     {
       key: "latest",
       header: <SortHeader label="Latest" k="latest" sort={sort} onSort={onSort} />,
+      ariaSort: ariaSort("latest", sort),
       width: "84px",
       className: "tnum",
       cell: (d) =>
@@ -116,6 +132,7 @@ function docColumns(sort: Sort, onSort: (s: Sort) => void, names: TemplateNames)
     {
       key: "updated",
       header: <SortHeader label="Updated" k="updated" sort={sort} onSort={onSort} />,
+      ariaSort: ariaSort("updated", sort),
       width: "120px",
       hideOnPhone: true,
       align: "right",
@@ -279,6 +296,9 @@ export default function DocumentsPage() {
   const ideasQ = useQuery("documents|ideas", loadIdeas);
   const [view, setView] = useState<"prds" | "ideas">("prds");
   const columns = docColumns(sort, setSort, names);
+  // On a phone a tapped row opens its PRD, but the arrow keys (Home, End, Space) only move
+  // the selection: the keydown that selects is caught before the row's own handler.
+  const byKey = useRef(false);
 
   return (
     <Page>
@@ -301,6 +321,11 @@ export default function DocumentsPage() {
         }
       />
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
+      {names.failed && (
+        <p data-testid="template-names-failed" role="status" className="mb-3 text-[13px] text-text2">
+          {NAMES_FAILED}
+        </p>
+      )}
       <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         <SegmentedControl
           label="Show"
@@ -363,19 +388,33 @@ export default function DocumentsPage() {
           inspector={selected && !phone ? <DocInspector d={selected} canPublish={can("publish_version")} names={names} /> : undefined}
         >
           <Panel>
-            <DataTable
-              label="PRDs"
-              testId="documents-table"
-              columns={columns}
-              rows={q.data ? documents : undefined}
-              loading={q.loading}
-              rowKey={(d) => d.slug}
-              selected={phone ? null : (selected?.slug ?? null)}
-              onSelect={(k) => (phone ? router.push(`/documents/${k}`) : setPicked(k))}
-              onActivate={(k) => router.push(`/documents/${k}`)}
-              empty={filter === "in_review" ? "No PRDs in review" : "No PRDs yet"}
-              rowProps={() => ({ "data-testid": "document-row" })}
-            />
+            <div
+              onKeyDownCapture={(e) => {
+                byKey.current = ["ArrowUp", "ArrowDown", "Home", "End", " "].includes(e.key);
+              }}
+              onPointerDownCapture={() => {
+                byKey.current = false;
+              }}
+            >
+              <DataTable
+                label="PRDs"
+                testId="documents-table"
+                columns={columns}
+                rows={q.data ? documents : undefined}
+                loading={q.loading}
+                rowKey={(d) => d.slug}
+                selected={phone ? picked : (selected?.slug ?? null)}
+                onSelect={(k) => {
+                  const moved = byKey.current;
+                  byKey.current = false;
+                  if (phone && !moved) router.push(`/documents/${k}`);
+                  else setPicked(k);
+                }}
+                onActivate={(k) => router.push(`/documents/${k}`)}
+                empty={filter === "in_review" ? "No PRDs in review" : "No PRDs yet"}
+                rowProps={() => ({ "data-testid": "document-row" })}
+              />
+            </div>
           </Panel>
         </Split>
       )}

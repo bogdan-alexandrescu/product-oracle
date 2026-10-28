@@ -107,7 +107,7 @@ export function ReportsPanel({
           error) is Oracle's work's to say, not this panel's. */}
       {job?.status === "failed" && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-button bg-crit-bg px-3 py-2" role="alert">
-          <p className="min-w-0 flex-1 text-sm font-medium text-crit">The reports could not be written. Try again.</p>
+          <p className="min-w-0 flex-1 text-sm font-medium text-crit">The reports could not be written.{canAct && " Try again."}</p>
           {canAct && (
             <Button variant="danger" onClick={generate} data-testid="reports-retry">
               Retry

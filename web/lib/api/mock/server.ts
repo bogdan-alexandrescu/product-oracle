@@ -1820,7 +1820,10 @@ function ensureReviewV2(db: Db): ReviewV2Db {
 /** O5: the share links' context (./shares.ts); `me` is null for a link holder. */
 function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesContext {
   const publications = ensureReviewV2(db).publications;
-  const base = { documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now };
+  const base = {
+    documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now,
+    zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+  };
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
   db.shares ??= scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO
     ? seeded("shares", () => seedShares(base, db.user_id, db.members.find((m) => m.status === "disabled")?.id ?? null, scenario === SHARING_SCENARIO))

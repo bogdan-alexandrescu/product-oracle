@@ -94,17 +94,33 @@ function mod(
   };
 }
 
+/** A brief-layer module: its contract puts these sections in the brief and has no full layer
+ * (brief_section_ids and full_layer: false, as the API's built-in core.yaml). */
+function withBrief(c: Catalog, ids: string[]): Catalog {
+  return { ...c, brief_layer: true, full_layer: false, contract: { ...c.contract, brief_layer: true, full_layer: false, brief_section_ids: ids } };
+}
+
+/** As oracle.modules.composer._layer_impact for a module the template does not map: its
+ * brief sections (brief_section_ids, else all of them for a brief-only module) and the rest. */
+function layerImpactOf(c: Catalog): Composed["layer_impact"] {
+  const sections = c.section_ids;
+  const listed = c.contract.brief_section_ids;
+  const brief = Array.isArray(listed) && listed.length ? (listed as string[]) : c.brief_layer && !c.full_layer ? [...sections] : [];
+  const full = c.full_layer || !brief.length ? sections.filter((s) => !brief.includes(s)) : [];
+  return { brief_sections: brief, full_sections: full, new_sections: [...sections], template_sections: [], absent_template_sections: [] };
+}
+
 const BOTH = [PACK_A, PACK_B];
 const PACK_TITLE: Record<string, string> = { [PACK_A]: "General Tech Startup", [PACK_B]: "Multi-tenant AI Agent Platform" };
 
 export function seedModules(documentId: string | null, userId: string): ModulesDb {
   const catalog: Catalog[] = [
-    mod("decision.executive", "Executive decision", "required", 10, ["executive-decision"], BOTH),
-    mod("strategy.alignment", "Strategic alignment", "required", 20, ["strategic-alignment"], BOTH),
+    withBrief(mod("decision.executive", "Executive decision", "required", 10, ["executive-decision"], BOTH), ["executive-decision"]),
+    withBrief(mod("strategy.alignment", "Strategic alignment", "required", 20, ["strategic-alignment"], BOTH), ["strategic-alignment"]),
     mod("goals.outcomes", "Intended outcomes and success metrics", "required", 60, ["outcomes-metrics"], BOTH, ["strategy.alignment"]),
     mod("constraints.solutions", "Constraints, blockers and solution strategy", "required", 100, ["constraints-solutions"], BOTH, ["goals.outcomes"]),
     mod("economics.value", "Value and cost economics", "conditional", 120, ["value-economics"], BOTH, ["goals.outcomes"]),
-    mod("risks.register", "Risks", "required", 130, ["risk-register"], BOTH),
+    withBrief(mod("risks.register", "Risks", "required", 130, ["risk-register"], BOTH), ["risk-register"]),
     mod("platform.tenant-isolation", "Multi-tenant isolation", "conditional", 210, ["tenant-isolation"], [PACK_B]),
     { ...mod("agents.tool-policies", "Tool policies", "conditional", 240, ["tool-policies"], [PACK_B]), required_review_role: "owner" },
     mod("sources.data-points", "Sources and data points", "required", 1000, ["sources", "sources-list", "sources-data", "sources-evidence"], BOTH),
@@ -160,13 +176,7 @@ function composed(c: Catalog, included: boolean, selection: Composed["selection"
     depends_on: c.depends_on,
     required_by: [],
     conflicts_with: [],
-    layer_impact: {
-      brief_sections: [],
-      full_sections: c.section_ids,
-      new_sections: c.section_ids,
-      template_sections: [],
-      absent_template_sections: [],
-    },
+    layer_impact: layerImpactOf(c),
     field_problems: [],
     condition_error: null,
     user_reason: null,
@@ -396,13 +406,29 @@ function titleOf(rec: Schemas["RecommendationOut"], key: string): string {
   return rec.modules.find((m) => m.key === key)?.title ?? key;
 }
 
-function outlineOf(modules: Composed[]): Schemas["OutlineEntry"][] {
+/** The sections the included modules add, in their order, each once: in the brief when it
+ * is one of the module's brief sections (as the composer's outline; its _heading names a
+ * second section after the module). */
+function moduleSections(modules: Composed[]): Schemas["OutlineEntry"][] {
   return modules
     .filter((m) => m.included)
-    .flatMap((m) => [
-      ...m.layer_impact.brief_sections.map((s) => ({ section_id: s, heading: m.title, level: 2, layer: "brief" as const, module: m.key, origin: "module" as const })),
-      ...m.section_ids.map((s) => ({ section_id: s, heading: m.title, level: 2, layer: "full" as const, module: m.key, origin: "module" as const })),
-    ]);
+    .flatMap((m) => {
+      const added = m.layer_impact.new_sections;
+      return added.map((s) => ({
+        section_id: s,
+        heading: added.length === 1 || s === added[0] ? m.title : `${m.title}: ${s.replace(/-/g, " ")}`,
+        level: 2,
+        layer: m.layer_impact.brief_sections.includes(s) ? ("brief" as const) : ("full" as const),
+        module: m.key,
+        origin: "module" as const,
+      }));
+    });
+}
+
+/** Without template sections, as the composer: the brief sections modules add, then the full ones. */
+function outlineOf(modules: Composed[]): Schemas["OutlineEntry"][] {
+  const added = moduleSections(modules);
+  return [...added.filter((o) => o.layer === "brief"), ...added.filter((o) => o.layer !== "brief")];
 }
 
 /** As oracle.modules.composer.outline: the template's own sections first (brief and full,
@@ -426,12 +452,18 @@ function templateOutline(db: ModulesDb, rec: Schemas["RecommendationOut"], secti
     origin: "template",
   }));
   const mapped = new Set(manifest?.modules.map((e) => e.module_key) ?? []);
-  const added = outlineOf(included.filter((m) => !mapped.has(m.key))).filter((o) => !keys.has(o.section_id));
-  const sourcesNew = added.filter((o) => o.section_id.startsWith("sources"));
-  const rest = added.filter((o) => !sourcesNew.includes(o));
+  const added = moduleSections(included.filter((m) => !mapped.has(m.key))).filter((o) => !keys.has(o.section_id));
+  // As the composer: added brief sections before the full version (its "full" section, else the
+  // template's first full one), full ones before Sources and data points, new sources last.
+  const briefNew = added.filter((o) => o.layer === "brief");
+  const sourcesNew = added.filter((o) => o.layer !== "brief" && o.section_id.startsWith("sources"));
+  const fullNew = added.filter((o) => o.layer !== "brief" && !sourcesNew.includes(o));
+  const fullHead = entries.findIndex((e) => e.section_id === "full");
+  const firstFull = entries.findIndex((e) => e.layer === "full");
+  const fullAt = fullHead >= 0 ? fullHead : firstFull >= 0 ? firstFull : entries.length;
   const at = entries.findIndex((e) => e.section_id === "sources");
   const cut = at < 0 ? entries.length : at;
-  return [...entries.slice(0, cut), ...rest, ...entries.slice(cut), ...sourcesNew];
+  return [...entries.slice(0, fullAt), ...briefNew, ...entries.slice(fullAt, cut), ...fullNew, ...entries.slice(cut), ...sourcesNew];
 }
 
 function inspected(m: Composed, db: ModulesDb): Schemas["InspectedModule"] {

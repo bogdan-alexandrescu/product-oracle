@@ -5,11 +5,14 @@ import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
 
 const ENDED = "This link has ended. Ask the person who sent it for a new one.";
-/** What an opened link's status says about it (qa-docs-71): the roadmap, who shared it and when it ends. */
-type About = { title?: string | null; shared_by?: string | null; expires_at?: string | null };
+/**
+ * What an opened link's status says about it (qa-docs-71): the roadmap, the company and the
+ * person who shared it, and the day it ends (`expires_on`, written by the API in the Company
+ * time zone, as the page's footer: this page has no member's zone to read).
+ */
+type About = { title?: string | null; shared_by?: string | null; shared_by_name?: string | null; expires_at?: string | null; expires_on?: string | null };
 type View =
   | { kind: "loading" }
   | { kind: "locked"; note: string | null }
@@ -64,9 +67,15 @@ export function SharedRoadmap({ token }: { token: string }) {
   }, [token]);
 
   // qa-docs-71: the browser tab names the roadmap once the link is open.
+  // The title it had comes back when the page goes.
   const shownTitle = view.kind === "open" ? view.about.title : null;
   useEffect(() => {
-    if (shownTitle) document.title = `${shownTitle} · Shared roadmap`;
+    if (!shownTitle) return;
+    const before = document.title;
+    document.title = `${shownTitle} · Shared roadmap`;
+    return () => {
+      document.title = before;
+    };
   }, [shownTitle]);
 
   const unlock = async (e: FormEvent) => {
@@ -102,7 +111,8 @@ export function SharedRoadmap({ token }: { token: string }) {
   };
 
   if (view.kind === "open") {
-    const { title, shared_by, expires_at } = view.about;
+    const { title, expires_on } = view.about;
+    const who = sharedBy(view.about);
     // qa-docs-70: the shared page is the company's light document, so the bar is light too
     // (fixed colours, whatever the app's theme), and the frame grows to its content: one scroll.
     return (
@@ -114,9 +124,9 @@ export function SharedRoadmap({ token }: { token: string }) {
         >
           <div className="min-w-0 flex-1">
             {title && <h1 className="font-display text-xl font-bold tracking-heading break-words">{title}</h1>}
-            {(shared_by || expires_at) && (
+            {(who || expires_on) && (
               <p className="text-sm text-[#475569]" data-testid="shared-about">
-                {[shared_by ? `Shared by ${shared_by}` : null, expires_at ? `Link ends ${formatDate(expires_at)}` : null].filter(Boolean).join(" · ")}
+                {[who ? `Shared by ${who}` : null, expires_on ? `Link ends ${expires_on}` : null].filter(Boolean).join(" · ")}
               </p>
             )}
           </div>
@@ -169,6 +179,12 @@ export function SharedRoadmap({ token }: { token: string }) {
   );
 }
 
+/** "Ann Lee at Example Labs": the person who made the link (qa-docs-71), and their company. */
+function sharedBy({ shared_by, shared_by_name }: About): string | null {
+  if (shared_by_name && shared_by) return `${shared_by_name} at ${shared_by}`;
+  return shared_by_name || shared_by || null;
+}
+
 /**
  * The API's page in a sandboxed frame: no script runs in it (no allow-scripts); same origin
  * only so this page can read its height and grow the frame to it (qa-docs-70: one scroll).
@@ -177,9 +193,19 @@ function Frame({ title, html }: { title: string; html: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [height, setHeight] = useState<number | null>(null);
   useEffect(() => {
+    // The content's own height: the frame is squeezed to nothing for the reading (and
+    // set back before anything paints), so the page's scrollHeight is its content, not the
+    // frame's last height. Then it shrinks when the window widens, and a page sized in vh
+    // does not grow with the frame without end.
     const fit = () => {
-      const doc = ref.current?.contentDocument;
-      if (doc?.documentElement) setHeight(doc.documentElement.scrollHeight);
+      const frame = ref.current;
+      const doc = frame?.contentDocument;
+      if (!frame || !doc?.documentElement) return;
+      const was = frame.style.height;
+      frame.style.height = "0px";
+      const content = doc.documentElement.scrollHeight;
+      frame.style.height = was;
+      setHeight(content);
     };
     // The frame may load before React listens to it: fit once it is there, and as it grows.
     const el = ref.current;
@@ -202,6 +228,8 @@ function Frame({ title, html }: { title: string; html: string }) {
     };
   }, [html]);
   return (
+    // allow-same-origin is safe only while there is no allow-scripts: with both, the
+    // page could reach into this one and take the sandbox off (qa-docs-share.spec pins it).
     <iframe
       ref={ref}
       title={title}

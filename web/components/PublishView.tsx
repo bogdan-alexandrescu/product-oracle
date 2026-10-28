@@ -481,8 +481,10 @@ export function PublishView({ doc }: { doc: string }) {
   // page lists those, from the version the approve checks.
   const dated = d != null && DATED_KINDS.has(d.kind);
   const headings = new Map(sections.map((s) => [s.section_key, s.heading]));
+  const published = n != null && d?.approved_version === n;
+  // A published version has nothing left to block it: no blocks, even for a roadmap's dates.
   const blocks =
-    readiness && n != null
+    readiness && n != null && !published
       ? dated
         ? versionQ.data
           ? dateBlocksOf(versionQ.data.date_marks, headings)
@@ -490,7 +492,6 @@ export function PublishView({ doc }: { doc: string }) {
         : blocksOf(doc, n, readiness, strategyQ.data)
       : [];
   const selected = blocks.find((b) => b.id === picked) ?? blocks[0] ?? null;
-  const published = n != null && d?.approved_version === n;
   // #370: Publish is POST .../approve; anyone who may not call it never sees the button. A
   // vision, strategy or update is an owner's (its per-item role); any other kind an approver's.
   const canPublish = can("approve_version", d != null && !OWNER_APPROVES[d.kind]);

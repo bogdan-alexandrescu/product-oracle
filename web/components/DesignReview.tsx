@@ -75,18 +75,24 @@ function usePrdWords(spec: Spec | undefined, d: Design | undefined): PrdWords {
   const view = spec && d ? spec.stale.find((x) => x.artifact_version_id === d.version.id) : undefined;
   const deps = [...(d?.lineage?.dependencies ?? []), ...(view?.dependencies ?? []), ...(spec?.stale ?? []).flatMap((x) => x.dependencies)];
   const reasons = (spec?.stale ?? []).flatMap((x) => x.reasons);
-  const slug =
+  const known =
     spec?.prd?.slug ??
     deps.find((x) => x.upstream.document_kind === "prd" && x.upstream.document_slug)?.upstream.document_slug ??
-    reasons.map((r) => SLUG_IN_REASON.exec(r)?.[1]).find(Boolean) ??
     null;
-  const docQ = useQuery(`doc|${slug}`, () => (slug ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: slug } } })) : Promise.resolve(null)));
-  const n = docQ.data?.latest_version ?? null;
+  // A hyphenated word after "in"/"of" ("in real-time") is only a guess: it names the PRD
+  // only when a PRD with that slug is found.
+  const guess = known ? null : (reasons.map((r) => SLUG_IN_REASON.exec(r)?.[1]).find(Boolean) ?? null);
+  const asked = known ?? guess;
+  const docQ = useQuery(`doc|${asked}`, () =>
+    asked ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: asked } } })).catch(() => null) : Promise.resolve(null),
+  );
+  const slug = known ?? (guess && docQ.data?.slug === guess && docQ.data.kind === "prd" ? guess : null);
+  const n = slug ? (docQ.data?.latest_version ?? null) : null;
   const versionQ = useQuery(`design-prd-sections|${slug}|${n}`, () =>
     slug && n ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: slug, n } } })) : Promise.resolve(null),
   );
   const headings = new Map((versionQ.data?.sections ?? []).map((x) => [x.section_key, x.heading]));
-  return { slug, title: spec?.prd?.title ?? docQ.data?.title ?? null, heading: (key) => headings.get(key) ?? null };
+  return { slug, title: spec?.prd?.title ?? (slug ? docQ.data?.title : null) ?? null, heading: (key) => headings.get(key) ?? null };
 }
 
 /** A section by its heading ("5.2 Shipping step"), or "a section" while it is not known. */
@@ -94,7 +100,8 @@ const sectionName = (w: PrdWords, key: string) => w.heading(key) ?? "a section";
 
 /** A staleness reason in words: section headings and the PRD's title, never keys or slugs. */
 function reasonText(reason: string, w: PrdWords): string {
-  let out = reason.replace(/\bsection ([A-Za-z0-9._-]+)/g, (_, key: string) => (w.heading(key) ? `section "${w.heading(key)}"` : "a section"));
+  // A key may hold dots ("s-5.2"), but the period that ends the sentence is kept.
+  let out = reason.replace(/\bsection ([A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*)/g, (_, key: string) => (w.heading(key) ? `section "${w.heading(key)}"` : "a section"));
   if (w.slug) out = out.replaceAll(w.slug, w.title ?? "the PRD");
   return out.charAt(0).toUpperCase() + out.slice(1);
 }

@@ -327,13 +327,17 @@ function NotPublished({ doc, n, onClose, onPublished }: { doc: string; n: number
   return (
     <div role="status" className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">
       <p className="font-semibold" data-testid="share-not-published">
-        Publish v{n} first: a link shows a published version, never a draft. What still stops it:
+        Publish v{n} first: a link shows a published version, never a draft.{problems.length > 0 && " What still stops it:"}
       </p>
-      <ul className="my-1 list-disc pl-5" data-testid="share-blocks">
-        {problems.map((b) => (
-          <li key={b.code}>{b.code === "version_not_approved" ? `v${n} is not approved yet` : b.message}</li>
-        ))}
-      </ul>
+      {/* "Already published" is no reason it can't be (it was filtered out above): no list, no heading, when nothing else is left. */}
+      {problems.length > 0 && (
+        <ul className="my-1 list-disc pl-5" data-testid="share-blocks">
+          {problems.map((b, i) => (
+            // A code can come twice (two sections, two messages): the place keeps each key apart.
+            <li key={`${b.code}-${i}`}>{b.code === "version_not_approved" ? `v${n} is not approved yet` : b.message}</li>
+          ))}
+        </ul>
+      )}
       <p>{publishLink}</p>
     </div>
   );
