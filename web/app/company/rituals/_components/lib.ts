@@ -1,7 +1,9 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 import { displayZone, formatInZone } from "@/lib/dates";
-import { formatDate } from "@/lib/format";
+import { formatDate, zoneName } from "@/lib/format";
+import { displayName } from "@/lib/names";
+import { DEFAULT_ZONE } from "@/lib/zone";
 
 export type Ritual = Schemas["RitualOut"];
 export type Occurrence = Schemas["OccurrenceOut"];
@@ -43,12 +45,22 @@ export function scheduleOf(raw: Ritual["schedule"]): Schedule {
   return { freq: "weekly", interval: 1, weekday: 0, week_of_month: 1, month: 1, time: "09:00", timezone: "America/Los_Angeles", ...(raw as Partial<Schedule>) };
 }
 
-/** "9:00" from "09:00". */
-const clock = (t: string) => t.replace(/^0(\d)/, "$1");
+/** The zone's short name for a time that repeats: "PT" (not PST or PDT), else "GMT+9". */
+export function zoneShort(zone: string): string {
+  const parts = formatInZone(new Date().toISOString(), zone, { timeZoneName: "shortGeneric" }).split(", ");
+  return parts[parts.length - 1] ?? zone;
+}
+
+/** "9:00 AM" from "09:00", "4:00 PM" from "16:00": the format every other time on the page has (qa-company-25). */
+function clockOnly(t: string): string {
+  const [h, m] = t.split(":").map(Number);
+  return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+}
 const plural = (day: string) => `${day}s`;
 
-/** When the ritual meets, in its own zone: "Mondays 9:00", "First Tuesday of the month, 10:00". */
+/** When the ritual meets, in the Company time zone: "Mondays 9:00 AM PT", "First Tuesday of the month, 10:00 AM PT". */
 export function whenText(s: Schedule): string {
+  const clock = (t: string) => `${clockOnly(t)} ${zoneShort(s.timezone)}`;
   const day = WEEKDAYS[s.weekday] ?? "Monday";
   const nth = WEEKS.find((w) => w.value === s.week_of_month)?.label ?? "First";
   switch (s.freq) {
@@ -72,7 +84,13 @@ export const localTime = (iso: string) => formatInZone(iso, displayZone(), WHEN)
 export const localDate = formatDate;
 
 /** The same instant in the ritual's own zone (it is scheduled there), for the tooltip. */
-export const zoneTime = (iso: string, timezone: string) => `${formatInZone(iso, timezone, WHEN)} (${timezone})`;
+export const zoneTime = (iso: string, timezone: string) => `${formatInZone(iso, timezone, WHEN)} (${zoneName(timezone)})`;
+
+/**
+ * The Company time zone in words (qa-company-23/24): "Pacific Time (Los Angeles)"; when no
+ * owner chose one yet, it says so and names the default used meanwhile, as Home's set-up does.
+ */
+export const zoneText = (zone: string, isDefault: boolean) => (isDefault ? `Not set · ${zoneName(DEFAULT_ZONE)} is used` : zoneName(zone));
 
 export const STATE_LABEL: Record<OccurrenceSummary["status"], string> = {
   scheduled: "Scheduled",
@@ -91,16 +109,32 @@ export const STATE_KIND: Record<OccurrenceSummary["status"], ChipKind> = {
   failed: "crit",
 };
 
-/** "About $17 a month (6 summaries)", "If on: about $17 a month". */
+const summaries = (n: number) => `${n} ${n === 1 ? "summary" : "summaries"}`;
+
+/** "About $17 a month (6 summaries)"; on demand, what Every pre-read would cost (qa-company-27). */
 export function estimateText(s: SummarySettings): string {
   const usd = `$${Math.round(s.estimate.usd_per_month)}`;
-  if (s.mode === "on_demand") return `If on: about ${usd} a month`;
   const n = Math.round(s.estimate.runs_per_month);
-  return `About ${usd} a month (${n} ${n === 1 ? "summary" : "summaries"})`;
+  if (s.mode === "on_demand") return `Every pre-read would cost about ${usd} a month (about ${summaries(n)})`;
+  return `About ${usd} a month (${summaries(n)})`;
+}
+
+/** A ritual's summaries in whole numbers: "about 4 a month", "about 1 every 3 months", "about 1 a year". */
+export function perMonthText(runs: number): string {
+  if (runs >= 0.95) return `about ${Math.round(runs)} a month`;
+  if (runs <= 0) return "none";
+  const months = Math.round(1 / runs);
+  return months >= 12 ? "about 1 a year" : `about 1 every ${months} months`;
 }
 
 /** A person's name from the member directory (GET /v1/people), which every member may read. */
 export const personName = (people: Person[] | undefined, id: string) => people?.find((p) => p.user_id === id)?.name ?? "—";
+
+/** A person's email from the member directory, shown beside the name (qa-company-28). */
+export const personEmail = (people: Person[] | undefined, id: string) => people?.find((p) => p.user_id === id)?.email;
+
+/** A member's name as everywhere else (lib/names.ts), the email kept for second. */
+export const memberName = (m: Member) => displayName(m.email, m.name);
 
 /** The rule alone, as the API takes it: the ritual is in the Company time zone. */
 export function ruleOf(s: Schedule): Schemas["RitualSchedule"] {

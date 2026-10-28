@@ -2,7 +2,7 @@
 
 import { Button, Icon, LinkButton, Panel } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { formatDay } from "@/lib/format";
+import { formatDay, zoneName } from "@/lib/format";
 import { ZONE_NOT_SET } from "@/lib/zone";
 
 type Step = Schemas["SetupStep"];
@@ -46,11 +46,12 @@ const STEPS: Record<string, Copy> = {
     href: "/settings/company?from=setup#horizons",
     status: (s) => (s.done ? "Checked" : "Not checked"),
   },
-  // H2: done once an owner stored the Company time zone; detail is the zone.
+  // H2: done once an owner stored the Company time zone; detail is the zone, in words
+  // ("Pacific Time (Los Angeles)"), as Settings and Rituals name it; else the default is used.
   timezone: {
     label: "Time zone",
     href: "/settings/company?from=setup#timezone",
-    status: (s) => (s.done ? (s.detail ?? "Set") : ZONE_NOT_SET),
+    status: (s) => (s.done ? (s.detail ? zoneName(s.detail) : "Set") : ZONE_NOT_SET),
   },
   // B1: done once a Build the baseline run succeeded; detail is when the last one finished.
   build_baseline: {

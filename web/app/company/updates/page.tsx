@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { Button, Chip, DataTable, Empty, InfoTip, PageHeader, Panel, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, Empty, InfoTip, Panel, type Column } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+import { CompanyHeader } from "../_nav";
 import { NewUpdateDialog } from "./_components/NewUpdateDialog";
 import { RowMenu, RowMenuItem } from "./_components/RowMenu";
 import { VisibilityDialog } from "./_components/VisibilityDialog";
@@ -29,7 +30,7 @@ export default function UpdatesPage() {
   if (!can("start_draft", true)) {
     return (
       <>
-        <PageHeader title="Company" />
+        <CompanyHeader />
         <Panel>
           <Empty testId="updates-not-found">Not found</Empty>
         </Panel>
@@ -71,7 +72,7 @@ function Updates() {
     {
       key: "period",
       header: "Period",
-      width: "168px",
+      width: "200px",
       phone: "meta",
       cell: (u) => (
         <span className="tnum text-sm" data-testid="update-period">
@@ -114,7 +115,7 @@ function Updates() {
                       setChanging(u);
                     }}
                   >
-                    {u.visibility === "approvers" ? "Open to the company" : "Limit to owners and approvers"}
+                    {u.visibility === "approvers" ? "Share with the whole company…" : "Limit to owners and approvers…"}
                   </RowMenuItem>
                 )}
               </RowMenu>
@@ -126,8 +127,7 @@ function Updates() {
 
   return (
     <>
-      <PageHeader
-        title="Company"
+      <CompanyHeader
         action={
           mayCreate && (
             <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
@@ -144,7 +144,7 @@ function Updates() {
           <InfoTip label="updates" align="end">
             The product part of the board update and the monthly investor update. Oracle drafts them from goals, tracks, launches and outcomes:
             metrics first, only dates a verified schedule basis supports, and the asks left for an owner. An owner decides what is said and
-            approves; owners and approvers see them unless an owner opens one to the company.
+            approves; owners and approvers see them unless an owner shares one with the whole company.
           </InfoTip>
         }
       >

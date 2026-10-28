@@ -34242,6 +34242,7 @@ export interface components {
             /** Replaced By */
             replaced_by?: string | null;
             last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
+            next_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
         };
         /** RitualPatch */
         RitualPatch: {

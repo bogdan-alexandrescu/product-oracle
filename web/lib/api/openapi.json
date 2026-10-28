@@ -104115,6 +104115,16 @@
                 "type": "null"
               }
             ]
+          },
+          "next_pre_read": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OccurrenceSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

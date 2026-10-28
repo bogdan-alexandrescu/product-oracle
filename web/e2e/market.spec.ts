@@ -37,7 +37,7 @@ async function openMarket(page: Page) {
   await expect(page.getByTestId("company-tab-market").filter({ visible: true })).toHaveAttribute("aria-current", "page");
 }
 
-const subTab = (page: Page, name: string) => page.getByRole("group", { name: "Market" }).getByRole("button", { name });
+const subTab = (page: Page, name: string) => page.getByRole("tablist", { name: "Market" }).getByRole("tab", { name });
 const alternativeRow = (page: Page, name: string) => page.getByTestId("alternative-row").filter({ hasText: name });
 const inspector = (page: Page) => page.getByTestId("alternative-inspector").filter({ visible: true });
 const findings = (page: Page) => page.getByTestId("web-finding").filter({ visible: true });

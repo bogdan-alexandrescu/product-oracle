@@ -145,7 +145,7 @@ test("strategy: an owner opens Company and lands on Strategy with the vision, th
   const planned = stop.getByTestId("stop-planned");
   await expect(planned).toHaveText("2 items still planned");
   await expect(planned).toHaveAttribute("data-tone", "fail");
-  await expect(strategy).toContainText("Next review 1 Oct 2027");
+  await expect(strategy).toContainText("Next review Oct 1, 2027");
 
   const stack = root.getByTestId("strategy-stack");
   await expect(stack.getByRole("columnheader")).toHaveText(["Focus choice", "Goal", "Roadmap items", "Findings"]);

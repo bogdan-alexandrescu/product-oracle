@@ -60,7 +60,7 @@ test("a proposal names the baseline items, evidence and document it is about; th
   await about.getByLabel("Kind", { exact: true }).selectOption({ label: "Document" });
   await about.getByLabel("Item", { exact: true }).selectOption({ label: "Checkout redesign PRD" });
   await about.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(about.getByRole("button", { name: "Remove Document checkout-redesign" })).toBeVisible();
+  await expect(about.getByRole("button", { name: "Remove Document Checkout redesign PRD" })).toBeVisible();
   await dialog.getByRole("button", { name: "Propose" }).click();
   await expect(dialog).toHaveCount(0);
 
@@ -73,7 +73,7 @@ test("a proposal names the baseline items, evidence and document it is about; th
     await expect(restsOn).not.toContainText("Cut early churn");
     await expect(restsOn.getByTestId("decision-evidence")).toHaveCount(1);
     await expect(restsOn.getByTestId("decision-evidence")).toContainText(STALL);
-    await expect(ins.getByRole("link", { name: "Document checkout-redesign" })).toHaveAttribute("href", "/documents/checkout-redesign");
+    await expect(ins.getByRole("link", { name: "Document Checkout redesign PRD" })).toHaveAttribute("href", "/documents/checkout-redesign");
   }
 });
 

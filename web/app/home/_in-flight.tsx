@@ -19,6 +19,8 @@ import {
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type DocumentSummary, type Schemas, type VersionOut } from "@/lib/api/client";
+import { plural } from "@/lib/format";
+import { docLabel, runLabel } from "@/lib/labels";
 import { useQuery } from "@/lib/use-query";
 
 import {
@@ -28,7 +30,6 @@ import {
   RunCost,
   SEGMENT_STATUS_KIND,
   SEGMENT_STATUS_LABEL,
-  shortId,
   type RunOut,
   type RunSummary,
 } from "../runs/_lib";
@@ -57,12 +58,19 @@ function runNext(run: RunSummary): string {
   return run.progress?.now ?? "–";
 }
 
-function title(f: Flight) {
-  return f.kind === "prd" ? f.doc.title : (f.run.document_slug ?? f.run.flow_title);
+/** The run's document, by slug, among the PRDs Home lists. */
+const runDoc = (run: RunSummary, docs: DocumentSummary[] | undefined) =>
+  run.document_slug ? docs?.find((x) => x.slug === run.document_slug) : undefined;
+
+/** A row by its human name (qa-shell-32): the PRD's title, or the run's document and flow, never a slug or an id. */
+function title(f: Flight, docs?: DocumentSummary[]) {
+  return f.kind === "prd" ? docLabel(f.doc) : runLabel(f.run, runDoc(f.run, docs)?.title);
 }
 
+/** "Step 8/9": where a PRD in review stands on the journey, said as a step so it is not read as sections done. */
+const STEP_TEXT = `Step ${REVIEW_STEP}/${JOURNEY_STEPS.length}`;
 
-export function flightColumns(phoneHeader: ReactNode): Column<Flight>[] {
+export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]): Column<Flight>[] {
   return [
     {
       key: "name",
@@ -70,11 +78,12 @@ export function flightColumns(phoneHeader: ReactNode): Column<Flight>[] {
       phone: "title",
       cell: (f) => (
         <span className="flex min-w-0 items-baseline gap-1.5">
-          <span className="truncate font-medium">{title(f)}</span>
+          <span className="truncate font-medium" title={title(f, docs)}>
+            {title(f, docs)}
+          </span>
           {f.kind === "prd" && f.doc.latest_version != null && (
             <span className="tnum flex-none text-sm text-text2">v{f.doc.latest_version}</span>
           )}
-          {f.kind === "run" && <span className="tnum flex-none font-mono text-[13px] text-text2">{shortId(f.run.id)}</span>}
         </span>
       ),
     },
@@ -108,21 +117,27 @@ export function flightColumns(phoneHeader: ReactNode): Column<Flight>[] {
     },
     {
       key: "done",
-      header: "Done",
+      header: "Progress",
       width: "150px",
       phone: "meta",
       cell: (f) => {
         if (f.kind === "prd") {
           return (
-            <span className="flex min-w-0 items-center gap-2" data-testid="row-journey">
+            <span className="flex min-w-0 items-center gap-2" data-testid="row-journey" title={`Journey step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}: Review`}>
               <JourneyTrack current={REVIEW_STEP} variant="dots" />
-              <b className="tnum flex-none font-semibold">
-                {REVIEW_STEP}/{JOURNEY_STEPS.length}
-              </b>
+              <b className="tnum flex-none font-semibold whitespace-nowrap">{STEP_TEXT}</b>
             </span>
           );
         }
         const d = f.run.progress;
+        // qa-company-43: a run paused over budget is not finished, whatever its segments say.
+        if (f.run.status === "paused_overrun") {
+          return (
+            <span className="tnum font-semibold whitespace-nowrap text-crit" data-testid="row-paused" title={d ? `Paused after ${d.done} of ${plural(d.total, "segment")}` : "Paused"}>
+              Paused{d ? ` at ${d.done}/${d.total}` : ""}
+            </span>
+          );
+        }
         return d ? <Meter value={d.done} max={d.total} label="Segments done" /> : <span className="text-text2">–</span>;
       },
     },
@@ -184,7 +199,20 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
   const count = (k: string | null) => sections.filter((s) => (s.verdict?.verdict ?? null) === k).length;
   const approved = count("approved");
   const r: Schemas["ReadinessDashboard"] | null | undefined = readiness.data;
-  const blockers = r ? r.items.filter((i) => r.blocking.includes(i.key)) : [];
+  const failing = r ? r.items.filter((i) => r.blocking.includes(i.key)) : [];
+  // qa-company-45: the critical-blockers check names its blockers by id; read their statements,
+  // only when the check is failing, so each line names a blocker, never the check's heading.
+  const ids = failing.flatMap((i) => i.evidence_ids ?? []);
+  const named = useQuery(`home|blockers|${d.id}|${ids.join(",")}`, () =>
+    ids.length === 0
+      ? Promise.resolve([])
+      : unwrap(api.GET("/v1/blockers", { params: { query: { document_id: d.id } } })).catch(() => []),
+  );
+  const statement = new Map((named.data ?? []).map((b) => [b.id, b.statement]));
+  const blockers: { key: string; title: string; detail: string; hard: boolean }[] = failing.flatMap((i) => {
+    const each = (i.evidence_ids ?? []).flatMap((id) => (statement.has(id) ? [{ key: `${i.key}:${id}`, title: statement.get(id)!, detail: i.rationale, hard: i.hard }] : []));
+    return each.length > 0 ? each : [{ key: i.key, title: i.title, detail: i.rationale || i.question, hard: i.hard }];
+  });
 
   return (
     <Inspector
@@ -210,11 +238,11 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           tone: r && r.blocking.length > 0 ? "crit" : undefined,
           testId: "stat-blockers",
         },
-        { label: "Sections done", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
+        { label: "Sections approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
         { label: "Open items", value: openItems ?? 0, testId: "stat-open" },
       ]}
     >
-      <InspectorSection testId="inspector-journey">
+      <InspectorSection testId="inspector-journey" label={`Journey: step ${REVIEW_STEP} of ${JOURNEY_STEPS.length}, ${JOURNEY_STEPS[REVIEW_STEP - 1]}`}>
         <JourneyTrack current={REVIEW_STEP} variant="bar" />
       </InspectorSection>
       {v && sections.length > 0 && (
@@ -250,7 +278,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
         >
           {blockers.map((b) => (
             <InspectorRow key={b.key}>
-              <span className="inline-flex min-w-0 items-center gap-2.5" title={b.question}>
+              <span className="inline-flex min-w-0 items-center gap-2.5" title={`${b.title}${b.detail ? `: ${b.detail}` : ""}`} data-testid="inspector-blocker">
                 <Icon name="alert" size={16} className="flex-none text-crit" />
                 <span className="truncate">{b.title}</span>
               </span>
@@ -280,21 +308,19 @@ function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run"
   // The run's segments and checkpoints: one call, for the selected run only.
   const detailQ = useQuery(`home|run|${run.id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: run.id } } })));
   const detail: RunOut | undefined = detailQ.data;
-  const doc = docs.find((x) => x.slug === run.document_slug);
+  const doc = runDoc(run, docs);
   const goals = useTracedGoals(doc?.slug, doc?.latest_version, goalIndex);
+  const name = runLabel(run, doc?.title);
   return (
     <Inspector
       testId="home-inspector"
-      label={`Run ${shortId(run.id)} details`}
-      eyebrow={`Run ${shortId(run.id)} · selected`}
-      title={run.document_slug ?? run.flow_title}
+      label={`${name} details`}
+      eyebrow="Run · selected"
+      title={name}
       chips={
-        <>
-          <Chip hero kind={runStatusKind(run)}>
-            {runStatusLabel(run)}
-          </Chip>
-          <Chip hero>{run.flow_title}</Chip>
-        </>
+        <Chip hero kind={runStatusKind(run)}>
+          {runStatusLabel(run)}
+        </Chip>
       }
       action={
         <LinkButton variant="hero" href={`/runs/${run.id}`}>
@@ -325,7 +351,7 @@ function RunInspector({ f, docs, goalIndex }: { f: Extract<Flight, { kind: "run"
       {run.document_slug && run.document_id && (
         <InspectorSection>
           <Link href={`/documents/${run.document_slug}`} className="font-medium text-accent-ink hover:underline">
-            {run.document_slug}
+            {doc ? docLabel(doc) : runLabel({ ...run, flow_title: "" }).replace(/ · $/, "")}
           </Link>
         </InspectorSection>
       )}
@@ -357,18 +383,23 @@ export function FlightTable({
   selected,
   onSelect,
   header,
+  docs,
 }: {
   rows: Flight[] | undefined;
   loading: boolean;
   selected: string | null;
   onSelect: (key: string) => void;
   header: ReactNode;
+  /** The PRDs Home lists, so a run is named by its document's title (else its slug in words). */
+  docs?: DocumentSummary[];
 }) {
+  // Each row's PRD is in `rows` too: a run of a PRD in review is named by that PRD's title.
+  const named = docs ?? rows?.flatMap((f) => (f.kind === "prd" ? [f.doc] : []));
   return (
     <DataTable
       label="In flight"
       testId="home-in-flight-table"
-      columns={flightColumns(header)}
+      columns={flightColumns(header, named)}
       rows={rows}
       loading={loading}
       rowKey={(f) => f.key}

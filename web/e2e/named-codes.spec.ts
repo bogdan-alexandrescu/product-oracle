@@ -55,7 +55,7 @@ test("Plan, Baseline and Priorities draw names, never a place code or a slug", a
   expect(await mainText(page)).not.toMatch(BARE);
 });
 
-test("a goal chip's card opens on hover and Tab, shows name, target and Open, and Escape closes it", async ({ page }) => {
+test("a goal chip's card opens on hover and Enter, shows name, target and Open, and Escape closes it", async ({ page }) => {
   await withCodes(page);
   await login(page);
   await page.goto("/plan");
@@ -76,6 +76,9 @@ test("a goal chip's card opens on hover and Tab, shows name, target and Open, an
   await page.getByTestId("plan-row").filter({ hasText: "Daily alert digest email" }).filter({ visible: true }).click();
   for (let i = 0; i < 40 && !(await chip.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
   await expect(chip).toBeFocused();
+  // qa-company-4: focus alone does not open the card; Enter does.
+  await expect(card).toHaveCount(0);
+  await page.keyboard.press("Enter");
   await expect(card).toBeVisible();
   await expect(card.getByTestId("card-name")).toHaveText("Growth");
   await page.keyboard.press("Escape");
@@ -214,7 +217,7 @@ test("Before drafting's Goals draws each goal with its chip, never a place code"
   await expect(page.getByTestId("code-card").getByTestId("card-name")).toHaveText("Growth");
 });
 
-test("keyboard: Tab goes into the card and cycles there; Escape closes it and focus returns to the chip", async ({ page }) => {
+test("keyboard: Tab passes the chip; Enter opens the card, Tab leaves it; Escape gives focus back to the chip", async ({ page }) => {
   await withCodes(page);
   await login(page);
   await page.goto("/plan");
@@ -222,27 +225,33 @@ test("keyboard: Tab goes into the card and cycles there; Escape closes it and fo
   const card = page.getByTestId("code-card");
   await page.getByTestId("plan-row").filter({ hasText: "Daily alert digest email" }).filter({ visible: true }).click();
   for (let i = 0; i < 40 && !(await chip.evaluate((el) => el === document.activeElement)); i++) await page.keyboard.press("Tab");
-  await expect(card.getByRole("link", { name: "Open" })).toBeVisible();
+  await expect(chip).toBeFocused();
+  // qa-company-4: no card on focus; the next Tab goes past the chip.
+  await expect(card).toHaveCount(0);
   await page.keyboard.press("Tab");
-  await expect(card.getByRole("link", { name: "Open" })).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(card.getByRole("link", { name: "Open" })).toBeFocused();
+  await expect(chip).not.toBeFocused();
+  await expect(card).toHaveCount(0);
   await page.keyboard.press("Shift+Tab");
+  await expect(chip).toBeFocused();
+  // Enter on the chip opens the card with focus on its link; Tab past it closes the card.
+  await page.keyboard.press("Enter");
+  await expect(card.getByRole("link", { name: "Open" })).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(card).toHaveCount(0);
+  await expect(chip).not.toBeFocused();
+  // Escape closes the card and gives focus back to the chip.
+  await chip.focus();
+  await page.keyboard.press("Enter");
   await expect(card.getByRole("link", { name: "Open" })).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
   await expect(chip).toBeFocused();
-  // Enter on the chip opens the card with focus inside it.
   await page.keyboard.press("Enter");
-  await expect(card).toBeVisible();
-  await expect(chip).not.toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(card.getByRole("link", { name: "Open" })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/baseline\?entity=/);
 });
 
-test("keyboard: a citation chip's card takes focus on open, keeps Tab inside, and gives focus back on Escape", async ({ page }) => {
+test("keyboard: a citation chip's card takes focus on open, Tab leaves it, and Escape gives focus back", async ({ page }) => {
   await login(page);
   await page.goto("/documents/checkout-redesign/v/2");
   const cite = (await openSection(page, "problem")).getByTestId("cite-c4");
@@ -251,9 +260,13 @@ test("keyboard: a citation chip's card takes focus on open, keeps Tab inside, an
   await expect(card).toBeVisible();
   const source = card.getByRole("link", { name: /Open source/ });
   await expect(source).toBeFocused();
-  await page.keyboard.press("Tab");
-  await expect(source).toBeFocused();
   await page.keyboard.press("Escape");
   await expect(card).toHaveCount(0);
   await expect(cite).toBeFocused();
+  // qa-company-4: Tab past the card's last link closes it, never a trap.
+  await page.keyboard.press("Enter");
+  await expect(source).toBeFocused();
+  await page.keyboard.press("Tab");
+  await expect(card).toHaveCount(0);
+  await expect(cite).not.toBeFocused();
 });

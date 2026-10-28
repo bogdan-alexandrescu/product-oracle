@@ -23,8 +23,10 @@ import {
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
+import { docLabel, runLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
+import { loadInbox } from "@/lib/waiting";
 
 import {
   CHECKPOINT_LABEL,
@@ -38,7 +40,6 @@ import {
   RunsWhere,
   SENT_BACK_STATE,
   WAITING_STATUSES,
-  shortId,
   type RunSummary,
 } from "./_lib";
 import { NewRunDialog } from "./_new-run-dialog";
@@ -50,9 +51,25 @@ const ACTION: Partial<Record<RunSummary["status"], string>> = {
   paused_overrun: "Decide",
 };
 
+type DocNamed = Parameters<typeof docLabel>[0];
+
+/**
+ * What a run is for, by name (qa-shell-32), never its slug or short id: its document's title
+ * ("Usage alerts PRD"), else the run's document and flow in words (runLabel).
+ */
+function runName(r: RunSummary, docs: Map<string, DocNamed>): string {
+  const d = r.document_id ? docs.get(r.document_id) : undefined;
+  return d ? docLabel(d) : runLabel(r);
+}
+
 export default function RunsPage() {
   const q = useQuery("runs", () => unwrap(api.GET("/v1/runs")));
-  const { can } = useMe();
+  // Document titles, to name each run by its document; the slug in words until they load.
+  const docsQ = useQuery("runs|documents", () => unwrap(api.GET("/v1/documents")).catch(() => []));
+  const docs = new Map<string, DocNamed>((docsQ.data ?? []).map((d) => [d.id, d]));
+  // qa-shell-1: the checkpoints this person may decide, as the Inbox lists them (the rail reads the same call).
+  const inboxQ = useQuery("runs|inbox", loadInbox);
+  const { can, me } = useMe();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string | null>(null);
@@ -62,24 +79,31 @@ export default function RunsPage() {
   const checkpoints = runs.filter((r) => r.status === "awaiting_checkpoint" && !isDelivering(r)).length;
   const selected = runs.find((r) => r.id === picked) ?? waiting[0] ?? runs[0];
 
+  /**
+   * qa-shell-1: the row's one action, only for a person who may take it: a cost approval and
+   * resuming an overrun are owners' (can()), cancelling one its starter's or an approver's, and
+   * a checkpoint its decider's (the Inbox's can_decide). Anyone else opens the run from its name.
+   */
+  const mayAct = (r: RunSummary): boolean => {
+    if (r.status === "awaiting_approval") return can("approve_run");
+    if (r.status === "paused_overrun") return can("resume_run") || can("cancel_run", r.created_by === me?.user_id);
+    if (r.status === "awaiting_checkpoint") return !!inboxQ.data?.checkpoints.some((c) => c.run_id === r.id && c.can_decide);
+    return false;
+  };
+
   const columns: Column<RunSummary>[] = [
-    {
-      key: "id",
-      header: "Run",
-      width: "68px",
-      phone: "hide",
-      narrow: "hide",
-      cell: (r) => <span className="tnum font-mono text-sm text-accent-ink">{shortId(r.id)}</span>,
-    },
     {
       key: "for",
       header: "For",
       phone: "title",
-      cell: (r) => (
-        <Link href={`/runs/${r.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
-          {r.document_slug ?? r.flow_title}
-        </Link>
-      ),
+      cell: (r) => {
+        const name = runName(r, docs);
+        return (
+          <Link href={`/runs/${r.id}`} className="font-medium hover:underline" title={name} onClick={(e) => e.stopPropagation()}>
+            {name}
+          </Link>
+        );
+      },
     },
     { key: "flow", header: "Flow", width: "150px", phone: "meta", narrow: "hide", cell: (r) => r.flow_title },
     {
@@ -106,7 +130,7 @@ export default function RunsPage() {
       align: "right",
       phone: "action",
       cell: (r) =>
-        ACTION[r.status] && !isDelivering(r) ? (
+        ACTION[r.status] && !isDelivering(r) && mayAct(r) ? (
           <Button
             onClick={(e) => {
               e.stopPropagation();
@@ -160,7 +184,7 @@ export default function RunsPage() {
       {/* byRoom: the inspector goes below when the Split is too narrow for it and the table,
           as with the Ask panel docked, so the table keeps its button column (its narrow columns
           go first, by the table's width); with the panel closed it sits beside over 1100 px. */}
-      <Split byRoom inspector={selected && <RunInspector run={selected} />}>
+      <Split byRoom inspector={selected && <RunInspector run={selected} name={runName(selected, docs)} />}>
         <Panel
           title="Runs"
           count={q.data ? runs.length : undefined}
@@ -195,12 +219,12 @@ export default function RunsPage() {
   );
 }
 
-function RunInspector({ run }: { run: RunSummary }) {
+function RunInspector({ run, name }: { run: RunSummary; name: string }) {
   return (
     <Inspector
       label="Run"
-      eyebrow={`Run ${shortId(run.id)} · selected`}
-      title={run.document_slug ?? run.flow_title}
+      eyebrow="Run · selected"
+      title={name}
       action={
         <LinkButton variant="hero" href={`/runs/${run.id}`}>
           Open

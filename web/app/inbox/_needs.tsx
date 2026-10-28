@@ -7,7 +7,9 @@ import { useId, useState, type ReactNode } from "react";
 import { Button, Chip, CodeText, confirmInPage, CostFigure, DataTable, Icon, InfoTip, LinkButton, type Column, type IconName } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { addDays, displayZone, formatInZone, zoneInstant } from "@/lib/dates";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatAge, formatDate, formatDateTime, formatMoney, plural } from "@/lib/format";
+import { runLabel } from "@/lib/labels";
+import { useMe, type Operation } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 import { BUILD_PARAM } from "@/components/NextDraft";
 import { sectionHref } from "@/lib/section-link";
@@ -39,10 +41,7 @@ import {
   reviewHref,
   SENT_BACK_STATE,
   STOP_CANCELLING_CONFIRM,
-  age,
   deliveryText,
-  shortId,
-  usd,
   type InboxOut,
   type RunSummary,
 } from "../runs/_lib";
@@ -54,7 +53,6 @@ export type Need = {
   kind: string;
   item: ReactNode;
   context: ReactNode;
-  run?: string;
   at?: string | null;
   action: ReactNode;
   /** The row's Inbox state (new, open, staged, declined, done), when it has one. */
@@ -78,6 +76,20 @@ export type Need = {
   childOf?: string;
 };
 
+/**
+ * How long a row has waited, in one unit (formatAge: "5m", "3h", "1d", "2w"); nothing for a
+ * row with no time or one still ahead (a ritual's due time), never a dash.
+ */
+function ageOf(at: string | null | undefined): string {
+  if (!at) return "";
+  const t = new Date(at).getTime();
+  if (Number.isNaN(t) || t > Date.now()) return "";
+  return formatAge(t);
+}
+
+/** A cost in dollars ("$53.00"), or that there is none yet. */
+const money = (v: number | null | undefined) => (v == null ? "no estimate" : formatMoney(v));
+
 export const NEED_COLUMNS: Column<Need>[] = [
   {
     key: "kind",
@@ -100,22 +112,16 @@ export const NEED_COLUMNS: Column<Need>[] = [
     key: "item",
     header: "Item",
     phone: "title",
+    // The item's text keeps its room: a chip or a note goes to a second line rather than cut it.
     cell: (n) => (
       <span
-        className={`flex min-w-0 items-center gap-x-2.5 gap-y-1 max-[600px]:flex-wrap ${n.childOf ? "text-[14px] max-[600px]:border-l-2 max-[600px]:border-line-strong max-[600px]:pl-2" : ""}`}
+        className={`flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1 ${n.childOf ? "text-[14px] max-[600px]:border-l-2 max-[600px]:border-line-strong max-[600px]:pl-2" : ""}`}
       >
         {n.item}
       </span>
     ),
   },
-  { key: "context", header: "For", width: "26%", phone: "meta", cell: (n) => n.context },
-  {
-    key: "run",
-    header: "Run",
-    width: "64px",
-    phone: "hide",
-    cell: (n) => <span className="tnum font-mono text-sm text-text2">{n.run ?? ""}</span>,
-  },
+  { key: "context", header: "For", width: "24%", phone: "meta", narrow: "hide", cell: (n) => n.context },
   {
     key: "age",
     header: "Age",
@@ -124,7 +130,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
     phone: "meta",
     cell: (n) => (
       <span className="tnum text-text2" title={n.atTip ?? (n.at ? formatDateTime(n.at) : undefined)}>
-        {age(n.at)}
+        {ageOf(n.at)}
         {n.left && (
           <span className="block text-[12px] leading-4 text-warn max-[600px]:ml-1.5 max-[600px]:inline" data-testid="need-left">
             {n.left}
@@ -136,7 +142,8 @@ export const NEED_COLUMNS: Column<Need>[] = [
   {
     key: "act",
     header: <span className="sr-only">Action</span>,
-    width: "212px",
+    // Wide enough for a row's actions on one line (qa-company-9): the primary, then the rest.
+    width: "340px",
     align: "right",
     phone: "action",
     wrap: true,
@@ -145,16 +152,19 @@ export const NEED_COLUMNS: Column<Need>[] = [
     className:
       "max-[600px]:has-[[data-inbox-actions]]:order-5 max-[600px]:has-[[data-inbox-actions]]:basis-full max-[600px]:has-[[data-child-actions]]:order-5 max-[600px]:has-[[data-child-actions]]:basis-full",
     cell: (n) => (
-      <span className="inline-flex flex-wrap justify-end gap-1.5 has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full">
+      <span
+        data-row-actions
+        className="inline-flex flex-wrap items-center justify-end gap-1.5 min-[601px]:flex-nowrap has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full"
+      >
         {n.action}
       </span>
     ),
   },
 ];
 
-/** Home's narrower lines: no run id, one action each. */
-export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.filter((c) => c.key !== "run").map((c) =>
-  c.key === "kind" ? { ...c, width: "164px" } : c.key === "context" ? { ...c, width: "24%" } : c.key === "act" ? { ...c, width: "200px" } : c,
+/** Home's narrower lines: one action each. */
+export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
+  c.key === "kind" ? { ...c, width: "150px" } : c.key === "context" ? { ...c, width: "22%", narrow: undefined } : c.key === "act" ? { ...c, width: "180px" } : c,
 );
 
 export function NeedTable({
@@ -238,32 +248,57 @@ export function NeedTable({
   );
 }
 
-export function CountChip({ label, n }: { label: string; n: number }) {
+/** Home's count of one kind of item (qa-company-40): a link to the Inbox, where they are. */
+export function CountChip({ label, n, testId }: { label: string; n: number; testId?: string }) {
   return (
-    <Chip kind="line">
-      {label} <b className="tnum">{n}</b>
-    </Chip>
+    <Link href="/inbox" title={`Open the Inbox: ${plural(n, "item")}`} data-testid={testId} className="rounded-full hover:underline hover:brightness-95">
+      <Chip kind="line">
+        {label} <b className="tnum">{n}</b>
+      </Chip>
+    </Link>
   );
 }
 
-function RunName({ run }: { run: Pick<RunSummary, "flow_title" | "document_slug"> }) {
+/** A run by its human name ("Usage alerts PRD · Roadmap from an approved PRD"), never its slug. */
+function RunName({ run }: { run: Pick<RunSummary, "flow_title" | "document_slug" | "document_kind"> }) {
+  const name = runLabel(run);
   return (
-    <span className="min-w-0 truncate">
-      {run.flow_title}
-      {run.document_slug && <span className="ml-1.5 font-mono text-sm text-text2">{run.document_slug}</span>}
+    <span className="min-w-0 truncate" title={name}>
+      {name}
+    </span>
+  );
+}
+
+/**
+ * What the signed-in person may do (lib/me's can, and their id for the items they started):
+ * a row draws only the actions they can take. Everything, when a caller passes none.
+ */
+export type Perms = { can: (op: Operation, onItem?: boolean) => boolean; userId: string | null };
+const ALL: Perms = { can: () => true, userId: null };
+
+/** The signed-in person's Perms, for allNeeds. */
+export function usePerms(): Perms {
+  const { can, me } = useMe();
+  return { can, userId: me?.user_id ?? null };
+}
+
+/** Who acts on a row the signed-in person cannot act on: said in the action's place. */
+function ByRole({ who, title }: { who: string; title?: string }) {
+  return (
+    <span className="text-[13px] whitespace-nowrap text-text2" title={title} data-testid="need-by-role">
+      {who}
     </span>
   );
 }
 
 export type Act = (key: string, call: () => Promise<unknown>) => Promise<void>;
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
 /** The Inbox's state tabs (C1e, owner 2026-10-20), New first: the default tab on arrival. */
 export type InboxState = "new" | "open" | "staged" | "declined" | "done";
 export const STATE_TABS: { id: InboxState; label: string }[] = [
   { id: "new", label: "New" },
-  { id: "open", label: "Open" },
+  // "Seen", not "Open": Open is every row's action (qa-company-48).
+  { id: "open", label: "Seen" },
   { id: "staged", label: "Staged" },
   { id: "declined", label: "Declined" },
   { id: "done", label: "Done" },
@@ -335,7 +370,10 @@ export function feedbackNeeds(
   seenBefore: string | null | undefined,
   onActed: OnActed,
   compact = false,
+  perms: Perms = ALL,
 ): StatedNeed[] {
+  // Accept, Decline and Stage for agents are an approver's (the API's route roles).
+  const mayDecide = perms.can("accept_suggestion") && perms.can("update_feedback");
   const docLink = (slug: string, title: string | null | undefined) => (
     <Link href={`/documents/${slug}`} className="block truncate hover:underline">
       {title ?? slug}
@@ -396,10 +434,9 @@ export function feedbackNeeds(
       item: (
         <>
           <SuggestionPeek href={href} summary={f.summary} text={live ? f.suggestion_text : null} />
-          {f.section_key ? (
-            <span className="flex-none font-mono text-[13px] text-text2">#{f.section_key}</span>
-          ) : (
-            // D13: feedback on the whole draft names no section.
+          {/* The row names no section key (qa-company-11): its link opens the section. D13:
+              feedback on the whole draft says so. */}
+          {!f.section_key && (
             <span className="flex-none text-[13px] text-text2" data-testid="inbox-general">
               General
             </span>
@@ -415,9 +452,14 @@ export function feedbackNeeds(
           <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`}>
             Open
           </LinkButton>
-        ) : live ? (
+        ) : live && !compact && mayDecide ? (
           // D14: decide on Oracle's suggestion here; a remount per state and suggestion.
-          <InboxActions key={`${f.id}-${state}-${f.suggestion_id ?? ""}`} f={f} href={href} compact={compact} onActed={onActed} />
+          <InboxActions key={`${f.id}-${state}-${f.suggestion_id ?? ""}`} f={f} href={href} onActed={onActed} />
+        ) : live ? (
+          // Home (qa-company-10), and a role that cannot decide: one Open, where the item is decided.
+          <LinkButton href={href} aria-label={`Open ${f.summary}`} title={mayDecide ? undefined : "Approvers decide feedback"}>
+            Open
+          </LinkButton>
         ) : (
           <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`}>
             Open
@@ -1234,7 +1276,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
             {isHeld(c) && <span className="block truncate text-warn">{CONSOLE_HELD}</span>}
           </span>
         ),
-      run: shortId(c.run_id),
       at: c.created_at,
       left: wait?.state === "open" && wait.seconds_left != null ? timeLeft(wait.seconds_left) : null,
       action: c.kind === "baseline_confirm" ? (
@@ -1275,7 +1316,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         <RunName run={r} />
       </Link>
     ),
-    run: shortId(r.id),
     at: r.created_at,
     action: (
       <Button
@@ -1306,7 +1346,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         <RunName run={r} />
       </Link>
     ),
-    run: shortId(r.id),
     at: r.started_at ?? r.created_at,
     action: compact ? (
       <LinkButton href={`/runs/${r.id}`}>Decide</LinkButton>
@@ -1346,7 +1385,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </span>
     ),
     context: runContext(r),
-    run: shortId(r.id),
     at: r.started_at ?? r.created_at,
     action: compact ? (
       openRun(r)
@@ -1433,7 +1471,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </span>
     ),
     context: runContext(r),
-    run: shortId(r.id),
     at: r.started_at ?? r.created_at,
     action: compact
       ? openRun(r)
@@ -1458,7 +1495,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </span>
     ),
     context: runContext(r),
-    run: shortId(r.id),
     at: r.finished_at ?? r.started_at ?? r.created_at,
     action: openRun(r),
   }));
@@ -1492,7 +1528,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         <RunName run={c} />
       </Link>
     ),
-    run: shortId(c.run_id),
     at: c.decided_at ?? c.created_at,
     action: <LinkButton href={`/runs/${c.run_id}`}>Open</LinkButton>,
   }));
@@ -1508,7 +1543,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </span>
     ),
     context: runContext(r),
-    run: shortId(r.id),
     at: r.started_at ?? r.created_at,
     action: null,
   }));
@@ -1526,7 +1560,6 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </span>
     ),
     context: runContext(r),
-    run: shortId(r.id),
     at: r.started_at ?? r.created_at,
     action: openRun(r),
   }));

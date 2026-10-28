@@ -3,14 +3,28 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 
-import { Button, Chip, DataTable, Empty, InfoTip, PageHeader, Panel, SegmentedControl, Split, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, Empty, InfoTip, Panel, SegmentedControl, Split, type Column } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+import { formatMoney } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { CompanyHeader } from "../_nav";
 import { RitualInspector } from "./_components/RitualInspector";
-import { estimateText, localDate, localTime, personName, scheduleOf, whenText, zoneTime, type Ritual, type SummarySettings } from "./_components/lib";
+import {
+  estimateText,
+  localDate,
+  localTime,
+  perMonthText,
+  personEmail,
+  personName,
+  scheduleOf,
+  whenText,
+  zoneTime,
+  type Ritual,
+  type SummarySettings,
+} from "./_components/lib";
 
 export default function RitualsPage() {
   return (
@@ -35,6 +49,10 @@ function Rituals() {
   // The owner's member pickers read the member list (owners only); every name on the page
   // comes from the member directory, which everyone who sees the table may read.
   const membersQ = useQuery(owner ? "rituals|members" : "rituals|members|none", () => (owner ? unwrap(api.GET("/v1/members")) : Promise.resolve(undefined)));
+  // qa-company-24: whether an owner chose the Company time zone yet (Settings are the owner's).
+  const zoneQ = useQuery(owner ? "settings|company_timezone" : "settings|company_timezone|none", () =>
+    owner ? unwrap(api.GET("/v1/settings/{key}", { params: { path: { key: "company_timezone" } } })) : Promise.resolve(undefined),
+  );
   const [picked, setPicked] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const rows = ritualsQ.data ?? [];
@@ -50,26 +68,54 @@ function Rituals() {
   }
 
   const columns: Column<Ritual>[] = [
-    { key: "title", header: "Ritual", phone: "title", cell: (r) => <span className="truncate font-medium">{r.title}</span> },
-    { key: "when", header: "When", phone: "meta", cell: (r) => <span className="truncate text-sm">{whenText(scheduleOf(r.schedule))}</span> },
-    { key: "owner", header: "Owner", width: "180px", phone: "hide", cell: (r) => <span className="truncate text-sm">{personName(peopleQ.data, r.owner_id)}</span> },
-    { key: "attendees", header: "Attendees", width: "96px", phone: "hide", align: "right", cell: (r) => <span className="tnum text-sm">{r.attendee_ids.length}</span> },
+    // qa-company-8: names and schedules wrap rather than cut; Owner and Attendees (in the
+    // inspector too) give way when the table is narrow beside it.
+    { key: "title", header: "Ritual", phone: "title", wrap: true, cell: (r) => <span className="font-medium">{r.title}</span> },
+    { key: "when", header: "When", phone: "meta", wrap: true, cell: (r) => <span className="text-sm">{whenText(scheduleOf(r.schedule))}</span> },
+    {
+      key: "owner",
+      header: "Owner",
+      width: "132px",
+      phone: "hide",
+      narrow: "hide",
+      wrap: true,
+      cell: (r) => (
+        <span className="text-sm" title={personEmail(peopleQ.data, r.owner_id)}>
+          {personName(peopleQ.data, r.owner_id)}
+        </span>
+      ),
+    },
+    { key: "attendees", header: "Attendees", width: "88px", phone: "hide", narrow: "hide", align: "right", cell: (r) => <span className="tnum text-sm">{r.attendee_ids.length}</span> },
     {
       key: "next",
       header: "Next",
-      width: "176px",
+      width: "184px",
       phone: "meta",
       phoneLabel: "Next",
+      wrap: true,
+      // qa-company-7: a meeting prepared early stays Next, its pre-read one click away.
       cell: (r) => (
-        <span data-col="next" className="tnum text-sm" title={r.next_due_at ? zoneTime(r.next_due_at, scheduleOf(r.schedule).timezone) : undefined}>
-          {r.status === "active" && r.next_due_at ? localTime(r.next_due_at) : "—"}
+        <span className="text-sm">
+          <span data-col="next" className="tnum" title={r.next_due_at ? zoneTime(r.next_due_at, scheduleOf(r.schedule).timezone) : undefined}>
+            {r.status === "active" && r.next_due_at ? localTime(r.next_due_at) : "—"}
+          </span>
+          {r.status === "active" && r.next_pre_read && (
+            <Link
+              href={`/company/rituals/${r.next_pre_read.id}`}
+              data-testid="next-pre-read"
+              className="block text-accent-ink hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              Pre-read ready
+            </Link>
+          )}
         </span>
       ),
     },
     {
       key: "last",
       header: "Last pre-read",
-      width: "128px",
+      width: "120px",
       phone: "meta",
       phoneLabel: "Last",
       cell: (r) =>
@@ -97,8 +143,7 @@ function Rituals() {
 
   return (
     <>
-      <PageHeader
-        title="Company"
+      <CompanyHeader
         action={
           owner && (
             <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>
@@ -122,7 +167,15 @@ function Rituals() {
       <Split
         inspector={
           selected ? (
-            <RitualInspector key={`${selected.id}|${selected.lock_version}`} ritual={selected} members={membersQ.data} people={peopleQ.data} canEdit={owner} onChanged={changed} />
+            <RitualInspector
+              key={`${selected.id}|${selected.lock_version}`}
+              ritual={selected}
+              members={membersQ.data}
+              people={peopleQ.data}
+              zoneDefault={!!zoneQ.data?.is_default}
+              canEdit={owner}
+              onChanged={changed}
+            />
           ) : undefined
         }
       >
@@ -196,17 +249,20 @@ function SummariesLine({ settings, canEdit, onChanged }: { settings: SummarySett
           ? "No active ritual would be summarized."
           : settings.estimate.rituals.map((r) => (
               <span key={r.ritual_id} className="block">
-                {r.title}: {r.runs_per_month} a month
+                {r.title}: {perMonthText(r.runs_per_month)}, {formatMoney(r.per_summary_usd)} each
               </span>
             ))}
-        <span className="mt-1 block">Each summary is one Oracle run of ${settings.estimate.per_summary_usd.toFixed(2)}.</span>
+        <span className="mt-1 block">Each summary is one Oracle run.</span>
       </InfoTip>
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>
   );
 }
 
-/** Add ritual (owners): a custom ritual with a title; its schedule is set in the inspector. */
+/**
+ * Add ritual (owners): a custom ritual with a title, made with the defaults it says
+ * (qa-company-29); its schedule, length and people are then edited in the inspector.
+ */
 function AddRitual({ onClose, onAdded }: { onClose: () => void; onAdded: (r: Ritual) => Promise<void> }) {
   const [title, setTitle] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -245,6 +301,9 @@ function AddRitual({ onClose, onAdded }: { onClose: () => void; onAdded: (r: Rit
       <Button variant="ghost" onClick={onClose}>
         Cancel
       </Button>
+      <p className="basis-full text-sm text-text2" data-testid="add-ritual-hint">
+        It starts every Monday at 9:00 AM for 30 minutes, with you as owner and no attendees. Change any of it in the panel once it is added.
+      </p>
       {error && <ErrorNote>{error}</ErrorNote>}
     </form>
   );

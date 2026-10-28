@@ -6,7 +6,7 @@ import { Chip, CodeChip, InfoTip, LinkButton, Notice, Panel, Ring, Sparkline, To
 import { namedText } from "@/lib/codes";
 import { percent } from "@/lib/goal-tree";
 
-import { amount, assess, formatFigure, shownGoals, spanMonths, type GoalView, type Point } from "./_goals";
+import { assess, changeText, formatFigure, shownGoals, spanMonths, type GoalView, type Point } from "./_goals";
 
 /** One goal: id and title, current over target, confidence ring, trend when there is history, distance to go. */
 function GoalCard({
@@ -25,6 +25,8 @@ function GoalCard({
   const trend = history && history.length >= 2 ? history : null;
   const change = trend ? Math.round((trend.at(-1)!.value - trend[0].value) * 10) / 10 : null;
   const p = assess(g, history);
+  // prod-2: no current value, no confidence ring: a number beside "–" reads as the goal's score.
+  const noValue = p.state === "none" || !g.currentText;
   return (
     <li
       data-testid={`home-goal-${g.tag}`}
@@ -55,7 +57,15 @@ function GoalCard({
             <span className="tnum ml-1 text-[15px] font-medium text-text2 max-[600px]:ml-0 max-[600px]:block">/ {g.targetText}</span>
           )}
         </span>
-        <Ring value={g.confidence} size={44} label={g.confidence == null ? "No confidence" : `Confidence ${g.confidence}`} />
+        {!noValue && (
+          // The ring says what it is: the evidence's confidence, not the goal's progress.
+          <span className="flex flex-none flex-col items-center gap-0.5" data-testid="goal-confidence">
+            <Ring value={g.confidence} size={44} label={g.confidence == null ? "No confidence" : `Confidence ${g.confidence}`} />
+            <span aria-hidden className="text-[12px] leading-4 font-medium text-text2">
+              confidence
+            </span>
+          </span>
+        )}
       </div>
       {/* The trend's room (the Sparkline's 240 x 40) is kept while it loads, so the band does not
           grow under the page a moment after it is drawn (#520: a goal chip's card below it closed). */}
@@ -99,7 +109,7 @@ function GoalCard({
         )}
         {change != null && change !== 0 && p.state !== "raw" && (
           <span className="tnum text-sm font-semibold text-text2" data-testid="goal-change">
-            <span className="text-text">{`${change > 0 ? "+" : "−"}${amount(Math.abs(change), !!g.current?.compact)}`}</span> {spanMonths(trend!)}m
+            {changeText(change, g.current, spanMonths(trend!))}
           </span>
         )}
       </div>
@@ -134,6 +144,28 @@ function Subgoals({ g, subs }: { g: GoalView; subs: GoalView[] }) {
         </ul>
       </details>
     </div>
+  );
+}
+
+/** Four placeholder goal cards, the size of the real ones, so the band does not jump when they load. */
+function GoalsSkeleton() {
+  return (
+    <ul
+      aria-hidden
+      data-testid="goals-loading"
+      className="grid grid-cols-4 divide-x divide-line max-[600px]:grid-cols-2 max-[600px]:divide-x-0 max-[600px]:[&>li]:border-b max-[600px]:[&>li:nth-child(odd)]:border-r"
+    >
+      {[0, 1, 2, 3].map((i) => (
+        <li key={i} className="flex min-w-0 flex-col gap-3 border-line px-4 pt-3.5 pb-3 max-[600px]:px-3">
+          <span className="block h-4 w-3/4 animate-pulse rounded bg-surface2" />
+          <span className="flex items-center justify-between gap-2">
+            <span className="block h-8 w-1/2 animate-pulse rounded bg-surface2" />
+            <span className="block size-11 flex-none animate-pulse rounded-full bg-surface2" />
+          </span>
+          <span className="block h-3 w-2/3 animate-pulse rounded bg-surface2" />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -198,7 +230,8 @@ export function GoalsPanel({
           <Notice tone="error">{error}</Notice>
         </div>
       )}
-      {loading && !goals && <div aria-hidden className="h-[150px] animate-pulse bg-surface2/60" />}
+      {/* prod-1: while the goals load, skeleton cards in their place, as Needs you draws skeleton rows. */}
+      {!goals && (loading || !error) && <GoalsSkeleton />}
       {goals && shown.length === 0 && (
         <div data-testid="home-goals-empty" className="flex flex-wrap items-center gap-3 px-4 py-4">
           <span className="text-[15px] font-semibold text-text2">No goals yet</span>

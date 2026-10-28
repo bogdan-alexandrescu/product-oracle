@@ -1,5 +1,6 @@
 import type { Schemas } from "@/lib/api/client";
 import { addDays, DEFAULT_ZONE, todayIn } from "@/lib/dates";
+import { formatDateRange } from "@/lib/format";
 
 export type Update = Schemas["DocumentSummary"];
 export type Period = Schemas["UpdatePeriod"];
@@ -32,20 +33,12 @@ export const VISIBILITY_LABEL: Record<Update["visibility"], string> = {
   company: "Company",
 };
 
-const SHORT_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-/** "2026-10-01" as "Oct 1". */
-function shortDay(iso: string): string {
-  const [, m, d] = iso.split("-").map(Number);
-  return `${SHORT_MONTHS[m - 1]} ${d}`;
-}
-
-/** "Oct 1 - Oct 31"; the years show when the period crosses one. */
+/** "Sep 8 – Oct 20, 2026" (qa-company-50: the shared range, en dash, with the year). */
 export function formatPeriod(p: Period | null | undefined): string {
   if (!p) return "—";
-  const cross = p.from.slice(0, 4) !== p.to.slice(0, 4);
-  return cross ? `${shortDay(p.from)}, ${p.from.slice(0, 4)} - ${shortDay(p.to)}, ${p.to.slice(0, 4)}` : `${shortDay(p.from)} - ${shortDay(p.to)}`;
+  return formatDateRange(p.from, p.to);
 }
 
 /** Today in the Company time zone (#401), as YYYY-MM-DD. */

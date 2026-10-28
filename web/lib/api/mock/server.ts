@@ -2225,6 +2225,8 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     uuid,
     companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     decisions: () => db.decisions?.decisions ?? [],
+    // qa-company-6: the goals block reads the baseline's goals, as Home does.
+    goals: () => db.baseline.entities.filter((e) => e.type === "goal") as Schemas["EntityOut"][],
     openVariances: (id) => openVariances(ensureMetrics(db, me), id),
     marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
     baselineStarts: () => levelFor((db.autonomy ??= emptyAutonomy()), "baseline") !== "observe",

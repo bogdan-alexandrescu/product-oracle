@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { Button, DataTable, Empty, InfoTip, Panel, confirmInPage, type Column } from "@/components/ds";
+import { Button, DataTable, InfoTip, Panel, confirmInPage, type Column } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { addDays, todayIn, useCompanyZone } from "@/lib/dates";
@@ -10,6 +10,7 @@ import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { CompanyEmpty } from "../../_empty";
 import { RowMenu, RowMenuItem } from "../../updates/_components/RowMenu";
 import { DealDialog } from "./DealDialog";
 import { ImportDialog } from "./ImportDialog";
@@ -181,7 +182,46 @@ export function WinLoss() {
           )}
         </div>
         {q.data && q.data.length === 0 ? (
-          <Empty testId="deals-empty">No win or loss records{result || reason || alternative || period !== "all" ? " match" : " yet"}</Empty>
+          result || reason || alternative || period !== "all" ? (
+            <CompanyEmpty
+              testId="deals-empty"
+              title="No win or loss records match"
+              action={
+                <Button
+                  onClick={() => {
+                    setResult("");
+                    setReason("");
+                    setPeriod("all");
+                    setAlternative("");
+                  }}
+                >
+                  Clear the filters
+                </Button>
+              }
+            >
+              Nothing has this result, reason, period or alternative. Change or clear a filter to see more.
+            </CompanyEmpty>
+          ) : (
+            <CompanyEmpty
+              testId="deals-empty"
+              title="No win or loss records yet"
+              action={
+                mayAdd || mayImport ? (
+                  <>
+                    {mayAdd && (
+                      <Button icon="plus" onClick={() => setEditing("new")}>
+                        Add a record
+                      </Button>
+                    )}
+                    {mayImport && <Button onClick={() => setImporting(true)}>Import a CSV file</Button>}
+                  </>
+                ) : undefined
+              }
+            >
+              Record why each deal was won, lost or churned, one at a time or from a CSV file of your deals. Pricing memos count these
+              records as evidence.
+            </CompanyEmpty>
+          )
         ) : (
           <DataTable
             label="Win and loss"

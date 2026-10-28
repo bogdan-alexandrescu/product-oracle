@@ -2,13 +2,15 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 
-import { Button, Chip, DataTable, Empty, InfoTip, Panel, SegmentedControl, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, InfoTip, Panel, SegmentedControl, type Column } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { addDays, dayIn, todayIn, useCompanyZone } from "@/lib/dates";
+import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+import { CompanyEmpty } from "../../_empty";
 import { FindingCard } from "./FindingCard";
 import { LABEL_TITLE, LABELS, RATING_KIND, RATING_LABEL, RATINGS, day, originOf, type Change, type Label, type Rating } from "./lib";
 
@@ -26,12 +28,15 @@ export function ChangeLog({
   alternative,
   onAlternative,
   onOpenChange,
+  onAddAlternative,
 }: {
   view: ChangeView;
   onView: (v: ChangeView) => void;
   alternative: string | null;
   onAlternative: (id: string | null) => void;
   onOpenChange: (id: string) => void;
+  /** Opens Alternatives with its Add form (the empty change log's way to start). */
+  onAddAlternative?: () => void;
 }) {
   const zone = useCompanyZone();
   const { can } = useMe();
@@ -41,6 +46,14 @@ export function ChangeLog({
   const [rating, setRating] = useState<Rating | "">("");
   const [month, setMonth] = useState("");
   const [older, setOlder] = useState(false);
+  const filtered = !!(alternative || origin || label || rating || month);
+  const clearFilters = () => {
+    onAlternative(null);
+    setOrigin("");
+    setLabel("");
+    setRating("");
+    setMonth("");
+  };
 
   // The month is the Company's: ask the API for a day either side (its from/to are UTC days),
   // then keep the changes whose day in the Company time zone falls in it.
@@ -85,7 +98,7 @@ export function ChangeLog({
       title="Change log"
       tools={
         <InfoTip label="the change log" align="end">
-          What changed about each alternative, dated in the Company time zone ({zone}): differences between two weekly reads of a watched page,
+          What changed about each alternative, dated in the Company time zone ({zoneName(zone)}): differences between two weekly reads of a watched page,
           and web findings a person promoted. From the web lists what the monthly web search found: not vetted until a person promotes or dismisses
           it.
         </InfoTip>
@@ -146,7 +159,25 @@ export function ChangeLog({
         <>
           {changes.error && <ErrorNote>{changes.error}</ErrorNote>}
           {changes.data && rows.length === 0 ? (
-            <Empty testId="changes-empty">No changes here</Empty>
+            <CompanyEmpty
+              testId="changes-empty"
+              title={filtered ? "No changes match" : "No changes yet"}
+              action={
+                filtered ? (
+                  <Button onClick={clearFilters}>Clear the filters</Button>
+                ) : onAddAlternative && can("create_competitor") && competitors.data?.length === 0 ? (
+                  <Button icon="plus" onClick={onAddAlternative}>
+                    Add your first alternative
+                  </Button>
+                ) : undefined
+              }
+            >
+              {filtered
+                ? "Nothing changed for this alternative, origin, label, rating or month. Change or clear a filter to see more."
+                : competitors.data?.length === 0
+                  ? "Each week Oracle reads the public pages you watch on each alternative and lists what changed here. Add an alternative and its pages to start."
+                  : "Each week Oracle reads the pages watched on each alternative and lists what changed here. Watch more pages from an alternative's details."}
+            </CompanyEmpty>
           ) : (
             <DataTable
               label="Changes"
@@ -164,7 +195,10 @@ export function ChangeLog({
         <div className="px-4 max-[600px]:px-3" data-testid="web-findings">
           {findings.error && <ErrorNote>{findings.error}</ErrorNote>}
           {findings.data && open.length === 0 ? (
-            <Empty testId="findings-empty">Nothing from the web to vet</Empty>
+            <CompanyEmpty testId="findings-empty" title="Nothing from the web to vet">
+              Once a month Oracle searches the web for news, reviews and launches about each alternative. What it finds waits here for an
+              approver to promote to the change log or dismiss.
+            </CompanyEmpty>
           ) : (
             <div className="flex flex-col divide-y divide-line">
               {open.map((f) => (

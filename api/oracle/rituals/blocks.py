@@ -90,6 +90,39 @@ def _first(attrs: dict[str, Any], key: str) -> Any:
     return attrs.get(f"{key}_text") if v is None or v == "" else v
 
 
+MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def day_text(d: date | str) -> str:
+    """A calendar day as the web's format module writes it: "Nov 2, 2026" (never ISO)."""
+    if isinstance(d, str):
+        try:
+            d = date.fromisoformat(d[:10])
+        except ValueError:
+            return d
+    return f"{MONTHS[d.month - 1]} {d.day}, {d.year}"
+
+
+def _number(v: float) -> str:
+    return str(int(v)) if float(v).is_integer() else f"{round(float(v), 10):g}"
+
+
+def figure_text(attrs: dict[str, Any], key: str) -> str | None:
+    """A goal's current or target as Home writes it (web/app/home/_goals.ts typedText):
+    a typed number with its unit ("9.4%", "$4M", "400 teams"), else the text as written."""
+    v, unit = attrs.get(key), attrs.get("unit")
+    typed = isinstance(v, int | float) and not isinstance(v, bool) and isinstance(unit, str)
+    # Home types the target only when it says which way it is met.
+    if key == "target" and attrs.get("comparison") not in ("at_least", "above", "at_most", "below"):
+        typed = False
+    if typed and unit:
+        if unit in CURRENCY:
+            return f"{CURRENCY[unit]}{_amount(float(v), abs(float(v)) >= 1e3)}"
+        return f"{_number(v)}%" if unit == "%" else f"{_number(v)} {unit}"
+    raw = _first(attrs, key)
+    return None if raw is None or raw == "" else str(raw)
+
+
 def _noun(u: str) -> str:
     return u[:-1] if len(u) > 3 and u.endswith("s") else u
 
@@ -197,8 +230,9 @@ async def goals(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
             "target": _shown(_first(a, "target")), "current": _shown(current),
             "distance": distance, "change_since_last": change,
             "owner": _shown(_first(a, "owner")), "href": f"/baseline?entity={g.id}",
-            "text": f"{g.title}: {_shown(current) or '-'} of {_shown(_first(a, 'target')) or '-'}"
-                    f"{' · ' + distance if distance else ''}",
+            # qa-company-6: Home's words for the same goal ("9.4% of 12% · 2.6 pts to go").
+            "text": f"{g.title}: {figure_text(a, 'current') or '-'} of "
+                    f"{figure_text(a, 'target') or '-'}{' · ' + distance if distance else ''}",
         })  # fmt: skip
     return rows
 
@@ -269,7 +303,7 @@ async def outcomes_due(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
         if isinstance(by, str) and by[:10] <= today:
             rows.append({"outcome_id": str(o.id), "title": o.title, "by": by[:10],
                          "href": f"/plan/outcomes?outcome={o.id}",
-                         "text": f"{o.title} (due {by[:10]})"})  # fmt: skip
+                         "text": f"{o.title} (due {day_text(by)})"})  # fmt: skip
     return rows
 
 
@@ -352,7 +386,7 @@ async def slips(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
                 "milestone_id": str(m.id), "track_id": str(m.track_id), "title": m.name,
                 "milestone_date": m.target_date.isoformat(), "tracker_date": latest.isoformat(),
                 "href": f"/roadmap?track={m.track_id}",
-                "text": f"{m.name}: {m.target_date.isoformat()} -> {latest.isoformat()}",
+                "text": f"{m.name}: {day_text(m.target_date)} → {day_text(latest)}",
             })  # fmt: skip
     return rows
 
@@ -405,7 +439,7 @@ async def priority_changes(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, An
             title = r.get("title") or r.get("key")
             rows.append({"key": r.get("key"), "title": title, "from": old["rank"],
                          "to": r["rank"], "href": "/priorities",
-                         "text": f"{title}: #{old['rank']} -> #{r['rank']}"})  # fmt: skip
+                         "text": f"{title}: #{old['rank']} → #{r['rank']}"})  # fmt: skip
     return rows
 
 
@@ -611,7 +645,7 @@ async def strategy_age(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
             "kind": kind, "title": a.document.title, "approved_at":
             approved.isoformat() if approved else None, "age_days": days,
             "review_on": a.review_on.isoformat(), "href": "/company/strategy",
-            "text": f"The {label} was approved {days} days ago; review by {a.review_on}",
+            "text": f"The {label} was approved {days} days ago; review by {day_text(a.review_on)}",
         })  # fmt: skip
     return rows
 
