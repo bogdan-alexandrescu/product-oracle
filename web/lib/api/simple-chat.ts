@@ -84,9 +84,9 @@ type Init = { params?: { path?: Record<string, string>; query?: Record<string, u
 type Call = (path: string, init?: Init) => Promise<{ data?: unknown; error?: unknown; response: Response }>;
 const loose = api as unknown as { GET: Call; POST: Call; PUT: Call };
 
-/** GET /v1/simple/chat: the reader's own Ask thread. */
-export function askThread(): Promise<ChatThread> {
-  return unwrap(loose.GET("/v1/simple/chat")) as Promise<ChatThread>;
+/** GET /v1/simple/chat?page=: the reader's own Ask thread on that Simple page (one per page; Home without one). */
+export function askThread(page?: string): Promise<ChatThread> {
+  return unwrap(loose.GET("/v1/simple/chat", page ? { params: { query: { page } } } : undefined)) as Promise<ChatThread>;
 }
 
 /**

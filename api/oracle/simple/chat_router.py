@@ -1,7 +1,8 @@
 """Simple S9 (#723, D22): change by chat (oracle.simple.chat). For people: a run's token is
 refused (the ``simple`` area is in no run-token scope, oracle.mcp.scopes).
 
-- ``GET /v1/simple/chat``: viewer and up; the caller's own Ask-panel thread.
+- ``GET /v1/simple/chat?page=``: viewer and up; the caller's own Ask-panel thread on that
+  Simple page (one thread per person and page; Home without a page).
 - ``POST /v1/simple/chat/messages``: viewer and up; the line and Oracle's reply (cards,
   one question, an answer or a note). Nothing is written to the plan.
 - ``GET|POST /v1/simple/meetings/{id}/chat[/messages]``: the meeting's attendees; 404
@@ -15,7 +16,7 @@ refused (the ``simple`` area is in no run-token scope, oracle.mcp.scopes).
 
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from oracle.auth.deps import TenantDB
 from oracle.simple import changes, chat, drafts
@@ -43,16 +44,22 @@ async def _run(db, coro):
 
 
 @router.get("/chat", response_model=ChatThreadOut, name="get_simple_chat")
-async def get_simple_chat(principal: Reader, db: TenantDB) -> ChatThreadOut:
-    """The caller's Ask-panel thread: their requests, Oracle's replies and cards."""
-    return await _run(db, chat.thread(db, principal))
+async def get_simple_chat(
+    principal: Reader, db: TenantDB, page: str | None = Query(default=None, max_length=300)
+) -> ChatThreadOut:
+    """The caller's Ask-panel thread on ``page`` (the Simple page the panel was opened
+    from; Home without one): their requests, Oracle's replies and cards."""
+    return await _run(db, chat.thread(db, principal, page=page))
 
 
 @router.post("/chat/messages", response_model=ChatThreadOut, name="post_simple_chat")
 async def post_simple_chat(body: ChatIn, principal: Reader, db: TenantDB) -> ChatThreadOut:
     """Ask Oracle in plain words; a change request gets change cards (nothing applies
     until Apply), an ambiguous one a question, a question about the plan an answer."""
-    return await _run(db, chat.post(db, principal, body.text, only_understood=body.only_understood))
+    return await _run(
+        db,
+        chat.post(db, principal, body.text, only_understood=body.only_understood, page=body.page),
+    )
 
 
 @router.get("/meetings/{meeting_id}/chat", response_model=ChatThreadOut,

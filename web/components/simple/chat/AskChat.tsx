@@ -19,24 +19,28 @@ import { ChatMessages, ChatThreadView } from "./ChatThread";
 export function AskChat({ about, ask }: { about: string; ask?: (text: string) => Promise<void> }) {
   const page = usePathname();
   const { can } = useMe();
-  const [thread, setThread] = useState<ChatThread | null>(null);
+  // A thread read for another page never shows here.
+  const [held, setHeld] = useState<{ page: string | null; thread: ChatThread } | null>(null);
+  const thread = held && held.page === page ? held.thread : null;
+  const setThread = useCallback((t: ChatThread) => setHeld({ page, thread: t }), [page]);
   const [error, setError] = useState<string | null>(null);
+  // The walk: the thread belongs to the page the panel was opened from (a new page starts empty).
   const load = useCallback(async () => {
     try {
-      setThread(await askThread());
+      setThread(await askThread(page ?? undefined));
     } catch (e) {
       setError(errorMessage(e));
     }
-  }, []);
+  }, [page, setThread]);
   useEffect(() => {
     let live = true;
-    askThread()
+    askThread(page ?? undefined)
       .then((t) => live && setThread(t))
       .catch((e) => live && setError(errorMessage(e)));
     return () => {
       live = false;
     };
-  }, []);
+  }, [page, setThread]);
   const changes = can("create_simple_change");
   const send = async (text: string) => {
     const t = await askSay(text, page ?? undefined, !!ask);
@@ -71,15 +75,15 @@ export async function askInChat(text: string, page: string | undefined): Promise
   const t = await askSay(text, page, true);
   if (t.understood === false) return null;
   const from = t.messages.findLastIndex((m) => m.author_kind === "person");
-  return <AskLines lines={t.messages.slice(Math.max(from, 0))} />;
+  return <AskLines lines={t.messages.slice(Math.max(from, 0))} page={page} />;
 }
 
 /** S9's lines shown in an Ask chat; a card applied or discarded reloads them from the reader's thread. */
-function AskLines({ lines }: { lines: ChatMessage[] }) {
+function AskLines({ lines, page }: { lines: ChatMessage[]; page: string | undefined }) {
   const [shown, setShown] = useState(lines);
   const reload = async () => {
     const ids = new Set(lines.map((m) => m.id));
-    const t = await askThread();
+    const t = await askThread(page);
     setShown(t.messages.filter((m) => ids.has(m.id)));
   };
   return (

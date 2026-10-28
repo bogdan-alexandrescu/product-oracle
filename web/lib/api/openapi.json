@@ -43375,8 +43375,35 @@
           "simple"
         ],
         "summary": "Get Simple Chat",
-        "description": "The caller's Ask-panel thread: their requests, Oracle's replies and cards.",
+        "description": "The caller's Ask-panel thread on ``page`` (the Simple page the panel was opened\nfrom; Home without one): their requests, Oracle's replies and cards.",
         "operationId": "get_simple_chat",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -43387,16 +43414,18 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         },
-        "security": [
-          {
-            "HTTPBearer": []
-          },
-          {
-            "APIKeyCookie": []
-          }
-        ],
         "x-min-role": "viewer",
         "x-per-item": "viewer"
       }
@@ -115189,6 +115218,17 @@
             "type": "string",
             "title": "Key"
           },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -116059,6 +116099,22 @@
           "pending": {
             "type": "boolean",
             "title": "Pending"
+          },
+          "failed": {
+            "type": "boolean",
+            "title": "Failed",
+            "default": false
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure"
           },
           "can_comment": {
             "type": "boolean",

@@ -1,3 +1,4 @@
+import { MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -191,3 +192,52 @@ for (const [where, use] of [
     });
   }
 }
+
+test.describe("a drawing that takes a while lands without a reload", () => {
+  test.use(DESKTOP);
+  const JOB_MS = 4500;
+
+  async function noReloads(page: Page): Promise<() => number> {
+    let loads = 0;
+    page.on("framenavigated", (f) => {
+      if (f === page.mainFrame()) loads += 1;
+    });
+    return () => loads;
+  }
+
+  test.beforeEach(async ({ page }) => {
+    await page.addInitScript(([key, ms]) => localStorage.setItem(key, ms), [MOCK_VISUAL_JOB_MS_KEY, String(JOB_MS)] as const);
+  });
+
+  test("a roadmap item's card: drawing, then version 1", async ({ page }) => {
+    await login(page);
+    await page.goto(ROADMAP);
+    await bar(page, "alert-digest").click();
+    const card = page.getByTestId("floating-card");
+    await card.getByRole("button", { name: "Open the item's flow" }).click();
+    const loads = await noReloads(page);
+    await card.getByRole("button", { name: "Ask Oracle to draw it" }).click();
+    await expect(card.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
+    // The job is still running at the panel's first read again.
+    await page.waitForTimeout(2500);
+    await expect(card.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
+    await expect(card.getByTestId("flow-version")).toHaveText("Version 1 of 1", { timeout: JOB_MS + 6000 });
+    await expect(card.getByTestId("flow-svg")).toBeVisible();
+    expect(loads()).toBe(0);
+  });
+
+  test("a one-pager bet line: drawing, then version 1", async ({ page }) => {
+    await login(page);
+    await page.goto(ONE_PAGER);
+    await page.getByRole("button", { name: "Flow for bet 3" }).click();
+    const wide = page.getByRole("group", { name: "User flow of bet 3" });
+    const loads = await noReloads(page);
+    await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
+    await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
+    await page.waitForTimeout(2500);
+    await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
+    await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1", { timeout: JOB_MS + 6000 });
+    await expect(wide.getByTestId("flow-svg")).toBeVisible();
+    expect(loads()).toBe(0);
+  });
+});

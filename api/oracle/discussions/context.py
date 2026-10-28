@@ -315,6 +315,11 @@ PAGES = {
     "runs": "Runs", "inbox": "Inbox", "company": "Company", "sources": "Sources",
     "settings": "Settings",
 }  # fmt: skip
+# The walk: Simple's pages by their segment after ``/simple`` ("Home" for ``/simple``).
+SIMPLE_PAGES = {
+    "": "Home", "roadmap": "Roadmap", "priorities": "Priorities", "decisions": "Decisions",
+    "meetings": "Meetings", "prds": "One-pager", "one-pagers": "One-pager",
+}  # fmt: skip
 OPEN_RUNS = ("awaiting_approval", "running", "awaiting_checkpoint", "paused_overrun")
 
 
@@ -325,6 +330,8 @@ def page_name(path: str) -> str:
     if not parts:
         return "General"
     head = parts[0]
+    if head == "simple" and (name := SIMPLE_PAGES.get(parts[1] if len(parts) > 1 else "")):
+        return "One-pagers" if name == "One-pager" and len(parts) < 3 else name
     if head not in PAGES:
         return path
     name = PAGES[head]

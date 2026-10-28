@@ -973,6 +973,27 @@ async def _upcoming(
             )
         ).all()
     ) if occ_ids else {}  # fmt: skip
+    # The walk: the ritual's real attendees are its owner and attendees and whoever was
+    # present at the last review held from it (a meeting started from one of its
+    # occurrences), until the ritual's attendees are edited after that review: then its list
+    # is. Not ``updated_at``: the scheduler bumps it whenever it moves ``next_due_at``.
+    held: dict[uuid.UUID, list[uuid.UUID]] = {}
+    edited = {r.id: r.attendees_edited_at for _, r in rows}
+    if edited:
+        for rid, ids, absent, at in await db.execute(
+            select(RitualOccurrence.ritual_id, SimpleMeeting.attendee_ids,
+                   SimpleMeeting.absent_ids, SimpleMeeting.started_at)
+            .join(RitualOccurrence, RitualOccurrence.id == SimpleMeeting.occurrence_id)
+            .where(RitualOccurrence.ritual_id.in_(list(edited)))
+            .order_by(SimpleMeeting.started_at.desc())
+        ):  # fmt: skip
+            if rid in held:
+                continue
+            fresh = edited[rid] is None or at is None or at >= edited[rid]
+            held[rid] = [i for i in ids or [] if i not in (absent or [])] if fresh else []
+    missing = {i for ids in held.values() for i in ids} - set(names)
+    if missing:
+        names.update(await _names(db, missing))
     out = []
     for o, r in rows:
         due = o.due_at if o is not None else r.next_due_at
@@ -985,7 +1006,7 @@ async def _upcoming(
             length_min=min(max(r.duration_min, 5), 240),
             attendees=[
                 SimplePersonRef(id=i, name=names.get(i, "someone"))
-                for i in dict.fromkeys([r.owner_id, *(r.attendee_ids or [])])
+                for i in dict.fromkeys([r.owner_id, *(r.attendee_ids or []), *held.get(r.id, [])])
             ],
             meeting_id=started.get(o.id) if o is not None else None,
             pre_read_ready=o is not None and o.status == "ready",

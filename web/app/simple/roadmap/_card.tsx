@@ -299,6 +299,9 @@ export function FloatingCard({
 }) {
   // The widened card's visual: a draft's own flow ("item", S7) or a proposal's or the item's feature visual (S10).
   const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
+  // The walk: the item's flow drawn while its card is open names itself here at once.
+  const [drawn, setDrawn] = useState<{ id: string; title: string } | null>(null);
+  const drawnTitle = drawn?.id === item.id ? drawn.title : null;
   const ref = useRef<HTMLDivElement>(null);
   useScreenSubject({ kind: "roadmap_item", subject: { item_id: item.id, key: item.key } }, item.title);
   useEffect(() => {
@@ -447,7 +450,7 @@ export function FloatingCard({
             <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">Flow</h3>
             <div className="mt-1 flex items-center gap-2 text-[15px]" data-testid="card-flow">
               <FlowThumb label="Open the item's flow" testId="item-flow-thumb" onOpen={() => setWide(wide !== "item" && wide?.id === item.id ? null : { kind: "feature", id: item.id })} />
-              <span className="min-w-0 flex-1">{item.flow ? item.flow.title : <span className="text-text2">No flow yet</span>}</span>
+              <span className="min-w-0 flex-1">{item.flow ? item.flow.title : drawnTitle ?? <span className="text-text2">No flow yet</span>}</span>
             </div>
           </section>)}
           {item.decided_in.length > 0 && (
@@ -509,7 +512,7 @@ export function FloatingCard({
               </Button>
               </>
             ) : (
-              <FlowPanel key={`${wide.kind}-${wide.id}`} subject={wide} onClose={() => setWide(null)} />
+              <FlowPanel key={`${wide.kind}-${wide.id}`} subject={wide} onClose={() => setWide(null)} onDrawn={wide.kind === "feature" && wide.id === item.id ? (f) => setDrawn({ id: item.id, title: f.title }) : undefined} />
             )}
           </section>
         )}

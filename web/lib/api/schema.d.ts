@@ -12570,7 +12570,8 @@ export interface paths {
         };
         /**
          * Get Simple Chat
-         * @description The caller's Ask-panel thread: their requests, Oracle's replies and cards.
+         * @description The caller's Ask-panel thread on ``page`` (the Simple page the panel was opened
+         *     from; Home without one): their requests, Oracle's replies and cards.
          */
         get: operations["get_simple_chat"];
         put?: never;
@@ -38349,6 +38350,8 @@ export interface components {
             id: string;
             /** Key */
             key: string;
+            /** Code */
+            code?: string | null;
             /** Title */
             title: string;
             /** Outcome */
@@ -38687,6 +38690,13 @@ export interface components {
             comments: components["schemas"]["SimpleVisualCommentOut"][];
             /** Pending */
             pending: boolean;
+            /**
+             * Failed
+             * @default false
+             */
+            failed: boolean;
+            /** Failure */
+            failure?: string | null;
             /** Can Comment */
             can_comment: boolean;
             /** Can Revise */
@@ -68419,7 +68429,9 @@ export interface operations {
     };
     get_simple_chat: {
         parameters: {
-            query?: never;
+            query?: {
+                page?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -68433,6 +68445,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

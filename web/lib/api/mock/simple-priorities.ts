@@ -58,12 +58,19 @@ function initials(key: string): string {
 
 /**
  * priorities.short_codes: each feature's short code, for feature keys in creation order: the
- * key when it is a code (F-12), else its initials, a digit added on a clash in creation order,
+ * key when it is a code (F-12), else its PRD section's code (F-06), else its initials, a digit added on a clash in creation order,
  * so every reader reads the same code and a new feature never renames an older one.
  */
-export function shortCodes(keys: string[]): string[] {
+export function shortCodes(keys: string[], prd: Record<string, string> = {}): string[] {
   const out: (string | null)[] = keys.map((k) => (FEATURE_CODE.test(k) ? k : null));
   const taken = new Set(out.filter((c): c is string => c !== null));
+  // The walk: a feature whose item came from a PRD section with a code (f-06) reads F-06.
+  keys.forEach((k, i) => {
+    if (out[i] === null && prd[k] && !taken.has(prd[k])) {
+      out[i] = prd[k];
+      taken.add(prd[k]);
+    }
+  });
   keys.forEach((k, i) => {
     if (out[i] !== null) return;
     const base = initials(k);
@@ -276,7 +283,8 @@ export function prioritiesOut(
   // is in creation order, a feature outside it after them by key.
   const featureKey = (k: string): string => FEATURES[k]?.code ?? k;
   const created = [...Object.keys(FEATURES), ...yours.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
-  const shorts = shortCodes(created);
+  const prdCodes = Object.fromEntries(yours.filter((i) => i.code).map((i) => [featureKey(i.key), i.code!]));
+  const shorts = shortCodes(created, prdCodes);
   const short = new Map(created.map((k, n) => [k, shorts[n]]));
   yours.forEach((i, n) => (rows[n].short_code = short.get(featureKey(i.key))!));
   const codes = new Map(read.items.map((i) => [i.id, i]));

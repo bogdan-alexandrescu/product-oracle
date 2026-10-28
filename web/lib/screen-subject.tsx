@@ -30,10 +30,26 @@ const PAGES: Record<string, string> = {
   settings: "Settings",
 };
 
-/** "Settings · Members" for /settings/members, "General" for /. */
+/** Simple's pages by their segment after /simple (oracle.discussions.context.SIMPLE_PAGES). */
+const SIMPLE_PAGES: Record<string, string> = {
+  "": "Home",
+  roadmap: "Roadmap",
+  priorities: "Priorities",
+  decisions: "Decisions",
+  meetings: "Meetings",
+  prds: "One-pager",
+  "one-pagers": "One-pager",
+};
+
+/** "Settings · Members" for /settings/members, "General" for /, "Home" for /simple. */
 export function pageName(path: string): string {
   const parts = path.split("?")[0].split("/").filter(Boolean);
   if (parts.length === 0) return "General";
+  if (parts[0] === "simple") {
+    const name = SIMPLE_PAGES[parts[1] ?? ""];
+    if (name === "One-pager" && !parts[2]) return "One-pagers";
+    if (name) return name;
+  }
   const name = PAGES[parts[0]];
   if (!name) return path;
   if ((parts[0] === "settings" || parts[0] === "company") && parts[1]) {

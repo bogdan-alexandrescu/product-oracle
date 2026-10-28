@@ -39,7 +39,7 @@ from oracle.authz import has_role
 from oracle.baseline.models import Entity
 from oracle.priorities import service as priorities
 from oracle.priorities.schemas import RankedFeature
-from oracle.roadmap.models import HORIZONS
+from oracle.roadmap.models import HORIZONS, RoadmapItem
 from oracle.simple import changes, drafts, key_dates, service, targets
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader
@@ -222,13 +222,39 @@ def _initials(key: str) -> str:
     return ((words[0] if words else "") + "xx")[:2].upper()
 
 
-def short_codes(keys: list[str]) -> list[str]:
+PRD_SECTION_CODE = re.compile(r"([a-z]{1,3})-(\d+)", re.IGNORECASE)
+
+
+def prd_code(section_key: str | None) -> str | None:
+    """The PRD's own code of a section an item was imported from ("f-06" -> "F-06"); None
+    for a section key that is no code ("problem", "goals")."""
+    m = PRD_SECTION_CODE.fullmatch((section_key or "").strip())
+    return f"{m.group(1).upper()}-{m.group(2)}" if m else None
+
+
+def short_codes(keys: list[str], prd: dict[str, str] | None = None) -> list[str]:
     """Each feature's short code, for feature keys in the features' creation order: the key
-    when it is a code (F-12), else its initials, a digit added on a clash (DI, DI2) in creation
+    when it is a code (F-12), else the PRD code of the section its roadmap item was imported
+    from (``prd``: "F-06"), else its initials, a digit added on a clash (DI, DI2) in creation
     order. From the feature alone, never the item a reader sees, nor the key's order or the
     rank: every reader reads the same code, and a new feature never renames an older one."""
-    out: list[str | None] = [k if FEATURE_CODE.fullmatch(k) else None for k in keys]
-    taken = {c for c in out if c is not None}
+    prd = prd or {}
+    out: list[str | None] = [None] * len(keys)
+    taken: set[str] = set()
+    # Codes (the key's own, else the PRD's) in creation order: the older feature keeps a
+    # code; a later one that would read the same reads it with a digit (F-06.2).
+    for i, k in enumerate(keys):
+        own = k if FEATURE_CODE.fullmatch(k) else prd.get(k)
+        if own is None:
+            continue
+        if own in taken and not FEATURE_CODE.fullmatch(k):
+            continue  # a PRD code already taken: initials below
+        code, n = own, 1
+        while code in taken:
+            n += 1
+            code = f"{own}.{n}"
+        out[i] = code
+        taken.add(code)
     for i, k in enumerate(keys):
         if out[i] is not None:
             continue
@@ -244,15 +270,32 @@ def short_codes(keys: list[str]) -> list[str]:
 
 async def _short_codes(db: AsyncSession) -> dict[str, str]:
     """Every feature's short code by its key, over all the company's features (dropped ones
-    keep theirs, so no code moves when one goes)."""
-    keys = list(
-        await db.scalars(
-            select(Entity.key)
+    keep theirs, so no code moves when one goes). A feature whose roadmap item came from a
+    PRD section with a code ("f-06") reads as the PRD names it (F-06)."""
+    rows = (
+        await db.execute(
+            select(Entity.id, Entity.key)
             .where(Entity.type == "feature")
             .order_by(Entity.created_at, Entity.key)
         )
-    )
-    return dict(zip(keys, short_codes(keys), strict=True))
+    ).all()
+    keys = [k for _, k in rows]
+    key_of = {i: k for i, k in rows}
+    prd: dict[str, str] = {}
+    for fid, section in await db.execute(
+        select(RoadmapItem.feature_id, RoadmapItem.prd_section_key)
+        .where(
+            RoadmapItem.feature_id.is_not(None),
+            RoadmapItem.prd_section_key.is_not(None),
+            # Published roadmaps only: a draft's code is not every reader's.
+            RoadmapItem.roadmap_version_id.is_not(None),
+        )
+        .order_by(RoadmapItem.created_at)
+    ):
+        code = prd_code(section)
+        if code and fid in key_of:
+            prd.setdefault(key_of[fid], code)
+    return dict(zip(keys, short_codes(keys, prd), strict=True))
 
 
 def _buckets(rows: list[SimplePriorityRow]) -> tuple[list[SimpleGoalBucket], float]:
