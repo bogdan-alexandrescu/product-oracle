@@ -13,7 +13,8 @@ import { login } from "./helpers";
  * 3. A recorded change's impact highlights the rail by what the change is about, not always PRDs.
  * 4. qa-plan-40: a feature's score steps read the same number style as the Score column, their
  *    arithmetic is true, and confidence reads one way in every step: a percent ("90%").
- * 5. A stored change whose anchor feature is no longer anyone's still names it by the API's
+ * 5. The owner's "Percent everywhere": confidence reads as one percent wherever it is shown.
+ * 6. A stored change whose anchor feature is no longer anyone's still names it by the API's
  *    own title in the Changes log, not by its bare key.
  */
 
@@ -27,7 +28,13 @@ async function openImpact(page: Page, n = 2) {
 
 test("impact: the lineage names a baseline item's kind, not its raw key", async ({ page }) => {
   await scenario(page, "impact");
-  await openImpact(page);
+  await login(page);
+  // A version's preview reaches only that document's sections (as the API's): a baseline
+  // item is an upstream on its own what-if, opened from its drawer as a person would.
+  await page.goto("/baseline");
+  await page.getByTestId("feature-f.guided-setup").getByRole("button", { name: "Guided setup" }).click();
+  await page.getByRole("dialog", { name: "Guided setup" }).getByRole("link", { name: "What if it changed?" }).click();
+  await expect(page).toHaveURL(/\/impact\/entities\/[^/]+$/);
   const graph = page.getByRole("region", { name: "Lineage" });
   const upstream = graph.getByTestId("lineage-upstream").filter({ hasText: "Guided setup" });
   await expect(upstream).toBeVisible();
@@ -191,6 +198,49 @@ test("priorities: with a track record, the confidence step and the formula read 
   ]);
 
   await stepsAddUp(page);
+});
+
+/**
+ * The owner's "Percent everywhere" (2026-10-28): one confidence figure, to the tenth where it
+ * is computed, reads the same in the ring, the Confidence section and its words, the Inputs
+ * table, the score steps and the Confidence column; each evidence item is a percent too.
+ */
+async function confidenceReads(page: Page, key: string, title: string, shown: string) {
+  const row = page.getByTestId(`priority-row-${key}`);
+  await expect(row.getByRole("meter", { name: `Confidence ${shown}` })).toContainText(shown);
+  await row.getByRole("button", { name: title, exact: true }).click();
+  const inspector = page.getByTestId("priority-inspector");
+  const ring = inspector.getByRole("img", { name: `Confidence ${shown}` });
+  await expect(ring).toBeVisible();
+  await expect(ring).toHaveText(shown);
+  const why = page.getByTestId(`explanation-${key}`);
+  await expect(why.getByTestId("confidence-figure")).toHaveText(shown);
+  await expect(why.getByTestId("confidence-explain")).toContainText(shown);
+  await expect(why.getByRole("row", { name: /^Confidence/ }).getByRole("cell").nth(1)).toHaveText(shown);
+  const steps = (await why.getByRole("list", { name: "Steps" }).getByRole("listitem").allInnerTexts()).join("\n");
+  expect(steps).toContain(shown);
+  for (const ev of await why.getByTestId("evidence-confidence").allInnerTexts()) expect(ev.trim()).toMatch(/^\d+(\.\d)?%$/);
+}
+
+test("priorities: confidence reads as one percent in the ring, the section, the Inputs and the steps", async ({ page }) => {
+  await login(page, "approver@example.com");
+  await page.goto("/priorities");
+  await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
+  await pickMethod(page, "Goal-weighted");
+  await confidenceReads(page, "F-2", "Shipping cost shown in the cart", "90%");
+});
+
+test("priorities: with a track record, confidence reads as the same percent to the tenth everywhere", async ({ page }) => {
+  await scenario(page, "outcomes");
+  await login(page, "approver@example.com");
+  await page.goto("/priorities");
+  await expect(page.getByTestId("track-record")).toContainText("Track record ×0.77");
+  await pickMethod(page, "Goal-weighted");
+  await confidenceReads(page, "F-1", "Saved addresses at checkout", "57.8%");
+  // The words say where the figure came from: the evidence's average, then the track record.
+  await expect(page.getByTestId("explanation-F-1").getByTestId("confidence-explain")).toHaveText(
+    "Average of 7 evidence items: 75%; after the track record ×0.77, 57.8%",
+  );
 });
 
 test("priorities: the Changes log names a retired override's anchor by the API's title, not its key", async ({ page }) => {
