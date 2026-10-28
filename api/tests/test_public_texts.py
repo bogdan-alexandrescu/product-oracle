@@ -1395,9 +1395,13 @@ def test_every_letter_with_several_readings_has_a_stand_in():
 @pytest.mark.timing
 def test_the_note_check_keeps_up_with_many_notes():
     """protects=#703 re-review (major): a company's notes from every roadmap version (300
-    notes of 40 words) are checked in well under a second, each time; fails_when=the
-    note runs are rebuilt on every check once there are more than 256 notes (about 10 s
-    each)."""
+    notes of 40 words) are each read into words once, and every later check reuses them
+    (no note is read again, no word pattern compiled again), so a check stays well under a
+    second; fails_when=the note runs are rebuilt on every check once there are more than
+    256 notes (about 10 s each, a cache too small for them), or a check takes 5 s or more;
+    no_claim=a sub-second time on this runner: the first check warms the process's
+    character caches (about 1 s on a slow runner), so the guard is what each check builds,
+    with a ceiling far above a working check and well below the regression."""
     import random
     import time
 
@@ -1410,9 +1414,23 @@ def test_the_note_check_keeps_up_with_many_notes():
     copied = " ".join(notes[-1].split()[10:15])
     text = " ".join(word() for _ in range(120)) + f". It waits on {copied} for now."
     ctx = _ctx(notes=notes)
-    for _ in range(3):
+
+    def built() -> tuple[int, int]:
+        return (
+            leak_check._note_words.cache_info().misses,
+            leak_check._word_pattern.cache_info().misses,
+        )
+
+    for n in range(3):
+        before = built()
         start = time.perf_counter()
         found = leak_check.check(text, ctx)
         took = time.perf_counter() - start
-        assert took < 1.0, took
         assert [f.code for f in found] == ["internal_note"], found
+        notes_read, patterns = (after - b for after, b in zip(built(), before, strict=True))
+        if n == 0:
+            # Each note read into words at most once (fewer if this process has them).
+            assert notes_read <= len(notes), notes_read
+        else:
+            assert (notes_read, patterns) == (0, 0), (n, notes_read, patterns)
+        assert took < 5.0, (n, took)

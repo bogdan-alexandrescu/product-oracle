@@ -12,6 +12,7 @@ import httpx
 import pytest
 from sqlalchemy import select, text
 
+from oracle.db import get_engine
 from oracle.mcp import server as mcp_server
 from oracle.models import AuditEvent
 from oracle.runs import service
@@ -89,20 +90,67 @@ async def test_reads_initialize_and_tools_list_never_read_swarmcloud(client, own
     assert _reads(swarm) == before
 
 
+# A wall-clock ceiling for each wait of the test below: it is never reached while the
+# shared read works (the test waits on events, not on the runner's speed), and only stops
+# a hang from hanging CI.
+CEILING = 60
+
+
+async def _until(done, what, ceiling: float = CEILING) -> None:
+    """Waits until ``done()``; at the ceiling fails with ``what()``, what it waited for."""
+    try:
+        async with asyncio.timeout(ceiling):
+            while not done():
+                await asyncio.sleep(0.05)
+    except TimeoutError:
+        raise AssertionError(f"{what()} after {ceiling} s") from None
+
+
 @pytest.mark.timing
 async def test_thirty_concurrent_writes_on_a_slow_status_share_one_bounded_read(
     client, owner, monkeypatch
 ):
-    """30 run-token writes while SwarmCloud's status hangs: no database connection is held
-    over the read (a cookie request is served meanwhile), they share one read, and the
-    read's deadline makes them read-only ('status unknown')."""
+    """protects=W5 (owner 2026-10-20): 30 run-token writes while SwarmCloud's status hangs
+    all join ONE status read; while it hangs no database connection is held (none is
+    checked out, and a cookie request is served); its deadline (HOLD_READ_SECONDS) ends
+    it and every write is refused read-only ('status unknown'), with no second read.
+    fails_when=a write makes a read of its own, holds a database connection over the
+    read, or is not answered once the read's deadline passes.
+    no_claim=how fast the runner serves 30 MCP sessions: the test waits on what happens
+    (each write reaching the read, the deadline) and fires the read's real deadline
+    itself, with a 60 s ceiling per wait only against a hang."""
     tenant_id, auth = owner
     swarm = on()
     runtime = use(swarm)
     run = await started(client, auth)
     token = token_of(swarm)
     cookie = await as_user(tenant_id, "owner")
+    # The first MCP session of a process builds the app's OpenAPI document for the tool
+    # catalog (seconds of CPU on a shared runner): built here, before the writes, as a
+    # running server has it.
+    async with mcp_session(token, FORWARDED) as c:
+        await c.list_tools()
     monkeypatch.setattr(service, "HOLD_READ_SECONDS", 1.0, raising=False)
+    # The read's deadline is the real one, made with HOLD_READ_SECONDS; the test, not
+    # the runner's clock, says when it passes.
+    deadlines: list[tuple[float, asyncio.Timeout]] = []
+
+    def deadline(seconds: float) -> asyncio.Timeout:
+        made = asyncio.timeout(3600)
+        deadlines.append((seconds, made))
+        return made
+
+    monkeypatch.setattr(service, "_hold_deadline", deadline)
+    joined = 0
+    live_hold = service._live_hold
+
+    async def counted(*a, **kw):
+        nonlocal joined
+        joined += 1
+        return await live_hold(*a, **kw)
+
+    monkeypatch.setattr(service, "_live_hold", counted)
+    reading = asyncio.Event()
     release = asyncio.Event()
     calls = 0
     real = runtime.status
@@ -110,21 +158,51 @@ async def test_thirty_concurrent_writes_on_a_slow_status_share_one_bounded_read(
     async def slow(workflow_id):
         nonlocal calls
         calls += 1
+        reading.set()
         await release.wait()
         return await real(workflow_id)
 
     monkeypatch.setattr(runtime, "status", slow)
+
     writes = [asyncio.create_task(_push(token, f"r8-{n}")) for n in range(30)]
     try:
-        await asyncio.sleep(0.3)
-        resp = await asyncio.wait_for(client.get(f"/v1/runs/{run['id']}", headers=cookie), 5)
+        # A write that holds a connection over the read exhausts the pool: the others
+        # never reach the read, and the wait says so.
+        await _until(
+            lambda: joined >= 30 and reading.is_set(),
+            lambda: (
+                f"{joined}/30 writes reached the status read ({calls} reads); "
+                f"{get_engine().pool.checkedout()} database connections checked out"
+            ),
+        )
+        # All 30 wait on the one read, which hangs: no connection is held over it, and a
+        # cookie request is served meanwhile.
+        assert calls == 1 and not any(w.done() for w in writes)
+        assert get_engine().pool.checkedout() == 0
+        resp = await asyncio.wait_for(client.get(f"/v1/runs/{run['id']}", headers=cookie), CEILING)
         assert resp.status_code == 200, resp.text
-        results = await asyncio.wait_for(asyncio.gather(*writes), 20)
+        assert not any(w.done() for w in writes)
+        [(seconds, read_deadline)] = deadlines
+        assert seconds == 1.0
+        read_deadline.reschedule(asyncio.get_running_loop().time())
+        results = await asyncio.wait_for(asyncio.gather(*writes), CEILING)
     finally:
         release.set()
         await asyncio.gather(*writes, return_exceptions=True)
     assert all(err and "status unknown" in said for err, said in results), results[:2]
-    assert calls == 1
+    assert calls == 1 and joined == 30
+
+
+async def test_a_wait_that_never_comes_says_what_it_waited_for():
+    """A wait of the shared-read test that reaches its ceiling fails with what it
+    waited for (how many writes reached the read, the connections checked out), not
+    with a bare TimeoutError."""
+    with pytest.raises(AssertionError, match=r"3/30 writes .* 2 database connections"):
+        await _until(
+            lambda: False,
+            lambda: "3/30 writes reached the status read; 2 database connections checked out",
+            ceiling=0.1,
+        )
 
 
 async def test_a_slow_status_read_times_out_to_read_only(client, owner, monkeypatch):
