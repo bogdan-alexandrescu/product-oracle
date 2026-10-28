@@ -157,6 +157,26 @@ test("qa-company-27: the on-demand estimate says what Every pre-read would cost,
   await expect(tip).not.toContainText(/\d\.\d+ a month/);
 });
 
+test("fix-company review: with every ritual paused, the summaries estimate still says what one summary costs", async ({ page }) => {
+  // protects=the review's minor on the summaries popover; fails_when=no price shows once no ritual is active.
+  await openRituals(page);
+  const rows = page.getByTestId("ritual-row");
+  const n = await rows.count();
+  for (let i = 0; i < n; i++) {
+    await rows.nth(i).click();
+    const pause = inspector(page).getByRole("button", { name: "Pause", exact: true });
+    if (await pause.isVisible()) {
+      await pause.click();
+      await expect(inspector(page).getByRole("button", { name: "Resume", exact: true })).toBeVisible();
+    }
+  }
+  const line = page.getByTestId("ritual-summaries");
+  await line.getByRole("button", { name: "About the summaries estimate" }).click();
+  const tip = line.getByRole("tooltip");
+  await expect(tip).toContainText("No active ritual would be summarized.");
+  await expect(tip).toContainText("Each summary is one Oracle run of about $3.00.");
+});
+
 test("qa-company-29: Add ritual says what it starts with and where to change it", async ({ page }) => {
   await openRituals(page);
   await page.getByRole("button", { name: "Add ritual" }).click();

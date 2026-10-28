@@ -69,13 +69,13 @@ test.describe("desktop", () => {
   test("qa-company-33: the tab strip stays put between tabs, and every tab has the same (i) beside Company", async ({ page }) => {
     await login(page);
     const tops: number[] = [];
-    for (const key of ["strategy", "updates", "metrics", "market"] as const) {
+    for (const key of ["strategy", "decisions", "updates", "metrics", "market"] as const) {
       await openTab(page, key);
       const header = page.locator("header[data-page-header]").filter({ visible: true });
       await expect(header.getByRole("button", { name: "About Company" })).toHaveCount(1);
       tops.push((await nav(page).boundingBox())!.y);
     }
-    // Strategy has no header button; Updates, Metrics and Market (Add alternative) do.
+    // Strategy has no header button; Decisions (Propose decision), Updates, Metrics and Market (Add alternative) do.
     for (const y of tops) expect(Math.abs(y - tops[0])).toBeLessThanOrEqual(0.5);
   });
 
@@ -142,6 +142,7 @@ test.describe("phone", () => {
   test("qa-company-34: the page's primary button shares the tab strip's row, not a row of its own", async ({ page }) => {
     await login(page);
     for (const [key, name] of [
+      ["decisions", "Propose decision"],
       ["metrics", "Add metric"],
       ["updates", "New update"],
     ] as const) {

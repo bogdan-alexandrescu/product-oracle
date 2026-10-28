@@ -250,3 +250,16 @@ test("at 390 px rows are cards and the bottom bar shows the tally and Approve", 
   await expect(bar(page).getByRole("button", { name: "Approve baseline" })).toBeVisible();
   await expect(bar(page).getByRole("button", { name: "Send back to agents" })).toBeHidden();
 });
+
+// fix-company review: a run that wrote nothing to the baseline says so; never "All 0 items handled".
+test("a run with no items says it has none, not that all of them are handled", async ({ page }) => {
+  await page.clock.setSystemTime(new Date("2026-10-27T12:00:00Z"));
+  await seeded(page, "no-document");
+  // guest-checkout's Baseline to PRD run (the "no-document" scenario) created no baseline items.
+  await page.goto("/baseline?run=7a11c0de-0000-4000-8000-0000000000e1");
+  const band = page.getByTestId("from-run-band");
+  await expect(band).toContainText("From run · Baseline to PRD");
+  await expect(band).toContainText("No items");
+  await expect(band.getByTestId("band-all-handled")).toHaveCount(0);
+  await expect(band).not.toContainText("0 items");
+});
