@@ -232,7 +232,7 @@ test.describe("desktop", () => {
       // Updated sorts newest first by default.
       await expect(page.getByTestId("sort-updated")).toHaveAttribute(
         "aria-label",
-        /newest or highest first/,
+        /newest first/,
       );
       await expect(
         page

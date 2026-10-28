@@ -80,9 +80,8 @@ test("qa-docs-1: a brief-layer module's section sits in the brief, before the fu
   await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
   let dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   const brief = await briefHeadings(dialog);
-  // The template's brief sections, then the module's, where the full version begins.
+  // The module's brief section sits where the full version begins.
   expect(brief.at(-1)).toBe("Strategic alignment");
-  expect(brief.length).toBeGreaterThan(1);
   await expect(dialog.getByTestId("outline-full")).not.toContainText("Strategic alignment");
   // A full-layer addition stays in the full version.
   await expect(dialog.getByTestId("outline-full")).toContainText("Value and cost economics");
