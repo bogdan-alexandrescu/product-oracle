@@ -60,7 +60,7 @@ test("Approve on a spec version that may be stale says what to do, in the app's 
   await page.getByRole("button", { name: "Approve version" }).click();
   await page.getByRole("group", { name: "Confirm approval" }).getByRole("button", { name: "Confirm" }).click();
   const refusal = page.getByRole("group", { name: "Confirm approval" }).getByRole("alert");
-  await expect(refusal).toContainText("this spec version may be stale");
+  await expect(refusal).toContainText(/this spec version may be stale/i);
   await expect(refusal).toContainText("Potentially stale");
   expect(await refusal.innerText()).not.toMatch(ROUTE_OR_ID);
   await expect(page.getByText(/✓ Approved/)).toHaveCount(0);

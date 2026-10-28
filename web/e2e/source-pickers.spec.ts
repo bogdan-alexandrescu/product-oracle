@@ -105,9 +105,9 @@ test("slack picker: a rate limit reads as a retry", async ({ page }) => {
   const form = await addForm(page, "slack");
   const picker = form.getByRole("group", { name: "Slack channels" });
   await picker.getByLabel("Search channels").fill("ratelimit");
-  await expect(picker.getByRole("alert")).toHaveText("Slack is busy: try again in 30 seconds");
+  await expect(picker.getByRole("alert")).toHaveText("Slack is busy: try again in 30 seconds.");
   await picker.getByRole("button", { name: "Retry" }).click();
-  await expect(picker.getByRole("alert")).toHaveText("Slack is busy: try again in 30 seconds");
+  await expect(picker.getByRole("alert")).toHaveText("Slack is busy: try again in 30 seconds.");
   await picker.getByLabel("Search channels").fill("pro");
   await expect(picker.getByRole("checkbox", { name: "#product" })).toBeVisible();
   await expect(picker.getByRole("alert")).toHaveCount(0);

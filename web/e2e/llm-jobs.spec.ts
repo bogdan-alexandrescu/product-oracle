@@ -228,7 +228,7 @@ test("an owner turns a job kind off for a document", async ({ page }) => {
   await expect(review).not.toBeChecked();
   await page.getByTestId("jobs-panel").filter({ visible: true }).getByRole("button", { name: "Suggest changes now" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "turned off" })).toHaveText(
-    '"Suggest changes from feedback" is turned off for this document (409)',
+    '"Suggest changes from feedback" is turned off for this document.',
   );
   await page.reload();
   await openTab(page, "History");

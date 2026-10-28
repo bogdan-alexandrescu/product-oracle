@@ -62,7 +62,9 @@ test("every screen shows the Ask strip; ⌘J opens the 400 px panel and Esc clos
   }
   await page.keyboard.press("ControlOrMeta+j");
   await expect(panel(page)).toBeVisible();
-  expect((await page.getByTestId("hop-dock").boundingBox())!.width).toBe(400);
+  // qa-shell-8: at 1366 px the 400 px panel overlays as a drawer (it docks from 1600 px).
+  expect((await page.getByTestId("hop-drawer").boundingBox())!.width).toBe(400);
+  expect((await page.getByTestId("hop-dock").boundingBox())!.width).toBe(45);
   await noSidewaysScroll(page);
   await page.keyboard.press("Escape");
   await expect(panel(page)).toHaveCount(0);
@@ -102,7 +104,9 @@ test("the diff and publish pages are about their document, and a chat started th
   await panel(page).getByRole("textbox", { name: "Ask Oracle" }).fill("What is left before we publish?");
   await panel(page).getByRole("button", { name: "Send" }).click();
   await expect(panel(page).getByTestId("discussion-thread")).toBeVisible();
-  await expect(panel(page).getByTestId("hop-about")).toHaveText("About: Checkout redesign PRD");
+  // In the thread its own header names the subject; the panel's About chip is for the list (qa-shell-20).
+  await expect(panel(page).getByTestId("hop-about")).toHaveCount(0);
+  await expect(panel(page).getByTestId("discussion-thread")).toContainText("Checkout redesign PRD");
 });
 
 // Criterion 6: a section_edit Oracle proposes on a locked section cannot be staged, in G3's
@@ -183,7 +187,8 @@ test("a panel chat is private, Oracle's reply streams in, and Share as discussio
   await expect(thread.getByTestId("discussion-visibility")).toHaveText("Private");
   await expect(thread.getByTestId("discussion-people")).toHaveText("1 person");
   await expect(thread.getByTestId("oracle-reply").last()).toContainText(ANSWER_START);
-  await expect(panel(page).getByTestId("hop-about")).toHaveText(/Problem$/);
+  await expect(panel(page).getByTestId("hop-about")).toHaveCount(0);
+  await expect(thread).toContainText("Problem");
   // ⋯ has no Make open on a panel chat.
   await thread.getByRole("button", { name: "Discussion actions" }).click();
   await expect(page.getByRole("menuitem", { name: "Write summary" })).toBeVisible();
