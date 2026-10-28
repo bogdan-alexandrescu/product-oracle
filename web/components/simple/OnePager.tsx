@@ -294,11 +294,11 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                               // The owner's P6: "Edit" shows when the line is pointed at or tapped, not on every line.
                               <button
                                 type="button"
-                                aria-label={v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}
                                 className="simple-noprint text-sm underline opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
                                 onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}
                               >
-                                {v.can_edit ? "Edit" : "Propose wording"}
+                                <span aria-hidden data-testid="line-edit-word">{v.can_edit ? "Edit" : "Propose wording"}</span>
+                                <span className="sr-only">{v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}</span>
                               </button>
                             )}
                           </div>

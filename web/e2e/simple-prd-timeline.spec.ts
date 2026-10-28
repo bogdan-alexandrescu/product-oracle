@@ -173,10 +173,11 @@ for (const phone of [false, true]) {
         await expect(meta).toContainText(/Owner \S+/);
         await expect(meta).toContainText("2 Nov - 12 Feb");
         const article = page.getByRole("article", { name: "One-pager" });
-        await expect(article.getByText(/Edit line \d/)).toHaveCount(0);
+        // What a person reads on each line is "Edit" (its number is for screen readers only).
+        await expect(article.getByTestId("line-edit-word").first()).toHaveText("Edit");
+        for (const word of await article.getByTestId("line-edit-word").allTextContents()) expect(word).toBe("Edit");
         const line = article.locator("li[data-line]").first();
-        const edit = line.getByRole("button", { name: /^Edit/ });
-        await expect(edit).toHaveText("Edit");
+        const edit = line.getByRole("button", { name: /^Edit line/ });
         await expect(edit).toHaveCSS("opacity", "0");
         if (!phone) await line.hover();
         else await line.getByTestId("one-pager-line-text").tap();
