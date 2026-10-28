@@ -948,6 +948,8 @@ function seedSimpleWalkScenario(): Db {
  * Team invites (F-05, in M1 and M2) is left undated, so its slices' date suggestions wait in
  * the roadmap tray's "Dates to confirm". Invented data.
  */
+const UNDATED_PLAN_FEATURE = "F-11";
+
 function seedSimplePlanScenario(): Db {
   const db = seedSimpleHomeOnePrdScenario();
   const rm = db.simple_roadmap!;
@@ -971,9 +973,9 @@ function seedSimplePlanScenario(): Db {
     const from = w[horizon][0];
     const k = `plan-${section}`;
     const name = planFeatureName(code) ?? of[0].name;
-    // Team invites (F-05, a slice in M1 and one in M2) has no dates of its own: Oracle's date
-    // suggestion for it, in the tray's "Dates to confirm", spans its two slices.
-    const dated = code === "F-05" ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
+    // Team invites (F-05, a slice in M1 and one in M2) and Self-serve checkout (F-11, roadmap-gantt) have no dates of their own:
+    // Oracle's date suggestions for them, in the tray's "Dates to confirm", are their slices'.
+    const dated = code === "F-05" || code === UNDATED_PLAN_FEATURE ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
     rm.items.push({ key: k, title: name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", ...dated, section, heading: `${code} ${name}` });
     rm.ids[k] = stableUuid(`simple-item/${k}`);
   }
@@ -985,6 +987,21 @@ function seedSimplePlanScenario(): Db {
     id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "draft", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
+  return db;
+}
+
+/**
+ * roadmap-gantt, the "simple-plan-two" scenario: "simple-plan" with a second planned PRD (Usage
+ * alerts: its Weekly alert digest, F-06, is in the same plan's M1) whose plan this reader
+ * cannot open, and Public signup (F-13) under a goal of its own named Growth, the goal the
+ * plan's other Growth features move. Invented data.
+ */
+function seedSimplePlanTwoScenario(): Db {
+  const db = seedSimplePlanScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = { ...rm.plan!, prds: ["usage-alerts"], hidden: ["usage-alerts"] };
+  const signup = rm.items.find((x) => x.key === "plan-f-13");
+  if (signup) signup.goal = "growth";
   return db;
 }
 
@@ -2721,6 +2738,8 @@ function load(): Db {
                 ? seedSimpleWalkScenario
               : scenario === "simple-plan"
                 ? seedSimplePlanScenario
+              : scenario === "simple-plan-two"
+                ? seedSimplePlanTwoScenario
               : scenario === "simple-chat"
                 ? () => {
                     const db = seedSimpleHomeScenario();

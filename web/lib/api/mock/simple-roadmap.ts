@@ -190,6 +190,8 @@ function sectionLabel(section: string, heading?: string): string {
 
 /** S4: each goal's metric (the goal counters' line). */
 const METRICS: Record<string, string> = { "grow-retention": "Teams active after 90 days", "faster-activation": "Days to the first alert", "quiet-alerts": "Teams muting alerts" };
+/** roadmap-gantt ("simple-plan-two"): a goal named like a plan goal ("Growth"), for the plan's items only. */
+const PLAN_GOALS: Record<string, string> = { growth: "Growth" };
 export const goalId = (key: string): string => stableUuid(`simple-goal/${key}`);
 export const roadmapId = (slug: string): string => stableUuid(`simple-doc/${slug}`);
 export const ROADMAP_SLUGS = (): string[] => Object.keys(ROADMAPS);
@@ -502,10 +504,31 @@ function regenerate(db: SimpleDb, today: string): number {
     durations.set(k, [...(durations.get(k) ?? []), span(r.start.date, r.end.date)]);
   }
   let open = 0;
+  const slices = db.plan ? planSlices() : [];
   for (const { s, r } of resolved.values()) {
     const id = db.ids[s.key];
     const current = db.suggestions.find((x) => x.item_id === id && x.status === "open");
     const undated = r.start.estimated && r.end.estimated && !closed(s) && s.status !== "done" && !s.drafting_until;
+    // plan-model (suggestions._planned): an item the PRD's plan places gets one suggestion per
+    // dated slice, inside its milestone, never packed from the window's start.
+    const code = prdCode(s.section);
+    const planned = undated && code && ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === PLAN_PRD_SLUG ? slices.filter((x) => x.feature_code === code && x.start_date && x.end_date) : [];
+    if (planned.length) {
+      db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open" && !x.slice_code));
+      for (const sl of planned) {
+        const mine = db.suggestions.filter((x) => x.item_id === id && x.slice_code === sl.code);
+        if (mine.some((x) => x.status !== "open")) continue;
+        open += 1;
+        if (mine.length) continue;
+        db.suggestions.push({
+          id: stableUuid(`simple-suggestion/${s.key}/${sl.code}`),
+          item_id: id, item_key: s.key, item_title: s.title, start_date: sl.start_date!, end_date: sl.end_date!,
+          basis: `Placed inside ${sl.milestone} ${sl.milestone_name} by the PRD's order (${word(sl.milestone_start!)} - ${word(sl.milestone_end!)}).`,
+          status: "open", created_at: new Date(mockNowMs()).toISOString(), decided_by: null, decided_at: null, slice_code: sl.code, can_decide: false,
+        });
+      }
+      continue;
+    }
     if (!undated || db.suggestions.some((x) => x.item_id === id && x.status === "dismissed")) {
       db.suggestions = db.suggestions.filter((x) => !(x.item_id === id && x.status === "open"));
       continue;
@@ -616,7 +639,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   const slices = db.plan ? planSlices() : [];
   const slicesOf = (s: SeedItem, prdSlug: string) => {
     const code = prdCode(s.section);
-    return code && prdSlug === PLAN_PRD_SLUG ? slices.filter((x) => x.feature_code === code) : [];
+    return code && (prdSlug === PLAN_PRD_SLUG || db.plan?.prds?.includes(prdSlug)) ? slices.filter((x) => x.feature_code === code) : [];
   };
   const items: Item[] = seeds.map((s) => {
     const r = all.get(s.key)!.r;
@@ -628,7 +651,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
       code: prdCode(s.section),
       roadmap: { id: stableUuid(`simple-doc/${s.roadmap}`), slug: s.roadmap, title: rm.title },
       prd: { id: stableUuid(`simple-prd/${s.roadmap}`), slug: rm.prd.toLowerCase().replace(/ /g, "-"), title: rm.prd },
-      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
+      goal: s.goal ? { id: stableUuid(`simple-goal/${s.goal}`), key: s.goal, title: GOALS[s.goal] ?? PLAN_GOALS[s.goal], metric: METRICS[s.goal] ?? null } : null,
       track: s.track ? { id: stableUuid(`simple-track/${s.track}`), title: TRACKS[s.track] } : null,
       confidence: s.confidence ?? null,
       status: s.merged_into ? "merged" : s.draft ? "draft" : (s.status ?? "planned"),
@@ -703,12 +726,17 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: null, horizon: "now" as const, status: "planned" as const, item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
       }),
       // The plan's dated milestones (M1-M3), each naming the items with a slice in it.
-      ...(db.plan ? planMilestones() : []).map((m) => ({
-        id: stableUuid(`simple-plan-milestone/${m.code}`), track_id: stableUuid("simple-track/onboarding"), name: `${m.code} · ${m.name}`, date: m.end_date,
-        horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
-        item_ids: items.filter((i) => i.milestones.includes(m.code)).map((i) => i.id),
-        start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets,
-      })),
+      // roadmap-gantt: each planned PRD's own records ("simple-plan-two": two PRDs, M1-M3 each).
+      ...(db.plan ? [PLAN_PRD_SLUG, ...(db.plan.prds ?? [])] : []).flatMap((slug) =>
+        planMilestones().map((m) => ({
+          id: stableUuid(slug === PLAN_PRD_SLUG ? `simple-plan-milestone/${m.code}` : `simple-plan-milestone/${slug}/${m.code}`),
+          track_id: stableUuid(`simple-track/${slug === PLAN_PRD_SLUG ? "onboarding" : (seeds.find((s) => ROADMAPS[s.roadmap].prd.toLowerCase().replace(/ /g, "-") === slug)?.track ?? "onboarding")}`),
+          name: `${m.code} · ${m.name}`, date: m.end_date,
+          horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
+          item_ids: items.filter((i) => i.prd?.slug === slug && i.milestones.includes(m.code)).map((i) => i.id),
+          start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets,
+        })),
+      ),
     ],
     span: db.plan ? planSpan() : null,
     changes_in_review: reader.hidden,

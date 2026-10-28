@@ -24,6 +24,7 @@ import {
   ChangeFailed,
   closedItem,
   decide,
+  lanes,
   nearWords,
   propose,
   quarters,
@@ -39,6 +40,7 @@ import {
   type Format,
   type GanttUnit,
   type Item,
+  type Lane,
   type Roadmap,
   type Where,
 } from "./_lib";
@@ -60,8 +62,7 @@ async function brandOf(): Promise<Brand | null> {
   }
 }
 
-type Group = Roadmap["group"];
-type Filters = { group: Group; roadmap: string; prd: string; goal: string; track: string; from: string; to: string };
+type Filters = { group: Lane; roadmap: string; prd: string; goal: string; track: string; from: string; to: string };
 const NO_FILTERS: Filters = { group: "goal", roadmap: "", prd: "", goal: "", track: "", from: "", to: "" };
 
 const PHONE = "(max-width: 640px)";
@@ -219,7 +220,7 @@ function DecisionTray({
   act: Act;
   canChange: boolean;
   onDecide: (c: Change, how: "accept" | "decline") => void;
-  onSuggestion: (i: Item, how: "accept" | "dismiss") => void;
+  onSuggestion: (i: Item, how: "accept" | "dismiss", id?: string) => void;
   onClose: () => void;
   phone: boolean;
   suggestions: GoalSuggestionsApi;
@@ -228,12 +229,24 @@ function DecisionTray({
   const suggested = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject);
   const brokenItems = items.filter((i) => i.can_decide && broken(i).length);
   const dates = items.filter((i) => i.suggestion?.can_decide);
+  // roadmap-gantt: an item the plan places has one date to confirm per slice, inside its milestone.
+  const open = useQuery(`simple-date-suggestions:${dates.map((i) => i.suggestion!.id).join(",")}`, () =>
+    dates.some((i) => i.suggestion!.slice_code) ? unwrap(api.GET("/v1/simple/roadmap/date-suggestions", { params: { query: { status: "open" } } })) : Promise.resolve([]),
+  );
+  const dateRows = dates.flatMap((i) => {
+    const sliced = (open.data ?? []).filter((x) => x.item_id === i.id && x.slice_code).sort((a, b) => (a.start_date < b.start_date ? -1 : 1));
+    const rows = sliced.length ? sliced : [i.suggestion!];
+    return rows.map((x, k) => {
+      const sl = x.slice_code ? i.slices.find((y) => y.code === x.slice_code) : undefined;
+      return { item: i, s: x, words: sl ? `${sl.code} ${sl.name} · ${sl.milestone} ${sl.milestone_name}` : i.title, last: sliced.length > 1 && k === rows.length - 1 };
+    });
+  });
   const mine = proposals.filter((c) => c.can_decide);
   const pulled = mine.filter((c) => c.op === "change_horizon");
   const others = mine.filter((c) => c.op !== "change_horizon");
   const counters: [string, number][] = [
     ["Broken links", brokenItems.length],
-    ["Dates to confirm", dates.length],
+    ["Dates to confirm", dateRows.length],
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
   ];
@@ -295,15 +308,16 @@ function DecisionTray({
       </section>
       <section className="mt-4">
         <h3 className="font-semibold">Dates to confirm</h3>
-        {dates.length ? (
+        {dateRows.length ? (
           <ul>
-            {dates.map((i) => (
-              <li key={i.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-date">
+            {dateRows.map(({ item: i, s, words, last }) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-date" data-slice={s.slice_code ?? undefined}>
                 <span className="min-w-0 flex-1 text-[15px]">
-                  {i.title}: {shortDay(i.suggestion!.start_date)} – {shortDay(i.suggestion!.end_date)}
+                  {words}: {shortDay(s.start_date)} – {shortDay(s.end_date)}
+                  {last && <span className="block text-sm text-text2">Accepting one dates all of {i.title}&rsquo;s slices.</span>}
                 </span>
-                <Button onClick={() => onSuggestion(i, "accept")}>Accept</Button>
-                <Button variant="ghost" onClick={() => onSuggestion(i, "dismiss")}>
+                <Button onClick={() => onSuggestion(i, "accept", s.id)}>Accept</Button>
+                <Button variant="ghost" onClick={() => onSuggestion(i, "dismiss", s.id)}>
                   Dismiss
                 </Button>
               </li>
@@ -376,7 +390,8 @@ export function SimpleRoadmap() {
   const svg = useRef<SVGSVGElement | null>(null);
 
   const qs = useMemo(() => {
-    const q: Record<string, string> = { group: f.group };
+    // Group by Milestone reads the goal grouping and regroups by the items' slices (lanes()).
+    const q: Record<string, string> = { group: f.group === "milestone" ? "goal" : f.group };
     for (const k of ["roadmap", "prd", "goal", "track", "from", "to"] as const) if (f[k]) q[k] = f[k];
     return q;
   }, [f]);
@@ -449,6 +464,14 @@ export function SimpleRoadmap() {
 
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
   const data = roadmap.data;
+  // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
+  const laned = useMemo(() => (data ? lanes(data, f.group) : null), [data, f.group]);
+  const planPrds = useMemo(() => [...new Set((data?.items ?? []).flatMap((i) => (i.slices.length && i.prd ? [i.prd.slug] : [])))].sort(), [data]);
+  // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
+  const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, async () =>
+    (await Promise.allSettled(planPrds.map((prd) => unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd } } }))))).flatMap((r) => (r.status === "fulfilled" ? [r.value] : [])),
+  );
+  const noWork = useMemo(() => [...new Map((plans.data ?? []).flatMap((p) => p.holidays).map((h) => [h.start, h])).values()], [plans.data]);
   const [seen, setSeen] = useState<{ of: Roadmap | null; prd: [string, string][]; goal: [string, string][]; track: [string, string][] }>({ of: null, prd: [], goal: [], track: [] });
   if (data && seen.of !== data) {
     const add = (list: [string, string][], pairs: [string, string][]) => [...new Map([...list, ...pairs])];
@@ -572,10 +595,10 @@ export function SimpleRoadmap() {
   );
 
   const onSuggestion = useCallback(
-    async (i: Item, how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }) => {
+    async (i: Item, how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }, id?: string) => {
       if (!i.suggestion) return;
       try {
-        await suggestion(i.suggestion.id, how, dates);
+        await suggestion(id ?? i.suggestion.id, how, dates);
         const words = how === "dismiss" ? "Dismissed Oracle's dates" : i.suggestion.can_decide ? "Dates accepted in your working draft" : "Dates proposed: they wait for the decider";
         toast({ message: words });
       } catch (e) {
@@ -788,13 +811,14 @@ export function SimpleRoadmap() {
         <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
         <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setF({ ...f, from })} />
         <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setF({ ...f, to })} />
-        <SegmentedControl<Group>
+        <SegmentedControl<Lane>
           label="Group by"
           size="sm"
           value={f.group}
           onChange={(group) => setF({ ...f, group })}
           items={[
             { value: "goal", label: "Goal", testId: "group-goal" },
+            { value: "milestone", label: "Milestone", testId: "group-milestone" },
             { value: "track", label: "Track", testId: "group-track" },
             { value: "prd", label: "PRD", testId: "group-prd" },
           ]}
@@ -835,7 +859,9 @@ export function SimpleRoadmap() {
           />
         ) : (
           <Chart
-            data={data}
+            data={laned ?? data}
+            lane={f.group}
+            noWork={noWork}
             format={format}
             unit={unit}
             compact={phone}
@@ -934,7 +960,7 @@ export function SimpleRoadmap() {
           act={act}
           canChange={canChange}
           onDecide={(c, how) => void onDecide(c, how)}
-          onSuggestion={(i, how) => void onSuggestion(i, how)}
+          onSuggestion={(i, how, id) => void onSuggestion(i, how, undefined, id)}
           onClose={() => setTray(false)}
           phone={phone}
           suggestions={suggestions}
