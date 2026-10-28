@@ -38090,6 +38090,29 @@ export interface components {
             status: "planned" | "done" | "dropped";
             /** Item Ids */
             item_ids: string[];
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Effort Weeks */
+            effort_weeks?: number | null;
+            /**
+             * Done When
+             * @default []
+             */
+            done_when: string[];
+            /**
+             * Targets
+             * @default []
+             */
+            targets: components["schemas"]["SimpleMilestoneTarget"][];
+        };
+        /** SimpleMilestoneTarget */
+        SimpleMilestoneTarget: {
+            /** Goal */
+            goal: string;
+            /** Target */
+            target: string;
         };
         /** SimpleMinutes */
         SimpleMinutes: {
@@ -38476,6 +38499,146 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** SimplePlanSpan */
+        SimplePlanSpan: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Label */
+            label: string;
+        };
+        /** SimpleSlice */
+        SimpleSlice: {
+            /** Code */
+            code: string;
+            /** Feature Code */
+            feature_code: string;
+            /** Name */
+            name: string;
+            /** Milestone */
+            milestone: string;
+            /** Milestone Name */
+            milestone_name: string;
+            /** Milestone Start */
+            milestone_start?: string | null;
+            /** Milestone End */
+            milestone_end?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Estimated */
+            estimated: boolean;
+            /** Effort Weeks */
+            effort_weeks?: number | null;
+            /** Goal */
+            goal?: string | null;
+            /** Pm Owned */
+            pm_owned: boolean;
+        };
+        /** SimplePlanMilestone */
+        SimplePlanMilestone: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Effort Weeks */
+            effort_weeks?: number | null;
+            /** Planned Weeks */
+            planned_weeks: number;
+            /** Done When */
+            done_when: string[];
+            /** Targets */
+            targets: components["schemas"]["SimpleMilestoneTarget"][];
+            /** Feature Codes */
+            feature_codes: string[];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "prd" | "oracle";
+        };
+        /** SimplePlanGoalTarget */
+        SimplePlanGoalTarget: {
+            /** Milestone */
+            milestone: string;
+            /** Target */
+            target: string;
+        };
+        /** SimplePlanGoal */
+        SimplePlanGoal: {
+            /** Name */
+            name: string;
+            /** Targets */
+            targets: components["schemas"]["SimplePlanGoalTarget"][];
+        };
+        /** SimplePlanGoalWeeks */
+        SimplePlanGoalWeeks: {
+            /** Goal */
+            goal: string;
+            /** Milestone */
+            milestone: string;
+            /** Weeks */
+            weeks: number;
+        };
+        /** SimplePlanHoliday */
+        SimplePlanHoliday: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Label */
+            label?: string | null;
+        };
+        /** SimplePlanOut */
+        SimplePlanOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "reading" | "failed" | "none";
+            /** Source */
+            source?: ("prd" | "oracle") | null;
+            /** Dated */
+            dated: boolean;
+            /** Message */
+            message?: string | null;
+            /** Milestones */
+            milestones: components["schemas"]["SimplePlanMilestone"][];
+            /** Slices */
+            slices: components["schemas"]["SimpleSlice"][];
+            /** Goals */
+            goals: components["schemas"]["SimplePlanGoal"][];
+            /** Goal Weeks */
+            goal_weeks: components["schemas"]["SimplePlanGoalWeeks"][];
+            span?: components["schemas"]["SimplePlanSpan"] | null;
+            /** Holidays */
+            holidays: components["schemas"]["SimplePlanHoliday"][];
+            /** Can Read Again */
+            can_read_again: boolean;
+            /** Read At */
+            read_at?: string | null;
+        };
         /** SimpleQuarter */
         SimpleQuarter: {
             /**
@@ -38545,6 +38708,16 @@ export interface components {
             milestone?: components["schemas"]["SimpleItemMilestone"] | null;
             /** Phases */
             phases: components["schemas"]["SimplePhase"][];
+            /**
+             * Slices
+             * @default []
+             */
+            slices: components["schemas"]["SimpleSlice"][];
+            /**
+             * Milestones
+             * @default []
+             */
+            milestones: string[];
             /** Depends On */
             depends_on: string[];
             /** Needed By */
@@ -38617,6 +38790,7 @@ export interface components {
             items: components["schemas"]["SimpleRoadmapItem"][];
             /** Milestones */
             milestones: components["schemas"]["SimpleMilestone"][];
+            span?: components["schemas"]["SimplePlanSpan"] | null;
             /**
              * Changes In Review
              * @default 0

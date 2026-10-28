@@ -21,7 +21,7 @@ import {
   NEW_FLOW_OPS,
   OP_WORDS,
   planByMonth,
-  planInput,
+  planInputs,
   prdInPlay,
   waitSentence,
   type BrokenLink,
@@ -124,7 +124,7 @@ export default function SimpleHome() {
     [ranked, roadmap.data, priorities.data],
   );
   const plan = useMemo(
-    () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").map(planInput), roadmap.data.today) : null),
+    () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").flatMap(planInputs), roadmap.data.today) : null),
     [roadmap.data, planPrd],
   );
   const draft = (drafts.data ?? []).find((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
@@ -480,6 +480,12 @@ export default function SimpleHome() {
         <Block q={roadmap} testId="home-plan">
           {(r) => (
             <>
+              {/* The plan's span, when the PRD's plan dates it ("2 Nov - 12 Feb"). */}
+              {r.span && (
+                <p className="simple-small" data-testid="home-plan-span">
+                  {r.span.label}
+                </p>
+              )}
               {/* In the plan's card, filled with it: above the goal band it pushed everything down. */}
               {r.changes_in_review > 0 && (
                 <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">

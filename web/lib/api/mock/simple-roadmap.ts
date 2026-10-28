@@ -13,6 +13,7 @@ import { plainFlow } from "./simple-visuals";
 import { mockNowMs } from "./clock";
 import { seeded, stableUuid } from "./ids";
 import { flowFor, type VisualsDb } from "./simple-visuals";
+import { PLAN_PRD_SLUG, planMilestones, planSlices, planSpan, type PlanDb } from "./simple-plan";
 
 type Item = Schemas["SimpleRoadmapItem"];
 type Suggestion = Schemas["DateSuggestionOut"];
@@ -105,6 +106,8 @@ interface SimpleDb {
   visuals?: VisualsDb;
   /** S8: decided decisions that changed each item (by item id), newest first. */
   decided_in?: Record<string, { id: string; number: number; title: string }[]>;
+  /** The plan-model lane (./simple-plan.ts): Guided setup's plan, in the "simple-plan" scenario. */
+  plan?: PlanDb;
 }
 
 /** A roadmap's key date (roadmap_key_dates): invented names and days. */
@@ -316,6 +319,9 @@ function resolve(db: SimpleDb, s: SeedItem, w: [string, string]): { start: Dated
   else if (end.date < w[0]) start = { date: addDays(end.date, -41), source: "estimated", estimated: true };
   return { start, end };
 }
+
+/** A milestone no plan dates (the new SimpleMilestone fields, empty). */
+const UNDATED = { start_date: null, end_date: null, effort_weeks: null, done_when: [] as string[], targets: [] as { goal: string; target: string }[] };
 
 const PHASES = [["discover", 0.15], ["build", 0.55], ["beta", 0.2], ["launch", 0.1]] as const;
 
@@ -554,9 +560,16 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
   if (!["goal", "track", "prd"].includes(group)) return null;
   const seeds = visibleItems(db, role);
   const all = new Map(seeds.map((s) => [s.key, { s, r: resolve(db, s, w[s.horizon]) }]));
+  // The plan-model lane: the plan PRD's items whose code is a plan feature carry its slices.
+  const slices = db.plan ? planSlices() : [];
+  const slicesOf = (s: SeedItem, prdSlug: string) => {
+    const code = prdCode(s.section);
+    return code && prdSlug === PLAN_PRD_SLUG ? slices.filter((x) => x.feature_code === code) : [];
+  };
   const items: Item[] = seeds.map((s) => {
     const r = all.get(s.key)!.r;
     const rm = ROADMAPS[s.roadmap];
+    const sliced = slicesOf(s, rm.prd.toLowerCase().replace(/ /g, "-"));
     const suggestion = db.suggestions.find((x) => x.item_id === db.ids[s.key] && x.status === "open");
     return {
       id: db.ids[s.key], key: s.key, title: s.title, outcome: s.outcome ?? null, horizon: s.horizon,
@@ -576,6 +589,8 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         ? { name: s.milestone.name, date: addDays(w[s.horizon][0], s.milestone.day), source: "item", ...recordOf(s) }
         : s.record ? { name: s.record, date: null, source: "track", ...recordOf(s) } : null,
       phases: phases(r.start.date, r.end.date, s, w[s.horizon]),
+      slices: sliced,
+      milestones: [...new Set(sliced.map((x) => x.milestone))],
       depends_on: (s.depends ?? []).filter((k) => all.has(k)).map((k) => db.ids[k]),
       needed_by: seeds.filter((x) => x.depends?.includes(s.key)).map((x) => db.ids[x.key]),
       flags: flagsOf(s, r, all, w[s.horizon]),
@@ -630,12 +645,20 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
     groups: [...groups.entries()].sort((a, b) => (a[1].sort < b[1].sort ? -1 : 1)).map(([key, g]) => ({ key, title: g.title, item_ids: g.item_ids })),
     items: shown,
     milestones: [
-      { id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now", status: "planned", item_ids: [db.ids["alert-digest"]] },
+      { id: stableUuid("simple-milestone/beta"), track_id: stableUuid("simple-track/alerts"), name: "Beta", date: addDays(w.now[0], 60), horizon: "now", status: "planned", item_ids: [db.ids["alert-digest"]], ...UNDATED },
       ...[...new Set(seeds.flatMap((s) => (s.record ? [s.record] : [])))].map((name) => {
         const of = seeds.filter((s) => s.record === name);
-        return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: null, horizon: "now" as const, status: "planned" as const, item_ids: of.map((s) => db.ids[s.key]) };
+        return { id: recordOf(of[0]).record_id!, track_id: stableUuid(`simple-track/${of[0].track}`), name, date: null, horizon: "now" as const, status: "planned" as const, item_ids: of.map((s) => db.ids[s.key]), ...UNDATED };
       }),
+      // The plan's dated milestones (M1-M3), each naming the items with a slice in it.
+      ...(db.plan ? planMilestones() : []).map((m) => ({
+        id: stableUuid(`simple-plan-milestone/${m.code}`), track_id: stableUuid("simple-track/onboarding"), name: `${m.code} · ${m.name}`, date: m.end_date,
+        horizon: (m.end_date <= w.now[1] ? "now" : m.end_date <= w.next[1] ? "next" : "later") as Horizon, status: "planned" as const,
+        item_ids: items.filter((i) => i.milestones.includes(m.code)).map((i) => i.id),
+        start_date: m.start_date, end_date: m.end_date, effort_weeks: m.effort_weeks, done_when: m.done_when, targets: m.targets,
+      })),
     ],
+    span: db.plan ? planSpan() : null,
     changes_in_review: reader.hidden,
     drafts: reader.visible,
     // One roadmap chosen: its key dates; all roadmaps: every readable one's (oracle.simple.service).

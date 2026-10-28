@@ -325,7 +325,8 @@ export function prioritiesOut(
   const total = round(buckets.reduce((s, b) => s + b.weeks, 0));
   for (const b of buckets) b.share = total ? round(b.weeks / total) : 0;
   return {
-    today, quarter: quarter(today), method: "goal_weighted",
+    // The plan-model lane: with a plan, its span ("2 Nov - 12 Feb"), else the calendar quarter.
+    today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
     rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,
   };

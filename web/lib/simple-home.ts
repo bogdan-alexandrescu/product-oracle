@@ -116,6 +116,8 @@ export type PlanInput = {
   estimated: boolean;
   milestone: string | null;
   milestoneDate: string | null;
+  /** The day the plan starts the milestone, when the PRD dates it (a plan's M1 2 Nov - 27 Nov). */
+  milestoneStart?: string | null;
   /** The milestone record the item links (a track milestone), when any: its row. */
   record?: { id: string; name: string | null } | null;
 };
@@ -177,7 +179,7 @@ export function planByMonth(items: PlanInput[], today: string): PlanStrip | null
     const [key, label] = i.record ? [`record:${i.record.id}`, milestoneOf(i.record.name)[1]] : milestoneOf(i.milestone);
     keyed.set(key, [...(keyed.get(key) ?? []), { label, i }]);
   }
-  const groups = new Map<string, { name: string; date: string | null; of: PlanInput[] }>();
+  const groups = new Map<string, { name: string; date: string | null; begins: string | null; of: PlanInput[] }>();
   for (const [key, of] of keyed) {
     const counts = new Map<string, number>();
     for (const x of of) counts.set(x.label, (counts.get(x.label) ?? 0) + 1);
@@ -185,11 +187,14 @@ export function planByMonth(items: PlanInput[], today: string): PlanStrip | null
     const name = [...counts].sort((a, b) => Number(a[0] === key) - Number(b[0] === key) || b[1] - a[1] || byCodePoint(a[0], b[0]))[0][0];
     const dates = of.flatMap((x) => (x.i.milestoneDate ? [x.i.milestoneDate] : []));
     const date = dates.length ? maxOf(dates) : null;
-    groups.set(`${name}|${date ?? ""}`, { name, date, of: of.map((x) => x.i) });
+    // A dated plan milestone (the PRD dates it): its row spans its start to its end.
+    const starts = of.flatMap((x) => (x.i.milestoneStart ? [x.i.milestoneStart] : []));
+    groups.set(`${name}|${date ?? ""}`, { name, date, begins: starts.length ? minOf(starts) : null, of: of.map((x) => x.i) });
   }
   const dated = [...groups.values()].flatMap((g) => (g.date ? [g.date] : []));
   const committed = items.filter((i) => !i.estimated).map((i) => i.end);
-  const first = minOf([...items.map((i) => i.start), ...dated]);
+  const begins = items.flatMap((i) => (i.milestoneStart ? [i.milestoneStart] : []));
+  const first = minOf([...items.map((i) => i.start), ...dated, ...begins]);
   const last = dated.length ? maxOf(dated) : maxOf(committed.length ? committed : items.map((i) => i.end));
   let start = monthOf(first);
   const lastMonth = monthOf(last > first ? last : first);
@@ -201,19 +206,19 @@ export function planByMonth(items: PlanInput[], today: string): PlanStrip | null
   }
   const months = Array.from({ length: n }, (_, k) => addMonths(start, k));
   const end = new Date(Date.parse(`${addMonths(months.at(-1)!, 1)}T00:00:00Z`) - DAY).toISOString().slice(0, 10);
-  const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean): PlanStrip["rows"][number] => ({
+  const row = (name: string, date: string | null, of: PlanInput[], milestone: boolean, begins: string | null = null): PlanStrip["rows"][number] => ({
     name,
     date,
     items: of.length,
-    start: minOf(of.map((i) => i.start)),
-    end: maxOf(of.map((i) => i.end)),
-    estimated: of.every((i) => i.estimated),
+    start: begins && date ? begins : minOf(of.map((i) => i.start)),
+    end: begins && date ? date : maxOf(of.map((i) => i.end)),
+    estimated: begins && date ? false : of.every((i) => i.estimated),
     milestone,
     past_edge: !!date && date > end,
   });
   const rows = [...groups.values()]
     .sort((a, b) => (a.date === null) !== (b.date === null) ? (a.date === null ? 1 : -1) : byCodePoint(a.date ?? "", b.date ?? "") || byCodePoint(a.name, b.name))
-    .map((g) => row(g.name, g.date, g.of, true));
+    .map((g) => row(g.name, g.date, g.of, true, g.begins));
   if (loose.length) rows.push(row("No milestone", null, loose, false));
   return {
     start,
@@ -225,7 +230,21 @@ export function planByMonth(items: PlanInput[], today: string): PlanStrip | null
   };
 }
 
-/** A roadmap item as the plan strip reads it. */
+/** A roadmap item as the plan strip reads it: one input per slice when the plan slices it
+ * (each in its milestone, dated by the PRD's plan), else the item itself. */
+export const planInputs = (i: Item): PlanInput[] =>
+  (i.slices ?? []).length
+    ? i.slices.map((s) => ({
+        start: s.start_date ?? i.start.date,
+        end: s.end_date ?? i.end.date,
+        estimated: !(s.milestone_start && s.milestone_end),
+        milestone: `${s.milestone} · ${s.milestone_name}`,
+        milestoneDate: s.milestone_end ?? null,
+        milestoneStart: s.milestone_start ?? null,
+      }))
+    : [planInput(i)];
+
+/** A roadmap item (with no slices) as the plan strip reads it. */
 export const planInput = (i: Item): PlanInput => ({
   start: i.start.date,
   end: i.end.date,

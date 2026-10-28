@@ -688,5 +688,95 @@
    ],
    "past_edge": 0
   }
+ },
+ {
+  "name": "dated plan milestones: rows span each milestone's start to end",
+  "today": "2026-10-28",
+  "items": [
+   {
+    "start": "2026-11-04",
+    "end": "2026-11-20",
+    "estimated": true,
+    "milestone": "M1 · Prove it",
+    "milestoneDate": "2026-11-27",
+    "milestoneStart": "2026-11-02"
+   },
+   {
+    "start": "2026-11-09",
+    "end": "2026-11-25",
+    "estimated": false,
+    "milestone": "M1 · Prove it",
+    "milestoneDate": "2026-11-27",
+    "milestoneStart": "2026-11-02"
+   },
+   {
+    "start": "2026-12-01",
+    "end": "2026-12-18",
+    "estimated": true,
+    "milestone": "M2 · Scale volume",
+    "milestoneDate": "2026-12-25",
+    "milestoneStart": "2026-11-30"
+   },
+   {
+    "start": "2026-12-28",
+    "end": "2027-01-15",
+    "estimated": false,
+    "milestone": "M3 · Open to all",
+    "milestoneDate": "2027-02-12",
+    "milestoneStart": "2026-12-28"
+   },
+   {
+    "start": "2027-01-04",
+    "end": "2027-02-05",
+    "estimated": true,
+    "milestone": "M3 · Open to all",
+    "milestoneDate": "2027-02-12",
+    "milestoneStart": "2026-12-28"
+   }
+  ],
+  "expected": {
+   "start": "2026-11-01",
+   "end": "2027-02-28",
+   "months": [
+    "2026-11-01",
+    "2026-12-01",
+    "2027-01-01",
+    "2027-02-01"
+   ],
+   "today": null,
+   "rows": [
+    {
+     "name": "M1 · Prove it",
+     "date": "2026-11-27",
+     "items": 2,
+     "start": "2026-11-02",
+     "end": "2026-11-27",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "M2 · Scale volume",
+     "date": "2026-12-25",
+     "items": 1,
+     "start": "2026-11-30",
+     "end": "2026-12-25",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    },
+    {
+     "name": "M3 · Open to all",
+     "date": "2027-02-12",
+     "items": 2,
+     "start": "2026-12-28",
+     "end": "2027-02-12",
+     "estimated": false,
+     "milestone": true,
+     "past_edge": false
+    }
+   ],
+   "past_edge": 0
+  }
  }
 ]
