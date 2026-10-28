@@ -178,6 +178,8 @@ const REPLY_MAX = 2000;
 const DRAFT_MS = 2_000;
 const ASKED_AGAIN_THRESHOLD = 3;
 export const WHY_NOT_SCENARIO = "requests-why-not";
+/** More requests than one page of the queue (fix-work review): 210 decided ones, newer than every New one. */
+export const MANY_REQUESTS_SCENARIO = "requests-many";
 const DONE_REPLY: ReplyOut["status"][] = ["sent", "notified", "skipped", "withdrawn"];
 
 const isNo = (reason: string | null | undefined, note: string | null | undefined) =>
@@ -292,6 +294,13 @@ export function seedRequests(input: { ownerId: string; goals: { id: string }[]; 
     requester_kind: "customer", state: "disqualified", disqualify_reason: "out_of_scope",
     decision_note: "Hosting is not part of the product", ...decided,
   });
+  // requests-mock.spec seeds in Node, where there is no localStorage.
+  if (typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === MANY_REQUESTS_SCENARIO) {
+    // Each a minute and a half apart, all within the last day: the New requests come after them, past the first 200.
+    for (let i = 0; i < 210; i++) {
+      add(0.001 * (i + 1), `Decided request ${i + 1}`, "support", { state: "qualified", goal_ids: [g0], ...decided });
+    }
+  }
 
   const found = (days: number, title: string, channel: CandidateOut["channel"], item: string, text: string): CandidateOut => ({
     id: mockUuid(), owner_user_id: input.ownerId, run_id: null, title, body: null, requester_name: "A customer", channel,

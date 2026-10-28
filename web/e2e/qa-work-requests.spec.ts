@@ -21,11 +21,26 @@ const tab = (page: Page, id: "all" | "new" | "themes" | "interviews") => page.ge
 const rows = (page: Page) => page.getByTestId("request-row");
 const box = async (page: Page, testId: string) => (await page.getByTestId(testId).filter({ visible: true }).first().boundingBox())!;
 const sideways = (page: Page) => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+/**
+ * How far a list draws past its own box or the screen. Its panel clips what overflows, so the
+ * page never scrolls sideways: the list itself (a table's column widths, a row) is measured.
+ */
+const overflow = (page: Page, testId: string) =>
+  page
+    .getByTestId(testId)
+    .filter({ visible: true })
+    .first()
+    .evaluate((root) => {
+      const lists = [root, ...root.querySelectorAll("table, ul")] as HTMLElement[];
+      const rows = [...root.querySelectorAll("tr, li")].map((r) => r.getBoundingClientRect().right - window.innerWidth);
+      return Math.max(...lists.map((el) => el.scrollWidth - el.clientWidth), ...rows);
+    });
+const goalFilter = (page: Page) => page.getByTestId("request-filters").getByLabel("Goal", { exact: true });
 
 test("qa-work-37: one row of tabs with names that do not clash with the New chip or button", async ({ page }) => {
   await login(page);
   await openRequests(page);
-  await expect(page.getByTestId("requests-nav").getByRole("link")).toHaveText(["All requests", "To decide", "Themes", "Interviews"]);
+  await expect(page.getByTestId("requests-nav").getByRole("link")).toHaveText(["All requests", "To decide", /^Themes\s*\d*$/, "Interviews"]);
   await expect(page.getByRole("button", { name: /^Queue/ })).toHaveCount(0);
   await tab(page, "themes").click();
   await expect(page).toHaveURL(/\/requests\/themes$/);
@@ -97,9 +112,9 @@ test("qa-work-6, qa-work-41: To decide rows open the request; ages, not dates; t
 test("qa-work-16: New request offers the list's goals and a Channel select", async ({ page }) => {
   await login(page);
   await openRequests(page);
-  const listGoals = (await page.getByTestId("request-filters").getByLabel("Goal", { exact: true }).locator("option").allTextContents()).filter(
-    (g) => g !== "Any goal",
-  );
+  // fix-work review: the goals arrive after the rows; read the options once they are there.
+  await expect(goalFilter(page).locator("option", { hasText: "Cut early churn" })).toHaveCount(1);
+  const listGoals = (await goalFilter(page).locator("option").allTextContents()).filter((g) => g !== "Any goal");
   expect(listGoals).toContain("Cut early churn");
   await page.getByRole("button", { name: "New request" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New request" });
@@ -194,15 +209,96 @@ test.describe("phone", () => {
     expect((await tab(page, "new").boundingBox())!.height).toBeGreaterThanOrEqual(44);
   });
 
-  test("qa-work-42: To decide and Interviews fit the phone's width", async ({ page }) => {
+  test("qa-work-42, fix-work review: To decide and Interviews fit the phone's width, lists and all", async ({ page }) => {
     await login(page);
     await page.goto("/requests");
     await expect(rows(page).first()).toBeVisible();
     await tab(page, "new").click();
     await expect(rows(page).first()).toBeVisible();
     expect(await sideways(page)).toBeLessThanOrEqual(0);
+    // The panel clips, so the page alone never scrolls: the list's columns and rows must fit too.
+    expect(await overflow(page, "new-requests")).toBeLessThanOrEqual(0);
     await tab(page, "interviews").click();
     await expect(page.getByTestId("interview-row").first()).toBeVisible();
     expect(await sideways(page)).toBeLessThanOrEqual(0);
+    expect(await overflow(page, "interviews-table")).toBeLessThanOrEqual(0);
   });
+});
+
+test("fix-work review: New request does not offer a rejected goal", async ({ page }) => {
+  await login(page);
+  await page.goto("/baseline");
+  await page.getByTestId("goal-g.early-churn").getByRole("button", { name: "Cut early churn" }).click();
+  const d = page.getByRole("dialog", { name: "Cut early churn" });
+  await d.getByRole("button", { name: "Reject" }).click();
+  const ask = d.getByRole("form", { name: "Reject" });
+  await ask.getByLabel("Reason").fill("Not a goal this year.");
+  await ask.getByRole("button", { name: "Reject" }).click();
+  await expect(d.getByRole("status").filter({ hasText: "Rejected" })).toBeVisible();
+
+  await openRequests(page);
+  await page.getByRole("button", { name: "New request" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New request" });
+  const goals = dialog.getByTestId("new-request-goal");
+  await expect(goals.filter({ hasText: "Raise activation" })).toHaveCount(1);
+  await expect(goals.filter({ hasText: "Cut early churn" })).toHaveCount(0);
+  await expect(dialog).not.toContainText("(not confirmed yet)");
+});
+
+test("fix-work review: To decide asks for the New requests, so ones past the queue's first 200 still show", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "requests-many"));
+  await login(page);
+  await openRequests(page);
+  // All requests holds the newest 200: decided ones only, here.
+  await expect(rows(page).filter({ hasText: "Decided request 1" }).first()).toBeVisible();
+  await expect(rows(page).filter({ hasText: "Dark mode" })).toHaveCount(0);
+  await tab(page, "new").click();
+  await expect(page).toHaveURL(/\/requests\/new$/);
+  for (const title of ["Bulk edit prices", "Dark mode", "Save my card for the next order", "Pay by bank transfer"]) {
+    await expect(rows(page).filter({ hasText: title })).toHaveCount(1);
+  }
+  await expect(page.getByTestId("requests-empty")).toHaveCount(0);
+  await expect(rows(page).filter({ hasText: "Decided request" })).toHaveCount(0);
+});
+
+test("fix-work review: the Themes tab shows its count, and keeps up with a new theme", async ({ page }) => {
+  await login(page);
+  await openRequests(page);
+  const count = page.getByTestId("requests-tab-themes-count").filter({ visible: true });
+  await expect(count).toHaveText("3");
+  await tab(page, "themes").click();
+  await page.getByLabel("New theme").fill("Payments");
+  await page.getByRole("button", { name: "Create theme" }).click();
+  await expect(page.getByTestId("theme-row").filter({ hasText: "Payments" })).toBeVisible();
+  await expect(count).toHaveText("4");
+  await tab(page, "all").click();
+  await expect(count).toHaveText("4");
+});
+
+test("fix-work review: filters, ticked requests and the open request stay across the tabs", async ({ page }) => {
+  await login(page);
+  await openRequests(page);
+  const filters = page.getByTestId("request-filters");
+  await expect(goalFilter(page).locator("option", { hasText: "Raise activation" })).toHaveCount(1);
+  await goalFilter(page).selectOption({ label: "Raise activation" });
+  await filters.getByLabel("Search requests").fill("e");
+  await rows(page).filter({ hasText: "Weekly summary email" }).getByRole("checkbox", { name: "Select Weekly summary email" }).check();
+  await rows(page).filter({ hasText: "Weekly summary email" }).getByRole("button", { name: "Weekly summary email" }).click();
+  await expect(page.getByTestId("request-inspector").getByRole("heading", { name: "Weekly summary email" })).toBeVisible();
+
+  await tab(page, "themes").click();
+  await expect(page.getByTestId("theme-row").first()).toBeVisible();
+  await tab(page, "all").click();
+  await expect(rows(page).first()).toBeVisible();
+  await expect(goalFilter(page).locator("option:checked")).toHaveText("Raise activation");
+  await expect(filters.getByLabel("Search requests")).toHaveValue("e");
+  await expect(rows(page).filter({ hasText: "Weekly summary email" }).getByRole("checkbox")).toBeChecked();
+  await expect(page.getByRole("button", { name: "Start a PRD from 1 request" })).toBeVisible();
+  await expect(page.getByTestId("request-inspector").getByRole("heading", { name: "Weekly summary email" })).toBeVisible();
+
+  // To decide keeps the goal and the search it shares with All requests.
+  await tab(page, "new").click();
+  await expect(page).toHaveURL(/\/requests\/new$/);
+  await expect(goalFilter(page).locator("option:checked")).toHaveText("Raise activation");
+  await expect(filters.getByLabel("Search requests")).toHaveValue("e");
 });

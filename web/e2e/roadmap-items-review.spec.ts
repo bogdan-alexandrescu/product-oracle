@@ -101,7 +101,7 @@ test("Remove date stages the edit, survives a reload, and Undo restores the row"
   await expect(bar(page).getByTestId("staged-chip")).toHaveCount(0);
 });
 
-// Card gate: protects = criterion 6, Approve is disabled with "{b} blocking left" while blocking
+// Card gate: protects = criterion 6, Approve is disabled with "{b} blocking problems left" while blocking
 // reasons are open and reads "Approve with n edits" once each is fixed or waived; then criterion 7,
 // approving shows "Approved with n edits" and Agents' file the original; fails_when = Approve
 // enabled early, or a dialog/decision missing; no_claim = the real gate's computation.
@@ -109,7 +109,7 @@ test("blocking reasons hold Approve; fixed or waived it approves with edits", as
   await open(page);
   const approve = bar(page).getByRole("button", { name: /^Approve/ });
   await expect(approve).toBeDisabled();
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("3 blocking left");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("3 blocking problems left");
   await row(page, "slack-alerts").getByRole("button", { name: "Remove date", exact: true }).click();
   await row(page, "budget-caps").getByRole("button", { name: "Move to Later", exact: true }).click();
   await row(page, "usage-export").getByRole("button", { name: "More actions for Usage export" }).click();

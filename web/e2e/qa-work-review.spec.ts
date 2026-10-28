@@ -151,14 +151,32 @@ test.describe("desktop", () => {
   });
 });
 
+test.describe("wide desktop", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  // fix-work review: where the table's header is drawn, every heading reads in full (none cut
+  // or running into the next column), the inspector beside the table included.
+  test("qa-work-31 (fix-work review): at 1440 px every column heading of the table reads in full", async ({ page }) => {
+    await open(page);
+    const heads = page.locator('table[aria-label="Roadmap items"] thead th').filter({ visible: true });
+    expect(await heads.count()).toBeGreaterThan(3);
+    const cut = await heads.evaluateAll((ths) => ths.filter((th) => th.scrollWidth > th.clientWidth).map((th) => th.textContent));
+    expect(cut).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1440);
+  });
+});
+
 test.describe("phone", () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 
-  test("qa-work-31: nothing runs off the side, the table's header included", async ({ page }) => {
+  // fix-work review: on a phone the table's header is for screen readers only (a 1 px clipped
+  // box), so the check is that it is not drawn at all, and that the page never scrolls sideways.
+  test("qa-work-31 (fix-work review): nothing runs off the side; the table's header is not drawn on a phone", async ({ page }) => {
     await open(page);
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     const head = (await page.locator('table[aria-label="Roadmap items"] thead').boundingBox())!;
-    expect(head.x + head.width).toBeLessThanOrEqual(390);
+    expect(head.width).toBeLessThanOrEqual(1);
+    expect(head.height).toBeLessThanOrEqual(1);
   });
 
   test("qa-work-31/14: the decision bar sits above the tab bar, and a row scrolled into view clears both", async ({ page }) => {

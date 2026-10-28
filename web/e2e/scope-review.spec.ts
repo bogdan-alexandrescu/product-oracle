@@ -54,7 +54,7 @@ test("a blocking dependency disables Approve until Include <dependency> fixes it
   await expect(bulk.getByTestId("row-reasons")).toContainText("Depends on a left-out feature");
   await bulk.getByRole("button", { name: "Include Address book export" }).click();
   await expect(bulk.getByTestId("row-done")).toContainText("✓");
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("0 blocking left");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("0 blocking problems left");
   await expect(bar(page).getByRole("button", { name: "Approve with 1 edit" })).toBeEnabled();
 });
 

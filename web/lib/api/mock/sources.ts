@@ -38,6 +38,11 @@ export type SourcesContext = {
 
 
 export const SOURCES_STORAGE_KEY = "po-mock-sources-v2";
+/**
+ * Tests set this localStorage key to a source's name to have someone edit that source while
+ * its next sync runs: the sync ends superseded and keeps nothing (as the API's does). Read once.
+ */
+export const MOCK_SYNC_SUPERSEDED_KEY = "po-mock-sync-superseded";
 
 /** A Fireflies connection's endpoint, as Settings > Connections set it (the default otherwise). */
 function withEndpoint(c: Schemas["ConnectionChoice"]): Schemas["ConnectionChoice"] {
@@ -700,6 +705,11 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     }
     if (s.status === "error") {
       return json(200, { source_id: s.id, outcome: "error", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: s.last_error, source: counted(db, s) });
+    }
+    // Edited while it synced (MOCK_SYNC_SUPERSEDED_KEY): nothing kept, the source unchanged.
+    if (localStorage.getItem(MOCK_SYNC_SUPERSEDED_KEY) === s.name) {
+      localStorage.removeItem(MOCK_SYNC_SUPERSEDED_KEY);
+      return json(200, { source_id: s.id, outcome: "superseded", upserted: 0, versions_written: 0, deleted: 0, checkpoints: 0, retry_after: null, error: null, source: counted(db, s) });
     }
     // Slack rate-limits the first sync of channel C0RATELIMIT after its first checkpoint:
     // what it stored is kept and the next sync resumes (and finishes).

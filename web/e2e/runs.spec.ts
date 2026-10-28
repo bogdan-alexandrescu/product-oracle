@@ -8,6 +8,29 @@ function status(page: Page) {
   return page.getByTestId("run-status").filter({ visible: true });
 }
 
+/**
+ * fix-work review: waits until a tab's mock API has nothing in flight. The mock keeps the data
+ * in the context's localStorage, and every call (a GET too) loads it all and saves it all back,
+ * queued in order within its own tab only: a second tab's call still running while the first
+ * tab decides saves its older copy over the decision. One more call answers once every call
+ * queued before it has, and no call follows it.
+ */
+async function settled(tab: Page) {
+  await expect
+    .poll(
+      () =>
+        tab.evaluate(async () => {
+          const g = globalThis as { __poMockCalls?: string[]; __poMockFetch?: (r: Request) => Promise<Response> };
+          const before = g.__poMockCalls?.length ?? 0;
+          await g.__poMockFetch!(new Request(new URL("/v1/runs", location.origin)));
+          await new Promise((r) => setTimeout(r, 300));
+          return (g.__poMockCalls?.length ?? 0) - before;
+        }),
+      { intervals: [0] },
+    )
+    .toBe(1);
+}
+
 async function openRuns(page: Page) {
   await login(page);
   await page.getByTestId("nav-runs").click();
@@ -496,6 +519,10 @@ test("a decision SwarmCloud has not taken yet: recorded, shown as delivering, fi
   const other = await page.context().newPage();
   await other.goto(page.url());
   await expect(other.getByTestId("checkpoint-baseline_confirm")).toContainText("Waiting");
+  // fix-work review: the second tab's own loading is done before the first decides, so it
+  // never saves the mock data it read before the decision over it (failed under 3 workers).
+  await settled(other);
+  await settled(page);
 
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   // The page re-reads the run: the review is approved, delivering, with why it waits. That
@@ -559,4 +586,27 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
   await row.getByRole("link").first().click();
   await page.getByRole("button", { name: "Check agents now" }).click();
   await expect(status(page)).toHaveText("Running");
+});
+
+test("fix-work review: a check that could not read some runs says so on a run that is not at work", async ({ page }) => {
+  // The mock's tick never fails, and it answers inside the page (no network to route): the
+  // check's answer gets two runs it could not read on its way to the page.
+  await page.addInitScript(() => {
+    const json = Response.prototype.json;
+    Response.prototype.json = async function (this: Response) {
+      const out = (await json.call(this)) as unknown;
+      if (out && typeof out === "object" && "runs_checked" in out && Array.isArray((out as { errors?: unknown }).errors)) {
+        (out as { errors: string[] }).errors = ["run a: SwarmCloud HTTP 502", "run b: SwarmCloud HTTP 502"];
+      }
+      return out;
+    };
+  });
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
+  await expect(status(page)).toHaveText("Waiting for review");
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  const result = page.getByTestId("tick-result");
+  // Why no agent works on this run, and the runs the check could not read.
+  await expect(result).toContainText("No agents are working right now; the run is waiting for your review.");
+  await expect(result).toContainText(/2 runs could not be checked at .+\.$/);
 });
