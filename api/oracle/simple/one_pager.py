@@ -51,6 +51,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack
 from oracle.simple import drafts, plan_strip
+from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
 from oracle.simple.models import SimpleChange, SimpleDraft, SimpleOnePager, SimpleSession
 from oracle.simple.schemas import (
@@ -1680,7 +1681,7 @@ def _timeline_html(view: Any, today: Any) -> str:
         fill, edge, ink = tone[m.code]
         out.append(f"<span class='f' style='left:{pct(m.end_date, True)};background:{fill};"
                    f"color:{ink};border-color:{edge}'>{escape(m.code)} ends "
-                   f"{m.end_date.day} {m.end_date.strftime('%b')}</span>")  # fmt: skip
+                   f"{plan_model._day(m.end_date)}</span>")  # fmt: skip
     mo = start.replace(day=1)
     while mo < end:
         at = max(mo, start)
@@ -1731,10 +1732,7 @@ def _timeline_html(view: Any, today: Any) -> str:
 def _part_html(view: Any, m: Any) -> str:
     """prd-timeline: one milestone's page: name and dates, Done when, targets, what it
     builds by kind, its open decisions and risks."""
-
-    def day(d: Any) -> str:
-        return f"{d.day} {d.strftime('%b')}"
-
+    day = plan_model._day
     out = [f"<section class='part'><h1>{escape(m.code)} {escape(m.name)}</h1>"
            f"<div class='meta'>{day(m.start_date)} – {day(m.end_date)}"]  # fmt: skip
     if m.effort_weeks is not None:
@@ -1772,7 +1770,6 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     """The one-pager's branded page (the published lines: a PDF is shared), and a file
     stem."""
     from oracle.branding import BRAND_CSS, accent_css, load_brand, render_brand_header
-    from oracle.simple import plan as plan_model
 
     out = await read(db, principal, doc)
     brand = await load_brand(db)
