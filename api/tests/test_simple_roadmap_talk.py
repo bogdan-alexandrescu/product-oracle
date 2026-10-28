@@ -39,6 +39,21 @@ Test cards (protects / fails_when / no_claim):
   has not) and are refused with a reason, writing nothing; the reader's unknown goal or
   self-move is a refusal, never a card; fails_when=a corrected or read card is one the
   change engine would refuse; no_claim=the wording of each refusal.
+- test_correct_restates_the_item_talk_line: protects=after Correct in an item's talk the
+  "I understood:" line says the corrected values; fails_when=the line keeps Oracle's
+  reading while the corrected dates apply; no_claim=the web's layout.
+- test_applied_add_item_names_its_item: protects=an applied add_item card names the new
+  item (the timeline flashes its bar); fails_when=the card's item_id stays empty;
+  no_claim=a proposed addition (it has no item yet).
+- test_add_item_card_says_what_the_engine_does: protects=an add_item card's Apply or
+  Propose follows the target roadmap's own rule (with no decider, its approver-owner
+  applies); fails_when=the card says Propose while the engine applies; no_claim=other ops.
+- test_item_talk_filters_off_topic_answers: protects=in an item's talk an answer that
+  names nothing of the item or the roadmap is not shown as Oracle's; fails_when=any
+  reader answer is shown; no_claim=the model's words.
+- test_correct_refusals_are_plain: protects=Correct's refusals use plain words, never
+  field jargon ("values: ..."); fails_when=a refusal starts with an internal field name;
+  no_claim=the exact wording.
 """
 
 import uuid
@@ -290,3 +305,62 @@ async def test_correct_refuses_what_the_engine_would(client):
     m = await say(client, w, "owner", "cut Move_Dates U", "/simple")
     r = await apply(client, w, "owner", m["cards"][0]["id"], {"title": "x"})
     assert r.status_code == 422, r.text
+
+
+async def test_correct_restates_the_item_talk_line(client):
+    w = await world()
+    m = await say(client, w, "owner", "move it two weeks later", page(w))
+    assert m["body"] == "I understood: move Adaptive pacing two weeks later, to 15 Oct – 29 Nov."
+    r = await apply(client, w, "owner", m["cards"][0]["id"],
+                    {"start_date": "2026-11-20", "end_date": "2026-12-04"})  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert r.json()["card"]["summary"] == "Move Adaptive pacing to 20 Nov – 4 Dec"
+    line = await last(client, w, "owner", page(w))
+    assert line["body"] == "I understood: move Adaptive pacing to 20 Nov – 4 Dec."
+
+
+async def test_applied_add_item_names_its_item(client):
+    w = await world()
+    one = actions(act("add_item", title="Dashboard", goal="Growth", milestone="M2"))
+    m = await reads(client, w, "owner", "add a dashboard item", one, ROADMAP)
+    r = await apply(client, w, "owner", m["cards"][0]["id"])
+    assert r.status_code == 200, r.text
+    d = await added(w, "Dashboard")
+    assert d is not None and r.json()["card"]["item_id"] == str(d.id)
+
+
+@pytest.mark.parametrize("who", ["approver", "commenter"])
+async def test_add_item_card_says_what_the_engine_does(client, who):
+    w = await World(await make_people()).build(decider=False, track_owner="approver",
+                                               ops=["move_dates"])  # fmt: skip
+    one = actions(act("add_item", title="Dashboard"))
+    m = await reads(client, w, who, "add a dashboard item", one, ROADMAP)
+    [card] = m["cards"]
+    want = "applied" if who == "approver" else "proposed"
+    assert card["may"] == ("apply" if want == "applied" else "propose")
+    r = await apply(client, w, who, card["id"])
+    assert r.status_code == 200, r.text
+    assert r.json()["card"]["status"] == want
+
+
+async def test_item_talk_filters_off_topic_answers(client):
+    w = await world()
+    m = await reads(client, w, "commenter", "tell me a joke",
+                    {"actions": [], "clarify": None, "answer": "The weather is fine today.",
+                     "source": "roadmap"}, page(w))  # fmt: skip
+    assert m["kind"] != "answer" and "weather" not in m["body"]
+    m = await reads(client, w, "commenter", "where does it end?",
+                    {"actions": [], "clarify": None, "answer": "It ends in M1 Launch prep.",
+                     "source": "roadmap"}, page(w))  # fmt: skip
+    assert m["kind"] == "answer" and m["body"] == "It ends in M1 Launch prep."
+
+
+async def test_correct_refusals_are_plain(client):
+    w = await world()
+    m = await say(client, w, "owner", "move it two weeks later", page(w))
+    r = await apply(client, w, "owner", m["cards"][0]["id"], {"milestone": "M2"})
+    assert r.status_code == 422 and "cannot be corrected" in r.text
+    assert not r.json()["detail"].startswith("values")
+    m = await say(client, w, "owner", "cut Move_Dates U", "/simple")
+    r = await apply(client, w, "owner", m["cards"][0]["id"], {"title": "x"})
+    assert r.status_code == 422 and not r.json()["detail"].startswith("values"), r.text

@@ -109,6 +109,9 @@ for (const [phone, dark] of [
       await expect(answer.getByTestId("chat-message-body")).toContainText("Adaptive pacing runs 16 Nov – 27 Nov");
       await expect(answer.getByTestId("chat-message-source")).toHaveText("From the PRD · F-16 Adaptive pacing");
       await expect(talk.getByTestId("chat-card")).toHaveCount(0);
+      // A question about its days is read from the roadmap, and says so.
+      await say(talk, "When is it?");
+      await expect(last(talk).getByTestId("chat-message-source")).toHaveText("From the roadmap · F-16 Adaptive pacing");
     });
 
     /**
@@ -159,14 +162,14 @@ for (const [phone, dark] of [
       const move = card(panel, "Reliability work");
       const add = card(panel, "Add Dashboard");
       await expect(move.getByTestId("chat-card-summary")).toHaveText("Move F-18 Reliability work after Sign-up work, to 11 Nov – 1 Dec");
-      await expect(add.getByTestId("chat-card-summary")).toHaveText("Add Dashboard under Growth to M2 Scale volume, 28 Nov – 9 Dec");
+      await expect(add.getByTestId("chat-card-summary")).toHaveText("Add Dashboard under Growth to M2 Scale volume, 5 Dec – 18 Dec");
 
       await tap(add.getByRole("button", { name: "Correct" }));
       const fields = add.getByTestId("chat-card-correct");
       await expect(fields.getByLabel("Title")).toHaveValue("Dashboard");
       await expect(fields.getByLabel("Goal")).toHaveValue("Growth");
       await expect(fields.getByLabel("Milestone")).toHaveValue("M2 Scale volume");
-      await expect(fields.getByLabel("Start")).toHaveValue("2026-11-28");
+      await expect(fields.getByLabel("Start")).toHaveValue("2026-12-05");
       await expect(fields.getByLabel("End")).toHaveAttribute("type", "date");
       await fields.getByLabel("Start").fill("2026-12-07");
       await fields.getByLabel("End").fill("2026-12-16");
@@ -179,6 +182,70 @@ for (const [phone, dark] of [
       await expect(move.getByTestId("chat-card-outcome")).toContainText("Rejected: nothing changed");
       await expect(bar(page, "reliability-work")).toHaveAttribute("data-start", "2026-10-31");
       await expect(bar(page, "dashboard")).toHaveAttribute("data-start", "2026-12-07");
+    });
+
+    /**
+     * Card roadmap-talk-correct-restates: protects = Correct in the item's talk changes the
+     * "I understood:" line to the corrected dates, which apply; fails_when = the line keeps
+     * Oracle's reading while other dates apply; no_claim = the card's layout.
+     */
+    test(`Correct in the card's talk restates the corrected move (${where})`, async ({ page }) => {
+      await signIn(page, EMAILS.owner, "/simple/roadmap");
+      const { talk } = await openTalk(page, "adaptive-pacing", phone);
+      await say(talk, "move it two weeks later");
+      const c = talk.getByTestId("chat-card");
+      await expect(c).toHaveCount(1);
+      await tap(c.getByRole("button", { name: "Correct" }));
+      const fields = c.getByTestId("chat-card-correct");
+      await fields.getByLabel("Start").fill("2026-12-07");
+      await fields.getByLabel("End").fill("2026-12-16");
+      await tap(c.getByRole("button", { name: "Apply" }));
+      await expect(c).toHaveAttribute("data-status", "applied");
+      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move F-16 Adaptive pacing to 7 Dec – 16 Dec.");
+      await expect(bar(page, "adaptive-pacing")).toHaveAttribute("data-start", "2026-12-07");
+    });
+
+    /**
+     * Card roadmap-talk-split-cut: protects = a split's new slices are named "…: slice 2" as
+     * the API names them, and a cut card says Reject like every roadmap card; fails_when =
+     * the slice is named otherwise or the cut card says Discard; no_claim = the slices' dates.
+     */
+    test(`a split names its slices and a cut card says Reject (${where})`, async ({ page }) => {
+      await signIn(page, EMAILS.owner, "/simple/roadmap");
+      const { talk } = await openTalk(page, "adaptive-pacing", phone);
+      await say(talk, "split it into two slices");
+      await expect(card(talk, "Adaptive pacing: slice 2")).toHaveCount(1);
+      await say(talk, "cut it");
+      const cut = card(talk, "Cut F-16");
+      await expect(cut.getByRole("button", { name: "Reject" })).toBeVisible();
+      await expect(cut.getByRole("button", { name: "Discard" })).toHaveCount(0);
+    });
+
+    /**
+     * Card roadmap-talk-apply-all: protects = Apply all on the roadmap's two-action line
+     * applies both cards, with the values typed into an open Correct form, and both bars
+     * move and flash (the new item's too); fails_when = the timeline keeps the old bars
+     * until a reload, nothing flashes, or Apply all ignores the corrected values;
+     * no_claim = the flash's look.
+     */
+    test(`Apply all applies both changes and flashes their bars (${where})`, async ({ page }) => {
+      await signIn(page, EMAILS.owner, "/simple/roadmap");
+      await expect(bar(page, "reliability-work")).toHaveAttribute("data-start", "2026-10-31");
+      const panel = await openAsk(page, phone);
+      await say(panel, "push the reliability work after the sign-up work and add a dashboard item to M2 under Growth");
+      await expect(panel.getByTestId("chat-message-body").filter({ hasText: "I understood two changes:" })).toBeVisible({ timeout: 10_000 });
+      const add = card(panel, "Add Dashboard");
+      await tap(add.getByRole("button", { name: "Correct" }));
+      const fields = add.getByTestId("chat-card-correct");
+      await fields.getByLabel("Start").fill("2026-12-07");
+      await fields.getByLabel("End").fill("2026-12-16");
+      await tap(panel.getByRole("button", { name: "Apply all" }));
+      await expect(card(panel, "Reliability work")).toHaveAttribute("data-status", "applied");
+      await expect(card(panel, "Add Dashboard")).toHaveAttribute("data-status", "applied");
+      await expect(bar(page, "reliability-work")).toHaveAttribute("data-start", "2026-11-11");
+      await expect(bar(page, "reliability-work")).toHaveAttribute("data-flash", "true");
+      await expect(bar(page, "dashboard")).toHaveAttribute("data-start", "2026-12-07");
+      await expect(bar(page, "dashboard")).toHaveAttribute("data-flash", "true");
     });
 
     /**
