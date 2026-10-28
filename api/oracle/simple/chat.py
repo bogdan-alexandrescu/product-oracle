@@ -998,7 +998,9 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
         }
         meetings = _module(MEETINGS)
         try:
-            one_ = await meetings.one(db, c.principal, r.meeting_id) if meetings else None
+            # A savepoint: a failing read of the agenda leaves the job's transaction usable.
+            async with db.begin_nested():
+                one_ = await meetings.one(db, c.principal, r.meeting_id) if meetings else None
         except Exception:  # noqa: BLE001 -- the agenda is context, never required
             one_ = None
         if one_ is not None:
@@ -1006,7 +1008,9 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             context["meeting"]["agenda"] = [
                 getattr(x, "title", str(x)) for x in getattr(one_, "open_decisions", []) or []
             ][:20]
-            context["meeting"]["under_discussion"] = getattr(one_, "current_title", None)
+            # The meeting has no item cursor: the PRD under review is what it discusses.
+            prd = getattr(one_, "prd", None)
+            context["meeting"]["under_discussion"] = getattr(prd, "title", None)
     else:
         context["page"] = read.page
     items = []
