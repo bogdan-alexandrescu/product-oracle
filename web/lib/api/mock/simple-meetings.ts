@@ -420,6 +420,8 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
   };
   const open = made
     .filter((o) => (only ? o.id === only : Date.parse(o.ends_at) >= now && (active.has(o.ritual_id) || !rituals.some((r) => r.id === o.ritual_id))))
+    // Not one whose review was held (its meeting has ended): the ritual's following one is next.
+    .filter((o) => !!only || !db.meetings.some((m) => m.occurrence_id === o.id && m.status === "ended"))
     .sort((a, b) => a.due_at.localeCompare(b.due_at))
     .filter((o, i, xs) => !!only || xs.findIndex((x) => x.ritual_id === o.ritual_id) === i);
   const rows: Schemas["SimpleUpcomingMeeting"][] = open.map((o) => ({
@@ -874,6 +876,9 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.status = "ended";
     m.ended_at = now;
     m.ended_by = ctx.me.id;
+    // As meetings.end(): the ritual's occurrence is held, so Upcoming shows the ritual's next.
+    const theirs = m.occurrence_id ? ctx.rituals?.occurrences.find((o) => o.id === m.occurrence_id) : undefined;
+    if (theirs && ["scheduled", "ready", "missed"].includes(theirs.status)) Object.assign(theirs, { status: "held", held_by: ctx.me.id, held_at: now });
     m.minutes = extract(ctx, db, m);
     const job = flags().includes("minutes-failed") ? "failed" : flags().includes("minutes-slow") ? "slow" : null;
     const later = flags().includes("minutes-later-failed") ? "failed" : flags().includes("minutes-later") ? "succeeded" : null;

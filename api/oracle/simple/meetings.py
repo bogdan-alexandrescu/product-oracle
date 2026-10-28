@@ -1046,8 +1046,15 @@ async def _upcoming(
     if only is not None:
         q = q.where(RitualOccurrence.id == only)
     else:
+        # Not one whose review was held (a meeting started from it has ended): the ritual's
+        # following occurrence is the next one.
+        held_here = select(SimpleMeeting.occurrence_id).where(
+            SimpleMeeting.occurrence_id.is_not(None), SimpleMeeting.status == "ended"
+        )
         q = q.where(
-            RitualOccurrence.status.in_(("scheduled", "ready")), RitualOccurrence.ends_at >= now
+            RitualOccurrence.status.in_(("scheduled", "ready")),
+            RitualOccurrence.ends_at >= now,
+            RitualOccurrence.id.not_in(held_here),
         )
     rows: list[tuple[Any, Any]] = list(
         (await db.execute(q.order_by(RitualOccurrence.due_at).limit(UPCOMING_MAX))).all()
@@ -1231,6 +1238,13 @@ async def end(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Simple
         raise MeetingError(409, "This meeting has ended already")
     now = company_time.now()
     m.status, m.ended_at, m.ended_by = "ended", now, _me(principal)
+    if m.occurrence_id is not None:
+        # The ritual's occurrence is held: Upcoming and Home's next review move to its next.
+        from oracle.rituals.models import RitualOccurrence
+
+        occ = await db.get(RitualOccurrence, m.occurrence_id, with_for_update=True)
+        if occ is not None and occ.status in ("scheduled", "ready", "missed"):
+            occ.status, occ.held_by, occ.held_at = "held", _me(principal), now
     session = await db.get(SimpleSession, m.session_id, with_for_update=True)
     if session is not None and session.closed_at is None:
         session.closed_at = now
