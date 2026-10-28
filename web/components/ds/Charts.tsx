@@ -20,28 +20,33 @@ export function Ring({
   tone = "auto",
   hero = false,
   label,
+  text,
 }: {
   value: number | null | undefined;
   size?: number;
   stroke?: number;
   tone?: RingTone;
   hero?: boolean;
-  /** Accessible name; defaults to "Confidence N". */
+  /** Accessible name; defaults to "Confidence " and the figure shown. */
   label?: string;
+  /** The figure shown in the ring, formatted by the caller ("57.8%"); defaults to the value. */
+  text?: string;
 }) {
   const v = value == null || Number.isNaN(value) ? null : Math.max(0, Math.min(100, Math.round(value)));
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const t = tone === "auto" ? (v != null && v < 50 ? "warn" : "accent") : tone;
   const col = hero ? "var(--hero-accent)" : TONE_VAR[t];
-  const fs = size >= 56 ? 18 : size >= 40 ? 14 : 13;
+  const shown = v == null ? null : (text ?? String(v));
+  // A longer figure ("57.8%") steps down a size so it stays inside the ring.
+  const fs = (size >= 56 ? 18 : size >= 40 ? 14 : 13) - (shown != null && shown.length > 3 ? 3 : 0);
   return (
     <svg
       width={size}
       height={size}
       viewBox={`0 0 ${size} ${size}`}
       role="img"
-      aria-label={label ?? (v == null ? "No confidence" : `Confidence ${v}`)}
+      aria-label={label ?? (shown == null ? "No confidence" : `Confidence ${shown}`)}
       data-value={v ?? ""}
       className="flex-none"
     >
@@ -76,7 +81,7 @@ export function Ring({
         fontSize={fs}
         fill={hero ? "var(--hero-text)" : "var(--text)"}
       >
-        {v ?? "–"}
+        {shown ?? "–"}
       </text>
     </svg>
   );
@@ -142,6 +147,7 @@ export function Meter({
   label,
   showMax = true,
   width,
+  text,
 }: {
   value: number;
   max: number;
@@ -149,6 +155,8 @@ export function Meter({
   label: string;
   showMax?: boolean;
   width?: number;
+  /** The figure beside the bar, formatted by the caller ("57.8%"); defaults to the value (and max). */
+  text?: string;
 }) {
   const p = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   return (
@@ -164,8 +172,12 @@ export function Meter({
         <i className="block h-full rounded bg-accent" style={{ width: `${p * 100}%` }} />
       </span>
       <b className="tnum font-semibold whitespace-nowrap">
-        {value}
-        {showMax && `/${max}`}
+        {text ?? (
+          <>
+            {value}
+            {showMax && `/${max}`}
+          </>
+        )}
       </b>
     </span>
   );

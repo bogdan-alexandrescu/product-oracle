@@ -89,12 +89,19 @@ export function inputValueText(name: string, v: unknown): string {
   return String(v);
 }
 
-/** Confidence 0-1 as 0-100: the one scale the page shows it in. */
-const pct = (n: number) => Math.round(n * 100);
+/** Confidence 0-1 as a percent, to the tenth the API keeps it to: 0.578 reads "57.8%", 0.9 "90%". */
+export const confidencePercent = (n: number): string => `${Math.round(n * 1000) / 10}%`;
 
-/** How the confidence was worked out, on the page's 0-100 scale: "Average of 1 evidence item: 60". */
-export function confidenceWords(c: Schemas["ConfidenceUsed"]): string {
-  const v = pct(c.value);
+/**
+ * How the confidence was worked out, as a percent: "Average of 1 evidence item: 60%"; with a
+ * track record, the figure before it and after ("75%; after the track record ×0.77, 57.8%").
+ */
+export function confidenceWords(c: Schemas["ConfidenceUsed"], track?: number | null): string {
+  const before = c.before_track_record;
+  const v =
+    before != null && before !== c.value
+      ? `${confidencePercent(before)}; after the track record${track != null ? ` ×${track}` : ""}, ${confidencePercent(c.value)}`
+      : confidencePercent(c.value);
   switch (c.source) {
     case "evidence":
       return `Average of ${plural(c.evidence.length, "evidence item")}: ${v}`;

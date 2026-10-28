@@ -49,6 +49,7 @@ import {
   type NameOf,
 } from "./_components/overrides";
 import {
+  confidencePercent,
   confidenceWords,
   dayText,
   evidenceName,
@@ -87,8 +88,8 @@ const FLAGS: Record<string, { label: string; kind: ChipKind; title: string }> = 
     title: "Part of a set of features that depend on each other.",
   },
   missing_inputs: { label: "Missing inputs", kind: "warn", title: "Some inputs this method needs are not set." },
-  no_confidence: { label: "No confidence data", kind: "warn", title: "No evidence or confidence value: 50 assumed." },
-  low_confidence: { label: "Low confidence", kind: "warn", title: "Confidence below 40." },
+  no_confidence: { label: "No confidence data", kind: "warn", title: "No evidence or confidence value: 50% assumed." },
+  low_confidence: { label: "Low confidence", kind: "warn", title: "Confidence below 40%." },
   moved_for_dependency: {
     label: "Moved for a dependency",
     kind: "acc",
@@ -162,7 +163,7 @@ function FlagChip({ flag, hero = false }: { flag: string; hero?: boolean }) {
 
 /** The scorer's own rounding (two places), to find a factor in a step it wrote. */
 const fmt = (n: number | null | undefined) => (n == null ? "—" : String(Math.round(n * 100) / 100));
-/** Confidence 0-1 as 0-100: the one scale the page shows it in (ring, bar, figures). */
+/** Confidence 0-1 as 0-100, the ring's and the bar's fill; their figures are confidencePercent's. */
 const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n * 100));
 
 /** A goal as words: its code and name ("G-B Growth"), never its key. */
@@ -232,23 +233,18 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
       flag: "missing_inputs",
     });
   }
+  // A person moved or pinned a lower-scored feature above it (qa-plan-20): that says who,
+  // beside any reason of its own, never left to read as a dependency's doing.
+  const moved = (x: RankedFeature) => `${x.title} (moved by ${x.override!.by})`;
+  const higher = features.slice(0, at).filter((x) => s(x) < s(f));
+  const movedAbove = higher.filter((x) => !!x.override).map(moved);
   if (out.length === 0) {
-    // Nothing of its own: features moved up for their dependencies sit above it, or a person
-    // moved or pinned a neighbour (qa-plan-20): that says who, never a dependency it doesn't have.
-    const moved = (x: RankedFeature) => `${x.title} (moved by ${x.override!.by})`;
-    const higher = features.slice(0, at).filter((x) => s(x) < s(f));
+    // Nothing of its own: features moved up for their dependencies sit above it.
     const above = higher.filter((x) => !x.override).map((x) => x.title);
-    const movedAbove = higher.filter((x) => !!x.override).map(moved);
     if (above.length > 0) {
       out.push({
         label: `Below ${above.join(", ")}: placed earlier for a dependency`,
         title: "A feature that others depend on is placed above its score, so features scored higher can sit below it.",
-      });
-    }
-    if (movedAbove.length > 0) {
-      out.push({
-        label: `Below ${movedAbove.join(", ")}`,
-        title: "A person moved or pinned these features above their score.",
       });
     }
     // Or it sits above features scored higher that rank lower for their own reason.
@@ -262,6 +258,12 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
         title: "Features scored higher rank below this one: a person moved them, features with no confirmed goal come last, or a feature waits for those it depends on.",
       });
     }
+  }
+  if (movedAbove.length > 0) {
+    out.push({
+      label: `Below ${movedAbove.join(", ")}`,
+      title: "A person moved or pinned these features above their score.",
+    });
   }
   return out;
 }
@@ -288,7 +290,7 @@ function EvidenceChip({ ev }: { ev: EvidenceUsed }) {
       <CardEyebrow>{["Evidence", kind].filter(Boolean).join(" · ")}</CardEyebrow>
       <span className="block font-semibold break-words">{title}</span>
       <span className="tnum mt-1 block text-text2">
-        {[date, ev.confidence != null && `confidence ${pct(ev.confidence)}`].filter(Boolean).join(" · ")}
+        {[date, ev.confidence != null && `confidence ${confidencePercent(ev.confidence)}`].filter(Boolean).join(" · ")}
       </span>
       {/* Only an http(s) URL opens: an upload's file name or another scheme is no link. */}
       {ev.ref && isHttpUrl(ev.ref) && !ev.source_removed && (
@@ -305,9 +307,6 @@ function EvidenceChip({ ev }: { ev: EvidenceUsed }) {
   );
 }
 
-/** Confidence 0-1 as a percent, to the tenth the API keeps it to: 0.578 reads "57.8%". */
-const pctText = (n: number) => `${Math.round(n * 1000) / 10}%`;
-
 /**
  * A step with confidence as a percent wherever it is a factor, so its arithmetic stays true:
  * "score = 6 × 0.75 ÷ 2" reads "score = 6 × 75% ÷ 2", and "confidence = 0.75 × track record
@@ -315,7 +314,7 @@ const pctText = (n: number) => `${Math.round(n * 1000) / 10}%`;
  */
 function stepText(step: string, confidence: number | null | undefined): string {
   const track = step.match(/^confidence = (\d+(?:\.\d+)?) × track record (\S+) = (\d+(?:\.\d+)?)$/);
-  if (track) return `confidence = ${pctText(Number(track[1]))} × track record ${track[2]} = ${pctText(Number(track[3]))}`;
+  if (track) return `confidence = ${confidencePercent(Number(track[1]))} × track record ${track[2]} = ${confidencePercent(Number(track[3]))}`;
   if (confidence == null || !/^score\b/.test(step)) return step;
   // The last "× c": confidence is the last factor in every formula (impact comes before it in RICE).
   const factor = [` × ${confidence}`, ` × ${fmt(confidence)}`].find((f) => step.includes(f));
@@ -323,7 +322,7 @@ function stepText(step: string, confidence: number | null | undefined): string {
   const at = step.lastIndexOf(factor);
   const end = at + factor.length;
   if (end < step.length && step[end] !== " ") return step;
-  return `${step.slice(0, at)} × ${pctText(confidence)}${step.slice(end)}`;
+  return `${step.slice(0, at)} × ${confidencePercent(confidence)}${step.slice(end)}`;
 }
 
 /** The ranking method: a radio group drawn as B1's segmented control. */
@@ -422,7 +421,12 @@ function FeatureInspector({
   const words = (s: string) => e.goals.reduce((t, g) => t.split(`(${g.goal})`).join(`(${goalText(g.goal, g.title)})`), s);
   // A feature the run ranks that Oracle's live ranking lacks (a proposal of the run): its own line only.
   const live = !run || run.live_rank != null || f.entity_id !== "";
-  const inputs = Object.entries(e.inputs ?? {}) as [string, Record<string, unknown> | null][];
+  const given = Object.entries(e.inputs ?? {}) as [string, Record<string, unknown> | null][];
+  // Confidence is an input of every formula that multiplies by it: its row reads as the steps do.
+  const inputs: [string, Record<string, unknown> | null][] =
+    /confidence/.test(e.formula) && !given.some(([name]) => name === "confidence")
+      ? [...given, ["confidence", { value: e.confidence.value, from: CONFIDENCE_SOURCE[e.confidence.source] }]]
+      : given;
   return (
     <div id={id}>
       <Inspector
@@ -448,7 +452,7 @@ function FeatureInspector({
             value: f.formula_rank != null && f.formula_rank !== f.rank ? `#${f.rank} · Oracle #${f.formula_rank}` : `#${f.rank}`,
           },
           ...(run ? [{ label: "Live", value: run.live_rank == null ? "—" : `#${run.live_rank}` }] : []),
-          { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} size={46} /> },
+          { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} text={confidencePercent(e.confidence.value)} size={46} /> },
           { label: "Score", value: formatScore(f.score) },
         ]}
       >
@@ -516,16 +520,18 @@ function FeatureInspector({
                     <tr key={name} className="border-t border-line align-top">
                       <td className="py-1 pr-2 break-words">{inputLabel(name)}</td>
                       <td className="tnum py-1 pr-2 break-words">
-                        {name === "confidence" && typeof v?.value === "number" ? pct(v.value) : inputValueText(name, v?.value)}
+                        {name === "confidence" && typeof v?.value === "number" ? confidencePercent(v.value) : inputValueText(name, v?.value)}
                       </td>
                       <td className="py-1 break-words text-text2">
                         {name === "goal_value"
                           ? v?.estimated
                             ? "A person's estimate"
                             : "The feature's goals"
-                          : v?.attr
-                            ? `${inputLabel(String(v.attr))} (from the feature)`
-                            : "—"}
+                          : typeof v?.from === "string"
+                            ? v.from.charAt(0).toUpperCase() + v.from.slice(1)
+                            : v?.attr
+                              ? `${inputLabel(String(v.attr))} (from the feature)`
+                              : "—"}
                       </td>
                     </tr>
                   ))}
@@ -548,12 +554,14 @@ function FeatureInspector({
             label="Confidence"
             tools={
               <InfoTip label="Confidence used">
-                <span data-testid="confidence-explain">{confidenceWords(e.confidence)}</span>
+                <span data-testid="confidence-explain">{confidenceWords(e.confidence, e.calibration?.applied ? e.calibration.factor : null)}</span>
               </InfoTip>
             }
           >
             <div className="flex items-center gap-2.5">
-              <b className="tnum">{pct(e.confidence.value) ?? "—"}</b>
+              <b className="tnum" data-testid="confidence-figure">
+                {confidencePercent(e.confidence.value)}
+              </b>
               <span className="text-sm text-text2">{CONFIDENCE_SOURCE[e.confidence.source]}</span>
             </div>
             {e.confidence.evidence.length > 0 && (
@@ -563,7 +571,9 @@ function FeatureInspector({
                     <span className="flex min-w-0 flex-1">
                       <EvidenceChip ev={ev} />
                     </span>
-                    <span className="tnum flex-none text-text2">{pct(ev.confidence) ?? "—"}</span>
+                    <span className="tnum flex-none text-text2" data-testid="evidence-confidence">
+                      {ev.confidence != null ? confidencePercent(ev.confidence) : "—"}
+                    </span>
                     {ev.source_removed && (
                       <Chip kind="na" data-testid="source-removed">
                         source removed
@@ -1030,12 +1040,10 @@ function Priorities() {
       // Kept at 1440 px and up with the inspector docked; only a table under 820 px drops it.
       narrow: "laptop",
       cell: (f) => {
-        const c = pct(f.explanation.confidence.value);
-        return c == null ? (
-          <span className="text-text2">—</span>
-        ) : (
-          <Meter value={c} max={100} showMax={false} label={`Confidence ${c}`} width={48} />
-        );
+        const v = f.explanation.confidence.value;
+        if (v == null) return <span className="text-text2">—</span>;
+        const text = confidencePercent(v);
+        return <Meter value={pct(v)!} max={100} showMax={false} text={text} label={`Confidence ${text}`} />;
       },
     },
     {
