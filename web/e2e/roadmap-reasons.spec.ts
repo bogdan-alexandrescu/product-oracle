@@ -30,7 +30,7 @@ async function openRun(page: Page) {
   await login(page);
   await seedRoadmapReview(page);
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap"]').getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
   const check = page.getByTestId("items-check");
   await expect(check).toBeVisible();

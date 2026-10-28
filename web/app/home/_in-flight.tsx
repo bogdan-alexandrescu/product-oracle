@@ -203,15 +203,15 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
   // qa-company-45: the critical-blockers check names its blockers by id; read their statements,
   // only when the check is failing, so each line names a blocker, never the check's heading.
   const ids = failing.flatMap((i) => i.evidence_ids ?? []);
-  const named = useQuery(`home|blockers|${d.id}|${ids.join(",")}`, () =>
+  const named = useQuery(`home|blockers|${d.id}|${ids.join(",")}`, (): Promise<Schemas["BlockerSummary"][]> =>
     ids.length === 0
       ? Promise.resolve([])
       : unwrap(api.GET("/v1/blockers", { params: { query: { document_id: d.id } } })).catch(() => []),
   );
   const statement = new Map((named.data ?? []).map((b) => [b.id, b.statement]));
-  const blockers: { key: string; title: string; detail: string; hard: boolean }[] = failing.flatMap((i) => {
-    const each = (i.evidence_ids ?? []).flatMap((id) => (statement.has(id) ? [{ key: `${i.key}:${id}`, title: statement.get(id)!, detail: i.rationale, hard: i.hard }] : []));
-    return each.length > 0 ? each : [{ key: i.key, title: i.title, detail: i.rationale || i.question, hard: i.hard }];
+  const blockers: { key: string; title: string; hard: boolean }[] = failing.flatMap((i) => {
+    const each = (i.evidence_ids ?? []).flatMap((id) => (statement.has(id) ? [{ key: `${i.key}:${id}`, title: statement.get(id)!, hard: i.hard }] : []));
+    return each.length > 0 ? each : [{ key: i.key, title: i.title, hard: i.hard }];
   });
 
   return (
@@ -278,7 +278,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
         >
           {blockers.map((b) => (
             <InspectorRow key={b.key}>
-              <span className="inline-flex min-w-0 items-center gap-2.5" title={`${b.title}${b.detail ? `: ${b.detail}` : ""}`} data-testid="inspector-blocker">
+              <span className="inline-flex min-w-0 items-center gap-2.5" title={b.title} data-testid="inspector-blocker">
                 <Icon name="alert" size={16} className="flex-none text-crit" />
                 <span className="truncate">{b.title}</span>
               </span>
@@ -406,7 +406,7 @@ export function FlightTable({
       selected={selected}
       // Enter selects as a click does; the inspector's Open opens the row.
       onSelect={(k) => onSelect(k)}
-      rowProps={(f) => ({ "data-testid": "flight-row", "data-kind": f.kind })}
+      rowProps={(f) => ({ "data-testid": "flight-row", "data-kind": f.kind, "data-document": (f.kind === "prd" ? f.doc.slug : f.run.document_slug) ?? undefined })}
     />
   );
 }

@@ -31,7 +31,7 @@ test("run page: the sent-back review names the Company day it was sent back on",
     const held = await page.evaluate((id) => JSON.parse(localStorage.getItem("po-mock-db-v2")!).runs.runs.some((r: { id: string }) => r.id === id), runId);
     if (held) break;
   }
-  await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap"]').getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 
   // D1 (#542): staged and decided on the Roadmap items review screen, then back to the run.

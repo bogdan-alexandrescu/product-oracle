@@ -51,7 +51,7 @@ test("inbox: cancel a run paused on overrun", async ({ page }) => {
   await page.getByTestId("inbox-overruns").getByRole("button", { name: "Cancel run" }).click();
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
   await page.goto("/runs");
-  await expect(page.getByTestId("run-row").filter({ hasText: "team-workspaces" })).toContainText("Cancelled");
+  await expect(page.locator('[data-testid="run-row"][data-document="team-workspaces"]')).toContainText("Cancelled");
 });
 
 test("inbox: retry importing a run's output Oracle stopped trying to import", async ({ page }) => {
@@ -121,7 +121,7 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
   // The seed's 10 and the pending access request (A5, #203 part 3).
   await expect(badge).toHaveText("11");
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   await expect(page.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toBeVisible();
   const run = page.url();

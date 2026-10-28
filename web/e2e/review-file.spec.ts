@@ -17,7 +17,7 @@ test("send back with staged actions and no note, then view the review that was s
   await login(page);
   await seedRoadmapReview(page);
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap"]').getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 
   // D1 (#542): staged and decided on the Roadmap items review screen, not the run page; no note.

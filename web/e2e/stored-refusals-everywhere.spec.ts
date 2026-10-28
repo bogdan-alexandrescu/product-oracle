@@ -28,7 +28,7 @@ test.beforeEach(async ({ page }) => {
 
 test("a failed run and its segment say when they failed, the refusal in the past", async ({ page }) => {
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "checkout-redesign" }).filter({ hasText: "Failed" }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="checkout-redesign"]').filter({ hasText: "Failed" }).getByRole("link").first().click();
 
   const notes = page.getByTestId("failed-at");
   await expect(notes).toHaveCount(2);

@@ -67,12 +67,12 @@ test("a step SwarmCloud holds reads why and since when on the Runs row and the r
   await seedQueuedRun(page);
 
   await page.goto("/runs");
-  const row = page.locator("tr[data-row]").filter({ hasText: "queued-onboarding" });
+  const row = page.locator('tr[data-row][data-document="queued-onboarding"]');
   await expect(row.getByTestId("run-queue-wait")).toHaveText(`${QUOTA} · since ${SINCE_WORDS}`);
   // A run SwarmCloud does not hold shows nothing of the kind.
-  await expect(page.locator("tr[data-row]").filter({ hasText: "team-onboarding" }).getByTestId("run-queue-wait")).toHaveCount(0);
+  await expect(page.locator('tr[data-row][data-document="team-onboarding"]').getByTestId("run-queue-wait")).toHaveCount(0);
 
-  await row.getByRole("link", { name: "queued-onboarding" }).click();
+  await row.getByRole("link").first().click();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN_ID}$`));
   await expect(page.getByTestId("segment-queue-wait")).toHaveCount(1);
   await expect(page.getByTestId("segment-queue-wait")).toHaveText(`${QUOTA} · since ${SINCE_WORDS}`);

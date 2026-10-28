@@ -88,7 +88,7 @@ for (const scheme of ["light", "dark"] as const) {
     );
     // A run waiting at a checkpoint: Decide.
     await page.goto("/runs");
-    await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+    await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
     await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
     await expectOneFilledPrimary(page, "run waiting at a checkpoint");
   });

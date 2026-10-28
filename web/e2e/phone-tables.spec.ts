@@ -82,7 +82,7 @@ test("phone runs: run names are whole, costs show on approvals and overruns, the
     await expectInViewport(page, row.locator('td[data-phone="title"]'));
   }
   const approval = rows.filter({ hasText: "Awaiting cost approval" });
-  await expect(approval.locator('td[data-phone="title"]')).toHaveText("usage-alerts-v2");
+  await expect(approval.locator('td[data-phone="title"]')).toHaveText("Usage alerts v2 PRD · Baseline to PRD");
   await expect(approval.locator('[data-cost="prominent"]')).toBeVisible();
   await expect(approval.getByRole("button", { name: "Approve" })).toBeVisible();
   const overrun = rows.filter({ hasText: "Paused" });

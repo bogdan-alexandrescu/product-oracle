@@ -209,7 +209,7 @@ export default function RunsPage() {
               selected={selected?.id ?? null}
               onSelect={(k) => setPicked(k)}
               onActivate={(k) => router.push(`/runs/${k}`)}
-              rowProps={() => ({ "data-testid": "run-row" })}
+              rowProps={(r) => ({ "data-testid": "run-row", "data-document": r.document_slug ?? undefined })}
             />
           )}
         </Panel>

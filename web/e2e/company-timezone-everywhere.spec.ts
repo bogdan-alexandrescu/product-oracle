@@ -36,7 +36,7 @@ test("runs list and a run page: run times in the Company time zone", async ({ pa
   await setZone(page, "Pacific/Auckland");
   await page.getByTestId("nav-runs").click();
   await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeVisible();
-  const row = page.getByTestId("run-row").filter({ hasText: "team-onboarding" });
+  const row = page.locator('[data-testid="run-row"][data-document="team-onboarding"]');
   // Created 08:00 UTC on Oct 17: 9:00 PM that day in Auckland.
   await row.locator("td").nth(2).click();
   const inspector = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });

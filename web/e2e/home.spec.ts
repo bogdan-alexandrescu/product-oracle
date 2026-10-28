@@ -22,7 +22,7 @@ test("Home: goals show current over target, distance to go, confidence and trend
   await expect(g1.getByRole("img", { name: "Confidence 78" })).toBeVisible();
   // The trend comes from the goal's recorded revisions, with the target dashed.
   await expect(g1.getByTestId("goal-trend").locator("line[data-target='45']")).toHaveCount(1);
-  await expect(g1.getByTestId("goal-change")).toHaveText("+7 6m");
+  await expect(g1.getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
 
   await expect(page.getByTestId("home-goal-G2").getByTestId("goal-to-go")).toHaveText("2.6 pts to go");
   const g3 = page.getByTestId("home-goal-G3");
@@ -80,22 +80,22 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await expect(inspector.getByTestId("row-goals")).toHaveText("Raise activationGrow paid conversion");
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
-  await expect(inspector.getByTestId("stat-sections")).toContainText("Sections done");
+  await expect(inspector.getByTestId("stat-sections")).toContainText("Sections approved");
   await expect(inspector.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/documents/checkout-redesign");
 
   // A run: its segments and what comes next.
-  const onboarding = flights.filter({ hasText: "team-onboarding" });
+  const onboarding = flights.filter({ hasText: "Team onboarding PRD" });
   await onboarding.click();
   await expect(onboarding).toHaveAttribute("aria-selected", "true");
   await expect(inspector).toContainText("selected");
-  await expect(inspector.getByRole("heading", { name: "team-onboarding" })).toBeVisible();
+  await expect(inspector.getByRole("heading", { name: /^Team onboarding PRD/ })).toBeVisible();
   await expect(inspector.getByTestId("inspector-next")).toContainText("Confirm the baseline");
   await expect(inspector.getByTestId("stat-segments")).toContainText("1/4");
 
   // Keyboard: ArrowUp moves the selection back up the table.
   await page.keyboard.press("ArrowUp");
-  await expect(flights.filter({ hasText: "usage-alerts-v2" })).toHaveAttribute("aria-selected", "true");
-  await expect(inspector.getByRole("heading", { name: "usage-alerts-v2" })).toBeVisible();
+  await expect(flights.filter({ hasText: "Usage alerts v2 PRD" })).toHaveAttribute("aria-selected", "true");
+  await expect(inspector.getByRole("heading", { name: /^Usage alerts v2 PRD/ })).toBeVisible();
 });
 
 test("Home on a phone: stacked blocks under the phone header, inspector below, no sideways scroll", async ({ page }) => {

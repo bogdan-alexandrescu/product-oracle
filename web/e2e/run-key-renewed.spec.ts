@@ -10,7 +10,7 @@ test("a run whose key was renewed says so on its page", async ({ page }) => {
   await login(page);
   await page.getByTestId("nav-runs").click();
   await expect(page.getByRole("heading", { level: 1, name: "Runs" })).toBeVisible();
-  const row = page.getByTestId("run-row").filter({ hasText: "checkout-redesign" }).filter({ hasText: "Running" });
+  const row = page.locator('[data-testid="run-row"][data-document="checkout-redesign"]').filter({ hasText: "Running" });
   await row.getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Feedback loop" })).toBeVisible();
 

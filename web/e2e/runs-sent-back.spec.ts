@@ -44,7 +44,7 @@ test("a draft Oracle sent back reads Revising on the run page and the runs list,
 
   // The runs list says Revising too, with the summary on hover, and no Draft rejected.
   await page.getByTestId("nav-runs").click();
-  const row = page.getByTestId("run-row").filter({ hasText: "guest-checkout" });
+  const row = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
   await expect(row.getByTestId("run-sent-back")).toHaveText("Revising");
   await expect(row.getByTestId("run-sent-back")).toHaveAttribute("title", `${REVISING}. ${SUMMARY}`);
   await expect(row.getByTestId("run-draft-rejected")).toHaveCount(0);
@@ -107,7 +107,7 @@ test("a clean revision clears Revising: the draft is imported and the review wai
 
   // The runs list: neither Revising nor Draft rejected.
   await page.getByTestId("nav-runs").click();
-  const row = page.getByTestId("run-row").filter({ hasText: "guest-checkout" });
+  const row = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
   await expect(row).toBeVisible();
   await expect(row.getByTestId("run-sent-back")).toHaveCount(0);
   await expect(row.getByTestId("run-draft-rejected")).toHaveCount(0);

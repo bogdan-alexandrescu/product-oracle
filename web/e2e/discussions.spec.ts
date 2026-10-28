@@ -165,7 +165,7 @@ test("an approver discusses a pending checkpoint in a sheet on the run page", as
   await withScenario(page);
   await login(page, APPROVER);
   await page.getByTestId("nav-runs").click();
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   const card = page.getByTestId("checkpoint-baseline_confirm");
   await card.getByRole("button", { name: "Discuss" }).click();
   const sheet = page.getByTestId("sheet-discuss");
