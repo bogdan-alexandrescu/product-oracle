@@ -37,6 +37,10 @@ Test cards (protects / fails_when / no_claim):
   per milestone (each slice once) and its span, the same for every role; fails_when=the plan
   is missing, its totals differ from the plan endpoint's or a role reads another plan;
   no_claim=the web's drawing (Playwright's simple-priorities-plan spec).
+- test_priority_rows_say_whether_they_are_in_the_plan: protects=each Priorities row says
+  whether its item is the plan PRD's (in_plan), so Goal buckets still lists the roadmap's items
+  outside the plan; fails_when=a row outside the plan reads as in it, or the plan's row does
+  not; no_claim=the web's card (Playwright's simple-plan-charts spec).
 """
 
 import hashlib
@@ -56,6 +60,7 @@ from oracle.simple import plan, suggestions
 from oracle.simple.models import RoadmapDateSuggestion, SimplePrdPlan
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import Ctx, make_ctx
+from tests.test_simple_roadmap_api import Seed
 
 NOW = datetime(2026, 10, 28, 19, 0, tzinfo=UTC)
 FIXTURE = (Path(__file__).parent / "fixtures" / "prd_plan_invented.md").read_text()
@@ -261,6 +266,26 @@ async def test_priorities_carry_the_plan(client, role):
     assert sum(w["weeks"] for w in p["goal_weeks"]) == sum(
         m["planned_weeks"] for m in p["milestones"]
     )
+
+
+async def test_priority_rows_say_whether_they_are_in_the_plan(client):
+    ctx = await make_ctx()
+    ids = await seed(ctx, items=("f-03",))
+    async with tenant_session(ctx.tenant_id) as s:
+        f03 = await s.scalar(select(RoadmapItem).where(RoadmapItem.item_key == "f-03"))
+        mine = await Seed(s).entity("feature", "setup-steps", effort=2)
+        other = await Seed(s).entity("feature", "loose-end", effort=1)
+        f03.feature_id = mine.id
+        # An item of the same roadmap that no PRD's plan holds.
+        s.add(RoadmapItem(roadmap_document_id=f03.roadmap_document_id,
+                          roadmap_version_id=f03.roadmap_version_id, item_key="loose",
+                          title="Loose end", horizon="now", position=1, feature_id=other.id,
+                          track_id=ids["track"]))  # fmt: skip
+        await s.commit()
+    r = await client.get("/v1/simple/priorities", headers=ctx.as_("viewer"))
+    assert r.status_code == 200, r.text
+    got = {row["code"]: row.get("in_plan") for row in r.json()["rows"]}
+    assert got == {"f-03": True, "loose": False}
 
 
 @pytest.mark.parametrize(
