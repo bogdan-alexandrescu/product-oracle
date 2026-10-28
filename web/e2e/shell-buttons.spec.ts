@@ -92,6 +92,26 @@ for (const theme of ["light", "dark"] as const) {
       expect(addRing).toBe(cancelRing);
     });
 
+    test(`a disabled ghost button looks disabled, not like an enabled one (${theme})`, async ({ page }) => {
+      // protects=the ghost variant's disabled look (fix-shell review); fails_when=a disabled ghost
+      // draws with the enabled ghost's colour and opacity; no_claim=each page's own disabled reasons.
+      await login(page);
+      await page.goto("/design");
+      await expect(page.getByTestId("design-gallery")).toBeVisible({ timeout: 20_000 });
+      const ghosts = page.getByTestId("design-buttons").locator('button[data-variant="ghost"]');
+      const look = (b: Locator) =>
+        b.evaluate((el) => {
+          el.getAnimations().forEach((a) => a.finish());
+          const s = getComputedStyle(el);
+          return { color: s.color, opacity: Number(s.opacity) };
+        });
+      const on = await look(ghosts.filter({ hasText: "No icon" }));
+      const off = await look(ghosts.filter({ hasText: "Disabled" }));
+      await expect(ghosts.filter({ hasText: "Disabled" })).toBeDisabled();
+      expect(on.opacity).toBe(1);
+      expect(off.opacity, "a disabled ghost is dimmed").toBeLessThanOrEqual(0.6);
+    });
+
     test(`a ritual's Save says No changes until something changed, then is an accent solid (${theme})`, async ({ page }) => {
       await page.clock.install({ time: new Date("2026-10-23T12:00:00Z") });
       await page.addInitScript((key) => localStorage.setItem(key, "rituals"), MOCK_SCENARIO_KEY);

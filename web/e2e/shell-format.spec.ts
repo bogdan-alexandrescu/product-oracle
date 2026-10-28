@@ -37,6 +37,9 @@ test("dates: the year only when it is not this year, in the Company zone", () =>
   // 03:00 UTC on Oct 29 is still Oct 28 in Los Angeles.
   expect(formatShortDate("2026-10-29T03:00:00Z", now, LA)).toBe("Oct 28");
   expect(formatWeekday("2026-11-02T17:00:00Z", LA)).toBe("Mon, Nov 2");
+  // A timestamp without a zone is a moment in UTC, not a calendar day.
+  expect(formatShortDate("2026-10-29T03:00:00", now, LA)).toBe("Oct 28");
+  expect(formatDateRange("2026-10-20T03:00:00", "2026-10-29T03:00:00", LA)).toBe("Oct 19 – Oct 28, 2026");
 });
 
 test("times: hour, minute and the zone's short name", () => {
@@ -57,6 +60,10 @@ test("ages: now, minutes, hours, days and weeks, with no space and no 24h", () =
   expect(formatAge("2026-10-21T12:00:00Z", now)).toBe("1d");
   expect(formatAge("2026-10-11T12:00:00Z", now)).toBe("11d");
   expect(formatAge("2026-09-22T12:00:00Z", now)).toBe("4w");
+  // A time still to come is not "now".
+  expect(formatAge("2026-10-22T12:05:00Z", now)).toBe("in 5m");
+  expect(formatAge("2026-10-25T12:00:00Z", now)).toBe("in 3d");
+  expect(formatAge("2026-10-22T12:00:20Z", now)).toBe("now");
 });
 
 test("money, counts, plurals and percentages", () => {
@@ -94,9 +101,15 @@ test("errors: a role refusal names who may act; a message reads as a sentence or
   expect(roleRefusal("Requires the commenter role")).toBe("Only commenters, approvers and owners can do this.");
   expect(roleRefusal("Requires the approver role or the engineering lead")).toBe("Only approvers, owners and the engineering lead can do this.");
   expect(roleRefusal("Only an owner can decide this stop")).toBeNull();
+  // The lead's clause counts only right after the role it widens.
+  expect(roleRefusal("This stop is decided by the owner or the engineering lead")).toBeNull();
+  expect(roleRefusal("Requires the engineering lead or an owner")).toBe("Only owners and the engineering lead can do this.");
   expect(asSentence("Slack is busy: try again in 30 seconds")).toBe("Slack is busy: try again in 30 seconds");
   expect(asSentence("reconciling needs a reason")).toBe("reconciling needs a reason");
   expect(asSentence("source_changed")).toBeNull();
+  // One plain word reads as a sentence; a host before a colon is not a field's name.
+  expect(asSentence("Forbidden")).toBe("Forbidden.");
+  expect(asSentence("posthog.com: the project was not found")).toBe("posthog.com: the project was not found");
   expect(asSentence("bad {json}")).toBeNull();
   expect(asSentence("a dated milestone needs a verified estimate (basis_ids); Oracle never invents dates")).toBe(
     "a dated milestone needs a verified estimate; Oracle never invents dates",

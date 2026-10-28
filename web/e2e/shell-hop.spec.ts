@@ -1,6 +1,8 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { THEME_KEY } from "../lib/theme";
+import { ADMIN, login } from "./helpers";
 
 /*
  * The Ask panel's thread (qa-shell-20, qa-shell-21), on the mock API as a person would use
@@ -49,3 +51,46 @@ test.describe("phone", () => {
     expect(Math.abs(circle.width - circle.height)).toBeLessThanOrEqual(0.5);
   });
 });
+
+for (const width of [1366, 1440]) {
+  for (const theme of ["light", "dark"] as const) {
+    test(`at ${width} px (${theme}) the open Ask drawer lies above the page and takes its own clicks`, async ({ page }) => {
+      // protects=below 1600 px the Ask drawer overlays the page above everything in it (fix-shell
+      // review); fails_when=a roadmap card's buttons paint over the drawer and take the clicks
+      // meant for Send; no_claim=what the answer says (simple-ask-one-box.spec.ts).
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript(
+        ([key, themeKey, t]) => {
+          localStorage.setItem(key, "simple-chat");
+          localStorage.setItem(themeKey, t);
+        },
+        [MOCK_SCENARIO_KEY, THEME_KEY, theme] as const,
+      );
+      await page.goto("/login");
+      await page.getByLabel("Email").fill("commenter@example.com");
+      await page.getByLabel("Password").fill(ADMIN.password);
+      await page.getByRole("button", { name: "Sign in" }).click();
+      await expect(page).not.toHaveURL(/\/login/);
+      await page.goto("/simple/roadmap");
+      await page.getByTestId("simple-ask").filter({ visible: true }).first().click();
+      const drawer = page.getByTestId("hop-drawer");
+      await expect(panel(page).getByTestId("ask-chat")).toBeVisible();
+      const box = (await drawer.boundingBox())!;
+      const outside = await drawer.evaluate((el, b) => {
+        const miss: string[] = [];
+        for (let i = 1; i < 10; i++)
+          for (let j = 1; j < 10; j++) {
+            const x = b.x + (b.width * i) / 10;
+            const y = b.y + (b.height * j) / 10;
+            const hit = document.elementFromPoint(x, y);
+            if (!hit || !el.contains(hit)) miss.push(`${Math.round(x)},${Math.round(y)}`);
+          }
+        return miss;
+      }, box);
+      expect(outside, "points of the drawer that the page covers").toEqual([]);
+      await panel(page).getByRole("textbox", { name: "Message Oracle" }).fill("who owns Weekly alert digest?");
+      await panel(page).getByRole("button", { name: "Send" }).click();
+      await expect(panel(page).getByTestId("ask-chat-thread").getByTestId("chat-message").last()).toHaveAttribute("data-kind", "answer");
+    });
+  }
+}

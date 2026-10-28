@@ -164,3 +164,18 @@ test.describe("phone", () => {
     });
   }
 });
+
+test.describe("phone, a strip that is not tabs", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("its chevrons say Scroll left and Scroll right, not tabs", async ({ page }) => {
+    // protects=the chevrons' names fit what the strip holds (fix-shell review); fails_when=a strip
+    // of plain items calls its chevrons "Scroll tabs right"; no_claim=paging (tested above).
+    await login(page);
+    await page.goto("/design");
+    const strip = page.getByTestId("design-scroll-strip");
+    await expect(strip).toBeVisible({ timeout: 20_000 });
+    await expect(strip.getByRole("button", { name: "Scroll right", exact: true })).toBeVisible();
+    await expect(strip.getByRole("button", { name: /tabs/ })).toHaveCount(0);
+  });
+});

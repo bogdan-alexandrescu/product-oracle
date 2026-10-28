@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { login } from "./helpers";
+import { ADMIN, login } from "./helpers";
 
 // qa-shell-3, 4, 24, 25, 26: a wrong URL is the app's own "Page not found" (title, sentence,
 // Go to Home, a link back to its section), without a hydration error, without a vertical
@@ -88,3 +88,16 @@ for (const phone of [false, true]) {
     });
   });
 }
+
+test("Go to Home takes a Simple user to Simple's home, not Detailed's", async ({ page }) => {
+  // protects=Go to Home follows the person's landing (fix-shell review); fails_when=it always
+  // opens /home, Detailed's; no_claim=the landing rule itself (simple-mode.spec.ts).
+  await page.goto("/login");
+  await page.getByLabel("Email").fill("viewer@example.com");
+  await page.getByLabel("Password").fill(ADMIN.password);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).toHaveURL(/\/simple$/);
+  await page.goto("/this-page-does-not-exist");
+  await page.getByRole("link", { name: "Go to Home" }).click();
+  await expect(page).toHaveURL(/\/simple$/);
+});

@@ -31,7 +31,8 @@ async function expectOneStyle(dialog: Locator, title: string) {
   await expect(dialog).toHaveAttribute("role", "dialog");
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect(dialog.getByRole("heading", { level: 2, name: title })).toBeVisible();
-  await expect(dialog.getByRole("button", { name: `Close ${title}` })).toBeVisible();
+  // The X is "Close": the dialog itself is named by its title.
+  await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeVisible();
   const footer = dialog.getByTestId("dialog-footer");
   const cancel = footer.getByRole("button", { name: "Cancel" });
   await expect(cancel).toHaveAttribute("data-variant", "secondary");
@@ -125,7 +126,7 @@ test("Build roadmap uses the same frame", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "Build roadmap" });
   await expectOneStyle(dialog, "Build roadmap");
   await expect(dialog.getByLabel("Roadmap", { exact: true })).toBeFocused();
-  await dialog.getByRole("button", { name: "Close Build roadmap" }).click();
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(dialog).toHaveCount(0);
 });
 
@@ -142,4 +143,60 @@ test("Settings › Sources: More actions moves focus into its menu, and Escape r
   await page.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   await expect(more).toBeFocused();
+});
+
+test("New launch: a track-only change asks before closing, and Cancel waits while it saves", async ({ page }) => {
+  // protects=a changed Track counts as typed work; Cancel and the X are disabled while Create launch
+  // is saving (fix-shell review); fails_when=Escape drops a changed track without asking, or Cancel
+  // can be pressed mid-save; no_claim=the launch itself (launches-create.spec.ts).
+  await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "launches"));
+  await login(page);
+  await page.goto("/roadmap/launches");
+  await page.getByTestId("new-launch").click();
+  const launch = page.getByRole("dialog", { name: "New launch" });
+  const track = launch.getByLabel("Track");
+  const first = await track.inputValue();
+  const other = await track.locator("option").evaluateAll((os, v) => os.map((o) => (o as HTMLOptionElement).value).find((x) => x !== v)!, first);
+  await track.selectOption(other);
+  await page.keyboard.press("Escape");
+  await expect(launch.getByTestId("dialog-discard")).toContainText("Discard your changes?");
+  await launch.getByRole("button", { name: "Discard" }).click();
+  await expect(launch).toHaveCount(0);
+
+  await page.evaluate(() => localStorage.setItem("po-mock-slow", "POST /v1/launches"));
+  await page.getByTestId("new-launch").click();
+  await launch.getByTestId("launch-item-option").nth(0).getByRole("checkbox").check();
+  await launch.getByRole("button", { name: "Create launch" }).click();
+  await expect(launch.getByRole("button", { name: "Creating…" })).toBeVisible();
+  await expect(launch.getByRole("button", { name: "Cancel" })).toBeDisabled();
+  await expect(launch.getByRole("button", { name: "Close", exact: true })).toBeDisabled();
+  await expect(launch).toHaveCount(0);
+});
+
+test.describe("phone", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("Record basis opened from a Plan item's sheet: Escape asks inside the dialog and keeps the sheet", async ({ page }) => {
+    // protects=Escape in a dialog over a sheet goes to the dialog (its discard question), not the
+    // sheet; fails_when=the sheet's own Escape closes the sheet and the typed text with it;
+    // no_claim=the basis itself (date-bases.spec.ts).
+    await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, DATE_BASES_SCENARIO]);
+    await login(page, LEAD);
+    await page.goto("/plan");
+    await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Alerts in the team chat" }).click();
+    const sheet = page.getByTestId("sheet-plan-item");
+    await expect(sheet).toBeVisible();
+    await sheet.getByRole("button", { name: "Verify date" }).click();
+    const dialog = page.getByRole("dialog", { name: "Record basis" });
+    await dialog.getByLabel("Reference").fill("ENG-999");
+    await page.keyboard.press("Escape");
+    await expect(dialog.getByTestId("dialog-discard")).toContainText("Discard your changes?");
+    await expect(dialog.getByLabel("Reference")).toHaveValue("ENG-999");
+    await expect(sheet).toBeVisible();
+    await dialog.getByRole("button", { name: "Keep editing" }).click();
+    await page.keyboard.press("Escape");
+    await dialog.getByRole("button", { name: "Discard" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(sheet).toBeVisible();
+  });
 });
