@@ -64,6 +64,8 @@ test("an approver sets a section's owner, reviewers and due date in place", asyn
   await expect(seeded).toContainText("Owner Admin");
   await expect(seeded).toContainText("Due Oct 24");
 
+  // Sections with no owner fold into one line (qa-docs-45); Assign lists them.
+  await panel.getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
   const row = panel.locator('[data-section-key="problem"]');
   await expect(row).toContainText("No owner");
   await row.getByRole("button", { name: "Edit owner and reviewers of 2. Problem" }).click();
@@ -135,6 +137,7 @@ test("an approver can assign sections and run campaigns, and sees the review set
   await asRole(page, "approver");
   await login(page);
   await page.goto(DOC);
+  await page.getByTestId("section-assignments").getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
   await expect(page.getByTestId("section-assignments").getByRole("button", { name: "Edit owner and reviewers of 2. Problem" })).toBeEnabled();
   await expect(page.getByTestId("campaigns").getByRole("button", { name: "Ask for feedback" })).toBeEnabled();
   await page.getByRole("button", { name: "Review settings" }).click();

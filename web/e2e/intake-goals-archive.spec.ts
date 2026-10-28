@@ -32,7 +32,7 @@ test("goal from the door, then Archive asks and the page says it is archived", a
   await expect(goals).toContainText("to go");
   await expect(goals).not.toContainText("No confirmed company goal yet");
 
-  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Archive" }).click();
   const confirm = page.getByRole("alertdialog", { name: "Archive" });
   await expect(confirm).toBeVisible();

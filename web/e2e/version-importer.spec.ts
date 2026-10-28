@@ -20,7 +20,7 @@ test("each version names who imported it, with the id only in the tooltip", asyn
   const by = page.getByTestId("version-inspector").getByTestId("version-importer");
   for (const [n, name] of [
     [1, "Approver"],
-    [2, "agent-track"],
+    [2, "API token agent-track"],
     [3, "Oracle"],
   ] as const) {
     await pick(page, n);

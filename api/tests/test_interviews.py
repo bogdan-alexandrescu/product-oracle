@@ -434,6 +434,7 @@ async def test_a_reply_with_a_link_or_too_long_is_replaced_by_the_next_question(
     fake.script["interview_turn"].append("not json at all")
     turn = await say(client, token, cookie, LONG)
     assert turn["messages"][-1]["body"].startswith("That was my last question")
+    assert "Press Finish interview" in turn["messages"][-1]["body"]
 
 
 async def test_messages_are_paced_capped_and_the_40th_finishes(client, ctx, fake, monkeypatch):
