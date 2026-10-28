@@ -468,7 +468,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               );
             })}
             <Arrows data={data} l={l} sc={sc} moved={moved} />
-            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} flash={flash === r.item.id} canDrag={canDrag} phased={format === "waterfall"} {...bars} /> : null))}
+            {l.rows.map((r) => (r.kind === "item" ? <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} flash={flash.has(r.item.id)} canDrag={canDrag} phased={format === "waterfall"} {...bars} /> : null))}
             <PreviewGhost l={l} sc={sc} items={items} />
             <line x1={today} x2={today} y1={l.top - 14} y2={l.height} stroke="var(--crit)" strokeWidth={2} data-testid="today-line" pointerEvents="none" />
             <text x={today + 4} y={l.top - 4} fontSize={11} fill="var(--crit)" fontWeight={600} pointerEvents="none">
@@ -727,17 +727,17 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
 /** How long an applied change's bar flashes (ms). */
 const FLASH_MS = 2500;
 
-/** roadmap-talk: the item a chat card just applied to ("simple:applied"), for ~2.5 s; else null. */
-function useAppliedFlash(): string | null {
-  const [flash, setFlash] = useState<string | null>(null);
+/** roadmap-talk: the items chat cards just applied to ("simple:applied"; Apply all sends several), each for ~2.5 s. */
+function useAppliedFlash(): ReadonlySet<string> {
+  const [flash, setFlash] = useState<ReadonlySet<string>>(() => new Set());
   useEffect(() => {
     let timer = 0;
     const on = (e: Event) => {
       const id = (e as CustomEvent<AppliedDetail>).detail?.item_id;
       if (!id) return;
-      setFlash(id);
+      setFlash((f) => new Set(f).add(id));
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => setFlash(null), FLASH_MS);
+      timer = window.setTimeout(() => setFlash(new Set()), FLASH_MS);
     };
     window.addEventListener(APPLIED_EVENT, on);
     return () => {

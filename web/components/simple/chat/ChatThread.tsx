@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { applyAll, chooseChoice, hasPending, PENDING_POLL_MS, retryMessage, type ChatMessage, type ChatThread as Thread } from "@/lib/api/simple-chat";
+import { applyAll, applyCard, chooseChoice, hasPending, PENDING_POLL_MS, retryMessage, sendApplied, sendCardChanged, type ChatMessage, type ChatThread as Thread } from "@/lib/api/simple-chat";
 import { errorMessage } from "@/lib/use-query";
 
 import { ChatCard } from "./ChatCard";
@@ -130,6 +130,15 @@ export function usePendingPoll(thread: { messages: ChatMessage[] } | null, reloa
 export function ChatMessages({ messages, onCardChanged, onThread }: { messages: Thread["messages"]; onCardChanged?: () => void; onThread?: (t: Thread) => void }) {
   // A line handed to Oracle's Ask (kind "ask") lives in Ask's chat: neither it nor the person's line shows here.
   const handed = new Set(messages.filter((m) => m.kind === "ask").flatMap((m) => [m.id, m.reply_to]));
+  // roadmap-talk: the values typed into each card's open Correct form, for Apply all.
+  const [corrections] = useState(() => new Map<string, Record<string, string | null>>());
+  const onCorrecting = useCallback(
+    (id: string, values: Record<string, string | null> | null) => {
+      if (values) corrections.set(id, values);
+      else corrections.delete(id);
+    },
+    [corrections],
+  );
   return (
     <ol className="flex flex-col gap-3" aria-label="Messages">
       {messages.filter((m) => !handed.has(m.id)).map((m) => (
@@ -151,11 +160,11 @@ export function ChatMessages({ messages, onCardChanged, onThread }: { messages: 
               </p>
             )}
           </div>
-          <LineActions message={m} onThread={onThread} />
+          <LineActions message={m} onThread={onThread} corrections={corrections} />
           {m.cards.length > 0 && (
             <div className="flex w-full flex-col gap-2">
               {m.cards.map((c) => (
-                <ChatCard key={c.id} card={c} onChanged={onCardChanged} />
+                <ChatCard key={c.id} card={c} onChanged={onCardChanged} onCorrecting={onCorrecting} />
               ))}
             </div>
           )}
@@ -165,17 +174,22 @@ export function ChatMessages({ messages, onCardChanged, onThread }: { messages: 
   );
 }
 
-/** A line's own actions (chat-reader): Retry, the choices, Apply all; the outcome of each. */
-function LineActions({ message: m, onThread }: { message: ChatMessage; onThread?: (t: Thread) => void }) {
+/**
+ * A line's own actions (chat-reader): Retry, the choices, Apply all; the outcome of each.
+ * Apply all applies a card with an open Correct form with its typed values first, then the
+ * rest; the roadmap reads again and each applied item's bar flashes.
+ */
+function LineActions({ message: m, onThread, corrections }: { message: ChatMessage; onThread?: (t: Thread) => void; corrections: Map<string, Record<string, string | null>> }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
-  const run = async (fn: () => Promise<Thread>) => {
+  const run = async (fn: () => Promise<Thread | null>) => {
     setBusy(true);
     setError(null);
     setSaid(null);
     try {
-      onThread?.(await fn());
+      const t = await fn();
+      if (t) onThread?.(t);
     } catch (e) {
       setError(detail(e));
     } finally {
@@ -219,9 +233,27 @@ function LineActions({ message: m, onThread }: { message: ChatMessage; onThread?
             disabled={busy}
             onClick={() =>
               void run(async () => {
-                const r = await applyAll(m.id);
-                if (r.stopped) setSaid(`Applied ${r.applied.length} of ${open.length}. Stopped at “${r.stopped.summary}”: ${r.stopped.reason.replace(/\.$/, "")}.`);
-                return r.thread;
+                const flashed: string[] = [];
+                let done = 0;
+                try {
+                  for (const c of open) {
+                    const values = corrections.get(c.id);
+                    if (!values) continue;
+                    const one = await applyCard(c.id, null, values);
+                    done += 1;
+                    if (one.card.status === "applied" && one.card.item_id) flashed.push(one.card.item_id);
+                  }
+                  // Every card was corrected and applied: nothing is left for Apply all.
+                  if (done === open.length) return null;
+                  const r = await applyAll(m.id);
+                  if (r.stopped) setSaid(`Applied ${done + r.applied.length} of ${open.length}. Stopped at “${r.stopped.summary}”: ${r.stopped.reason.replace(/\.$/, "")}.`);
+                  const cards = r.thread.messages.find((x) => x.id === m.id)?.cards ?? [];
+                  for (const c of cards) if (r.applied.includes(c.id) && c.status === "applied" && c.item_id) flashed.push(c.item_id);
+                  return r.thread;
+                } finally {
+                  sendCardChanged();
+                  for (const id of flashed) sendApplied(id);
+                }
               })
             }
           >

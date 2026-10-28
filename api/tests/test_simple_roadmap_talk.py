@@ -52,8 +52,9 @@ Test cards (protects / fails_when / no_claim):
   names nothing of the item or the roadmap is not shown as Oracle's; fails_when=any
   reader answer is shown; no_claim=the model's words.
 - test_correct_refusals_are_plain: protects=Correct's refusals use plain words, never
-  field jargon ("values: ..."); fails_when=a refusal starts with an internal field name;
-  no_claim=the exact wording.
+  field jargon ("values: ..."); a cut on the roadmap is a roadmap card with nothing to
+  correct (the web says Reject); fails_when=a refusal starts with an internal field name or
+  a roadmap cut has no Correct data; no_claim=the exact wording.
 """
 
 import uuid
@@ -364,3 +365,8 @@ async def test_correct_refusals_are_plain(client):
     m = await say(client, w, "owner", "cut Move_Dates U", "/simple")
     r = await apply(client, w, "owner", m["cards"][0]["id"], {"title": "x"})
     assert r.status_code == 422 and not r.json()["detail"].startswith("values"), r.text
+    m = await say(client, w, "owner", "cut Move_Dates U", ROADMAP)
+    [cut] = m["cards"]
+    assert cut["correct"] == {"fields": [], "values": {}}
+    r = await apply(client, w, "owner", cut["id"], {"title": "x"})
+    assert r.status_code == 422 and r.json()["detail"] == "The title cannot be corrected here"

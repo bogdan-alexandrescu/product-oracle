@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { Button, SegmentedControl } from "@/components/ds";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
@@ -329,6 +329,16 @@ export function FloatingCard({
       : "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl"
     : `absolute z-40 rounded-xl ${talk ? "w-[820px]" : wide ? "w-[760px]" : "w-[380px]"}`;
   const showDetails = !phone || !talk;
+  // roadmap-talk: a widened card (the talk, the flow) keeps inside the roadmap, not the 380 px card's left.
+  const [left, setLeft] = useState<number | null>(null);
+  const baseLeft = typeof style.left === "number" ? style.left : null;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (phone || !el || !parent || baseLeft == null) return setLeft(null);
+    const room = parent.clientWidth - el.offsetWidth - 8;
+    setLeft(baseLeft > room ? Math.max(0, room) : null);
+  }, [talk, wide, phone, baseLeft]);
   return (
     <div
       ref={ref}
@@ -339,7 +349,7 @@ export function FloatingCard({
       data-sheet={phone ? "bottom" : "float"}
       data-wide={wide ? "true" : "false"}
       data-talk={talk ? "true" : "false"}
-      style={phone ? undefined : style}
+      style={phone ? undefined : left == null ? style : { ...style, left }}
       className={`${place} max-w-[calc(100vw-16px)] overflow-y-auto border border-line bg-surface p-4 shadow-tip outline-none`}
     >
       <div className="flex items-start gap-2">

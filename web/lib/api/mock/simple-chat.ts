@@ -859,7 +859,7 @@ function talkMove(db: SimpleDb, i: Item, start: string, end: string, how = ""): 
   };
 }
 
-/** An add_item card: the title, its goal, milestone and dates inside the milestone. */
+/** An add_item card: the title, its goal, milestone and dates: the API's rule, the milestone's last two weeks, never before today. */
 function addItemDraft(db: SimpleDb, ctx: ChatCtx, rawTitle: string, m: string, g: string): ReaderOut {
   const title = unquote(rawTitle).replace(/^./, (c) => c.toUpperCase());
   if (!title) return { refusal: "What should the new item be called?" };
@@ -867,8 +867,8 @@ function addItemDraft(db: SimpleDb, ctx: ChatCtx, rawTitle: string, m: string, g
   if (!ms) return { refusal: `I could not find the milestone “${m}”.` };
   const goal = g ? goalNamed(g) : null;
   if (g && !goal) return { refusal: `I could not find the goal “${g}”.` };
-  const start = ms.from > today() ? ms.from : today();
-  const end = addDays(start, 11) < ms.date ? addDays(start, 11) : ms.date;
+  const end = ms.date;
+  const start = addDays(end, -13) > today() ? addDays(end, -13) : today();
   return { card: buildAdd(title, goal, ms.name, start, end) };
 }
 
@@ -893,7 +893,8 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
   const t = text.trim().replace(/\s+/g, " ").replace(/[.!]+$/, "");
   const it = "(?:it|this|this item)";
   if (QUESTION.test(t) || t.endsWith("?")) {
-    const source = i.code ? `From the PRD · ${about(i)}` : `From the roadmap · ${about(i)}`;
+    // As the API: its own read of when / who is the roadmap's; the reader's answers cite the PRD when the item has one.
+    const source = i.code && !/\b(when|who)\b/i.test(t) ? `From the PRD · ${about(i)}` : `From the roadmap · ${about(i)}`;
     if (/\bwho\b.*\bown/i.test(t)) return { kind: "answer", body: i.owner ? `${i.owner.name} owns ${i.title}.` : `${i.title} has no owner yet.`, cards: [], source };
     const why = i.reasons[0] ? ` ${i.reasons[0]}` : "";
     const outcome = i.outcome ? ` Its outcome: ${i.outcome}.` : "";
@@ -932,7 +933,7 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
   }
   if (new RegExp(`^(?:cut|drop) ${it}$`, "i").test(t)) {
     if (i.status === "cut") return { kind: "note", body: `${i.title} is cut already.`, cards: [] };
-    return one({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: { cut: true }, summary: `Cut ${about(i)}`, item_id: i.id, item_title: i.title, preview: { kind: "cut", item_id: i.id }, flow: null, fixes: [], change_words: null, correct: null });
+    return one({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: { cut: true }, summary: `Cut ${about(i)}`, item_id: i.id, item_title: i.title, preview: { kind: "cut", item_id: i.id }, flow: null, fixes: [], change_words: null, correct: { fields: [], values: {} } });
   }
   if ((m = new RegExp(`^split ${it} (?:into|in) (two|three|four|\\d) (?:slices|parts|pieces)$`, "i").exec(t))) {
     const n = Math.min(4, Math.max(2, countOf(m[1])));
@@ -943,7 +944,7 @@ function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, tex
       const a = addDays(i.start.date, each * k);
       const b = k === n - 1 ? i.end.date : addDays(a, each - 1);
       const goal = i.goal ? (goalNamed(i.goal.key) ?? null) : null;
-      cards.push(buildAdd(`${i.title} — slice ${k + 1}`, goal, i.milestone?.name ?? null, a, b));
+      cards.push(buildAdd(`${i.title}: slice ${k + 1}`, goal, i.milestone?.name ?? null, a, b));
     }
     return { kind: "cards", body: `I understood: split ${about(i)} into ${n} slices.`, cards };
   }
@@ -1167,6 +1168,8 @@ function roadmapCorrect(d: Draft): Draft {
     return { ...d, change_words: d.change_words ?? words, correct: { fields: ["start_date", "end_date"], values: { start_date: a.start_date, end_date: a.end_date } } };
   }
   if (d.op === "edit_title" && typeof a.title === "string") return { ...d, change_words: d.change_words ?? { before: String(b.title ?? ""), after: a.title }, correct: { fields: ["title"], values: { title: a.title } } };
+  // A cut has nothing to correct; it is still a roadmap card (Reject, not Discard).
+  if (d.op === "cut") return { ...d, correct: { fields: [], values: {} } };
   if (d.op === "set_owner" && typeof p.person_name === "string") return { ...d, change_words: d.change_words ?? { before: typeof p.before_name === "string" ? p.before_name : "No owner", after: p.person_name }, correct: { fields: ["owner"], values: { owner: p.person_name } } };
   return d;
 }
@@ -1565,9 +1568,12 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       if (n != null && !c.fixes[n]) return json(422, { detail: "fix: one of the card's fixes" });
       // roadmap-talk: Correct's values rebuild the card (summary, after) before it applies.
       if (n == null && b.values && typeof b.values === "object") {
-        if (!c.correct) return json(422, { detail: "values: this card has nothing to correct" });
+        if (!c.correct) return json(422, { detail: "This change has nothing to correct" });
         const refused = correctCard(db, ctx, c, b.values as Record<string, unknown>);
         if (refused) return json(422, { detail: refused });
+        // An item talk's one-card line ("I understood: …") says the corrected card, as the API.
+        const said = chat.threads[c.thread]?.messages.find((x) => x.id === c.message_id);
+        if (said && said.card_ids.length === 1 && said.body.startsWith("I understood: ")) said.body = `I understood: ${c.summary.replace(/^./, (x) => x.toLowerCase())}.`;
         c.fixes = asIf(db, c).fixes;
       }
       const out = await applyOne(db, chat, c, ctx, n, s8);

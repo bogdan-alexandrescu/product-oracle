@@ -40,7 +40,16 @@ export function actionWords(p: ActionPreview): string[] {
  * roadmap (the "simple:preview" event); after Apply the card says who applied or proposed it,
  * with Undo while applied.
  */
-export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?: (card: Card) => void }) {
+export function ChatCard({
+  card: initial,
+  onChanged,
+  onCorrecting,
+}: {
+  card: Card;
+  onChanged?: (card: Card) => void;
+  /** roadmap-talk: the values typed into this card's open Correct form (null: closed), for its line's Apply all. */
+  onCorrecting?: (cardId: string, values: Record<string, string | null> | null) => void;
+}) {
   // The thread polls: a newer copy of the card (another tab applied it) replaces ours.
   const [local, setLocal] = useState<{ from: Card; card: Card } | null>(null);
   const card = local && local.from === initial ? local.card : initial;
@@ -53,6 +62,11 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
   const [routedTo, setRoutedTo] = useState<string[] | null>(null);
   // roadmap-talk: Correct opens the card's fields, prefilled with Oracle's reading.
   const [fields, setFields] = useState<Record<string, string> | null>(null);
+  const corrected = (f: Record<string, string>) => Object.fromEntries(Object.entries(f).map(([k, v]) => [k, v.trim() || null]));
+  useEffect(() => {
+    onCorrecting?.(initial.id, fields ? corrected(fields) : null);
+  }, [fields, initial.id, onCorrecting]);
+  useEffect(() => () => onCorrecting?.(initial.id, null), [initial.id, onCorrecting]);
   useEffect(
     () => () => {
       // Closing the card (or its panel) clears its ghost.
@@ -89,8 +103,7 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
   const apply = (fix: number | null = null) =>
     run(async () => {
       stopPreview();
-      const corrected = fix == null && fields ? Object.fromEntries(Object.entries(fields).map(([k, v]) => [k, v.trim() || null])) : undefined;
-      const r = await applyCard(card.id, fix, corrected);
+      const r = await applyCard(card.id, fix, fix == null && fields ? corrected(fields) : undefined);
       setFields(null);
       if (r.card.status === "applied" && r.card.item_id) sendApplied(r.card.item_id);
       if (r.result && r.result.change.status === "proposed" && r.result.change.routed_to.length) {
@@ -221,7 +234,7 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
           >
             {correct ? "Reject" : "Discard"}
           </button>
-          {correct && (
+          {correct && shown.length > 0 && (
             <button type="button" className="simple-button" aria-expanded={!!fields} disabled={busy || !card.may} onClick={startCorrect}>
               {fields ? "Keep Oracle's reading" : "Correct"}
             </button>

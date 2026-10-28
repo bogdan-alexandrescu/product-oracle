@@ -49,6 +49,8 @@ CORRECTABLE: dict[str, tuple[str, ...]] = {
     "edit_title": ("title",),
     "set_owner": ("owner",),
     "add_item": ("title", "goal", "milestone", "start_date", "end_date"),
+    # A cut has nothing to correct; it is still a roadmap card (Reject, not Discard).
+    "cut": (),
 }
 SLICES_MAX = 4
 
