@@ -106,7 +106,7 @@ async def test_link_ask_discussion(client):
 
     async def discussion(who: str) -> str:
         r = await client.post("/v1/discussions", headers=w.ctx.as_(who), json={
-            "subject_kind": "screen", "subject": {"path": "/simple", "label": "Home"},
+            "subject_kind": "screen", "subject": {"path": "/simple"},
             "origin": "panel", "visibility": "private"})  # fmt: skip
         assert r.status_code in (200, 201), r.text
         return r.json()["id"]
