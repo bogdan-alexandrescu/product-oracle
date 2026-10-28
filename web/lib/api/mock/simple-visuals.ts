@@ -8,7 +8,9 @@ import { stableUuid } from "./ids";
  * last) and comments. Pressing Revise answers with the next version at once (the API queues
  * the simple_visual job); asking for a drawing stays pending (the job running) until the
  * panel's next read, which draws it, or, for a subject in `failOnce`, ends without one
- * (`failed`, Retry asks again).
+ * (`failed`, Retry asks again). A test may keep the job running for a while
+ * (MOCK_VISUAL_JOB_MS_KEY, ms in localStorage): until then every read still answers
+ * "drawing", as the API does while the simple_visual job runs.
  *
  * Who: everyone reads; commenters and up comment on a drawn visual; owners (who change
  * the subject directly) ask for a drawing and revise.
@@ -28,6 +30,8 @@ interface MockVisual {
   pending?: boolean;
   /** Oracle's newest drawing job ended without a drawing: why (the API's `failure`). */
   failure?: string | null;
+  /** When the drawing job was queued (the browser's clock, ms). */
+  queued_at?: number;
 }
 
 export interface VisualsDb {
@@ -35,6 +39,11 @@ export interface VisualsDb {
   /** Subjects whose next drawing fails (the job ends without one), then draw on Retry. */
   failOnce?: string[];
 }
+
+/** Tests set this localStorage key to how long (ms) a requested drawing's job runs. */
+export const MOCK_VISUAL_JOB_MS_KEY = "po-mock-visual-job-ms";
+
+const jobMs = (): number => (typeof localStorage === "undefined" ? 0 : Number(localStorage.getItem(MOCK_VISUAL_JOB_MS_KEY) ?? 0) || 0);
 
 interface Ctx {
   id: string;
@@ -206,7 +215,7 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
   const v = db.visuals[key];
   const m = req.method;
   if (m === "GET" && p.length === 5) {
-    if (v?.pending) {
+    if (v?.pending && Date.now() - (v.queued_at ?? 0) >= jobMs()) {
       v.pending = false;
       if (db.failOnce?.includes(key)) {
         // The job has ended without a drawing: the panel says so and offers Retry.
@@ -259,12 +268,12 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
       if (!doc) return json(422, { detail: "A one-pager line's visual is asked for with its PRD" });
       // Queued once: a visual with no drawing (its job drew nothing) is drawn again.
       const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "A bet of the one-pager");
-      if (!cur.versions.length) cur.pending = true;
+      if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
       return json(202, out(db.visuals[key], kind, id, ctx, doc));
     }
     // The job is queued: the panel reads "drawing" until its next read lands the drawing.
     const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "The new flow");
-    if (!cur.versions.length) cur.pending = true;
+    if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
     return json(202, out(db.visuals[key], kind, id, ctx));
   }
   return null;
