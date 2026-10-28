@@ -28,7 +28,8 @@ async function openRun(page: Page, name: string) {
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 }
 
-const asViewer = (page: Page) => page.addInitScript(([key]) => localStorage.setItem(key, "viewer"), [MOCK_ROLE_KEY] as const);
+const asRole = (page: Page, role: string) => page.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, role] as const);
+const asViewer = (page: Page) => asRole(page, "viewer");
 
 test("qa-work-1: a viewer gets no Approve (or any action) on a run waiting for cost approval", async ({ page }) => {
   await asViewer(page);
@@ -48,6 +49,21 @@ test("qa-work-17: row buttons say what they do: Open for an approval and an over
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   // The run page's own action for an overrun.
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
+});
+
+test("fix-work review: an approver gets Decide on a checkpoint an approver decides, a commenter does not", async ({ page }) => {
+  await asRole(page, "approver");
+  await openRuns(page);
+  await expect(row(page, "team onboarding").getByRole("button")).toHaveText(["Decide"]);
+  await row(page, "team onboarding").getByRole("button", { name: "Decide" }).click();
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+/);
+});
+
+test("fix-work review: a commenter gets no Decide on the runs list", async ({ page }) => {
+  await asRole(page, "commenter");
+  await openRuns(page);
+  await expect(row(page, "team onboarding")).toHaveCount(1);
+  await expect(row(page, "team onboarding").getByRole("button")).toHaveCount(0);
 });
 
 test("qa-work-9, 10, 23, 25: names not slugs or ids, one waiting count, flows in full on hover, one cost format", async ({ page }) => {

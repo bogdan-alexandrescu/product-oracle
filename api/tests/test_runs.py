@@ -566,6 +566,27 @@ async def test_checkpoint_roles(client, owner, runtime):
     assert run["checkpoints"][0]["status"] == "approved"
 
 
+async def test_a_runs_row_says_who_decides_its_checkpoint(client, owner, runtime):
+    """fix-work review: the Runs row's Decide follows the run page's can_decide, so an
+    approver gets it on an approver's checkpoint, a commenter does not."""
+    tenant_id, auth = owner
+    commenter = await as_user(tenant_id, "commenter")
+    approver = await as_user(tenant_id, "approver")
+    run = await started(client, auth)
+    await tick(client, auth)
+
+    async def row(headers):
+        resp = await client.get("/v1/runs", headers=headers)
+        assert resp.status_code == 200, resp.text
+        return next(r for r in resp.json() if r["id"] == run["id"])
+
+    assert (await row(approver))["can_decide"] is True
+    assert (await row(auth))["can_decide"] is True
+    assert (await row(commenter))["can_decide"] is False
+    await decide(client, approver, await get(client, approver, run["id"]))
+    assert (await row(approver))["can_decide"] is False
+
+
 async def test_flow_named_role_is_enforced(client, owner, runtime):
     _, auth = owner
     run = await started(client, auth)
