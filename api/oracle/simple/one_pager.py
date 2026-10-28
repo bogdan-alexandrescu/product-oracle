@@ -363,19 +363,37 @@ def _own_fact(text: str, sources: list[Section]) -> str | None:
 def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
     """The plan strip's reading of a PRD's roadmap items (uncut), each with the milestone
     record that links it, when any."""
-    return [
-        plan_strip.PlanItem(
-            i.start.date,
-            i.end.date,
-            i.estimated,
-            (i.milestone.name or "Milestone") if i.milestone else None,
-            i.milestone.date if i.milestone else None,
-            str(i.milestone.record_id) if i.milestone and i.milestone.record_id else None,
-            i.milestone.record_name if i.milestone else None,
+    out = []
+    for i in items:
+        if i.status == "cut":
+            continue
+        # plan-model: one input per slice, each in its milestone as the PRD's plan dates it.
+        for sl in getattr(i, "slices", None) or []:
+            out.append(
+                plan_strip.PlanItem(
+                    sl.start_date or i.start.date,
+                    sl.end_date or i.end.date,
+                    not (sl.milestone_start and sl.milestone_end),
+                    f"{sl.milestone} · {sl.milestone_name}",
+                    sl.milestone_end,
+                    milestone_start=sl.milestone_start,
+                )
+            )
+        if getattr(i, "slices", None):
+            continue
+        out.append(
+            plan_strip.PlanItem(
+                i.start.date,
+                i.end.date,
+                i.estimated,
+                (i.milestone.name or "Milestone") if i.milestone else None,
+                i.milestone.date if i.milestone else None,
+                str(i.milestone.record_id) if i.milestone and i.milestone.record_id else None,
+                i.milestone.record_name if i.milestone else None,
+                i.milestone.start_date if i.milestone else None,
+            )
         )
-        for i in items
-        if i.status != "cut"
-    ]
+    return out
 
 
 def _cells(row: str) -> list[str]:

@@ -73,6 +73,7 @@ def test_plan_strip_cases(case):
             date.fromisoformat(i["milestoneDate"]) if i["milestoneDate"] else None,
             (i.get("record") or {}).get("id"),
             (i.get("record") or {}).get("name"),
+            date.fromisoformat(i["milestoneStart"]) if i.get("milestoneStart") else None,
         )
         for i in case["items"]
     ]

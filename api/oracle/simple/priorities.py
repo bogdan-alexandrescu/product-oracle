@@ -76,6 +76,35 @@ def quarter(today: date) -> SimpleQuarter:
                          label=f"Q{q + 1} {today.year}")  # fmt: skip
 
 
+async def plan_quarter(
+    db: AsyncSession, read_: service.Read
+) -> tuple[SimpleQuarter, set[uuid.UUID] | None]:
+    """plan-model: "this quarter" is the plan's span (the plan running today, else the next
+    to start) of the PRDs on the roadmap; the calendar quarter only with no dated plan.
+    With the plan's span, also the items it places in that span (a slice overlapping it);
+    None: the calendar quarter, whose items are the Now horizon's."""
+    from oracle.simple import plan
+
+    views = await plan.views(db, {e.prd.id for e in read_.entries if e.prd})
+    span = plan.current_span(list(views.values()), read_.today)
+    if span is None:
+        return quarter(read_.today), None
+    inside = {
+        e.row.id
+        for e in read_.entries
+        if e.prd is not None
+        and e.prd.id in views
+        and any(
+            x.start_date is not None
+            and x.end_date is not None
+            and x.start_date <= span.end
+            and x.end_date >= span.start
+            for x in views[e.prd.id].slices_of(service._prd_code(e.row.prd_section_key))
+        )
+    }
+    return SimpleQuarter(start=span.start, end=span.end, label=span.label), inside
+
+
 def _items(read_: service.Read) -> dict[str, service.Entry]:
     """Feature id -> its item: the earliest horizon, then the lowest key (cut and draft items
     never: a draft is not ranked yet)."""
@@ -298,7 +327,11 @@ async def _short_codes(db: AsyncSession) -> dict[str, str]:
     return dict(zip(keys, short_codes(keys, prd), strict=True))
 
 
-def _buckets(rows: list[SimplePriorityRow]) -> tuple[list[SimpleGoalBucket], float]:
+def _buckets(
+    rows: list[SimplePriorityRow], inside: set[uuid.UUID] | None = None
+) -> tuple[list[SimpleGoalBucket], float]:
+    """Engineer-weeks per goal this quarter: the plan's items in its span (``inside``), else
+    the Now horizon's."""
     goals: dict[str, SimpleGoalBucket] = {}
     none: SimpleGoalBucket | None = None
     for r in rows:
@@ -313,7 +346,7 @@ def _buckets(rows: list[SimplePriorityRow]) -> tuple[list[SimpleGoalBucket], flo
                     key=r.goal.key, title=r.goal.title, weeks=0, share=0, codes=[]
                 )
             b = goals[r.goal.key]
-        if r.horizon == "now":
+        if (r.item_id in inside) if inside is not None else r.horizon == "now":
             b.weeks += r.effort or 0
             b.codes.append(r.code)
     out = [goals[k] for k in sorted(goals)] + ([none] if none is not None else [])
@@ -436,10 +469,11 @@ async def build(
     for f, r in zip(ranking.features, rows, strict=True):
         r.short_code = short.get(f.key, f.key)
     _after(rows, deps)
-    buckets, total = _buckets(rows)
+    this_quarter, inside = await plan_quarter(db, read_)
+    buckets, total = _buckets(rows, inside)
     return SimplePrioritiesOut(
         today=read_.today,
-        quarter=quarter(read_.today),
+        quarter=this_quarter,
         method=METHOD,
         formula=ranking.formula,
         rows=rows,

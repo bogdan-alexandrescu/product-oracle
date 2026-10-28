@@ -173,14 +173,19 @@ def quarter(n: int, today: date, year: int | None = None) -> tuple[date, date]:
     return _months(year, 3 * (n - 1) + 1, 3)
 
 
-def parse_period(text: str, today: date) -> tuple[date, date] | None:
-    """A period in words, from ``today`` (the company's day): "this quarter", "next
+def parse_period(
+    text: str, today: date, plan_span: tuple[date, date] | None = None
+) -> tuple[date, date] | None:
+    """A period in words, from ``today`` (the company's day): "this quarter" (the plan's
+    span when there is one, plan-model), "next
     quarter", "the quarter after [next]", "next month", "<month> [year]" (the next one on
     or after this month), "Qn [year]" and "Hn [year]" (the next on or after today's)."""
     t = " ".join(text.lower().split()).removeprefix("the ")
     q = (today.month - 1) // 3  # this quarter, from 0
     steps = {"this quarter": 0, "current quarter": 0, "next quarter": 1,
              "quarter after": 2, "quarter after next": 2}  # fmt: skip
+    if t in steps and steps[t] == 0 and plan_span is not None:
+        return plan_span
     if t in steps:
         return _months(today.year, 3 * (q + steps[t]) + 1, 3)
     if t == "this month":
@@ -246,6 +251,8 @@ class Ctx:
         # suggest_feature: the confirmed goals and the baseline features (look-alikes).
         self.goals: list[Any] = []
         self.features: list[Any] = []
+        # plan-model: "this quarter" is the span of the plan running today (else the next).
+        self.plan_span: tuple[date, date] | None = None
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -253,6 +260,11 @@ class Ctx:
         self.page_document = await chat_actions.page_document(self.db, self.page)
         self.overlays = await drafts.overlays_for(self.db, self.principal)
         self.read = await service.load(self.db, self.overlays)
+        from oracle.simple import plan
+
+        views = await plan.views(self.db, {e.prd.id for e in self.read.entries if e.prd})
+        span = plan.current_span(list(views.values()), self.read.today)
+        self.plan_span = (span.start, span.end) if span is not None else None
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
         self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
         self.goals, self.features = await chat_actions.suggest_context(self.db)
@@ -432,7 +444,7 @@ def _b_horizon(c: Ctx, a: dict[str, Any]) -> Built:
 
 def _b_move(c: Ctx, a: dict[str, Any]) -> Built:
     when, shift = _arg(a, "when"), _arg(a, "shift")
-    period = parse_period(when, c.today) if when else None
+    period = parse_period(when, c.today, c.plan_span) if when else None
     day = None
     if when and period is None:
         day = parse_day(when, c.today) if re.fullmatch(DAY, when, re.I) else None
@@ -725,7 +737,7 @@ def _phrase(c: Ctx, t: str) -> tuple[str, dict[str, Any]] | None:
         # The item's name may hold " to ": try each split, the shortest time first.
         for at in reversed([x.start() for x in re.finditer(r" to ", t, re.I)]):
             what, when = t[5:at], re.sub(r"\.$", "", t[at + 4 :])
-            if parse_period(when, c.today) or (
+            if parse_period(when, c.today, c.plan_span) or (
                 re.fullmatch(DAY, when, re.I) and parse_day(when, c.today)
             ):
                 return "move_dates", {"item": what, "when": when}

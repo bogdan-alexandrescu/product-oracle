@@ -154,10 +154,12 @@ import {
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { PLAN_PRD_SLUG, planFeatureName, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
+import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { itemSubjectName, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
+import { itemSubjectName, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -934,6 +936,55 @@ function seedSimpleWalkScenario(): Db {
   db.simple_one_pager = seedWalkOnePager();
   const skeleton = db.documents.find((d) => d.kind === "prd" && d.slug === "checkout-redesign");
   if (skeleton) db.simple_one_pagers = { [skeleton.id]: seedSkeletonOnePager({ id: skeleton.id, slug: skeleton.slug, title: skeleton.title }) };
+  return db;
+}
+
+/**
+ * The plan-model lane, the "simple-plan" scenario: "simple-home-one-prd" whose PRD in play
+ * (Guided setup) has a dated plan (./simple-plan.ts): three milestones (M1 Prove it, M2 Scale
+ * volume, M3 Open to all), twenty features F-01..F-20 on the onboarding roadmap (the setup
+ * checklist and the sample data import are F-01 and F-02), each with its slices, the plan's
+ * span on Home and the priorities, its one-pager's Timeline drawn from the same slices.
+ * Team invites (F-05, in M1 and M2) is left undated, so its slices' date suggestions wait in
+ * the roadmap tray's "Dates to confirm". Invented data.
+ */
+function seedSimplePlanScenario(): Db {
+  const db = seedSimpleHomeOnePrdScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = seedPlan();
+  const w = simpleWindows(new Date(mockNowMs()).toISOString().slice(0, 10));
+  const days = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+  const byFeature = new Map<string, ReturnType<typeof planSlices>>();
+  for (const x of planSlices()) byFeature.set(x.feature_code, [...(byFeature.get(x.feature_code) ?? []), x]);
+  const existing: Record<string, string> = { "F-01": "setup-checklist", "F-02": "setup-import" };
+  for (const [code, of] of byFeature) {
+    const section = code.toLowerCase();
+    const key = existing[code];
+    if (key) {
+      const s = rm.items.find((x) => x.key === key);
+      if (s) s.section = section;
+      continue;
+    }
+    const start = of.map((x) => x.start_date!).sort()[0];
+    const end = of.map((x) => x.end_date!).sort().at(-1)!;
+    const horizon = start <= w.now[1] ? "now" : "next";
+    const from = w[horizon][0];
+    const k = `plan-${section}`;
+    const name = planFeatureName(code) ?? of[0].name;
+    // Team invites (F-05, a slice in M1 and one in M2) has no dates of its own: Oracle's date
+    // suggestion for it, in the tray's "Dates to confirm", spans its two slices.
+    const dated = code === "F-05" ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
+    rm.items.push({ key: k, title: name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", ...dated, section, heading: `${code} ${name}` });
+    rm.ids[k] = stableUuid(`simple-item/${k}`);
+  }
+  db.simple_one_pager = seedOnePager();
+  db.simple_one_pager.slice = planSlice();
+  // The PRD itself, so Simple's One-pagers lists it (its one-pager is the seeded one).
+  const at = "2026-10-20T15:05:00Z";
+  db.documents.push({
+    id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "draft", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
+  });
   return db;
 }
 
@@ -2668,6 +2719,8 @@ function load(): Db {
                 ? seedSimpleHomeOnePrdScenario
               : scenario === "simple-walk"
                 ? seedSimpleWalkScenario
+              : scenario === "simple-plan"
+                ? seedSimplePlanScenario
               : scenario === "simple-chat"
                 ? () => {
                     const db = seedSimpleHomeScenario();
@@ -5188,6 +5241,19 @@ async function route(db: Db, req: Request): Promise<Response> {
       p,
     );
     if (onePagerRes) return onePagerRes;
+    // The plan-model lane: a PRD's plan (GET .../plan, owners' POST .../plan/read-again).
+    const planRes = routeSimplePlan(
+      db.simple_roadmap!.plan,
+      me.role,
+      (ref) => {
+        if (ref === PLAN_PRD_SLUG || ref === db.simple_one_pager!.doc.id || ref === stableUuid("simple-prd/onboarding-roadmap")) return { ...db.simple_one_pager!.doc };
+        const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
+        return d ? { id: d.id, slug: d.slug, title: d.title } : null;
+      },
+      r,
+      p,
+    );
+    if (planRes) return planRes;
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, r, p, q);

@@ -19,6 +19,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { planByMonth } from "@/lib/simple-home";
+import { planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
@@ -135,7 +136,22 @@ type SliceItem = {
   milestone: [string, string] | null;
   /** The track milestone record naming the item, when any (the strip's row). */
   record?: { id: string; name: string };
+  /** The day its milestone starts when the PRD's plan dates it (the strip's row spans it). */
+  milestoneStart?: string;
 };
+
+/** The plan-model lane ("simple-plan"): the slice as the PRD's dated plan has it, one item per slice. */
+export function planSlice(): SliceItem[] {
+  return planSlices().map((x) => ({
+    title: x.name,
+    horizon: "now" as const,
+    start: x.start_date!,
+    end: x.end_date!,
+    estimated: !(x.milestone_start && x.milestone_end),
+    milestone: [`${x.milestone} · ${x.milestone_name}`, x.milestone_end!] as [string, string],
+    milestoneStart: x.milestone_start!,
+  }));
+}
 const BETA_LAUNCH = { id: stableUuid("op-milestone/beta-launch"), name: "Beta launch" };
 const SLICE: SliceItem[] = [
   ...Array.from({ length: 12 }, (_, i) => ({ title: `Setup step ${i + 1}`, horizon: "now" as const, start: "2026-10-05", end: "2026-11-20", estimated: false, milestone: ["M1", "2026-11-20"] as [string, string] })),
@@ -364,7 +380,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     })),
     timeline: (db.slice ?? SLICE).map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
-      (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, record: x.record ?? null })),
+      (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
       new Date(mockNowMs()).toISOString().slice(0, 10),
     ),
     sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),

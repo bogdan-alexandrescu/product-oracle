@@ -42092,6 +42092,110 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/prds/{prd}/plan": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Prd Plan",
+        "description": "The PRD's plan as its latest approved version has it.",
+        "operationId": "get_simple_prd_plan",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimplePlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/prds/{prd}/plan/read-again": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Read Simple Prd Plan Again",
+        "description": "Read the plan again from the approved version (its tables, else Oracle's job).",
+        "operationId": "read_simple_prd_plan_again",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimplePlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
     "/v1/simple/sessions": {
       "post": {
         "tags": [
@@ -63753,6 +63857,17 @@
               }
             ],
             "title": "Decided At"
+          },
+          "slice_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slice Code"
           },
           "can_decide": {
             "type": "boolean",
@@ -114024,6 +114139,30 @@
         ],
         "title": "SimpleGoalSuggestionsOut"
       },
+      "SimpleGoalWeeks": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "weeks": {
+            "type": "number",
+            "title": "Weeks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal",
+          "milestone",
+          "weeks"
+        ],
+        "title": "SimpleGoalWeeks",
+        "description": "Engineer-weeks per goal per milestone: each slice once, under its feature's first\ngoal."
+      },
       "SimpleGroup": {
         "properties": {
           "key": {
@@ -114050,6 +114189,37 @@
           "item_ids"
         ],
         "title": "SimpleGroup"
+      },
+      "SimpleHoliday": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "SimpleHoliday"
       },
       "SimpleItemFlags": {
         "properties": {
@@ -114128,6 +114298,18 @@
               }
             ],
             "title": "Record Name"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
           }
         },
         "type": "object",
@@ -115120,6 +115302,57 @@
             },
             "type": "array",
             "title": "Item Ids"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "effort_weeks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort Weeks"
+          },
+          "done_when": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Done When",
+            "default": []
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMilestoneTarget"
+            },
+            "type": "array",
+            "title": "Targets",
+            "default": []
           }
         },
         "type": "object",
@@ -115132,6 +115365,25 @@
           "item_ids"
         ],
         "title": "SimpleMilestone"
+      },
+      "SimpleMilestoneTarget": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal",
+          "target"
+        ],
+        "title": "SimpleMilestoneTarget",
+        "description": "plan-model: one goal's target at a milestone, in words with its unit."
       },
       "SimpleMinutes": {
         "properties": {
@@ -115329,6 +115581,268 @@
         ],
         "title": "SimplePhase"
       },
+      "SimplePlanGoal": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanGoalTarget"
+            },
+            "type": "array",
+            "title": "Targets",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "SimplePlanGoal"
+      },
+      "SimplePlanGoalTarget": {
+        "properties": {
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milestone",
+          "target"
+        ],
+        "title": "SimplePlanGoalTarget"
+      },
+      "SimplePlanMilestone": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "effort_weeks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort Weeks"
+          },
+          "planned_weeks": {
+            "type": "number",
+            "title": "Planned Weeks",
+            "default": 0
+          },
+          "done_when": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Done When",
+            "default": []
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMilestoneTarget"
+            },
+            "type": "array",
+            "title": "Targets",
+            "default": []
+          },
+          "feature_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Feature Codes",
+            "default": []
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "oracle"
+            ],
+            "title": "Source",
+            "default": "prd"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "SimplePlanMilestone"
+      },
+      "SimplePlanOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "reading",
+              "failed",
+              "none"
+            ],
+            "title": "Status"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "oracle"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "dated": {
+            "type": "boolean",
+            "title": "Dated",
+            "default": false
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanMilestone"
+            },
+            "type": "array",
+            "title": "Milestones",
+            "default": []
+          },
+          "slices": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleSlice"
+            },
+            "type": "array",
+            "title": "Slices",
+            "default": []
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
+          },
+          "goal_weeks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleGoalWeeks"
+            },
+            "type": "array",
+            "title": "Goal Weeks",
+            "default": []
+          },
+          "span": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePlanSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holidays": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleHoliday"
+            },
+            "type": "array",
+            "title": "Holidays",
+            "default": []
+          },
+          "can_read_again": {
+            "type": "boolean",
+            "title": "Can Read Again",
+            "default": false
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "status"
+        ],
+        "title": "SimplePlanOut"
+      },
       "SimplePlanRow": {
         "properties": {
           "name": {
@@ -115386,6 +115900,32 @@
         ],
         "title": "SimplePlanRow",
         "description": "One row of the plan strip: a milestone (its name, date and how many of the PRD's\nitems carry it), or the items with no milestone summed in one row."
+      },
+      "SimplePlanSpan": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "label"
+        ],
+        "title": "SimplePlanSpan",
+        "description": "plan-model: first milestone start to last milestone end, \"2 Nov - 12 Feb\"."
       },
       "SimplePlanStrip": {
         "properties": {
@@ -116294,6 +116834,22 @@
             "type": "array",
             "title": "Decided In",
             "default": []
+          },
+          "slices": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleSlice"
+            },
+            "type": "array",
+            "title": "Slices",
+            "default": []
+          },
+          "milestones": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Milestones",
+            "default": []
           }
         },
         "type": "object",
@@ -116396,6 +116952,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "span": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePlanSpan"
               },
               {
                 "type": "null"
@@ -116529,6 +117095,120 @@
           "connected"
         ],
         "title": "SimpleSlackState"
+      },
+      "SimpleSlice": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "feature_code": {
+            "type": "string",
+            "title": "Feature Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "milestone_name": {
+            "type": "string",
+            "title": "Milestone Name"
+          },
+          "milestone_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Start"
+          },
+          "milestone_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone End"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated",
+            "default": true
+          },
+          "effort_weeks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort Weeks"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "pm_owned": {
+            "type": "boolean",
+            "title": "Pm Owned",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "feature_code",
+          "name",
+          "milestone",
+          "milestone_name"
+        ],
+        "title": "SimpleSlice",
+        "description": "plan-model: the part of a roadmap item's feature one milestone builds (F-05a / F-05b;\nan item in one milestone has one slice, F-05). Its dates are Oracle's placement inside\nthe milestone by the PRD's order words (``estimated``)."
       },
       "SimpleStartOptions": {
         "properties": {

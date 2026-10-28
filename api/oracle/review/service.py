@@ -1181,6 +1181,11 @@ async def approve_version(
         from oracle.roadmap import tracks
 
         await tracks.ensure_track(session, document, version, actor=principal, cause="approved")
+        # plan-model: the approved version's plan is read now (its tables, else Oracle's
+        # prd_plan job), not on the first read of it.
+        from oracle.simple import plan as simple_plan
+
+        await simple_plan.on_version_approved(session, document)
     elif document.kind == "roadmap":
         # H6: approving a roadmap version plans a launch per item in Now, owned by the
         # approver (none for items that already have one).
