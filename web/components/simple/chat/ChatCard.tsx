@@ -9,6 +9,8 @@ import { errorMessage } from "@/lib/use-query";
 
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 
+const proposedWords = (to: string) => `Proposed to ${to}; they decide`;
+
 /** A chat action's Preview in words: what Apply changes (it has no roadmap ghost). */
 export function actionWords(p: ActionPreview): string[] {
   switch (p.kind) {
@@ -16,6 +18,8 @@ export function actionWords(p: ActionPreview): string[] {
     case "decider":
       return [`${p.kind === "owner" ? "Owner" : "Decider"}: ${p.before_name ?? "none"} → ${p.person_name}`];
     case "decision":
+      // On Ask a commenter's decision is a proposal: its decider confirms it.
+      if (p.proposed_to) return [`Decision: ${p.text}`, proposedWords(p.proposed_to), "On the Decisions page, open until they decide"];
       return [`Decision: ${p.text} — decided by ${p.decider_name}`, p.where === "meeting" ? "In this meeting's decisions" : "On the Decisions page"];
     case "note":
       return [`Adds to the minutes' notes: ${p.text}`];
@@ -99,6 +103,11 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
         {card.summary}
       </p>
       {card.item_title && <p className="simple-small text-text2">Item: {card.item_title}</p>}
+      {open && action?.kind === "decision" && action.proposed_to && (
+        <p className="simple-small text-text2" data-testid="chat-card-proposed-to">
+          Goes to {action.proposed_to}; they decide
+        </p>
+      )}
       {red.length > 0 && (
         <ul className="flex flex-col gap-1" data-testid="chat-card-flags">
           {red.map((f, n) => (
@@ -189,7 +198,10 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
         <div className="flex flex-wrap items-center gap-2" data-testid="chat-card-outcome">
           <span className="simple-small">
             {card.status === "applied" && `Applied by ${card.decided_by_name ?? "someone"}`}
-            {card.status === "proposed" && `Proposed to ${routedTo?.length ? routedTo.join(", ") : "the decider"} by ${card.decided_by_name ?? "someone"}`}
+            {card.status === "proposed" &&
+              (action?.kind === "decision" && action.proposed_to
+                ? proposedWords(action.proposed_to)
+                : `Proposed to ${routedTo?.length ? routedTo.join(", ") : "the decider"} by ${card.decided_by_name ?? "someone"}`)}
             {card.status === "discarded" && "Discarded: nothing changed"}
             {card.status === "undone" && "Undone"}
           </span>

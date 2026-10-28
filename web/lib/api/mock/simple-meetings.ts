@@ -609,6 +609,25 @@ export function chatMeetings(open: () => { db: MeetingsDb; ctx: MeetingsCtx }): 
       const slug = /^\/simple\/prds\/([^/?#]+)/.exec(page)?.[1];
       return slug ? (prds(open().ctx).find((x) => x.slug === slug)?.id ?? null) : null;
     },
+    proposeTo(documentId) {
+      // As chat_actions.ask_decider: the document's decider, else the company's owners; the first who may decide.
+      const { ctx } = open();
+      const prd = documentId ? prds(ctx).find((x) => x.ids.includes(documentId)) : undefined;
+      const ids = [prd?.decider ?? null, ...owners(ctx)];
+      const may = (id: string | null) => ctx.members.find((m) => m.id === id && RANK[m.role] >= RANK.approver);
+      const to = ids.map(may).find((x) => !!x);
+      return to ? { id: to.id, name: to.name } : null;
+    },
+    propose(title, deciderId, documentId) {
+      const { db } = open();
+      const number = Math.max(0, ...db.decisions.map((d) => d.number)) + 1;
+      const d: Decision = {
+        id: crypto.randomUUID(), number, title, origin: "chat", status: "proposed", approver_id: deciderId, at: iso(Math.max(mockNowMs(), ...db.decisions.map((x) => Date.parse(x.at) + 1))),
+        subjects: documentId ? [{ kind: "document", id: documentId }] : [], meeting_id: null, change_ids: [],
+      };
+      db.decisions.push(d);
+      return d.id;
+    },
   };
 }
 

@@ -19,7 +19,7 @@ export type ChatPreview =
  */
 export type ActionPreview =
   | { kind: "owner" | "decider"; item_id: string; person_id: string; person_name: string; before_name: string | null }
-  | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page" }
+  | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page"; proposed_to?: string | null }
   | { kind: "note" | "question"; text: string }
   | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string };
 

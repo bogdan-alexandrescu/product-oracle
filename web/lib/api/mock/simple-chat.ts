@@ -33,7 +33,7 @@ type Preview =
   | { kind: "milestone"; item_id: string; name: string; date: string }
   | { kind: "cut"; item_id: string }
   | { kind: "owner" | "decider"; item_id: string; person_id: string; person_name: string; before_name: string | null }
-  | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page" }
+  | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page"; proposed_to?: string }
   | { kind: "note" | "question"; text: string }
   | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string }
   | null;
@@ -133,6 +133,10 @@ export interface ChatMeetings {
   undecide(decisionId: string): void;
   /** The document a page shows (Ask on /simple/prds/{slug}), or null. */
   documentOf(page: string): string | null;
+  /** Who confirms a commenter's decision on Ask: the document's decider, else an owner (an approver or above). */
+  proposeTo(documentId: string | null): { id: string; name: string } | null;
+  /** A commenter's decision on Ask, open on the Decisions page for `deciderId`. */
+  propose(title: string, deciderId: string, documentId: string | null): string;
 }
 
 export interface ChatDb {
@@ -141,7 +145,19 @@ export interface ChatDb {
   meetings: Record<string, Meeting>;
 }
 
-export type ChatCtx = SimpleChangesCtx & { roles: Record<string, Role> };
+export type ChatCtx = SimpleChangesCtx & {
+  roles: Record<string, Role>;
+  /** A commenter's decision on Ask as an open decision of the decision log (POST /v1/decisions as them); its id. */
+  proposeDecision?: (b: Schemas["DecisionCreate"]) => Promise<string | null>;
+  /** Who confirms it (ChatMeetings.proposeTo). */
+  proposeTo?: (documentId: string | null) => { id: string; name: string } | null;
+};
+
+/** On Ask a commenter's decision is a proposal (the owner's pick, 2026-10-27): who it goes to, else null. */
+function askProposal(ctx: ChatCtx, meeting: Meeting | null, documentId: string | null): string | null {
+  if (meeting || ctx.role !== "commenter") return null;
+  return ctx.proposeTo?.(documentId)?.name ?? "an owner";
+}
 
 /** The invented meeting's id (stable: specs open /simple/meetings/{id}). */
 export const CHAT_MEETING_ID = stableUuid("simple-meeting/weekly-plan-review");
@@ -464,10 +480,13 @@ function agendaDraft(meeting: Meeting, i: Item, move: "next" | "skip"): Draft {
   return actionDraft(move === "next" ? `Take ${i.title} next` : `Skip ${i.title}`, `agenda_${move}`, i, { meeting_id: meeting.id, item_id: i.id }, {}, { move }, { kind: "agenda", item_id: i.id, move, item_title: i.title });
 }
 
-function decisionDraft(meeting: Meeting | null, documentId: string | null, who: Person, text: string): Draft {
+function decisionDraft(meeting: Meeting | null, documentId: string | null, who: Person, text: string, proposedTo: string | null = null): Draft {
   const t = words(text);
   const target: Values = meeting ? { meeting_id: meeting.id } : documentId ? { document_id: documentId } : {};
-  return actionDraft(`Record the decision: ${t}`, "record_decision", null, target, {}, { text: t, decider_id: who.id }, { kind: "decision", text: t, decider_name: who.name, where: meeting ? "meeting" : "page" });
+  const preview = proposedTo
+    ? { kind: "decision" as const, text: t, decider_name: proposedTo, where: "page" as const, proposed_to: proposedTo }
+    : { kind: "decision" as const, text: t, decider_name: who.name, where: meeting ? ("meeting" as const) : ("page" as const) };
+  return actionDraft(`Record the decision: ${t}`, "record_decision", null, target, {}, { text: t, decider_id: who.id }, preview);
 }
 /** Chat actions' cards: "I understood one change:" (the contract's reply line). */
 const ONE_CHANGE = "I understood one change:";
@@ -517,7 +536,7 @@ function chatActionReply(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting
     return change(() => {
       const who = by ? person(by) : { id: ctx.id, name: ctx.names[ctx.id] ?? "someone" };
       if (!isPerson(who)) return who;
-      return one(decisionDraft(meeting, documentId, who, what));
+      return one(decisionDraft(meeting, documentId, who, what, askProposal(ctx, meeting, documentId)));
     });
   }
   if (!asks && (m = /^(.+?) (owns|decides) (.+)$/i.exec(t)) && !/^who$/i.test(m[1])) {
@@ -596,7 +615,7 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
   set_decider: (a) => who(a, "decider"),
   record_decision: ({ ctx, meeting, documentId, rest }) => {
     if (!rest) return { refusal: "What was decided?" };
-    return { card: decisionDraft(meeting, documentId, { id: ctx.id, name: ctx.names[ctx.id] ?? "someone" }, rest) };
+    return { card: decisionDraft(meeting, documentId, { id: ctx.id, name: ctx.names[ctx.id] ?? "someone" }, rest, askProposal(ctx, meeting, documentId)) };
   },
   minutes_note: ({ meeting, rest }) => (!meeting ? { refusal: MEETING_ONLY } : !rest ? { refusal: "What should the minutes say?" } : { card: noteDraft(meeting, "note", rest) }),
   open_question: ({ meeting, rest }) => (!meeting ? { refusal: MEETING_ONLY } : !rest ? { refusal: "What should the minutes say?" } : { card: noteDraft(meeting, "question", rest) }),
@@ -811,9 +830,8 @@ function mayOf(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx): { may: 
   const m = meetingOf(chat, c);
   const bar = m ? meetingBar(m, ctx) : ctx.role === "viewer" ? "Viewers read the plan; they don't change it" : null;
   if (bar) return { may: null, why_not: bar };
-  // As the API (chat_actions.bar): on Ask, approvers and owners record decisions.
-  if (!m && c.op === "record_decision" && ctx.role !== "approver" && ctx.role !== "owner")
-    return { may: null, why_not: "Approvers and owners record decisions; ask one of them" };
+  // As the API (chat_actions.proposes): on Ask, approvers and owners record decisions; a commenter proposes one.
+  if (!m && c.op === "record_decision" && ctx.role === "commenter") return { may: "propose", why_not: null };
   const item = c.item_id ? itemsFor(db, ctx).find((i) => i.id === c.item_id) : undefined;
   // Filing a feature ask is every commenter's right (Requests), as are a meeting's notes, agenda
   // and decisions (the meeting's rules came first) and a decision on Ask; else the item's rule.
@@ -912,7 +930,13 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
 async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
   const use = n == null ? c : c.fixes[n];
   if (LOCAL_OPS.has(c.op)) {
-    const result = applyLocal(c, meetingOf(chat, c), ctx, s8);
+    const meeting = meetingOf(chat, c);
+    if (!meeting && c.op === "record_decision" && ctx.role === "commenter") {
+      const proposed = await proposeLocal(c, ctx);
+      if (proposed instanceof Response) return proposed;
+      return { card: cardOut(db, chat, c, ctx), result: proposed };
+    }
+    const result = applyLocal(c, meeting, ctx, s8);
     return { card: cardOut(db, chat, c, ctx), result };
   }
   // The new owner or decider's name, for the roadmap's owner line.
@@ -1034,6 +1058,28 @@ function applyLocal(c: StoredCard, meeting: Meeting | null, ctx: ChatCtx, s8?: C
   const change = {
     id: c.change_id, session_id: null, document_id: null, draft_ids: [], op: c.op, target: c.target, before: c.before, after: c.after, status: "applied", by: ctx.id, by_name: by, at,
     decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: true,
+  };
+  return { change, flags: [] } as unknown as Schemas["SimpleChangeResult"];
+}
+
+/** A commenter's decision on Ask: an open decision (the decision log's POST, as them) for the document's decider. */
+async function proposeLocal(c: StoredCard, ctx: ChatCtx): Promise<Response | Schemas["SimpleChangeResult"]> {
+  const documentId = (c.target.document_id as string | undefined) ?? null;
+  const to = ctx.proposeTo?.(documentId);
+  if (!to || !ctx.proposeDecision) return json(409, { detail: "No one can decide this yet: ask an owner" });
+  const text = String(c.after.text ?? "").slice(0, 200);
+  const id = await ctx.proposeDecision({
+    title: text, context: "Proposed from the Ask panel", approver_id: to.id,
+    options: [{ key: "decided", label: text }, { key: "declined", label: "Decline" }] as Schemas["DecisionCreate"]["options"],
+    subjects: documentId ? [{ kind: "document", id: documentId }] : [],
+  } as Schemas["DecisionCreate"]);
+  if (!id) return json(409, { detail: "No one can decide this yet: ask an owner" });
+  const by = ctx.names[ctx.id] ?? "someone";
+  const at = now();
+  Object.assign(c, { status: "proposed", change_id: null, decided_by_name: by, decided_at: at, decision_id: id, preview: { ...(c.preview ?? {}), proposed_to: to.name } });
+  const change = {
+    id: crypto.randomUUID(), session_id: null, document_id: null, draft_ids: [], op: c.op, target: c.target, before: c.before, after: c.after, status: "proposed", by: ctx.id, by_name: by, at,
+    decided_by: null, decided_at: null, reason: null, decision_reason: null, routed_to: [], undoes_id: null, undone: false, can_decide: false, can_undo: false,
   };
   return { change, flags: [] } as unknown as Schemas["SimpleChangeResult"];
 }

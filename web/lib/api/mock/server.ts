@@ -5175,7 +5175,18 @@ async function route(db: Db, req: Request): Promise<Response> {
       });
       return { db: ensureMeetings(db, ctx), ctx };
     });
-    const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, req, p, reviews);
+    // A commenter's decision on Ask: an open decision of the decision log (Home's "Decisions waiting for you"), shown on Decisions too.
+    const proposeDecision = async (b: Schemas["DecisionCreate"]) => {
+      const dctx = decisionsContext(db, me);
+      const post = new Request("http://mock/v1/decisions", { method: "POST", body: JSON.stringify(b) });
+      const res = (await routeDecisions(dctx, ensureDecisions(db, dctx), post, ["v1", "decisions"], new URLSearchParams()))!;
+      if (!res.ok) return null;
+      const doc = b.subjects?.find((x) => x.kind === "document")?.id ?? null;
+      reviews.propose(b.title, b.approver_id, doc);
+      return ((await res.json()) as Schemas["DecisionOut"]).id;
+    };
+    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d) };
+    const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, chatCtx, req, p, reviews);
     if (chatRes) return chatRes;
   }
   // The Plan (F1): one read of the PRDs in play and the roadmap rows.
