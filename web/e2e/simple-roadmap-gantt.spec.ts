@@ -195,8 +195,17 @@ for (const phone of [false, true]) {
           const a = await boxOf(slice(page, "F-05a"));
           expect(a.x).toBeGreaterThanOrEqual(sv.x - 1);
           expect(a.x).toBeLessThan(sv.x + sv.width);
+          const name = page.getByTestId("chart-labels").getByText("Team invites");
+          await name.scrollIntoViewIfNeeded();
+          const before = (await name.boundingBox())!;
+          const left0 = await scroller.evaluate((el) => el.scrollLeft);
           await scroller.evaluate((el) => el.scrollBy({ left: 400 }));
-          await expect(page.getByTestId("chart-labels").getByText("Team invites")).toBeInViewport();
+          await expect.poll(async () => scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(left0);
+          // The weeks moved; the name stayed where it was, on the left.
+          const after = (await name.boundingBox())!;
+          expect(Math.abs(after.x - before.x)).toBeLessThan(1);
+          expect(after.x).toBeLessThan(sv.x);
+          await expect(name).toBeInViewport();
           const w = await page.evaluate(() => document.documentElement.scrollWidth);
           expect(w).toBeLessThanOrEqual(391);
         });
