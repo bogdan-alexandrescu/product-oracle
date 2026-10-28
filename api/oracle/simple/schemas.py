@@ -891,6 +891,9 @@ class SimplePrioritiesOut(BaseModel):
     # Roadmap-plus: the line drawn, and the lines offered (Pick a date aside).
     line: SimpleLine | None = None
     lines: list[SimpleLine] = []
+    # plan-charts: the plan "this quarter" is (Goal buckets by milestone); none with no
+    # dated plan.
+    plan: SimplePlanOut | None = None
 
 
 SimpleRoadmapItem.model_rebuild()

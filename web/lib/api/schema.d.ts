@@ -38516,6 +38516,7 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["SimpleLine"][];
+            plan?: components["schemas"]["SimplePlanOut"] | null;
         };
         /**
          * SimplePriorityAfter

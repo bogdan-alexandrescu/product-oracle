@@ -521,16 +521,26 @@ def compute(data: dict[str, Any] | None) -> View:
 def current_span(views: list[View], today: date) -> SimplePlanSpan | None:
     """The span "this quarter" means: the plan running today, else the next to start, else
     the latest to end."""
-    spans = [v.span for v in views if v.span is not None]
-    if not spans:
+    picked = current(dict(enumerate(views)), today)
+    return picked[1].span if picked else None
+
+
+def current[K](views: dict[K, View], today: date) -> tuple[K, View] | None:
+    """plan-charts: the plan "this quarter" is (its key and view): the plan running today,
+    else the next to start, else the latest to end."""
+    dated = [(k, v, v.span) for k, v in views.items() if v.span is not None]
+    if not dated:
         return None
-    running = [s for s in spans if s.start <= today <= s.end]
+    running = [x for x in dated if x[2].start <= today <= x[2].end]
     if running:
-        return min(running, key=lambda s: (s.start, s.end))
-    ahead = [s for s in spans if s.start > today]
+        k, v, _ = min(running, key=lambda x: (x[2].start, x[2].end))
+        return k, v
+    ahead = [x for x in dated if x[2].start > today]
     if ahead:
-        return min(ahead, key=lambda s: (s.start, s.end))
-    return max(spans, key=lambda s: (s.end, s.start))
+        k, v, _ = min(ahead, key=lambda x: (x[2].start, x[2].end))
+        return k, v
+    k, v, _ = max(dated, key=lambda x: (x[2].end, x[2].start))
+    return k, v
 
 
 # --------------------------------------------------------------------------- storage

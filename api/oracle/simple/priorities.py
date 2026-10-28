@@ -44,8 +44,10 @@ from oracle.simple import changes, drafts, key_dates, service, targets
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader
 from oracle.simple.schemas import (
+    SimpleDocRef,
     SimpleGoalBucket,
     SimpleLine,
+    SimplePlanOut,
     SimplePrioritiesOut,
     SimplePriorityAfter,
     SimplePriorityDraft,
@@ -79,13 +81,30 @@ def quarter(today: date) -> SimpleQuarter:
 async def plan_quarter(db: AsyncSession, read_: service.Read) -> SimpleQuarter:
     """plan-model: "this quarter" is the plan's span (the plan running today, else the next
     to start) of the PRDs on the roadmap; the calendar quarter only with no dated plan."""
+    return (await plan_in_play(db, read_))[0]
+
+
+async def plan_in_play(
+    db: AsyncSession, read_: service.Read
+) -> tuple[SimpleQuarter, SimplePlanOut | None]:
+    """The quarter and plan-charts' plan: the plan "this quarter" is (its PRD on the roadmap
+    the reader sees, its milestones, slices and engineer-weeks per goal per milestone)."""
     from oracle.simple import plan
 
-    views = await plan.views(db, {e.prd.id for e in read_.entries if e.prd})
-    span = plan.current_span(list(views.values()), read_.today)
-    if span is None:
-        return quarter(read_.today)
-    return SimpleQuarter(start=span.start, end=span.end, label=span.label)
+    prds = {e.prd.id: e.prd for e in read_.entries if e.prd}
+    picked = plan.current(await plan.views(db, set(prds)), read_.today)
+    if picked is None or picked[1].span is None:
+        return quarter(read_.today), None
+    pid, view = picked
+    span = view.span
+    doc = prds[pid]
+    return SimpleQuarter(start=span.start, end=span.end, label=span.label), SimplePlanOut(
+        prd=SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title),
+        status="ready", source=view.milestones[0].source if view.milestones else None,
+        dated=view.dated, message=view.message, milestones=view.milestones,
+        slices=view.slices, goals=view.goals, goal_weeks=view.goal_weeks, span=span,
+        holidays=view.holidays,
+    )  # fmt: skip
 
 
 def _items(read_: service.Read) -> dict[str, service.Entry]:
@@ -449,9 +468,11 @@ async def build(
         r.short_code = short.get(f.key, f.key)
     _after(rows, deps)
     buckets, total = _buckets(rows)
+    this_quarter, plan_out = await plan_in_play(db, read_)
     return SimplePrioritiesOut(
         today=read_.today,
-        quarter=await plan_quarter(db, read_),
+        quarter=this_quarter,
+        plan=plan_out,
         method=METHOD,
         formula=ranking.formula,
         rows=rows,
