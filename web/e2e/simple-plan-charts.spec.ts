@@ -20,8 +20,11 @@ import { expect, test, type Locator, type Page } from "./test";
  * name, dates and how full it is, one stacked bar per goal with a segment per milestone
  * ("M1 4.0") and its total, the footnote, every total equal to the plan's, goal cards listing
  * each feature with its milestone chips and weeks, and the page's quarter label the plan's
- * span; no label is cut; fails_when = a number differs from the plan, the old "Share of ..."
- * caption shows, a bar or chip is missing or a label overflows; no_claim = how the API reads
+ * span; no label is cut and every label on a milestone colour reads at 4.5:1; roadmap items
+ * outside the plan still listed under their goal; fails_when = a number differs from the plan,
+ * the old "Share of ..." caption shows, a bar or chip is missing, a label overflows or reads
+ * under 4.5:1, a chip carries more than the code, dates and how full, or items outside the
+ * plan vanish; no_claim = how the API reads
  * the plan (api tests/test_simple_plan_api.py), suggestions under each goal (their own spec).
  *
  * Card plan-charts-value-effort: protects = the effort axis is logarithmic (ticks 0.5, 1, 2,
@@ -33,9 +36,11 @@ import { expect, test, type Locator, type Page } from "./test";
  *
  * Card plan-charts-linked: protects = selecting a mark (click, tap or the keyboard) highlights
  * its row in the Ranked list beside the chart and scrolls it into view, selecting a row
- * highlights its mark, Escape clears both; a sideways drag still re-estimates effort on the log
+ * highlights its mark, Escape clears both (once the Ask panel it may have closed first is shut);
+ * a real tap on a phone selects; the Ranked titles wrap, never cut; a sideways drag still re-estimates effort on the log
  * scale through the change engine; fails_when = the row or mark is not highlighted, the row
- * stays off screen, Escape leaves a highlight or a drag reads the linear scale; no_claim =
+ * stays off screen, Escape leaves a highlight, Escape that closes the Ask panel also clears
+ * the selection, a tap does not select, a title is cut or a drag reads the linear scale; no_claim =
  * the change engine's roles (simple-priorities.spec.ts).
  */
 
@@ -66,6 +71,30 @@ const GOALS = [
   { goal: "Revenue", parts: ["M2 2.0", "M3 9.0"], total: "11.0 wk" },
 ];
 
+/** The labels whose text reads under 4.5:1 on their own background (the nearest painted one). */
+async function contrasts(where: Locator) {
+  return where.evaluateAll((els) => {
+    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).map(Number);
+    const lum = ([r, g, b]: number[]) => {
+      const f = (x: number) => ((x /= 255) <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const bg = (e: Element | null): number[] => {
+      for (; e; e = e.parentElement) {
+        const c = rgb(getComputedStyle(e).backgroundColor);
+        if (c.length >= 3 && (c.length < 4 || c[3] > 0)) return c;
+      }
+      return [255, 255, 255];
+    };
+    return els
+      .map((e) => {
+        const [a, b] = [lum(rgb(getComputedStyle(e).color)), lum(bg(e))].sort((x, y) => y - x);
+        return { text: e.textContent, ratio: Math.round(((a + 0.05) / (b + 0.05)) * 100) / 100 };
+      })
+      .filter((x) => x.ratio < 4.5);
+  });
+}
+
 /** No label inside the element is wider than its box (nothing cut). */
 async function nothingCut(where: Locator) {
   const cut = await where.evaluateAll((els) => els.filter((e) => e.scrollWidth > e.clientWidth + 1).map((e) => e.textContent));
@@ -81,7 +110,7 @@ const centreX = async (l: Locator) => {
 
 for (const v of VIEWS) {
   test.describe(v.name, () => {
-    if (v.phone) test.use({ viewport: PHONE });
+    if (v.phone) test.use({ viewport: PHONE, hasTouch: true });
 
     test("goal buckets: where each goal's work lands, by milestone, from the plan", async ({ page }) => {
       await setUp(page, v.scheme, "simple-plan");
@@ -94,10 +123,12 @@ for (const v of VIEWS) {
         "This quarter: 56.0 engineer-weeks over three milestones (51.0 planned + 5.0 spare). Bars are engineer-weeks.",
       );
       await expect(head.getByTestId("milestone-chip")).toHaveText([
-        "M1 Prove it · 2 Nov - 27 Nov · 13.0 of 16.0 wk",
-        "M2 Scale volume · 30 Nov - 25 Dec · 15.0 of 16.0 wk",
-        "M3 Open to all · 28 Dec - 12 Feb · 23.0 of 24.0 wk",
+        "M1 · 2 Nov - 27 Nov · 13.0 of 16.0 wk",
+        "M2 · 30 Nov - 25 Dec · 15.0 of 16.0 wk",
+        "M3 · 28 Dec - 12 Feb · 23.0 of 24.0 wk",
       ]);
+      // The chip's name is in its title (hover), not its words: the owner's "M2 · dates · how full".
+      await expect(head.getByTestId("milestone-chip").nth(1)).toHaveAttribute("title", "M2 Scale volume");
       const bars = head.getByTestId("goal-bar");
       await expect(bars).toHaveCount(4);
       for (const [k, g] of GOALS.entries()) {
@@ -115,6 +146,8 @@ for (const v of VIEWS) {
       await expect(head.getByTestId("buckets-footnote")).toHaveText("Each feature counts once, under the goal it moves most. Engineer-weeks are the PRD's, per slice.");
       await expect(page.getByText(/Share of .* by engineer-weeks/)).toHaveCount(0);
       await nothingCut(head.locator('[data-testid="goal-bar-segment"] span, [data-testid="milestone-chip"]'));
+      // Every label on a milestone colour reads at AA (4.5:1), light and dark.
+      expect(await contrasts(head.locator('[data-testid="goal-bar-segment"] span'))).toEqual([]);
 
       // The goal cards: each feature with its milestone chips and weeks.
       const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
@@ -128,6 +161,16 @@ for (const v of VIEWS) {
       await expect(launch.getByTestId("plan-chip")).toHaveText(["M2 PM-owned"]);
       await expect(page.getByTestId("plan-goal")).toHaveCount(4);
       await nothingCut(page.locator('[data-testid="plan-chip"]'));
+      expect(await contrasts(page.locator('[data-testid="plan-chip"]'))).toEqual([]);
+
+      // Roadmap items outside the plan (the alerts roadmap's) still show, under their goal.
+      const outside = page.getByTestId("plan-outside");
+      await expect(outside.getByRole("heading", { name: "Also this quarter, outside the plan" })).toBeVisible();
+      const retention = outside.locator('[data-testid="plan-outside-goal"][data-key="grow-retention"]');
+      await expect(retention).toContainText("Grow retention");
+      for (const title of ["Alert rules engine", "Weekly alert digest", "Mobile alert push"]) await expect(retention).toContainText(title);
+      // The plan's own features are in the cards above, not again here.
+      await expect(outside).not.toContainText("Setup checklist");
     });
 
     test("value / effort: a log effort axis split at the medians, linked to the ranked list", async ({ page }) => {
@@ -159,17 +202,30 @@ for (const v of VIEWS) {
       expect(overlap).toBe(0);
       await expect(mark(page, "alert-export").getByTestId("vxe-code")).toHaveText("AE");
 
-      // Select a mark: its row lights up and comes into view.
-      await mark(page, "price-tiers").click();
+      // The Ranked list's titles wrap, never cut.
+      await nothingCut(page.locator('[data-testid="side-row"] [data-testid="prio-title"]'));
+
+      // Select a mark (a tap on a phone): its row lights up and comes into view.
+      if (v.phone) await mark(page, "price-tiers").tap();
+      else await mark(page, "price-tiers").click();
       await expect(mark(page, "price-tiers")).toHaveAttribute("aria-pressed", "true");
       await expect(sideRow(page, "price-tiers")).toHaveAttribute("data-selected", "true");
       await expect(sideRow(page, "price-tiers")).toBeInViewport();
       await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(1);
       // Select a row: its mark lights up instead.
-      await sideRow(page, "alert-digest").getByRole("button").click();
+      if (v.phone) await sideRow(page, "alert-digest").getByRole("button").tap();
+      else await sideRow(page, "alert-digest").getByRole("button").click();
       await expect(mark(page, "alert-digest")).toHaveAttribute("aria-pressed", "true");
       await expect(mark(page, "price-tiers")).toHaveAttribute("aria-pressed", "false");
       await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
+      if (!v.phone) {
+        // Escape closes what is open on top first (the Ask panel), and leaves the selection.
+        await page.getByTestId("hop-strip").click();
+        await expect(page.getByTestId("hop-dock")).toHaveAttribute("data-open", "true");
+        await page.keyboard.press("Escape");
+        await expect(page.getByTestId("hop-dock")).toHaveAttribute("data-open", "false");
+        await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
+      }
       // Escape clears both.
       await page.keyboard.press("Escape");
       await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(0);
