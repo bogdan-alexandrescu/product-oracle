@@ -12,16 +12,19 @@ import { RequestsNav } from "./_nav";
  * requests, selection and themes (RequestsStateProvider), so moving between them keeps them.
  */
 export default function RequestsLayout({ children }: { children: ReactNode }) {
+  // The shared state reads the session's queries, so it renders on the client only.
   return (
-    <RequestsStateProvider>
-      <PageTabsProvider tabs={<RequestsNav where="header" />}>
-        <div className="hidden px-2.5 pt-3 max-[600px]:block">
-          <Suspense fallback={null}>
-            <RequestsNav where="top" />
-          </Suspense>
-        </div>
-        {children}
-      </PageTabsProvider>
-    </RequestsStateProvider>
+    <Suspense fallback={null}>
+      <RequestsStateProvider>
+        <PageTabsProvider tabs={<RequestsNav where="header" />}>
+          <div className="hidden px-2.5 pt-3 max-[600px]:block">
+            <Suspense fallback={null}>
+              <RequestsNav where="top" />
+            </Suspense>
+          </div>
+          {children}
+        </PageTabsProvider>
+      </RequestsStateProvider>
+    </Suspense>
   );
 }
