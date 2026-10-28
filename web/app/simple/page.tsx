@@ -8,6 +8,7 @@ import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
+import { DueLabel, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
@@ -67,14 +68,20 @@ export default function SimpleHome() {
   const goals = useQuery(k("goals"), () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })), { keepPrevious: true });
   const changes = useQuery(k("changes"), () => unwrap(api.GET("/v1/simple/changes")), { keepPrevious: true });
   const drafts = useQuery(k("drafts"), () => unwrap(api.GET("/v1/simple/drafts")), { keepPrevious: true });
+  // prd-questions: the one list of product decisions waiting for me (GET /v1/simple/decisions/waiting):
+  // its count, its late count and the PRDs' questions; then the other judgement calls from the
+  // Inbox, never Oracle's run approvals (class checkpoint) nor a PRD's question read twice.
+  const waiting = useQuery(k("waiting"), () => unwrap(api.GET("/v1/simple/decisions/waiting")), { keepPrevious: true });
   const decisions = useQuery(
     k("decisions"),
     async (): Promise<Decision[]> => {
       const rows = (await loadInbox()).decisions.filter((d) => d.counts && d.reason === "needs_decision");
-      return Promise.all(rows.map((d) => unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } }))));
+      const all = await Promise.all(rows.map((d) => unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } }))));
+      return all.filter((d) => d.class !== "checkpoint" && d.origin !== "checkpoint" && (d.origin as string) !== "prd");
     },
     { keepPrevious: true },
   );
+  const questionActions = useQuestionActions(reloadAll);
   // The one list of scheduled reviews (Meetings > Upcoming): its first row is the next.
   const meeting = useQuery(k("meeting"), async () => {
     const list = await unwrap(api.GET("/v1/simple/meetings"));
@@ -137,7 +144,7 @@ export default function SimpleHome() {
   const now = new Date();
   const hour = Number(formatInZone(now.toISOString(), zone, { hour: "numeric", hourCycle: "h23" }).replace(/\D.*$/, "")) || 9;
   const firstName = (me?.name ?? me?.email ?? "").split(/[\s@]/)[0];
-  const decisionCount = decisions.data?.length ?? 0;
+  const decisionCount = waiting.data?.count ?? 0;
   const sentence = reads
     ? "Here is where the plan stands."
     : waitSentence([
@@ -330,7 +337,7 @@ export default function SimpleHome() {
         <section aria-label="Summary" data-testid="home-summary" className="simple-card">
           <ul className="grid grid-cols-3 gap-3 max-[600px]:grid-cols-1">
             {[
-              ["decisions", decisions.data ? decisionCount : null, "decisions waiting for you"],
+              ["decisions", waiting.data ? decisionCount : null, "decisions waiting for you"],
               ["proposals", changes.data ? proposalRows.length : null, proposalRows === toDecide ? "proposals on your items" : "of your proposals waiting"],
               ["broken-links", roadmap.data ? broken.length : null, "broken links"],
             ].map(([id, n, label]) => (
@@ -361,8 +368,21 @@ export default function SimpleHome() {
       )}
 
       {!reads && (
-        <HomeCard id="decisions" icon="flag" title="Decisions waiting for you" count={decisions.data?.length} all="/simple/decisions">
-          <Block q={decisions} testId="home-decisions">
+        <HomeCard
+          id="decisions"
+          icon="flag"
+          title="Decisions waiting for you"
+          count={waiting.data?.count}
+          extra={
+            waiting.data && waiting.data.late > 0 ? (
+              <span data-testid="home-decisions-late" className="simple-status simple-status-risk tnum">
+                {waiting.data.late} late
+              </span>
+            ) : null
+          }
+          all="/simple/decisions"
+        >
+          <Block q={{ ...decisions, error: waiting.error ?? decisions.error, data: waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined }} testId="home-decisions">
             {(rows) =>
               rows.length === 0 ? (
                 <p className="simple-small" data-testid="home-decisions-empty">
@@ -370,7 +390,13 @@ export default function SimpleHome() {
                 </p>
               ) : (
                 <Top rows={rows} more="/simple/decisions">
-                  {(d) => <DecisionRow key={d.id} d={d} onDecide={decide} />}
+                  {(d) =>
+                    "code" in d ? (
+                      <QuestionHomeRow key={d.id} q={d} actions={questionActions} />
+                    ) : (
+                      <DecisionRow key={d.id} d={d} onDecide={decide} />
+                    )
+                  }
                 </Top>
               )
             }
@@ -603,6 +629,41 @@ export default function SimpleHome() {
 function stored(i: Schemas["SimpleRoadmapItem"]) {
   const own = (d: Schemas["SimpleDate"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
   return { start_date: own(i.start), end_date: own(i.end) };
+}
+
+/** Home's decision rows: the late questions first, then the other judgement calls, then the rest of the questions (soonest first). */
+function homeDecisionRows(questions: Question[], others: Decision[]): (Question | Decision)[] {
+  return [...questions.filter((q) => q.late), ...others, ...questions.filter((q) => !q.late)];
+}
+
+/** prd-questions: a PRD's question waiting for me: its code and title, due label and what it blocks; Decide as recommended when I may. */
+function QuestionHomeRow({ q, actions }: { q: Question; actions: ReturnType<typeof useQuestionActions> }) {
+  const writes = q.can.decide || q.can.propose;
+  return (
+    <HomeRow
+      testId="home-question"
+      lead={<RowIcon name="flag" />}
+      title={`${q.code} ${q.title}`}
+      meta={
+        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <DueLabel q={q} />
+          {q.blocks && <span>{q.blocks.label}</span>}
+          {q.recommendation && <span>PRD recommends: {q.recommendation}</span>}
+        </span>
+      }
+      actions={
+        writes && q.recommendation ? (
+          <button type="button" disabled={actions.busy} className="simple-button simple-button-primary" onClick={() => void actions.decide(q, { option: "recommended" })}>
+            {q.can.decide ? "Decide as recommended" : "Propose as recommended"}
+          </button>
+        ) : (
+          <Link href="/simple/decisions" className="simple-button">
+            Open
+          </Link>
+        )
+      }
+    />
+  );
 }
 
 /** A decision waiting for me: Decide with the proposed option, or choose another. */

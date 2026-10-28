@@ -427,6 +427,10 @@ ChangeOp = Literal[
     # chat-actions: the item's own owner and decider (into the working draft).
     "set_owner",
     "set_decider",
+    # prd-questions: a PRD's open question (a decision) answered, or its decider named
+    # (oracle.simple.questions).
+    "decide_question",
+    "name_decider",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
@@ -1544,6 +1548,8 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     roadmap_ids: list[uuid.UUID] = []
     meeting_decisions: list[SimpleMeetingDecision] = []
     open_decisions: list[SimpleOpenDecision] = []
+    # prd-questions: the agenda's "Decisions due": the PRD's open questions, soonest first.
+    decisions_due: "list[SimpleQuestion]" = []
     pending_proposals: list[SimpleChangeOut] = []
     drafts: list[SimpleDraftOut] = []
     # Everyone its drafts wait on, named (#723 review: an absent section reviewer need not
@@ -1659,15 +1665,110 @@ class SimpleFilterOption(BaseModel):
     title: str
 
 
+QuestionColumn = Literal["needs_input", "recommended", "decided"]
+DecisionsView = Literal["list", "board", "meetings"]
+
+
+class SimpleQuestionOption(BaseModel):
+    key: str
+    label: str
+
+
+class SimpleQuestionFeature(BaseModel):
+    code: str
+    title: str
+
+
+class SimpleQuestionBlocks(BaseModel):
+    """What the question blocks: a milestone of the PRD's plan and its features."""
+
+    milestone: str | None = None
+    milestone_name: str | None = None
+    features: list[SimpleQuestionFeature] = []
+    # "Blocks M1: F-03 Health log" (the owner's words).
+    label: str
+
+
+class SimpleQuestionPending(BaseModel):
+    """A proposed answer waiting for the decider (a change through the engine)."""
+
+    change_id: uuid.UUID
+    by: SimplePersonRef
+    answer: str
+
+
+class SimpleQuestionCan(BaseModel):
+    # Applies at once (owners and the decider, with Undo).
+    decide: bool = False
+    # Proposes to the decider (approvers and commenters).
+    propose: bool = False
+    # Names the decider (owners and the decider; others propose).
+    name_decider: bool = False
+
+
+class SimpleQuestion(BaseModel):
+    """prd-questions: one of a PRD's open questions, read in as a decision (origin
+    ``prd``): the PRD's code (Q7), its recommendation and alternatives, what it blocks,
+    its due day and decider."""
+
+    id: uuid.UUID
+    number: int
+    code: str
+    title: str
+    status: str
+    column: QuestionColumn
+    prd: SimpleDocRef
+    decider: SimplePersonRef | None = None
+    # What is missing for a "Needs input" question: "decider" or "recommendation".
+    missing: Literal["decider", "recommendation"] | None = None
+    due_on: dt.date | None = None
+    # "Late · due Fri 6 Nov" or "Due Fri 27 Nov" (company days); None when decided.
+    due_label: str | None = None
+    late: bool = False
+    blocks: SimpleQuestionBlocks | None = None
+    recommendation: str | None = None
+    alternatives: list[SimpleQuestionOption] = []
+    chosen: str | None = None
+    decided_at: dt.datetime | None = None
+    decided_by: SimplePersonRef | None = None
+    # "Decided Fri 23 Oct by Ana Lee" or "Decided in the PRD on Fri 23 Oct by Ana Lee".
+    decided_label: str | None = None
+    waiting_for_me: bool = False
+    pending: SimpleQuestionPending | None = None
+    can: SimpleQuestionCan = SimpleQuestionCan()
+
+
 class SimpleDecisionsOut(BaseModel):
     """Simple's Decisions (direction B "By meeting"): the meetings' decisions grouped under
-    them, newest first, then the decisions taken outside meetings."""
+    them, newest first, then the decisions taken outside meetings. prd-questions: the
+    PRDs' open questions as decisions (List and Board), the person's remembered view and
+    how many of Oracle's run approvals Simple leaves to Detailed."""
 
     meetings: list[SimpleMeetingGroup]
     other: list[SimpleDecisionRow]
     prds: list[SimpleFilterOption]
     goals: list[SimpleFilterOption]
     meeting_options: list[SimpleFilterOption]
+    # Open first, soonest due first; decided after, newest first.
+    questions: list[SimpleQuestion] = []
+    waiting_count: int = 0
+    late_count: int = 0
+    # Oracle's own run approvals waiting for this person (shown in Detailed only).
+    approvals_waiting: int = 0
+    view: DecisionsView = "list"
+
+
+class SimpleDecisionsWaitingOut(BaseModel):
+    """prd-questions: the one list Home's "Decisions waiting for you", the rail's count and
+    the review meeting's "Decisions due" read: product decisions waiting for this person
+    (the PRDs' open questions and other judgement calls), never Oracle's run approvals."""
+
+    count: int
+    late: int
+    questions: list[SimpleQuestion] = []
+    # Other product decisions (not a PRD's question) waiting for this person.
+    others: int = 0
+    approvals_waiting: int = 0
 
 
 class InboxSimpleMinutes(BaseModel):
@@ -1682,3 +1783,6 @@ class InboxSimpleMinutes(BaseModel):
 
 SimpleRoadmapItem.model_rebuild()
 OnePagerOut.model_rebuild()
+
+
+SimpleMeetingOut.model_rebuild()

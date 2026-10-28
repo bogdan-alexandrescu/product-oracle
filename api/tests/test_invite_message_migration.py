@@ -82,7 +82,7 @@ def _invite(tenant: uuid.UUID, address: str, **message) -> uuid.UUID:
 # the chain; no_claim=what the column does.
 def test_the_chain_ends_here():
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0090_whole_prd_stale_cleared"]
+    assert script.get_heads() == ["0091_prd_questions"]
     assert script.get_revision(REVISION).down_revision == PREVIOUS
 
 

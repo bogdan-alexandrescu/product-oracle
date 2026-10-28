@@ -45124,6 +45124,37 @@
         "x-min-role": "viewer"
       }
     },
+    "/v1/simple/decisions/waiting": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Decisions Waiting",
+        "description": "prd-questions: the product decisions waiting for this person (Home's card, the rail's\ncount, the review's \"Decisions due\"); Oracle's run approvals only counted, for Detailed.",
+        "operationId": "get_simple_decisions_waiting",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDecisionsWaitingOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
     "/v1/simple/priorities": {
       "get": {
         "tags": [
@@ -58594,7 +58625,9 @@
                   "set_milestone",
                   "add_feature_ask",
                   "set_owner",
-                  "set_decider"
+                  "set_decider",
+                  "decide_question",
+                  "name_decider"
                 ]
               },
               {
@@ -58906,7 +58939,9 @@
               "set_milestone",
               "add_feature_ask",
               "set_owner",
-              "set_decider"
+              "set_decider",
+              "decide_question",
+              "name_decider"
             ],
             "title": "Op"
           },
@@ -79748,7 +79783,9 @@
               "set_milestone",
               "add_feature_ask",
               "set_owner",
-              "set_decider"
+              "set_decider",
+              "decide_question",
+              "name_decider"
             ],
             "title": "Op"
           },
@@ -94877,11 +94914,27 @@
                 "type": "null"
               }
             ]
+          },
+          "simple_decisions_view": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "list",
+                  "board",
+                  "meetings"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simple Decisions View"
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).\n``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);\nunset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).\n``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);\nunset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all.\n``simple_decisions_view``: Simple's Decisions as List, Board or By meeting; unset, List."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -94980,6 +95033,22 @@
                 "type": "null"
               }
             ]
+          },
+          "simple_decisions_view": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "list",
+                  "board",
+                  "meetings"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simple Decisions View"
           }
         },
         "type": "object",
@@ -112533,7 +112602,9 @@
               "set_milestone",
               "add_feature_ask",
               "set_owner",
-              "set_decider"
+              "set_decider",
+              "decide_question",
+              "name_decider"
             ],
             "title": "Op"
           },
@@ -112648,7 +112719,9 @@
               "set_milestone",
               "add_feature_ask",
               "set_owner",
-              "set_decider"
+              "set_decider",
+              "decide_question",
+              "name_decider"
             ],
             "title": "Op"
           },
@@ -113042,6 +113115,39 @@
             },
             "type": "array",
             "title": "Meeting Options"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestion"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          },
+          "waiting_count": {
+            "type": "integer",
+            "title": "Waiting Count",
+            "default": 0
+          },
+          "late_count": {
+            "type": "integer",
+            "title": "Late Count",
+            "default": 0
+          },
+          "approvals_waiting": {
+            "type": "integer",
+            "title": "Approvals Waiting",
+            "default": 0
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "list",
+              "board",
+              "meetings"
+            ],
+            "title": "View",
+            "default": "list"
           }
         },
         "type": "object",
@@ -113053,7 +113159,44 @@
           "meeting_options"
         ],
         "title": "SimpleDecisionsOut",
-        "description": "Simple's Decisions (direction B \"By meeting\"): the meetings' decisions grouped under\nthem, newest first, then the decisions taken outside meetings."
+        "description": "Simple's Decisions (direction B \"By meeting\"): the meetings' decisions grouped under\nthem, newest first, then the decisions taken outside meetings. prd-questions: the\nPRDs' open questions as decisions (List and Board), the person's remembered view and\nhow many of Oracle's run approvals Simple leaves to Detailed."
+      },
+      "SimpleDecisionsWaitingOut": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "late": {
+            "type": "integer",
+            "title": "Late"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestion"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          },
+          "others": {
+            "type": "integer",
+            "title": "Others",
+            "default": 0
+          },
+          "approvals_waiting": {
+            "type": "integer",
+            "title": "Approvals Waiting",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "late"
+        ],
+        "title": "SimpleDecisionsWaitingOut",
+        "description": "prd-questions: the one list Home's \"Decisions waiting for you\", the rail's count and\nthe review meeting's \"Decisions due\" read: product decisions waiting for this person\n(the PRDs' open questions and other judgement calls), never Oracle's run approvals."
       },
       "SimpleDelivery": {
         "properties": {
@@ -115103,6 +115246,14 @@
             "title": "Open Decisions",
             "default": []
           },
+          "decisions_due": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestion"
+            },
+            "type": "array",
+            "title": "Decisions Due",
+            "default": []
+          },
           "pending_proposals": {
             "items": {
               "$ref": "#/components/schemas/SimpleChangeOut"
@@ -116640,6 +116791,329 @@
           "label"
         ],
         "title": "SimpleQuarter"
+      },
+      "SimpleQuestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "column": {
+            "type": "string",
+            "enum": [
+              "needs_input",
+              "recommended",
+              "decided"
+            ],
+            "title": "Column"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "decider",
+                  "recommendation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "due_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Label"
+          },
+          "late": {
+            "type": "boolean",
+            "title": "Late",
+            "default": false
+          },
+          "blocks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleQuestionBlocks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          },
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestionOption"
+            },
+            "type": "array",
+            "title": "Alternatives",
+            "default": []
+          },
+          "chosen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided Label"
+          },
+          "waiting_for_me": {
+            "type": "boolean",
+            "title": "Waiting For Me",
+            "default": false
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleQuestionPending"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can": {
+            "$ref": "#/components/schemas/SimpleQuestionCan",
+            "default": {
+              "decide": false,
+              "propose": false,
+              "name_decider": false
+            }
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "code",
+          "title",
+          "status",
+          "column",
+          "prd"
+        ],
+        "title": "SimpleQuestion",
+        "description": "prd-questions: one of a PRD's open questions, read in as a decision (origin\n``prd``): the PRD's code (Q7), its recommendation and alternatives, what it blocks,\nits due day and decider."
+      },
+      "SimpleQuestionBlocks": {
+        "properties": {
+          "milestone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone"
+          },
+          "milestone_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Name"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestionFeature"
+            },
+            "type": "array",
+            "title": "Features",
+            "default": []
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "SimpleQuestionBlocks",
+        "description": "What the question blocks: a milestone of the PRD's plan and its features."
+      },
+      "SimpleQuestionCan": {
+        "properties": {
+          "decide": {
+            "type": "boolean",
+            "title": "Decide",
+            "default": false
+          },
+          "propose": {
+            "type": "boolean",
+            "title": "Propose",
+            "default": false
+          },
+          "name_decider": {
+            "type": "boolean",
+            "title": "Name Decider",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SimpleQuestionCan"
+      },
+      "SimpleQuestionFeature": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "title"
+        ],
+        "title": "SimpleQuestionFeature"
+      },
+      "SimpleQuestionOption": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "SimpleQuestionOption"
+      },
+      "SimpleQuestionPending": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "by": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "by",
+          "answer"
+        ],
+        "title": "SimpleQuestionPending",
+        "description": "A proposed answer waiting for the decider (a change through the engine)."
       },
       "SimpleResumeOut": {
         "properties": {

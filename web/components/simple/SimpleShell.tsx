@@ -36,7 +36,8 @@ function isActive(pathname: string, d: Dest): boolean {
 
 /**
  * The rail's yellow counts (S1 restyle, the owner's pick): only where something waits on the
- * signed-in person, from the Inbox: Decisions (decisions they decide), Roadmap (proposals they
+ * signed-in person: Decisions (the product decisions waiting for them, GET
+ * /v1/simple/decisions/waiting, run approvals never), from the Inbox Roadmap (proposals they
  * decide and drafts waiting for their approval); Meetings counts what its page lists (the
  * production walk): the live meetings and the upcoming reviews not started yet, read when the
  * rail mounts, when something waiting changes and on the Meetings pages, not on every other
@@ -51,11 +52,12 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
-    loadInbox()
-      .then((inbox) => {
+    // prd-questions: Decisions counts the product decisions waiting for me (Oracle's run approvals never).
+    Promise.all([loadInbox(), unwrap(api.GET("/v1/simple/decisions/waiting"))])
+      .then(([inbox, waiting]) => {
         if (!alive) return;
         setCounts({
-          Decisions: inbox.decisions.filter((d) => d.counts).length,
+          Decisions: waiting.count,
           Roadmap: inbox.simple_proposals.length + inbox.simple_approvals.length,
         });
       })

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ds";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
 import { OnePager } from "@/components/simple/OnePager";
+import { QuestionRow, useQuestionActions } from "@/components/simple/questions/Questions";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { MeetingAgenda, MeetingNote } from "@/lib/api/simple-chat";
@@ -365,6 +366,7 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
   return (
     <div className="space-y-4">
       {error && <ErrorNote>{error}</ErrorNote>}
+      <DecisionsDue m={m} reload={reload} />
       <section aria-label="Open decisions" className="simple-card">
         <h2 className="simple-h2">Open decisions</h2>
         {m.open_decisions.length === 0 && <p className="simple-small">None open.</p>}
@@ -606,5 +608,29 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * prd-questions: the agenda's "Decisions due": the PRDs' questions waiting for me, soonest
+ * first, each with its due label and what it blocks; Decide as recommended passes the
+ * meeting's session_id so the decision lands in its minutes.
+ */
+function DecisionsDue({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
+  const actions = useQuestionActions(reload, m.session_id);
+  const due = m.decisions_due ?? [];
+  return (
+    <section aria-label="Decisions due" data-testid="decisions-due" className="simple-card">
+      <h2 className="simple-h2">Decisions due</h2>
+      {due.length === 0 ? (
+        <p className="simple-small">No decision is due.</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-border">
+          {due.map((q) => (
+            <QuestionRow key={q.id} q={q} mode="due" actions={actions} />
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

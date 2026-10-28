@@ -71,7 +71,7 @@ def _columns() -> list[str]:
 def test_the_chain_after_feedback_agent_staging():
     script = ScriptDirectory.from_config(_cfg())
     # 0022_baseline_flow (B1) and the train's revisions chain on it; one head.
-    assert script.get_heads() == ["0090_whole_prd_stale_cleared"]
+    assert script.get_heads() == ["0091_prd_questions"]
     assert script.get_revision(REVISION).down_revision == "0021_feedback_agent_staging"
     assert script.get_revision("0022_baseline_flow").down_revision == REVISION
 

@@ -787,8 +787,10 @@ async def _flags(
 
 
 async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
-    from oracle.simple import additions, key_dates, one_pager, targets
+    from oracle.simple import additions, key_dates, one_pager, questions, targets
 
+    if body.op in questions.OPS:
+        return await questions.create(db, principal, body)
     if body.op in key_dates.OPS:
         return await key_dates.create(db, principal, body)
     if body.op in additions.OPS:
@@ -881,10 +883,12 @@ async def decide(
     session_id: uuid.UUID | None = None,
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
-    from oracle.simple import additions, key_dates, one_pager, targets
+    from oracle.simple import additions, key_dates, one_pager, questions, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in questions.OPS:
+        return await questions.decide(db, principal, c, action, reason, session_id)
     if c.op in key_dates.OPS:
         return await key_dates.decide(db, principal, c, action, reason)
     if c.op in additions.OPS:
@@ -924,10 +928,12 @@ async def decide(
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
-    from oracle.simple import additions, key_dates, one_pager, targets
+    from oracle.simple import additions, key_dates, one_pager, questions, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in questions.OPS:
+        return await questions.undo(db, principal, c)
     if c.op in key_dates.OPS:
         return await key_dates.undo(db, principal, c)
     if c.op in additions.OPS:
@@ -1004,6 +1010,8 @@ class _View:
         self.owners: dict[uuid.UUID, set[uuid.UUID]] = (people or {}).get("owners", {})
         self.company_owners = company_owners or []
         self.now = company_time.now()
+        # prd-questions: the questions its changes are on, by id.
+        self.questions: dict[str, Any] = {}
 
     def route(self, c: SimpleChange) -> list[uuid.UUID]:
         return current_route(c, self.by_id, self.deciders, self.company_owners)
@@ -1015,8 +1023,10 @@ class _View:
             return None
 
     def may_decide(self, c: SimpleChange) -> bool:
-        from oracle.simple import additions, key_dates, one_pager, targets
+        from oracle.simple import additions, key_dates, one_pager, questions, targets
 
+        if c.op in questions.OPS:
+            return questions.may_decide_change(self.principal, c, self.questions)
         if c.op in key_dates.OPS:
             return key_dates.may_decide(self.principal, c, self)
         if c.op in additions.OPS:
@@ -1032,7 +1042,8 @@ class _View:
         """Working changes and proposals: their people, the session's, the document's
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
-        if c.document_id is not None and c.document_id not in self.docs and c.op != "edit_line":
+        if (c.document_id is not None and c.document_id not in self.docs
+                and c.op not in ("edit_line", "decide_question", "name_decider")):  # fmt: skip
             return False
         if self.me is None:
             return False
@@ -1115,7 +1126,18 @@ async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -
     owners = (await drafts.who(db, {c.document_id for c in changes if c.document_id})).owners
     people = {"drafts": participants, "owners": owners}
     company = await _company_owners(db) if any(c.status == "proposed" for c in changes) else []
-    return _View(principal, read_, await _reviewers(db), sessions, undone, people, company)
+    v = _View(principal, read_, await _reviewers(db), sessions, undone, people, company)
+    qids = {
+        c.target.get("decision_id") for c in changes if c.op in ("decide_question", "name_decider")
+    }
+    if qids:
+        from oracle.decisions.models import Decision
+
+        ids = [uuid.UUID(i) for i in qids if i]
+        v.questions = {
+            str(d.id): d for d in await db.scalars(select(Decision).where(Decision.id.in_(ids)))
+        }
+    return v
 
 
 async def one_out(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeOut:

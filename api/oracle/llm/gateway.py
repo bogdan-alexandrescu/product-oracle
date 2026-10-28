@@ -105,6 +105,8 @@ JOBS = (
     "chat_reader",
     # plan-model: a PRD version's plan read from its text (oracle.simple.plan).
     "prd_plan",
+    # prd-questions: a PRD version's open questions read (oracle.simple.questions).
+    "prd_questions",
 )
 
 #: Accounts one call may try before giving up (the first plus two swaps).

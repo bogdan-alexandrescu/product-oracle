@@ -35,6 +35,7 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from "@/lib/api/client";
+import { questionsCounts, questionsOfMeeting, questionsOut, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
 import { plainFlow } from "./simple-visuals";
 import { seedSimpleProposal } from "./simple-changes";
 import { mockNowMs } from "./clock";
@@ -63,6 +64,10 @@ export interface MeetingsCtx {
   rituals?: RitualsDb;
   /** The people's lines in a meeting's chat (S9's ./simple-chat.ts): part of its record (minutes.record). */
   chatLines?: (meetingId: string) => string[];
+  /** prd-questions: the person's remembered Decisions view (preferences.simple_decisions_view). */
+  view?: () => "list" | "board" | "meetings" | null;
+  /** prd-questions: the decision log's judgement calls waiting for this person (not run approvals). */
+  othersWaiting?: () => number;
 }
 
 interface Meeting {
@@ -128,6 +133,8 @@ export interface MeetingsDb {
   decisions: Decision[];
   occurrences: Occurrence[];
   inbox_seen: Record<string, string>;
+  /** prd-questions: the invented PRD's open questions (./simple-questions.ts), seeded on first read. */
+  questions?: QuestionsDb;
 }
 
 interface Prd {
@@ -368,6 +375,8 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
       flow: decidedFlow(ctx, d),
     })),
     open_decisions: openDecisions(ctx, db, p),
+    // The meeting PRD's open questions, whoever decides them (questions.due_for).
+    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id).filter((q) => q.status === "proposed"),
     pending_proposals: proposals(ctx, p),
     drafts: meetingDrafts(ctx, db, m, p),
     waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
@@ -725,6 +734,17 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   const of = (m: Meeting) => db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst);
   if (prd) shown = shown.filter((m) => m.prd === prd.slug || of(m).some(keep));
   else if (match) shown = shown.filter((m) => of(m).some(keep));
+  // The questions follow the filters too (as the API): the PRD's, the goal's PRDs', the meeting's.
+  const qd = qdb(ctx, db);
+  let qs = questionsOut(ctx, qd, prdQ);
+  if (goal) {
+    const goalPrds = all.filter((i) => i.goal?.id === goal.id && i.prd).map((i) => i.prd!.id);
+    qs = qs.filter((x) => ps.some((p) => p.ids.includes(x.prd.id) && goalPrds.some((g) => p.ids.includes(g))));
+  }
+  if (meetingQ) {
+    const ids = questionsOfMeeting(qd, meetingQ);
+    qs = qs.filter((x) => ids.has(x.id));
+  }
   const others = meetingQ ? [] : db.decisions.filter((d) => !d.meeting_id && product(d) && keep(d)).sort((a, b) => b.number - a.number);
   const out: Schemas["SimpleDecisionsOut"] = {
     meetings: shown.map((m) => {
@@ -735,6 +755,10 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     prds: [...ps].sort((a, b) => a.title.localeCompare(b.title)).map((x) => ({ id: x.slug, title: x.title })),
     goals: [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
     meeting_options: ms.map((m) => ({ id: m.id, title: m.title })),
+    // prd-questions: the PRD's open questions (List and Board), counts and the remembered view.
+    questions: qs,
+    ...(({ waiting_count, late_count, approvals_waiting }) => ({ waiting_count, late_count, approvals_waiting }))(questionsCounts(ctx, qd, qs)),
+    view: ctx.view?.() ?? "list",
   };
   return json(200, out);
 }
@@ -743,6 +767,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
 export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "simple" || (p[2] !== "meetings" && p[2] !== "decisions")) return null;
   const method = req.method;
+  if (p[2] === "decisions" && p[3] === "waiting") return method === "GET" ? json(200, waitingOut(ctx, qdb(ctx, db), ctx.othersWaiting?.() ?? 0)) : null;
   if (p[2] === "decisions") return method === "GET" ? decisionsPage(ctx, db, q) : null;
   const ps = prds(ctx);
   const now = iso(mockNowMs());
@@ -936,4 +961,24 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     return ok();
   }
   return null;
+}
+
+/** prd-questions: the questions' db, seeded on first use. */
+function qdb(ctx: MeetingsCtx, db: MeetingsDb): QuestionsDb {
+  return (db.questions ??= seedQuestions(ctx));
+}
+
+/**
+ * prd-questions: decide_question and name_decider through POST /v1/simple/changes (and their
+ * undo); with a live meeting's session_id the decision lands in that meeting's minutes.
+ */
+export function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Request, p: string[]): Promise<Response | null> {
+  return routeQuestionChanges(ctx, qdb(ctx, db), req, p, (sessionId, title) => {
+    const m = db.meetings.find((x) => x.session_id === sessionId);
+    if (!m) return false;
+    if (m.status !== "live") return "ended";
+    const prd = prds(ctx).find((x) => x.slug === m.prd);
+    record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
+    return m.id;
+  });
 }

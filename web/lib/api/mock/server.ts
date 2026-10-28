@@ -153,7 +153,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
-import { chatMeetings, ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
@@ -4605,6 +4605,11 @@ async function route(db: Db, req: Request): Promise<Response> {
         if (Object.keys(picks).some((k) => !["prd", "goal", "track"].includes(k)) || Object.values(picks).some((v) => typeof v !== "string" || !/^[A-Za-z0-9_.-]{0,200}$/.test(v))) return json(422, { detail: "simple_filters" });
         mine.simple_filters = { prd: picks.prd ?? "", goal: picks.goal ?? "", track: picks.track ?? "" } as Schemas["SimpleFilters"];
       }
+      if (patch.simple_decisions_view != null) {
+        // prd-questions: how Simple's Decisions opens (preferences.DecisionsView).
+        if (!["list", "board", "meetings"].includes(patch.simple_decisions_view)) return json(422, { detail: "simple_decisions_view" });
+        mine.simple_decisions_view = patch.simple_decisions_view;
+      }
       if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
       if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
       for (const [k, v] of Object.entries(pings)) if (typeof v === "boolean") mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
@@ -4615,6 +4620,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     mine.priorities_line ??= null; // this quarter until they pick a line (roadmap-plus)
     mine.simple_roadmap ??= null; // all roadmaps until they pick one
     mine.simple_filters ??= null; // every PRD, goal and track until they pick some
+    mine.simple_decisions_view ??= null; // List until they pick a view (prd-questions)
     if ((mine.experience as string) === "studio") mine.experience = "detailed"; // its name before #723's rename, as the API reads it
     return json(200, mine);
   }
@@ -5296,8 +5302,18 @@ async function route(db: Db, req: Request): Promise<Response> {
           .filter((t) => t.meeting_id === id)
           .flatMap((t) => t.messages.filter((x) => x.author_kind === "person").map((x) => x.body)),
     };
+    // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
+    meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;
+    meetingsCtx.othersWaiting = () => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const ctx = decisionsContext(db, me);
+      ensureDecisions(db, ctx);
+      return decisionInbox(ctx, db.decisions!, null).filter((d) => d.counts && d.reason === "needs_decision").length;
+    };
     const meetingsDb = ensureMeetings(db, meetingsCtx);
-    const meetingsRes = (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
+    const meetingsRes =
+      (await routeMeetingQuestions(meetingsDb, meetingsCtx, req, p)) ??
+      (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
     if (meetingsRes) return meetingsRes;
   }
   const simpleRes = await simpleRoute(req);
