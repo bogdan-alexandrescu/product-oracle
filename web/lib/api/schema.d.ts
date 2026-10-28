@@ -37551,6 +37551,12 @@ export interface components {
             change: "new" | "changed" | "same";
             /** Section Key */
             section_key?: string | null;
+            /** Actor */
+            actor?: string | null;
+            /** Yes */
+            yes?: string | null;
+            /** No */
+            no?: string | null;
         };
         /** SimpleGoalBrief */
         SimpleGoalBrief: {
@@ -38852,6 +38858,15 @@ export interface components {
             failed: boolean;
             /** Failure */
             failure?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * Stage
+             * @default 0
+             */
+            stage: number;
+            /** Subject Name */
+            subject_name?: string | null;
             /** Can Comment */
             can_comment: boolean;
             /** Can Revise */
