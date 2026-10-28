@@ -11,16 +11,13 @@ import { expect, test } from "./test";
  * lists the edited ones (the API's rituals.attendees_edited_at), not the past attendees;
  * fails_when = the past attendees stay listed after the edit, or the edit is not what
  * decides (the API read updated_at, which the scheduler moves); no_claim = the scheduler's
- * tick itself (api tests: test_simple_walk_fixes_review2_api).
+ * tick itself (api tests: test_simple_walk_fixes_review2_api). Walk fixes 3 (M2) un-fixed it:
+ * the held review leaves Upcoming and the next one reads the ritual's live attendees.
  */
 
 test.use({ viewport: { width: 1366, height: 820 } });
 
-// Train Y (CLD, 2026-10-28): fixme. The API test (test_simple_walk_fixes_review2_api) proves the rule; through
-// the mock, Home's next review after the held one still reads the held occurrence's own attendee list
-// (meetings-mock occurrence vs the rituals store), so this spec never passed (both re-reviews saw it fail).
-// Follow-up: make the mock's held occurrence leave Upcoming and read the ritual's live attendees, then unfix.
-test.fixme("the next review lists who was present until the ritual's attendees are edited", async ({ page }) => {
+test("the next review lists who was present until the ritual's attendees are edited", async ({ page }) => {
   await login(page);
   // Detailed's rituals first (the mock seeds them on first read).
   await page.goto("/company/rituals");
