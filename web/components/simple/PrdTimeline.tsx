@@ -275,7 +275,7 @@ function Lanes({ plan, lanes, today, onPick }: { plan: Plan; lanes: ReturnType<t
               </button>
             );
           })}
-          <span className="absolute top-8 z-10 -translate-x-1/2 rounded-full bg-accent px-2 text-xs font-semibold text-on-accent" style={{ left: `${pct(today)}%` }}>Today</span>
+          <span className="absolute top-0.5 z-10 -translate-x-1/2 rounded-full bg-accent px-2 text-xs font-semibold text-on-accent" style={{ left: `${pct(today)}%` }}>Today</span>
           {months.map((x) => (
             <span key={x.at} data-testid="timeline-month" className="absolute bottom-0 border-l border-[var(--simple-rule)] pl-1 text-sm text-text-faint" style={{ left: `${x.at}%` }}>{x.label}</span>
           ))}
@@ -325,7 +325,7 @@ function Lanes({ plan, lanes, today, onPick }: { plan: Plan; lanes: ReturnType<t
                       title={p.slices.map(named).join("\n")}
                       onClick={() => onPick(p.milestone)}
                       className={`absolute h-8 whitespace-nowrap rounded-full border px-2.5 text-left text-sm font-semibold ${p.pm ? "border-dashed" : ""}`}
-                      style={{ left: `${left}%`, width: `${w}%`, top: 6 + p.row * ROW, background: c.fill, color: c.ink, borderColor: c.edge, borderWidth: p.pm ? 2 : 1 }}
+                      style={{ left: `${left}%`, width: `${w}%`, minWidth: codesOf(p)[0].length * 7.8 + 22, top: 6 + p.row * ROW, background: c.fill, color: c.ink, borderColor: c.edge, borderWidth: p.pm ? 2 : 1 }}
                     >
                       {fitCodes(codesOf(p), (w / 100) * width)}
                     </button>

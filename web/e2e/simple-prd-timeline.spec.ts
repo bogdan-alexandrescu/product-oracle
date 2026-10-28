@@ -71,7 +71,7 @@ for (const phone of [false, true]) {
   for (const scheme of ["light", "dark"] as const) {
     const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
     test.describe(where, () => {
-      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme });
+      test.use({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 820 }, colorScheme: scheme, hasTouch: phone });
 
       test(`the timeline leads the page with goal lanes and goals tracked (${where})`, async ({ page }) => {
         await open(page, scheme);
