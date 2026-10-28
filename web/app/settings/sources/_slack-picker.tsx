@@ -140,7 +140,7 @@ export function useSlackChannelNames(connectionId: string | null, ids: string[],
     if (!missing.length) return found;
     let cursor: string | null = null;
     for (let i = 0; i < NAME_PAGES; i++) {
-      const page = await unwrap(
+      const page: { channels: { id: string; name: string }[]; next_cursor?: string | null } = await unwrap(
         api.GET("/v1/connections/{connection_id}/slack/channels", {
           params: { path: { connection_id: connectionId! }, query: { search: "", ...(cursor ? { cursor } : {}) } },
         }),

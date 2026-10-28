@@ -42,7 +42,7 @@ export function SettingsGate({ children, back }: { children: ReactNode; back?: G
       <PageHeader title={tab.label} />
       <Panel testId="not-for-role" bodyClassName="flex flex-wrap items-center gap-3 px-4 py-3">
         <span aria-hidden className="grid size-9 flex-none place-items-center rounded-full bg-accent-soft text-accent-ink">
-          <Icon name="lock" size={18} />
+          <Icon name="lock" size={20} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold text-text">Not available for your role</p>
