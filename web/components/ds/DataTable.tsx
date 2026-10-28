@@ -171,6 +171,8 @@ export function DataTable<T>({
             <col key={c.key} style={c.width ? { width: c.width } : undefined} className={phone(c)} />
           ))}
         </colgroup>
+        {/* On a phone the header is for screen readers only (sr-only: a 1 px clipped box), so
+            nothing in it can run off the screen there (qa-work-31). */}
         <thead className={hideHeader ? "sr-only" : "max-[600px]:sr-only"} role="rowgroup">
           <tr role="row">
             {columns.map((c) => (

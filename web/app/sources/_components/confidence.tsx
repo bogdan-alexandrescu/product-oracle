@@ -1,5 +1,6 @@
 import { Chip, type ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
+import { formatPercent } from "@/lib/format";
 
 type Confidence = Schemas["ConfidenceOut"];
 type Kind = Schemas["SourceOut"]["kind"];
@@ -12,6 +13,35 @@ export const KIND_LABEL: Record<Kind, string> = {
   fireflies: "Fireflies",
   google_docs: "Google Docs",
 };
+
+/** An item's kind in words, one ("Pull request") and many ("Pull requests"). */
+const ITEM_KIND: Record<string, [one: string, many: string]> = {
+  file: ["File", "Files"],
+  page: ["Page", "Pages"],
+  doc: ["Doc", "Docs"],
+  message: ["Message", "Messages"],
+  thread: ["Thread", "Threads"],
+  transcript: ["Transcript", "Transcripts"],
+  issue: ["Issue", "Issues"],
+  pull_request: ["Pull request", "Pull requests"],
+  release: ["Release", "Releases"],
+  milestone: ["Milestone", "Milestones"],
+  readme: ["README", "READMEs"],
+};
+
+/** The item kinds a search can filter on, in the filter's order. */
+export const ITEM_KINDS = Object.keys(ITEM_KIND);
+
+const kindWords = (k: string) => {
+  const words = k.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+/** One item's kind: "Message", "Pull request". */
+export const itemKind = (k: string) => ITEM_KIND[k]?.[0] ?? kindWords(k);
+
+/** Items of a kind: "Messages", "Pull requests". */
+export const itemKinds = (k: string) => ITEM_KIND[k]?.[1] ?? `${kindWords(k)}s`;
 
 export const FACTOR_LABEL: Record<string, string> = {
   source: "Kind of source",
@@ -26,7 +56,7 @@ export function confidenceLevel(c: Confidence): { label: string; kind: ChipKind 
   return { label: "Medium", kind: "warn" };
 }
 
-export const pct = (v: number) => `${Math.round(v * 100)}%`;
+export const pct = formatPercent;
 
 /** The factors behind a confidence value with their share of the weight. */
 export function confidenceFactors(c: Confidence) {

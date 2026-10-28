@@ -9,7 +9,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
-import { when, type Summary } from "./_lib";
+import { dayMonth, when, type Summary } from "./_lib";
 
 type Proposal = Schemas["IntakeProposalOut"];
 
@@ -96,7 +96,9 @@ function ProposalCard({ p, approver, onChanged }: { p: Proposal; approver: boole
           </Chip>
         </span>
       </div>
-      <span className="text-[13px] text-text2">Proposed {when(p.created_at)}</span>
+      <span className="text-[13px] text-text2" title={when(p.created_at)}>
+        Proposed {dayMonth(p.created_at)}
+      </span>
       <ProposalDiff p={p} />
       <Outcome p={p} />
       {error && <InlineError>{error}</InlineError>}

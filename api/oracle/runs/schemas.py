@@ -976,6 +976,9 @@ class RunSummary(BaseModel):
     # Dismiss clears the item (once nothing of the run is left to read).
     cancel_again: list[str] = []
     can_dismiss_overrun: bool = False
+    # Whether the caller may decide the checkpoint the run waits on (the run page's
+    # ``can_decide``): the Runs row shows Decide or Review items only then.
+    can_decide: bool = False
     # Work given up on that Oracle still checks: submissions it looks for (Retry, or
     # Cancel past the lookup cap), to cancel them and count their cost if they landed,
     # and workflows it stopped cancelling, whose cost it reads until they end.

@@ -254,7 +254,7 @@ test("strategy: an owner drafts the next strategy version with Oracle from the s
   await sheet.getByRole("button", { name: "Draft with Oracle" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Vision or strategy draft");
-  await expect(page.getByText("product-strategy").first()).toBeVisible();
+  await expect(page.getByTestId("run-document").filter({ visible: true })).toContainText("Product strategy");
 });
 
 // protects=with no vision, an owner sees New vision; its sheet asks the horizon in years and

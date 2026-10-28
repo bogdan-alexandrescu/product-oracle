@@ -8,7 +8,7 @@ import { GoalPicker, TemplateThemePicker, useConfirmedGoals, useDraftChoice } fr
 import { ErrorNote, Loading } from "@/components/ui";
 import { STOP_HELP, stopLabel } from "@/app/runs/_lib";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDay } from "@/lib/format";
+import { formatDay, formatMoney, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -27,14 +27,14 @@ const DEPTHS: { value: Depth; label: string }[] = [
   { value: "deep", label: "Deep" },
 ];
 
-const usd = (n: number) => `$${n.toFixed(2)}`;
+const usd = formatMoney;
 
 /** Why the baseline is rebuilt first, as its tooltip says it. */
 function reasonText(status: ReviewStatus): string {
   if (status.reason === "build_under_way" || status.build_under_way) return "A baseline build is under way";
   if (status.reason === "never_reviewed" || !status.last_approved_at) return "No baseline review has been approved yet";
   const days = status.age_days ?? 0;
-  return `The last baseline review was approved ${days} day${days === 1 ? "" : "s"} ago`;
+  return `The last baseline review was approved ${plural(days, "day")} ago`;
 }
 
 const getReviewStatus = () => unwrap(api.GET("/v1/baseline/review-status"));

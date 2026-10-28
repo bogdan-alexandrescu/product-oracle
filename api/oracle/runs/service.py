@@ -1284,10 +1284,16 @@ async def read_run(db: AsyncSession, run_id: uuid.UUID, principal: Principal | N
     if run.status == "draft" or not segments or not any(s.swarm_workflow_id for s in segments):
         await load_learned(runtime)
         notes += [n for n in runtime.notes() if n not in notes]
+    summary = _summary(
+        run, refs, waiting, segments, next((c for c in checkpoints if _owes(c)), None)
+    )
+    summary.can_decide = (
+        waiting is not None
+        and principal is not None
+        and may_decide(principal, waiting, run.flow, leads)
+    )
     return RunOut(
-        **_summary(
-            run, refs, waiting, segments, next((c for c in checkpoints if _owes(c)), None)
-        ).model_dump(),
+        **summary.model_dump(),
         knobs=KnobsOut(
             depth=knobs.depth,  # type: ignore[arg-type]
             roles=knobs.roles,
@@ -1677,7 +1683,16 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
         )
         for seg in rows:
             segments[seg.run_id].append(seg)
-    return [_summary(r, refs, pending.get(r.id), segments[r.id], owed.get(r.id)) for r in runs]
+    principal = visibility.principal_of(db)
+    leads = await engineering_leads(db) if principal is not None and pending else frozenset()
+    out = []
+    for r in runs:
+        row = _summary(r, refs, pending.get(r.id), segments[r.id], owed.get(r.id))
+        cp = pending.get(r.id)
+        if cp is not None and principal is not None:
+            row.can_decide = may_decide(principal, cp, r.flow, leads)
+        out.append(row)
+    return out
 
 
 async def read_scope(db: AsyncSession, run_id: uuid.UUID) -> PrdScopeOut:

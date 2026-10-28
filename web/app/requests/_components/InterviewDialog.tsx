@@ -27,7 +27,7 @@ const ABOUT: { value: About; label: string }[] = [
 
 const QUESTIONS: { value: Questions; label: string; testId: string }[] = [
   { value: "drafted", label: "Oracle drafts them", testId: "interview-questions-drafted" },
-  { value: "pricing", label: "Pricing", testId: "interview-questions-pricing" },
+  { value: "pricing", label: "Use the pricing question set", testId: "interview-questions-pricing" },
 ];
 
 /** A link's expiry in the Company time zone, labelled ("Oct 29, 9:14 AM PDT", #447). */
@@ -179,11 +179,12 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
       <div className="flex flex-col gap-1">
         <span className="text-sm font-semibold text-text2">Questions</span>
         <SegmentedControl label="Questions" size="sm" items={QUESTIONS} value={questions} onChange={setQuestions} />
-        {questions === "pricing" && (
-          <p data-testid="interview-pricing-hint" className="text-sm text-text2">
-            Six fixed questions on price, what it replaces and who approves the purchase. You can edit them next.
-          </p>
-        )}
+        {/* qa-work-12: one line on what each choice does. */}
+        <p data-testid="interview-questions-hint" className="text-sm text-text2">
+          {questions === "pricing"
+            ? "Six fixed questions on price, what it replaces and who approves the purchase. You can edit them next."
+            : "Oracle writes questions about what you picked above. You can edit them next."}
+        </p>
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="flex justify-end gap-2 pt-1">

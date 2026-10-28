@@ -1,11 +1,35 @@
 import { expect, test, type Page } from "./test";
 
+import { MOCK_TICK_ERRORS_KEY } from "../lib/api/mock/runs";
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /** The run's status badge (Next keeps the list page mounted but hidden). */
 function status(page: Page) {
   return page.getByTestId("run-status").filter({ visible: true });
+}
+
+/**
+ * fix-work review: waits until a tab's mock API has nothing in flight. The mock keeps the data
+ * in the context's localStorage, and every call (a GET too) loads it all and saves it all back,
+ * queued in order within its own tab only: a second tab's call still running while the first
+ * tab decides saves its older copy over the decision. One more call answers once every call
+ * queued before it has, and no call follows it.
+ */
+async function settled(tab: Page) {
+  await expect
+    .poll(
+      () =>
+        tab.evaluate(async () => {
+          const g = globalThis as { __poMockCalls?: string[]; __poMockFetch?: (r: Request) => Promise<Response> };
+          const before = g.__poMockCalls?.length ?? 0;
+          await g.__poMockFetch!(new Request(new URL("/v1/runs", location.origin)));
+          await new Promise((r) => setTimeout(r, 300));
+          return (g.__poMockCalls?.length ?? 0) - before;
+        }),
+      { intervals: [0] },
+    )
+    .toBe(1);
 }
 
 async function openRuns(page: Page) {
@@ -25,10 +49,10 @@ test("runs list shows each run with its status, and cost only on the approval an
   await expect(waiting).not.toContainText("$");
   const approval = rows.and(page.locator('[data-document="usage-alerts-v2"]'));
   await expect(approval).toContainText("Awaiting cost approval");
-  await expect(approval.locator('[data-cost="prominent"]')).toContainText("est.");
+  await expect(approval.locator('[data-cost="prominent"]')).toContainText("estimated");
   const overrun = rows.and(page.locator('[data-document="team-workspaces"]'));
   await expect(overrun).toContainText("Paused: over budget");
-  await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 / $9.00");
+  await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 of $9.00 estimated");
 });
 
 test("run detail: approve each checkpoint through to the imported PRD", async ({ page }) => {
@@ -37,13 +61,12 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await expect(page.getByTestId("run-notes")).toContainText("Local agent runtime");
   // P3d Cost prominence: the cost is one small line in Details.
-  await expect(page.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$6.30 of $26.50 est.");
+  await expect(page.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$6.30 of $26.50 estimated");
 
   // The open checkpoint: its state in the row (named once, in the decision and the inspector),
   // Decide as the page's primary action.
   const chip = page.getByTestId("segment-baseline").getByTestId("checkpoint-waiting");
   await expect(chip).toHaveText(/^Waiting/);
-  await expect(chip).toHaveAttribute("href", "#decide");
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toContainText("Confirm the baseline");
   await expect(page.getByRole("complementary", { name: "Run" }).filter({ visible: true })).toContainText("Confirm the baseline");
   await page.getByRole("button", { name: "Decide", exact: true }).click();
@@ -53,7 +76,7 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
 
   // The baseline's artifacts can be read before deciding.
   const baseline = page.getByTestId("segment-baseline");
-  await baseline.getByRole("button", { name: "baseline.yaml" }).click();
+  await baseline.getByRole("button", { name: "Baseline", exact: true }).click();
   await expect(page.getByTestId("artifact-content")).toContainText("confidence");
 
   // Requesting changes needs a note; the segment runs again.
@@ -450,6 +473,7 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await openRuns(page);
     const rows = page.getByTestId("run-row");
     await expect(rows).toHaveCount(5);
+    // qa-work-9: rows are named by their documents ("Team onboarding PRD"), not slugs.
     const byRun: Record<string, string> = {};
     for (const row of await rows.all()) {
       const slug = (await row.getAttribute("data-document"))!;
@@ -470,6 +494,7 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await expect(page.getByTestId("inbox-state-tabs")).toBeVisible();
     await expect(page.getByTestId("inbox-needs")).not.toContainText(` ${short("usage-alerts-v2")}`);
     await page.goto(byRun["team-onboarding"]!);
+    await expect(page).toHaveURL(new RegExp(`/runs/${short("team-onboarding")}`));
     await expect(page.getByTestId("run-name")).toContainText("Team onboarding");
     await expect(page.getByText(`Run ${short("team-onboarding")}`)).toHaveCount(0);
     await context.close();
@@ -490,6 +515,10 @@ test("a decision SwarmCloud has not taken yet: recorded, shown as delivering, fi
   const other = await page.context().newPage();
   await other.goto(page.url());
   await expect(other.getByTestId("checkpoint-baseline_confirm")).toContainText("Waiting");
+  // fix-work review: the second tab's own loading is done before the first decides, so it
+  // never saves the mock data it read before the decision over it (failed under 3 workers).
+  await settled(other);
+  await settled(page);
 
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   // The page re-reads the run: the review is approved, delivering, with why it waits. That
@@ -553,4 +582,16 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
   await row.getByRole("link").first().click();
   await page.getByRole("button", { name: "Check agents now" }).click();
   await expect(status(page)).toHaveText("Running");
+});
+
+test("fix-work review: a check that could not read some runs says so on a run that is not at work", async ({ page }) => {
+  await page.addInitScript(([key]) => localStorage.setItem(key, "2"), [MOCK_TICK_ERRORS_KEY] as const);
+  await openRuns(page);
+  await page.getByTestId("run-row").filter({ hasText: "team onboarding" }).getByRole("link").click();
+  await expect(status(page)).toHaveText("Waiting for review");
+  await page.getByRole("button", { name: "Check agents now" }).click();
+  const result = page.getByTestId("tick-result");
+  // Why no agent works on this run, and the runs the check could not read.
+  await expect(result).toContainText("No agents are working right now; the run is waiting for your review.");
+  await expect(result).toContainText(/2 runs could not be checked at .+\.$/);
 });

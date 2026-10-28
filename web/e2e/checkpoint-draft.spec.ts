@@ -109,6 +109,6 @@ test("a decision over a draft that changed since it loaded is refused until I lo
   await expect(changed).toHaveCount(0);
   await sendBack();
   await expect(page.getByTestId("review-status")).toHaveText(/^Sent back/);
-  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
+  await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
   await expect(page.getByTestId("segment-roadmap_items").getByTestId("checkpoint-roadmap_items")).toContainText("Changes requested");
 });

@@ -35023,6 +35023,11 @@ export interface components {
              * @default false
              */
             can_dismiss_overrun: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
             /** Searching */
             searching?: string | null;
             /** Import Failed */
@@ -35289,6 +35294,11 @@ export interface components {
              * @default false
              */
             can_dismiss_overrun: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
             /** Searching */
             searching?: string | null;
             /** Import Failed */

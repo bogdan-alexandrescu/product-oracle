@@ -22,7 +22,7 @@ test.describe("desktop", () => {
     await openPresent(page);
     const text = (await banner(page).innerText()).trim();
     expect(text).toMatch(/· Draft ·/);
-    expect(text).toMatch(/Imported [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M/);
+    expect(text).toMatch(/Imported [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{1,2}:\d{2} [AP]M/);
     expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     expect(text).not.toMatch(/· draft|imported /);
     // Not again in the control bar.
