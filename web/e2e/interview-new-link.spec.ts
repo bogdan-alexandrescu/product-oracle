@@ -70,7 +70,7 @@ async function makeNewLink(page: Page): Promise<string> {
   await expect(dialog).toHaveCount(0);
 
   // The page says when the link was made, and no longer offers to show the old one.
-  await expect(page.getByTestId("interview-link-made")).toHaveText(/^Made [A-Z][a-z]{2} \d{1,2}/);
+  await expect(page.getByTestId("interview-link-made")).toHaveText(/^[A-Z][a-z]{2} \d{1,2}/);
   await expect(page.getByTestId("interview-link-note")).toContainText("Make a new link");
   await expectNothingCut(page, "interview-about");
   return url;
@@ -93,6 +93,20 @@ test("a member makes a new link; the old link says it was replaced", async ({ pa
   await oldAndNewLinks(page, url);
 });
 
+test("the old link of a withdrawn interview says it was withdrawn", async ({ page }) => {
+  // protects=review minor 2: an old link of an interview withdrawn after a new link says so;
+  // fails_when=it says replaced and sends the customer to ask for a new link that is withdrawn
+  // too; no_claim=the API's order of checks (api/tests/test_interviews.py).
+  const url = await makeNewLink(page);
+  await page.getByRole("button", { name: "Withdraw link", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "Withdraw link", exact: true }).click();
+  await expect(page.getByTestId("interview-status")).toHaveText("Withdrawn");
+  await page.goto(OLD_LINK);
+  await expect(page.getByTestId("interview-refused")).toHaveText("This link was withdrawn.");
+  await page.goto(new URL(url).pathname);
+  await expect(page.getByTestId("interview-refused")).toHaveText("This link was withdrawn.");
+});
+
 test("a viewer is not offered a new link", async ({ page }) => {
   // protects=the creator-or-approver rule through the interview's can_manage, and the made
   // date for every reader; fails_when=a viewer sees Make a new link or not when the link was
@@ -100,7 +114,7 @@ test("a viewer is not offered a new link", async ({ page }) => {
   await login(page, "viewer@example.com");
   await openInterview(page);
   // Everyone who reads the interview sees when its link was made; only a manager may replace it.
-  await expect(page.getByTestId("interview-link-made")).toHaveText(/^Made [A-Z][a-z]{2} \d{1,2}/);
+  await expect(page.getByTestId("interview-link-made")).toHaveText(/^[A-Z][a-z]{2} \d{1,2}/);
   await expect(page.getByTestId("interview-link-note")).toBeVisible();
   await expect(page.getByRole("button", { name: "Make a new link", exact: true })).toHaveCount(0);
 });

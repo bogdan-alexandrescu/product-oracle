@@ -19,7 +19,7 @@ import pytest
 from sqlalchemy import select, update
 
 from oracle.baseline.models import Entity
-from oracle.interviews import public, turns
+from oracle.interviews import public, service, turns
 from oracle.interviews.models import Interview, InterviewMessage
 from oracle.jobs import worker
 from oracle.jobs.models import LlmJob
@@ -641,8 +641,6 @@ async def test_the_ticker_expires_links_and_snapshots_what_was_said(client, ctx,
     """protects=expiry by the ticker with a snapshot only when there is an answer;
     fails_when=an expired interview stays open or one without answers is snapshotted;
     no_claim=Cloud Scheduler: the sweep is called directly."""
-    from oracle.interviews import service
-
     said, token = await invited(client, ctx, fake)
     _, cookie = await open_link(client, token)
     ask(fake)
@@ -720,6 +718,65 @@ async def test_a_new_link_replaces_the_old_one(client, ctx, fake, no_wait):
     finished = await client.post(path, headers=ctx.as_("approver"))
     assert finished.status_code == 409
     assert finished.json()["detail"] == "This interview is finished, so it can't get a new link."
+
+
+async def test_a_link_past_its_expiry_gets_no_new_link(client, ctx, fake, no_wait):
+    """protects=review minor 1: a link whose 7 days passed is refused a new link even before
+    the ticker marks it expired; fails_when=a new link reopens it for 7 days and skips its
+    snapshot; no_claim=the ticker (test_the_ticker_expires_links_and_snapshots_what_was_said)."""
+    iv, _ = await invited(client, ctx, fake)
+    async with tenant_session(ctx.tenant_id) as s:
+        await s.execute(
+            update(Interview).values(link_expires_at=datetime.now(UTC) - timedelta(seconds=5))
+        )
+        await s.commit()
+    resp = await client.post(f"/v1/interviews/{iv['id']}/new-link", headers=ctx.as_("approver"))
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == service.NEW_LINK_REFUSED["expired"]
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Interview, uuid.UUID(iv["id"]))
+        assert row.replaced_link_hashes == [] and row.link_expires_at < datetime.now(UTC)
+
+
+async def test_an_old_link_of_a_closed_interview_says_why_it_closed(client, ctx, fake, no_wait):
+    """protects=review minor 2: an old link of an interview later withdrawn or finished says
+    withdrawn or used, not replaced; fails_when=it tells the customer to ask for a new link
+    that would not work either; no_claim=the web's wording (web/e2e/interview-new-link)."""
+    iv, old = await invited(client, ctx, fake)
+    resp = await client.post(f"/v1/interviews/{iv['id']}/new-link", headers=ctx.as_("commenter"))
+    new = resp.json()["url"].rsplit("/i/", 1)[1]
+    _, cookie = await open_link(client, new)
+    done = await client.post(f"/v1/public/interviews/{new}/finish", headers=cookie)
+    assert done.status_code == 200, done.text
+    stale = await client.get(f"/v1/public/interviews/{old}")
+    assert stale.status_code == 410 and stale.json() == {"reason": "used"}
+
+    other, old2 = await invited(client, ctx, fake, interviewee_name="Ben Ode")
+    await client.post(f"/v1/interviews/{other['id']}/new-link", headers=ctx.as_("commenter"))
+    await client.post(f"/v1/interviews/{other['id']}/revoke", headers=ctx.as_("commenter"))
+    stale = await client.get(f"/v1/public/interviews/{old2}")
+    assert stale.status_code == 410 and stale.json() == {"reason": "withdrawn"}
+
+
+async def test_only_the_last_replaced_links_are_kept(client, ctx, fake, no_wait):
+    """protects=review minor 4: replaced links' hashes are capped at the last
+    REPLACED_LINKS_KEPT; fails_when=the list grows with every new link, so an old link stays
+    recognisable forever; no_claim=the exact cap (an implementation choice)."""
+    iv, first = await invited(client, ctx, fake)
+    path = f"/v1/interviews/{iv['id']}/new-link"
+    tokens = [first]
+    for _ in range(service.REPLACED_LINKS_KEPT + 1):
+        resp = await client.post(path, headers=ctx.as_("commenter"))
+        assert resp.status_code == 201, resp.text
+        tokens.append(resp.json()["url"].rsplit("/i/", 1)[1])
+    async with tenant_session(ctx.tenant_id) as s:
+        row = await s.get(Interview, uuid.UUID(iv["id"]))
+        kept = [public.hash_value(t) for t in tokens[-service.REPLACED_LINKS_KEPT - 1 : -1]]
+        assert row.replaced_link_hashes == kept
+    forgotten = await client.get(f"/v1/public/interviews/{first}")
+    assert forgotten.status_code == 404 and forgotten.json() == {"reason": "expired"}
+    recent = await client.get(f"/v1/public/interviews/{tokens[-2]}")
+    assert recent.status_code == 410 and recent.json() == {"reason": "replaced"}
 
 
 async def test_public_operations_are_not_mcp_tools(client):
