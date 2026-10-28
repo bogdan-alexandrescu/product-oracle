@@ -223,9 +223,9 @@ test("phone: tabs scroll on one line; features keep delivery and confidence", as
   await expect(page.getByTestId("confirmed-chip")).toBeHidden();
 
   const guided = page.getByTestId("feature-f.guided-setup");
-  await expect(guided.getByTestId("feature-delivery")).toBeVisible();
-  await expect(guided.getByTestId("feature-delivery")).toHaveText("In progress");
-  await expect(guided.getByTestId("feature-confidence")).toBeVisible();
+  await expect(guided.getByTestId("phone-feature-delivery")).toBeVisible();
+  await expect(guided.getByTestId("phone-feature-delivery")).toHaveText("In progress");
+  await expect(guided.getByTestId("phone-feature-confidence")).toBeVisible();
   await expect(guided.getByRole("img", { name: "Confidence 71%" })).toBeVisible();
   expect(await clippedTexts(guided)).toEqual([]);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

@@ -762,10 +762,10 @@ function FeatureRow({
         </span>
       </td>
       {/* A phone keeps the delivery state and confidence, labelled, on the feature's second line (qa-plan-50). */}
-      <td role="cell" data-testid="feature-delivery" className="truncate px-2 py-1.5 max-[600px]:block max-[600px]:overflow-visible max-[600px]:p-0">
+      <td role="cell" data-testid="phone-feature-delivery" className="truncate px-2 py-1.5 max-[600px]:block max-[600px]:overflow-visible max-[600px]:p-0">
         <DeliveryChip value={feature.attrs?.status} />
       </td>
-      <td role="cell" data-testid="feature-confidence" className="px-2 py-1.5 text-center max-[600px]:flex max-[600px]:items-center max-[600px]:gap-1 max-[600px]:p-0">
+      <td role="cell" data-testid="phone-feature-confidence" className="px-2 py-1.5 text-center max-[600px]:flex max-[600px]:items-center max-[600px]:gap-1 max-[600px]:p-0">
         <span className="hidden text-sm text-text2 max-[600px]:inline">Confidence</span>
         <ConfidenceRing value={feature.confidence} low={low} size={32} />
       </td>
