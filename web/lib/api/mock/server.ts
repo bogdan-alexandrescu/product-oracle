@@ -5149,6 +5149,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       roadmap: db.simple_roadmap,
       onePager: db.simple_one_pager,
       rituals: ensureRituals(db, me),
+      chatLines: (id) =>
+        Object.values(db.simple_chat?.threads ?? {})
+          .filter((t) => t.meeting_id === id)
+          .flatMap((t) => t.messages.filter((x) => x.author_kind === "person").map((x) => x.body)),
     };
     const meetingsDb = ensureMeetings(db, meetingsCtx);
     const meetingsRes = (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
