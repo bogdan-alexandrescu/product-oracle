@@ -300,7 +300,68 @@ export const OP_WORDS: Record<string, string> = {
   set_action_item_status: "Set an action item's status",
   add_launch_task: "Add a launch task",
   set_launch_task_status: "Set a launch task's status",
+  estimate_feature: "Estimate value and effort",
+  confirm_item: "Confirm the item",
+  edit_line: "Edit a one-pager line",
+  add_key_date: "Add a key date",
+  edit_key_date: "Change a key date",
+  remove_key_date: "Remove a key date",
+  set_milestone: "Set a milestone",
+  add_feature_ask: "File a feature ask",
 };
+
+/** What happened, in plain words, before the item it happened to (Home's "Since your last visit"). */
+const DONE_WORDS: Record<string, string> = {
+  move_dates: "Dates moved for",
+  change_horizon: "Horizon changed for",
+  reorder: "Reordered",
+  cut: "Cut",
+  restore: "Restored",
+  edit_title: "Retitled",
+  edit_outcome: "Outcome changed for",
+  accept_date_suggestion: "Suggested dates accepted for",
+  accept_risk: "Risk accepted on",
+  shift_dependents: "Dependents moved after",
+  move_dependency: "Dependency moved for",
+  override_priority: "Priority changed for",
+  add_item_task: "Task added to",
+  edit_item_task: "Task changed on",
+  set_item_task_status: "Task status set on",
+  add_action_item: "Action item added",
+  edit_action_item: "Action item changed",
+  set_action_item_status: "Action item status set",
+  add_launch_task: "Launch task added to",
+  set_launch_task_status: "Launch task status set on",
+  estimate_feature: "Effort estimated for",
+  confirm_item: "Confirmed",
+  edit_line: "One-pager line edited",
+  add_key_date: "Key date added",
+  edit_key_date: "Key date changed",
+  remove_key_date: "Key date removed",
+  add_item: "Added",
+  merge_item: "Merged",
+  keep_both: "Kept beside its look-alike:",
+  set_milestone: "Milestone set for",
+  add_feature_ask: "Feature ask filed:",
+};
+
+/**
+ * The walk: a change as Home's "Since your last visit" says it, in plain words, never the op's
+ * internal name: "Effort estimated for F-08 Conversion attribution v0". `item` is the item it
+ * changed (its PRD code and title) when the reader sees it.
+ */
+export function changeWords(c: Pick<Schemas["SimpleChangeOut"], "op" | "after" | "target">, item: { code?: string | null; title: string } | null | undefined): string {
+  const after = (c.after ?? {}) as Record<string, unknown>;
+  let lead = DONE_WORDS[c.op] ?? "Changed";
+  if (c.op === "estimate_feature") {
+    const value = "goal_value" in after;
+    const effort = "effort" in after;
+    lead = value && effort ? "Value and effort estimated for" : value ? "Value estimated for" : "Effort estimated for";
+  }
+  const named = typeof after.title === "string" ? after.title : typeof after.name === "string" ? after.name : null;
+  const subject = item ? `${item.code ? `${item.code} ` : ""}${item.title}` : named;
+  return subject ? `${lead} ${subject}` : lead.replace(/ (for|to|on|after|beside its look-alike):?$|:$/, "");
+}
 
 const LINE_FIELDS = ["title", "outcome", "start_date", "end_date", "horizon"];
 

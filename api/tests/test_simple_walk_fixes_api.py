@@ -220,3 +220,16 @@ async def test_next_review_lists_the_rituals_real_attendees(client):
     assert names == {uid(w, "owner"), uid(w, "approver"), uid(w, "commenter")}
     async with tenant_session(w.ctx.tenant_id) as s:
         assert await s.scalar(select(User).where(User.id == uuid.UUID(uid(w, "owner"))))
+
+
+def test_simple_page_names():
+    """protects=the Ask panel's chip names Simple's pages in words (Home, Roadmap, ...),
+    never the route; fails_when=/simple reads "/simple"; no_claim=Detailed's page names."""
+    from oracle.discussions.context import page_name
+
+    assert page_name("/simple") == "Home"
+    assert page_name("/simple/roadmap?prd=x") == "Roadmap"
+    assert page_name("/simple/priorities") == "Priorities"
+    assert page_name("/simple/decisions") == "Decisions"
+    assert page_name("/simple/one-pagers/guided-setup") == "One-pager"
+    assert page_name("/settings/members") == "Settings · Members"

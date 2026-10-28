@@ -103,7 +103,7 @@ const markCodes = (tab: Page) =>
 const CODES = {
   "setup-checklist": "SC",
   "alert-rules": "AR",
-  "alert-digest": "AD",
+  "alert-digest": "F-06",
   "alert-mobile": "AM",
   "setup-import": "F-12",
   "alert-export": "AE",

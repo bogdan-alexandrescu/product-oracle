@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -95,7 +95,7 @@ function Drawing({ flow, big }: { flow: Flow; big?: boolean }) {
  * line names its PRD (`documentId`): the API looks the bet up on that page. While Oracle
  * draws (the simple_visual job), the panel says so and reads again until the drawing lands.
  */
-export function FlowPanel({ subject, documentId, onClose }: { subject: FlowSubject; documentId?: string; onClose?: () => void }) {
+export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: FlowSubject; documentId?: string; onClose?: () => void; onDrawn?: (flow: Flow) => void }) {
   const key = `simple-visual|${subject.kind}|${subject.id}`;
   const q = useQuery(key, () =>
     unwrap(
@@ -105,12 +105,28 @@ export function FlowPanel({ subject, documentId, onClose }: { subject: FlowSubje
     ),
   );
   const pending = q.data?.pending ?? false;
-  const { reload } = q;
+  // The walk: read again until the job ends (a ref, so a re-render never stops the reading),
+  // then tell the place that asked (its thumbnail, its "No flow yet") what was drawn.
+  const reloadRef = useRef(q.reload);
+  const onDrawnRef = useRef(onDrawn);
+  useEffect(() => {
+    reloadRef.current = q.reload;
+    onDrawnRef.current = onDrawn;
+  });
   useEffect(() => {
     if (!pending) return;
-    const t = window.setInterval(() => void reload(), 2000);
+    const t = window.setInterval(() => void reloadRef.current(), 2000);
     return () => window.clearInterval(t);
-  }, [pending, reload]);
+  }, [pending]);
+  const drawnFlow = q.data?.flow ?? null;
+  const told = useRef<string | null>(null);
+  useEffect(() => {
+    if (!drawnFlow || pending) return;
+    const mark = `${drawnFlow.version}`;
+    if (told.current === mark) return;
+    told.current = mark;
+    onDrawnRef.current?.(drawnFlow);
+  }, [drawnFlow, pending]);
   const [shown, setShown] = useState<number | null>(null);
   const [old, setOld] = useState<Flow | null>(null);
   const [full, setFull] = useState(false);
@@ -184,6 +200,16 @@ export function FlowPanel({ subject, documentId, onClose }: { subject: FlowSubje
             {shown !== null ? " (an older version)" : ""}
           </span>
           {v.pending && <span className="text-text2" data-testid="flow-pending">Oracle is drawing the next version…</span>}
+          {!v.pending && v.failed && shown === null && (
+            <span className="text-danger" data-testid="flow-failed">
+              Oracle could not draw the next version.{" "}
+              {v.can_revise && open.length > 0 && (
+                <button type="button" className="underline" disabled={busy} onClick={() => void revise()}>
+                  Retry
+                </button>
+              )}
+            </span>
+          )}
           {v.versions.length > 1 && (
             <label className="flex items-center gap-1">
               <span className="text-text2">History</span>
@@ -261,10 +287,16 @@ export function FlowPanel({ subject, documentId, onClose }: { subject: FlowSubje
       </div>
     ) : (
       <div className="space-y-2">
-        <p data-testid="flow-empty">{v.pending ? "Oracle is drawing the user flow and the screen it touches…" : "No flow yet: Oracle has not drawn a user flow or a wireframe for this proposal."}</p>
+        <p data-testid="flow-empty">
+          {v.pending
+            ? "Oracle is drawing the user flow and the screen it touches…"
+            : v.failed
+              ? `Oracle could not draw the flow${v.failure ? `: ${v.failure}` : ""}.`
+              : "No flow yet: Oracle has not drawn a user flow or a wireframe for this proposal."}
+        </p>
         {v.can_revise && !v.pending && (
           <Button onClick={() => void ask()} disabled={busy}>
-            Ask Oracle to draw it
+            {v.failed ? "Retry" : "Ask Oracle to draw it"}
           </Button>
         )}
       </div>

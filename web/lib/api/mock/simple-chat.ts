@@ -492,7 +492,7 @@ function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, c
 function sees(chat: ChatDb, c: StoredCard, ctx: ChatCtx): boolean {
   const m = meetingOf(chat, c);
   if (m) return m.attendee_ids.includes(ctx.id);
-  return c.thread === `ask:${ctx.id}` || c.thread === `walk:${ctx.id}`;
+  return c.thread.startsWith(`ask:${ctx.id}:`) || c.thread === `walk:${ctx.id}`;
 }
 
 async function engine(db: SimpleDb, ctx: ChatCtx, method: string, path: string, body?: unknown): Promise<Response> {
@@ -549,6 +549,12 @@ async function walkOut(db: SimpleDb, chat: ChatDb, ctx: ChatCtx) {
   return { steps };
 }
 
+/** The Simple page an Ask thread belongs to (oracle.simple.chat.page_of). */
+export function pageOf(page: string | null | undefined): string {
+  const path = `/${(page ?? "").split("?")[0].split("#")[0].split("/").filter(Boolean).join("/")}`;
+  return path === "/simple" || path.startsWith("/simple/") ? path : "/simple";
+}
+
 /** The S9 routes; null for any other path. */
 export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, req: Request, p: string[]): Promise<Response | null> {
   if (p[1] !== "simple") return null;
@@ -557,13 +563,18 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
 
   if (p[2] === "walk" && !p[3] && m === "GET") return json(200, await walkOut(db, chat, ctx));
 
-  if (p[2] === "chat" && !p[3] && m === "GET") return json(200, threadOut(db, chat, chat.threads[`ask:${ctx.id}`] ?? null, ctx, null));
+  // The walk: one Ask thread per person AND page (chat.page_of; Home without a page).
+  if (p[2] === "chat" && !p[3] && m === "GET") {
+    const key = `ask:${ctx.id}:${pageOf(new URL(req.url).searchParams.get("page"))}`;
+    return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, null));
+  }
   if (p[2] === "chat" && p[3] === "messages" && !p[4] && m === "POST") {
     const b = await body();
     const text = String(b.text ?? "").trim();
     if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
-    const understood = say(db, chat, `ask:${ctx.id}`, null, ctx, text, b.only_understood === true);
-    return json(200, { ...threadOut(db, chat, chat.threads[`ask:${ctx.id}`] ?? null, ctx, null), understood });
+    const key = `ask:${ctx.id}:${pageOf(typeof b.page === "string" ? b.page : null)}`;
+    const understood = say(db, chat, key, null, ctx, text, b.only_understood === true);
+    return json(200, { ...threadOut(db, chat, chat.threads[key] ?? null, ctx, null), understood });
   }
 
   if (p[2] === "meetings" && p[3] && p[4] === "chat") {

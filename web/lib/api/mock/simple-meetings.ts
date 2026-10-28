@@ -393,13 +393,19 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
         return { id: o.id, ritual_id: r.id, ritual_title: r.title, due_at: o.due_at, ends_at: o.ends_at ?? iso(Date.parse(o.due_at) + r.duration_min * 60_000), length_min: r.duration_min, attendee_ids: [r.owner_id, ...r.attendee_ids], ready: o.status === "ready" };
       }),
   ];
+  // The walk: the ritual's real attendees add whoever attended the last review held from it.
+  const ritualOf = new Map<string, string>([...db.occurrences, ...(ctx.rituals?.occurrences ?? [])].map((o) => [o.id, o.ritual_id]));
+  const held = (ritualId: string): string[] =>
+    [...db.meetings]
+      .filter((m) => m.occurrence_id && ritualOf.get(m.occurrence_id) === ritualId)
+      .sort((a, b) => b.started_at.localeCompare(a.started_at))[0]?.attendee_ids ?? [];
   const open = made
     .filter((o) => (only ? o.id === only : Date.parse(o.ends_at) >= now && (active.has(o.ritual_id) || !rituals.some((r) => r.id === o.ritual_id))))
     .sort((a, b) => a.due_at.localeCompare(b.due_at))
     .filter((o, i, xs) => !!only || xs.findIndex((x) => x.ritual_id === o.ritual_id) === i);
   const rows: Schemas["SimpleUpcomingMeeting"][] = open.map((o) => ({
     occurrence_id: o.id, ritual_id: o.ritual_id, ritual_title: o.ritual_title, due_at: o.due_at, ends_at: o.ends_at, length_min: o.length_min,
-    attendees: [...new Set(o.attendee_ids)].map((i) => ref(ctx, i)), meeting_id: db.meetings.find((m) => m.occurrence_id === o.id)?.id ?? null,
+    attendees: [...new Set([...o.attendee_ids, ...held(o.ritual_id)])].map((i) => ref(ctx, i)), meeting_id: db.meetings.find((m) => m.occurrence_id === o.id)?.id ?? null,
     pre_read_ready: !!o.ready, can_start: mayStartRitual(ctx, o.ritual_id),
   }));
   if (only) return rows;
@@ -407,7 +413,7 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
     if (!r.next_due_at || open.some((o) => o.ritual_id === r.id)) continue;
     rows.push({
       occurrence_id: null, ritual_id: r.id, ritual_title: r.title, due_at: r.next_due_at, ends_at: iso(Date.parse(r.next_due_at) + r.duration_min * 60_000),
-      length_min: Math.min(Math.max(r.duration_min, 5), 240), attendees: [...new Set([r.owner_id, ...r.attendee_ids])].map((i) => ref(ctx, i)), meeting_id: null,
+      length_min: Math.min(Math.max(r.duration_min, 5), 240), attendees: [...new Set([r.owner_id, ...r.attendee_ids, ...held(r.id)])].map((i) => ref(ctx, i)), meeting_id: null,
       pre_read_ready: false, can_start: mayStartRitual(ctx, r.id),
     });
   }
