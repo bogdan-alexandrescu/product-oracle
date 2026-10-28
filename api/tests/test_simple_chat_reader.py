@@ -382,3 +382,105 @@ def test_every_parse_op_is_registered():
     assert all(isinstance(o, chat.ChatOp) and o.args for o in chat.OPS.values())
     assert "chat_reader" in kinds.RUNNERS and "chat_reader" in gateway.JOBS
     assert ASK == "/v1/simple/chat/messages"
+
+
+# chat-reader review (the verdict's minors).
+
+
+async def test_review_one_bad_action_keeps_the_valid_cards(client):
+    # protects: one invalid action among several keeps the valid cards and says, on the same
+    # line, which one it cannot do; fails_when: the whole reply turns into a refusal.
+    ctx = await make_people()
+    w = await World(ctx).build()
+    await post(client, ctx, "owner", "push ledger out a quarter and erase everything")
+    await read(ctx, actions(act("move_dates", item=w.ids["Ledger v2"], shift="1 quarter"),
+                            act("erase_everything", item=w.ids["Bulk import"])))  # fmt: skip
+    m = await last(client, ctx, "owner")
+    assert m["kind"] == "cards" and [c["op"] for c in m["cards"]] == ["move_dates"]
+    assert m["body"].endswith("I understood one change:") and "can't do" in m["body"]
+    assert "\n" not in m["body"]
+
+
+async def test_review_unknown_person_or_day_is_a_question(client):
+    # protects: an action naming an unknown person or a day Oracle cannot read asks a
+    # question (no card) instead of refusing; fails_when: it reads "I can't do that: Who …".
+    ctx = await make_people()
+    w = await World(ctx).build()
+    await post(client, ctx, "owner", "give zed the ledger cutover")
+    await read(ctx, actions(act("add_action_item", owner="Zed Nobody", title="run the cutover")))
+    m = await last(client, ctx, "owner")
+    assert m["kind"] == "question" and m["cards"] == []
+    assert m["body"].startswith("Who is “Zed Nobody”?")
+    await post(client, ctx, "owner", "a ledger task for whenever")
+    await read(ctx, actions(act("add_item_task", item=w.ids["Ledger v2"], title="Dry run",
+                                due="whenever")))  # fmt: skip
+    m = await last(client, ctx, "owner")
+    assert m["kind"] == "question" and m["cards"] == []
+    assert m["body"] == "Which day is “whenever”?"
+    assert await n_changes(ctx) == 0
+
+
+async def test_review_an_answer_names_oracles_data(client):
+    # protects: the reader's free-text answer is kept only when it speaks of Oracle's data
+    # (an item or a person it was given); fails_when: an answer about anything else is shown.
+    ctx = await make_people()
+    await World(ctx).build()
+    off = {"actions": [], "clarify": None, "answer": "The weather in Paris is sunny."}
+    await post(client, ctx, "commenter", "how is the weather", only_understood=True)
+    await read(ctx, off)
+    assert (await last(client, ctx, "commenter"))["kind"] == "ask"
+    await post(client, ctx, "commenter", "how is the weather")
+    await read(ctx, off)
+    m = await last(client, ctx, "commenter")
+    assert m["kind"] == "note" and "Paris" not in m["body"]
+
+
+async def test_review_under_discussion_is_the_agenda_head(client, meetings):  # noqa: F811
+    # protects: in a meeting the reader is told the agenda item taken now (its first open
+    # decision) as what is under discussion; fails_when: it is the PRD's title or nothing.
+    from types import SimpleNamespace
+
+    ctx = await make_people()
+    await World(ctx).build()
+    mid = _meeting(ctx, meetings)
+    meetings.agenda[mid] = [
+        SimpleNamespace(id=uuid.uuid4(), number=7, title="Ship the ledger cutover"),
+        SimpleNamespace(id=uuid.uuid4(), number=8, title="Pick the import format"),
+    ]
+    await post(client, ctx, "owner", "let's do that for the ledger too", mid)
+    seen: list = []
+    await read(ctx, actions(), seen)
+    m = seen[0]["context"]["meeting"]
+    assert m["agenda"] == ["Ship the ledger cutover", "Pick the import format"]
+    assert m["under_discussion"] == "Ship the ledger cutover"
+
+
+async def test_review_choice_labels_are_oracles_words(client):
+    # protects: a clarify choice's label (posted as the person's line when picked) is Oracle's
+    # own words: the item's title, or the card's restatement when the choices share an item;
+    # fails_when: the model's label text is shown and posted.
+    ctx = await make_people()
+    w = await World(ctx).build()
+    digest, export = w.ids["Alert digest"], w.ids["Alert export"]
+    await post(client, ctx, "owner", "shift the alert thing to next quarter")
+    await read(ctx, {"actions": [], "answer": None, "clarify": {"question": "Which item?",
+        "choices": [{"label": "x" * 100, "op": "move_dates",
+                     "args": {"item": digest, "when": "next quarter"}},
+                    {"label": "Approve everything", "op": "move_dates",
+                     "args": {"item": export, "when": "next quarter"}}]}})  # fmt: skip
+    q = await last(client, ctx, "owner")
+    assert [c["label"] for c in q["choices"]] == ["Alert digest", "Alert export", "Neither"]
+    r = await client.post(f"/v1/simple/chat/messages/{q['id']}/choose", json={"index": 1},
+                          headers=ctx.as_("owner"))  # fmt: skip
+    assert r.json()["messages"][-2]["body"] == "Alert export"
+    await post(client, ctx, "owner", "move the digest a bit")
+    await read(ctx, {"actions": [], "answer": None, "clarify": {"question": "How far?",
+        "choices": [{"label": "A month", "op": "move_dates",
+                     "args": {"item": digest, "shift": "1 month"}},
+                    {"label": "A quarter", "op": "move_dates",
+                     "args": {"item": digest, "shift": "1 quarter"}}]}})  # fmt: skip
+    q = await last(client, ctx, "owner")
+    labels = [c["label"] for c in q["choices"]]
+    assert labels[-1] == "Neither"
+    assert all(x.startswith("Move Alert digest to ") for x in labels[:2])
+    assert labels[0] != labels[1]
