@@ -258,7 +258,8 @@ test("fix-work review: To decide asks for the New requests, so ones past the que
     await expect(rows(page).filter({ hasText: title })).toHaveCount(1);
   }
   await expect(page.getByTestId("requests-empty")).toHaveCount(0);
-  await expect(rows(page).filter({ hasText: "Decided request" })).toHaveCount(0);
+  // All requests stays in the page, hidden, while To decide shows.
+  await expect(page.getByTestId("new-requests").getByTestId("request-row").filter({ hasText: "Decided request" })).toHaveCount(0);
 });
 
 test("fix-work review: the Themes tab shows its count, and keeps up with a new theme", async ({ page }) => {
@@ -299,6 +300,7 @@ test("fix-work review: filters, ticked requests and the open request stay across
   // To decide keeps the goal and the search it shares with All requests.
   await tab(page, "new").click();
   await expect(page).toHaveURL(/\/requests\/new$/);
-  await expect(goalFilter(page).locator("option:checked")).toHaveText("Raise activation");
-  await expect(filters.getByLabel("Search requests")).toHaveValue("e");
+  const toDecide = page.getByTestId("new-requests");
+  await expect(toDecide.getByLabel("Goal", { exact: true }).locator("option:checked")).toHaveText("Raise activation");
+  await expect(toDecide.getByLabel("Search requests")).toHaveValue("e");
 });
