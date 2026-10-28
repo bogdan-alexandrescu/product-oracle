@@ -20,6 +20,13 @@ function day(d: string | null | undefined): string {
   return d ? calendarDay(d.slice(0, 10), { month: "short", day: "numeric", year: "numeric" }) : "";
 }
 
+/** What holds a decider-approved draft back, in the meeting banner's words ("Waiting on Rae's approval · Sections Scope need a reviewer"). */
+function heldWords(d: Schemas["OnePagerDraft"]): string {
+  const names = d.waiting_on.map((p) => p.name);
+  const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
+  return [...(names.length ? [`Waiting on ${who}'s approval`] : []), ...d.blocked_by].join(" · ");
+}
+
 /** "2h ago": how long since `at` (Remind's "Reminded 2h ago"). */
 export function ago(at: string, now = Date.now()): string {
   const minutes = Math.max(0, Math.floor((now - Date.parse(at)) / 60000));
@@ -159,8 +166,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           <strong>Working draft</strong>
           <span>· {v.draft.changes} {v.draft.changes === 1 ? "change" : "changes"}</span>
           <span>· published v{v.draft.base_version ?? v.version} stays live until approved</span>
-          {v.draft.decider_approved && v.draft.waiting_on.length > 0 && (
-            <span>· Approved in {v.draft.approved_in ?? "the meeting"} · publishes when {v.draft.waiting_on.map((p) => p.name).join(", ")} approves</span>
+          {v.draft.decider_approved && (v.draft.waiting_on.length > 0 || v.draft.blocked_by.length > 0) && (
+            <span>· Approved in {v.draft.approved_in ?? "the meeting"} · not yet published: {heldWords(v.draft)}</span>
           )}
           {v.draft.status === "submitted" && !v.draft.decider_approved && v.draft.waiting_on.length > 0 && (
             <span data-testid="draft-waits-on">· Submitted · waiting on review from {v.draft.waiting_on.map((p) => p.name).join(", ")}</span>
@@ -266,7 +273,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                         {wide === l.id && l.flow_subject && (
                           // A phone's widened card is a full-height sheet.
                           <div className="simple-noprint fixed inset-0 z-40 overflow-auto bg-[var(--simple-paper)] p-4 md:static md:z-auto md:bg-transparent md:p-0" data-widened="true" aria-label={`User flow of bet ${numbers.get(l.id)}`} role="group">
-                            <FlowPanel subject={{ kind: "one_pager_line", id: l.flow_subject }} onClose={() => setWide(null)} />
+                            <FlowPanel subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} onClose={() => setWide(null)} />
                           </div>
                         )}
                         {l.decisions.length > 0 && (

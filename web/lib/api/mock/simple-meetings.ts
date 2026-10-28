@@ -17,7 +17,17 @@
  *
  * The minutes job (production walk): ending a meeting answers at once unless the key holds
  * "minutes-failed" (the job fails: "failed", Draft again requeues it, which then answers) or
- * "minutes-slow" (still drafting past 2 minutes: "slow"); Send works in every state.
+ * "minutes-slow" (still drafting past 2 minutes: "slow"), "minutes-later" (drafting, then
+ * Oracle's minutes MINUTES_LATER_MS after End on the mock clock) or "minutes-later-failed"
+ * (drafting, then failed); Send works in every state.
+ *
+ * "no-reviewers": Guided setup has no required reviewer (a PRD started from an empty skeleton).
+ * Approve publishes only when nothing holds it: an absent required reviewer, or (with
+ * "section-reviewer") the commenter named as the reviewer of Guided setup's required section
+ * "What we will build" and absent, whom the draft then waits on too (drafts._section_people);
+ * with "section-needs-reviewer" that section has nobody who may approve it and the draft's
+ * blocked_by says so (drafts.held). The decision then reads "not yet published: …" in the
+ * banner's words.
  *
  * Each decided flow is linked (meetings.decided_flows): a meeting decision on a draft item
  * names it with its flow, S10's (the priorities mock's bundles); "flow" in MOCK_MEETINGS_KEY
@@ -34,6 +44,8 @@ import { publishOnePager, type OnePagerDb } from "./simple-one-pager";
 import { roadmapOut, type SimpleDb } from "./simple-roadmap";
 
 export const MOCK_MEETINGS_KEY = "po-mock-simple-meetings";
+/** "minutes-later": the minutes job ends this long after End (the production walk: 14 s). */
+export const MINUTES_LATER_MS = 20_000;
 
 type Role = Schemas["Me"]["role"];
 type Ref = Schemas["SimplePersonRef"];
@@ -71,9 +83,11 @@ interface Meeting {
   minutes_state: "drafting" | "ready" | "sent" | null;
   /** The minutes job while drafting (meetings._minutes_job). */
   minutes_job?: "drafting" | "slow" | "failed" | null;
+  /** "minutes-later": when (mock clock, ms) the job ends, and how. */
+  minutes_due?: { at: number; outcome: "succeeded" | "failed" } | null;
   delivery: Delivery | null;
   sent_at: string | null;
-  approved: { at: string; waiting_on: string[] } | null;
+  approved: { at: string; waiting_on: string[]; blocked_by?: string[] } | null;
 }
 
 interface Decision {
@@ -138,7 +152,7 @@ function prds(ctx: MeetingsCtx): Prd[] {
   const dana = ctx.members.find((m) => m.email === "dana.decider@example.com");
   const approver = ctx.members.find((m) => m.email === "approver@example.com");
   return [
-    { slug: "guided-setup", title: "Guided setup", id: ctx.onePager.doc.id, ids: [ctx.onePager.doc.id, stableUuid("simple-prd/onboarding-roadmap")], decider: dana?.id ?? null, reviewers: approver ? [approver.id] : [] },
+    { slug: "guided-setup", title: "Guided setup", id: ctx.onePager.doc.id, ids: [ctx.onePager.doc.id, stableUuid("simple-prd/onboarding-roadmap")], decider: dana?.id ?? null, reviewers: approver && !flags().includes("no-reviewers") ? [approver.id] : [] },
     { slug: "usage-alerts", title: "Usage alerts", id: stableUuid("simple-prd/alerts-roadmap"), ids: [stableUuid("simple-prd/alerts-roadmap")], decider: null, reviewers: [] },
   ];
 }
@@ -297,17 +311,34 @@ function proposals(ctx: MeetingsCtx, p: Prd): Change[] {
   return [...roadmap, ...lines].filter((c) => sees(ctx, c)).sort((a, b) => (a.at < b.at ? -1 : 1)).map((c) => bare(ctx, c));
 }
 
+/** The decider approved, and something still holds publishing (drafts.holds). */
+const held = (m: Meeting) => !!m.approved && (m.approved.waiting_on.length > 0 || (m.approved.blocked_by ?? []).length > 0);
+
+const people = (names: string[]) => (names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+
 function meetingDrafts(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting, p: Prd): Schemas["SimpleDraftOut"][] {
   const made = db.decisions.filter((d) => d.meeting_id === m.id && d.change_ids.length);
   if (!made.length) return [];
   return [{
-    id: stableUuid(`simple-meeting-draft/${m.id}`), document: docRef(p), status: m.approved ? (m.approved.waiting_on.length ? "submitted" : "approved") : "working",
+    id: stableUuid(`simple-meeting-draft/${m.id}`), document: docRef(p), status: m.approved ? (held(m) ? "submitted" : "approved") : "working",
     base_version: p.slug === ctx.onePager.doc.slug ? ctx.onePager.version : 1, version: null, created_by: m.presenter_id, created_at: made[made.length - 1].at,
     participant_ids: [...new Set(made.map((d) => d.approver_id).filter((x): x is string => !!x))], changes: made.length,
     submitted_at: m.approved?.at ?? null, submitted_by: m.approved ? m.presenter_id : null, decider_approved: !!m.approved,
-    waiting_on: m.approved?.waiting_on ?? [], approved_at: m.approved && !m.approved.waiting_on.length ? m.approved.at : null, blocked_by: [],
+    waiting_on: m.approved?.waiting_on ?? [], approved_at: m.approved && !held(m) ? m.approved.at : null, blocked_by: m.approved?.blocked_by ?? [],
     can_submit: false, can_resume: false, can_approve: false, change_log: [], can_withdraw: false,
   }];
+}
+
+/** A "minutes-later" job whose time came: it answers (Oracle's minutes) or fails. */
+function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
+  if (!m.minutes_due || m.minutes_state !== "drafting" || mockNowMs() < m.minutes_due.at) return;
+  if (m.minutes_due.outcome === "failed") m.minutes_job = "failed";
+  else {
+    m.minutes = { ...extract(ctx, db, m), summary: `Oracle's minutes of ${m.title}: ${db.decisions.filter((d) => d.meeting_id === m.id).length} decisions taken.`, written_by: "oracle" };
+    m.minutes_state = "ready";
+    m.minutes_job = null;
+  }
+  m.minutes_due = null;
 }
 
 function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeetingOut"] {
@@ -327,6 +358,7 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     open_decisions: openDecisions(ctx, db, p),
     pending_proposals: proposals(ctx, p),
     drafts: meetingDrafts(ctx, db, m, p),
+    waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
     minutes: m.minutes,
     minutes_job: m.status === "ended" && m.minutes_state === "drafting" ? (m.minutes_job ?? "drafting") : null,
     delivery: m.delivery,
@@ -666,6 +698,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
   if (!m) return json(404, { detail: "No such meeting" });
   const prd = ps.find((x) => x.slug === m.prd)!;
   const ok = () => json(200, one(ctx, db, m));
+  settleLater(ctx, db, m);
   if (!p[4] && method === "GET") return ok();
   if (p[4] === "join" && method === "POST") {
     if (m.status !== "live") return json(409, { detail: "This meeting has ended" });
@@ -705,10 +738,16 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     if (!db.decisions.some((d) => d.meeting_id === m.id && d.change_ids.length)) return json(422, { detail: "Nothing to approve: no change was made in this meeting" });
     const present = m.attendee_ids.filter((i) => !m.absent_ids.includes(i));
     const waiting = prd.reviewers.filter((i) => i !== ctx.me.id && !present.includes(i));
-    m.approved = { at: now, waiting_on: waiting };
-    const wait = waiting.map((i) => nameOf(ctx, i)).join(", ");
-    record(db, ctx, m, `Approved ${prd.title} (${waiting.length ? `publishes when ${wait} approves` : "published"})`, [{ kind: "document", id: prd.id }], []);
-    if (prd.slug === ctx.onePager.doc.slug && waiting.length) ctx.onePager.approval = { approved_in: m.title, waiting_on: waiting.map((i) => ref(ctx, i)) };
+    // "section-reviewer": Guided setup's required section "What we will build" names the
+    // commenter as its reviewer; absent, it is not approved over their head and the draft
+    // waits on them (drafts._sections_approve, drafts._section_people).
+    const sectionReviewer = flags().includes("section-reviewer") ? ctx.members.find((x) => x.email === "commenter@example.com") : undefined;
+    if (sectionReviewer && !present.includes(sectionReviewer.id) && sectionReviewer.id !== ctx.me.id && !waiting.includes(sectionReviewer.id)) waiting.push(sectionReviewer.id);
+    const blocked = flags().includes("section-needs-reviewer") ? ["Sections What we will build need a reviewer"] : [];
+    m.approved = { at: now, waiting_on: waiting, blocked_by: blocked };
+    const why = [...(waiting.length ? [`Waiting on ${people(waiting.map((i) => nameOf(ctx, i)))}'s approval`] : []), ...blocked];
+    record(db, ctx, m, `Approved ${prd.title} (${why.length ? `not yet published: ${why.join(" · ")}` : "published"})`, [{ kind: "document", id: prd.id }], []);
+    if (prd.slug === ctx.onePager.doc.slug && why.length) ctx.onePager.approval = { approved_in: m.title, waiting_on: waiting.map((i) => ref(ctx, i)), blocked_by: blocked };
     else if (prd.slug === ctx.onePager.doc.slug) publishOnePager(ctx.onePager);
     return ok();
   }
@@ -720,8 +759,10 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     m.ended_by = ctx.me.id;
     m.minutes = extract(ctx, db, m);
     const job = flags().includes("minutes-failed") ? "failed" : flags().includes("minutes-slow") ? "slow" : null;
-    m.minutes_state = job ? "drafting" : "ready";
-    m.minutes_job = job;
+    const later = flags().includes("minutes-later-failed") ? "failed" : flags().includes("minutes-later") ? "succeeded" : null;
+    m.minutes_state = job || later ? "drafting" : "ready";
+    m.minutes_job = later ? "drafting" : job;
+    m.minutes_due = later ? { at: mockNowMs() + MINUTES_LATER_MS, outcome: later } : null;
     return ok();
   }
   if (p[4] === "minutes" && p[5] === "redraft" && method === "POST") {

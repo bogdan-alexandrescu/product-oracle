@@ -6,7 +6,8 @@
 - ``POST .../comments``: commenter and up, on the newest version (or one annotation).
 - ``POST .../revise``: who changes the subject directly: Oracle redraws it from the open
   comments as the next version.
-- ``POST .../request``: the same people ask Oracle to draw a subject that has none.
+- ``POST .../request``: the same people ask Oracle to draw a subject that has none (a
+  one-pager bet line with its PRD's ``document_id``).
 """
 
 import uuid
@@ -38,11 +39,13 @@ async def _run(db, coro):
 
 @router.get(SUBJECT, response_model=SimpleVisualOut, name="get_simple_visual")
 async def get_simple_visual(
-    kind: str, subject_id: uuid.UUID, principal: Reader, db: TenantDB
-) -> SimpleVisualOut:
+    kind: str, subject_id: uuid.UUID, principal: Reader, db: TenantDB,
+    document_id: uuid.UUID | None = None,
+) -> SimpleVisualOut:  # fmt: skip
     """The subject's visual: its newest drawing (null: none yet), versions newest first,
-    comments, whether Oracle is drawing it, and what the caller may do."""
-    return await _run(db, visuals.read(db, principal, kind, subject_id))
+    comments, whether Oracle is drawing it, and what the caller may do. ``document_id``: a
+    one-pager line's PRD (who may ask Oracle to draw a bet with none)."""
+    return await _run(db, visuals.read(db, principal, kind, subject_id, document_id))
 
 
 @router.get(SUBJECT + "/versions/{number}", response_model=SimpleFlow,
@@ -90,9 +93,14 @@ async def request_simple_visual(
     kind: str, subject_id: uuid.UUID, principal: Commenter, db: TenantDB,
     body: SimpleVisualRequestIn | None = None,
 ) -> SimpleVisualOut:  # fmt: skip
-    """Ask Oracle to draw a subject's visual (a feature on the roadmap that has none)."""
+    """Ask Oracle to draw a subject's visual (a feature on the roadmap, or a one-pager bet
+    with its PRD's ``document_id``, that has none)."""
     out = await _run(
-        db, visuals.ask_for(db, principal, kind, subject_id, body.brief if body else "")
-    )
+        db,
+        visuals.ask_for(
+            db, principal, kind, subject_id, body.brief if body else "",
+            body.document_id if body else None,
+        ),
+    )  # fmt: skip
     await db.commit()
     return out

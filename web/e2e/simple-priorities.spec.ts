@@ -154,7 +154,7 @@ test.describe("desktop", () => {
 
   /**
    * Card simple-priorities-2x2: protects = the value/effort 2x2 draws each row as its goal's
-   * shape with its rank as the number, hollow below the line, beside B's ranked side list;
+   * shape with its short code (codes stay with the item), hollow below the line, beside B's ranked side list;
    * dragging a mark sideways re-estimates effort through the change engine and score and rank
    * update at once; Undo restores; fails_when = marks lack ranks or the below-the-line
    * state, a sideways drag changes goal value instead of effort, the rank does not move, or

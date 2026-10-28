@@ -41674,7 +41674,7 @@
           "simple"
         ],
         "summary": "Get Simple Roadmap",
-        "description": "Every roadmap's items the caller may read on one timeline, grouped by goal, track or\nPRD: each with its resolved dates (source, estimated), open date suggestion,\nmilestone, waterfall phases, dependencies both ways and constraint flags; plus the\ntracks' milestones, the horizon windows, the company's today and the shown roadmaps' key\ndates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``\n(slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).",
+        "description": "Every roadmap's items the caller may read on one timeline, grouped by goal, track or\nPRD: each with its resolved dates (source, estimated), open date suggestion,\nmilestone, waterfall phases, dependencies both ways and constraint flags; plus the\ntracks' milestones, the horizon windows, the company's today and the shown roadmaps' key\ndates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``\n(slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping),\n``roadmap`` (id or slug: one roadmap's items; 404 when the caller cannot read it).\n``roadmaps``: every roadmap the caller may read, for the Roadmap filter.",
         "operationId": "get_simple_roadmap",
         "security": [
           {
@@ -41783,6 +41783,23 @@
                 }
               ],
               "title": "To"
+            }
+          },
+          {
+            "name": "roadmap",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Roadmap"
             }
           }
         ],
@@ -44679,7 +44696,7 @@
           "simple"
         ],
         "summary": "Get Simple Visual",
-        "description": "The subject's visual: its newest drawing (null: none yet), versions newest first,\ncomments, whether Oracle is drawing it, and what the caller may do.",
+        "description": "The subject's visual: its newest drawing (null: none yet), versions newest first,\ncomments, whether Oracle is drawing it, and what the caller may do. ``document_id``: a\none-pager line's PRD (who may ask Oracle to draw a bet with none).",
         "operationId": "get_simple_visual",
         "security": [
           {
@@ -44707,6 +44724,23 @@
               "type": "string",
               "format": "uuid",
               "title": "Subject Id"
+            }
+          },
+          {
+            "name": "document_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Document Id"
             }
           }
         ],
@@ -44965,7 +44999,7 @@
           "simple"
         ],
         "summary": "Request Simple Visual",
-        "description": "Ask Oracle to draw a subject's visual (a feature on the roadmap that has none).",
+        "description": "Ask Oracle to draw a subject's visual (a feature on the roadmap, or a one-pager bet\nwith its PRD's ``document_id``, that has none).",
         "operationId": "request_simple_visual",
         "security": [
           {
@@ -90143,6 +90177,14 @@
               }
             ],
             "title": "Approved In"
+          },
+          "blocked_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocked By",
+            "default": []
           }
         },
         "type": "object",
@@ -93977,11 +94019,32 @@
               }
             ],
             "title": "Priorities Line"
+          },
+          "simple_roadmap": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simple Roadmap"
+          },
+          "simple_filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFilters"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``)."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).\n``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);\nunset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -94058,6 +94121,28 @@
               }
             ],
             "title": "Priorities Line"
+          },
+          "simple_roadmap": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(all|[0-9a-f-]{36})$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simple Roadmap"
+          },
+          "simple_filters": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleFilters"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -112479,6 +112564,32 @@
         ],
         "title": "SimpleFilterOption"
       },
+      "SimpleFilters": {
+        "properties": {
+          "prd": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{0,200}$",
+            "title": "Prd",
+            "default": ""
+          },
+          "goal": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{0,200}$",
+            "title": "Goal",
+            "default": ""
+          },
+          "track": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]{0,200}$",
+            "title": "Track",
+            "default": ""
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SimpleFilters",
+        "description": "The Simple roadmap's PRD, Goal and Track picks, remembered like its Roadmap filter."
+      },
       "SimpleFlag": {
         "properties": {
           "kind": {
@@ -113892,6 +114003,14 @@
             "title": "Drafts",
             "default": []
           },
+          "waiting_people": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Waiting People",
+            "default": []
+          },
           "minutes": {
             "anyOf": [
               {
@@ -114823,6 +114942,11 @@
             "type": "string",
             "title": "Code"
           },
+          "short_code": {
+            "type": "string",
+            "title": "Short Code",
+            "default": ""
+          },
           "title": {
             "type": "string",
             "title": "Title"
@@ -115376,6 +115500,24 @@
             "type": "array",
             "title": "Key Date Roadmaps",
             "default": []
+          },
+          "roadmaps": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleKeyDateRoadmap"
+            },
+            "type": "array",
+            "title": "Roadmaps",
+            "default": []
+          },
+          "roadmap": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -115923,6 +116065,18 @@
             "maxLength": 2000,
             "title": "Brief",
             "default": ""
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
           }
         },
         "type": "object",

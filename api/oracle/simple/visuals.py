@@ -21,7 +21,8 @@ answer brings none.
 Who: viewers read (a visual of a document they cannot see is not there); commenters and up
 comment; who changes the subject's document directly (an owner, its decider, with none its
 track owner: oracle.simple.drafts.can_edit; with no document, the company's owners) asks
-for a drawing and revises. A change's visual is read by whoever may read the change.
+for a drawing and revises. A change's visual is read by whoever may read the change; a
+one-pager bet's by who reads that bet on the page (a working draft's bet: who sees the draft).
 """
 
 import html
@@ -68,10 +69,11 @@ BRIEF_MAX = 2000
 _ID = re.compile(r"^[a-z0-9][a-z0-9-]{0,39}$")
 # The ops whose proposals add or change a feature or a flow (they come with a visual).
 FEATURE_OPS = ("confirm_item", "edit_outcome")
-# Subjects Simple cannot look up (other lanes' or a one-pager line): drawn with their
-# proposal through request_visual, never asked for by id over /request.
+# Subjects Simple cannot look up (other lanes'): drawn with their proposal through
+# request_visual, never asked for by id over /request. A one-pager line is asked for with
+# its PRD (``document_id``): its subject is a bet of the page as the caller reads it.
 LOOSE_KINDS = ("suggestion", "chat_card")
-UNASKABLE_KINDS = (*LOOSE_KINDS, "one_pager_line")
+UNASKABLE_KINDS = LOOSE_KINDS
 
 
 class VisualError(Exception):
@@ -146,6 +148,36 @@ async def _subject(db: AsyncSession, kind: str, subject_id: uuid.UUID) -> Subjec
     return Subject(title="")
 
 
+async def bet_line(
+    db: AsyncSession, principal: Any, document_id: uuid.UUID | None, subject_id: uuid.UUID
+) -> tuple[uuid.UUID, str] | None:
+    """The bet ("What we will build") line of the PRD's one-pager whose subject this is, as
+    the caller reads the page: the published version's, or the working draft's for who
+    sees the draft, whose readers ask for the published bets too. None: no PRD given, or
+    no such bet."""
+    from oracle.simple import one_pager
+    from oracle.simple.changes import ChangeError
+
+    if document_id is None:
+        return None
+    try:
+        page = await one_pager.read(db, principal, str(document_id))
+    except ChangeError:
+        return None
+    for b in page.blocks:
+        for x in b.lines:
+            if x.flow_subject == subject_id:
+                return page.document.id, x.text
+    # Who reads the working draft asks for the published version's bets too.
+    doc = await db.get(Document, page.document.id)
+    b = await one_pager.built(db, doc, queue=False, persist=False)  # type: ignore[arg-type]
+    for blk in [x for x in b.row.blocks or [] if x.get("key") == "bets"]:
+        for x in blk.get("lines") or []:
+            if line_subject(page.document.id, x.get("text") or "") == subject_id:
+                return page.document.id, x["text"]
+    return None
+
+
 async def _visual(db: AsyncSession, kind: str, subject_id: uuid.UUID) -> SimpleVisual | None:
     return await db.scalar(
         select(SimpleVisual).where(
@@ -190,6 +222,10 @@ async def may_read(db: AsyncSession, principal: Any, v: SimpleVisual) -> bool:
         # has the id).
         me = _me(principal)
         return me is not None and (has_role(principal.role, "owner") or me == v.requested_by)
+    if v.subject_kind == "one_pager_line" and v.document_id is not None:
+        # A bet's subject is its words: who has the PRD but not the page the bet is on (a
+        # working draft's) does not read its drawing.
+        return await bet_line(db, principal, v.document_id, v.subject_id) is not None
     return True
 
 
@@ -312,24 +348,39 @@ async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
 
 
 async def read(
-    db: AsyncSession, principal: Any, subject_kind: str, subject_id: uuid.UUID
+    db: AsyncSession,
+    principal: Any,
+    subject_kind: str,
+    subject_id: uuid.UUID,
+    document_id: uuid.UUID | None = None,
 ) -> SimpleVisualOut:
     """The subject's visual as the caller may read it: the newest drawing, the list of
-    versions, the comments and what the caller may do. No visual yet: ``flow`` null."""
+    versions, the comments and what the caller may do. No visual yet: ``flow`` null; a
+    one-pager line is offered the ask with its PRD (``document_id``) only."""
     if subject_kind not in SUBJECT_KINDS:
         raise VisualError(422, f"subject_kind must be one of {', '.join(SUBJECT_KINDS)}")
     v = await _visual(db, subject_kind, subject_id)
+    if v is not None and not await may_read(db, principal, v):
+        if subject_kind != "one_pager_line":
+            raise VisualError(404, "No such visual")
+        # A bet not on the caller's page reads as one with nothing drawn.
+        v = None
     if v is None:
         # Nothing drawn or asked for yet: who may ask is who would revise it.
         try:
             subject = await _subject(db, subject_kind, subject_id)
         except VisualError:
             subject = Subject(title="")
+        bet = None
+        if subject_kind == "one_pager_line":
+            bet = await bet_line(db, principal, document_id, subject_id)
+            subject.document_id = bet[0] if bet else None
         probe = SimpleVisual(
             subject_kind=subject_kind, subject_id=subject_id,
             document_id=subject.document_id, brief="",
         )  # fmt: skip
-        if not await may_read(db, principal, probe):
+        # A bet found on the caller's page is theirs to read.
+        if subject_kind != "one_pager_line" and not await may_read(db, principal, probe):
             raise VisualError(404, "No such visual")
         return SimpleVisualOut(
             subject_kind=subject_kind,
@@ -340,10 +391,9 @@ async def read(
             pending=False,
             can_comment=False,
             can_revise=subject_kind not in UNASKABLE_KINDS
+            and (subject_kind != "one_pager_line" or bet is not None)
             and await may_revise(db, principal, probe),
         )
-    if not await may_read(db, principal, v):
-        raise VisualError(404, "No such visual")
     vers = await _versions(db, v)
     comments = list(
         await db.scalars(
@@ -486,12 +536,28 @@ async def request_visual(
 
 
 async def ask_for(
-    db: AsyncSession, principal: Any, subject_kind: str, subject_id: uuid.UUID, brief: str
+    db: AsyncSession,
+    principal: Any,
+    subject_kind: str,
+    subject_id: uuid.UUID,
+    brief: str,
+    document_id: uuid.UUID | None = None,
 ) -> SimpleVisualOut:
     """The route's "Ask Oracle to draw it" for a subject with no visual yet (who revises).
-    Only subjects Simple can look up: the others are drawn with their proposal."""
+    Only subjects Simple can look up: the others are drawn with their proposal. A
+    one-pager bet line names its PRD (``document_id``); its words are the brief."""
     if subject_kind in UNASKABLE_KINDS:
         raise VisualError(422, "Oracle draws this visual with its proposal; it is not asked for")
+    if subject_kind == "one_pager_line":
+        if document_id is None:
+            raise VisualError(422, "A one-pager line's visual is asked for with its PRD")
+        if not await may_revise(db, principal, SimpleVisual(document_id=document_id)):
+            raise VisualError(403, "Only who changes this directly asks Oracle for its visual")
+        bet = await bet_line(db, principal, document_id, subject_id)
+        if bet is None:
+            raise VisualError(404, "No such bet on the PRD's one-pager")
+        await request_visual(db, principal, subject_kind, subject_id, bet[1], document_id=bet[0])
+        return await read(db, principal, subject_kind, subject_id, bet[0])
     subject = await _subject(db, subject_kind, subject_id)
     probe = SimpleVisual(subject_kind=subject_kind, subject_id=subject_id,
                          document_id=subject.document_id, brief="")  # fmt: skip

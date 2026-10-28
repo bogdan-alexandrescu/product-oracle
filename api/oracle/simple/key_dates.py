@@ -15,8 +15,8 @@ decider its owner (an owner of one of its tracks while an approver or owner) app
 change (``drafts.can_edit``); approvers and commenters propose it, routed to the decider,
 else the roadmap's deciding owners, else the company's owners; viewers read.
 
-**Ops** (``target.document_id``: the roadmap; ``before``/``after``: ``{"key_date": {name,
-date, note} | null}``):
+**Ops** (``target.document_id``, or ``target.roadmap_id`` as add_item names it: the
+roadmap; ``before``/``after``: ``{"key_date": {name, date, note} | null}``):
 
 - ``add_key_date``: ``after`` {name, date, note?}; the new key date's id is chosen when the
   change is made (``target.key_date_id``). ``before`` ``{"key_date": null}``.
@@ -332,7 +332,11 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     from oracle.simple import changes
 
     me, now = changes._me(principal), company_time.now()
-    doc = changes._uuid(body.target.get("document_id"), "document_id")
+    # The Roadmap filter names the roadmap as ``roadmap_id`` (as add_item does); either works.
+    named = {body.target.get(k) for k in ("document_id", "roadmap_id")} - {None, ""}
+    if len(named) > 1:
+        raise _error(422, "target: document_id and roadmap_id name different roadmaps")
+    doc = changes._uuid(next(iter(named), None), "document_id")
     await db.execute(select(Document.id).where(Document.id == doc).with_for_update())
     if await _readable(db, doc) is None:
         raise _error(404, "No such roadmap")

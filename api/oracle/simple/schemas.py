@@ -238,9 +238,14 @@ class SimpleRoadmapOut(BaseModel):
     changes_in_review: int = 0
     # S3b: the open drafts the reader sees (their items read as the draft has them).
     drafts: list["SimpleDraftBrief"] = []
-    # Roadmap-plus: the key dates of the roadmaps shown, by day, and those roadmaps.
+    # Roadmap-plus: the key dates of the roadmap chosen (else of every roadmap the reader
+    # may read), by day, and those roadmaps.
     key_dates: list[SimpleKeyDate] = []
     key_date_roadmaps: list[SimpleKeyDateRoadmap] = []
+    # The Roadmap filter: every roadmap the reader may read (whether their change applies
+    # there), and the one the read is narrowed to (``roadmap``), if any.
+    roadmaps: list[SimpleKeyDateRoadmap] = []
+    roadmap: "SimpleDocRef | None" = None
 
 
 class DateSuggestionEdit(BaseModel):
@@ -548,6 +553,11 @@ class SimplePriorityRow(BaseModel):
     item_id: uuid.UUID | None = None
     # The item's key, else the feature's key.
     code: str
+    # What a mark on the value/effort 2x2 shows: a short code that never changes with rank, the
+    # feature's code (F-12) else 2-3 capitals from the feature's key, the same for every
+    # reader, unique in the company (a digit added on a clash, in the features' creation
+    # order). oracle.simple.priorities.short_codes.
+    short_code: str = ""
     title: str
     goal: SimplePriorityGoal | None = None
     milestone: str | None = None
@@ -675,6 +685,8 @@ class SimpleVisualReviseIn(BaseModel):
 
 class SimpleVisualRequestIn(BaseModel):
     brief: str = Field(default="", max_length=2000)
+    # A one-pager bet line's PRD (its subject is a bet of that page).
+    document_id: uuid.UUID | None = None
 
 
 class SimplePriorityProposal(BaseModel):
@@ -868,6 +880,9 @@ class OnePagerDraft(BaseModel):
 
     # S8: the meeting the decider approved it in ("Approved in <meeting title>").
     approved_in: str | None = None
+    # What else, besides ``waiting_on``, holds a decider-approved draft back (#723 review:
+    # "Sections Scope need a reviewer"), as the meeting's banner says it.
+    blocked_by: list[str] = []
 
 
 class OnePagerRemindOut(BaseModel):
@@ -1263,6 +1278,9 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     open_decisions: list[SimpleOpenDecision] = []
     pending_proposals: list[SimpleChangeOut] = []
     drafts: list[SimpleDraftOut] = []
+    # Everyone its drafts wait on, named (#723 review: an absent section reviewer need not
+    # be an attendee), for the banner's "Waiting on <name>'s approval".
+    waiting_people: list[SimplePersonRef] = []
     minutes: SimpleMinutes | None = None
     # The minutes job's state while ``minutes_state`` is "drafting" (else None).
     minutes_job: MinutesJobState | None = None

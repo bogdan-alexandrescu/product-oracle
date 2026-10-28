@@ -12023,7 +12023,9 @@ export interface paths {
          *     milestone, waterfall phases, dependencies both ways and constraint flags; plus the
          *     tracks' milestones, the horizon windows, the company's today and the shown roadmaps' key
          *     dates (the working draft's to who sees it; roadmap-plus). Filters: ``prd``
-         *     (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping).
+         *     (slug or id), ``goal`` (key or id), ``track`` (id), ``from``/``to`` (bars overlapping),
+         *     ``roadmap`` (id or slug: one roadmap's items; 404 when the caller cannot read it).
+         *     ``roadmaps``: every roadmap the caller may read, for the Roadmap filter.
          */
         get: operations["get_simple_roadmap"];
         put?: never;
@@ -13017,7 +13019,8 @@ export interface paths {
         /**
          * Get Simple Visual
          * @description The subject's visual: its newest drawing (null: none yet), versions newest first,
-         *     comments, whether Oracle is drawing it, and what the caller may do.
+         *     comments, whether Oracle is drawing it, and what the caller may do. ``document_id``: a
+         *     one-pager line's PRD (who may ask Oracle to draw a bet with none).
          */
         get: operations["get_simple_visual"];
         put?: never;
@@ -13101,7 +13104,8 @@ export interface paths {
         put?: never;
         /**
          * Request Simple Visual
-         * @description Ask Oracle to draw a subject's visual (a feature on the roadmap that has none).
+         * @description Ask Oracle to draw a subject's visual (a feature on the roadmap, or a one-pager bet
+         *     with its PRD's ``document_id``, that has none).
          */
         post: operations["request_simple_visual"];
         delete?: never;
@@ -29415,6 +29419,11 @@ export interface components {
             can_remind: boolean;
             /** Approved In */
             approved_in?: string | null;
+            /**
+             * Blocked By
+             * @default []
+             */
+            blocked_by: string[];
         };
         /**
          * OnePagerFlow
@@ -30694,6 +30703,8 @@ export interface components {
          *     ``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they
          *     last switched to (#723); unset, they land by role (viewers and commenters in Simple).
          *     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).
+         *     ``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);
+         *     unset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all.
          */
         Preferences: {
             /**
@@ -30726,6 +30737,9 @@ export interface components {
             experience?: ("simple" | "detailed") | null;
             /** Priorities Line */
             priorities_line?: string | null;
+            /** Simple Roadmap */
+            simple_roadmap?: string | null;
+            simple_filters?: components["schemas"]["SimpleFilters"] | null;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -30740,6 +30754,9 @@ export interface components {
             experience?: ("simple" | "detailed") | null;
             /** Priorities Line */
             priorities_line?: string | null;
+            /** Simple Roadmap */
+            simple_roadmap?: string | null;
+            simple_filters?: components["schemas"]["SimpleFilters"] | null;
         };
         /**
          * PreviousAttempt
@@ -37264,6 +37281,27 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * SimpleFilters
+         * @description The Simple roadmap's PRD, Goal and Track picks, remembered like its Roadmap filter.
+         */
+        SimpleFilters: {
+            /**
+             * Prd
+             * @default
+             */
+            prd: string;
+            /**
+             * Goal
+             * @default
+             */
+            goal: string;
+            /**
+             * Track
+             * @default
+             */
+            track: string;
+        };
         /** SimpleFlag */
         SimpleFlag: {
             /**
@@ -37818,6 +37856,11 @@ export interface components {
              * @default []
              */
             drafts: components["schemas"]["SimpleDraftOut"][];
+            /**
+             * Waiting People
+             * @default []
+             */
+            waiting_people: components["schemas"]["SimplePersonRef"][];
             minutes?: components["schemas"]["SimpleMinutes"] | null;
             /** Minutes Job */
             minutes_job?: ("drafting" | "slow" | "failed") | null;
@@ -38211,6 +38254,11 @@ export interface components {
             item_id?: string | null;
             /** Code */
             code: string;
+            /**
+             * Short Code
+             * @default
+             */
+            short_code: string;
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;
@@ -38427,6 +38475,12 @@ export interface components {
              * @default []
              */
             key_date_roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
+            /**
+             * Roadmaps
+             * @default []
+             */
+            roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
+            roadmap?: components["schemas"]["SimpleDocRef"] | null;
         };
         /** SimpleSendIn */
         SimpleSendIn: {
@@ -38641,6 +38695,8 @@ export interface components {
              * @default
              */
             brief: string;
+            /** Document Id */
+            document_id?: string | null;
         };
         /** SimpleVisualReviseIn */
         SimpleVisualReviseIn: {
@@ -67497,6 +67553,7 @@ export interface operations {
                 track?: string | null;
                 from?: string | null;
                 to?: string | null;
+                roadmap?: string | null;
             };
             header?: never;
             path?: never;
@@ -69084,7 +69141,9 @@ export interface operations {
     };
     get_simple_visual: {
         parameters: {
-            query?: never;
+            query?: {
+                document_id?: string | null;
+            };
             header?: never;
             path: {
                 kind: string;
