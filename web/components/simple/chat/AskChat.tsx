@@ -90,7 +90,7 @@ const MAX_WAIT_POLLS = 20;
  * (kept in the reader's own thread), else null and the chat posts the line to Ask. A line the
  * reader is still reading is waited for (polled) first: read as a question, it goes to Ask too.
  */
-export async function askInChat(text: string, page: string | undefined): Promise<ReactNode | null> {
+export async function askInChat(text: string, page: string | undefined, handOff?: (text: string) => Promise<void>): Promise<ReactNode | null> {
   let t = await askSay(text, page, true);
   if (t.understood === false) return null;
   const from = t.messages.findLastIndex((m) => m.author_kind === "person");
@@ -105,12 +105,22 @@ export async function askInChat(text: string, page: string | undefined): Promise
     HANDED.add(asked.id);
     return null;
   }
-  return <AskLines lines={lines()} />;
+  return <AskLines lines={lines()} handOff={handOff} />;
 }
 
 /** S9's lines shown in an Ask chat (and the lines after them: a choice's, a retry's); a card applied or discarded reloads them from the reader's thread. */
-function AskLines({ lines }: { lines: ChatMessage[] }) {
+function AskLines({ lines, handOff }: { lines: ChatMessage[]; handOff?: (text: string) => Promise<void> }) {
   const [shown, setShown] = useState(lines);
+  // A line still being read when askInChat stopped waiting: read as Ask's, it goes to Ask now, once.
+  useEffect(() => {
+    if (!handOff) return;
+    for (const m of shown) {
+      if (m.kind !== "ask" || HANDED.has(m.id)) continue;
+      HANDED.add(m.id);
+      const line = shown.find((x) => x.id === m.reply_to);
+      if (line) void handOff(line.body);
+    }
+  }, [shown, handOff]);
   // A choice picked here adds its lines (they follow the last one shown); a reload keeps those shown.
   const take = (t: ChatThread, grow: boolean) =>
     setShown((was) => {
