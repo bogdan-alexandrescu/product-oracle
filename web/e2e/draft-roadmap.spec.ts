@@ -132,7 +132,7 @@ test("Derive and the owner switch by role; unticking the switch persists across 
   const auto = visible(page, "draft-roadmap-auto");
   const box = auto.getByRole("checkbox", { name: "Update the draft roadmap with each new draft" });
   await expect(box).toBeChecked();
-  await auto.getByRole("button", { name: "About deriving for each new draft" }).click();
+  await auto.getByRole("button", { name: "About updating with each new draft" }).click();
   await expect(page.getByText("About $5.50 per draft at standard depth. Runs in the background.").filter({ visible: true })).toBeVisible();
   await box.uncheck();
   await expect(box).not.toBeChecked();

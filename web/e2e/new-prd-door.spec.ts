@@ -160,7 +160,7 @@ test("reopen after an estimate: the brief keeps Draft with Oracle and the sheet 
   await page.reload();
   await expect(page.getByRole("heading", { level: 1, name: "Saved addresses for guests" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Draft with Oracle" })).toBeEnabled();
-  await expect(page.getByRole("button", { name: "More actions" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Actions for / })).toBeVisible();
   await page.goto("/documents");
   await page.getByRole("button", { name: /^Ideas\s*\d+$/ }).click();
   const row = page.getByTestId("idea-row").filter({ hasText: "Saved addresses for guests" });
@@ -207,7 +207,8 @@ test("empty skeleton: the quiet link still creates an empty v1, and a commenter 
   await page.getByTestId("template-option-prd-rfc").click();
   await page.getByRole("button", { name: "Start from an empty skeleton instead" }).click();
   await expect(page).toHaveURL(/\/documents\/skeleton-first-prd$/);
-  await expect(page.getByText("template prd-rfc v1")).toBeVisible();
+  await expect(page.getByTestId("doc-template")).toBeVisible();
+  await expect(page.getByTestId("doc-template")).not.toContainText("prd-rfc");
   await signOut(page);
 
   await login(page, "commenter@example.com");

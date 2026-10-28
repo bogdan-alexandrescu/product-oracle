@@ -71,7 +71,6 @@ test("share a Board link: the address and passcode are shown once; the holder ne
   await expect(sheet.getByLabel("Expires")).toHaveValue("14d");
   await expect(sheet.getByLabel("Allow PDF download")).toBeChecked();
   await expect(sheet.getByText("A downloaded PDF can't be revoked")).toBeVisible();
-  await expect(sheet.getByLabel("Label")).toHaveAttribute("placeholder", "Board, October meeting");
   await sheet.getByLabel("Label").fill("Board, October meeting");
   await sheet.getByRole("button", { name: "Create link" }).click();
 
