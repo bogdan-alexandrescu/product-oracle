@@ -140,13 +140,12 @@ export function roleRefusal(message: string): string | null {
   return rest ? `${only} ${asSentence(rest) ?? ""}`.trim() : only;
 }
 
-/** The API's message as a person reads it: a sentence with its period, or null when it reads as a code. */
+/** The API's message as a person reads it (its own words), or null when it reads as a code. */
 export function asSentence(message: string | null | undefined): string | null {
   // A field's name before its problem ("project_id: give the PostHog project id") is left out.
   const text = message?.trim().replace(/^[a-z]+[_.][a-z0-9_.]*: (?=\S)/, "") ?? "";
   if (!/\s/.test(text) || /[{}]|\w_\w|^\w+:\S/.test(text)) return null;
-  const said = text.replace(/^(\W*)(\p{Ll})/u, (_, lead: string, first: string) => lead + first.toUpperCase());
-  return /[.!?…]["”)]?$/.test(said) ? said : `${said}.`;
+  return text;
 }
 
 export const SOMETHING_WENT_WRONG = "Something went wrong. Try again.";

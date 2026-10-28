@@ -23,8 +23,28 @@ function subscribe(l: () => void) {
   };
 }
 
+const PHONE = "(max-width: 600px)";
+
+function subscribePhone(l: () => void) {
+  const mq = window.matchMedia(PHONE);
+  mq.addEventListener("change", l);
+  return () => mq.removeEventListener("change", l);
+}
+
+/** Whether the window is phone-sized; false on the server and until hydration. */
+export const usePhone = () => useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
+
+/**
+ * The page's info tip in one place only (no tip, and no test id, drawn twice): after the H1
+ * on a wider window, handed to the phone header on a phone.
+ */
+export function PageInfo({ info }: { info: ReactNode }) {
+  const phone = usePhone();
+  return phone ? <PublishPageInfo info={info} /> : <span className="-ml-1 flex flex-none items-center">{info}</span>;
+}
+
 /** Publishes the page's info tip while the header that draws it is mounted. */
-export function PublishPageInfo({ info }: { info: ReactNode }) {
+function PublishPageInfo({ info }: { info: ReactNode }) {
   const id = useId();
   useLayoutEffect(() => {
     infos.set(id, info);

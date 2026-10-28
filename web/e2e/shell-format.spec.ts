@@ -94,8 +94,8 @@ test("errors: a role refusal names who may act; a message reads as a sentence or
   expect(roleRefusal("Requires the commenter role")).toBe("Only commenters, approvers and owners can do this.");
   expect(roleRefusal("Requires the approver role or the engineering lead")).toBe("Only approvers, owners and the engineering lead can do this.");
   expect(roleRefusal("Only an owner can decide this stop")).toBeNull();
-  expect(asSentence("Slack is busy: try again in 30 seconds")).toBe("Slack is busy: try again in 30 seconds.");
-  expect(asSentence("reconciling needs a reason")).toBe("Reconciling needs a reason.");
+  expect(asSentence("Slack is busy: try again in 30 seconds")).toBe("Slack is busy: try again in 30 seconds");
+  expect(asSentence("reconciling needs a reason")).toBe("reconciling needs a reason");
   expect(asSentence("source_changed")).toBeNull();
   expect(asSentence("bad {json}")).toBeNull();
 });

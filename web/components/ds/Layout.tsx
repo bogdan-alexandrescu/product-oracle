@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { Icon, type IconName } from "./Icon";
-import { PublishPageInfo } from "./page-info";
+import { PageInfo } from "./page-info";
 import { PageTabs } from "./PageTabs";
 
 /**
@@ -56,12 +56,7 @@ export function PageHeader({
         {title}
         {suffix && <span data-title-suffix className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2">{suffix}</span>}
       </h1>
-      {info && (
-        <>
-          <span className="-ml-1 flex flex-none items-center max-[600px]:hidden">{info}</span>
-          <PublishPageInfo info={info} />
-        </>
-      )}
+      {info && <PageInfo info={info} />}
       <div
         className={`flex min-w-0 flex-auto flex-wrap items-center gap-2 ${status ? "" : "max-[600px]:hidden"}`}
       >
