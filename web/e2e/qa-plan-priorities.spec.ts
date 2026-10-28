@@ -159,7 +159,7 @@ test("qa-plan-41: no evidence ids; the confidence line in words", async ({ page 
   await rowOf(page, "F-5").getByRole("button", { name: "Address lookup service" }).click();
   const ex = page.getByTestId("explanation-F-5");
   await ex.getByRole("button", { name: "About Confidence used" }).click();
-  await expect(ex.getByTestId("confidence-explain")).toHaveText("Average of 1 evidence item: 60");
+  await expect(ex.getByTestId("confidence-explain")).toHaveText("Average of 1 evidence item: 60%");
   await ex.getByTestId("evidence-chip").first().click();
   const card = page.getByTestId("code-card");
   await expect(card).toContainText("Issue 412");
