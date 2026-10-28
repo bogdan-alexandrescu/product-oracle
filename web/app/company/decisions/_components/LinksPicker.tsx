@@ -32,7 +32,7 @@ const KINDS = [
 ] as const;
 type PickKind = (typeof KINDS)[number]["value"];
 
-type Named = { kind: unknown; id: unknown; ref?: unknown };
+type Named = { kind?: unknown; id?: unknown; ref?: unknown };
 
 /**
  * What a decision is about, by name (prod-3): a document by its title (docLabel), never its

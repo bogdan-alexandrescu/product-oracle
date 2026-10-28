@@ -162,7 +162,7 @@ test.describe("phone", () => {
     await login(page);
     await openTab(page, "market");
     const tabs = page.getByRole("tablist", { name: "Market" });
-    const scrollbar = await tabs.evaluate((el) => ({ style: getComputedStyle(el).scrollbarWidth, bar: el.offsetHeight - el.clientHeight }));
+    const scrollbar = await tabs.evaluate((el: HTMLElement) => ({ style: getComputedStyle(el).scrollbarWidth, bar: el.offsetHeight - el.clientHeight }));
     expect(scrollbar.style).toBe("none");
     expect(scrollbar.bar).toBe(0);
     const pricing = tabs.getByRole("tab", { name: "Pricing" });
