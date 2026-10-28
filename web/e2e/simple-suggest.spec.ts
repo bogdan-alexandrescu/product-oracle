@@ -1,6 +1,6 @@
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { THEME_KEY } from "../lib/theme";
-import { ADMIN } from "./helpers";
+import { ADMIN, signOut } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /*
@@ -41,6 +41,13 @@ async function closeDrawer(page: Page, phone: boolean) {
   if (phone) await page.keyboard.press("Escape");
   else await page.getByTestId("goal-panel").getByRole("button", { name: "Close" }).click();
   await expect(page.getByTestId("goal-panel")).toHaveCount(0);
+}
+
+async function signOutHere(page: Page, phone: boolean) {
+  if (!phone) return signOut(page);
+  await page.getByTestId("phone-user-menu").click();
+  await page.getByRole("dialog", { name: "Account" }).getByRole("button", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/login/);
 }
 
 async function noSidewaysScroll(page: Page, phone: boolean) {
@@ -112,6 +119,7 @@ for (const phone of [false, true]) {
         await noSidewaysScroll(page, phone);
         await closeDrawer(page, phone);
 
+        await signOutHere(page, phone);
         await signIn(page, EMAILS.owner);
         drawer = await openDrawer(page);
         await expect(drawer.getByTestId("suggest-form")).toHaveCount(0);
