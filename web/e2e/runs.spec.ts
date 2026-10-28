@@ -499,13 +499,7 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await expect(page.getByText(`Run ${short("team-onboarding")}`)).toHaveCount(0);
     await context.close();
   }
-  expect(Object.keys(ids[0]!).map((k) => k.toLowerCase().split(" ").slice(0, 2).join(" ")).sort()).toEqual([
-    "checkout redesign",
-    "saved carts",
-    "team onboarding",
-    "team workspaces",
-    "usage alerts",
-  ]);
+  expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "saved-carts", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);
   expect(ids[1]).toEqual(ids[0]);
   expect(dates[1]).toEqual(dates[0]);
 });

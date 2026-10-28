@@ -24,7 +24,7 @@ for (const role of ["viewer", "commenter"] as const) {
     await expect(run(page, "team-workspaces")).toContainText("Paused: over budget");
     // Give the inbox (whose checkpoints say who decides) time to answer before counting buttons.
     await page.waitForTimeout(1000);
-    await expect(table.getByRole("button", { name: /^(Approve|Decide|Resume|Review|Cancel run)$/ })).toHaveCount(0);
+    await expect(table.getByRole("button", { name: /^(Approve|Decide|Resume|Review|Review items|Open|Cancel run)$/ })).toHaveCount(0);
     // Each run still opens from its name.
     await expect(run(page, "team-onboarding").getByRole("link").first()).toHaveAttribute("href", /^\/runs\//);
   });
@@ -34,13 +34,14 @@ test("an approver is not offered a cost approval, an owner's call", async ({ pag
   await openRuns(page, "approver");
   await expect(run(page, "usage-alerts-v2")).toContainText("Awaiting cost approval");
   await page.waitForTimeout(1000);
-  await expect(run(page, "usage-alerts-v2").getByRole("button", { name: "Approve" })).toHaveCount(0);
+  await expect(run(page, "usage-alerts-v2").getByRole("button", { name: /^(Approve|Open)$/ })).toHaveCount(0);
 });
 
 test("an owner gets each row's action", async ({ page }) => {
   await openRuns(page);
-  await expect(run(page, "usage-alerts-v2").getByRole("button", { name: "Approve" })).toBeVisible();
-  await expect(run(page, "team-workspaces").getByRole("button", { name: "Decide" })).toBeVisible();
+  // The cost approval and the overrun open the run, where Approve and Resume are (qa-work-17).
+  await expect(run(page, "usage-alerts-v2").getByRole("button", { name: "Open" })).toBeVisible();
+  await expect(run(page, "team-workspaces").getByRole("button", { name: "Open" })).toBeVisible();
   await expect(run(page, "team-onboarding").getByRole("button", { name: "Decide" })).toBeVisible();
 });
 
@@ -54,7 +55,7 @@ test("runs are named by document and flow, with no slug or short id", async ({ p
   await expect(table.getByRole("columnheader", { name: "Run" })).toHaveCount(0);
   await run(page, "team-workspaces").getByTestId("run-status").click();
   const inspector = page.getByRole("complementary", { name: "Run" }).filter({ visible: true });
-  await expect(inspector).toContainText("Run · selected");
+  await expect(inspector).toContainText("Selected run");
   await expect(inspector).not.toContainText(/Run [0-9a-f]{4}\b/);
   await expect(inspector.getByRole("heading", { name: "Team workspaces PRD" })).toBeVisible();
 });
@@ -65,7 +66,7 @@ test.describe("on a phone", () => {
   test("a viewer's stacked rows carry no action they cannot take", async ({ page }) => {
     await openRuns(page, "viewer");
     await page.waitForTimeout(1000);
-    await expect(page.getByTestId("runs-table").getByRole("button", { name: /^(Approve|Decide)$/ })).toHaveCount(0);
+    await expect(page.getByTestId("runs-table").getByRole("button", { name: /^(Approve|Decide|Open)$/ })).toHaveCount(0);
     await expect(run(page, "usage-alerts-v2").locator('td[data-phone="title"]')).toHaveText("Usage alerts v2 PRD · Baseline to PRD");
   });
 });

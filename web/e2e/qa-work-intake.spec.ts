@@ -32,9 +32,10 @@ const bubble = (page: Page, prompt: string) => thread(page).getByTestId("questio
 test("qa-work-11: the header has one overflow menu, Delete in it", async ({ page }) => {
   await openIntake(page);
   const header = page.locator("header[data-page-header]").filter({ visible: true });
-  await expect(header.getByRole("button", { name: "More actions" })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
-  await header.getByRole("button", { name: "More actions" }).click();
+  // The menu's label names the intake (qa-docs-65): "Actions for <title>".
+  await expect(header.getByRole("button", { name: /^Actions for / })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "More actions" })).toHaveCount(0);
+  await header.getByRole("button", { name: /^Actions for / }).click();
   for (const name of ["Re-analyse", "Archive", "Delete…"]) {
     await expect(page.getByRole("menuitem", { name: new RegExp(`^${name}`) })).toBeVisible();
   }

@@ -23,7 +23,7 @@ import {
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime, plural } from "@/lib/format";
-import { docLabel } from "@/lib/labels";
+import { docLabel, runLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -36,7 +36,6 @@ import {
   runStatusLabel,
   RunCost,
   RunStatusBadge,
-  runName,
   RunsWhere,
   SENT_BACK_STATE,
   WAITING_STATUSES,
@@ -49,11 +48,11 @@ type DocNamed = Parameters<typeof docLabel>[0];
 
 /**
  * What a run is for, by name (qa-shell-32), never its slug or short id: its document's title
- * ("Usage alerts PRD"), else the run's document in words (runName; the Flow column says the flow).
+ * ("Usage alerts PRD"), else the run's document and flow in words (runLabel).
  */
 function runTitle(r: RunSummary, docs: Map<string, DocNamed>): string {
   const d = r.document_id ? docs.get(r.document_id) : undefined;
-  return d ? docLabel(d) : runName(r);
+  return d ? docLabel(d) : runLabel(r);
 }
 
 export default function RunsPage() {
