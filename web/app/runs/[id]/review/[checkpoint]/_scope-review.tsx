@@ -607,7 +607,7 @@ function RawFile({ open, onClose, runId, seq }: { open: boolean; onClose: () => 
     if (!open) return;
     let live = true;
     api.GET("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", { params: { path: { run_id: runId, seq, name } }, parseAs: "text" }).then(({ data, response }) => {
-      if (live) setLoaded({ name, text: response.ok ? (data as string) : `Could not load ${name} (${response.status}).` });
+      if (live) setLoaded({ name, text: response.ok ? (data as string) : `Could not load ${name}. Try again.` });
     });
     return () => {
       live = false;

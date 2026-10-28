@@ -62,7 +62,7 @@ test("impact: reconciling needs a reason, as the API says", async ({ page }) => 
   const r = row(page, "Cart wireframes");
   await r.getByRole("button", { name: "Reconcile…" }).click();
   await r.getByRole("button", { name: "Reconcile", exact: true }).click();
-  await expect(r.getByRole("alert")).toContainText("reconciling needs a reason");
+  await expect(r.getByRole("alert")).toContainText(/reconciling needs a reason/i);
   await r.getByLabel("Why the current version still holds").fill("Only copy changed in scope");
   await r.getByRole("button", { name: "Reconcile", exact: true }).click();
   await expect(r.getByTestId("plan-freshness")).toHaveText("Reconciled");

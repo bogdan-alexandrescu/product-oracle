@@ -14,6 +14,7 @@ const interTight = Inter_Tight({ subsets: ["latin"], variable: "--font-inter-tig
 // DM Mono ships 300/400/500; the rail badge's 600 is synthesised from 500.
 const mono = DM_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-dm-mono", display: "swap" });
 
+// The default; the shell names each page, "<its H1> · Product Oracle" (qa-shell-2, AppShell's DocumentTitle).
 export const metadata: Metadata = {
   title: "Product Oracle",
   description: "PRD review loop",

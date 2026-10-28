@@ -48,18 +48,16 @@ export function AutonomySettings() {
     <>
       <PageHeader
         title="Autonomy"
-        status={
-          <>
-            <InfoTip label="autonomy" align="start" side="bottom">
-              {LEVELS.map((l) => (
-                <span key={l.value} className="block">
-                  <b>{l.title}:</b> {LEVEL_COPY[l.value]}
-                </span>
-              ))}
-            </InfoTip>
-            {capsReady && !owner && <ViewOnly />}
-          </>
+        info={
+          <InfoTip label="autonomy" align="start" side="bottom">
+            {LEVELS.map((l) => (
+              <span key={l.value} className="block">
+                <b>{l.title}:</b> {LEVEL_COPY[l.value]}
+              </span>
+            ))}
+          </InfoTip>
         }
+        status={capsReady && !owner && <ViewOnly />}
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         <p className="text-[15px] text-text2">How far Oracle goes on its own. You can change this any time.</p>

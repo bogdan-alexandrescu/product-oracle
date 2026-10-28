@@ -565,7 +565,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
           </Link>
         }
         title={`New ${label}`}
-        status={
+        info={
           <InfoTip label={`new ${label}s`} align="start" side="bottom">
             Answer what you can; every question is optional. The template and theme follow your answers, and you can
             change either.
@@ -841,7 +841,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
           </Link>
         }
         title="New PRD"
-        status={
+        info={
           <InfoTip label="new PRDs" align="start" side="bottom">
             Say what problem it solves; the rest is optional. Continue and Oracle asks what it still needs to know before
             it drafts.

@@ -234,6 +234,19 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
     <>
       <PageHeader
         title="API tokens"
+        info={
+          <InfoTip label="API tokens" align="start" side="bottom">
+            Every credential that can call this company&apos;s Oracle; secrets are never shown after they are created.
+            Removing a member revokes all of theirs.
+            <span className="mt-2 block">
+              {KINDS.map((k) => (
+                <span key={k} className="block">
+                  <b>{KIND_LABEL[k]}</b>: {KIND_TIP[k]}
+                </span>
+              ))}
+            </span>
+          </InfoTip>
+        }
         status={
           <>
             {active != null && (
@@ -247,17 +260,6 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
                 {expired} expired
               </Chip>
             )}
-            <InfoTip label="API tokens" align="start" side="bottom">
-              Every credential that can call this company&apos;s Oracle; secrets are never shown after they are created.
-              Removing a member revokes all of theirs.
-              <span className="mt-2 block">
-                {KINDS.map((k) => (
-                  <span key={k} className="block">
-                    <b>{KIND_LABEL[k]}</b>: {KIND_TIP[k]}
-                  </span>
-                ))}
-              </span>
-            </InfoTip>
           </>
         }
       />

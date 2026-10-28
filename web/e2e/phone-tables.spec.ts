@@ -223,11 +223,16 @@ test("phone settings: the current tab is in full view, clear of the fades and ch
     const [box, item, more] = await Promise.all([
       strip.boundingBox(),
       current.boundingBox(),
-      strip.evaluate((el) => ({ left: el.hasAttribute("data-more-left"), right: el.hasAttribute("data-more-right") })),
+      strip.evaluate((el) => ({
+        left: el.hasAttribute("data-more-left"),
+        right: el.hasAttribute("data-more-right"),
+        // Where the first whole item starts from each edge: the fade hides up to there.
+        cutL: parseFloat(el.style.getPropertyValue("--cut-l")) || 0,
+        cutR: parseFloat(el.style.getPropertyValue("--cut-r")) || 0,
+      })),
     ]);
-    const fade = 32;
-    expect(item!.x, path).toBeGreaterThanOrEqual(box!.x + (more.left ? fade : 0) - 0.5);
-    expect(item!.x + item!.width, path).toBeLessThanOrEqual(box!.x + box!.width - (more.right ? fade : 0) + 0.5);
+    expect(item!.x, path).toBeGreaterThanOrEqual(box!.x + (more.left ? more.cutL : 0) - 0.5);
+    expect(item!.x + item!.width, path).toBeLessThanOrEqual(box!.x + box!.width - (more.right ? more.cutR : 0) + 0.5);
     // Nor under a chevron button.
     for (const chevron of await nav.locator('[data-testid^="strip-more-"]').all()) {
       const c = (await chevron.boundingBox())!;

@@ -9,6 +9,8 @@ import { useSyncExternalStore } from "react";
 export const OPEN_KEY = "oracle.hop-panel.open";
 
 let open: boolean | null = null;
+/* qa-shell-19: opened by a person (the strip, ⌘J, Simple's Ask Oracle), not restored from storage: focus its question box. */
+let focusAsk = false;
 const listeners = new Set<() => void>();
 let draft = "";
 const draftListeners = new Set<() => void>();
@@ -25,6 +27,7 @@ function read(): boolean {
 }
 
 export function setPanelOpen(next: boolean) {
+  if (next && !read()) focusAsk = true;
   open = next;
   // Words no box took while it was open are dropped, never shown typed in later.
   if (!next && draft) {
@@ -80,4 +83,11 @@ export function useAskDraft(): string {
     () => draft,
     () => "",
   );
+}
+
+/** Whether the panel was just opened by a person (its question box takes focus); asks once. */
+export function takeAskFocus(): boolean {
+  const f = focusAsk;
+  focusAsk = false;
+  return f;
 }

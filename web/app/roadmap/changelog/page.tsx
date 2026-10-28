@@ -1,9 +1,9 @@
 "use client";
 
-import Link from "next/link";
 import { useState } from "react";
 
 import { Button, Chip, Empty, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
+import { PlanCrumb } from "@/app/plan/_crumb";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -90,19 +90,17 @@ export default function ChangelogPage() {
     <Page>
       <PageHeader
         title="Changelog"
-        back={
-          <Link href="/roadmap" className="hover:underline">
-            Roadmap
-          </Link>
+        info={
+          <InfoTip label="Changelog" align="start" side="bottom">
+            Internal entries are for everyone at the company. Public entries need an approver&apos;s Publish; Export
+            gives the published ones as Markdown or HTML for a person to post. Oracle posts nothing outside.
+          </InfoTip>
         }
+        back={<PlanCrumb />}
         status={
           q.data && (
             <>
               <Chip kind="acc">{entries.length} entries</Chip>
-              <InfoTip label="Changelog" align="start" side="bottom">
-                Internal entries are for everyone at the company. Public entries need an approver&apos;s Publish; Export
-                gives the published ones as Markdown or HTML for a person to post. Oracle posts nothing outside.
-              </InfoTip>
             </>
           )
         }

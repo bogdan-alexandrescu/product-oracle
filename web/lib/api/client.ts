@@ -102,27 +102,69 @@ export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
   const { data, error, response } = await call;
   if (response.ok) return data as T;
   if (error && typeof error === "object" && "code" in error && typeof error.code === "string") {
-    const message = "message" in error && typeof error.message === "string" ? error.message : response.statusText;
-    throw new ApiError(response.status, message, error.code, retryAfter(response));
+    const message = "message" in error && typeof error.message === "string" ? error.message : "";
+    throw new ApiError(response.status, describeStatus(response.status, message, true), error.code, retryAfter(response));
   }
   // A structured refusal ({detail: {code, message}}, e.g. D8 "review_changed") keeps its code.
   const inner = error && typeof error === "object" && "detail" in error ? error.detail : null;
   if (inner && typeof inner === "object" && "code" in inner && typeof inner.code === "string") {
-    const message = "message" in inner && typeof inner.message === "string" ? inner.message : response.statusText;
-    throw new ApiError(response.status, message, inner.code);
+    const message = "message" in inner && typeof inner.message === "string" ? inner.message : "";
+    throw new ApiError(response.status, describeStatus(response.status, message, true), inner.code);
   }
   // {detail: {message, …}} without a code (e.g. S8's 409 "has its meeting already") says its message.
   const said = inner && typeof inner === "object" && "message" in inner && typeof inner.message === "string" ? inner.message : null;
   const detail =
     error && typeof error === "object" && "detail" in error && typeof error.detail === "string"
       ? error.detail
-      : (said ?? response.statusText);
+      : (said ?? "");
   throw new ApiError(response.status, describeStatus(response.status, detail), undefined, retryAfter(response));
 }
 
-function describeStatus(status: number, detail: string): string {
+/** Who holds each role or a higher one, in the API's role ladder (viewer < commenter < approver < owner). */
+const ROLE_HOLDERS: Record<string, string> = {
+  viewer: "members",
+  commenter: "commenters, approvers and owners",
+  approver: "approvers and owners",
+  owner: "owners",
+};
+
+/** A 403's "Requires the approver role" as "Only approvers and owners can do this."; null for any other refusal. */
+export function roleRefusal(message: string): string | null {
+  const role = /^Requires the (\w+) role/.exec(message)?.[1];
+  const who = role ? ROLE_HOLDERS[role] : undefined;
+  // The lead's clause widens the role right before it ("Requires the approver role or the engineering lead").
+  const lead = /^Requires the (engineering lead or an owner|\w+ role or the engineering lead)\b/.test(message);
+  if (!who && !lead) return null;
+  const only = who ? `Only ${lead ? `${who.replace(" and ", ", ")} and the engineering lead` : who} can do this.` : "Only owners and the engineering lead can do this.";
+  // What the API says after the refusal ("…: commenters suggest a change instead") stays.
+  const rest = /^[^:]*: (.+)$/.exec(message)?.[1];
+  return rest ? `${only} ${asSentence(rest) ?? ""}`.trim() : only;
+}
+
+/** The API's message as a person reads it (its own words), or null when it reads as a code. */
+export function asSentence(message: string | null | undefined): string | null {
+  // A field's name before its problem ("project_id: give the PostHog project id", "body.title: …")
+  // is left out; a host ("posthog.com: …") is not a field's name and stays.
+  const text = message?.trim().replace(/^(?![a-z0-9-]+\.(?:com|io|net|org|dev|app|ai|co)\b)[a-z]+[_.][a-z0-9_.]*: (?=\S)/, "") ?? "";
+  // One plain word ("Forbidden") still reads; a code ("source_changed") does not.
+  if (/^[A-Z][a-z]+$/.test(text)) return `${text}.`;
+  if (!/\s/.test(text) || /[{}]/.test(text)) return null;
+  // A field's name in brackets inside the sentence ("(basis_ids)") is left out too.
+  return text.replace(/ \([a-z]+_[a-z0-9_]*\)/g, "");
+}
+
+export const SOMETHING_WENT_WRONG = "Something went wrong. Try again.";
+
+/** What a failed call says to a person: never its status, never a code. */
+function describeStatus(status: number, detail: string, coded = false): string {
   if (status === 401) return "Your session has expired. Sign in again.";
+  if (status === 403) {
+    const refusal = roleRefusal(detail);
+    if (refusal) return refusal;
+  }
+  // A coded refusal's message is the API's own words for a person; only a missing one is filled in.
+  if (coded && detail.trim()) return detail;
   if (status === 404) return detail || "Not found.";
   if (status === 501) return "This part of the API is not implemented yet.";
-  return detail ? `${detail} (${status})` : `Request failed (${status}).`;
+  return asSentence(detail) ?? SOMETHING_WENT_WRONG;
 }

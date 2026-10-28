@@ -73,7 +73,7 @@ export default function TrashPage() {
     <>
       <PageHeader
         title="Trash"
-        status={
+        info={
           <InfoTip label="Trash" align="start" side="bottom">
             Deleted artifacts wait here for 30 days, with everything that went with them. Restore brings them back
             together; after 30 days they are gone for good.

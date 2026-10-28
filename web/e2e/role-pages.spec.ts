@@ -105,10 +105,10 @@ for (const role of ROLES) {
     await expect(jobs.getByText(/Approvers and owners/)).toHaveCount(0);
 
     // A document only an owner approves: no "Only an owner approves" note for anyone.
-    // 10d (updates.spec.ts): updates are for owners and approvers; anyone else gets "Document not found".
+    // 10d (updates.spec.ts): updates are for owners and approvers; anyone else gets the document's not-found state.
     await page.goto("/documents/board-update-2026-10/v/1");
     if (approver) await expect(page.getByTestId("doc-status").filter({ visible: true })).toBeVisible();
-    else await expect(page.getByText("Document not found").first()).toBeVisible();
+    else await expect(page.getByText("This document doesn't exist or was deleted.").filter({ visible: true })).toBeVisible();
     await expect(page.getByTestId("owner-approves-note")).toHaveCount(0);
     await expect(page.getByTestId("role-note")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(role === "owner" ? 1 : 0);

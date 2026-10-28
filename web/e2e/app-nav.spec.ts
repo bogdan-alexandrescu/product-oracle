@@ -200,8 +200,9 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/login");
   const bar = page.getByTestId("phone-header");
-  await expect(bar.getByTestId("phone-title")).toHaveText("Sign in");
-  await expect(bar.getByTestId("phone-user-menu")).toHaveCount(0);
+  // qa-shell-22: sign-in keeps its own card heading, no app header.
+  await expect(page.getByRole("heading", { level: 1, name: "Sign in" })).toBeVisible();
+  await expect(bar).toHaveCount(0);
 
   await login(page);
   await page.goto("/settings/members");
@@ -211,7 +212,8 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   expect(box.height).toBe(44);
   await expect(bar).toHaveCSS("background-color", "rgb(11, 58, 122)");
   const title = bar.getByTestId("phone-title");
-  await expect(title).toHaveText("Members");
+  // qa-shell-23: a section's tab shows the section's name.
+  await expect(title).toHaveText("Settings");
   await expect(title).toHaveCSS("color", "rgb(255, 255, 255)");
   await expect(title).toHaveCSS("font-weight", "600");
   // The page's H1 stays for screen readers but is not drawn a second time.

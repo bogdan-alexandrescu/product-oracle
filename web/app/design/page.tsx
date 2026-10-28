@@ -2,13 +2,17 @@
 
 import { useState, useSyncExternalStore } from "react";
 
-import { Page, PageHeader, SegmentedControl } from "@/components/ds";
+import { Notice, Page, PageHeader, SegmentedControl } from "@/components/ds";
 import { useMe } from "@/lib/me";
 import { useTheme } from "@/lib/theme";
 
 import { Gallery } from "./_gallery";
 
 type Mode = "light" | "dark" | "both";
+
+/** A developer page (qa-settings-9): it says so, and it stays out of every navigation. */
+const TITLE = "Design system (developers)";
+const DEVELOPER_NOTE = "Developer page: the components the app is built from. Not part of the product.";
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
@@ -40,7 +44,7 @@ export default function DesignPage() {
   if (!capsReady || !owner) {
     return (
       <Page>
-        <PageHeader title="Design" testId="design-header" />
+        <PageHeader title={TITLE} testId="design-header" />
       </Page>
     );
   }
@@ -56,7 +60,7 @@ export default function DesignPage() {
   return (
     <Page>
       <PageHeader
-        title="Design"
+        title={TITLE}
         testId="design-header"
         action={
           <SegmentedControl
@@ -71,6 +75,7 @@ export default function DesignPage() {
           />
         }
       />
+      <Notice testId="design-developer-note">{DEVELOPER_NOTE}</Notice>
       {both ? (
         <div className="grid grid-cols-2 items-start gap-4 max-[1100px]:grid-cols-1" data-testid="design-both">
           <div className="ds-light min-w-0 rounded-panel bg-bg p-3 text-text" data-theme-preview="light">

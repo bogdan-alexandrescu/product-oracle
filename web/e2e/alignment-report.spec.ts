@@ -175,7 +175,7 @@ test("Generate now makes an on-demand report, posted only with Post to Slack tic
   await page.getByRole("button", { name: "Generate now" }).click();
   const dialog = page.getByRole("dialog", { name: "Generate a report now" });
   await expect(dialog.getByLabel("Post to Slack")).not.toBeChecked();
-  await dialog.getByRole("button", { name: "Generate" }).click();
+  await dialog.getByRole("button", { name: "Generate", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^Alignment so far · week of /);
   await expect(page.getByTestId("report-slack").filter({ visible: true })).toHaveText("Not posted to Slack.");
 
@@ -183,7 +183,7 @@ test("Generate now makes an on-demand report, posted only with Post to Slack tic
   await expect(rows).toHaveCount(3);
   await page.getByRole("button", { name: "Generate now" }).click();
   await page.getByRole("dialog", { name: "Generate a report now" }).getByLabel("Post to Slack").check();
-  await page.getByRole("dialog", { name: "Generate a report now" }).getByRole("button", { name: "Generate" }).click();
+  await page.getByRole("dialog", { name: "Generate a report now" }).getByRole("button", { name: "Generate", exact: true }).click();
   await expect(page.getByTestId("report-slack").filter({ visible: true })).toContainText("Posted to #plan");
 });
 

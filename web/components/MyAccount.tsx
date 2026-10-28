@@ -104,7 +104,7 @@ export function MyAccount() {
     <Page>
       <PageHeader
         title="My account"
-        status={
+        info={
           <InfoTip label="your account" align="start" side="bottom">
             How you sign in, your password, and the credentials that act as you: personal API tokens and the MCP clients
             you authorized. Changing your password or signing out everywhere revokes them all.

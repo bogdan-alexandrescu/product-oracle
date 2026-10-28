@@ -25,7 +25,8 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 /**
  * A phone bottom sheet: a scrim, a handle, a title and a scrolling body. Escape, a tap on
  * the scrim, the close button and a swipe down on the handle close it; focus stays inside
- * while it is open and returns to what opened it.
+ * while it is open and returns to what opened it. `above`: it sits above the phone tab bar
+ * and a swipe down anywhere on it closes it (the More sheet, qa-shell-10).
  */
 export function Sheet({
   open,
@@ -36,6 +37,8 @@ export function Sheet({
   tools,
   scroll = true,
   full = false,
+  above = false,
+  id,
 }: {
   open: boolean;
   title: string;
@@ -48,9 +51,13 @@ export function Sheet({
   scroll?: boolean;
   /** Full height (the head-of-product panel on a phone). */
   full?: boolean;
+  /** Above the phone tab bar, which stays in reach; a swipe down anywhere on it closes it. */
+  above?: boolean;
+  /** The panel's id (a control's aria-controls). */
+  id?: string;
 }) {
   const panel = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ y: number; dy: number } | null>(null);
+  const drag = useRef<{ y: number; dy: number; captured?: boolean } | null>(null);
   const close = useRef(onClose);
   useEffect(() => {
     close.current = onClose;
@@ -64,6 +71,10 @@ export function Sheet({
     const p = panel.current;
     (p?.querySelector<HTMLElement>("[data-autofocus]") ?? p)?.focus();
     const onKey = (e: KeyboardEvent) => {
+      // A dialog opened from the sheet (portalled outside it) handles its own keys: its
+      // Escape asks before dropping typed work, and its Tab stays inside it.
+      const at = document.activeElement;
+      if (p && at && at !== document.body && !p.contains(at) && at.closest('[role="dialog"], [role="alertdialog"]')) return;
       if (e.key === "Escape") {
         e.preventDefault();
         e.stopPropagation();
@@ -97,13 +108,29 @@ export function Sheet({
   if (!open) return null;
 
   const onDown = (e: PointerEvent<HTMLDivElement>) => {
-    drag.current = { y: e.clientY, dy: 0 };
+    drag.current = { y: e.clientY, dy: 0, captured: true };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
   const onMove = (e: PointerEvent<HTMLDivElement>) => {
     if (!drag.current || !panel.current) return;
     drag.current.dy = Math.max(0, e.clientY - drag.current.y);
     panel.current.style.transform = `translateY(${drag.current.dy}px)`;
+  };
+  // `above`: a swipe anywhere; the pointer is captured only once it moves, so a tap still clicks.
+  const onPanelDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (!above || drag.current || (e.pointerType === "mouse" && e.button !== 0)) return;
+    drag.current = { y: e.clientY, dy: 0 };
+  };
+  const onPanelMove = (e: PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    if (!above || !d || !panel.current) return;
+    d.dy = Math.max(0, e.clientY - d.y);
+    if (d.dy < 8 && !d.captured) return;
+    if (!d.captured) {
+      d.captured = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    panel.current.style.transform = `translateY(${d.dy}px)`;
   };
   const onUp = () => {
     const d = drag.current;
@@ -113,15 +140,23 @@ export function Sheet({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col justify-end" data-testid={testId}>
+    <div
+      className={`fixed inset-x-0 top-0 z-50 flex flex-col justify-end ${above ? "bottom-[var(--phone-tab-bar)]" : "bottom-0"}`}
+      data-testid={testId}
+    >
       <div data-testid="sheet-scrim" aria-hidden className="absolute inset-0 bg-hero/50" onClick={onClose} />
       <div
         ref={panel}
+        id={id}
         role="dialog"
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none`}
+        onPointerDown={above ? onPanelDown : undefined}
+        onPointerMove={above ? onPanelMove : undefined}
+        onPointerUp={above ? onUp : undefined}
+        onPointerCancel={above ? onUp : undefined}
+        className={`relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none`}
       >
         <div
           data-testid="sheet-handle"

@@ -20,7 +20,7 @@ const TONE: Record<MarkState, string> = {
   approved: "text-pass",
   changes_requested: "text-warn",
   rejected: "text-crit",
-  none: "text-line-strong",
+  none: "text-text2",
   lapsed: "text-warn",
   locked: "text-text2",
 };

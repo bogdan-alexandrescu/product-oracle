@@ -133,6 +133,11 @@ export default function RunsPage() {
     <Page>
       <PageHeader
         title="Runs"
+        info={
+          <InfoTip label="where runs execute" align="start" side="bottom">
+            <RunsWhere />
+          </InfoTip>
+        }
         status={
           <>
             {checkpoints > 0 && (
@@ -140,9 +145,6 @@ export default function RunsPage() {
                 {checkpoints} checkpoint{checkpoints === 1 ? "" : "s"}
               </Chip>
             )}
-            <InfoTip label="where runs execute" align="start" side="bottom">
-              <RunsWhere />
-            </InfoTip>
           </>
         }
         action={

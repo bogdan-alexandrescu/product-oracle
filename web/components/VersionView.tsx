@@ -9,7 +9,7 @@ import { CommentPopover, SelectionButton, type PageRect } from "@/components/Com
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
 import { PricingDecide } from "@/components/PricingDecide";
-import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
+import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, Panel, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
 import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
@@ -45,7 +45,7 @@ import { EvidencePane } from "@/components/evidence/EvidencePane";
 import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, Loading } from "@/components/ui";
 import { resolveSelector, selectorFromRange, type TextQuoteSelector } from "@/lib/anchor";
-import { api, unwrap, type CitationOut, type DateMarkOut, type SectionOut, type Verdict } from "@/lib/api/client";
+import { ApiError, api, unwrap, type CitationOut, type DateMarkOut, type SectionOut, type Verdict } from "@/lib/api/client";
 import { draftRoadmapOf } from "@/lib/api/draft-roadmap";
 import { feedbackEntries, openBySection } from "@/lib/feedback";
 import { formatDate } from "@/lib/format";
@@ -122,9 +122,20 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   // (review_section), which also stand for the other decisions on a version.
   const canComment = can("create_comment");
   const canDecide = can("review_section");
-  const docQ = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
+  // qa-shell-4: a document (or version) the API does not have (404) shows one not-found
+  // state and no actions. A missing document wins over its missing version.
+  const [missing, setMissing] = useState<"doc" | "version" | null>(null);
+  const docQ = useQuery(`doc|${doc}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })).catch((e: unknown) => {
+      if (e instanceof ApiError && e.status === 404) setMissing("doc");
+      throw e;
+    }),
+  );
   const verQ = useQuery(`ver|${doc}|${n}`, () =>
-    unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
+    unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })).catch((e: unknown) => {
+      if (e instanceof ApiError && e.status === 404) setMissing((m) => (m === "doc" ? m : "version"));
+      throw e;
+    }),
   );
   // Commenters can cite public links on baseline items from any section.
   const graphQ = useQuery(`baseline-graph|${canComment}`, () =>
@@ -973,6 +984,30 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     />
   );
 
+  // The evidence pane says itself when the version is not found.
+  if (missing === "doc" || (missing === "version" && pane !== "evidence")) {
+    return (
+      <Page>
+        <PageHeader title={missing === "doc" ? "Document not found" : "Version not found"} />
+        <Panel testId="doc-not-found" bodyClassName="flex flex-col items-center gap-3 pb-8">
+          <Empty icon="doc">
+            {missing === "doc" ? "This document doesn't exist or was deleted." : `Version ${n} of this document doesn't exist.`}
+          </Empty>
+          <div className="flex flex-wrap justify-center gap-2">
+            {missing === "version" && (
+              <LinkButton href={`/documents/${doc}`} variant="ghost">
+                Open the document
+              </LinkButton>
+            )}
+            <LinkButton href="/documents" variant="ghost" icon="back">
+              Back to PRDs
+            </LinkButton>
+          </div>
+        </Panel>
+      </Page>
+    );
+  }
+
   return (
     <DateMarkContext.Provider value={dateMarkCtx}>
     <div ref={rootRef} onClickCapture={onLinkCapture} className={onDocument ? "max-[639px]:pb-16" : undefined}>
@@ -1068,6 +1103,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           draft={draftRoadmapOf(version)}
         />
 
+        {/* No actions until the document is there: a missing one shows only its not-found state. */}
+        {document_ && (
         <div className="mb-3 flex flex-wrap items-center gap-2 max-[600px]:gap-y-2.5">
           {versions.length > 0 && <VersionSwitcher doc={doc} versions={versions} current={n} variant="segments" hrefFor={paneHref} />}
           {onDocument && hasBrief && (
@@ -1131,6 +1168,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           )}
           {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
         </div>
+        )}
         {/* #481: a spec version that may be stale is reviewed or reconciled here. */}
         {document_?.kind === "spec" && version && !version.approved_at && (
           <SpecStaleness doc={doc} n={n} mayApprove={canApprove} onChanged={() => void verQ.reload()} />
