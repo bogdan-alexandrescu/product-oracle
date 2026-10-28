@@ -360,26 +360,27 @@ for (const scheme of ["light", "dark"] as const) {
 
     /**
      * Card simple-additions-phone-commenter: protects = a commenter's sheet says Propose and
-     * proposes; on the empty goal's tile the suggestions open in a sheet with Accept (a
-     * proposal) and no Reject; fails_when = a commenter's add applies, Reject shows to a
-     * commenter, or Accept applies; no_claim = who the proposal is routed to.
+     * proposes; on the empty goal's tile the suggestions open in a sheet where the commenter
+     * reads Oracle's (no Accept or Reject: the decider's) and its flow opens full height;
+     * fails_when = a commenter's add applies, or Accept or Reject shows to a commenter;
+     * no_claim = who the proposal is routed to.
      */
-    test("a commenter proposes from the sheet and accepts a suggestion as a proposal", async ({ page }) => {
+    test("a commenter proposes from the sheet and reads a goal's suggestions", async ({ page }) => {
       await openRoadmap(page, "commenter@example.com");
       await sheetAdd(page, "Pause alerts on holidays", "Keep alerts quiet", "Propose");
       await expect(toastWith(page, "Proposed Pause alerts on holidays (Keep alerts quiet): it waits for the decider")).toBeVisible();
       await expect(bar(page, "pause-alerts-on-holidays")).toHaveCount(0);
       await page.getByTestId("goal-counter-empty").getByTestId("goal-counter-suggestions").click();
       const sheet = page.getByTestId("goal-panel");
+      await sheet.getByRole("tab", { name: "✦ Oracle · 2" }).click();
       const s = sheet.locator('[data-testid="goal-suggestion"][data-title="Quiet hours for alerts"]');
       await expect(s.getByRole("button", { name: "Reject" })).toHaveCount(0);
+      await expect(s.getByRole("button", { name: "Accept" })).toHaveCount(0);
       await s.getByRole("button", { name: "Open the flow for Quiet hours for alerts" }).click();
       const flow = page.getByTestId("flow-sheet").getByRole("dialog");
       const box = (await flow.boundingBox())!;
       expect(Math.round(box.height)).toBeGreaterThanOrEqual(840);
       await flow.getByRole("button", { name: /close/i }).first().click();
-      await s.getByRole("button", { name: "Accept" }).click();
-      await expect(toastWith(page, "Proposed Quiet hours for alerts: it waits for the decider")).toBeVisible();
       await noSidewaysScroll(page);
     });
 
