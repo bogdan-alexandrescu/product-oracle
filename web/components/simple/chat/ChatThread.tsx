@@ -18,6 +18,7 @@ export function ChatThreadView({
   testId,
   onCardChanged,
   onThread,
+  typed,
 }: {
   thread: Thread | null;
   send: (text: string) => Promise<unknown>;
@@ -27,8 +28,24 @@ export function ChatThreadView({
   onCardChanged?: () => void;
   /** chat-reader: Retry, a choice or Apply all answered this thread. */
   onThread?: (t: Thread) => void;
+  /** Words typed in for the person (a goal's "Suggest from the chat"); they go on writing after them. */
+  typed?: string;
 }) {
   const [text, setText] = useState("");
+  const box = useRef<HTMLTextAreaElement>(null);
+  const [had, setHad] = useState(typed);
+  if (typed !== had) {
+    setHad(typed);
+    if (typed) setText(typed);
+  }
+  useEffect(() => {
+    if (!typed) return;
+    const t = box.current;
+    if (t) {
+      t.focus();
+      window.setTimeout(() => t.setSelectionRange(typed.length, typed.length), 0);
+    }
+  }, [typed]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
@@ -69,6 +86,7 @@ export function ChatThreadView({
           </p>
         )}
         <textarea
+          ref={box}
           aria-label="Message Oracle"
           rows={2}
           maxLength={2000}

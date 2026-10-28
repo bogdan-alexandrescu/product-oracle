@@ -21,7 +21,8 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { stableUuid } from "./ids";
 import { routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
-import { itemDeciderId, itemOwnerId, roadmapOut, storedDates, type SimpleDb } from "./simple-roadmap";
+import { GOALS, goalId, itemDeciderId, itemOwnerId, lookalikes, roadmapOut, storedDates, type SimpleDb } from "./simple-roadmap";
+import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
 type Values = Record<string, unknown>;
 type Item = Schemas["SimpleRoadmapItem"];
@@ -36,6 +37,7 @@ type Preview =
   | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page"; proposed_to?: string; not_to?: string }
   | { kind: "note" | "question"; text: string }
   | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string }
+  | { kind: "suggestion"; goal_id: string; goal_title: string; title: string; outcome: string; looks_like: { code: string; title: string; why: string }[] }
   | null;
 type Fix = { label: string; op: string; target: Values; before: Values; after: Values };
 type Mode = "everyone" | "presenter" | "named";
@@ -490,12 +492,36 @@ function decisionDraft(meeting: Meeting | null, documentId: string | null, who: 
     : { kind: "decision" as const, text: t, decider_name: who.name, where: meeting ? ("meeting" as const) : ("page" as const) };
   return actionDraft(`Record the decision: ${t}`, "record_decision", null, target, {}, { text: t, decider_id: proposedTo ? null : who.id }, preview);
 }
+/** A suggestion's name: the words' first clause, capitalised, at most 60 characters (never cut mid-word). */
+function suggestionTitle(text: string): string {
+  let t = text.split(/[.,;]| so | to /i)[0].trim();
+  if (t.length > 60) t = t.slice(0, 61).replace(/\s+\S*$/, "");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** "Suggest a feature for <goal>: <words>" (chat_actions.suggest_feature): the card, Oracle's restating and the look-alikes. */
+function suggestDraft(db: SimpleDb, goalWords: string, what: string): Reply {
+  const w = goalWords.trim().toLowerCase();
+  const goal = Object.keys(GOALS).find((k) => k === w || GOALS[k].toLowerCase() === w);
+  if (!goal) return { kind: "question", body: `Which goal: ${Object.values(GOALS).join(", ")}?`, cards: [] };
+  const outcome = what.trim().replace(/\s+/g, " ");
+  const title = suggestionTitle(outcome);
+  const looks = lookalikes(db, title, null)
+    .map((k) => db.items.find((x) => x.key === k)!)
+    .map((x) => ({ code: x.key, title: x.title, why: x.why ? `which already ${x.why.charAt(0).toLowerCase()}${x.why.slice(1).replace(/\.$/, "")}` : "which has a similar name" }));
+  const said = looks.map((l, n) => ` ${n ? "It also looks like" : "It looks like"} ${l.code} ${l.title}, ${l.why}.`).join("");
+  const draft = actionDraft(`Suggest ${title} for ${GOALS[goal]}`, "suggest_feature", null, { goal_id: goalId(goal) }, {}, { title, outcome }, {
+    kind: "suggestion", goal_id: goalId(goal), goal_title: GOALS[goal], title, outcome, looks_like: looks,
+  });
+  return { kind: "cards", body: `${ONE_CHANGE} suggest ${title} for ${GOALS[goal]}.${said}`, cards: [draft] };
+}
+
 /** Chat actions' cards: "I understood one change:" (the contract's reply line). */
 const ONE_CHANGE = "I understood one change:";
 /** The meeting-only phrases' answer outside a meeting (no card). */
 export const MEETING_ONLY = "Minutes notes, open questions and agenda changes belong to a meeting.";
 /** Ops applied here, not through the change engine: a decision, the minutes' notes and the agenda. */
-const LOCAL_OPS = new Set(["record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip"]);
+const LOCAL_OPS = new Set(["record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip", "suggest_feature"]);
 
 /**
  * The chat actions' phrases (the contract's): "<person> owns <item>", "<person> decides
@@ -540,6 +566,10 @@ function chatActionReply(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting
       if (!isPerson(who)) return who;
       return one(decisionDraft(meeting, documentId, who, what, askProposal(ctx, meeting, documentId), by ? who : null));
     });
+  }
+  if ((m = /^suggest a feature for (.+?):\s*(.+)$/i.exec(t))) {
+    const [, g, what] = m;
+    return change(() => suggestDraft(db, g, what));
   }
   if (!asks && (m = /^(.+?) (owns|decides) (.+)$/i.exec(t)) && !/^who$/i.test(m[1])) {
     const [, x, verb, y] = m;
@@ -947,6 +977,15 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
 /** One card through the change engine (or its fix n): the card out and the result, or the engine's refusal. */
 async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
   const use = n == null ? c : c.fixes[n];
+  if (c.op === "suggest_feature") {
+    // Filed as the person's own suggestion (origin "person"): it lands under People.
+    const goal = Object.keys(GOALS).find((k) => goalId(k) === c.target.goal_id) ?? "";
+    const r = fileSuggestion(db, ctx, goal, String(c.after.title ?? ""), String(c.after.outcome ?? ""));
+    if ("detail" in r) return json(r.status, { detail: r.detail });
+    c.target = { ...c.target, suggestion_id: r.id };
+    const result = applyLocal(c, null, ctx, s8);
+    return { card: cardOut(db, chat, c, ctx), result };
+  }
   if (LOCAL_OPS.has(c.op)) {
     const meeting = meetingOf(chat, c);
     if (!meeting && c.op === "record_decision" && ctx.role === "commenter") {
@@ -1260,7 +1299,9 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (p[5] === "undo") {
       if (c.status !== "applied" || !c.change_id) return json(409, { detail: `Only an applied card undoes; this one is ${c.status}` });
       const meeting = meetingOf(chat, c);
-      if (LOCAL_OPS.has(c.op)) {
+      if (c.op === "suggest_feature") {
+        if (!unfileSuggestion(db, String(c.target.suggestion_id ?? ""))) return json(409, { detail: "The decider has decided this suggestion already" });
+      } else if (LOCAL_OPS.has(c.op)) {
         if (meeting?.ended) return json(409, { detail: "The meeting has ended" });
         unapplyLocal(c, meeting, s8);
       } else {

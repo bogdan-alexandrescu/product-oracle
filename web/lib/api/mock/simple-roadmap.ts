@@ -125,7 +125,9 @@ export interface GoalSuggestionRow {
   evidence: Schemas["SimpleEvidence"][];
   status: "open" | "accepted" | "rejected";
   reason: string | null;
-  origin: "auto" | "on_demand";
+  origin: "auto" | "on_demand" | "person";
+  /** A person's suggestion (origin "person"): who sent it. */
+  proposed_by?: string | null;
   created_at: string;
   decided_by_name: string | null;
   decided_at: string | null;

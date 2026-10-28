@@ -42,3 +42,36 @@ function subscribe(l: () => void) {
 export function usePanelOpen(): boolean {
   return useSyncExternalStore(subscribe, read, () => false);
 }
+
+/**
+ * Words typed into the Ask panel's box for the reader ("Suggest from the chat": a goal's
+ * drawer opens Ask with "Suggest a feature for <goal>: " typed in). The box takes them once.
+ */
+let draft = "";
+const draftListeners = new Set<() => void>();
+
+export function askWith(text: string) {
+  draft = text;
+  draftListeners.forEach((l) => l());
+  setPanelOpen(true);
+}
+
+/** Takes the typed-in words (they are cleared). */
+export function takeAskDraft(): string {
+  const t = draft;
+  draft = "";
+  return t;
+}
+
+export function useAskDraft(): string {
+  return useSyncExternalStore(
+    (l) => {
+      draftListeners.add(l);
+      return () => {
+        draftListeners.delete(l);
+      };
+    },
+    () => draft,
+    () => "",
+  );
+}

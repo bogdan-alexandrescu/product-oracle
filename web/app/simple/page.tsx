@@ -6,7 +6,7 @@ import { useMemo, useState } from "react";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
-import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
+import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -317,17 +317,7 @@ export default function SimpleHome() {
                         </span>
                       )}
                     </div>
-                    {(() => {
-                      const known = suggestions.data?.goals.find((x) => x.goal.id === g.id);
-                      if (!known) return null;
-                      const n = (suggestions.data?.suggestions ?? []).filter((x) => x.goal.id === g.id).length;
-                      return (
-                        <button type="button" data-testid="home-goal-suggestions" onClick={() => setGoalPanel(known.goal)} className="simple-small self-start font-semibold text-accent-ink hover:underline">
-                          {n ? `✦ ${n} suggested ${n === 1 ? "feature" : "features"}` : proposes ? "✦ Suggest features" : "✦ No suggested features"}
-                          {known.pending && " · Oracle is suggesting…"}
-                        </button>
-                      );
-                    })()}
+                    <SuggestionsButton goal={{ id: g.id, key: g.id, title: g.name }} api={suggestions} onOpen={setGoalPanel} className="self-start" />
                   </li>
                 ))}
               </ul>

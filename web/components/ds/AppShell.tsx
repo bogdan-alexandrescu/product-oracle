@@ -6,7 +6,7 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternal
 
 import { HopPanel } from "@/components/hop/HopPanel";
 import { SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
-import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
+import { setPanelOpen, useAskDraft, usePanelOpen } from "@/components/hop/open-state";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { homeOf, modeOf } from "@/lib/experience";
 import { resetMockData } from "@/lib/api/mock/server";
@@ -479,6 +479,13 @@ function PhoneHeader() {
   const { me } = useMe();
   const title = usePageTitle(pathname);
   const [ask, setAsk] = useState(false);
+  // A goal's "Suggest from the chat" opens the Ask sheet with its words typed in.
+  const typedIn = useAskDraft();
+  useEffect(() => {
+    // The words arrive from outside React (the drawer's link); a phone opens its sheet for them.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (typedIn && window.matchMedia("(max-width: 600px)").matches) setAsk(true);
+  }, [typedIn]);
   const [askPath, setAskPath] = useState(pathname);
   if (askPath !== pathname) {
     setAskPath(pathname);

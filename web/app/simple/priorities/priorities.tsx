@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as R
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { FlowThumb } from "@/components/simple/Flow";
-import { GoalSuggestionList, useGoalSuggestions, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
+import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -953,6 +953,7 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 
 function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
   const buckets: Bucket[] = data.buckets;
+  const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
   // The rows' short codes, as the 2x2 and the lists show them.
   const short = new Map(data.rows.map((r) => [r.code, r.short_code || r.code]));
   return (
@@ -985,12 +986,13 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
             <p className="mt-1 text-[length:var(--simple-small)] text-text2">{b.codes.length ? b.codes.map((c) => short.get(c) ?? c).join(", ") : "Nothing this quarter"}</p>
             {!b.no_goal && (
               <div className="mt-3 border-t border-line pt-3">
-                <GoalSuggestionList goal={{ id: "", key: b.key, title: b.title }} api={suggestions} />
+                <SuggestionsButton goal={{ id: "", key: b.key, title: b.title }} api={suggestions} onOpen={setGoalPanel} />
               </div>
             )}
           </li>
         ))}
       </ul>
+      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
     </section>
   );
 }

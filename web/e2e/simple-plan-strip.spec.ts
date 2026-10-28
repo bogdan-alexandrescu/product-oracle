@@ -86,7 +86,7 @@ for (const phone of [false, true]) {
           await setUp(page, "simple-home", scheme);
           await login(page, EMAILS[role]);
           await page.goto("/simple");
-          await expect(page.getByTestId("home-goal").filter({ hasText: "Faster activation" }).getByTestId("home-goal-path")).toHaveText("$30,000 -> $50,000");
+          await expect(page.getByTestId("home-goal").filter({ hasText: "Faster activation" }).getByTestId("home-goal-path")).toHaveText("From $30,000 · target $50,000");
           const plan = page.getByTestId("home-plan");
           await expect(plan.getByTestId("home-strip-month").first()).toBeVisible();
           await expect(plan.getByTestId("home-strip-today")).toHaveCount(1);

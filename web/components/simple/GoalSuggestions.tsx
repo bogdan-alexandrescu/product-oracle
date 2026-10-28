@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { askWith } from "@/components/hop/open-state";
+import { useCompanyZone, zoneDateTime } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -195,14 +197,17 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-center gap-2">
             <span className="text-[length:var(--simple-text)] font-semibold text-text">{s.title}</span>
-            <span className="rounded-full bg-surface2 px-2 text-text2">{s.origin === "auto" ? "Oracle suggested" : "Asked for"}</span>
+            <span className="rounded-full bg-surface2 px-2 text-text2" data-testid="oracle-suggested">
+              ✦ Oracle suggested
+            </span>
           </p>
           <p data-testid="suggestion-outcome">{s.outcome}</p>
           <p className="text-text2" data-testid="suggestion-why">
             Why: {s.why}
           </p>
           {s.evidence.length > 0 && (
-            <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1" data-testid="suggestion-evidence" aria-label="Evidence">
+            <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1" data-testid="suggestion-evidence" aria-label="Sources">
+              <li className="text-text2">Sources:</li>
               {s.evidence.map((e) => (
                 <li key={e.label} className="flex items-center gap-1.5">
                   {e.url ? (
@@ -260,61 +265,260 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
   );
 }
 
-/** One goal's open suggestions, its "Suggest features" button and the pending line. */
-export function GoalSuggestionList({ goal, api: a, emptyWords }: { goal: GoalBrief; api: GoalSuggestionsApi; emptyWords?: string }) {
-  const { can } = useMe();
-  const state = a.data?.goals.find((g) => g.goal.id === goal.id || g.goal.key === goal.key);
+/** A goal's open suggestions: people's (origin "person") and Oracle's. */
+export function goalRows(a: GoalSuggestionsApi, goal: GoalBrief): { people: GoalSuggestion[]; oracle: GoalSuggestion[] } {
   const rows = (a.data?.suggestions ?? []).filter((s) => s.goal.id === goal.id || s.goal.key === goal.key);
-  const [asking, setAsking] = useState(false);
+  return { people: rows.filter((s) => s.origin === "person"), oracle: rows.filter((s) => s.origin !== "person") };
+}
+
+function goalState(a: GoalSuggestionsApi, goal: GoalBrief) {
+  return a.data?.goals.find((g) => g.goal.id === goal.id || g.goal.key === goal.key);
+}
+
+/**
+ * A goal's one button (Home's goal cards, Priorities' goal buckets): "Suggestions · N", just
+ * "Suggestions" at 0. While Oracle suggests it says so, and the count changes when it is done
+ * (never under the reader without a reason).
+ */
+export function SuggestionsButton({ goal, api: a, onOpen, className = "" }: { goal: GoalBrief; api: GoalSuggestionsApi; onOpen: (g: GoalBrief) => void; className?: string }) {
+  const state = goalState(a, goal);
+  if (!state) return null;
+  const { people, oracle } = goalRows(a, goal);
+  const n = people.length + oracle.length;
   return (
-    <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[length:var(--simple-small)] text-text2">
-          {rows.length ? `${rows.length} suggested ${rows.length === 1 ? "feature" : "features"}` : (emptyWords ?? "No suggested features.")}
-          {state?.empty && " · no items yet"}
-        </span>
-        {can("create_simple_change") && (
-          <Button
-            className="ml-auto"
-            disabled={asking || !!state?.pending}
-            onClick={async () => {
-              setAsking(true);
-              try {
-                await a.suggest(state?.goal ?? goal);
-              } finally {
-                setAsking(false);
-              }
-            }}
-          >
-            Suggest features
-          </Button>
+    <button
+      type="button"
+      data-testid="goal-suggestions-open"
+      data-goal={state.goal.key}
+      aria-label={`Suggestions for ${state.goal.title}`}
+      onClick={() => onOpen(state.goal)}
+      className={`simple-small rounded-lg border border-line bg-surface px-3 py-1.5 font-semibold text-accent-ink hover:bg-surface2 ${className}`}
+    >
+      {state.pending ? "Oracle is suggesting..." : n ? `Suggestions · ${n}` : "Suggestions"}
+    </button>
+  );
+}
+
+/** "Suggest a feature": name, what it does and for whom, the goal set, who decides; folded to one line for the decider. */
+function SuggestForm({ goal, decider, folded, onSent }: { goal: GoalBrief; decider: string | null; folded: boolean; onSent: () => Promise<void> }) {
+  const [open, setOpen] = useState(!folded);
+  const [title, setTitle] = useState("");
+  const [outcome, setOutcome] = useState("");
+  const [busy, setBusy] = useState(false);
+  if (!open)
+    return (
+      <button type="button" data-testid="suggest-form-open" onClick={() => setOpen(true)} className="simple-small self-start font-semibold text-accent-ink hover:underline">
+        + Suggest a feature
+      </button>
+    );
+  return (
+    <form
+      data-testid="suggest-form"
+      aria-label="Suggest a feature"
+      className="flex flex-col gap-2 rounded-[var(--simple-card-radius)] border border-line bg-surface2/40 p-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+          const r = await api.POST("/v1/simple/goals/{goal_id}/suggestions", { params: { path: { goal_id: goal.id } }, body: { title: title.trim(), outcome: outcome.trim() } });
+          if (!r.data) {
+            toast({ message: detailOf(r.error) });
+            return;
+          }
+          toast({ message: `Sent: ${r.data.title}` });
+          setTitle("");
+          setOutcome("");
+          await onSent();
+        } finally {
+          setBusy(false);
+        }
+      }}
+    >
+      <h3 className="font-semibold">Suggest a feature</h3>
+      <label className="simple-small font-medium" htmlFor={`suggest-title-${goal.key}`}>
+        Feature name
+      </label>
+      <input id={`suggest-title-${goal.key}`} required maxLength={200} value={title} onChange={(e) => setTitle(e.target.value)} className="rounded-lg border border-line bg-bg px-3 py-2" />
+      <label className="simple-small font-medium" htmlFor={`suggest-outcome-${goal.key}`}>
+        What it does, and for whom
+      </label>
+      <textarea id={`suggest-outcome-${goal.key}`} required rows={2} maxLength={1000} value={outcome} onChange={(e) => setOutcome(e.target.value)} className="rounded-lg border border-line bg-bg px-3 py-2" />
+      <p className="simple-small text-text2" data-testid="suggest-goal">
+        Goal: {goal.title}
+      </p>
+      <p className="simple-small text-text2" data-testid="suggest-decider">
+        {decider ? `${decider} decides.` : "The company's owners decide."}
+      </p>
+      <Button type="submit" variant="solid" className="self-start" disabled={busy || !title.trim() || !outcome.trim()}>
+        Send suggestion
+      </Button>
+    </form>
+  );
+}
+
+/** A person's suggestion: who sent it and when, what it does, the look-alikes; Accept / Reject for the decider. */
+function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi }) {
+  const zone = useCompanyZone();
+  const [rejecting, setRejecting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const run = async (f: () => Promise<void>) => {
+    setBusy(true);
+    try {
+      await f();
+    } catch (e) {
+      toast({ message: errorMessage(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <li data-testid="person-suggestion" data-title={s.title} className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 text-[length:var(--simple-small)]">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-[length:var(--simple-text)] font-semibold text-text">{s.title}</p>
+          <p data-testid="suggestion-outcome">{s.outcome}</p>
+          <p className="text-text2" data-testid="suggestion-by">
+            From {s.proposed_by_name ?? "someone"} · {zoneDateTime(s.created_at, zone)}
+          </p>
+          {s.looks_like.map((m) => (
+            <p key={m.id} className="mt-1 text-warn" data-testid="suggestion-looks-like">
+              Looks like {m.code} {m.title}
+            </p>
+          ))}
+        </div>
+        {(s.can_accept || s.can_reject) && (
+          <span className="flex flex-none gap-2">
+            {s.can_accept && (
+              <Button variant="solid" disabled={busy} onClick={() => void run(() => a.accept(s))}>
+                Accept
+              </Button>
+            )}
+            {s.can_reject && (
+              <Button disabled={busy} onClick={() => setRejecting(true)}>
+                Reject
+              </Button>
+            )}
+          </span>
         )}
       </div>
-      {state?.pending && (
-        <p role="status" data-testid="suggest-pending" className="text-[length:var(--simple-small)] text-accent-ink">
-          Oracle is suggesting features…
-        </p>
+      {rejecting && (
+        <RejectDialog
+          s={s}
+          onClose={() => setRejecting(false)}
+          onReject={(reason) => {
+            setRejecting(false);
+            void run(() => a.reject(s, reason));
+          }}
+        />
       )}
-      {rows.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {rows.map((s) => (
-            <SuggestionCard key={s.id} s={s} api={a} />
-          ))}
-        </ul>
+    </li>
+  );
+}
+
+/** The drawer's body: the form on top, "Suggest from the chat", then the People and Oracle tabs. */
+export function GoalSuggestionList({ goal, api: a, onChat }: { goal: GoalBrief; api: GoalSuggestionsApi; onChat?: () => void }) {
+  const { can } = useMe();
+  const state = goalState(a, goal);
+  const { people, oracle } = goalRows(a, goal);
+  const [tab, setTab] = useState<"people" | "oracle">("people");
+  const [asking, setAsking] = useState(false);
+  const suggests = can("create_simple_change");
+  const tabs = [
+    { key: "people" as const, label: `People · ${people.length}` },
+    { key: "oracle" as const, label: `✦ Oracle · ${oracle.length}` },
+  ];
+  return (
+    <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-3">
+      {suggests && (
+        <>
+          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} folded={!!state?.can_decide} onSent={a.reload} />
+          <button
+            type="button"
+            data-testid="suggest-from-chat"
+            onClick={() => {
+              onChat?.();
+              askWith(`Suggest a feature for ${(state?.goal ?? goal).title}: `);
+            }}
+            className="simple-small self-start text-accent-ink underline"
+          >
+            Suggest from the chat
+          </button>
+        </>
+      )}
+      <div role="tablist" aria-label="Who suggested" className="flex gap-1 border-b border-line">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.key}
+            data-testid={`suggestions-tab-${t.key}`}
+            onClick={() => setTab(t.key)}
+            className={`-mb-px border-b-2 px-3 py-2 font-semibold ${tab === t.key ? "border-accent text-text" : "border-transparent text-text2 hover:text-text"}`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {tab === "people" ? (
+        <div role="tabpanel" aria-label="People's suggestions" className="flex flex-col gap-2">
+          {people.length ? (
+            <ul className="flex flex-col gap-2">
+              {people.map((s) => (
+                <PersonCard key={s.id} s={s} api={a} />
+              ))}
+            </ul>
+          ) : (
+            <p className="simple-small text-text2">No one has suggested a feature for {goal.title} yet.</p>
+          )}
+        </div>
+      ) : (
+        <div role="tabpanel" aria-label="Oracle's suggestions" className="flex flex-col gap-2">
+          {suggests && (
+            <Button
+              className="self-start"
+              disabled={asking || !!state?.pending}
+              onClick={async () => {
+                setAsking(true);
+                try {
+                  await a.suggest(state?.goal ?? goal);
+                } finally {
+                  setAsking(false);
+                }
+              }}
+            >
+              ✦ Ask Oracle for more
+            </Button>
+          )}
+          {state?.pending && (
+            <p role="status" data-testid="suggest-pending" className="simple-small text-accent-ink">
+              Oracle is suggesting features…
+            </p>
+          )}
+          {oracle.length ? (
+            <ul className="flex flex-col gap-2">
+              {oracle.map((s) => (
+                <SuggestionCard key={s.id} s={s} api={a} />
+              ))}
+            </ul>
+          ) : (
+            !state?.pending && <p className="simple-small text-text2">Oracle suggests only when asked.</p>
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-/** A goal's suggestions in a panel: a side panel on a desktop, a bottom sheet on a phone. */
+/** A goal's suggestions drawer: a side panel on a desktop, a bottom sheet on a phone. */
 export function GoalPanel({ goal, api: a, onClose }: { goal: GoalBrief; api: GoalSuggestionsApi; onClose: () => void }) {
   const phone = usePhone();
-  const title = `Suggested features · ${goal.title}`;
+  const title = `Suggestions · ${goal.title}`;
   if (phone)
     return (
       <Sheet open title={title} onClose={onClose} testId="goal-panel">
         <div className="p-4">
-          <GoalSuggestionList goal={goal} api={a} />
+          <GoalSuggestionList goal={goal} api={a} onChat={onClose} />
         </div>
       </Sheet>
     );
@@ -326,7 +530,7 @@ export function GoalPanel({ goal, api: a, onClose }: { goal: GoalBrief; api: Goa
           ×
         </button>
       </div>
-      <GoalSuggestionList goal={goal} api={a} />
+      <GoalSuggestionList goal={goal} api={a} onChat={onClose} />
     </aside>
   );
 }

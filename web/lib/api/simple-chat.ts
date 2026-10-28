@@ -21,12 +21,13 @@ export type ActionPreview =
   | { kind: "owner" | "decider"; item_id: string; person_id: string; person_name: string; before_name: string | null }
   | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page"; proposed_to?: string | null; not_to?: string | null }
   | { kind: "note" | "question"; text: string }
-  | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string };
+  | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string }
+  | { kind: "suggestion"; goal_id: string; goal_title: string; title: string; outcome: string; looks_like: { code: string; title: string; why: string }[] };
 
 /** A card's preview: a roadmap ghost (ChatPreview) or a chat action's description. */
 export type CardPreview = ChatPreview | ActionPreview;
 
-const ACTION_KINDS = new Set(["owner", "decider", "decision", "note", "question", "agenda"]);
+const ACTION_KINDS = new Set(["owner", "decider", "decision", "note", "question", "agenda", "suggestion"]);
 export const isActionPreview = (p: CardPreview): p is ActionPreview => !!p && ACTION_KINDS.has(p.kind);
 
 /** A meeting's live notes and open questions typed in its chat (SimpleMeetingOut.notes). */

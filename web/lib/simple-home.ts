@@ -47,13 +47,23 @@ export function figure(value: number, unit: string, locale?: string): string {
   return `${v}`;
 }
 
-/** "50 -> 100 -> 200": the start, the measured value and the target, those the goal has. */
+/**
+ * The goal's target in words, each figure with its unit (H1: never a bare number): "From 50
+ * teams · now 100 teams · target 200 teams with weekly alerts on" (the metric names a counted
+ * unit's target when it starts with that unit).
+ */
 export function targetPath(attrs: Record<string, unknown>): string | null {
   const unit = typeof attrs.unit === "string" ? attrs.unit : "";
   const target = num(attrs.target);
   if (target == null) return typeof attrs.target_text === "string" ? attrs.target_text : null;
-  const steps = [num(attrs.start), num(attrs.current), target].filter((v): v is number => v != null);
-  return steps.map((v) => figure(v, unit)).join(" -> ");
+  const plain = (v: number) => (/^[a-z]/i.test(unit) && !["ms", "s", "min", "h", "days"].includes(unit) ? `${grouped(v)} ${unit}` : figure(v, unit));
+  const metric = typeof attrs.metric === "string" ? attrs.metric : "";
+  const goal = unit && metric.toLowerCase().startsWith(`${unit.toLowerCase()} `) ? `${grouped(target)} ${metric}` : plain(target);
+  const start = num(attrs.start);
+  const current = num(attrs.current);
+  const steps = [start != null ? `from ${plain(start)}` : null, current != null ? `now ${plain(current)}` : null, `target ${goal}`].filter((x): x is string => !!x);
+  const words = steps.join(" · ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
 /** A broken dependency (red, not accepted as a risk) or a milestone past its date and not done. */

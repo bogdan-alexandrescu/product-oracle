@@ -1,8 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
+import { takeAskDraft, useAskDraft } from "@/components/hop/open-state";
 import { askSay, askThread, hasPending, PENDING_POLL_MS, type ChatMessage, type ChatThread } from "@/lib/api/simple-chat";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -58,13 +59,21 @@ export function AskChat({ about, ask }: { about: string; ask?: (text: string) =>
     }
   }, [thread, ask]);
   const changes = can("create_simple_change");
+  // "Suggest from the chat": the words a goal's drawer typed in, taken once.
+  const waiting = useAskDraft();
+  const [typed, setTyped] = useState("");
+  const here = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // Only the box a person sees takes them (the dock's panel is hidden on a phone): a DOM check.
+    if (waiting && here.current?.getClientRects().length) setTyped(takeAskDraft());
+  }, [waiting]);
   const send = async (text: string) => {
     const t = await askSay(text, page ?? undefined, !!ask);
     if (t.understood === false && ask) return ask(text);
     setThread(t);
   };
   return (
-    <section aria-label="Ask or change the plan" data-testid="ask-chat" className="flex flex-col gap-2">
+    <section ref={here} aria-label="Ask or change the plan" data-testid="ask-chat" className="flex flex-col gap-2">
       {error && (
         <p role="alert" className="simple-small text-crit">
           {error}
@@ -78,6 +87,7 @@ export function AskChat({ about, ask }: { about: string; ask?: (text: string) =>
         send={send}
         onCardChanged={() => void load()}
         onThread={setThread}
+        typed={typed}
       />
     </section>
   );
