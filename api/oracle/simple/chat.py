@@ -1171,6 +1171,9 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
 def _grounded(c: Ctx, said: str) -> bool:
     """Whether the reader's answer speaks of Oracle's data: it names an item (its title or
     key) or a person it was given; any other answer is not Oracle's to give."""
+    if c.item is not None:
+        # roadmap-talk: in an item's talk the answer is about the item ("it").
+        return True
     t = said.lower()
     names = [e.row.title for e in c.entries()] + [e.row.item_key or "" for e in c.entries()]
     names += [display_name(u.email, u.name) for u in c.people]

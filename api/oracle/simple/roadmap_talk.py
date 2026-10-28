@@ -145,7 +145,7 @@ def _move_kw(c: Any, e: service.Entry, start: date, end: date, how: str = "") ->
         raise ValueError("the end comes before the start")
     s, en = start.isoformat(), end.isoformat()
     how = f" {how}," if how else ""
-    return chat._kw(f"Move {label(e)}{how} to {span(start, end)}, {end.year}", "move_dates", e,
+    return chat._kw(f"Move {label(e)}{how} to {span(start, end)}", "move_dates", e,
                     {"item_id": str(e.row.id)}, chat._dates(e), {"start_date": s, "end_date": en},
                     {"kind": "dates", "item_id": str(e.row.id), "start_date": s,
                      "end_date": en, "roadmap": True})  # fmt: skip
@@ -256,7 +256,7 @@ def build_add_item(c: Any, a: dict[str, Any]) -> chat.Built:
                                             else None} if m is not None else None)}  # fmt: skip
     words = (f" under {g.title}" if g is not None else "") + (f" to {m[0]}" if m else "")
     if start is not None and end is not None:
-        words += f", {span(start, end)}, {end.year}"
+        words += f", {span(start, end)}"
     return chat._kw(f"Add {title}{words}", "add_item", None, {"where": where}, {}, after,
                     {"kind": "add", "title": title, "goal": g.title if g is not None else None,
                      "milestone": m[0] if m else None, "start_date": after["start_date"],

@@ -2,9 +2,10 @@
 card, and conversational roadmap changes with Apply / Reject / Correct. Against Postgres;
 the reader's model is always a fake ``ask`` (tests.test_simple_chat_join.read).
 
-One roadmap (tests.test_simple_changes_api's World with the move_dates items): ``a`` (Oct 1
-- Nov 15, milestone "M1 Launch prep" on Nov 15), ``b`` (Nov 10 - Dec 15, depends on a,
-milestone "M2 Scale volume" on Dec 18), ``u`` undated; the goal Growth. Today is Nov 2.
+One roadmap (tests.test_simple_changes_api's World with the move_dates items): ``a``
+Adaptive pacing (Oct 1 - Nov 15, milestone "M1 Launch prep" on Nov 15), ``b`` Reliability
+work (Nov 10 - Dec 15, depends on a, milestone "M2 Scale volume" on Dec 18), ``u``
+undated; the goal Growth. Today is Nov 2.
 
 Test cards (protects / fails_when / no_claim):
 
@@ -17,9 +18,9 @@ Test cards (protects / fails_when / no_claim):
   panel's thread, the item is not in the payload or the answer has no source;
   no_claim=the model's words.
 - test_item_talk_move_restated_per_role: protects="move it two weeks later" in the item's
-  talk is restated in one line ("I understood: move … two weeks later, to …") with one
-  card showing before -> after, what it breaks and its Correct fields; Apply applies for
-  the owner and the decider, proposes for approvers and commenters; a viewer gets a note
+  talk is restated in one line ("I understood: move … two weeks later, to 15 Oct – 29
+  Nov.") with one card showing before -> after, what it breaks and its Correct fields;
+  Apply applies for the owner and the decider, proposes for approvers and commenters; a viewer gets a note
   and no card; fails_when=the card is built for a viewer, the restatement is missing or
   Apply bypasses the change engine's rights; no_claim=the web's layout.
 - test_new_actions_per_role: protects=each new action (move to another milestone, move
@@ -66,6 +67,7 @@ async def world() -> World:
     async with tenant_session(w.ctx.tenant_id) as s:
         a = await s.get(RoadmapItem, uuid.UUID(w.ids["move_dates-a"]))
         b = await s.get(RoadmapItem, uuid.UUID(w.ids["move_dates-b"]))
+        a.title, b.title = "Adaptive pacing", "Reliability work"
         a.milestone = {"name": "M1 Launch prep", "date": "2026-11-15", "date_source": "typed"}
         b.milestone = {"name": "M2 Scale volume", "date": "2026-12-18", "date_source": "typed"}
         g = Entity(type="goal", key="G1", title="Growth", status="confirmed", origin="user",
@@ -125,16 +127,16 @@ async def test_item_talk_answers_with_its_source(client):
     w = await world()
     seen: list = []
     m = await reads(client, w, "commenter", "what is this for?",
-                    {"actions": [], "clarify": None, "answer": "Move Dates A serves Growth.",
+                    {"actions": [], "clarify": None, "answer": "Adaptive pacing serves Growth.",
                      "source": "prd"}, page(w), seen)  # fmt: skip
     assert seen[0]["context"]["item"]["id"] == w.ids["move_dates-a"]
     assert {"M1 Launch prep", "M2 Scale volume"} <= set(seen[0]["milestones"])
-    assert m["kind"] == "answer" and m["body"] == "Move Dates A serves Growth."
-    assert m["source"] in ("From the PRD · Move Dates A", "From the roadmap · Move Dates A")
+    assert m["kind"] == "answer" and m["body"] == "Adaptive pacing serves Growth."
+    assert m["source"] in ("From the PRD · Adaptive pacing", "From the roadmap · Adaptive pacing")
     # A question parse() answers at once says its source too.
     m = await say(client, w, "commenter", "when is it?", page(w))
-    assert m["kind"] == "answer" and m["body"].startswith("Move Dates A: Oct 1")
-    assert m["source"] == "From the roadmap · Move Dates A"
+    assert m["kind"] == "answer" and m["body"].startswith("Adaptive pacing: 1 Oct")
+    assert m["source"] == "From the roadmap · Adaptive pacing"
     # The talk is kept with this item and this person.
     r = await client.get(CHAT, params={"page": page(w, "b")}, headers=w.ctx.as_("commenter"))
     assert r.json()["messages"] == []
@@ -153,13 +155,13 @@ async def test_item_talk_move_restated_per_role(client, who):
         assert m["body"].startswith("Viewers ask questions here")
         return
     assert m["kind"] == "cards"
-    assert m["body"] == "I understood: move Move Dates A two weeks later, to Oct 15 – Nov 29, 2026."
+    assert m["body"] == "I understood: move Adaptive pacing two weeks later, to 15 Oct – 29 Nov."
     [card] = m["cards"]
     assert card["op"] == "move_dates" and card["after"] == {"start_date": "2026-10-15",
                                                            "end_date": "2026-11-29"}  # fmt: skip
-    assert card["change_words"] == {"before": "Oct 1 – Nov 15", "after": "Oct 15 – Nov 29"}
-    assert card["correct"] == {"fields": ["start_date", "end_date"],
-                               "values": {"start_date": "2026-10-15", "end_date": "2026-11-29"}}  # fmt: skip
+    assert card["change_words"] == {"before": "1 Oct – 15 Nov", "after": "15 Oct – 29 Nov"}
+    assert card["correct"]["fields"] == ["start_date", "end_date"]
+    assert card["correct"]["values"] == {"start_date": "2026-10-15", "end_date": "2026-11-29"}
     kinds = {f["kind"] for x in card["flags"] for f in x["flags"] if f["state"] == "red"}
     assert "outside_milestone" in kinds  # it ends after M1 (Nov 15)
     assert card["may"] == ("apply" if APPLIES[who] == "applied" else "propose")
@@ -186,12 +188,13 @@ async def test_new_actions_per_role(client, who):
     ops = [c["op"] for c in m["cards"]]
     assert ops == ["set_milestone", "add_item", "move_dates", "add_item", "move_dates"], ops
     ms, add, first, slice2, after = m["cards"]
-    assert ms["summary"] == "Move Move Dates A to M2 Scale volume (Dec 18)"
+    assert ms["summary"] == "Move Adaptive pacing to M2 Scale volume (18 Dec)"
     assert ms["change_words"] == {"before": "M1 Launch prep", "after": "M2 Scale volume"}
-    assert add["summary"] == "Add Dashboard under Growth to M2 Scale volume, Dec 5 – Dec 18, 2026"
-    assert add["correct"]["values"] == {"title": "Dashboard", "goal": "Growth",
-                                        "milestone": "M2 Scale volume",
-                                        "start_date": "2026-12-05", "end_date": "2026-12-18"}  # fmt: skip
+    assert add["summary"] == "Add Dashboard under Growth to M2 Scale volume, 5 Dec – 18 Dec"
+    assert add["correct"]["values"] == {
+        "title": "Dashboard", "goal": "Growth", "milestone": "M2 Scale volume",
+        "start_date": "2026-12-05", "end_date": "2026-12-18",
+    }  # fmt: skip
     assert first["after"]["end_date"] < "2026-12-15" and slice2["after"]["title"].endswith("2")
     assert after["after"]["start_date"] == "2026-12-16"
     for card in (ms, add, first, slice2):
@@ -206,7 +209,7 @@ async def test_new_actions_per_role(client, who):
         assert dash is not None and dash.goal_ids == [uuid.UUID(w.goal)]  # type: ignore[attr-defined]
         assert (dash.start_date, dash.end_date) == (date(2026, 12, 5), date(2026, 12, 18))
         assert dash.milestone["name"] == "M2 Scale volume"
-        assert await added(w, "Move Dates B: slice 2") is not None
+        assert await added(w, "Reliability work: slice 2") is not None
     else:
         assert dash is None
 
@@ -227,7 +230,7 @@ async def test_two_actions_one_corrected_one_rejected(client):
     assert r.status_code == 200, r.text
     card = r.json()["card"]
     assert card["status"] == "applied" and card["summary"] == (
-        "Move Move Dates B to Nov 20 – Dec 20, 2026"
+        "Move Reliability work to 20 Nov – 20 Dec"
     )
     assert card["after"] == {"start_date": "2026-11-20", "end_date": "2026-12-20"}
     rb = await row(w, "b")
@@ -237,14 +240,14 @@ async def test_two_actions_one_corrected_one_rejected(client):
     assert r.status_code == 200 and r.json()["status"] == "discarded"
     assert await added(w, "Dashboard") is None
     # A corrected add: its title, milestone and dates as corrected.
-    m = await reads(client, w, "owner", "add a dashboard item",
-                    actions(act("add_item", title="Dashboard", goal="Growth")), ROADMAP)  # fmt: skip
+    one = actions(act("add_item", title="Dashboard", goal="Growth"))
+    m = await reads(client, w, "owner", "add a dashboard item", one, ROADMAP)
     r = await apply(client, w, "owner", m["cards"][0]["id"],
                     {"title": "Growth dashboard", "milestone": "M1 Launch prep",
                      "start_date": "2026-11-03", "end_date": "2026-11-13"})  # fmt: skip
     assert r.status_code == 200, r.text
     assert r.json()["card"]["summary"] == (
-        "Add Growth dashboard under Growth to M1 Launch prep, Nov 3 – Nov 13, 2026"
+        "Add Growth dashboard under Growth to M1 Launch prep, 3 Nov – 13 Nov"
     )
     d = await added(w, "Growth dashboard")
     assert d is not None and (d.start_date, d.end_date) == (date(2026, 11, 3), date(2026, 11, 13))
@@ -265,14 +268,22 @@ async def test_correct_refuses_what_the_engine_would(client):
     r = await apply(client, w, "owner", cid)
     assert r.status_code == 200 and r.json()["card"]["status"] == "applied"
     # A milestone the plan does not know.
-    m = await say(client, w, "owner", "move it to M3", page(w, "b"))
-    assert m["kind"] != "cards" and "M3" in m["body"]
+    b = w.ids["move_dates-b"]
+    m = await reads(
+        client,
+        w,
+        "owner",
+        "move it to M3",
+        actions(act("move_to_milestone", item=b, milestone="M3")),
+        page(w, "b"),
+    )
+    assert m["cards"] == [] and "M3" in m["body"]
     # The reader's unknown goal or self-move is a refusal, never a card.
     a = w.ids["move_dates-a"]
     m = await reads(client, w, "owner", "odd", actions(act("add_item", title="X", goal="Nope"),
                     act("move_after", item=a, after=a)), ROADMAP)  # fmt: skip
     assert m["cards"] == []
     # Correct on a card off the roadmap (the Home Ask panel) is refused.
-    m = await say(client, w, "owner", "cut Move Dates U", "/simple")
+    m = await say(client, w, "owner", "cut Move_Dates U", "/simple")
     r = await apply(client, w, "owner", m["cards"][0]["id"], {"title": "x"})
     assert r.status_code == 422, r.text
