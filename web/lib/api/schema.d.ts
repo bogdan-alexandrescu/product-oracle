@@ -12138,6 +12138,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/prds/{prd}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Prd Plan
+         * @description The PRD's plan as its latest approved version has it.
+         */
+        get: operations["get_simple_prd_plan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/plan/read-again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Simple Prd Plan Again
+         * @description Read the plan again from the approved version (its tables, else Oracle's job).
+         */
+        post: operations["read_simple_prd_plan_again"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/sessions": {
         parameters: {
             query?: never;
@@ -19514,6 +19554,8 @@ export interface components {
             decided_by?: string | null;
             /** Decided At */
             decided_at?: string | null;
+            /** Slice Code */
+            slice_code?: string | null;
             /**
              * Can Decide
              * @default false
@@ -37654,6 +37696,19 @@ export interface components {
             /** Suggestions */
             suggestions: components["schemas"]["SimpleGoalSuggestion"][];
         };
+        /**
+         * SimpleGoalWeeks
+         * @description Engineer-weeks per goal per milestone: each slice once, under its feature's first
+         *     goal.
+         */
+        SimpleGoalWeeks: {
+            /** Goal */
+            goal: string;
+            /** Milestone */
+            milestone: string;
+            /** Weeks */
+            weeks: number;
+        };
         /** SimpleGroup */
         SimpleGroup: {
             /** Key */
@@ -37662,6 +37717,21 @@ export interface components {
             title: string;
             /** Item Ids */
             item_ids: string[];
+        };
+        /** SimpleHoliday */
+        SimpleHoliday: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Label */
+            label?: string | null;
         };
         /** SimpleItemFlags */
         SimpleItemFlags: {
@@ -37688,6 +37758,8 @@ export interface components {
             record_id?: string | null;
             /** Record Name */
             record_name?: string | null;
+            /** Start Date */
+            start_date?: string | null;
         };
         /**
          * SimpleKeyDate
@@ -38107,7 +38179,10 @@ export interface components {
              */
             targets: components["schemas"]["SimpleMilestoneTarget"][];
         };
-        /** SimpleMilestoneTarget */
+        /**
+         * SimpleMilestoneTarget
+         * @description plan-model: one goal's target at a milestone, in words with its unit.
+         */
         SimpleMilestoneTarget: {
             /** Goal */
             goal: string;
@@ -38224,6 +38299,115 @@ export interface components {
             /** Estimated */
             estimated: boolean;
         };
+        /** SimplePlanGoal */
+        SimplePlanGoal: {
+            /** Name */
+            name: string;
+            /**
+             * Targets
+             * @default []
+             */
+            targets: components["schemas"]["SimplePlanGoalTarget"][];
+        };
+        /** SimplePlanGoalTarget */
+        SimplePlanGoalTarget: {
+            /** Milestone */
+            milestone: string;
+            /** Target */
+            target: string;
+        };
+        /** SimplePlanMilestone */
+        SimplePlanMilestone: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Effort Weeks */
+            effort_weeks?: number | null;
+            /**
+             * Planned Weeks
+             * @default 0
+             */
+            planned_weeks: number;
+            /**
+             * Done When
+             * @default []
+             */
+            done_when: string[];
+            /**
+             * Targets
+             * @default []
+             */
+            targets: components["schemas"]["SimpleMilestoneTarget"][];
+            /**
+             * Feature Codes
+             * @default []
+             */
+            feature_codes: string[];
+            /**
+             * Source
+             * @default prd
+             * @enum {string}
+             */
+            source: "prd" | "oracle";
+        };
+        /** SimplePlanOut */
+        SimplePlanOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "reading" | "failed" | "none";
+            /** Source */
+            source?: ("prd" | "oracle") | null;
+            /**
+             * Dated
+             * @default false
+             */
+            dated: boolean;
+            /** Message */
+            message?: string | null;
+            /**
+             * Milestones
+             * @default []
+             */
+            milestones: components["schemas"]["SimplePlanMilestone"][];
+            /**
+             * Slices
+             * @default []
+             */
+            slices: components["schemas"]["SimpleSlice"][];
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["SimplePlanGoal"][];
+            /**
+             * Goal Weeks
+             * @default []
+             */
+            goal_weeks: components["schemas"]["SimpleGoalWeeks"][];
+            span?: components["schemas"]["SimplePlanSpan"] | null;
+            /**
+             * Holidays
+             * @default []
+             */
+            holidays: components["schemas"]["SimpleHoliday"][];
+            /**
+             * Can Read Again
+             * @default false
+             */
+            can_read_again: boolean;
+            /** Read At */
+            read_at?: string | null;
+        };
         /**
          * SimplePlanRow
          * @description One row of the plan strip: a milestone (its name, date and how many of the PRD's
@@ -38255,6 +38439,24 @@ export interface components {
              * @default false
              */
             past_edge: boolean;
+        };
+        /**
+         * SimplePlanSpan
+         * @description plan-model: first milestone start to last milestone end, "2 Nov - 12 Feb".
+         */
+        SimplePlanSpan: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Label */
+            label: string;
         };
         /**
          * SimplePlanStrip
@@ -38499,146 +38701,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** SimplePlanSpan */
-        SimplePlanSpan: {
-            /**
-             * Start
-             * Format: date
-             */
-            start: string;
-            /**
-             * End
-             * Format: date
-             */
-            end: string;
-            /** Label */
-            label: string;
-        };
-        /** SimpleSlice */
-        SimpleSlice: {
-            /** Code */
-            code: string;
-            /** Feature Code */
-            feature_code: string;
-            /** Name */
-            name: string;
-            /** Milestone */
-            milestone: string;
-            /** Milestone Name */
-            milestone_name: string;
-            /** Milestone Start */
-            milestone_start?: string | null;
-            /** Milestone End */
-            milestone_end?: string | null;
-            /** Start Date */
-            start_date?: string | null;
-            /** End Date */
-            end_date?: string | null;
-            /** Estimated */
-            estimated: boolean;
-            /** Effort Weeks */
-            effort_weeks?: number | null;
-            /** Goal */
-            goal?: string | null;
-            /** Pm Owned */
-            pm_owned: boolean;
-        };
-        /** SimplePlanMilestone */
-        SimplePlanMilestone: {
-            /** Code */
-            code: string;
-            /** Name */
-            name: string;
-            /** Start Date */
-            start_date?: string | null;
-            /** End Date */
-            end_date?: string | null;
-            /** Effort Weeks */
-            effort_weeks?: number | null;
-            /** Planned Weeks */
-            planned_weeks: number;
-            /** Done When */
-            done_when: string[];
-            /** Targets */
-            targets: components["schemas"]["SimpleMilestoneTarget"][];
-            /** Feature Codes */
-            feature_codes: string[];
-            /**
-             * Source
-             * @enum {string}
-             */
-            source: "prd" | "oracle";
-        };
-        /** SimplePlanGoalTarget */
-        SimplePlanGoalTarget: {
-            /** Milestone */
-            milestone: string;
-            /** Target */
-            target: string;
-        };
-        /** SimplePlanGoal */
-        SimplePlanGoal: {
-            /** Name */
-            name: string;
-            /** Targets */
-            targets: components["schemas"]["SimplePlanGoalTarget"][];
-        };
-        /** SimplePlanGoalWeeks */
-        SimplePlanGoalWeeks: {
-            /** Goal */
-            goal: string;
-            /** Milestone */
-            milestone: string;
-            /** Weeks */
-            weeks: number;
-        };
-        /** SimplePlanHoliday */
-        SimplePlanHoliday: {
-            /**
-             * Start
-             * Format: date
-             */
-            start: string;
-            /**
-             * End
-             * Format: date
-             */
-            end: string;
-            /** Label */
-            label?: string | null;
-        };
-        /** SimplePlanOut */
-        SimplePlanOut: {
-            prd: components["schemas"]["SimpleDocRef"];
-            /** Version */
-            version?: number | null;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "ready" | "reading" | "failed" | "none";
-            /** Source */
-            source?: ("prd" | "oracle") | null;
-            /** Dated */
-            dated: boolean;
-            /** Message */
-            message?: string | null;
-            /** Milestones */
-            milestones: components["schemas"]["SimplePlanMilestone"][];
-            /** Slices */
-            slices: components["schemas"]["SimpleSlice"][];
-            /** Goals */
-            goals: components["schemas"]["SimplePlanGoal"][];
-            /** Goal Weeks */
-            goal_weeks: components["schemas"]["SimplePlanGoalWeeks"][];
-            span?: components["schemas"]["SimplePlanSpan"] | null;
-            /** Holidays */
-            holidays: components["schemas"]["SimplePlanHoliday"][];
-            /** Can Read Again */
-            can_read_again: boolean;
-            /** Read At */
-            read_at?: string | null;
-        };
         /** SimpleQuarter */
         SimpleQuarter: {
             /**
@@ -38708,16 +38770,6 @@ export interface components {
             milestone?: components["schemas"]["SimpleItemMilestone"] | null;
             /** Phases */
             phases: components["schemas"]["SimplePhase"][];
-            /**
-             * Slices
-             * @default []
-             */
-            slices: components["schemas"]["SimpleSlice"][];
-            /**
-             * Milestones
-             * @default []
-             */
-            milestones: string[];
             /** Depends On */
             depends_on: string[];
             /** Needed By */
@@ -38770,6 +38822,16 @@ export interface components {
              * @default []
              */
             decided_in: components["schemas"]["SimpleOpenDecision"][];
+            /**
+             * Slices
+             * @default []
+             */
+            slices: components["schemas"]["SimpleSlice"][];
+            /**
+             * Milestones
+             * @default []
+             */
+            milestones: string[];
         };
         /** SimpleRoadmapOut */
         SimpleRoadmapOut: {
@@ -38790,7 +38852,6 @@ export interface components {
             items: components["schemas"]["SimpleRoadmapItem"][];
             /** Milestones */
             milestones: components["schemas"]["SimpleMilestone"][];
-            span?: components["schemas"]["SimplePlanSpan"] | null;
             /**
              * Changes In Review
              * @default 0
@@ -38817,6 +38878,7 @@ export interface components {
              */
             roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
             roadmap?: components["schemas"]["SimpleDocRef"] | null;
+            span?: components["schemas"]["SimplePlanSpan"] | null;
         };
         /** SimpleSendIn */
         SimpleSendIn: {
@@ -38873,6 +38935,46 @@ export interface components {
             connected: boolean;
             /** Channel */
             channel?: string | null;
+        };
+        /**
+         * SimpleSlice
+         * @description plan-model: the part of a roadmap item's feature one milestone builds (F-05a / F-05b;
+         *     an item in one milestone has one slice, F-05). Its dates are Oracle's placement inside
+         *     the milestone by the PRD's order words (``estimated``).
+         */
+        SimpleSlice: {
+            /** Code */
+            code: string;
+            /** Feature Code */
+            feature_code: string;
+            /** Name */
+            name: string;
+            /** Milestone */
+            milestone: string;
+            /** Milestone Name */
+            milestone_name: string;
+            /** Milestone Start */
+            milestone_start?: string | null;
+            /** Milestone End */
+            milestone_end?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /**
+             * Estimated
+             * @default true
+             */
+            estimated: boolean;
+            /** Effort Weeks */
+            effort_weeks?: number | null;
+            /** Goal */
+            goal?: string | null;
+            /**
+             * Pm Owned
+             * @default false
+             */
+            pm_owned: boolean;
         };
         /** SimpleStartOptions */
         SimpleStartOptions: {
@@ -68059,6 +68161,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DateSuggestionOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_prd_plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimplePlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_simple_prd_plan_again: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimplePlanOut"];
                 };
             };
             /** @description Validation Error */
