@@ -20,8 +20,9 @@ import { expect, test, type Locator, type Page } from "./test";
  * fields (no UI shows them yet).
  *
  * Card plan-dated-one-pager: protects = the PRD's one-pager, reached from Simple's
- * One-pagers, draws the same dated M1-M3 rows in its Timeline; fails_when = its rows start at
- * their slices' dates or lose a milestone; no_claim = the PDF's drawing (the API's strip).
+ * One-pagers, leads with the plan's timeline whose milestone chips carry the same dated M1-M3
+ * (prd-timeline replaced the strip there); fails_when = a milestone or its dates are lost;
+ * no_claim = the timeline's lanes (simple-prd-timeline.spec), the PDF's drawing.
  */
 
 const EMAILS = { owner: ADMIN.email, viewer: "viewer@example.com" } as const;
@@ -90,9 +91,15 @@ for (const phone of [false, true]) {
           await page.locator('nav[aria-label="Simple"]:visible').getByRole("link", { name: "One-pagers" }).click();
           await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Guided setup" }).click();
           await expect(page).toHaveURL(/\/simple\/one-pagers\/guided-setup$/);
-          const strip = page.getByLabel("Timeline strip");
-          await expectDatedRows(strip, "plan-strip");
-          await expect(strip.getByTestId("plan-strip-label")).toHaveCount(3);
+          // prd-timeline: the one-pager leads with the plan's timeline (its milestone chips carry
+          // their start and end dates) in place of the strip.
+          const timeline = page.getByRole("region", { name: "Timeline" });
+          await expect(timeline.getByRole("group", { name: "Milestones" }).getByRole("button")).toHaveText([
+            "M1 Prove it · 2 Nov – 27 Nov",
+            "M2 Scale volume · 30 Nov – 25 Dec",
+            "M3 Open to all · 28 Dec – 12 Feb",
+          ]);
+          await expect(page.getByLabel("Timeline strip")).toHaveCount(0);
         });
       }
     });

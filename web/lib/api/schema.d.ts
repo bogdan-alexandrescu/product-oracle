@@ -38543,6 +38543,16 @@ export interface components {
             /** Estimated */
             estimated: boolean;
         };
+        /**
+         * SimplePlanDecision
+         * @description prd-timeline: an open decision a milestone waits on ("Q7 Legal input").
+         */
+        SimplePlanDecision: {
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+        };
         /** SimplePlanGoal */
         SimplePlanGoal: {
             /** Name */
@@ -38552,6 +38562,10 @@ export interface components {
              * @default []
              */
             targets: components["schemas"]["SimplePlanGoalTarget"][];
+            /** Measured */
+            measured?: string | null;
+            /** On Track */
+            on_track?: boolean | null;
         };
         /** SimplePlanGoalTarget */
         SimplePlanGoalTarget: {
@@ -38598,6 +38612,16 @@ export interface components {
              * @enum {string}
              */
             source: "prd" | "oracle";
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["SimplePlanDecision"][];
+            /**
+             * Risks
+             * @default []
+             */
+            risks: string[];
         };
         /** SimplePlanOut */
         SimplePlanOut: {
@@ -39356,6 +39380,15 @@ export interface components {
              * @default false
              */
             pm_owned: boolean;
+            /** Kind */
+            kind?: string | null;
+            /** What */
+            what?: string | null;
+            /**
+             * Flow Steps
+             * @default []
+             */
+            flow_steps: string[];
         };
         /** SimpleStartOptions */
         SimpleStartOptions: {

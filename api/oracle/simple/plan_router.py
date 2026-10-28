@@ -35,7 +35,7 @@ async def get_simple_prd_plan(prd: str, principal: Reader, db: TenantDB) -> Simp
     """The PRD's plan as its latest approved version has it."""
     document = await _doc(db, principal, prd)
     row, v = await plan.ensure(db, document, persist=False)
-    return plan.plan_out(document, row, v, principal)
+    return await plan.plan_out(db, document, row, v, principal)
 
 
 @router.post(
@@ -47,5 +47,6 @@ async def read_simple_prd_plan_again(prd: str, principal: Owner, db: TenantDB) -
     row, v = await plan.ensure(db, document, force=True)
     if v is None:
         raise HTTPException(status.HTTP_409_CONFLICT, plan.NO_VERSION)
+    out = await plan.plan_out(db, document, row, v, principal)
     await db.commit()
-    return plan.plan_out(document, row, v, principal)
+    return out
