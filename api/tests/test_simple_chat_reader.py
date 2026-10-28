@@ -435,24 +435,34 @@ async def test_review_an_answer_names_oracles_data(client):
     assert m["kind"] == "note" and "Paris" not in m["body"]
 
 
-async def test_review_under_discussion_is_the_agenda_head(client, meetings):  # noqa: F811
-    # protects: in a meeting the reader is told the agenda item taken now (its first open
-    # decision) as what is under discussion; fails_when: it is the PRD's title or nothing.
+async def test_review_under_discussion_is_what_the_meeting_takes(client, meetings):  # noqa: F811
+    # protects: in a meeting the reader is told what the meeting has under discussion: the
+    # item its agenda takes next ("take X next"), else the PRD under review; never the
+    # newest open decision (S8 lists them newest first); fails_when: with D-7 and D-12 open
+    # the reader is told D-12 is under discussion.
     from types import SimpleNamespace
 
     ctx = await make_people()
     await World(ctx).build()
     mid = _meeting(ctx, meetings)
+    meetings.prd = "Payments PRD"
     meetings.agenda[mid] = [
         SimpleNamespace(id=uuid.uuid4(), number=7, title="Ship the ledger cutover"),
-        SimpleNamespace(id=uuid.uuid4(), number=8, title="Pick the import format"),
+        SimpleNamespace(id=uuid.uuid4(), number=12, title="Pick the import format"),
     ]
-    await post(client, ctx, "owner", "let's do that for the ledger too", mid)
+    await post(client, ctx, "owner", "push that out a quarter", mid)
     seen: list = []
     await read(ctx, actions(), seen)
     m = seen[0]["context"]["meeting"]
-    assert m["agenda"] == ["Ship the ledger cutover", "Pick the import format"]
-    assert m["under_discussion"] == "Ship the ledger cutover"
+    assert m["under_discussion"] == "Payments PRD"
+    assert m["open_decisions"] == ["D-12 Pick the import format", "D-7 Ship the ledger cutover"]
+    meetings.next[mid] = "Ledger v2"
+    await post(client, ctx, "owner", "push that out a quarter", mid)
+    seen = []
+    await read(ctx, actions(), seen)
+    m = seen[0]["context"]["meeting"]
+    assert m["under_discussion"] == "Ledger v2"
+    assert m["agenda"] == {"next": "Ledger v2", "skipped": []}
 
 
 async def test_review_choice_labels_are_oracles_words(client):

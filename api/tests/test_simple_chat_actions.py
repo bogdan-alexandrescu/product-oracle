@@ -35,10 +35,10 @@ Test cards (protects / fails_when / no_claim):
 - test_record_decision_in_a_meeting_and_on_ask: protects=in a meeting "decision: <text>"
   becomes a meeting decision (decided by the named person, else the PRD's decider) shown
   on the meeting (the minutes' "Decisions taken"), Undo reverses it; on the Ask panel an
-  approver's decision is a decided decision on the page's document; a commenter's and a
-  viewer's are refused; fails_when=a decision is missing, decided by the wrong person,
-  stays decided after Undo, or a commenter records one; no_claim=the Decisions page's
-  grouping (S8's tests).
+  approver's decision is a decided decision on the page's document; a viewer's is refused
+  (a commenter's is a proposal: test_simple_chat_followups); fails_when=a decision is
+  missing, decided by the wrong person, stays decided after Undo; no_claim=the Decisions
+  page's grouping (S8's tests).
 """
 
 import uuid
@@ -235,10 +235,10 @@ async def test_record_decision_in_a_meeting_and_on_ask(client):
         assert d.approver_id == w.ctx.users["approver"].id
         assert {"kind": "document", "id": c["target"]["document_id"]} in [
             {"kind": x["kind"], "id": x["id"]} for x in d.subjects]  # fmt: skip
-    for who, code in (("commenter", 403), ("viewer", 403)):
-        c = await one_card(client, w, who, "decision: Not mine", page=page)
-        assert c["may"] is None, who
-        assert (await apply(client, w, who, c["id"])).status_code == code, who
+    # A commenter's is a proposal (test_simple_chat_followups); a viewer's is refused.
+    c = await one_card(client, w, "viewer", "decision: Not mine", page=page)
+    assert c["may"] is None
+    assert (await apply(client, w, "viewer", c["id"])).status_code == 403
 
 
 # ---------------------------------------------------------------- the review's findings

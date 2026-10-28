@@ -141,6 +141,8 @@ class FakeMeetings:
         self.module.one = self.one  # type: ignore[attr-defined]
         self.titles: dict[uuid.UUID, str] = {}
         self.agenda: dict[uuid.UUID, list[Decision]] = {}
+        self.next: dict[uuid.UUID, str] = {}
+        self.prd: str | None = None
 
     async def meeting_rules(self, db, meeting_id):
         return self.rules.get(meeting_id)
@@ -172,10 +174,21 @@ class FakeMeetings:
         return SimpleNamespace(upcoming=[], live=live, past=[])
 
     async def one(self, db, principal, meeting_id):
-        return SimpleNamespace(open_decisions=[
-            SimpleNamespace(id=d.id, number=d.number, title=d.title)
-            for d in self.agenda.get(meeting_id, [])
-        ])  # fmt: skip
+        """S8's ``one``: its open decisions newest first (by number, as
+        meetings._open_decisions), the agenda the meeting keeps (chat-actions' "take X
+        next" / "skip X") and the PRD under review."""
+        nxt = self.next.get(meeting_id)
+        return SimpleNamespace(
+            title=self.titles.get(meeting_id, "Review"),
+            open_decisions=[
+                SimpleNamespace(id=d.id, number=d.number, title=d.title)
+                for d in sorted(self.agenda.get(meeting_id, []), key=lambda d: -d.number)
+            ],
+            agenda=SimpleNamespace(
+                next=SimpleNamespace(id=uuid.uuid4(), title=nxt) if nxt else None, skipped=[]
+            ),
+            prd=SimpleNamespace(title=self.prd) if self.prd else None,
+        )  # fmt: skip
 
 
 @pytest.fixture
