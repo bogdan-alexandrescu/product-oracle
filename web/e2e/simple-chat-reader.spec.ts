@@ -78,9 +78,9 @@ for (const [phone, dark] of [
     });
 
     test(`meeting chat: a free-form line is read, restated with its card, and applies (${where})`, async ({ page }) => {
-      // protects: a line the fixed parser does not know shows "Reading that…" then (polled, no reload) "I understood one change:" with one move card three months on; the presenter applies it; "… and make <person> own it" restates the date change only (no owner op yet)
-      // fails_when: the line gets "I did not understand", the pending line never resolves without a reload, the restated line or the card is missing, or the owner half makes a card
-      // no_claim: the real reader's model output (api tests with a fake model); the owner op (a later step)
+      // protects: a line the fixed parser does not know shows "Reading that…" then (polled, no reload) "I understood one change:" with one move card three months on; the presenter applies it; "… and make <person> own it" restates the date change and the new owner (chat-join)
+      // fails_when: the line gets "I did not understand", the pending line never resolves without a reload, the restated line or the card is missing, or the owner half makes no card
+      // no_claim: the real reader's model output (api tests with a fake model)
       const chat = await meeting(page, EMAILS.owner);
       if (dark) await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
       await say(chat, "can we push Delivery pipeline v2 out a quarter");
@@ -94,10 +94,12 @@ for (const [phone, dark] of [
       await tap(moved.getByRole("button", { name: "Apply" }));
       await expect(moved.getByTestId("chat-card-outcome")).toContainText("Applied by Admin");
 
+      // chat-join: the owner half is chat-actions' set_owner, a second card.
       await say(chat, "push Delivery integrity and release safety to next quarter and make Commenter own it");
-      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood one change:");
-      await expect(last(chat).getByTestId("chat-card")).toHaveCount(1);
-      await expect(last(chat).getByTestId("chat-card")).toContainText("Move Delivery integrity and release safety to 1 Jan");
+      await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I understood two changes:");
+      await expect(last(chat).getByTestId("chat-card")).toHaveCount(2);
+      await expect(last(chat).getByTestId("chat-card").first()).toContainText("Move Delivery integrity and release safety to 1 Jan");
+      await expect(last(chat).getByTestId("chat-card").last()).toContainText("Make Commenter the owner of Delivery integrity and release safety");
       await expect(page.getByText("I did not understand that.")).toHaveCount(0);
     });
 
