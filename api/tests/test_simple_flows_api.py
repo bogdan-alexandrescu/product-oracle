@@ -126,3 +126,25 @@ async def test_roles_read_the_flow_fields(client, role, ask):
             select(SimpleVisual).where(SimpleVisual.subject_id == uuid.UUID(other))
         )
     assert (asked is not None) is (ask == 202)
+
+
+async def test_change_with_no_item_or_line_is_named_in_plain_words():
+    """The flows review: a pending change with no item and no line reads as "the change",
+    never its op ("Read add_item" would be jargon). protects=the drawing stage's subject
+    name; fails_when=the op name shows; no_claim=changes with an item (their title)."""
+    from datetime import UTC, datetime
+
+    from oracle.simple.models import SimpleChange
+
+    change = SimpleChange(
+        id=uuid.uuid4(), op="add_item", target={}, before={}, after={}, status="proposed",
+        by=uuid.uuid4(), at=datetime.now(UTC),
+    )  # fmt: skip
+
+    class Db:
+        async def get(self, model, key):
+            return change if model is SimpleChange else None
+
+    got = await visuals._subject(Db(), "change", change.id)
+    assert "add_item" not in got.title
+    assert got.title == "the change"

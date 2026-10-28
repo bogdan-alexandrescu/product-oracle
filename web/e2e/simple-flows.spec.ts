@@ -1,4 +1,4 @@
-import { MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
+import { MOCK_VISUAL_FAIL_KEY, MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -34,6 +34,29 @@ import { expect, test, type Locator, type Page } from "./test";
  * - "a PRD bet line opens the same flow": protects=a one-pager bet line's flow opens the
  *   same opened view with the storyboard switch; fails_when=the PRD line shows another
  *   presentation; no_claim=the one-pager's own layout.
+ *
+ * The flows review (2026-10-28):
+ * - "a PRD bet line is the same row": protects=a bet line shows the card's row: the live
+ *   thumbnail with "5 steps · 1 screen · version 1 · drawn ...", "No flow yet" with "Ask
+ *   Oracle to draw it", the drawing stages, bar and "Started ...", the swap without a
+ *   reload with "New", and the failed state with Retry; fails_when=the line shows a bare
+ *   thumbnail or a state only inside an opened panel; no_claim=the one-pager's layout.
+ * - "the drawing reaches its last stage": protects=while the job runs, "Draw the screen"
+ *   becomes the current stage and the bar fills past half; fails_when=the bar stops at
+ *   "Draw the steps"; no_claim=the job's real timing.
+ * - "the drawing names an item with no code by its title": protects=the stages read "Read
+ *   Alert routing by team" as the API's subject_name (the item's title); fails_when=the
+ *   mock names the request's brief; no_claim=coded names (the first row test).
+ * - "a drawing that landed while the card was closed is New": protects=closing the card
+ *   while Oracle draws and opening it after the drawing landed shows "New"; fails_when=the
+ *   chip needs the row to have watched the drawing; no_claim=how long "New" lasts.
+ * - "a long flow stays readable": protects=an 8-step flow's thumbnail numbers and opened
+ *   labels render at a readable size, and a word longer than its box stays inside it;
+ *   fails_when=the diagram is squeezed into one line or a long word runs past its box;
+ *   no_claim=pixel layout.
+ * - "the viewer holds the focus": protects=Full screen moves the focus into the viewer,
+ *   Tab stays in it, Escape gives the focus back to Full screen; fails_when=the focus stays
+ *   on the page under the viewer; no_claim=screen-reader output.
  */
 
 const DESKTOP = { width: 1366, height: 820 };
@@ -186,6 +209,120 @@ for (const phone of [false, true]) {
         await tap(wide.getByRole("group", { name: "Show the flow as" }).getByRole("button", { name: "Storyboard" }));
         await expect(wide.getByTestId("story-card").last()).toHaveAccessibleName("The screen");
         await expect(wide.getByTestId("story-yes-no")).toContainText("The checklist moves on and asks again tomorrow.");
+      });
+
+      test(`a PRD bet line is the same row: its states and the swap (${where})`, async ({ page }) => {
+        await page.addInitScript(([key, ms]) => localStorage.setItem(key, ms), [MOCK_VISUAL_JOB_MS_KEY, String(JOB_MS)] as const);
+        await page.addInitScript(([key, bet]) => localStorage.setItem(key, bet), [MOCK_VISUAL_FAIL_KEY, "Invite suggestions from the admin's calendar"] as const);
+        await login(page);
+        await page.goto("/simple/prds/guided-setup");
+        let loads = 0;
+        page.on("framenavigated", (f) => {
+          if (f === page.mainFrame()) loads += 1;
+        });
+        const drawn = page.getByRole("group", { name: "User flow of bet 2" });
+        await expect(drawn.getByTestId("flow-row").getByTestId("flow-meta")).toContainText("5 steps · 1 screen · version 1 · drawn");
+        await expect(drawn.getByRole("button", { name: "Flow for bet 2" }).locator('[data-shape="decision"]')).toHaveCount(1);
+        const row = page.getByRole("group", { name: "User flow of bet 4" }).getByTestId("flow-row");
+        await expect(row.getByTestId("flow-empty")).toContainText("No flow yet");
+        await tap(row.getByRole("button", { name: "Ask Oracle to draw it" }));
+        const stages = row.getByRole("list", { name: "Stages" });
+        await expect(stages).toContainText("Read A sample project created on day one");
+        await expect(stages).toContainText("Draw the screen");
+        await expect(row.getByRole("progressbar", { name: "Drawing" })).toBeVisible();
+        await expect(row.getByTestId("flow-empty")).toContainText("Updates here by itself; you can close the card. Started");
+        await expect(row.getByTestId("flow-meta")).toContainText("version 1 · drawn", { timeout: JOB_MS + 8000 });
+        await expect(row.getByTestId("flow-new")).toHaveText("New");
+        await expect(row.getByRole("button", { name: "Flow for bet 4" }).locator('[data-shape="decision"]')).toHaveCount(1);
+        // The failed state, on the line itself.
+        const failing = page.getByRole("group", { name: "User flow of bet 3" }).getByTestId("flow-row");
+        await tap(failing.getByRole("button", { name: "Ask Oracle to draw it" }));
+        await expect(failing.getByTestId("flow-empty")).toHaveText(/Oracle could not draw this flow\. Nothing changed on the item\./, { timeout: JOB_MS + 8000 });
+        await tap(failing.getByRole("button", { name: "Retry" }));
+        await expect(failing.getByTestId("flow-meta")).toContainText("version 1", { timeout: JOB_MS + 8000 });
+        expect(loads).toBe(0);
+      });
+
+      test(`the drawing reaches its last stage (${where})`, async ({ page }) => {
+        await page.addInitScript(([key, ms]) => localStorage.setItem(key, ms), [MOCK_VISUAL_JOB_MS_KEY, "120000"] as const);
+        const card = await openCard(page, "alert-digest");
+        const row = card.getByTestId("flow-row");
+        await tap(row.getByRole("button", { name: "Ask Oracle to draw it" }));
+        const stages = row.getByRole("list", { name: "Stages" });
+        await expect(stages.getByRole("listitem").nth(0)).toHaveAttribute("aria-current", "step");
+        await page.clock.fastForward(62000);
+        await expect(stages.getByRole("listitem").nth(1)).toHaveAttribute("aria-current", "step");
+        await page.clock.fastForward(20000);
+        await page.clock.fastForward(3000);
+        await expect(stages.getByRole("listitem").nth(2)).toHaveAttribute("aria-current", "step");
+        await expect(row.getByRole("progressbar", { name: "Drawing" })).toHaveAttribute("aria-valuenow", "3");
+      });
+
+      test(`the drawing names an item with no code by its title (${where})`, async ({ page }) => {
+        await page.addInitScript(([key, ms]) => localStorage.setItem(key, ms), [MOCK_VISUAL_JOB_MS_KEY, String(JOB_MS)] as const);
+        const card = await openCard(page, "alert-sso");
+        const row = card.getByTestId("flow-row");
+        await tap(row.getByRole("button", { name: "Ask Oracle to draw it" }));
+        await expect(row.getByRole("list", { name: "Stages" })).toContainText("Read Alert routing by team");
+      });
+
+      test(`a drawing that landed while the card was closed is New (${where})`, async ({ page }) => {
+        await page.addInitScript(([key, ms]) => localStorage.setItem(key, ms), [MOCK_VISUAL_JOB_MS_KEY, String(JOB_MS)] as const);
+        const card = await openCard(page, "alert-digest");
+        await tap(card.getByTestId("flow-row").getByRole("button", { name: "Ask Oracle to draw it" }));
+        await expect(card.getByTestId("flow-empty")).toHaveAttribute("data-state", "drawing");
+        await tap(card.getByRole("button", { name: "Close" }).first());
+        await expect(card).toHaveCount(0);
+        await page.waitForTimeout(JOB_MS + 1000);
+        await bar(page, "alert-digest").click();
+        const again = page.getByTestId("floating-card").getByTestId("flow-row");
+        await expect(again.getByTestId("flow-meta")).toContainText("version 1");
+        await expect(again.getByTestId("flow-new")).toHaveText("New");
+      });
+
+      test(`a long flow stays readable (${where})`, async ({ page }) => {
+        const card = await openCard(page, "alert-mobile");
+        const row = card.getByTestId("flow-row");
+        await expect(row.getByTestId("flow-meta")).toContainText("8 steps");
+        const thumb = row.getByRole("button", { name: "Open the item's flow" });
+        // The thumbnail's step numbers stay readable (at least 9 px tall on the screen).
+        const numbers = await thumb.locator("text").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height));
+        expect(Math.min(...numbers)).toBeGreaterThanOrEqual(9);
+        await tap(row.getByRole("button", { name: "Open the flow" }));
+        const svg = row.getByTestId("flow-detail").getByTestId("flow-svg");
+        await expect(svg).toBeVisible();
+        const fit = await svg.evaluate((el) =>
+          [...el.querySelectorAll("g")].flatMap((g) => {
+            const shape = g.querySelector<SVGGraphicsElement>("[data-shape]");
+            if (!shape) return [];
+            const box = shape.getBBox();
+            return [...g.querySelectorAll<SVGTextElement>("text")].map((t) => {
+              const b = t.getBBox();
+              return { text: t.textContent, inside: b.x >= box.x - 1 && b.x + b.width <= box.x + box.width + 1, px: t.getBoundingClientRect().height };
+            });
+          }),
+        );
+        expect(fit.length).toBeGreaterThan(8);
+        expect(fit.filter((f) => !f.inside)).toEqual([]);
+        // Labels render at a readable size (at least 11 px tall), on a phone too.
+        expect(Math.min(...fit.map((f) => f.px))).toBeGreaterThanOrEqual(11);
+      });
+
+      test(`the viewer holds the focus (${where})`, async ({ page }) => {
+        const card = await openCard(page, "alert-mobile");
+        const opener = card.getByTestId("flow-row").getByRole("button", { name: "Full screen" });
+        await tap(opener);
+        const viewer = page.getByRole("dialog", { name: "Full screen: Act on a pushed alert" });
+        await expect(viewer.getByRole("button", { name: "Exit full screen" })).toBeFocused();
+        for (let i = 0; i < 25; i += 1) {
+          await page.keyboard.press("Tab");
+          expect(await viewer.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+        }
+        await page.keyboard.press("Shift+Tab");
+        expect(await viewer.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+        await page.keyboard.press("Escape");
+        await expect(viewer).toHaveCount(0);
+        await expect(opener).toBeFocused();
       });
     });
   }
