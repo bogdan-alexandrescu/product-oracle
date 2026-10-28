@@ -252,7 +252,12 @@ function SummariesLine({ settings, canEdit, onChanged }: { settings: SummarySett
                 {r.title}: {perMonthText(r.runs_per_month)}, {formatMoney(r.per_summary_usd)} each
               </span>
             ))}
-        <span className="mt-1 block">Each summary is one Oracle run.</span>
+        {/* With no active ritual, what one summary would cost is still said. */}
+        <span className="mt-1 block">
+          {settings.estimate.rituals.length === 0
+            ? `Each summary is one Oracle run of about ${formatMoney(settings.estimate.per_summary_usd)}.`
+            : "Each summary is one Oracle run."}
+        </span>
       </InfoTip>
       {error && <ErrorNote>{error}</ErrorNote>}
     </div>

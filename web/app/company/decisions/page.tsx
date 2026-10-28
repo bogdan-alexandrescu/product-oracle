@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
-import { Avatar, Button, Chip, DataTable, FilterChips, InfoTip, PageHeader, Panel, Sheet, Split, type Column } from "@/components/ds";
+import { Avatar, Button, Chip, DataTable, FilterChips, InfoTip, Panel, Sheet, Split, type Column } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { paths } from "@/lib/api/schema";
@@ -14,6 +14,7 @@ import { useQuery } from "@/lib/use-query";
 import { useSetParams } from "@/lib/use-set-params";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
+import { CompanyHeader } from "../_nav";
 import { DecisionInspector } from "./_components/DecisionInspector";
 import { useSubjectLabel } from "./_components/LinksPicker";
 import { ProposeDialog } from "./_components/ProposeDialog";
@@ -74,11 +75,13 @@ export default function DecisionsPage() {
 const PAGE = 200;
 
 /** A state chip as the API's filters: Needs me is what waits on me to decide or review. */
-const STATE_QUERY: Record<StateFilter, Pick<ListQuery, "status" | "approver">> = {
+const STATE_QUERY: Record<StateFilter, Pick<ListQuery, "status" | "approver" | "due">> = {
   needs_me: { status: "open", approver: "me" },
   proposed: { status: "proposed" },
   review_due: { status: "review_due" },
-  decided: { status: "decided" },
+  // A decided call whose review has come is under Review due, not here: the API leaves it out,
+  // so a page of Decided is a full page.
+  decided: { status: "decided", due: false },
   all: {},
 };
 
@@ -166,8 +169,7 @@ function Decisions() {
     () => (state ? loadPages(query, pages) : Promise.resolve(undefined)),
     { keepPrevious: true },
   );
-  // Decided lists only decided rows: one whose review has come is under Review due, not here.
-  const rows = useMemo(() => (listQ.data?.rows ?? []).filter((d) => state !== "decided" || d.state === "decided"), [listQ.data, state]);
+  const rows = useMemo(() => listQ.data?.rows ?? [], [listQ.data]);
   // The count of what the filters choose from (the class, the run or subject), so a filter
   // that hides rows reads "2 of 5", never a bare 0.
   const baseQuery: ListQuery = { class: cls, run_id: run ?? undefined, subject_kind: subject?.kind, subject_id: subject?.id };
@@ -270,8 +272,7 @@ function Decisions() {
 
   return (
     <>
-      <PageHeader
-        title="Company"
+      <CompanyHeader
         action={
           can("create_decision") && (
             <Button variant="primary" icon="plus" onClick={() => setProposing(true)}>
