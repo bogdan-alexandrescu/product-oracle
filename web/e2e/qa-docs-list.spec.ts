@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_FAIL_KEY, MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 // QA pass 1, docs lane: the PRDs list (/documents), its side panel, row menu, delete dialog
@@ -123,6 +123,49 @@ test.describe("desktop", () => {
     expect(reversed).toEqual([...titles].reverse());
   });
 
+  test("review: each sorted header says its order with aria-sort, in words that fit the column", async ({
+    page,
+  }) => {
+    await open(page);
+    const table = page.getByTestId("documents-table");
+    const header = (k: string) =>
+      table.getByRole("columnheader").filter({ has: page.getByTestId(`sort-${k}`) });
+    // Newest first by default: Updated is the sorted column.
+    await expect(header("updated")).toHaveAttribute("aria-sort", "descending");
+    await expect(page.getByTestId("sort-updated")).toHaveAccessibleName("Sort by Updated, newest first");
+    for (const k of ["title", "status", "latest"])
+      await expect(header(k)).toHaveAttribute("aria-sort", "none");
+
+    await page.getByTestId("sort-title").click();
+    await expect(header("title")).toHaveAttribute("aria-sort", "ascending");
+    await expect(page.getByTestId("sort-title")).toHaveAccessibleName("Sort by Document, A to Z");
+    await expect(header("updated")).toHaveAttribute("aria-sort", "none");
+    await page.getByTestId("sort-title").click();
+    await expect(header("title")).toHaveAttribute("aria-sort", "descending");
+    await expect(page.getByTestId("sort-title")).toHaveAccessibleName("Sort by Document, Z to A");
+
+    await page.getByTestId("sort-status").click();
+    await expect(header("status")).toHaveAttribute("aria-sort", "ascending");
+    await expect(page.getByTestId("sort-status")).toHaveAccessibleName("Sort by Status, drafts first");
+
+    await page.getByTestId("sort-updated").click();
+    await expect(header("updated")).toHaveAttribute("aria-sort", "descending");
+    await page.getByTestId("sort-updated").click();
+    await expect(header("updated")).toHaveAttribute("aria-sort", "ascending");
+    await expect(page.getByTestId("sort-updated")).toHaveAccessibleName("Sort by Updated, oldest first");
+  });
+
+  test("review: when template names cannot load, the list says so and still reads in words", async ({
+    page,
+  }) => {
+    await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_FAIL_KEY, "/v1/templates"] as const);
+    await open(page);
+    await expect(page.getByTestId("template-names-failed")).toHaveText(
+      "Template names could not load, so they show in plain words.",
+    );
+    await expect(page.getByTestId("documents-table")).not.toContainText("oracle-default");
+  });
+
   test("qa-docs-17: the row menu says it opens the latest version, and does", async ({
     page,
   }) => {
@@ -214,6 +257,28 @@ test.describe("phone", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Saved carts PRD" }),
     ).toBeVisible();
+  });
+
+  test("review: on a phone the arrow keys move the selection; Enter opens the PRD", async ({
+    page,
+  }) => {
+    await open(page);
+    const rows = page.getByTestId("document-row");
+    const second = rows.nth(1);
+    const href = await second.locator("td:first-child a").getAttribute("href");
+    const title = await second.locator("td:first-child a").innerText();
+    await rows.first().focus();
+    await page.keyboard.press("ArrowDown");
+    await expect(second).toBeFocused();
+    await expect(second).toHaveAttribute("aria-selected", "true");
+    await expect(page).toHaveURL(/\/documents$/);
+    await page.keyboard.press("ArrowUp");
+    await expect(rows.first()).toBeFocused();
+    await expect(page).toHaveURL(/\/documents$/);
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`${href}$`));
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
   });
 
   test("qa-docs-44: the Ideas empty text wraps on a phone", async ({

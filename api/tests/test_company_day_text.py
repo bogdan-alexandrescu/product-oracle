@@ -434,7 +434,7 @@ def test_the_deck_banner_names_the_company_time():
     )
     banner = deck._banner(ev)
     # In words, capitalised, no ISO date (QA docs-30).
-    assert "Approved Oct 13, 9:00 AM NZDT" in banner
+    assert "Approved Oct 13, 2026, 9:00 AM NZDT" in banner
     assert "2026-" not in banner
 
 

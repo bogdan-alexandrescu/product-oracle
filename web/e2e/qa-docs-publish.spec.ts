@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 // QA pass 1, docs lane: the Publish page. Saved carts v2 (a PRD: no section reviewed, one
@@ -9,11 +9,16 @@ import { login } from "./helpers";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 
-async function open(page: Page, slug: string, role: Role = "owner") {
+async function open(page: Page, slug: string, role: Role = "owner", scenario?: string) {
   await page.addInitScript(([rk, r]) => localStorage.setItem(rk, r), [
     MOCK_ROLE_KEY,
     role,
   ] as const);
+  if (scenario)
+    await page.addInitScript(([sk, s]) => localStorage.setItem(sk, s), [
+      MOCK_SCENARIO_KEY,
+      scenario,
+    ] as const);
   await login(page);
   await page.goto(`/documents/${slug}/publish`);
   await expect(page.getByTestId("publish-readiness")).toBeVisible();
@@ -37,6 +42,17 @@ for (const viewport of [
       await expect(block).not.toContainText("2026-12-15");
       await expect(page.getByTestId("publish-button")).toBeDisabled();
       await expect(page.getByTestId("publish-ready")).toHaveCount(0);
+    });
+
+    test("review: a published roadmap lists no blocks, though a date's basis was withdrawn since", async ({
+      page,
+    }) => {
+      // "approved-plan": usage-alerts-roadmap v1 is published; its Dec 15, 2026 date has
+      // since lost its schedule basis.
+      await open(page, "usage-alerts-roadmap", "owner", "approved-plan");
+      await expect(page.getByTestId("published-chip")).toHaveText("Published v1");
+      await expect(page.getByTestId("blocks-chip")).toHaveText("0 blocks");
+      await expect(page.getByTestId("block-row")).toHaveCount(0);
     });
 
     test("qa-docs-3: the headline says what is still open, as the dialog does", async ({

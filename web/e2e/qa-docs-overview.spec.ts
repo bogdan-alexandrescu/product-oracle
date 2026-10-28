@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
+import { MOCK_FAIL_KEY, MOCK_ROLE_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 // QA pass 1, docs lane: a PRD's overview (/documents/<doc>): its header, version panel,
@@ -138,6 +138,37 @@ test.describe("desktop", () => {
         .getByTestId("section-assignments")
         .getByRole("button", { name: /^Edit owner/ }),
     ).toHaveCount(0);
+  });
+
+  test("review: the opening section reads as the Introduction and may be assigned like the others", async ({
+    page,
+  }) => {
+    await open(page, "saved-carts", "approver");
+    const panel = page.getByTestId("section-assignments");
+    await panel.getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
+    const intro = panel.locator("li[data-section-key]").filter({ hasText: "Introduction" });
+    await expect(intro).toHaveCount(1);
+    await intro.getByRole("button", { name: "Edit owner and reviewers of Introduction" }).click();
+    await expect(intro.getByRole("button", { name: "Choose the owner" })).toBeVisible();
+  });
+
+  test("review: a PRD with no engineering spec does not load the spec documents", async ({
+    page,
+  }) => {
+    await open(page, "saved-carts");
+    await expect(page.getByTestId("engineering-specs")).toContainText("No engineering spec yet");
+    // The version table and the section list have loaded too, so the page's calls are made.
+    await expect(page.getByTestId("section-assignments")).toBeVisible();
+    const calls = await page.evaluate(() => [...((globalThis as { __poMockCalls?: string[] }).__poMockCalls ?? [])]);
+    expect(calls.filter((c) => c.startsWith("GET /v1/documents?kind=spec"))).toEqual([]);
+  });
+
+  test("review: when template names cannot load, the header says so", async ({ page }) => {
+    await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_FAIL_KEY, "/v1/templates"] as const);
+    await open(page, "saved-carts");
+    await expect(page.getByTestId("template-names-failed")).toHaveText(
+      "Template names could not load, so they show in plain words.",
+    );
   });
 });
 

@@ -151,6 +151,10 @@ test.describe("desktop", () => {
       await expect(page.getByTestId("shared-about")).toHaveText(
         /^Shared by .+ · Link ends [A-Z][a-z]{2} \d{1,2}, \d{4}$/,
       );
+      // qa-docs-71: the person who made the link (signed in as Admin), not the company alone.
+      await expect(page.getByTestId("shared-about")).toContainText(
+        "Shared by Admin at ",
+      );
       await expect(page).toHaveTitle(/Platform roadmap, autumn/);
       // The bar matches the white frame in either theme.
       expect(
@@ -170,6 +174,22 @@ test.describe("desktop", () => {
         .toBe(true);
     });
   }
+
+  test("the shared page's frame never runs a script (no allow-scripts beside allow-same-origin)", async ({
+    page,
+  }) => {
+    await sharing(page);
+    await page.goto(DOC);
+    await openShared(page);
+    // allow-same-origin is safe only without allow-scripts: the frame must never run one.
+    const sandbox = await page
+      .getByTestId("shared-frame")
+      .getAttribute("sandbox");
+    expect(sandbox).not.toBeNull();
+    expect(sandbox!.split(/\s+/)).not.toContain("allow-scripts");
+    expect(sandbox!.split(/\s+/)).not.toContain("allow-top-navigation");
+    await expect(page).toHaveTitle(/Platform roadmap, autumn · Shared roadmap/);
+  });
 });
 
 test.describe("phone", () => {
@@ -190,5 +210,31 @@ test.describe("phone", () => {
         () => document.documentElement.scrollWidth <= window.innerWidth,
       ),
     ).toBe(true);
+  });
+
+  test("the shared page's frame shrinks to its page when the window widens: no blank gap", async ({
+    page,
+  }) => {
+    await sharing(page);
+    await page.goto(DOC);
+    await openShared(page);
+    const frame = page.getByTestId("shared-frame");
+    const tall = () => frame.evaluate((el: HTMLElement) => el.clientHeight);
+    /** How far the frame runs past the bottom of what its page shows. */
+    const gap = () =>
+      frame.evaluate((el: HTMLIFrameElement) => {
+        const doc = el.contentDocument;
+        if (!doc) return null;
+        const bottoms = [...doc.body.querySelectorAll("*")].map(
+          (e) => e.getBoundingClientRect().bottom,
+        );
+        return el.clientHeight - Math.max(0, ...bottoms);
+      });
+    await expect.poll(gap).toBeLessThan(64);
+    const onPhone = await tall();
+    // The phone turned into a desktop window: the page wraps less, the frame follows it.
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await expect.poll(tall).toBeLessThan(onPhone);
+    await expect.poll(gap).toBeLessThan(64);
   });
 });

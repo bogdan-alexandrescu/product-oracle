@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
+import { MOCK_DENY_KEY } from "../lib/api/mock/server";
 import { login, openTab, sectionStrip } from "./helpers";
 
 // QA pass 1, docs lane: the version page /documents/<doc>/v/<n> (Saved carts v2, a PRD with a
@@ -79,6 +80,16 @@ test.describe("desktop", () => {
     // Nothing visible in History names the Claude accounts.
     const visibleText = await history.evaluate((el) => (el as HTMLElement).innerText);
     expect(visibleText).not.toMatch(/Claude account/);
+  });
+
+  test("review: someone who may not retry the reports is not told to try again", async ({ page }) => {
+    await page.addInitScript(([k, v]) => localStorage.setItem(k, v), [MOCK_DENY_KEY, "create_llm_job"] as const);
+    await openVersion(page, CARTS);
+    await openTab(page, "History");
+    const reports = page.getByTestId("history-reports").filter({ visible: true }).getByTestId("reports-panel");
+    const alert = reports.getByRole("alert");
+    await expect(alert).toHaveText("The reports could not be written.");
+    await expect(alert.getByRole("button", { name: "Retry" })).toHaveCount(0);
   });
 
   test("qa-docs-13: each review count says what it counts", async ({ page }) => {

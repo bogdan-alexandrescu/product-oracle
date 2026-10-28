@@ -71,6 +71,32 @@ test("qa-docs-1: confirming keeps the brief sections, revision after revision", 
   expect(await briefHeadings(page.getByRole("dialog", { name: "Confirm revision 3" }))).toEqual(before);
 });
 
+test("qa-docs-1: a brief-layer module's section sits in the brief, before the full version, as the composer orders it", async ({ page }) => {
+  // fails_when=the mock places a brief-layer module's section (Strategic alignment's) elsewhere
+  // than the API's composer: in the full layer, or after the full version's sections.
+  await open(page, APPROVER);
+  await row(page, "economics.value").click();
+  await inspector(page).getByRole("button", { name: "Add to draft" }).click();
+  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  let dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
+  const brief = await briefHeadings(dialog);
+  // The template's brief sections, then the module's, where the full version begins.
+  expect(brief.at(-1)).toBe("Strategic alignment");
+  expect(brief.length).toBeGreaterThan(1);
+  await expect(dialog.getByTestId("outline-full")).not.toContainText("Strategic alignment");
+  // A full-layer addition stays in the full version.
+  await expect(dialog.getByTestId("outline-full")).toContainText("Value and cost economics");
+  await dialog.getByLabel("Reason (required)").fill("Value economics in the full version.");
+  await dialog.getByRole("button", { name: "Confirm revision 2", exact: true }).click();
+  await expect(page.getByTestId("composition-in-force")).toHaveText("Revision 2 in force");
+
+  // After the confirm, the next revision's outline keeps the brief in the same order.
+  await page.getByRole("button", { name: "Confirm revision 3" }).first().click();
+  dialog = page.getByRole("dialog", { name: "Confirm revision 3" });
+  expect(await briefHeadings(dialog)).toEqual(brief);
+  await expect(dialog.getByTestId("outline-full")).not.toContainText("Strategic alignment");
+});
+
 test("qa-docs-14: the Confirm action reads in full, once", async ({ page }) => {
   await open(page, APPROVER, "team-workspaces");
   const action = page.getByRole("button", { name: "Confirm revision 1" });
@@ -119,6 +145,21 @@ test("qa-docs-27: the Modules and Catalog tabs speak in names and plain words", 
   await expect(catalog.locator('[data-module="risks.register"]')).toContainText("Required");
   await expect(catalog).not.toContainText("conditional");
   await expect(catalog).not.toContainText("No policy");
+});
+
+test("qa-docs-27: a module's condition and review role read as plain words", async ({ page }) => {
+  // fails_when=the inspector prints the evaluator's condition ("scope.capabilities contains
+  // 'tool_use'") or the raw role ("needs the owner role").
+  await open(page, APPROVER);
+  await row(page, "agents.tool-policies").click();
+  const panel = inspector(page);
+  await expect(panel.getByRole("heading", { name: "Tool policies" })).toBeVisible();
+  await expect(panel).toContainText("the scope's capabilities include Tool use");
+  for (const raw of ["scope.capabilities", "contains '", "tool_use", "(actual:"]) {
+    await expect(panel).not.toContainText(raw);
+  }
+  await expect(panel).toContainText("Your role cannot add or remove it: it needs the Owner role.");
+  await expect(panel).not.toContainText("owner role");
 });
 
 test("qa-docs-55: a mandatory module offers no Remove, and its panel's labels are whole", async ({ page }) => {

@@ -421,12 +421,15 @@ async def test_confirming_keeps_the_brief_sections_of_the_outline(client):
 
     before = await brief()
     assert before, "the template has an outline"
+    assert any(layer == "brief" for _, layer in before), "the outline has a brief layer"
     resp = await _confirm(client, ctx)
     assert resp.status_code == 201, resp.text
     assert await brief() == before
     resp = await _confirm(client, ctx, base_revision=1, reason="Second look")
     assert resp.status_code == 201, resp.text
-    assert await brief() == before
+    after = await brief()
+    assert any(layer == "brief" for _, layer in after), "the brief survives a confirm"
+    assert after == before
 
 
 async def test_reasons_name_the_pack_by_its_title(client):

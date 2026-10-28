@@ -325,7 +325,8 @@ async def test_the_right_passcode_opens_the_page_with_a_cookie_on_the_links_path
     # qa-docs-71: the page's header names the roadmap, who shared it and when the link ends.
     assert got["state"] == "active" and got["allow_download"] is True
     assert got["title"] == "Example Labs roadmap" and got["shared_by"] and got["expires_at"]
-    assert set(got) == {"state", "allow_download", "title", "shared_by", "expires_at"}
+    assert set(got) == {"state", "allow_download", "title", "shared_by", "shared_by_name",
+                        "expires_at", "expires_on"}  # fmt: skip
     # Another link's cookie opens nothing here.
     other = token_of((await create(client, ctx, "owner", passcode="other-passcode-9")).json())
     resp = await client.get(f"{PUBLIC}/{other}", headers={"Cookie": cookie_of(resp)})
@@ -843,3 +844,69 @@ async def test_capabilities_let_approvers_manage_their_links(client, ctx):
                "revoke_share_link"):  # fmt: skip
         assert caps["per_item"][op] == "owner", op
     assert caps["operations"]["revoke_all_share_links"] is False
+
+
+async def test_the_status_names_the_person_who_made_the_link_and_its_end_in_the_company_zone(
+    client, ctx
+):
+    """protects=qa-docs-71 (the person who shared the link, not only the company) and the
+    page header's end day in the Company time zone, as the footer; fails_when=the status
+    names no person, or gives the end only as an ISO moment (the browser's zone then
+    picks the day), or its day is UTC's; no_claim=the web header (qa-docs-share.spec)."""
+    from oracle.shares.render import day_with_year
+    from tests.decision_helpers import set_company_zone
+
+    await seed_roadmap(ctx, publish=True)
+    token = token_of((await create(client, ctx, "owner")).json())
+    # Late in the UTC day: already the next day in Kiritimati (UTC+14).
+    ends = (datetime.now(UTC) + timedelta(days=10)).replace(hour=23, minute=30, second=0,
+                                                            microsecond=0)  # fmt: skip
+    async with tenant_session(ctx.tenant_id) as s:
+        link = await s.scalar(select(ShareLink).where(ShareLink.token_hash ==
+                                                      share_service.hash_token(token)))  # fmt: skip
+        link.expires_at = ends
+        await s.commit()
+    await set_company_zone(ctx.tenant_id, "Pacific/Kiritimati")
+    got = (await client.get(f"{PUBLIC}/{token}/status", headers=await opened(client, token))).json()
+    assert got["shared_by_name"] == "Owner"
+    assert got["shared_by"] == "Example Labs"
+    next_day = ends + timedelta(days=1)
+    assert got["expires_on"] == f"{next_day:%b} {next_day.day}, {next_day.year}"
+    assert got["expires_on"] == day_with_year(ends, "Pacific/Kiritimati")
+    assert not re.search(r"\d{4}-\d{2}-\d{2}", got["expires_on"])
+
+
+async def test_a_company_with_no_name_is_not_shared_by_our(client, ctx):
+    """protects=the link holder's words: a company with no name reads "Shared with you on
+    ..." and the header names no company, never "Shared by Our"; fails_when=the status or
+    the footer says "Our"; no_claim=the Public audience's own page."""
+    from oracle.models import Tenant
+
+    await seed_roadmap(ctx, publish=True)
+    token = token_of((await create(client, ctx, "owner")).json())
+    async with tenant_session(ctx.tenant_id) as s:
+        (await s.get(Tenant, ctx.tenant_id)).name = "  "
+        await s.commit()
+    share_public.reset_limits()
+    cookie = await opened(client, token)
+    got = (await client.get(f"{PUBLIC}/{token}/status", headers=cookie)).json()
+    assert got["shared_by"] is None and got["shared_by_name"] == "Owner"
+    page = await client.get(f"{PUBLIC}/{token}", headers=cookie)
+    assert page.status_code == 200, page.text
+    footer = _text(page.text)
+    assert "Shared with you on " in footer
+    assert "by Our" not in footer and "Shared with you by" not in footer
+
+
+def test_a_shared_items_milestone_date_reads_as_a_plain_day():
+    """protects=qa-docs-34 on the shared page: an item's milestone date in the items table
+    and its card reads "Nov 3, 2026", never "2026-11-03"; fails_when=the ISO day shows."""
+    from oracle.roadmap import variants
+
+    beta = {"name": "Beta", "date": "2026-11-03"}
+    item = variants.ItemView(key="falcon", title="Falcon", outcome=None, horizon="now",
+                             position=1, milestone=beta)  # fmt: skip
+    assert variants._milestone(item) == "Beta, Nov 3, 2026"
+    named = variants.ItemView(key="x", title="X", outcome=None, horizon="now", position=2,
+                              milestone={"name": "Beta"})  # fmt: skip
+    assert variants._milestone(named) == "Beta"

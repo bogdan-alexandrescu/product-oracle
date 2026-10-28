@@ -56,7 +56,7 @@ test("a module the caller's role cannot change says so; one it can is offered", 
   await openComposition(page, "approver");
   await row(page, "agents.tool-policies").click();
   await expect(inspector(page).getByRole("button", { name: "Remove from draft" })).toBeDisabled();
-  await expect(inspector(page)).toContainText("Your role cannot add or remove it: it needs the owner role.");
+  await expect(inspector(page)).toContainText("Your role cannot add or remove it: it needs the Owner role.");
   await row(page, "economics.value").click();
   await expect(inspector(page).getByRole("button", { name: "Add to draft" })).toBeEnabled();
   await expect(inspector(page)).not.toContainText("Your role cannot add or remove it");
