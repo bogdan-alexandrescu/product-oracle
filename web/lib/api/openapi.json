@@ -43227,6 +43227,70 @@
         "x-per-item": "commenter"
       }
     },
+    "/v1/simple/goals/{goal_id}/suggestions": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Create Goal Suggestion",
+        "description": "People's suggestions: file one on a goal, next to Oracle's.",
+        "operationId": "create_goal_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleGoalSuggestionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalSuggestion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "commenter"
+      }
+    },
     "/v1/simple/goal-suggestions/{suggestion_id}/accept": {
       "post": {
         "tags": [
@@ -43295,7 +43359,7 @@
           }
         },
         "x-min-role": "viewer",
-        "x-per-item": "commenter"
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/goal-suggestions/{suggestion_id}/reject": {
@@ -43366,7 +43430,7 @@
           }
         },
         "x-min-role": "viewer",
-        "x-per-item": "approver"
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/chat": {
@@ -58290,7 +58354,8 @@
                   "minutes_note",
                   "open_question",
                   "agenda_next",
-                  "agenda_skip"
+                  "agenda_skip",
+                  "suggest_feature"
                 ]
               }
             ],
@@ -113503,7 +113568,8 @@
             "type": "string",
             "enum": [
               "auto",
-              "on_demand"
+              "on_demand",
+              "person"
             ],
             "title": "Origin"
           },
@@ -113581,6 +113647,17 @@
           "can_reject": {
             "type": "boolean",
             "title": "Can Reject"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
           }
         },
         "type": "object",
@@ -113618,6 +113695,17 @@
           "empty": {
             "type": "boolean",
             "title": "Empty"
+          },
+          "decider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Name"
           }
         },
         "type": "object",
@@ -113627,6 +113715,29 @@
           "empty"
         ],
         "title": "SimpleGoalSuggestionGoal"
+      },
+      "SimpleGoalSuggestionIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "outcome": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Outcome"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "outcome"
+        ],
+        "title": "SimpleGoalSuggestionIn",
+        "description": "A person's goal suggestion: its title and what it does, and for whom."
       },
       "SimpleGoalSuggestionsOut": {
         "properties": {

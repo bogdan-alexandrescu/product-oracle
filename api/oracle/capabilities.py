@@ -141,17 +141,17 @@ DECIDED_PER_ITEM = frozenset(
 # writer's in it to add, edit or suggest, an approver's to stage, dismiss, resolve or record
 # (the date rights), a commenter's to propose, and the person asked's too to use as an answer.
 # Research this in a discussion (G2 §4) is an approver's who can write in it, while it is open.
-# Simple (#723): a goal's suggestions are asked for and accepted by any commenter (others' as
-# proposals) and rejected (final) by an approver (S7); a meeting's chat thread, a card and the
-# meeting's change mode are decided by the item: its attendees, the card's author, the presenter
-# (S9); the Ask panel's thread is every person's own. A visual is commented on by any commenter
-# who reads it, and asked for or revised by who changes its subject directly; Remind is the PRD's
-# owners' and decider's (S10, Remind): an owner always. A date suggestion's dismissal and a
-# proposal are decided by an owner, the roadmap's decider or (with none) the item's track owner
-# when an approver or owner (D-a); accepting or editing a suggestion is a change (others' a
-# proposal, D-b); a change is undone by its author alone; the changes' list shows owners all,
-# others those they made, decide or review; a submitted draft is withdrawn by its author or the
-# decider.
+# Simple (#723): a goal's suggestions are asked for and filed by any commenter, and accepted or
+# rejected (final) by an owner or whoever decides the goal's roadmap (S7); a meeting's chat
+# thread, a card and the meeting's change mode are decided by the item: its attendees, the card's
+# author, the presenter (S9); the Ask panel's thread is every person's own. A visual is commented
+# on by any commenter who reads it, and asked for or revised by who changes its subject directly;
+# Remind is the PRD's owners' and decider's (S10, Remind): an owner always. A date suggestion's
+# dismissal and a proposal are decided by an owner, the roadmap's decider or (with none) the
+# item's track owner when an approver or owner (D-a); accepting or editing a suggestion is a
+# change (others' a proposal, D-b); a change is undone by its author alone; the changes' list
+# shows owners all, others those they made, decide or review; a submitted draft is withdrawn by
+# its author or the decider.
 # A share link (O5) is an owner's to make for the Public audience and an approver's for the
 # others; its creator's or an owner's to extend, move or give a new passcode; and its
 # creator's or an owner's to revoke when Public (any approver's otherwise).
@@ -161,7 +161,7 @@ DECIDED_PER_ITEM = frozenset(
 # missing here.
 PER_ITEM: dict[str, Role | None] = {
     "accept_blocker_risk": "owner",
-    "accept_goal_suggestion": "commenter",
+    "accept_goal_suggestion": "owner",
     "accept_intake_proposal": "approver",
     "accept_scope_enhancement": "approver",
     "accept_simple_change": "owner",
@@ -194,6 +194,7 @@ PER_ITEM: dict[str, Role | None] = {
     "create_checkpoint_action": "owner",
     "create_discussion_change": None,
     "create_discussion_message": None,
+    "create_goal_suggestion": "commenter",
     "create_intake": "approver",
     "create_interview_link": "approver",
     "create_request": "owner",
@@ -259,7 +260,7 @@ PER_ITEM: dict[str, Role | None] = {
     "redraft_interview_guide": "approver",
     "redraft_simple_meeting_minutes": "owner",
     "regenerate_spec": "owner",
-    "reject_goal_suggestion": "approver",
+    "reject_goal_suggestion": "owner",
     "remind_simple_one_pager_reviewers": "owner",
     "remove_evidence": "approver",
     "reopen_track_alert": None,

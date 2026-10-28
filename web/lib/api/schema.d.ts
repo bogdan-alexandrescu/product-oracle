@@ -12521,6 +12521,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goals/{goal_id}/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Goal Suggestion
+         * @description People's suggestions: file one on a goal, next to Oracle's.
+         */
+        post: operations["create_goal_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/goal-suggestions/{suggestion_id}/accept": {
         parameters: {
             query?: never;
@@ -17556,7 +17576,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -37617,7 +37637,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "auto" | "on_demand";
+            origin: "auto" | "on_demand" | "person";
             /**
              * Created At
              * Format: date-time
@@ -37638,6 +37658,8 @@ export interface components {
             can_accept: boolean;
             /** Can Reject */
             can_reject: boolean;
+            /** Proposed By Name */
+            proposed_by_name?: string | null;
         };
         /** SimpleGoalSuggestionGoal */
         SimpleGoalSuggestionGoal: {
@@ -37646,6 +37668,18 @@ export interface components {
             pending: boolean;
             /** Empty */
             empty: boolean;
+            /** Decider Name */
+            decider_name?: string | null;
+        };
+        /**
+         * SimpleGoalSuggestionIn
+         * @description A person's goal suggestion: its title and what it does, and for whom.
+         */
+        SimpleGoalSuggestionIn: {
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome: string;
         };
         /** SimpleGoalSuggestionsOut */
         SimpleGoalSuggestionsOut: {
@@ -68499,6 +68533,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimpleSuggestJobOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_goal_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleGoalSuggestionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalSuggestion"];
                 };
             };
             /** @description Validation Error */

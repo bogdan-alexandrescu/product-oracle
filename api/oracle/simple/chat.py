@@ -242,6 +242,9 @@ class Ctx:
         self.ask_decider: User | None = None
         # Only a line that may build a decision card resolves it (False: the line is not one).
         self.wants_decider = True
+        # suggest_feature: the confirmed goals and the baseline features (look-alikes).
+        self.goals: list[Any] = []
+        self.features: list[Any] = []
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -251,6 +254,7 @@ class Ctx:
         self.read = await service.load(self.db, self.overlays)
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
         self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
+        self.goals, self.features = await chat_actions.suggest_context(self.db)
         if self.meeting is None and self.wants_decider and chat_actions.proposes(self.principal):
             self.ask_decider = await chat_actions.ask_decider(self.db, self.page_document)
         return self

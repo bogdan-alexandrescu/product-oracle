@@ -314,11 +314,12 @@ class RoadmapKeyDate(TenantScoped, Base):
 # --------------------------------------------------------------------------- S7
 
 GOAL_SUGGESTION_STATUSES = ("open", "accepted", "rejected")
-GOAL_SUGGESTION_ORIGINS = ("auto", "on_demand")
+GOAL_SUGGESTION_ORIGINS = ("auto", "on_demand", "person")
 
 
 class SimpleGoalSuggestion(TenantScoped, Base):
-    """Simple S7 (oracle.simple.additions): a feature Oracle suggests for a goal. ``open``
+    """Simple S7 (oracle.simple.additions): a feature Oracle (or a person, origin
+    ``person``, ``proposed_by``) suggests for a goal. ``open``
     until a person accepts it (an ``add_item`` change on the goal: ``change_id``,
     ``item_id``; undoing or declining that change reopens it) or rejects it (with an
     optional ``reason``; a rejected title is never suggested again for the goal).
@@ -354,6 +355,8 @@ class SimpleGoalSuggestion(TenantScoped, Base):
     item_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A person's suggestion (origin "person"): who filed it.
+    proposed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
 
 class SimpleGoalAuto(TenantScoped, Base):

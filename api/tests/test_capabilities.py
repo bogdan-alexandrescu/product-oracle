@@ -406,8 +406,9 @@ SIMPLE_PER_ITEM = {
     "retry_simple_chat_read": None,
     # S7 suggestions.
     "suggest_goal_features": "commenter",
-    "accept_goal_suggestion": "commenter",
-    "reject_goal_suggestion": "approver",
+    "create_goal_suggestion": "commenter",
+    "accept_goal_suggestion": "owner",
+    "reject_goal_suggestion": "owner",
     # S8 meetings: an owner, or the PRD's decider / the presenter.
     "start_simple_meeting": "owner",
     "approve_in_simple_meeting": "owner",

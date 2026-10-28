@@ -16,6 +16,10 @@
   then Oracle's drafted minutes: Summary notes, Open questions). Undo removes the note.
 - ``agenda_next`` / ``agenda_skip`` (item): meeting only; the meeting's agenda, seen by every
   attendee. Undo puts the agenda back as it was.
+- ``suggest_feature`` (goal, text): "Suggest a feature for <goal>: <text>" files a person's
+  goal suggestion (oracle.simple.additions.file_suggestion: origin ``person``, as the
+  caller; commenter and up), titled by the text's first clause, its outcome the text; the
+  card names the items and features it looks like. Undo removes it while still open.
 
 In a meeting the direct ops apply for whoever the presenter's change mode lets apply (chat's
 ``meeting_bar``: never a viewer, never once ended). ``ACTIONS`` is the contract with
@@ -41,7 +45,8 @@ from oracle.simple.models import SimpleChatCard
 from oracle.simple.schemas import SimpleChangeIn
 
 ENGINE_OPS = ("set_owner", "set_decider")
-DIRECT_OPS = ("record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip")
+DIRECT_OPS = ("record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip",
+              "suggest_feature")  # fmt: skip
 MEETING_ONLY = ("minutes_note", "open_question", "agenda_next", "agenda_skip")
 UNDERSTOOD = "I understood one change:"
 MEETING_NOTE = "Minutes notes, open questions and agenda changes belong to a meeting."
@@ -177,6 +182,81 @@ build_agenda_next = _agenda_build("next")
 build_agenda_skip = _agenda_build("skip")
 
 
+SUGGEST_TITLE_MAX = 60
+_CLAUSE = re.compile(r"[.,;]| so | to ", re.I)
+
+
+def suggestion_title(text: str) -> str:
+    """A suggestion's title from its text: the first clause (up to the first '.', ',', ';',
+    ' so ' or ' to '), first letter capitalised, at most 60 characters, never cut mid-word."""
+    t = " ".join((text or "").split())
+    t = _CLAUSE.split(t, maxsplit=1)[0].strip(" \"'“”‘’-:") or t.strip()
+    if len(t) > SUGGEST_TITLE_MAX:
+        cut = t[: SUGGEST_TITLE_MAX + 1]
+        t = cut.rsplit(" ", 1)[0] if " " in cut else t[:SUGGEST_TITLE_MAX]
+        t = t.rstrip(" ,;:-")
+    return t[:1].upper() + t[1:]
+
+
+def _why(text: str | None) -> str:
+    """A look-alike's plain why: "which already <what it does>", else its name."""
+    t = " ".join((text or "").split()).rstrip(" .")
+    if not t:
+        return "which has a similar name"
+    if len(t) > 120:
+        t = t[:121].rsplit(" ", 1)[0].rstrip(" ,;:")
+    return f"which already {t[:1].lower() + t[1:]}"
+
+
+async def suggest_context(db: AsyncSession) -> tuple[list[Any], list[Any]]:
+    """The confirmed goals and the baseline features a suggest_feature card reads."""
+    from oracle.simple import additions
+
+    return await additions._goals(db), await additions._features(db)
+
+
+def build_suggest_feature(c: chat.Ctx, args: dict[str, Any]) -> dict | chat.Reply:
+    from oracle.simple import additions
+
+    text = " ".join(str(args.get("text") or "").split()).strip("\"'“”‘’").strip()
+    text = text[: additions.TEXT_MAX]
+    goals = list(getattr(c, "goals", []) or [])
+    want = " ".join(str(args.get("goal") or "").split()).strip("\"'“”‘’").casefold()
+    goal = next((g for g in goals if want and want in (g.title.casefold(), g.key.casefold())),
+                None)  # fmt: skip
+    if goal is None:
+        names = [g.title for g in goals]
+        if not names:
+            return chat.Reply("note", "There are no confirmed goals to suggest a feature for.")
+        return chat.Reply("question", f"Which goal: {chat._or(names)}?")
+    if not text:
+        return chat.Reply("question", f"What should the feature for {goal.title} do, and for whom?")
+    title = suggestion_title(text)
+    assert c.read is not None
+    features = list(getattr(c, "features", []) or [])
+    by_id = {str(e.row.id): e for e in c.read.entries}
+    by_feature = {str(f.id): f for f in features}
+    looks: list[dict[str, Any]] = []
+    for m in additions.reconcile(title, c.read.entries, features):
+        if m.kind == "item":
+            e = by_id.get(m.id)
+            said = e.row.outcome if e is not None else None
+        else:
+            f = by_feature.get(m.id)
+            said = (f.attrs or {}).get("description") if f is not None else None
+        looks.append({"code": m.code, "title": m.title,
+                      "why": _why(said if isinstance(said, str) else None)})  # fmt: skip
+    body = f"{UNDERSTOOD} suggest {title} for {goal.title}."
+    for i, x in enumerate(looks):
+        body += f" It {'also ' if i else ''}looks like {x['code']} {x['title']}, {x['why']}."
+    card = {"summary": f"Suggest {title} for {goal.title}", "op": "suggest_feature",
+            "item_id": None, "target": {"goal_id": str(goal.id)}, "before": {},
+            "after": {"title": title, "outcome": text},
+            "preview": {"kind": "suggestion", "goal_id": str(goal.id), "goal_title": goal.title,
+                        "title": title, "outcome": text, "looks_like": looks}}  # fmt: skip
+    return chat.Reply("cards", body, [card])
+
+
 # --------------------------------------------------------------------------- the phrases
 
 # (pattern, op, arg names, worded: a "<words>: ..." phrase, which claims its line even
@@ -189,6 +269,7 @@ PHRASES: list[tuple[str, str, tuple[str, ...], bool]] = [
     (r"skip (.+?)\.?", "agenda_skip", ("item",), False),
     (r"(?:we )?decided:\s*(.+)", "record_decision", ("text",), True),
     (r"decision(?: by (.+?))?:\s*(.+)", "record_decision", ("decider", "text"), True),
+    (r"suggest a feature for (.+?):\s*(.+)", "suggest_feature", ("goal", "text"), True),
     (r"(?!who\b)(.+?) (?:now )?owns (.+?)\.?", "set_owner", ("person", "item"), False),
     (r"(?!who\b)(.+?) (?:now )?decides (.+?)\.?", "set_decider", ("person", "item"), False),
 ]  # fmt: skip
@@ -218,6 +299,8 @@ def bar(principal: Any, card: SimpleChatCard, rules: Any) -> str | None:
     if card.owner_id is not None and card.owner_id != chat._me(principal):
         return "This card is someone else's"
     if not has_role(principal.role, "commenter"):
+        if card.op == "suggest_feature":
+            return "Viewers read; commenters and up suggest"
         return "Viewers read the plan; they don't record decisions"
     return None
 
@@ -370,6 +453,32 @@ async def apply_agenda(db: AsyncSession, principal: Any, card: SimpleChatCard) -
     card.before = {"agenda": was}
 
 
+async def apply_suggest_feature(db: AsyncSession, principal: Any, card: SimpleChatCard) -> None:
+    """File the card's suggestion as the caller (origin ``person``), as the endpoint does."""
+    from oracle.simple import additions
+
+    try:
+        row = await additions.file_suggestion(db, principal, card.target.get("goal_id"),
+                                              str(card.after.get("title") or ""),
+                                              str(card.after.get("outcome") or ""))  # fmt: skip
+    except additions.ChangeError as e:
+        raise chat.ChatError(e.status, e.detail) from e
+    card.target = {**card.target, "suggestion_id": str(row.id)}
+
+
+async def _unsuggest(db: AsyncSession, card: SimpleChatCard) -> None:
+    from oracle.simple.models import SimpleGoalSuggestion
+
+    sid = card.target.get("suggestion_id")
+    row = await db.get(SimpleGoalSuggestion, uuid.UUID(sid), with_for_update=True) if sid else None
+    if row is None:
+        return
+    if row.status != "open":
+        raise chat.ChatError(409, f"This suggestion is {row.status} already: undo works while open")
+    await db.delete(row)
+    await db.flush()
+
+
 async def apply_engine(db: AsyncSession, principal: Any, card: SimpleChatCard) -> None:
     """set_owner / set_decider as a plain (db, principal, card) apply: the change engine
     with the caller's rights (in a meeting, into the meeting's session). It does not call
@@ -413,6 +522,8 @@ async def undo(db: AsyncSession, principal: Any, card: SimpleChatCard, rules: An
                     "in the meeting chat" if card.target.get("meeting_id") else "on the Ask panel"
                 )
                 await chat._reverse(db, principal, card.decision_id, f"Undone {where}")
+        elif card.op == "suggest_feature":
+            await _unsuggest(db, card)
         elif card.op in ("minutes_note", "open_question"):
             await meetings.remove_note(db, uuid.UUID(card.target["meeting_id"]),
                                        str(card.target.get("note_id")))  # fmt: skip
@@ -462,6 +573,9 @@ ACTIONS: list[dict[str, Any]] = [
      "args": {"item": "the roadmap item"}, "build": build_agenda_next, "apply": apply_agenda},
     {"op": "agenda_skip", "describe": "Skip a roadmap item in the meeting (meeting only)",
      "args": {"item": "the roadmap item"}, "build": build_agenda_skip, "apply": apply_agenda},
+    {"op": "suggest_feature", "describe": "Suggest a feature for a goal (filed as the person's)",
+     "args": {"goal": "the goal (its title or key)", "text": "the feature: what it does, for whom"},
+     "build": build_suggest_feature, "apply": apply_suggest_feature},
 ]  # fmt: skip
 
 # chat-join: the reader offers these ops and chat.apply applies their cards.

@@ -5,7 +5,7 @@ import datetime as dt
 import uuid
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 DateSource = Literal["typed", "accepted", "engineering", "tracker", "estimated"]
 RoadmapGroup = Literal["goal", "track", "prd"]
@@ -317,7 +317,12 @@ ChangeOp = Literal[
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
 ChatActionOp = Literal[
-    "record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip"
+    "record_decision",
+    "minutes_note",
+    "open_question",
+    "agenda_next",
+    "agenda_skip",
+    "suggest_feature",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -999,7 +1004,7 @@ class SimpleGoalSuggestion(BaseModel):
     evidence: list[SimpleEvidence]
     status: Literal["open", "accepted", "rejected"]
     reason: str | None
-    origin: Literal["auto", "on_demand"]
+    origin: Literal["auto", "on_demand", "person"]
     created_at: dt.datetime
     decided_by_name: str | None
     decided_at: dt.datetime | None
@@ -1009,12 +1014,32 @@ class SimpleGoalSuggestion(BaseModel):
     flow: SimpleFlow | None
     can_accept: bool
     can_reject: bool
+    # A person's suggestion (origin "person"): their display name.
+    proposed_by_name: str | None = None
 
 
 class SimpleGoalSuggestionGoal(BaseModel):
     goal: SimpleGoalBrief
     pending: bool
     empty: bool
+    # Who decides the goal's suggestions (its roadmap's decider, else its approving owners).
+    decider_name: str | None = None
+
+
+# oracle.simple.changes.TITLE_MAX (changes imports this module).
+SUGGESTION_TITLE_MAX = 200
+
+
+class SimpleGoalSuggestionIn(BaseModel):
+    """A person's goal suggestion: its title and what it does, and for whom."""
+
+    title: str = Field(min_length=1, max_length=SUGGESTION_TITLE_MAX)
+    outcome: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("title", "outcome", mode="before")
+    @classmethod
+    def _collapse(cls, v: Any) -> Any:
+        return " ".join(v.split()) if isinstance(v, str) else v
 
 
 class SimpleGoalSuggestionsOut(BaseModel):

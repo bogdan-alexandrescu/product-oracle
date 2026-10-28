@@ -1,4 +1,4 @@
-"""Migration 0090_simple_goal_suggestion_people (people's goal suggestions).
+"""Migration 0090_goal_suggestion_people (0090_simple_goal_suggestion_people.py).
 
 Card: protects=simple_goal_suggestions.proposed_by and the widened origin check ("person")
 come and go with the revision, chained on 0089_ritual_attendees_edited_at as the single
@@ -18,7 +18,7 @@ from sqlalchemy.engine import make_url
 
 from tests.conftest import API_DIR, TEST_DATABASE_URL, _reset_schema
 
-REVISION = "0090_simple_goal_suggestion_people"
+REVISION = "0090_goal_suggestion_people"
 PREVIOUS = "0089_ritual_attendees_edited_at"
 SCRATCH_URL = (
     make_url(TEST_DATABASE_URL)
