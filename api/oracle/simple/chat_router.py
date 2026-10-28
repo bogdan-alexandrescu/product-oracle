@@ -95,6 +95,7 @@ async def post_simple_chat(body: ChatIn, principal: Reader, db: TenantDB) -> Cha
             page=body.page,
             chat_id=body.chat_id,
             new_chat=body.new_chat,
+            general=body.general,
         ),  # fmt: skip
     )
 

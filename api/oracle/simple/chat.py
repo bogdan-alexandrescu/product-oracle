@@ -878,10 +878,12 @@ async def _thread(
     page: str | None = None,
     chat_id: uuid.UUID | None = None,
     new_chat: bool = False,
+    general: bool = False,
 ) -> Discussion | None:
     """A meeting's thread; else the caller's Ask chat ``chat_id``; else, with ``new_chat``
     (ask-fresh: every time the Ask panel opens in Simple), a new chat about the page (none
-    until its first line); else the page's first chat (the older one-thread-per-page)."""
+    until its first line); else the page's first chat (the older one-thread-per-page). A
+    new chat started under "General" stays General (Recent names it so)."""
     me = _me(principal)
     path, key = _key(meeting_id, me, page)
     if meeting_id is None and chat_id is not None:
@@ -897,7 +899,8 @@ async def _thread(
         )
     if d is None and create:
         title = "Meeting chat" if meeting_id else "Ask Oracle: changes"
-        d = Discussion(subject_kind="screen", subject={"path": path}, subject_key=key,
+        subject = {"path": path, **({"general": True} if general and meeting_id is None else {})}
+        d = Discussion(subject_kind="screen", subject=subject, subject_key=key,
                        title=title, visibility="private", author_only=meeting_id is None,
                        origin="panel", started_by=me)  # fmt: skip
         db.add(d)
@@ -982,6 +985,15 @@ def _ask_of(d: Discussion | None) -> uuid.UUID | None:
     return uuid.UUID(ask) if ask else None
 
 
+def _summary(d: Discussion) -> ChatSummaryOut:
+    """A chat on Recent chats: named by its page, or "General" for one started under General."""
+    page = page_of_thread(d) or "/simple"
+    general = bool((d.subject or {}).get("general"))
+    return ChatSummaryOut(id=d.id, page=page, page_name="General" if general else page_name(page),
+                          last_at=d.last_message_at or d.created_at, ask_id=_ask_of(d),
+                          general=general)  # fmt: skip
+
+
 def page_name(page: str | None) -> str:
     """A Simple page's name as the panel says it (never its route): Home, Roadmap..."""
     from oracle.discussions.context import page_name as named
@@ -1007,10 +1019,7 @@ async def recent(db: AsyncSession, principal: Any, limit: int = 10) -> list[Chat
     for d in rows:
         if not _own_chat(d, me):
             continue
-        page = page_of_thread(d) or "/simple"
-        out.append(ChatSummaryOut(id=d.id, page=page, page_name=page_name(page),
-                                  last_at=d.last_message_at or d.created_at,
-                                  ask_id=_ask_of(d)))  # fmt: skip
+        out.append(_summary(d))
     return out
 
 
@@ -1021,13 +1030,12 @@ async def link_ask(
     handed its questions to, so the chat reopened from Recent shows both."""
     d = await own_chat(db, principal, chat_id)
     ask = await db.get(Discussion, ask_id)
-    if ask is None or ask.origin != "panel" or ask.started_by != _me(principal):
+    if (ask is None or ask.origin != "panel" or ask.visibility != "private"
+            or ask.started_by != _me(principal)):  # fmt: skip
         raise ChatError(404, "No such chat")
     d.subject = {**(d.subject or {}), "ask": str(ask_id)}
     await db.commit()
-    page = page_of_thread(d) or "/simple"
-    return ChatSummaryOut(id=d.id, page=page, page_name=page_name(page),
-                          last_at=d.last_message_at or d.created_at, ask_id=ask_id)  # fmt: skip
+    return _summary(d)
 
 
 async def post(
@@ -1039,6 +1047,7 @@ async def post(
     page: str | None = None,
     chat_id: uuid.UUID | None = None,
     new_chat: bool = False,
+    general: bool = False,
 ) -> ChatThreadOut:
     """The person's line and Oracle's reply. parse() answers the lines it knows at once;
     any other line is for Oracle's reader: Oracle's line reads "Reading that…" while the
@@ -1061,7 +1070,8 @@ async def post(
         if meeting_id is None and chat_id is None and new_chat:
             # A new chat's first line goes to Oracle's Ask: the chat exists (empty) so the
             # panel links its Ask chat to it and Recent lists it (ask-fresh).
-            d = await _thread(db, principal, None, create=True, page=page, new_chat=True)
+            d = await _thread(db, principal, None, create=True, page=page, new_chat=True,
+                              general=general)  # fmt: skip
             assert d is not None
             d.last_message_at = datetime.now(UTC)
             await db.commit()
@@ -1072,7 +1082,7 @@ async def post(
     if reply.reader:
         reply = Reply("pending", READING)
     asked, answer = await _write(db, principal, meeting_id, text.strip(), reply, page=page,
-                                 chat_id=chat_id, new_chat=new_chat)  # fmt: skip
+                                 chat_id=chat_id, new_chat=new_chat, general=general)  # fmt: skip
     if reply.kind == "pending":
         read = SimpleChatRead(discussion_id=answer.discussion_id, message_id=answer.id,
                               ask_id=asked.id, meeting_id=meeting_id, by=_me(principal),
@@ -1107,12 +1117,13 @@ async def _write(
     page: str | None = None,
     chat_id: uuid.UUID | None = None,
     new_chat: bool = False,
+    general: bool = False,
 ) -> tuple[DiscussionMessage, DiscussionMessage]:
     """The person's line and Oracle's reply with its cards (and choices); the caller
     commits."""
     me = _me(principal)
     d = await _thread(db, principal, meeting_id, create=True, page=page, chat_id=chat_id,
-                      new_chat=new_chat)  # fmt: skip
+                      new_chat=new_chat, general=general)  # fmt: skip
     assert d is not None
     # Real time orders the lines (the company clock may stand still in tests).
     at = datetime.now(UTC)

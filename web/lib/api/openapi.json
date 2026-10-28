@@ -58754,6 +58754,11 @@
             "type": "boolean",
             "title": "New Chat",
             "default": false
+          },
+          "general": {
+            "type": "boolean",
+            "title": "General",
+            "default": false
           }
         },
         "type": "object",
@@ -59020,6 +59025,11 @@
               }
             ],
             "title": "Ask Id"
+          },
+          "general": {
+            "type": "boolean",
+            "title": "General",
+            "default": false
           }
         },
         "type": "object",

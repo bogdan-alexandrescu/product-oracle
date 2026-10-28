@@ -137,7 +137,7 @@ export function askThread(page?: string, chat?: string | null): Promise<ChatThre
 }
 
 /** ask-fresh: which Ask chat a line goes to: `chatId` continues one; `newChat` starts one about the page. */
-export type ChatTo = { chatId?: string | null; newChat?: boolean };
+export type ChatTo = { chatId?: string | null; newChat?: boolean; general?: boolean };
 
 /**
  * POST /v1/simple/chat/messages: the person's line and Oracle's reply. `onlyUnderstood` (the
@@ -151,7 +151,7 @@ export function askSay(text: string, page?: string, onlyUnderstood = false, to: 
         text,
         ...(page ? { page } : {}),
         ...(onlyUnderstood ? { only_understood: true } : {}),
-        ...(to.chatId ? { chat_id: to.chatId } : to.newChat ? { new_chat: true } : {}),
+        ...(to.chatId ? { chat_id: to.chatId } : to.newChat ? { new_chat: true, ...(to.general ? { general: true } : {}) } : {}),
       },
     }),
   ) as Promise<ChatThread>;

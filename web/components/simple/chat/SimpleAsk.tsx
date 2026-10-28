@@ -21,14 +21,12 @@ type Chat = { id: string | null; askId: string | null; page: string; general: bo
 
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 
-/** The Ask lines (kind "ask") already handed to Oracle's Ask in this page's life. */
-const HANDED = new Set<string>();
-
 /** "Today, 7:42 PM", "Yesterday, 6:58 PM", else "Oct 26, 6:58 PM": in the company's time zone. */
 export function chatWhen(iso: string, zone: string, now: number = Date.now()): string {
   const day = dayIn(iso, zone);
   const today = todayIn(zone, now);
-  const time = formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" });
+  // The owner's words, "Today, 7:42 PM": the company's time with no zone after it.
+  const time = formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" }).replace(/([AP]M)\s.*$/, "$1");
   const on = day === today ? "Today" : day === addDays(today, -1) ? "Yesterday" : formatInZone(iso, zone, { month: "short", day: "numeric" });
   return `${on}, ${time}`;
 }
@@ -151,7 +149,7 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
           <RecentChats
             items={recent}
             onOpen={(c) => {
-              setChat({ id: c.id, askId: c.ask_id ?? null, page: c.page, general: false });
+              setChat({ id: c.id, askId: c.ask_id ?? null, page: c.page, general: c.general });
               setSession((n) => n + 1);
               setRecent(null);
             }}
@@ -226,6 +224,8 @@ function ChatView({
   const [thread, setThread] = useState<ChatThread | null>(null);
   const [ask, setAsk] = useState<AskMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // The Ask lines (kind "ask") of this chat already handed to Oracle's Ask.
+  const handed = useRef(new Set<string>());
   const ids = useRef({ id: chat.id, askId: chat.askId });
   useEffect(() => {
     ids.current = { id: chat.id ?? thread?.id ?? ids.current.id, askId: chat.askId ?? ids.current.askId };
@@ -257,7 +257,7 @@ function ChatView({
     askThread(page, chat.id)
       .then((t) => {
         if (!live) return;
-        for (const m of t.messages) if (m.kind === "ask") HANDED.add(m.id);
+        for (const m of t.messages) if (m.kind === "ask") handed.current.add(m.id);
         setThread(t);
       })
       .catch((e) => live && setError(detail(e)));
@@ -292,8 +292,8 @@ function ChatView({
   useEffect(() => {
     if (!asks || !thread) return;
     for (const m of thread.messages) {
-      if (m.kind !== "ask" || HANDED.has(m.id)) continue;
-      HANDED.add(m.id);
+      if (m.kind !== "ask" || handed.current.has(m.id)) continue;
+      handed.current.add(m.id);
       const line = thread.messages.find((x) => x.id === m.reply_to);
       if (line) void handOn(line.body, thread.id).catch((e) => setError(detail(e)));
     }
@@ -302,7 +302,7 @@ function ChatView({
   const send = async (text: string) => {
     setError(null);
     const id = ids.current.id;
-    const t = await askSay(text, page, asks, id ? { chatId: id } : { newChat: true });
+    const t = await askSay(text, page, asks, id ? { chatId: id } : { newChat: true, general: chat.general });
     setThread(t);
     if (t.id && t.id !== id) {
       ids.current.id = t.id;

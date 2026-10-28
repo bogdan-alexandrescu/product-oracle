@@ -1058,6 +1058,8 @@ class ChatIn(BaseModel):
     # new one about ``page`` (the Ask panel opened again); else the page's first chat.
     chat_id: uuid.UUID | None = None
     new_chat: bool = False
+    # ask-fresh: the new chat is about General, not the page (Recent names it "General").
+    general: bool = False
 
 
 class ChatFix(BaseModel):
@@ -1151,6 +1153,8 @@ class ChatSummaryOut(BaseModel):
     page_name: str
     last_at: dt.datetime
     ask_id: uuid.UUID | None = None
+    # Started under "General": named so on Recent, and reopened as General.
+    general: bool = False
 
 
 class ChatListOut(BaseModel):

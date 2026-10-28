@@ -96,6 +96,8 @@ interface Thread {
   page?: string;
   ask_id?: string | null;
   started_at?: string;
+  /** Started under "General": Recent names it so (oracle.simple.chat._summary). */
+  general?: boolean;
 }
 
 /** Simple's page names as the panel says them (oracle.discussions.context.page_name): never a route. */
@@ -115,7 +117,8 @@ function ownChat(chat: ChatDb, ctx: ChatCtx, id: string | null | undefined): str
 
 function chatSummary(key: string, t: Thread) {
   const page = t.page ?? pageOf(key.split(":").slice(2).join(":").split("#")[0]);
-  return { id: t.id, page, page_name: pageName(page), last_at: t.messages.at(-1)?.at ?? t.started_at ?? now(), ask_id: t.ask_id ?? null };
+  const general = t.general === true;
+  return { id: t.id, page, page_name: general ? "General" : pageName(page), last_at: t.messages.at(-1)?.at ?? t.started_at ?? now(), ask_id: t.ask_id ?? null, general };
 }
 
 interface Meeting {
@@ -1245,10 +1248,13 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (typeof b.chat_id === "string" && !own) return json(404, { detail: "No such chat" });
     const page = own ? (chat.threads[own].page ?? "/simple") : pageOf(typeof b.page === "string" ? b.page : null);
     const key = own ?? `ask:${ctx.id}:${page}${b.new_chat === true ? `#${crypto.randomUUID()}` : ""}`;
+    const started = !!chat.threads[key];
     const understood = say(db, chat, key, null, ctx, text, b.only_understood === true, s8?.documentOf(page) ?? null);
     // A new chat's first line handed to Ask: the chat exists (empty), for the panel to link its Ask chat.
     if (!understood && b.new_chat === true && !own) chat.threads[key] ??= { id: crypto.randomUUID(), meeting_id: null, owner_id: ctx.id, messages: [] };
     if (chat.threads[key]) Object.assign(chat.threads[key], { page, started_at: chat.threads[key].started_at ?? now() });
+    // A chat started under "General" stays General.
+    if (chat.threads[key] && !started && b.general === true) chat.threads[key].general = true;
     return json(200, { ...threadOut(db, chat, chat.threads[key] ?? null, ctx, null), understood });
   }
   // Recent chats (ask-fresh): the caller's last ten Ask chats from any page; never a meeting's.

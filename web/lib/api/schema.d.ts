@@ -17708,6 +17708,11 @@ export interface components {
              * @default false
              */
             new_chat: boolean;
+            /**
+             * General
+             * @default false
+             */
+            general: boolean;
         };
         /** ChatListOut */
         ChatListOut: {
@@ -17818,6 +17823,11 @@ export interface components {
             last_at: string;
             /** Ask Id */
             ask_id?: string | null;
+            /**
+             * General
+             * @default false
+             */
+            general: boolean;
         };
         /** ChatThreadOut */
         ChatThreadOut: {
