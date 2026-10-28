@@ -269,8 +269,12 @@ async def test_questions_and_unknown_lines_go_to_ask(client):
                  "skip the intro, what is late?", "Who really owns Cut A?",
                  "Zelda owns Cut A", "commenter owns the moon", "skip the intro"):  # fmt: skip
         out = await ask_box(client, w, "owner", line)
-        assert out["understood"] is False, line
-        assert out["messages"] == [], line
+        # chat-join: not claimed by a phrase: nothing written (Oracle's Ask), or the line
+        # left to Oracle's reader ("Reading that…", which hands a question to Ask).
+        if out["messages"]:
+            assert out["messages"][-1]["kind"] == "pending", line
+        else:
+            assert out["understood"] is False, line
     out = await ask_box(client, w, "owner", "skip Cut A")
     assert out["understood"] is True
     assert out["messages"][-1]["body"] == chat_actions.MEETING_NOTE
@@ -285,7 +289,8 @@ async def test_unknown_person_offers_matching_people(client):
         c = await chat.Ctx(s, p, None).load()
         r = chat.parse(c, "Deee owns Cut A")
         assert r.kind == "question" and not r.cards
-        assert "Dee Cider" in r.choices
+        # chat-join: the choices row's choices (a pick builds the card).
+        assert "Dee Cider" in [ch["label"] for ch in r.choices]
 
 
 async def test_owner_words_name_the_items_own_owner(client):

@@ -686,6 +686,11 @@ def parse(c: Ctx, text: str) -> Reply:
         return Reply("note", VIEWER_NOTE)
     # The joined actions restate what was understood ("I understood one change:").
     out = build(c, *asks, body=_count(1) if asks[0] in APPLIERS else None)
+    if out.missing and out.person_text is not None:
+        # A person Oracle cannot find: asked at once, with the people the name may mean (the
+        # Ask panel's one box sends the line to Oracle's Ask).
+        out.understood = False
+        return out
     if out.missing:
         # A phrase it knows naming no item ("move the alert thing to Q2"): the reader reads
         # the name in context.
@@ -1126,7 +1131,7 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
                     # An action naming an item that matches several: ask which.
                     return Reply("question", "Which item?" if r.candidates else "Who do you mean?",
                                  choices=r.choices)  # fmt: skip
-                if r.kind == "question" and not r.missing:
+                if r.kind == "question" and (not r.missing or r.person_text is not None):
                     # An unknown person, a day it cannot read: ask (the next line answers).
                     return Reply("question", r.body)
                 refused.append(r.body if r.kind == "note" else f"I can't do that: {r.body}")
