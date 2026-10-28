@@ -79,6 +79,8 @@ for (const [where, size] of [
           await page.goto(PRIORITIES);
           await expect(page.getByTestId("simple-priorities")).toBeVisible();
           const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
+          // The picker can paint before its options on a cold page: read them once Now is offered.
+          await expect(select.locator('option[value="now"]')).toHaveCount(1);
           const list = page.getByRole("list", { name: "Ranked list" }).locator("..");
           const rows = page.getByTestId("prio-row");
           const title = (r: Locator) => r.getByTestId("prio-title");
