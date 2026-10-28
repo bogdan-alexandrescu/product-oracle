@@ -538,6 +538,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * (AC1: it changes nothing, the name included);
  * "simple-deciders" as the default company plus a decider of Simple's pricing roadmap and
  * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a);
+ * "simple-suggest-deciders" as "simple-home" plus the "simple-deciders" people, Avery Lane (an
+ * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4).
@@ -958,6 +960,34 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * Suggest review: "simple-home" plus the "simple-deciders" people, so Grow retention's
+ * suggestions (the alerts roadmap, no named decider) are decided by Avery Lane, an approver
+ * who owns the alerts track, and not by the company's owner alone; Keep alerts quiet's metric
+ * has no unit. Invented data.
+ */
+function seedSimpleSuggestDecidersScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const join = (email: string, name: string, role: "approver" | "commenter", i: number) => {
+    const m = {
+      email, name, role, engineering_lead: false, created_at: `2026-09-${String(10 + i).padStart(2, "0")}T09:00:00Z`,
+      id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
+    };
+    db.members.push(m);
+    return m.id;
+  };
+  const decider = join("dana.decider@example.com", "Dana Decider", "approver", 0);
+  const approver = join("avery.lane@example.com", "Avery Lane", "approver", 1);
+  const quiet = db.baseline.entities.find((e) => e.key === "quiet-alerts")!;
+  const attrs = { ...(quiet.attrs as Record<string, unknown>) };
+  delete attrs.unit;
+  quiet.attrs = attrs;
+  db.simple_roadmap!.deciders = { "pricing-roadmap": decider };
+  db.simple_roadmap!.track_owners = { alerts: approver };
+  db.simple_roadmap!.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
   return db;
 }
 
@@ -2630,6 +2660,8 @@ function load(): Db {
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
+              : scenario === "simple-suggest-deciders"
+                ? seedSimpleSuggestDecidersScenario
               : scenario === "simple-home-milestones"
                 ? seedSimpleHomeMilestonesScenario
               : scenario === "simple-home-one-prd"

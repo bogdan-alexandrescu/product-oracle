@@ -135,10 +135,12 @@ for (const phone of [false, true]) {
       /**
        * Card simple-suggest-chat: protects = "Suggest from the chat" opens Ask Oracle with
        * "Suggest a feature for Grow retention: " typed in; the person finishes it in their words;
-       * Oracle restates it, flags the look-alike ("It looks like … Weekly alert digest, which …")
+       * Oracle restates it, flags the look-alike by its code and name ("It looks like F-06 Weekly
+       * alert digest, which …", never the item's key)
        * and shows ONE card with Preview / Apply / Discard; Apply files it as the person's own
        * suggestion, under People in the goal's drawer; fails_when = Ask opens empty, there is no
-       * look-alike line or more than one card, or the applied suggestion is not under People;
+       * look-alike line, it names the item's key, there is more than one card, or the applied
+       * suggestion is not under People;
        * no_claim = Oracle's model reading free words (the fixed phrase is what the mock reads).
        */
       test(`a commenter suggests a feature from the chat (${where})`, async ({ page }) => {
@@ -152,7 +154,9 @@ for (const phone of [false, true]) {
         await box.press("Enter");
         const chat = page.getByTestId("ask-chat-thread").filter({ visible: true });
         await expect(chat).toContainText("I understood one change: suggest Weekly digest for admins for Grow retention.");
-        await expect(chat).toContainText("It looks like alert-digest Weekly alert digest, which");
+        // The look-alike by its display code and name, never its key (suggest review).
+        await expect(chat).toContainText("It looks like F-06 Weekly alert digest, which has a similar name.");
+        await expect(chat).not.toContainText("alert-digest");
         const card = chat.getByTestId("chat-card");
         await expect(card).toHaveCount(1);
         await expect(card.getByRole("button", { name: "Preview" })).toBeVisible();
@@ -167,6 +171,72 @@ for (const phone of [false, true]) {
         const again = await openDrawer(page);
         await expect(again.getByRole("tab", { name: "People · 1" })).toBeVisible();
         await expect(again.locator('[data-testid="person-suggestion"][data-title="Weekly digest for admins"]')).toContainText("weekly digest for admins so leads see what fired");
+      });
+
+      /**
+       * Card simple-suggest-chat-from-thread: protects = "Suggest from the chat" while the Ask
+       * panel shows a chat thread brings back Ask's box with "Suggest a feature for Grow
+       * retention: " typed in, at once (the words are never left waiting to show up later);
+       * fails_when = the panel stays on the thread and the box (and its words) does not show;
+       * no_claim = the thread's own answer (the mock's canned reply).
+       */
+      test(`"Suggest from the chat" from an open Ask thread (${where})`, async ({ page }) => {
+        await signIn(page, EMAILS.commenter);
+        await page.getByTestId(phone ? "phone-ask" : "simple-ask").filter({ visible: true }).first().click();
+        const panel = page.getByTestId("hop-panel").filter({ visible: true });
+        await panel.getByRole("textbox", { name: "Message Oracle" }).fill("What should we cut first?");
+        await panel.getByRole("button", { name: "Send" }).click();
+        await expect(panel.getByTestId("discussion-thread")).toBeVisible();
+        if (phone) await page.keyboard.press("Escape");
+        const drawer = await openDrawer(page);
+        await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
+        const box = page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true });
+        await expect(box).toHaveValue("Suggest a feature for Grow retention: ");
+        await noSidewaysScroll(page, phone);
+      });
+
+      /**
+       * Card simple-suggest-approver-decider: protects = with no named decider, the approver who
+       * owns the goal roadmap's track decides its suggestions (as the API's drafts.can_edit):
+       * the drawer names them ("Avery Lane decides."), they see Accept / Reject with the form
+       * folded and accept a commenter's suggestion; an owner who is not that decider still sees
+       * Accept / Reject; a goal whose metric has no unit reads each figure with the metric
+       * ("From 12 teams muting alerts · target 10 teams muting alerts", H1); fails_when = the
+       * drawer names the owner, the approver cannot accept, the owner cannot, or a target is a
+       * bare number; no_claim = a named decider on the goal's roadmap (api/tests).
+       */
+      test(`an approver who owns the goal's track decides its suggestions (${where})`, async ({ page, context }) => {
+        await context.addInitScript(([key]) => localStorage.setItem(key, "simple-suggest-deciders"), [MOCK_SCENARIO_KEY]);
+        await signIn(page, EMAILS.commenter);
+        const quiet = page.getByTestId("home-goal").filter({ hasText: "Keep alerts quiet" });
+        await expect(quiet.getByTestId("home-goal-path")).toHaveText("From 12 teams muting alerts · target 10 teams muting alerts");
+        let drawer = await openDrawer(page);
+        await expect(drawer.getByTestId("suggest-decider")).toHaveText("Avery Lane decides.");
+        const form = drawer.getByTestId("suggest-form");
+        await form.getByLabel("Feature name").fill("Shared alert notes");
+        await form.getByLabel("What it does, and for whom").fill("Leads leave a note on an alert so the next person on call knows what was tried");
+        await form.getByRole("button", { name: "Send suggestion" }).click();
+        await expect(toastWith(page, "Sent: Shared alert notes")).toBeVisible();
+        await closeDrawer(page, phone);
+        await signOutHere(page, phone);
+
+        await signIn(page, EMAILS.owner);
+        drawer = await openDrawer(page);
+        const forOwner = drawer.locator('[data-testid="person-suggestion"][data-title="Shared alert notes"]');
+        await expect(forOwner.getByRole("button", { name: "Accept" })).toBeVisible();
+        await expect(forOwner.getByRole("button", { name: "Reject" })).toBeVisible();
+        await closeDrawer(page, phone);
+        await signOutHere(page, phone);
+
+        await signIn(page, "avery.lane@example.com");
+        drawer = await openDrawer(page);
+        await expect(drawer.getByTestId("suggest-form-open")).toHaveText("+ Suggest a feature");
+        const theirs = drawer.locator('[data-testid="person-suggestion"][data-title="Shared alert notes"]');
+        await expect(theirs.getByRole("button", { name: "Reject" })).toBeVisible();
+        await theirs.getByRole("button", { name: "Accept" }).click();
+        await expect(toastWith(page, "Added Shared alert notes as a draft")).toBeVisible();
+        await expect(theirs).toHaveCount(0);
+        await noSidewaysScroll(page, phone);
       });
 
       /**

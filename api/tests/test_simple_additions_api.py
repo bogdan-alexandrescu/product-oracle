@@ -334,12 +334,13 @@ async def test_reconcile_and_keep_both(client):
     c = (await w.add(client, "owner", "Bulk import"))["change"]
     draft = c["target"]["item_id"]
     item = (await w.items(client))[draft]
+    # An item with no code reads by its name alone, never its key (suggest review).
     assert item["looks_like"][0] == {"kind": "item", "id": w.ids["import-a"],
-                                     "code": "import-a", "title": "Bulk import"}  # fmt: skip
+                                     "code": "", "title": "Bulk import"}  # fmt: skip
     c2 = (await w.add(client, "owner", "Audit log"))["change"]
     d2 = c2["target"]["item_id"]
     assert (await w.items(client))[d2]["looks_like"][0]["kind"] == "feature"
-    assert (await w.items(client))[d2]["looks_like"][0]["code"] == "audit-log"
+    assert (await w.items(client))[d2]["looks_like"][0]["code"] == ""
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
         "op": "keep_both", "target": {"item_id": draft}, "before": {"kept_both": False},
         "after": {}})  # fmt: skip
@@ -651,6 +652,19 @@ async def _people_rows(client, w: World, status="open") -> list[dict]:
     return [x for x in r.json()["suggestions"] if x["origin"] == "person"]
 
 
+def test_lookalike_code_is_a_display_code_never_a_key():
+    """protects=a look-alike feature reads by its display code ("F-09 Invite links") when its
+    key is a code, and by its name alone otherwise; fails_when=the code is a key slug
+    ("audit-log"), which reads like an id in the chat's reply and the drawer; no_claim=the
+    title matching itself (test_reconcile_and_keep_both)."""
+    coded = Entity(id=uuid.uuid4(), type="feature", key="f-09", title="Invite links")
+    slug = Entity(id=uuid.uuid4(), type="feature", key="audit-log", title="Audit log")
+    [m] = additions.reconcile("Invite links", [], [coded, slug])
+    assert (m.code, m.title) == ("F-09", "Invite links")
+    [m] = additions.reconcile("Audit log", [], [coded, slug])
+    assert (m.code, m.title) == ("", "Audit log")
+
+
 def test_suggestion_title_is_the_first_clause():
     t = chat_actions.suggestion_title
     assert t("audit log export, so admins can review changes") == "Audit log export"
@@ -674,10 +688,7 @@ async def test_chat_suggest_feature_card(client):
     assert m["kind"] == "cards", m["body"]
     assert m["body"].startswith(chat_actions.UNDERSTOOD)
     assert "Audit log export" in m["body"] and "Quiet" in m["body"]
-    assert (
-        "It looks like audit-log Audit Log, which already lets admins see who changed what"
-        in (m["body"])
-    )
+    assert "It looks like Audit Log, which already lets admins see who changed what" in (m["body"])
     [c] = m["cards"]
     assert c["op"] == "suggest_feature" and c["status"] == "open" and c["may"] == "apply"
     assert c["summary"] == "Suggest Audit log export for Quiet"
@@ -685,7 +696,7 @@ async def test_chat_suggest_feature_card(client):
         "kind": "suggestion", "goal_id": w.goals["quiet"], "goal_title": "Quiet",
         "title": "Audit log export",
         "outcome": "audit log export, so admins can review changes",
-        "looks_like": [{"code": "audit-log", "title": "Audit Log",
+        "looks_like": [{"code": "", "title": "Audit Log",
                         "why": "which already lets admins see who changed what"}],
     }  # fmt: skip
     assert await _people_rows(client, w) == []  # nothing until Apply
