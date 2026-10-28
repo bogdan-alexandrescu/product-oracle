@@ -39,11 +39,36 @@ async function expectWholeOption(select: Locator) {
   expect(fits, "the role select cuts its role name").toBe(true);
 }
 
+/** An email that wraps breaks only after its "@", never inside the name or the domain. */
+async function expectNoMidWordBreak(el: Locator) {
+  await expect(el).toBeVisible();
+  const breaks = await el.evaluate((e) => {
+    const walker = document.createTreeWalker(e, NodeFilter.SHOW_TEXT);
+    const chars: { ch: string; top: number }[] = [];
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const text = n.textContent ?? "";
+      for (let i = 0; i < text.length; i++) {
+        const range = document.createRange();
+        range.setStart(n, i);
+        range.setEnd(n, i + 1);
+        chars.push({ ch: text[i]!, top: Math.round(range.getBoundingClientRect().top) });
+      }
+    }
+    const out: string[] = [];
+    for (let i = 1; i < chars.length; i++) {
+      if (chars[i]!.top > chars[i - 1]!.top && chars[i - 1]!.ch !== "@") out.push(`${chars[i - 1]!.ch}|${chars[i]!.ch}`);
+    }
+    return out;
+  });
+  expect(breaks, `${await el.textContent()} breaks mid-word`).toEqual([]);
+}
+
 async function expectPeopleWhole(page: Page) {
   for (const email of ["admin@example.com", "approver@example.com", "commenter@example.com", "viewer@example.com", "former.pm@example.com"]) {
     const row = memberRow(page, email);
     await expectWhole(row.getByTestId("member-name"));
     await expectWhole(row.getByTestId("member-email"));
+    await expectNoMidWordBreak(row.getByTestId("member-email"));
   }
   await expect(memberRow(page, "commenter@example.com").getByLabel("Role for commenter@example.com")).toHaveValue("commenter");
   await expectWholeOption(memberRow(page, "commenter@example.com").getByLabel("Role for commenter@example.com"));
@@ -93,6 +118,7 @@ test.describe("members at 390", () => {
     await page.goto("/settings/members");
     for (const email of ["admin@example.com", "former.pm@example.com", "viewer@example.com"]) {
       await expectWhole(memberRow(page, email).getByTestId("member-email"));
+      await expectNoMidWordBreak(memberRow(page, email).getByTestId("member-email"));
     }
     await expectWhole(inviteRow(page, "new.hire@example.com").getByTestId("invite-who").getByText("new.hire@example.com", { exact: true }));
   });

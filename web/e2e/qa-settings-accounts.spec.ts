@@ -128,6 +128,27 @@ test("qa-settings-15: plain column headers, no repeated 'clears', one date forma
   await expect(table).not.toContainText("given out");
 });
 
+// protects: review minor, at 1440 the "5-hour use" header is whole and has room before "State".
+// fails_when: the column is narrower than its header, so the header runs into State.
+test("qa-settings-15: the 5-hour use header is whole and clear of State at 1440", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await openAccounts(page);
+  const table = page.getByTestId("account-list");
+  const textBox = (name: string) =>
+    table.getByRole("columnheader", { name, exact: true }).evaluate((th) => {
+      const range = document.createRange();
+      range.selectNodeContents(th);
+      const r = range.getBoundingClientRect();
+      const cell = th.getBoundingClientRect();
+      return { left: r.left, right: r.right, cellLeft: cell.left, cellRight: cell.right };
+    });
+  const five = await textBox("5-hour use");
+  const state = await textBox("State");
+  expect(five.left).toBeGreaterThanOrEqual(five.cellLeft);
+  expect(five.right).toBeLessThanOrEqual(five.cellRight);
+  expect(state.left - five.right).toBeGreaterThanOrEqual(12);
+});
+
 test("qa-settings-15: Spent until uses the page's one date format", async ({ page }) => {
   await page.addInitScript(([key, name]) => localStorage.setItem(key, name), [MOCK_SCENARIO_KEY, POOL_SPENT_SCENARIO]);
   await openAccounts(page);
