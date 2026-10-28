@@ -25,6 +25,7 @@ import { displayName } from "@/lib/names";
 import type {
   GuideItem,
   InterviewMessage,
+  InterviewLink,
   InterviewOut,
   InterviewPatch,
   InterviewSnapshot,
@@ -49,6 +50,8 @@ type WithPreset<T> = T & { preset: Preset | null };
 interface Row extends Omit<InterviewOut, "can_manage" | "created_by_name"> {
   /** The link's token (the API keeps only its sha256). */
   token: string | null;
+  /** Tokens a new link replaced (the API keeps their sha256): opening one says so. Absent on rows stored before. */
+  replaced_tokens?: string[];
   /** The id in the first opener's cookie. */
   opener: string | null;
   /** Index of the current guide question. */
@@ -112,6 +115,12 @@ export const PRICING_GUIDE: { prompt: string; purpose: string }[] = [
   { prompt: "Who approves a purchase like this, and from which budget?", purpose: "Budget owner" },
 ];
 const PRICING_FIXED = "A pricing interview's guide is fixed; edit it instead";
+/** As api/oracle/interviews/service.py NEW_LINK_REFUSED. */
+const NEW_LINK_REFUSED: Partial<Record<InterviewOut["status"], string>> = {
+  finished: "This interview is finished, so it can't get a new link.",
+  expired: "This interview's link expired, so it can't get a new link. Interview them again.",
+  revoked: "This interview was withdrawn, so it can't get a new link.",
+};
 const ACK = "Thank you, that helps.";
 export const MOCK_FOLLOW_UP = "Could you tell me about one specific time? What happened, step by step?";
 export const MOCK_CLOSING = "That was my last question. Press Send my answers when you're ready.";
@@ -125,7 +134,7 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 const fail = (status: number, detail: string) => json(status, { detail });
-const refuse = (status: number, reason: "used" | "expired" | "withdrawn") => json(status, { reason });
+const refuse = (status: number, reason: "used" | "expired" | "withdrawn" | "replaced") => json(status, { reason });
 
 function guideItems(preset: Preset | null = null): GuideItem[] {
   return (preset === "pricing" ? PRICING_GUIDE : MOCK_GUIDE).map((g, i) => ({ id: `q${i + 1}`, prompt: g.prompt, purpose: g.purpose }));
@@ -142,7 +151,7 @@ export function seedInterviews(input: { ownerId: string }): InterviewsDb {
     id: mockUuid(), kind: "customer", status: "invited", title: "Paying suppliers", intake_id: null, theme_id: null,
     topic: "Paying suppliers", intro: INTRO, guide: guideItems(), guide_job: { id: mockUuid(), status: "succeeded", error: null },
     interviewee_name: "Ana Lima", interviewee_company: "Example Co", link_expires_at: later(6 * 86_400_000),
-    link_opened_at: null, created_by: input.ownerId, created_at: at, finished_at: null, lock_version: 2, messages: [],
+    link_created_at: at, link_opened_at: null, created_by: input.ownerId, created_at: at, finished_at: null, lock_version: 2, messages: [],
     snapshot: {}, snapshot_job: null, request_ids: [], token: MOCK_INTERVIEW_TOKEN, opener: null, position: 0,
     followed_up: false, customer_messages: 0, guide_ready_at: null,
   };
@@ -243,9 +252,10 @@ export async function routePublicInterviews(db: InterviewsDb, ctx: InterviewsCon
   if (p[0] !== "v1" || p[1] !== "public" || p[2] !== "interviews" || !p[3]) return null;
   const token = p[3];
   const m = req.method;
-  const r = db.interviews.find((x) => x.token === token);
+  const r = db.interviews.find((x) => x.token === token || x.replaced_tokens?.includes(token));
   if (!r) return refuse(404, "expired");
   settle(r);
+  if (r.token !== token) return refuse(410, "replaced");
   if (r.status === "revoked") return refuse(410, "withdrawn");
   if (r.status === "expired") return refuse(410, "expired");
   if (r.status === "finished") return refuse(410, "used");
@@ -257,9 +267,10 @@ export async function routePublicInterviews(db: InterviewsDb, ctx: InterviewsCon
       r.opener = mockUuid();
       setCookie(token, r.opener);
       r.link_opened_at = now();
-      r.status = "in_progress";
       const first = r.guide[0];
-      if (first) r.messages.push(message("oracle", "question", first.prompt, first.id));
+      // A new link on an interview in progress carries it on.
+      if (first && r.status === "invited") r.messages.push(message("oracle", "question", first.prompt, first.id));
+      r.status = "in_progress";
     }
     const out: PublicInterview = {
       company: ctx.company,
@@ -316,12 +327,12 @@ export async function routePublicInterviews(db: InterviewsDb, ctx: InterviewsCon
 const canManageRow = (r: Row, ctx: InterviewsContext) => r.created_by === ctx.userId || atLeast(ctx.role, "approver");
 
 function outOf(r: Row, ctx: InterviewsContext): WithPreset<InterviewOut> {
-  const { token: _t, opener: _o, position: _p, followed_up: _f, customer_messages: _c, guide_ready_at: _g, interviewee_user_id: _u, ...rest } = r;
-  void [_t, _o, _p, _f, _c, _g, _u];
+  const { token: _t, replaced_tokens: _r, opener: _o, position: _p, followed_up: _f, customer_messages: _c, guide_ready_at: _g, interviewee_user_id: _u, ...rest } = r;
+  void [_t, _r, _o, _p, _f, _c, _g, _u];
   const email = ctx.memberEmail(r.created_by);
   // As the API's InterviewOut: a job's stored error read through the refusal rewrite (#604 re-review).
   const job = (j: JobState | null) => (j ? jobOut({ finished_at: null, ...j }) : null);
-  return { ...rest, guide_job: job(rest.guide_job), snapshot_job: job(rest.snapshot_job), preset: r.preset ?? null, created_by_name: email ? displayName(email) : null, can_manage: canManageRow(r, ctx) };
+  return { ...rest, link_created_at: rest.link_created_at ?? null, guide_job: job(rest.guide_job), snapshot_job: job(rest.snapshot_job), preset: r.preset ?? null, created_by_name: email ? displayName(email) : null, can_manage: canManageRow(r, ctx) };
 }
 
 /** The members' routes (/v1/interviews...); null when the path is not one of them. */
@@ -375,7 +386,7 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
       // The preset is the guide: no guide job, no model cost.
       guide: preset ? guideItems(preset) : [], preset,
       guide_job: preset ? null : ({ id: mockUuid(), status: "queued", error: null } satisfies JobState), interviewee_name: name,
-      interviewee_company: company, link_expires_at: null, link_opened_at: null, created_by: ctx.userId, created_at: now(),
+      interviewee_company: company, link_expires_at: null, link_created_at: null, link_opened_at: null, created_by: ctx.userId, created_at: now(),
       finished_at: null, lock_version: 1, messages: [], snapshot: {}, snapshot_job: null, request_ids: [], token: null,
       opener: null, position: 0, followed_up: false, customer_messages: 0, guide_ready_at: preset ? null : later(GUIDE_MS),
     };
@@ -428,9 +439,24 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
     if (!r.guide.length) return fail(409, "Draft the questions first");
     r.token = linkToken(mockUuid().replace(/-/g, ""));
     r.status = "invited";
+    r.link_created_at = now();
     r.link_expires_at = later(LINK_DAYS * 86_400_000);
     r.lock_version += 1;
-    return json(201, { url: `${window.location.origin}/i/${r.token}`, expires_at: r.link_expires_at });
+    return json(201, { url: `${window.location.origin}/i/${r.token}`, expires_at: r.link_expires_at, created_at: r.link_created_at } satisfies InterviewLink);
+  }
+  // Make a new link (qa-work-43), as api/oracle/interviews/service.py new_link.
+  if (p.length === 4 && m === "POST" && p[3] === "new-link") {
+    const refused = NEW_LINK_REFUSED[r.status];
+    if (refused) return fail(409, refused);
+    if (!r.token || (r.status !== "invited" && r.status !== "in_progress")) return fail(409, "This interview has no link yet; create its link first.");
+    r.replaced_tokens = [...(r.replaced_tokens ?? []), r.token];
+    r.token = linkToken(mockUuid().replace(/-/g, ""));
+    r.link_created_at = now();
+    r.link_expires_at = later(LINK_DAYS * 86_400_000);
+    r.link_opened_at = null;
+    r.opener = null;
+    r.lock_version += 1;
+    return json(201, { url: `${window.location.origin}/i/${r.token}`, expires_at: r.link_expires_at, created_at: r.link_created_at } satisfies InterviewLink);
   }
   if (p.length === 4 && m === "POST" && p[3] === "revoke") {
     if (r.status !== "invited" && r.status !== "in_progress") return fail(409, "Only an open link can be withdrawn");
@@ -471,7 +497,7 @@ export async function routeTeamInterviews(db: InterviewsDb, ctx: TeamContext, re
       r = {
         id: mockUuid(), kind: "team", status: "in_progress", title: ctx.intakeTitle(p[2]) ?? "", intake_id: p[2], theme_id: null,
         topic: null, intro: null, guide: [], guide_job: null, interviewee_name: null, interviewee_company: null,
-        link_expires_at: null, link_opened_at: null, created_by: ctx.userId, created_at: now(), finished_at: null,
+        link_expires_at: null, link_created_at: null, link_opened_at: null, created_by: ctx.userId, created_at: now(), finished_at: null,
         lock_version: 1, messages: [], snapshot: {}, snapshot_job: null, request_ids: [], token: null, opener: null,
         position: 0, followed_up: false, customer_messages: 0, guide_ready_at: null, interviewee_user_id: ctx.userId,
       };

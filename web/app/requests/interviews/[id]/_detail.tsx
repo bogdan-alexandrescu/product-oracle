@@ -3,19 +3,23 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
-import { Button, Chip, confirmInPage, Empty, Label, Page, PageHeader, Panel } from "@/components/ds";
+import { Button, Chip, confirmInPage, Dialog, Empty, Label, Page, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewOut } from "@/lib/api/interviews";
+import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewLink, type InterviewOut } from "@/lib/api/interviews";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
+
+import { LinkShown } from "../../_components/InterviewDialog";
 
 /**
  * One customer interview (C3): what it was about, the approved guide, the transcript, Oracle's
  * snapshot and the requests it created. Withdraw link: its creator or an approver, while the
  * link is open. The Requests tabs above are its way back (qa-work-45: no breadcrumb as well).
  * The link itself is shown once, when it is made, and only its hash is kept, so it cannot be
- * shown or copied again here (qa-work-43): the page says so, and what to do if it was lost.
+ * shown or copied again here (qa-work-43): the page says so and when it was made, and Make a
+ * new link (its creator or an approver, while the link is open) shows a fresh one once, after
+ * asking; the old link then tells whoever opens it that it was replaced.
  * An empty section says why it is empty and what comes next (qa-work-44).
  */
 export function InterviewDetail({ id }: { id: string }) {
@@ -29,6 +33,7 @@ export function InterviewDetail({ id }: { id: string }) {
     ),
   );
   const [error, setError] = useState<string | null>(null);
+  const [newLink, setNewLink] = useState(false);
 
   async function withdraw() {
     if (!iv) return;
@@ -88,13 +93,19 @@ export function InterviewDetail({ id }: { id: string }) {
         }
       />
       {error && <ErrorNote>{error}</ErrorNote>}
+      {newLink && <NewLinkDialog interview={iv} onMade={(next) => q.setData(() => next)} onClose={() => setNewLink(false)} />}
       <div className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-        <Panel title="About">
+        <Panel title="About" testId="interview-about">
           <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3 text-[15px]">
             <Fact label="What it was about">{iv.title}</Fact>
             <Fact label="Created by">
               {iv.created_by_name ?? "—"} · {formatDate(iv.created_at)}
             </Fact>
+            {iv.link_created_at && open && (
+              <Fact label="Link made">
+                <span data-testid="interview-link-made">Made {formatDateTime(iv.link_created_at)}</span>
+              </Fact>
+            )}
             {iv.link_expires_at && open && <Fact label="Link expires">{formatDateTime(iv.link_expires_at)}</Fact>}
             {iv.finished_at && <Fact label="Finished">{formatDateTime(iv.finished_at)}</Fact>}
             {open && (
@@ -102,8 +113,15 @@ export function InterviewDetail({ id }: { id: string }) {
                 <span data-testid="interview-link-note">
                   {iv.link_opened_at ? `Opened ${formatDateTime(iv.link_opened_at)}. ` : "Not opened yet. "}
                   For safety the link is shown only once, when it is made, so it can&apos;t be shown or copied again.
-                  {iv.can_manage && ` If ${name} lost it, withdraw it and interview them again for a new link.`}
+                  {iv.can_manage && ` If ${name} lost it, use Make a new link; the old link stops working.`}
                 </span>
+                {iv.can_manage && (
+                  <div className="mt-2">
+                    <Button variant="secondary" onClick={() => setNewLink(true)}>
+                      Make a new link
+                    </Button>
+                  </div>
+                )}
               </Fact>
             )}
           </dl>
@@ -236,6 +254,58 @@ function transcriptEmpty(iv: InterviewOut, name: string): string {
     default:
       return `${name} finished without answering.`;
   }
+}
+
+/**
+ * Make a new link (qa-work-43): asks first, then shows the new link once with Copy, as when the
+ * interview was first made. The interview is read again so the page shows when it was made.
+ */
+function NewLinkDialog({ interview, onMade, onClose }: { interview: InterviewOut; onMade: (next: InterviewOut) => void; onClose: () => void }) {
+  const [link, setLink] = useState<InterviewLink | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function make() {
+    setBusy(true);
+    setError(null);
+    try {
+      const made = await interviewsCall<InterviewLink>("POST", `/v1/interviews/${interview.id}/new-link`);
+      setLink(made);
+      onMade(await interviewsCall<InterviewOut>("GET", `/v1/interviews/${interview.id}`));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (link) {
+    return (
+      <Dialog title="New link made" onClose={onClose} testId="new-link-dialog">
+        <LinkShown link={link} />
+        <div className="flex justify-end">
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </div>
+      </Dialog>
+    );
+  }
+  return (
+    <Dialog
+      title="Make a new link"
+      onClose={onClose}
+      testId="new-link-dialog"
+      actions={
+        <Button variant="primary" onClick={make} disabled={busy}>
+          Make a new link
+        </Button>
+      }
+    >
+      <p>Make a new link? The old link stops working.</p>
+      {error && <ErrorNote>{error}</ErrorNote>}
+    </Dialog>
+  );
 }
 
 function Fact({ label, children }: { label: string; children: ReactNode }) {

@@ -401,6 +401,20 @@ function GuideStep({ initial, onCancel, onLinked }: { initial: Created; onCancel
 }
 
 function LinkStep({ link, onDone }: { link: InterviewLink; onDone: () => void }) {
+  return (
+    <div className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4">
+      <LinkShown link={link} />
+      <div className="flex justify-end">
+        <Button variant="primary" onClick={onDone}>
+          Done
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The private link, shown once, with Copy: here and on Make a new link (qa-work-43). */
+export function LinkShown({ link }: { link: InterviewLink }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
@@ -411,7 +425,7 @@ function LinkStep({ link, onDone }: { link: InterviewLink; onDone: () => void })
     }
   }
   return (
-    <div className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4">
+    <>
       <p className="text-sm text-text2">Copy it now: it shows only once. Send it to the customer yourself.</p>
       <div className="flex min-w-0 items-center gap-2">
         <input aria-label="Interview link" data-testid="interview-link" readOnly className={`${INPUT} min-w-0 flex-1 font-mono text-sm`} value={link.url} onFocus={(e) => e.target.select()} />
@@ -422,11 +436,6 @@ function LinkStep({ link, onDone }: { link: InterviewLink; onDone: () => void })
       <p data-testid="interview-link-terms" className="text-sm font-semibold">
         Works once · expires {formatPt(link.expires_at)}
       </p>
-      <div className="flex justify-end">
-        <Button variant="primary" onClick={onDone}>
-          Done
-        </Button>
-      </div>
-    </div>
+    </>
   );
 }

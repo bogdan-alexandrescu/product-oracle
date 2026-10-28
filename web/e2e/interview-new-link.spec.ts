@@ -41,11 +41,11 @@ async function makeNewLink(page: Page): Promise<string> {
   await openInterview(page);
 
   // Asked first; Cancel changes nothing.
-  await page.getByRole("button", { name: "Make a new link" }).click();
+  await page.getByRole("button", { name: "Make a new link", exact: true }).click();
   const dialog = page.getByTestId("new-link-dialog");
   await expect(dialog).toContainText(ASK);
   await expectNothingCut(page, "new-link-dialog");
-  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await page.goto(OLD_LINK);
   await expect(page.getByRole("heading", { name: "Hi Ana Lima" })).toBeVisible();
@@ -53,8 +53,8 @@ async function makeNewLink(page: Page): Promise<string> {
   // Ana opened it, so the interview is in progress; the new link carries it on.
   await page.goBack();
   await expect(page.getByTestId("interview-status")).toHaveText("In progress");
-  await page.getByRole("button", { name: "Make a new link" }).click();
-  await dialog.getByRole("button", { name: "Make a new link" }).click();
+  await page.getByRole("button", { name: "Make a new link", exact: true }).click();
+  await dialog.getByRole("button", { name: "Make a new link", exact: true }).click();
 
   // Shown once, with Copy, as when the interview was first made.
   const field = dialog.getByTestId("interview-link");
@@ -62,11 +62,11 @@ async function makeNewLink(page: Page): Promise<string> {
   const url = await field.inputValue();
   expect(url.endsWith(OLD_LINK)).toBe(false);
   await expect(dialog).toContainText("Copy it now: it shows only once.");
-  await dialog.getByRole("button", { name: "Copy" }).click();
+  await dialog.getByRole("button", { name: "Copy", exact: true }).click();
   await expect(dialog.getByRole("button", { name: "Copied" })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(url);
   await expectNothingCut(page, "new-link-dialog");
-  await dialog.getByRole("button", { name: "Done" }).click();
+  await dialog.getByRole("button", { name: "Done", exact: true }).click();
   await expect(dialog).toHaveCount(0);
 
   // The page says when the link was made, and no longer offers to show the old one.
@@ -99,7 +99,7 @@ test("a viewer is not offered a new link", async ({ page }) => {
   await login(page, "viewer@example.com");
   await openInterview(page);
   await expect(page.getByTestId("interview-link-note")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Make a new link" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Make a new link", exact: true })).toHaveCount(0);
 });
 
 test.describe("phone", () => {
