@@ -6,6 +6,7 @@ import { useId, useState, type FormEvent } from "react";
 
 import { Button, Chip, InfoTip, Notice, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatCount } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -71,13 +72,13 @@ export function ConnectionsSettings() {
         status={
           <>
             {q.data && (
-              <Chip kind="line">
-                <span className="tnum">{active}</span> active
+              <Chip kind="pass" data-testid="active-count">
+                <span className="tnum">{formatCount(active)}</span> active
               </Chip>
             )}
             {broken > 0 && (
               <Chip kind="warn" dot>
-                {broken} to fix
+                {formatCount(broken)} to fix
               </Chip>
             )}
           </>
@@ -181,7 +182,7 @@ function ProviderCard({
           </Button>
         )}
         {!pasting && (
-          <Button variant="ghost" className="first:-ml-2.5" onClick={() => setPasting(true)}>
+          <Button variant="secondary" onClick={() => setPasting(true)}>
             Paste a token
           </Button>
         )}
@@ -400,7 +401,7 @@ function TokenForm({
   );
 }
 
-const FIREFLIES_DEFAULT_ENDPOINT = "https://api.fireflies.ai/graphql";
+export const FIREFLIES_DEFAULT_ENDPOINT = "https://api.fireflies.ai/graphql";
 
 /** Owners only: another GraphQL endpoint for a Fireflies connection, with the key again. */
 function EndpointForm({ connection: c, reload, close }: { connection: Connection; reload: () => Promise<void>; close: () => void }) {

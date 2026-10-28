@@ -3,8 +3,9 @@
 import { useState } from "react";
 
 import { INPUT } from "@/app/settings/_components/fields";
-import { Avatar, Chip, DataTable, Notice, Panel, type Column } from "@/components/ds";
+import { Avatar, Button, Chip, DataTable, Notice, Panel, type Column } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { displayName } from "@/lib/names";
 import { useQuery } from "@/lib/use-query";
 
 type Person = Schemas["PersonOut"];
@@ -31,6 +32,19 @@ export function FindPerson({ value, onChange }: { value: string; onChange: (v: s
   );
 }
 
+/** "No one matches "zzz"", with Clear search: a people table when the search finds nobody. */
+export function NoMatch({ find, onClear }: { find: string; onClear: () => void }) {
+  if (!find.trim()) return <>No members</>;
+  return (
+    <span className="inline-flex flex-wrap items-center justify-center gap-2" data-testid="people-no-match">
+      <span>No one matches &ldquo;{find.trim()}&rdquo;</span>
+      <Button variant="ghost" onClick={onClear}>
+        Clear search
+      </Button>
+    </span>
+  );
+}
+
 /**
  * Settings › Members for a non-owner (A5, 3.10): the active members with their names and
  * role chips, read-only, from GET /v1/people. No status, sign-in, tokens or actions.
@@ -38,17 +52,19 @@ export function FindPerson({ value, onChange }: { value: string; onChange: (v: s
 export function PeopleReadOnly() {
   const peopleQ = useQuery("people:all", () => unwrap(api.GET("/v1/people", { params: { query: { limit: PEOPLE_LIMIT } } })));
   const [q, setQ] = useState("");
-  const rows = peopleQ.data?.filter((p) => matches(q, p.name, p.email));
+  const rows = peopleQ.data?.filter((p) => matches(q, displayName(p.email, p.name), p.email));
   const columns: Column<Person>[] = [
     {
       key: "member",
       header: "Member",
+      wrap: true,
       cell: (p) => (
         <span className="flex min-w-0 items-center gap-2.5">
-          <Avatar name={p.name || p.email} size={28} />
+          <Avatar name={displayName(p.email, p.name)} size={28} />
+          {/* The one name rule (lib/names): their name, or one made from the email; the email under it. */}
           <span className="flex min-w-0 flex-col leading-tight">
-            <span className="truncate font-semibold">{p.name}</span>
-            {p.name !== p.email && <span className="truncate text-[13px] text-text2">{p.email}</span>}
+            <span className="font-semibold [overflow-wrap:anywhere]">{displayName(p.email, p.name)}</span>
+            <span className="text-[13px] text-text2 [overflow-wrap:anywhere]">{p.email}</span>
           </span>
         </span>
       ),
@@ -57,7 +73,7 @@ export function PeopleReadOnly() {
   ];
   return (
     <div data-testid="people-readonly" className="flex flex-col gap-3">
-      <Panel title="People" count={peopleQ.data?.length} tools={<FindPerson value={q} onChange={setQ} />}>
+      <Panel title="People" count={rows?.length} tools={<FindPerson value={q} onChange={setQ} />}>
         {peopleQ.error ? (
           <div className="p-4">
             <Notice tone="error">{peopleQ.error}</Notice>
@@ -70,7 +86,7 @@ export function PeopleReadOnly() {
             loading={!peopleQ.data}
             rowKey={(p) => p.user_id}
             rowProps={() => ({ "data-testid": "person-row" })}
-            empty={q ? "Nobody matches" : "No members"}
+            empty={<NoMatch find={q} onClear={() => setQ("")} />}
           />
         )}
       </Panel>

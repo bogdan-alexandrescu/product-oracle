@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { ActedCell, SETTLING, useActed } from "@/components/account/acted";
 import { ConfirmDialog, type Consequence } from "@/components/account/ConfirmDialog";
+import { ROLE_LABEL } from "@/components/MembersSettings";
 import { Field, SELECT_FIELD } from "@/app/settings/_components/fields";
 import {
   Button,
@@ -20,8 +21,9 @@ import {
   Split,
 } from "@/components/ds";
 import { api, unwrap, type ApiToken, type TokenKind } from "@/lib/api/client";
-import { formatDate, formatDateTime, formatDay } from "@/lib/format";
-import { useMe } from "@/lib/me";
+import { formatDate, formatDateTime, formatDay, formatShortDate } from "@/lib/format";
+import { useMe, type Role } from "@/lib/me";
+import { scopesCodes, scopesText } from "@/lib/scopes";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 export const KIND_LABEL: Record<TokenKind, string> = {
@@ -83,21 +85,27 @@ export function Expiry({ t }: { t: Pick<ApiToken, "revoked_at" | "expires_at"> }
   );
 }
 
-/** Scopes on one line (mono, truncated, every one in the title); a service token's role. */
+/**
+ * Scopes in words (lib/scopes.ts), wrapping rather than cut off, the codes in the title
+ * (qa-settings-16); a service token's role.
+ */
 export function Scopes({ scopes, role }: { scopes?: string[] | null; role?: string }) {
-  if (!scopes?.length) return <span className="text-text2">acts as {role}</span>;
-  const text = scopes.join(", ");
+  if (!scopes?.length) {
+    const named = role ? (ROLE_LABEL[role as Role] ?? role) : null;
+    return <span className="text-text2">{named ? `Acts as ${named.toLowerCase()}` : "No scopes"}</span>;
+  }
   return (
-    <span className="block truncate font-mono text-[13px] text-text" title={text}>
-      {text}
+    <span className="block text-[15px] break-words text-text" title={scopesCodes(scopes)} data-testid="scopes">
+      {scopesText(scopes)}
     </span>
   );
 }
 
+/** A date in a narrow cell: "Sep 28", the year only when it is not this one (qa-settings-17); the full time in the title. */
 export const when = (iso?: string | null, never = "Never") =>
   iso ? (
-    <span className="tnum text-text2" title={formatDateTime(iso)}>
-      {formatDate(iso)}
+    <span className="tnum whitespace-nowrap text-text2" title={formatDateTime(iso)}>
+      {formatShortDate(iso)}
     </span>
   ) : (
     <span className="text-text2">{never}</span>
@@ -180,7 +188,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       key: "name",
       header: "Name",
       cell: (t) => (
-        <span className="min-w-0 truncate font-medium" title={`${t.name} · created ${formatDate(t.created_at)}`}>
+        <span className="min-w-0 truncate font-medium" title={`${t.name} · created ${formatShortDate(t.created_at)}`}>
           {t.name}
         </span>
       ),
@@ -198,7 +206,7 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       phoneLabel: "For ",
       cell: (t) => <span className={t.owner_email ? "" : "text-text2"}>{t.owner_email ?? "No one (company)"}</span>,
     },
-    { key: "scopes", header: "Scopes", width: "15%", hideOnPhone: true, cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
+    { key: "scopes", header: "Scopes", width: "15%", wrap: true, hideOnPhone: true, cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
     { key: "used", header: "Last used", width: "110px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
     // Created is in the name's title: the expiry matters more on one line.
     { key: "expires", header: "Expiry", width: "164px", cell: (t) => <Expiry t={t} /> },

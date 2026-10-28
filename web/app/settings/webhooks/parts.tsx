@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import { Button, Chip, type ChipKind } from "@/components/ds";
 import { INPUT } from "@/app/settings/_components/fields";
 import type { Schemas } from "@/lib/api/client";
+import { formatAge } from "@/lib/format";
 
 export type Webhook = Schemas["WebhookOut"];
 export type Delivery = Schemas["DeliveryOut"];
@@ -63,15 +64,10 @@ export function WebhookStatus({ hook }: { hook: Webhook }) {
   );
 }
 
-/** "Just now", "2 min ago", "4 h ago", "3 days ago": how long ago `iso` was. */
+/** "just now", "2m ago", "4h ago", "3d ago": how long ago `iso` was, in the shared age words. */
 export function ago(iso: string, now: number = Date.now()): string {
-  const min = Math.floor((now - Date.parse(iso)) / 60_000);
-  if (min < 1) return "Just now";
-  if (min < 60) return `${min} min ago`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `${h} h ago`;
-  const d = Math.floor(h / 24);
-  return `${d} day${d === 1 ? "" : "s"} ago`;
+  const age = formatAge(iso, now);
+  return age === "now" ? "just now" : `${age} ago`;
 }
 
 /** "✓ 200", "✕ 500", "✕ connect", "Pending", "Withheld". */

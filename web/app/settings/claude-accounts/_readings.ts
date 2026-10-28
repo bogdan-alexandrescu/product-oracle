@@ -1,13 +1,14 @@
 /**
  * What is known about an account's windows, ported from SwarmCloud's swarm-ui
  * (`src/types.ts`: readingOf, isProjected, bindingWindow, humaniseUntil, clearsIn,
- * timeAgo; `src/Accounts.tsx`: clearsOf, anyProjected, agoPastDay).
+ * timeAgo; `src/Accounts.tsx`: clearsOf, anyProjected).
  *
  * The rule the screen turns on: a missing reading is not zero, a stale reading is not a
  * current one, and a window that has reset describes a window that no longer exists.
  * An unmeasured figure prints an em dash; a projected one carries `~`.
  */
 import type { Schemas } from "@/lib/api/client";
+import { formatAge } from "@/lib/format";
 
 export type Account = Schemas["AccountOut"];
 export type AccountWindow = Schemas["WindowOut"];
@@ -79,33 +80,17 @@ export function clearsIn(iso: string | null | undefined, now: number): string {
   return humaniseUntil(t - now);
 }
 
-/** Time SINCE an instant. Never point it at a future instant: that is `clearsIn`. */
+/** Time SINCE an instant ("7m ago", lib/format's ages). Never point it at a future instant: that is `clearsIn`. */
 export function timeAgo(when: string | number, now: number = Date.now()): string {
-  const t = typeof when === "number" ? when : new Date(when).getTime();
-  if (!Number.isFinite(t)) return "at an unknown time";
-  const s = Math.max(0, Math.round((now - t) / 1000));
-  if (s < 5) return "just now";
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.round(s / 60)}m ago`;
-  if (s < 48 * 3600) return `${Math.round(s / 3600)}h ago`;
-  return `${Math.round(s / 86400)}d ago`;
+  const age = formatAge(when, now);
+  if (!age) return "at an unknown time";
+  return age === "now" ? "just now" : `${age} ago`;
 }
 
-/** An age past a day in days AND hours: `1d 20h ago`, not `44h ago`. */
-export function agoPastDay(when: string, now: number = Date.now()): string {
-  const t = Date.parse(when);
-  if (!Number.isFinite(t)) return timeAgo(when, now);
-  const h = Math.floor((now - t) / 3_600_000);
-  if (h < 24) return timeAgo(t, now);
-  const d = Math.floor(h / 24);
-  const r = h % 24;
-  return r === 0 ? `${d}d ago` : `${d}d ${r}h ago`;
-}
-
-/** `five_hour` -> `5h`, `seven_day` -> `7d`; any other window by its name. */
+/** `five_hour` -> `5-hour`, `seven_day` -> `weekly` (as the AI-off notice's limits); any other window by its name. */
 export function windowWord(key: string): string {
-  if (key === FIVE_HOUR) return "5h";
-  if (key === SEVEN_DAY) return "7d";
+  if (key === FIVE_HOUR) return "5-hour";
+  if (key === SEVEN_DAY) return "weekly";
   return key.replace(/_/g, "-");
 }
 
@@ -115,7 +100,7 @@ export interface Clears {
   tilde: boolean;
   unmeasured: boolean;
   title: string;
-  /** Which window, in the figures' own words (`5h`), or null with no binding window. */
+  /** Which window in words (`5-hour`), or null with no binding window. */
   win: string | null;
 }
 

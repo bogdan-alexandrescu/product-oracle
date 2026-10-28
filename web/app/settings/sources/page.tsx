@@ -22,15 +22,16 @@ import {
   type ChipKind,
 } from "@/components/ds";
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatCount, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
+import { FIREFLIES_DEFAULT_ENDPOINT } from "../connections/ConnectionsSettings";
 import { labelsOf, type PickerProps } from "./_browse-list";
 import { CodeMaps } from "./_code-maps";
 import { GithubPicker, githubReads } from "./_github-picker";
-import { SlackPicker } from "./_slack-picker";
+import { SlackPicker, useSlackChannelNames } from "./_slack-picker";
 import { CodeMapRefreshSetting } from "./_code-map-refresh";
 import { CompanyDriveSettings } from "./CompanyDrive";
 import { driveConfig, driveFiles, DriveFiles, DriveNotes, ReconnectToChoose, type DriveFile } from "./DriveFiles";
@@ -420,8 +421,7 @@ function ReconnectNotion({ picked }: { picked: number }) {
     >
       <Warn>Reconnect Notion to change pages.</Warn>
       <p className="text-sm text-text2">
-        This source&rsquo;s Notion connection was removed. It keeps its {picked} picked{" "}
-        {picked === 1 ? "page" : "pages"}; changing them needs a Notion connection.
+        This source&rsquo;s Notion connection was removed. It keeps its {plural(picked, "picked page")}; changing them needs a Notion connection.
       </p>
       <div>
         <LinkButton href="/settings/connections" icon="link">
@@ -472,7 +472,7 @@ function SourceRow({
     if (r.outcome === "completed") {
       setNotice({
         tone: "pass",
-        text: `Synced: ${r.upserted} item(s) seen, ${r.versions_written} new version(s), ${r.deleted} deleted.`,
+        text: `Synced: ${plural(r.upserted, "item")} seen, ${plural(r.versions_written, "new version")}, ${formatCount(r.deleted)} deleted.`,
       });
     } else if (r.outcome === "rate_limited") {
       setNotice({ tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
@@ -512,7 +512,7 @@ function SourceRow({
     if (fileRef.current) fileRef.current.value = "";
     if (!r) return;
     const added = r.items.length - r.unchanged.length;
-    setNotice({ tone: "pass", text: `Uploaded ${added} file(s)${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ""}.` });
+    setNotice({ tone: "pass", text: `Uploaded ${plural(added, "file")}${r.unchanged.length ? `, ${formatCount(r.unchanged.length)} unchanged` : ""}.` });
     const fresh = await act(() => unwrap(api.GET("/v1/sources/{source_id}", path)));
     if (fresh) onChange(fresh);
   }
@@ -520,11 +520,14 @@ function SourceRow({
   // Picks by name where the source saved one (labels), else by id (a source saved before
   // names were kept shows ids until it is next saved).
   const names = labelsOf(source.config);
+  const listed = allowlist ? entries(source.config, allowlist.key) : [];
+  // Slack: a channel saved without its name is named from the connection's channel list, never shown as an id.
+  const channelName = useSlackChannelNames(source.kind === "slack" ? source.connection_id : null, source.kind === "slack" ? listed : [], names);
   const items = drive
     ? picked.filter((f) => f.kind === "doc").map((f) => f.name)
-    : allowlist
-      ? entries(source.config, allowlist.key).map((id) => names[id] ?? id)
-      : [];
+    : source.kind === "slack"
+      ? listed.map(channelName)
+      : listed.map((id) => names[id] ?? id);
   // GitHub's include: what the source reads, when it reads only some kinds.
   const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";
@@ -557,10 +560,11 @@ function SourceRow({
               No connector
             </Chip>
           )}
-          {source.kind === "fireflies" && connection?.endpoint_url && (
-            <span className="min-w-0 max-w-full truncate text-sm text-text2" title={connection.endpoint_url}>
-              Reads <span className="font-mono">{connection.endpoint_url}</span>
-            </span>
+          {/* Fireflies' own API goes unsaid; an owner-set endpoint is named, its address on hover. */}
+          {source.kind === "fireflies" && connection?.endpoint_url && connection.endpoint_url !== FIREFLIES_DEFAULT_ENDPOINT && (
+            <Chip kind="line" title={`Reads ${connection.endpoint_url}`} data-testid="fireflies-endpoint">
+              Own Fireflies endpoint
+            </Chip>
           )}
         </span>
         <span className="flex flex-none items-center gap-1">
@@ -619,7 +623,7 @@ function SourceRow({
         </span>
       </div>
       <div className="tnum mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">
-        <span>{source.item_count} item(s)</span>
+        <span data-testid="source-items">{plural(source.item_count, "item")}</span>
         <span data-testid="source-synced">{synced}</span>
         {fireflies && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5" data-testid="fireflies-included">
@@ -822,12 +826,23 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
     }
   }
 
-  const blocked =
-    !option?.connector_available ||
-    (needsConnection && usable.length === 0) ||
-    (drive && (reconnect || files.length === 0)) ||
-    (kind === "fireflies" && !firefliesReady(meetings)) ||
-    (kind === "notion" && notionRoots(picked).length === 0);
+  // Why Add source is off, said beside it, the first thing missing only.
+  const blocked = !option?.connector_available
+    ? `The ${KIND_LABEL[kind]} connector is not available yet.`
+    : needsConnection && usable.length === 0
+      ? `Connect a ${KIND_LABEL[kind]} account first.`
+      : drive && reconnect
+        ? "Reconnect Google to choose files."
+        : drive && files.length === 0
+          ? "Choose at least one file or folder."
+          : kind === "fireflies" && !firefliesReady(meetings)
+            ? "Pick the meetings or series to pull in."
+            : kind === "notion" && notionRoots(picked).length === 0
+              ? "Tick at least one page."
+              : !name.trim()
+                ? "Give the source a name."
+                : null;
+  const whyId = useId();
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source">
@@ -902,10 +917,15 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       )}
       {Picker && usable.length > 0 && <Picker key={`${kind}:${connectionId}`} connectionId={connectionId} config={picked} onChange={setPicked} />}
       {error && <Notice tone="error">{error}</Notice>}
-      <div>
-        <Button type="submit" variant="solid" icon="plus" disabled={busy || blocked || !name.trim()}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <Button type="submit" variant="solid" icon="plus" disabled={busy || !!blocked} aria-describedby={blocked ? whyId : undefined}>
           Add source
         </Button>
+        {blocked && (
+          <span id={whyId} className="text-sm text-text2" data-testid="add-source-why">
+            {blocked}
+          </span>
+        )}
       </div>
     </form>
   );
@@ -950,9 +970,9 @@ export default function SourceSettingsPage() {
         </>
       }
       stats={[
-        { label: "Sources", value: sources.data ? list.length : "—" },
-        { label: "Items", value: sources.data ? items : "—" },
-        { label: "Errors", value: sources.data ? errors : "—", tone: errors > 0 ? "crit" : undefined },
+        { label: list.length === 1 ? "Source" : "Sources", value: sources.data ? formatCount(list.length) : "—" },
+        { label: items === 1 ? "Item" : "Items", value: sources.data ? formatCount(items) : "—" },
+        { label: errors === 1 ? "Error" : "Errors", value: sources.data ? formatCount(errors) : "—", tone: errors > 0 ? "crit" : undefined },
       ]}
     >
       <InspectorSection>
@@ -976,12 +996,12 @@ export default function SourceSettingsPage() {
           <>
             {errors > 0 && (
               <Chip kind="crit" dot>
-                {errors} in error
+                {formatCount(errors)} in error
               </Chip>
             )}
             {attention > 0 && (
               <Chip kind="warn" dot data-testid="sources-attention">
-                {attention} need{attention === 1 ? "s" : ""} attention
+                {formatCount(attention)} need{attention === 1 ? "s" : ""} attention
               </Chip>
             )}
           </>

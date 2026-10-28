@@ -2,7 +2,8 @@
 
 import { useState, useSyncExternalStore } from "react";
 
-import { Notice, Page, PageHeader, SegmentedControl } from "@/components/ds";
+import { Empty, LinkButton, Notice, Page, PageHeader, Panel, SegmentedControl } from "@/components/ds";
+import { Loading } from "@/components/ui";
 import { useMe } from "@/lib/me";
 import { useTheme } from "@/lib/theme";
 
@@ -34,17 +35,30 @@ function useSystemDark(): boolean {
  * the second copy scoped to the other theme by `.ds-light` / `.ds-dark`.
  */
 export default function DesignPage() {
-  const { can, capsReady } = useMe();
+  const { can, capsReady, capsError } = useMe();
   const [theme, setTheme] = useTheme();
   const systemDark = useSystemDark();
   const [both, setBoth] = useState(false);
   // #370: the kit is for whoever may read the company's settings (owners).
   const owner = can("get_setting_endpoint");
 
-  if (!capsReady || !owner) {
+  // qa-settings-8: another role is told so, as on a locked Settings tab (settings/_gate.tsx).
+  if (!owner) {
     return (
       <Page>
         <PageHeader title={TITLE} testId="design-header" />
+        {capsReady ? (
+          <Panel testId="not-for-role" bodyClassName="flex flex-col items-center gap-3 pb-8">
+            <Empty icon="lock">Not available for your role</Empty>
+            <p className="text-[15px] text-text2">The design system page is for owners.</p>
+            <LinkButton href="/home" variant="ghost">
+              Open Home
+            </LinkButton>
+          </Panel>
+        ) : capsError ? null : (
+          // A failed read says so in the shell, with Retry; no Loading forever.
+          <Loading />
+        )}
       </Page>
     );
   }

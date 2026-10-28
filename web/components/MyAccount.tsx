@@ -26,13 +26,19 @@ import {
   Split,
 } from "@/components/ds";
 import { api, ApiError, unwrap, type ApiToken, type McpClient, type MyAccount as Account } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, formatShortDate, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
+import { SCOPE_LABEL } from "@/lib/scopes";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 /** "Password" or "Google". */
 const methodLabel = (m: Account["sign_in_methods"][number]) => (m === "google" ? "Google" : "Password");
 type Scope = "oracle:read" | "oracle:write";
+/** What each scope a member can give a token lets it do (the code is in the label's title). */
+const SCOPE_NOTE: Record<Scope, string> = {
+  "oracle:read": "acts as a viewer",
+  "oracle:write": "acts with your role",
+};
 /** A new personal token's lifetime: the API takes 30, 90 or 365 days, or null (never). */
 type Lifetime = "30" | "90" | "365" | "never";
 const LIFETIMES: { value: Lifetime; label: string }[] = [
@@ -92,8 +98,9 @@ export function MyAccount() {
         ) : undefined
       }
       stats={[
-        { label: "Personal tokens", value: liveTokens ?? "—", testId: "stat-tokens" },
-        { label: "MCP clients", value: liveClients ?? "—", testId: "stat-clients" },
+        // Only live credentials count, so the labels say so (qa-settings-18).
+        { label: "Active tokens", value: liveTokens ?? "—", testId: "stat-tokens" },
+        { label: "Active MCP clients", value: liveClients ?? "—", testId: "stat-clients" },
       ]}
     >
       {account && <AccountDetails account={account} onSaved={(a) => accountQ.setData(() => a)} />}
@@ -138,17 +145,14 @@ export function MyAccount() {
           { icon: "signout", text: "Every browser signed in as you is signed out, this one too." },
           {
             icon: "lock",
-            text:
-              liveTokens === 1
-                ? "Your personal API token is revoked."
-                : `Your ${liveTokens ?? 0} personal API tokens are revoked.`,
+            text: liveTokens === 1 ? "Your personal API token is revoked." : `Your ${plural(liveTokens ?? 0, "personal API token")} are revoked.`,
           },
           {
             icon: "lock",
             text:
               liveClients === 1
                 ? "Your MCP client loses its access and refresh tokens."
-                : `Your ${liveClients ?? 0} MCP clients lose their access and refresh tokens.`,
+                : `Your ${plural(liveClients ?? 0, "MCP client")} lose their access and refresh tokens.`,
           },
           {
             icon: "runs",
@@ -255,6 +259,8 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
 
   const mismatch = again.length > 0 && again !== next;
   const short = next.length > 0 && next.length < min;
+  // qa-settings-32: a disabled Change password says what is missing.
+  const missing = !current ? "Enter your current password" : !next ? "Enter a new password" : !again && !short ? "Enter the new password again" : null;
   async function submit(e: FormEvent) {
     e.preventDefault();
     if (short || mismatch || !current) return;
@@ -310,6 +316,11 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
           </Button>
           {short && <span className="text-sm text-warn">At least {min} characters</span>}
           {mismatch && <span className="text-sm text-warn">The two new passwords differ</span>}
+          {!short && !mismatch && missing && !pending && (
+            <span className="text-sm text-text2" data-testid="password-missing">
+              {missing}
+            </span>
+          )}
         </div>
         <p className="col-span-full text-sm text-text2" data-testid="password-revokes">
           Changing it signs out every other session and revokes {REVOKES_TOO}.
@@ -329,6 +340,16 @@ function PasswordPanel({ account, onChanged }: { account: Account; onChanged: ()
         )}
       </form>
     </Panel>
+  );
+}
+
+/** "1 active", as Settings > API tokens counts (qa-settings-18): revoked and expired rows are listed but not counted. */
+function ActiveCount({ rows }: { rows?: Pick<ApiToken, "revoked_at" | "expires_at">[] }) {
+  if (!rows) return null;
+  return (
+    <Chip kind="pass" data-testid="panel-active-count">
+      {rows.filter((r) => tokenState(r) === "active").length} active
+    </Chip>
   );
 }
 
@@ -379,6 +400,8 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
     }
   }
 
+  // qa-settings-32: a disabled Create token says what is missing.
+  const missing = !name.trim() ? "Name the token first" : scopes.length === 0 ? "Choose Read, Write or both" : null;
   const toggle = (s: Scope) => setScopes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s].sort() as Scope[]));
   const rows = query.data ? [...query.data].reverse() : undefined;
   const columns: Column<ApiToken>[] = [
@@ -386,12 +409,12 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
       key: "name",
       header: "Name",
       cell: (t) => (
-        <span className="truncate font-medium" title={`${t.name} · created ${formatDate(t.created_at)}`}>
+        <span className="truncate font-medium" title={`${t.name} · created ${formatShortDate(t.created_at)}`}>
           {t.name}
         </span>
       ),
     },
-    { key: "scopes", header: "Scopes", width: "20%", hideOnPhone: true, cell: (t) => <Scopes scopes={t.scopes} /> },
+    { key: "scopes", header: "Scopes", width: "20%", wrap: true, hideOnPhone: true, cell: (t) => <Scopes scopes={t.scopes} /> },
     { key: "used", header: "Last used", width: "104px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
     // Created is in the name's title: the expiry matters more on one line.
     { key: "expires", header: "Expiry", width: "164px", cell: (t) => <Expiry t={t} /> },
@@ -423,13 +446,15 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
   return (
     <Panel
       title="Personal API tokens"
-      count={query.data?.filter((t) => tokenState(t) === "active").length}
       testId="tokens-panel"
       tools={
-        <InfoTip label="personal tokens" align="end">
+        <>
+          <ActiveCount rows={query.data} />
+          <InfoTip label="personal tokens" align="end">
           A personal token acts as you from scripts and agents. Read only acts as a viewer; with write it has your role.
-          The secret is shown once, when you create it. It expires after the time you choose; an expired token is refused.
-        </InfoTip>
+            The secret is shown once, when you create it. It expires after the time you choose; an expired token is refused.
+          </InfoTip>
+        </>
       }
     >
       <form onSubmit={create} aria-label="Create a token" className="flex flex-wrap items-end gap-3 border-b border-line p-4">
@@ -440,9 +465,9 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
           <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Scopes</legend>
           <div className="flex h-9 items-center gap-4">
             {(["oracle:read", "oracle:write"] as const).map((s) => (
-              <label key={s} className="inline-flex items-center gap-2 text-[15px]">
+              <label key={s} className="inline-flex items-center gap-2 text-[15px]" title={`${SCOPE_LABEL[s]}: ${SCOPE_NOTE[s]} (${s})`}>
                 <input type="checkbox" checked={scopes.includes(s)} onChange={() => toggle(s)} className="size-4 accent-[var(--accent)]" />
-                <span className="font-mono text-[13px]">{s}</span>
+                <span>{SCOPE_LABEL[s]}</span>
               </label>
             ))}
           </div>
@@ -451,9 +476,14 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
           <legend className="mb-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">Expires after</legend>
           <SegmentedControl label="Expires after" items={LIFETIMES} value={lifetime} onChange={setLifetime} />
         </fieldset>
-        <Button type="submit" variant="solid" icon="plus" disabled={pending || !name.trim() || scopes.length === 0}>
+        <Button type="submit" variant="solid" icon="plus" disabled={pending || !!missing} aria-describedby={missing ? "token-missing" : undefined}>
           {pending ? "Creating…" : "Create token"}
         </Button>
+        {missing && (
+          <span id="token-missing" data-testid="token-missing" className="self-center text-sm text-text2">
+            {missing}
+          </span>
+        )}
         {error && (
           <div className="basis-full">
             <Notice tone="error">{error}</Notice>
@@ -559,7 +589,7 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
         </span>
       ),
     },
-    { key: "scopes", header: "Scopes", width: "22%", hideOnPhone: true, cell: (c) => <Scopes scopes={c.scopes} /> },
+    { key: "scopes", header: "Scopes", width: "22%", wrap: true, hideOnPhone: true, cell: (c) => <Scopes scopes={c.scopes} /> },
     { key: "authorized", header: "Authorized", width: "104px", hideOnPhone: true, cell: (c) => when(c.authorized_at) },
     { key: "used", header: "Last used", width: "104px", phoneLabel: "Used ", cell: (c) => when(c.last_used_at) },
     { key: "status", header: "Status", width: "140px", cell: (c) => <TokenStatus t={c} /> },
@@ -590,13 +620,15 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
   return (
     <Panel
       title="MCP clients"
-      count={query.data?.filter((c) => tokenState(c) === "active").length}
       testId="clients-panel"
       tools={
-        <InfoTip label="MCP clients" align="end">
-          Agents and apps you authorized to use Oracle&apos;s MCP server as you (OAuth). Revoking one ends its access and
-          refresh tokens.
-        </InfoTip>
+        <>
+          <ActiveCount rows={query.data} />
+          <InfoTip label="MCP clients" align="end">
+            Agents and apps you authorized to use Oracle&apos;s MCP server as you (OAuth). Revoking one ends its access and
+            refresh tokens.
+          </InfoTip>
+        </>
       }
     >
       {query.error ? (

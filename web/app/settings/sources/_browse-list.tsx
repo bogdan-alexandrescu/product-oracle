@@ -3,6 +3,7 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { Button, Chip, Icon } from "@/components/ds";
+import { formatCount } from "@/lib/format";
 import { errorMessage } from "@/lib/use-query";
 
 import { INPUT, TEXTAREA } from "../_components/fields";
@@ -214,7 +215,7 @@ export function BrowseList({
         )}
         <span className="flex flex-none items-center gap-1.5 max-[600px]:w-full max-[600px]:justify-between">
           <Chip kind={picked.length ? "acc" : "na"} data-testid="picked-count">
-            {picked.length} selected
+            {formatCount(picked.length)} selected
           </Chip>
           {connectionId !== null && (
             <Button
