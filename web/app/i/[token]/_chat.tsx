@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type R
 import { confirmInPage } from "@/components/ds/ConfirmDialog";
 import { LIMITS, publicCall, type PublicInterview, type PublicMessage, type PublicProgress, type PublicTurn } from "@/lib/api/interviews";
 
-type Refusal = "used" | "expired" | "withdrawn" | "unreachable";
+type Refusal = "used" | "expired" | "withdrawn" | "replaced" | "unreachable";
 type Phase = { at: "loading" } | { at: "intro" } | { at: "chat" } | { at: "done" } | { at: "refused"; why: Refusal };
 
 const BUTTON =
@@ -19,7 +19,7 @@ const COLUMN = "mx-auto w-full max-w-2xl min-w-0 px-4";
 function refusalOf(status: number, reason: string | null): Refusal | null {
   if (status === 404) return "expired";
   if (status !== 410) return null;
-  return reason === "used" || reason === "withdrawn" ? reason : "expired";
+  return reason === "used" || reason === "withdrawn" || reason === "replaced" ? reason : "expired";
 }
 
 /**
@@ -136,9 +136,11 @@ export function InterviewChat({ token }: { token: string }) {
         ? `This link has already been used. ${company ? `Ask ${company} for a new one.` : "Ask the team that sent it for a new one."}`
         : phase.why === "withdrawn"
           ? "This link was withdrawn."
-          : phase.why === "expired"
-            ? "This link has expired."
-            : "We could not open this link. Check your connection and reload the page.";
+          : phase.why === "replaced"
+            ? `This link was replaced by a newer one. ${company ? `Ask ${company} for the new link.` : "Ask the team that sent it for the new link."}`
+            : phase.why === "expired"
+              ? "This link has expired."
+              : "We could not open this link. Check your connection and reload the page.";
     return (
       <Frame company={company}>
         <p data-testid="interview-refused" className="py-10 text-center text-lg font-semibold">

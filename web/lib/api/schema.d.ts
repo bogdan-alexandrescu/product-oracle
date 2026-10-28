@@ -11704,6 +11704,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/interviews/{interview_id}/new-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make New Interview Link
+         * @description Make a new link for an invited or in-progress interview: shown once; the old link
+         *     stops working at once and says it was replaced. Not for a finished or closed one.
+         */
+        post: operations["make_new_interview_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/interviews/{interview_id}/revoke": {
         parameters: {
             query?: never;
@@ -26359,6 +26380,11 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** InterviewMessageOut */
         InterviewMessageOut: {
@@ -26424,6 +26450,8 @@ export interface components {
             interviewee_company?: string | null;
             /** Link Expires At */
             link_expires_at?: string | null;
+            /** Link Created At */
+            link_created_at?: string | null;
             /** Link Opened At */
             link_opened_at?: string | null;
             /**
@@ -31679,7 +31707,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "used" | "expired" | "withdrawn";
+            reason: "used" | "expired" | "withdrawn" | "replaced";
         };
         /** PublicInterviewTurn */
         PublicInterviewTurn: {
@@ -67661,6 +67689,37 @@ export interface operations {
         };
     };
     create_interview_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_new_interview_link: {
         parameters: {
             query?: never;
             header?: never;

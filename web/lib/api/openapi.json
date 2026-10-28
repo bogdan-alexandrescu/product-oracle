@@ -40622,6 +40622,60 @@
         "x-per-item": "approver"
       }
     },
+    "/v1/interviews/{interview_id}/new-link": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Make New Interview Link",
+        "description": "Make a new link for an invited or in-progress interview: shown once; the old link\nstops working at once and says it was replaced. Not for a finished or closed one.",
+        "operationId": "make_new_interview_link",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      }
+    },
     "/v1/interviews/{interview_id}/revoke": {
       "post": {
         "tags": [
@@ -81861,12 +81915,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Expires At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
           }
         },
         "type": "object",
         "required": [
           "url",
-          "expires_at"
+          "expires_at",
+          "created_at"
         ],
         "title": "InterviewLinkOut",
         "description": "The private link, shown once."
@@ -82072,6 +82132,18 @@
               }
             ],
             "title": "Link Expires At"
+          },
+          "link_created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Created At"
           },
           "link_opened_at": {
             "anyOf": [
@@ -96718,7 +96790,8 @@
             "enum": [
               "used",
               "expired",
-              "withdrawn"
+              "withdrawn",
+              "replaced"
             ],
             "title": "Reason"
           }

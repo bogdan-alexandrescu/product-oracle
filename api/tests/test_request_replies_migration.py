@@ -64,7 +64,7 @@ def scratch_db():
 def test_chains_on_mains_head_and_is_the_only_head():
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0091_prd_questions"]
+    assert script.get_heads() == ["0090_interview_new_link"]
 
 
 def test_upgrade_and_a_downgrade_refused_while_a_new_reason_is_used(scratch_db):

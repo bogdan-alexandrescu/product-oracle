@@ -46,7 +46,7 @@ def _migration():
 def test_chains_on_the_single_head():
     script = ScriptDirectory.from_config(Config(str(API_DIR / "alembic.ini")))
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0091_prd_questions"]
+    assert script.get_heads() == ["0090_interview_new_link"]
 
 
 async def test_clears_only_the_whole_prd_reason(client, owner, runtime):  # noqa: F811
