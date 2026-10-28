@@ -138,7 +138,7 @@ async def approved(db: AsyncSession, document_id: uuid.UUID) -> DocumentVersion 
 def payload(document: Document, v: DocumentVersion) -> dict[str, Any]:
     return {
         "title": document.title,
-        "approved_on": (v.approved_at or company_time.now()).date().isoformat(),
+        "approved_on": company_time.day(v.approved_at or company_time.now()).isoformat(),
         "text": (v.markdown or "")[:MAX_TEXT],
     }
 
@@ -350,8 +350,8 @@ async def rows(db: AsyncSession, principal: Any, readable: set[uuid.UUID]) -> li
         if d.decided_at is not None:
             who = info.get("decided_by_name") or names.get(d.decided_by, "someone")
             where = " in the PRD" if d.rationale == "Decided in the PRD" else ""
-            decided_label = (f"Decided{where} on {company_time.date_in_words(d.decided_at.date())}"
-                             f" by {who}")  # fmt: skip
+            on = company_time.date_in_words(company_time.day(d.decided_at))
+            decided_label = f"Decided{where} on {on} by {who}"
         c = pending.get(str(d.id))
         decides = open_ and may_decide(principal, d)
         out.append(SimpleQuestion(
