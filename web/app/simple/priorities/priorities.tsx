@@ -700,10 +700,10 @@ function ShapeMark({ shape, hollow, code }: { shape: Shape; hollow: boolean; cod
   );
 }
 
-/** The effort axis's ticks: 0.5, 1, 2, 4 weeks, doubling on while efforts run longer. */
-function effortTicks(maxE: number): number[] {
+/** The effort axis's ticks: 0.5, 1, 2, 4 weeks, doubling on while they stay on the axis (up to `top`). */
+function effortTicks(top: number): number[] {
   const out = [0.5, 1, 2, 4];
-  while (out.at(-1)! < maxE) out.push(out.at(-1)! * 2);
+  while (out.at(-1)! * 2 <= top) out.push(out.at(-1)! * 2);
   return out;
 }
 
@@ -736,7 +736,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   const hi = Math.log2(maxE) + 0.4;
   const xPct = (e: number) => 4 + ((Math.log2(Math.max(0.25, e)) - lo) / (hi - lo)) * 92;
   const yPct = (v: number) => 4 + (1 - v / maxV) * 92;
-  const ticks = effortTicks(maxE);
+  const ticks = effortTicks(2 ** hi);
   const byValue = medianSplit(rows, (r) => r.goal_value ?? 0, true);
   const byEffort = medianSplit(rows, effortOf, false);
   const quadrant = (r: Row) => (byValue.firstHalf.has(r.feature_id) ? (byEffort.firstHalf.has(r.feature_id) ? 0 : 1) : byEffort.firstHalf.has(r.feature_id) ? 2 : 3);
