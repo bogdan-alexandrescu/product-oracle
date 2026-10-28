@@ -31,10 +31,11 @@ test("/design: the Brand card draws the mark, compact cut, tab icon and wordmark
   }
 });
 
-test("/design: a viewer sees only its title", async ({ page }) => {
+test("/design: a viewer is told the page is not for its role", async ({ page }) => {
   await login(page, "viewer@example.com");
   await page.goto("/design");
   await expect(page.getByRole("heading", { name: "Design system (developers)", exact: true })).toBeVisible();
+  await expect(page.getByTestId("not-for-role")).toContainText("Not available for your role");
   await expect(page.getByTestId("design-gallery")).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Theme" })).toHaveCount(0);
 });

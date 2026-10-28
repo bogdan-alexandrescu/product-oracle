@@ -56,6 +56,7 @@ async function nameLeadFromSetup(page: Page) {
 async function setZoneFromSetup(page: Page) {
   await row(page, "timezone").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=setup#timezone$/);
+  await page.getByLabel("Company time zone").selectOption("America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
   await backToHome(page);
@@ -64,7 +65,7 @@ async function setZoneFromSetup(page: Page) {
 async function confirmHorizonsFromSetup(page: Page) {
   await row(page, "horizons").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=setup#horizons$/);
-  await page.locator("#horizons").getByRole("button", { name: "Confirm" }).click();
+  await page.locator("#horizons").getByRole("button", { name: "Save" }).click();
   await expect(page.locator("#horizons").getByRole("button", { name: "Reset" })).toBeVisible();
   await backToHome(page);
 }
@@ -120,9 +121,9 @@ test("setup: Connect tools opens Connections and Back to Home shows it done", as
   await expect(page.getByRole("link", { name: "Back to Home" })).toHaveCount(0);
 });
 
-test("setup: Horizons opens the Company page with the defaults and Confirm ticks it", async ({ page }) => {
+test("setup: Horizons opens the Company page with the defaults and Save ticks it", async ({ page }) => {
   // protects=checking the horizons from the checklist; fails_when=the page shows other
-  // defaults, Confirm stores nothing, or the step stays open; no_claim=the API's validation.
+  // defaults, Save stores nothing, or the step stays open; no_claim=the API's validation.
   await newCompany(page);
   await login(page);
   await row(page, "horizons").getByRole("link", { name: "Open" }).click();
@@ -134,7 +135,7 @@ test("setup: Horizons opens the Company page with the defaults and Confirm ticks
   await expect(horizons.getByLabel("From")).toHaveValue("12");
   await expect(horizons.getByLabel("To")).toHaveValue("24");
   await expect(horizons.getByRole("button", { name: "Reset" })).toHaveCount(0);
-  await horizons.getByRole("button", { name: "Confirm" }).click();
+  await horizons.getByRole("button", { name: "Save" }).click();
   await expect(horizons.getByRole("button", { name: "Reset" })).toBeVisible();
   await backToHome(page);
   await expect(row(page, "horizons")).toHaveAttribute("data-done", "true");
@@ -162,7 +163,7 @@ test("setup: a change shows Save, a bad span shows the error, Reset reopens the 
   await horizons.getByRole("button", { name: "Reset" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Reset" }).click();
   await expect(horizons.getByLabel("From")).toHaveValue("12");
-  await expect(horizons.getByRole("button", { name: "Confirm" })).toBeVisible();
+  await expect(horizons.getByRole("button", { name: "Save" })).toBeVisible();
   await backToHome(page);
   await expect(row(page, "horizons")).toHaveAttribute("data-done", "false");
 });

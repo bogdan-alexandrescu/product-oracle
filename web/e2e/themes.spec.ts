@@ -24,7 +24,7 @@ test("themes: list, live preview, a low-contrast colour blocks saving", async ({
   // Muted text too light on white: WCAG AA fails, saving is blocked.
   await page.getByLabel("Muted", { exact: true }).fill("#aaaaaa");
   const contrast = page.getByTestId("contrast-errors");
-  await expect(contrast).toContainText("colors.muted #aaaaaa on colors.background #ffffff has a contrast of 2.32:1");
+  await expect(contrast).toContainText("Muted colour #aaaaaa on background colour #ffffff has a contrast of 2.32:1");
   await expect(contrast).toContainText("WCAG AA needs at least 4.5:1");
   await expect(save).toBeDisabled();
 

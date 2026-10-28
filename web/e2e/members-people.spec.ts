@@ -130,9 +130,9 @@ test("members: the owner names the approver in the inspector, and a commenter na
   // AC 29
   await login(page);
   await page.goto("/settings/members");
-  // The name in bold with the email under it; the viewer has no name, so the email alone.
+  // The name in bold with the email under it; the viewer has no name, so one made from the email (lib/names).
   await expect(memberRow(page, "approver@example.com").getByTestId("member-open")).toHaveText(/^Approver\s*approver@example\.com$/);
-  await expect(memberRow(page, "viewer@example.com").getByTestId("member-open")).toHaveText("viewer@example.com");
+  await expect(memberRow(page, "viewer@example.com").getByTestId("member-open")).toHaveText(/^Viewer\s*viewer@example\.com$/);
 
   const inspector = await openMember(page, "approver@example.com");
   await expect(inspector).toContainText("Up to 80 characters");
