@@ -38,6 +38,8 @@ export interface OnePagerCtx {
   reviewers: string[];
   /** Writes one Inbox notification, as oracle.review.collab.notify. */
   notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
+  /** prd-timeline: the PRD's dated plan's milestones ("M1 Prove it"): the PDF prints the timeline, then one page each. */
+  planPages?: string[];
 }
 
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -179,7 +181,7 @@ const NOTED_SLICE: SliceItem[] = [
   { title: "Setup help center", horizon: "now", start: "2026-10-12", end: "2026-12-11", estimated: false, milestone: null },
 ];
 export const WALK_PROBLEM =
-  "New workspace admins stall during setup because the checklist hides the invite step, and the queue of half-set-up teams grows every week a cohort lands; teams with more than ten people wait the longest, and the promise we make is a first teammate invited within a 48-hour window that we miss for most new teams after a weekend signup";
+  "New workspace admins stall during setup because the checklist hides the invite step. The queue of half-set-up teams grows every week a cohort lands; teams with more than ten people wait the longest, and the promise we make is a first teammate invited within a 48-hour window that we miss for most new teams after a weekend signup.";
 
 export function seedWalkOnePager(): OnePagerDb {
   const db = seedOnePager();
@@ -409,7 +411,8 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   if (p[2] === "one-pagers" && m === "GET") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
     if (p[4] === "pdf") {
-      return new Response("%PDF-1.7\n% one page\n", {
+      const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : ["One page"];
+      return new Response(`%PDF-1.7\n${pages.map((t, i) => `% page ${i + 1}: ${t}\n`).join("")}`, {
         status: 200,
         headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${db.doc.slug}-v${db.version}-one-pager.pdf"` },
       });

@@ -155,7 +155,7 @@ import {
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
 import { chatMeetings, ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
-import { PLAN_PRD_SLUG, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
+import { PLAN_PRD_SLUG, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
 import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, takeReaderWrote, type ChatDb } from "./simple-chat";
@@ -2684,6 +2684,13 @@ function load(): Db {
                 ? seedSimpleWalkScenario
               : scenario === "simple-plan"
                 ? seedSimplePlanScenario
+              : scenario === "simple-plan-undated"
+                ? () => {
+                    // prd-timeline: Guided setup's plan whose milestones have no dates.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.plan!.undated = true;
+                    return db;
+                  }
               : scenario === "simple-chat"
                 ? () => {
                     const db = seedSimpleHomeScenario();
@@ -5197,6 +5204,9 @@ async function route(db: Db, req: Request): Promise<Response> {
             id: uuid(), user_id, kind, title, document_id: onePagerDb.doc.id, version_number: version, section_key: null,
             comment_id: null, campaign_id: null, actor: `user:${me.id}`, data, read_at: null, created_at: now(),
           }),
+        planPages: onePagerDb.doc.slug === PLAN_PRD_SLUG && db.simple_roadmap?.plan && !db.simple_roadmap.plan.undated
+          ? planMilestones().map((m) => `${m.code} ${m.name}`)
+          : undefined,
       },
       r,
       p,

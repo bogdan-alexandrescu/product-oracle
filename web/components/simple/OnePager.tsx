@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "@/components/ds";
 import { FlowMini, FlowPanel } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
+import { PrdTimeline } from "@/components/simple/PrdTimeline";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -25,6 +26,18 @@ function heldWords(d: Schemas["OnePagerDraft"]): string {
   const names = d.waiting_on.map((p) => p.name);
   const who = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
   return [...(names.length ? [`Waiting on ${who}'s approval`] : []), ...d.blocked_by].join(" · ");
+}
+
+/**
+ * The owner's P5: a shortened line folds at a sentence end, never mid-sentence: the whole
+ * sentences that fit in the API's cut (`shown`, ending "…"), else the first sentence whole.
+ */
+export function foldAtSentence(full: string, shown: string): string {
+  const room = shown.replace(/…$/, "").length;
+  const ends = [...full.matchAll(/[.!?](?=\s|$)/g)].map((m) => m.index! + 1);
+  if (!ends.length) return full;
+  const fit = ends.filter((e) => e <= room);
+  return full.slice(0, fit.length ? fit[fit.length - 1] : ends[0]).trim();
 }
 
 /** "2h ago": how long since `at` (Remind's "Reminded 2h ago"). */
@@ -62,6 +75,11 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     seenRefresh.current = refresh;
     void reloadPage();
   }, [refresh, reloadPage]);
+  // prd-timeline: the PRD's plan leads the page (its timeline, goal lanes and milestone parts).
+  const planQ = useQuery(`simple-prd-plan|${doc}`, () =>
+    unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd: doc } } })).catch(() => null),
+  );
+  const [planNow, setPlanNow] = useState<Schemas["SimplePlanOut"] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -149,12 +167,14 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   }
 
   const notesFor = (id: string) => v.notes.filter((n) => n.line_id === id);
+  const plan = planNow ?? planQ.data ?? null;
+  const planShown = !!plan && plan.status !== "none" && plan.milestones.length > 0;
   const meta = [
     `Version ${v.version}`,
     v.published_at ? `published ${day(v.published_at)}` : null,
     v.owner ? `Owner ${v.owner.name}` : "No owner yet",
     v.decider ? `Decider ${v.decider.name}` : null,
-    v.span_start && v.span_end ? `${day(v.span_start)} – ${day(v.span_end)}` : null,
+    plan?.span ? plan.span.label : v.span_start && v.span_end ? `${day(v.span_start)} – ${day(v.span_end)}` : null,
   ].filter(Boolean);
 
   return (
@@ -207,13 +227,18 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
       {saved && <p role="status" className="simple-noprint mx-auto max-w-[1180px] px-4 text-right text-base">Saved {saved}</p>}
       {error && <div className="mx-auto max-w-[1180px] px-4"><ErrorNote>{error}</ErrorNote></div>}
+      {planShown && (
+        <div className="mx-auto max-w-[1180px] px-4 pt-6">
+          <PrdTimeline plan={plan} onPlan={setPlanNow} />
+        </div>
+      )}
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-6 md:grid-cols-[minmax(0,820px)_var(--simple-margin)]">
         <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
           <header className="mb-4 border-b border-[var(--simple-rule)] pb-3">
             <h1 className="text-3xl font-semibold">{v.document.title}</h1>
             <p className="mt-1 text-base text-text-faint" data-testid="one-pager-meta">{meta.join(" · ")}</p>
           </header>
-          {v.blocks.map((b) => (
+          {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             <section key={b.key} aria-label={b.title} className="mt-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
               {b.kind === "timeline" ? (
@@ -223,7 +248,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
               ) : (
                 <ul className="mt-1 space-y-1">
                   {b.lines.map((l) => (
-                    <li key={l.id} data-line={l.id} data-state={l.state} className="list-none">
+                    <li key={l.id} data-line={l.id} data-state={l.state} className="group list-none">
                       <div className={`rounded px-2 py-1 ${TINT[l.state]}`}>
                         {editing === l.id ? (
                           <form onSubmit={(e) => { e.preventDefault(); void save(l); }} className="space-y-2">
@@ -239,9 +264,9 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                             <span className="flex-1">
                               <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)} data-testid="one-pager-line-text">
                                 {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
-                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full && whole.has(l.id) ? l.full : l.text}
+                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
                               </button>
-                              {l.full && !l.metric && (
+                              {l.full && !l.metric && foldAtSentence(l.full, l.text) !== l.full && (
                                 <button
                                   type="button"
                                   className="simple-noprint ml-2 text-sm underline"
@@ -266,8 +291,14 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                               </button>
                             )}
                             {(v.can_edit || v.can_propose) && (
-                              <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}>
-                                {v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}
+                              // The owner's P6: "Edit" shows when the line is pointed at or tapped, not on every line.
+                              <button
+                                type="button"
+                                aria-label={v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}
+                                className="simple-noprint text-sm underline opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
+                                onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}
+                              >
+                                {v.can_edit ? "Edit" : "Propose wording"}
                               </button>
                             )}
                           </div>

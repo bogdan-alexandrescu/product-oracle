@@ -41,6 +41,7 @@ from oracle.simple.schemas import (
     SimpleGoalWeeks,
     SimpleHoliday,
     SimpleMilestoneTarget,
+    SimplePlanDecision,
     SimplePlanGoal,
     SimplePlanGoalTarget,
     SimplePlanMilestone,
@@ -427,6 +428,8 @@ def compute(data: dict[str, Any] | None) -> View:
             effort_weeks=m.get("effort_weeks"), done_when=list(m.get("done_when") or []),
             targets=[SimpleMilestoneTarget(**t) for t in m.get("targets") or []],
             source=data.get("source") or "prd",
+            decisions=[SimplePlanDecision(**d) for d in m.get("decisions") or []],
+            risks=list(m.get("risks") or []),
         ))  # fmt: skip
     by = {m.code: m for m in view.milestones}
     weeks = {
@@ -479,6 +482,8 @@ def compute(data: dict[str, Any] | None) -> View:
                 start_date=start, end_date=end, estimated=True,
                 effort_weeks=effort, goal=(f.get("goals") or [None])[0],
                 pm_owned=bool(f.get("pm_owned")),
+                kind=f.get("kind"), what=f.get("what"),
+                flow_steps=list(f.get("flow_steps") or []),
             ))  # fmt: skip
     totals: dict[tuple[str, str], float] = {}
     for s in view.slices:

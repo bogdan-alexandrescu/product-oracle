@@ -858,6 +858,18 @@ code .date-mark {
   --simple-edited: #fff4cc;
   --simple-proposal: #e6f0ff;
   --simple-margin: 280px;
+  /* prd-timeline: each milestone's colour (M1 blue, M2 violet, M3 amber): a bar's fill, its
+     edge and its text; the hatch of no-work weeks. */
+  --simple-m1: #dce8ff;
+  --simple-m1-edge: #3b6fd8;
+  --simple-m1-ink: #173d8a;
+  --simple-m2: #ece3ff;
+  --simple-m2-edge: #7a4fd6;
+  --simple-m2-ink: #432088;
+  --simple-m3: #fdeccb;
+  --simple-m3-edge: #c27c0e;
+  --simple-m3-ink: #6b4300;
+  --simple-hatch: rgba(120, 112, 96, 0.22);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -866,6 +878,16 @@ code .date-mark {
     --simple-rule: #283244;
     --simple-edited: #3a3214;
     --simple-proposal: #142a4a;
+    --simple-m1: #1c2f55;
+    --simple-m1-edge: #6f9bf0;
+    --simple-m1-ink: #d6e4ff;
+    --simple-m2: #2f2554;
+    --simple-m2-edge: #a585f0;
+    --simple-m2-ink: #e6dcff;
+    --simple-m3: #45330f;
+    --simple-m3-edge: #e0a53c;
+    --simple-m3-ink: #ffe3ad;
+    --simple-hatch: rgba(160, 172, 196, 0.22);
   }
 }
 :root[data-theme="dark"] {
@@ -874,6 +896,16 @@ code .date-mark {
   --simple-rule: #283244;
   --simple-edited: #3a3214;
   --simple-proposal: #142a4a;
+  --simple-m1: #1c2f55;
+  --simple-m1-edge: #6f9bf0;
+  --simple-m1-ink: #d6e4ff;
+  --simple-m2: #2f2554;
+  --simple-m2-edge: #a585f0;
+  --simple-m2-ink: #e6dcff;
+  --simple-m3: #45330f;
+  --simple-m3-edge: #e0a53c;
+  --simple-m3-ink: #ffe3ad;
+  --simple-hatch: rgba(160, 172, 196, 0.22);
 }
 @media print {
   .simple-noprint { display: none !important; }

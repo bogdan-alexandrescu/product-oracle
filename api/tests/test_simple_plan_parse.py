@@ -19,6 +19,10 @@ Test cards (protects / fails_when / no_claim):
   second goal; no_claim=the web's charts.
 - test_undated_milestones_say_so: protects=a milestones table with no dates gives an
   undated plan that says so plainly; fails_when=dates are invented; no_claim=the job.
+- test_part_fields_pass_through: protects=prd-timeline's milestone part reads, when the
+  plan's data gives them, each slice's kind, "what it does" and flow steps, and each
+  milestone's open decisions and risks; a plan without them reads empty; fails_when=one of
+  them is dropped on the way to the API; no_claim=how the reader finds them in a PRD.
 """
 
 from datetime import date
@@ -109,3 +113,45 @@ def test_undated_milestones_say_so():
     assert all(m.start_date is None and m.end_date is None for m in view.milestones)
     assert view.dated is False and view.span is None
     assert view.message == "This PRD's milestones have no dates."
+
+
+def test_part_fields_pass_through():
+    data = {
+        "milestones": [
+            {
+                "code": "M1",
+                "name": "Prove it",
+                "start": "2026-11-02",
+                "end": "2026-11-27",
+                "decisions": [{"code": "Q7", "title": "Legal input"}],
+                "risks": ["Pilot teams may not finish setup"],
+            },
+            {"code": "M2", "name": "Scale volume", "start": "2026-11-30", "end": "2026-12-25"},
+        ],
+        "features": [
+            {
+                "code": "F-01",
+                "name": "Setup checklist",
+                "milestones": ["M1"],
+                "effort": [2],
+                "kind": "New for people",
+                "what": "Shows each setup step and ticks it off",
+                "flow_steps": ["Open setup", "Tick a step"],
+            },
+            {"code": "F-02", "name": "Bulk import", "milestones": ["M2"], "effort": [2]},
+        ],
+        "goals": ["Activation"],
+    }
+    view = plan.compute(data)
+    m1, m2 = view.milestones
+    assert [(d.code, d.title) for d in m1.decisions] == [("Q7", "Legal input")]
+    assert m1.risks == ["Pilot teams may not finish setup"]
+    assert m2.decisions == [] and m2.risks == []
+    f1, f2 = view.slices
+    assert (f1.kind, f1.what, f1.flow_steps) == (
+        "New for people",
+        "Shows each setup step and ticks it off",
+        ["Open setup", "Tick a step"],
+    )
+    assert (f2.kind, f2.what, f2.flow_steps) == (None, None, [])
+    assert all(g.measured is None and g.on_track is None for g in view.goals)

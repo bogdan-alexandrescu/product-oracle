@@ -123,6 +123,11 @@ class SimpleSlice(BaseModel):
     # The goal it moves most: the first in the PRD's goals column for it.
     goal: str | None = None
     pm_owned: bool = False
+    # prd-timeline: what kind of work it is ("New for people", "Behind the scenes"), a plain
+    # one-line "what it does" and its flow's step names, when the PRD's features list says.
+    kind: str | None = None
+    what: str | None = None
+    flow_steps: list[str] = []
 
 
 class SimplePlanSpan(BaseModel):
@@ -147,6 +152,16 @@ class SimplePlanMilestone(BaseModel):
     feature_codes: list[str] = []
     # prd: the PRD's own tables; oracle: Oracle's reading of its text.
     source: Literal["prd", "oracle"] = "prd"
+    # prd-timeline: its open decisions and its risks in plain words, as the PRD states them.
+    decisions: list["SimplePlanDecision"] = []
+    risks: list[str] = []
+
+
+class SimplePlanDecision(BaseModel):
+    """prd-timeline: an open decision a milestone waits on ("Q7 Legal input")."""
+
+    code: str
+    title: str
 
 
 class SimplePlanGoalTarget(BaseModel):
@@ -157,6 +172,10 @@ class SimplePlanGoalTarget(BaseModel):
 class SimplePlanGoal(BaseModel):
     name: str
     targets: list[SimplePlanGoalTarget] = []
+    # prd-timeline: what is measured now (null: nothing measures it yet) and whether that is
+    # on track for the current milestone's target.
+    measured: str | None = None
+    on_track: bool | None = None
 
 
 class SimpleGoalWeeks(BaseModel):

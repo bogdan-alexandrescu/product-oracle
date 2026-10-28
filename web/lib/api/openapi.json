@@ -115209,6 +115209,25 @@
         ],
         "title": "SimplePhase"
       },
+      "SimplePlanDecision": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "title"
+        ],
+        "title": "SimplePlanDecision",
+        "description": "prd-timeline: an open decision a milestone waits on (\"Q7 Legal input\")."
+      },
       "SimplePlanGoal": {
         "properties": {
           "name": {
@@ -115222,6 +115241,28 @@
             "type": "array",
             "title": "Targets",
             "default": []
+          },
+          "measured": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured"
+          },
+          "on_track": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Track"
           }
         },
         "type": "object",
@@ -115330,6 +115371,22 @@
             ],
             "title": "Source",
             "default": "prd"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Risks",
+            "default": []
           }
         },
         "type": "object",
@@ -116825,6 +116882,36 @@
             "type": "boolean",
             "title": "Pm Owned",
             "default": false
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "what": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What"
+          },
+          "flow_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flow Steps",
+            "default": []
           }
         },
         "type": "object",

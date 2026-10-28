@@ -25,24 +25,57 @@ const addDays = (day: string, n: number): string => iso(ms(day) + n * DAY);
 const minOf = (xs: string[]) => xs.reduce((a, b) => (b < a ? b : a));
 const maxOf = (xs: string[]) => xs.reduce((a, b) => (b > a ? b : a));
 
-type Milestone = { code: string; name: string; start: string; end: string; capacity: number; done_when: string[] };
+type Milestone = { code: string; name: string; start: string; end: string; capacity: number; done_when: string[]; decisions?: { code: string; title: string }[]; risks?: string[] };
 const MILESTONES: Milestone[] = [
-  { code: "M1", name: "Prove it", start: "2026-11-02", end: "2026-11-27", capacity: 16, done_when: ["Ten pilot teams finish setup in a day", "Setup errors are alerted within five minutes"] },
-  { code: "M2", name: "Scale volume", start: "2026-11-30", end: "2026-12-25", capacity: 16, done_when: ["Bulk import handles 10,000 rows", "Invites come back from 40% of new admins"] },
-  { code: "M3", name: "Open to all", start: "2026-12-28", end: "2027-02-12", capacity: 24, done_when: ["Anyone can sign up without a sales call", "Annual billing is live"] },
+  { code: "M1", name: "Prove it", start: "2026-11-02", end: "2026-11-27", capacity: 16, done_when: ["Ten pilot teams finish setup in a day", "Setup errors are alerted within five minutes"], decisions: [{ code: "Q3", title: "Which sample data to ship" }], risks: ["Pilot teams may not have time to try setup before December"] },
+  { code: "M2", name: "Scale volume", start: "2026-11-30", end: "2026-12-25", capacity: 16, done_when: ["Bulk import handles 10,000 rows", "Invites come back from 40% of new admins"], decisions: [{ code: "Q7", title: "Legal input on invite emails" }, { code: "Q8", title: "The bulk import row limit" }], risks: ["Large imports could slow setup for everyone", "Checkout needs the payment provider's review first"] },
+  { code: "M3", name: "Open to all", start: "2026-12-28", end: "2027-02-12", capacity: 24, done_when: ["Anyone can sign up without a sales call", "Annual billing is live"], risks: ["The year-end break leaves seven weeks for the most work"] },
 ];
 
 const HOLIDAYS = [{ start: "2026-12-28", end: "2027-01-01", label: "Year-end break" }];
 
-const GOALS: { name: string; targets: [string, string][] }[] = [
-  { name: "Reliability", targets: [["M1", "99.5% setup success"], ["M2", "99.7% setup success"], ["M3", "99.9% setup success"]] },
-  { name: "Growth", targets: [["M1", "100 weekly active teams"], ["M2", "250 weekly active teams"], ["M3", "600 weekly active teams"]] },
+/** What each goal measures now (null: nothing counts it yet), and whether that is on track. */
+const GOALS: { name: string; targets: [string, string][]; measured?: string; on_track?: boolean }[] = [
+  { name: "Reliability", measured: "99.6% setup success", on_track: true, targets: [["M1", "99.5% setup success"], ["M2", "99.7% setup success"], ["M3", "99.9% setup success"]] },
+  { name: "Growth", measured: "40 weekly active teams", on_track: false, targets: [["M1", "100 weekly active teams"], ["M2", "250 weekly active teams"], ["M3", "600 weekly active teams"]] },
   { name: "Activation", targets: [["M1", "50% finish setup in a day"], ["M2", "60% finish setup in a day"], ["M3", "65% finish setup in a day"]] },
   { name: "Revenue", targets: [["M1", "$0 (no paid plan yet)"], ["M2", "$5,000 monthly recurring revenue"], ["M3", "$20,000 monthly recurring revenue"]] },
 ];
 
 /** [feature code, plain name, goal, then per milestone: [milestone, engineer-weeks (null: PM-owned), week offset in it]]. */
 type Feature = [string, string, string, [string, number | null, number][]];
+
+/** What each feature does, in one plain line, and its kind (PM-owned work is its own kind). */
+const WHAT: Record<string, [string, string]> = {
+  "F-01": ["New for people", "Shows each setup step and ticks it off when done"],
+  "F-02": ["New for people", "Fills a new workspace with sample projects to try"],
+  "F-03": ["Behind the scenes", "Tells the team within minutes when a setup fails"],
+  "F-04": ["PM-owned", "Rewrites the pricing page in plain words"],
+  "F-05": ["New for people", "Lets an admin invite teammates from setup"],
+  "F-06": ["Behind the scenes", "Sends a weekly report of setup errors"],
+  "F-07": ["New for people", "Imports people and projects from a spreadsheet"],
+  "F-08": ["New for people", "Shows a team how much it used the product this week"],
+  "F-09": ["Behind the scenes", "Retries failed setup steps on its own"],
+  "F-10": ["PM-owned", "Announces the new setup by email"],
+  "F-11": ["New for people", "Lets a team pay by card without talking to sales"],
+  "F-12": ["New for people", "Gives each admin a link that brings in new teams"],
+  "F-13": ["New for people", "Lets anyone sign up from the website"],
+  "F-14": ["Behind the scenes", "Keeps each plan within its limits"],
+  "F-15": ["Behind the scenes", "Shows whether setup is up or down"],
+  "F-16": ["New for people", "Sends new admins three short setup emails"],
+  "F-17": ["New for people", "Lets a team pay once a year"],
+  "F-18": ["PM-owned", "Answers the common pricing questions on one page"],
+  "F-19": ["Behind the scenes", "Proves setup holds ten times today's load"],
+  "F-20": ["New for people", "Finds help articles as you type"],
+};
+/** The flows drawn so far (step names), for the thumbnails. */
+const FLOWS: Record<string, string[]> = {
+  "F-01": ["Open setup", "Pick a step", "Finish it", "See it ticked"],
+  "F-05": ["Open invites", "Type emails", "Send"],
+  "F-07": ["Pick a file", "Match columns", "Import"],
+  "F-11": ["Pick a plan", "Enter a card", "Pay"],
+  "F-13": ["Open signup", "Enter email", "Confirm"],
+};
 const FEATURES: Feature[] = [
   ["F-01", "Setup checklist", "Activation", [["M1", 3, 0]]],
   ["F-02", "Sample data import", "Activation", [["M1", 3, 1]]],
@@ -95,6 +128,9 @@ export const planSlices = (): Slice[] =>
         effort_weeks: weeks,
         goal,
         pm_owned: weeks === null,
+        kind: WHAT[code]?.[0] ?? null,
+        what: WHAT[code]?.[1] ?? null,
+        flow_steps: [...(FLOWS[code] ?? [])],
       };
     }),
   );
@@ -117,6 +153,8 @@ export const planMilestones = () =>
     effort_weeks: m.capacity,
     done_when: [...m.done_when],
     targets: GOALS.flatMap((g) => g.targets.filter(([c]) => c === m.code).map(([, target]) => ({ goal: g.name, target }))),
+    decisions: (m.decisions ?? []).map((d) => ({ ...d })),
+    risks: [...(m.risks ?? [])],
   }));
 
 function json(status: number, body: unknown): Response {
@@ -127,6 +165,8 @@ export interface PlanDb {
   /** When the PRD's plan was last read (ISO time). */
   read_at: string;
   version: number;
+  /** prd-timeline ("simple-plan-undated"): the PRD's milestones have no dates. */
+  undated?: boolean;
 }
 
 export const seedPlan = (): PlanDb => ({ read_at: "2026-10-20T15:05:00Z", version: 3 });
@@ -135,6 +175,10 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
   const can = role === "owner";
   if (!plan) {
     return { prd, version: null, status: "none", source: null, dated: false, message: "This PRD has no plan yet.", milestones: [], slices: [], goals: [], goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: null };
+  }
+  if (plan.undated) {
+    const ms = planMilestones().map((m) => ({ ...m, start_date: null, end_date: null, planned_weeks: 0, feature_codes: [], source: "prd" as const }));
+    return { prd, version: plan.version, status: "ready", source: "prd", dated: false, message: "This PRD's milestones have no dates.", milestones: ms, slices: [], goals: GOALS.map((g) => ({ name: g.name, targets: g.targets.map(([milestone, target]) => ({ milestone, target })), measured: null, on_track: null })), goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: plan.read_at };
   }
   const slices = planSlices();
   const weeks = new Map<string, number>();
@@ -157,7 +201,7 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
       source: "prd" as const,
     })),
     slices,
-    goals: GOALS.map((g) => ({ name: g.name, targets: g.targets.map(([milestone, target]) => ({ milestone, target })) })),
+    goals: GOALS.map((g) => ({ name: g.name, targets: g.targets.map(([milestone, target]) => ({ milestone, target })), measured: g.measured ?? null, on_track: g.on_track ?? null })),
     goal_weeks: GOALS.flatMap((g) => MILESTONES.flatMap((m) => {
       const w = weeks.get(`${g.name}|${m.code}`);
       return w ? [{ goal: g.name, milestone: m.code, weeks: w }] : [];
