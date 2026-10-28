@@ -410,7 +410,8 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
     .filter((o, i, xs) => !!only || xs.findIndex((x) => x.ritual_id === o.ritual_id) === i);
   const rows: Schemas["SimpleUpcomingMeeting"][] = open.map((o) => ({
     occurrence_id: o.id, ritual_id: o.ritual_id, ritual_title: o.ritual_title, due_at: o.due_at, ends_at: o.ends_at, length_min: o.length_min,
-    attendees: [...new Set([...o.attendee_ids, ...held(o.ritual_id)])].map((i) => ref(ctx, i)), meeting_id: db.meetings.find((m) => m.occurrence_id === o.id)?.id ?? null,
+    // As the API: the ritual's owner and attendees as they are now, not as the occurrence was made.
+    attendees: [...new Set([...(active.has(o.ritual_id) ? [active.get(o.ritual_id)!.owner_id, ...active.get(o.ritual_id)!.attendee_ids] : o.attendee_ids), ...held(o.ritual_id)])].map((i) => ref(ctx, i)), meeting_id: db.meetings.find((m) => m.occurrence_id === o.id)?.id ?? null,
     pre_read_ready: !!o.ready, can_start: mayStartRitual(ctx, o.ritual_id),
   }));
   if (only) return rows;
