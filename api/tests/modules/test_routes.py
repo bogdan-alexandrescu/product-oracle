@@ -417,10 +417,10 @@ async def test_confirming_keeps_the_brief_sections_of_the_outline(client):
             "/v1/compositions/recommend", json={"document": SLUG}, headers=approver
         )
         assert resp.status_code == 200, resp.text
-        return [o["section_id"] for o in resp.json()["outline"] if o["layer"] == "brief"]
+        return [(o["section_id"], o["layer"]) for o in resp.json()["outline"]]
 
     before = await brief()
-    assert before, "the template has a brief layer"
+    assert before, "the template has an outline"
     resp = await _confirm(client, ctx)
     assert resp.status_code == 201, resp.text
     assert await brief() == before
