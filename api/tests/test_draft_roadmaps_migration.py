@@ -38,7 +38,7 @@ def scratch_db():
 def test_0030_chains_on_the_single_head():
     script = ScriptDirectory.from_config(base._cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0089_ritual_attendees_edited_at"]
+    assert script.get_heads() == ["0090_simple_prd_plans"]
 
 
 def _seed() -> None:

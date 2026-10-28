@@ -87,11 +87,110 @@ class SimpleItemMilestone(BaseModel):
     # from: the plan strip groups its items by it, whatever their own texts say.
     record_id: uuid.UUID | None = None
     record_name: str | None = None
+    # plan-model: the milestone's start when the PRD's plan dates it (``date`` its end).
+    start_date: dt.date | None = None
 
 
 class SimpleOwnerRef(BaseModel):
     id: uuid.UUID
     name: str
+
+
+class SimpleMilestoneTarget(BaseModel):
+    """plan-model: one goal's target at a milestone, in words with its unit."""
+
+    goal: str
+    target: str
+
+
+class SimpleSlice(BaseModel):
+    """plan-model: the part of a roadmap item's feature one milestone builds (F-05a / F-05b;
+    an item in one milestone has one slice, F-05). Its dates are Oracle's placement inside
+    the milestone by the PRD's order words (``estimated``)."""
+
+    code: str
+    feature_code: str
+    name: str
+    milestone: str
+    milestone_name: str
+    milestone_start: dt.date | None = None
+    milestone_end: dt.date | None = None
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    estimated: bool = True
+    # Null for PM-owned work (no engineering).
+    effort_weeks: float | None = None
+    # The goal it moves most: the first in the PRD's goals column for it.
+    goal: str | None = None
+    pm_owned: bool = False
+
+
+class SimplePlanSpan(BaseModel):
+    """plan-model: first milestone start to last milestone end, "2 Nov - 12 Feb"."""
+
+    start: dt.date
+    end: dt.date
+    label: str
+
+
+class SimplePlanMilestone(BaseModel):
+    code: str
+    name: str
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    # Its capacity, as the PRD gives it.
+    effort_weeks: float | None = None
+    # The slices' engineer-weeks in it.
+    planned_weeks: float = 0
+    done_when: list[str] = []
+    targets: list[SimpleMilestoneTarget] = []
+    feature_codes: list[str] = []
+    # prd: the PRD's own tables; oracle: Oracle's reading of its text.
+    source: Literal["prd", "oracle"] = "prd"
+
+
+class SimplePlanGoalTarget(BaseModel):
+    milestone: str
+    target: str
+
+
+class SimplePlanGoal(BaseModel):
+    name: str
+    targets: list[SimplePlanGoalTarget] = []
+
+
+class SimpleGoalWeeks(BaseModel):
+    """Engineer-weeks per goal per milestone: each slice once, under its feature's first
+    goal."""
+
+    goal: str
+    milestone: str
+    weeks: float
+
+
+class SimpleHoliday(BaseModel):
+    start: dt.date
+    end: dt.date
+    label: str | None = None
+
+
+class SimplePlanOut(BaseModel):
+    prd: "SimpleDocRef"
+    # The approved version the plan is read from.
+    version: int | None = None
+    # none: no approved version or no plan in it; reading: Oracle's job is reading it.
+    status: Literal["ready", "reading", "failed", "none"]
+    source: Literal["prd", "oracle"] | None = None
+    dated: bool = False
+    message: str | None = None
+    milestones: list[SimplePlanMilestone] = []
+    slices: list[SimpleSlice] = []
+    goals: list[SimplePlanGoal] = []
+    goal_weeks: list[SimpleGoalWeeks] = []
+    span: SimplePlanSpan | None = None
+    holidays: list[SimpleHoliday] = []
+    can_read_again: bool = False
+    read_at: dt.datetime | None = None
 
 
 class SimpleOpenDecision(BaseModel):
@@ -175,6 +274,10 @@ class SimpleRoadmapItem(BaseModel):
 
     # S8: the decided decisions that changed the item (newest first; the Decisions page).
     decided_in: list[SimpleOpenDecision] = []
+    # plan-model: one slice per milestone its feature spans in the PRD's plan, and those
+    # milestones' codes.
+    slices: list["SimpleSlice"] = []
+    milestones: list[str] = []
 
 
 class SimpleMatch(BaseModel):
@@ -205,6 +308,12 @@ class SimpleMilestone(BaseModel):
     horizon: Literal["now", "next", "later"]
     status: Literal["planned", "done", "dropped"]
     item_ids: list[uuid.UUID]
+    # plan-model: from the PRD's plan, the milestone of the same code (M1, M2, ...).
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    effort_weeks: float | None = None
+    done_when: list[str] = []
+    targets: list["SimpleMilestoneTarget"] = []
 
 
 class SimpleKeyDate(BaseModel):
@@ -249,6 +358,8 @@ class SimpleRoadmapOut(BaseModel):
     # there), and the one the read is narrowed to (``roadmap``), if any.
     roadmaps: list[SimpleKeyDateRoadmap] = []
     roadmap: "SimpleDocRef | None" = None
+    # plan-model: the shown PRDs' plan span ("this quarter"); null with no plan.
+    span: "SimplePlanSpan | None" = None
 
 
 class DateSuggestionEdit(BaseModel):

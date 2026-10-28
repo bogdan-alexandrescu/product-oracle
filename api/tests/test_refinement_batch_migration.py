@@ -60,7 +60,7 @@ def test_chains_on_the_roadmap_head():
     # 0017_citation_source_oracle chains on it, then 0018_runtime_features,
     # 0019_citation_confidence, the intake lane's 0014_intake and the PRD review chain;
     # one head.
-    assert script.get_heads() == ["0089_ritual_attendees_edited_at"]
+    assert script.get_heads() == ["0090_simple_prd_plans"]
     assert script.get_revision("0017_citation_source_oracle").down_revision == REVISION
     assert script.get_revision("0014_intake").down_revision == "0019_citation_confidence"
     assert script.get_revision("0014_review").down_revision == "0018_source_unavailable_items"
