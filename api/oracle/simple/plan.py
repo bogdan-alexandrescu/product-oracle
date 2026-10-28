@@ -166,7 +166,7 @@ def _part_col(h: list[str]) -> int | None:
         return 0
     if _col(h, "feature") is not None:
         return None
-    return _col(h, "risk")
+    return _col(h, "question", "open question", "decision", "risk")
 
 
 def _milestones(header: list[str], rows: list[list[str]], ref: date) -> list[dict[str, Any]]:
