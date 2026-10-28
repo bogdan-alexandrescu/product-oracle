@@ -86,7 +86,7 @@ for (const [where, use] of [
         await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("estimated");
         await expect(card(page, "setup-ideas")).toHaveAttribute("data-kind", "draft");
         await expect(card(page, "alert-digest")).toHaveAttribute("data-broken", "true");
-        await expect(card(page, "alert-digest").getByTestId("board-broken")).toContainText("it depends on ends");
+        await expect(card(page, "alert-digest").getByTestId("board-broken")).toContainText("which it depends on, ends");
         await expect(column(page, "later").getByTestId("board-below")).toContainText("In-app tour");
         // A window or span outside this year names its years.
         await expect(column(page, "later").locator("header")).toContainText(/, 20\d\d – .*, 20\d\d/);

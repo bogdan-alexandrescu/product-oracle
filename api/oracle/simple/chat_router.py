@@ -52,7 +52,7 @@ async def get_simple_chat(principal: Reader, db: TenantDB) -> ChatThreadOut:
 async def post_simple_chat(body: ChatIn, principal: Reader, db: TenantDB) -> ChatThreadOut:
     """Ask Oracle in plain words; a change request gets change cards (nothing applies
     until Apply), an ambiguous one a question, a question about the plan an answer."""
-    return await _run(db, chat.post(db, principal, body.text))
+    return await _run(db, chat.post(db, principal, body.text, only_understood=body.only_understood))
 
 
 @router.get("/meetings/{meeting_id}/chat", response_model=ChatThreadOut,

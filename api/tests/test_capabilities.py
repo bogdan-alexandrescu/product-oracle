@@ -413,6 +413,7 @@ SIMPLE_PER_ITEM = {
     "comment_in_simple_meeting": None,
     "end_simple_meeting": "owner",
     "edit_simple_meeting_minutes": "owner",
+    "redraft_simple_meeting_minutes": "owner",
     "send_simple_meeting_minutes": "owner",
 }
 

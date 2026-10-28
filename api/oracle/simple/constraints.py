@@ -3,7 +3,8 @@
 one-click fixes S3 applies.
 
 - ``dependency_order``: a dependency ends on or after the day the item starts (two window
-  estimates never conflict). Fixes: shift_dependents, move_dependency, accept_risk.
+  estimates never conflict); the line names the item and its dependency.
+  Fixes: shift_dependents, move_dependency, accept_risk.
 - ``blocker_date``: an open blocker of the item is expected after the item starts.
   Fixes: accept_risk.
 - ``outside_milestone``: the bar ends after its milestone's date. Fixes: accept_risk.
@@ -78,8 +79,8 @@ def _t(title: str) -> str:
     return title if len(title) <= TITLE else title[: TITLE - 1] + "…"
 
 
-def _day(d: date) -> str:
-    return f"{d:%b} {d.day}"
+def _day(d: date, year: bool = False) -> str:
+    return f"{d:%b} {d.day}" + (f" {d.year}" if year else "")
 
 
 def _risk(node: Node, kind: str, subject: str | None) -> dict[str, Any] | None:
@@ -121,21 +122,27 @@ def check(nodes: list[Node]) -> dict[str, list[Flag]]:
             if dep.end.estimated and n.start.estimated:
                 continue
             if dep.end.date >= n.start.date:
+                # Named both ways: a change card lists the dependents' lines under the moved
+                # item, so "Starts ..." alone read as the moved item's own start.
+                years = n.start.date.year != dep.end.date.year
                 reason = (
-                    f"Starts {_day(n.start.date)}, but '{_t(dep.title)}' it depends on "
-                    f"ends {_day(dep.end.date)}"
+                    f"'{_t(n.title)}' starts {_day(n.start.date, years)}, but "
+                    f"'{_t(dep.title)}', which it depends on, ends {_day(dep.end.date, years)}"
                 )
                 flags.append(_flag(n, "dependency_order", reason, dep.id))
         for b in n.blockers:
             if b.open and b.expected is not None and b.expected > n.start.date:
                 reason = (
-                    f"Starts {_day(n.start.date)}, but blocker '{_t(b.title)}' is expected "
-                    f"to clear {_day(b.expected)}"
+                    f"'{_t(n.title)}' starts {_day(n.start.date)}, but blocker '{_t(b.title)}' "
+                    f"is expected to clear {_day(b.expected)}"
                 )
                 flags.append(_flag(n, "blocker_date", reason, b.id))
         if n.milestone is not None and n.end.date > n.milestone[1]:
             name, day = n.milestone
-            reason = f"Ends {_day(n.end.date)}, after its milestone '{_t(name)}' ({_day(day)})"
+            reason = (
+                f"'{_t(n.title)}' ends {_day(n.end.date)}, after its milestone '{_t(name)}' "
+                f"({_day(day)})"
+            )
             flags.append(_flag(n, "outside_milestone", reason, name))
         if n.status == "cut":
             live = [d for d in dependents[n.id] if d.status != "cut"]

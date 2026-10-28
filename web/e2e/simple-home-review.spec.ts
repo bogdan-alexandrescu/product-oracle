@@ -13,7 +13,7 @@ import { ADMIN } from "./helpers";
  * "Propose:"), others' rows name who decides ("Avery Lane decides") and the proposal's toast
  * too; a decider with proposals on their items still sees their own proposals waiting; a
  * commenter's goal tiles count no broken link as needing them; people by display name;
- * Start meeting and Open pre-read stay in Simple; fails_when = the fixes switch on the owner
+ * Start meeting stays in Simple (the Meetings page, its start sheet open); fails_when = the fixes switch on the owner
  * role, the row says "The decider decides", the own proposals list hides behind the items'
  * list, or a link leaves /simple; no_claim = the real API (api/tests/test_simple_review_fixes.py
  * test_roadmap_items_say_who_decides), S8's meeting screen (a placeholder until then).
@@ -67,15 +67,14 @@ test("a commenter's goal tiles count no broken link as needing them", async ({ p
   await expect(page.getByTestId("home-goal-need")).toHaveCount(0);
 });
 
-test("people by name; Start meeting and Open pre-read stay in Simple", async ({ page }) => {
+test("people by name; Start meeting stays in Simple and opens the start sheet", async ({ page }) => {
   await signIn(page, "simple-home", ADMIN.email);
   const next = page.getByTestId("home-meeting-next");
   await expect(next).toContainText("Admin");
   await expect(next).not.toContainText(/\badmin\b/);
   const start = next.getByRole("link", { name: "Start meeting" });
-  await expect(start).toHaveAttribute("href", /^\/simple\/meetings\/[^/?#]+(\?start=1)?$/);
-  const preRead = next.getByRole("link", { name: "Open pre-read" });
-  if (await preRead.count()) await expect(preRead).toHaveAttribute("href", /^\/simple\//);
+  await expect(start).toHaveAttribute("href", /^\/simple\/meetings\?start=[0-9a-f-]+$/);
   await start.click();
-  await expect(page).toHaveURL(/\/simple\/meetings\/[^/?#]+/);
+  await expect(page).toHaveURL(/\/simple\/meetings\?start=/);
+  await expect(page.getByRole("dialog", { name: "Start a review" })).toBeVisible();
 });

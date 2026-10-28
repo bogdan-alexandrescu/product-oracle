@@ -10,8 +10,17 @@ The span: from the month of the earliest item start (or milestone date) to the m
 latest milestone date (with no dated milestone, the latest committed end; with none
 committed, the latest end), at most :data:`MAX_MONTHS` months (a longer span starts the
 month before today's, when that is later).
+
+Rows group by the milestone itself, not its text (CLD's production walk, 2026-10-27): real
+items carry notes after the milestone ("M1 · Measure it (needs the export); Digest in M2"),
+so the key is the milestone record the item links (a track milestone naming it), else the
+milestone's code (M1, M2, ...), else the text before the first " (" or ";". A row reads
+"<code> · <milestone name>" (the record's name, else the name most of its items give,
+a named label before a bare code), dated by the latest of its items' milestone dates.
 """
 
+import re
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
 
@@ -28,6 +37,27 @@ class PlanItem:
     estimated: bool
     milestone: str | None = None
     milestone_date: date | None = None
+    # The milestone record the item links (a track milestone's id and name), when any.
+    record_id: str | None = None
+    record_name: str | None = None
+
+
+# M1..M99: "M1.5 · X" and "M2026 roadmap" are texts, not codes.
+_CODE = re.compile(r"^(M\d{1,2})(?![\w.])\s*[·:\-–—]?\s*(.*)$", re.IGNORECASE)
+
+
+def milestone_of(text: str | None) -> tuple[str, str]:
+    """A milestone text's group key and its label: "M1 · Measure it (a note); more" ->
+    ("M1", "M1 · Measure it"); "Beta (two teams)" -> ("Beta", "Beta"); empty -> Milestone."""
+    head = (text or "").strip()
+    for sep in (" (", ";"):
+        head = head.split(sep, 1)[0]
+    head = " ".join(head.split())
+    m = _CODE.match(head)
+    if m:
+        code, name = m.group(1).upper(), m.group(2).strip()
+        return code, f"{code} · {name}" if name else code
+    return (head, head) if head else ("Milestone", "Milestone")
 
 
 def _month(d: date) -> date:
@@ -43,13 +73,24 @@ def strip(items: list[PlanItem], today: date) -> SimplePlanStrip | None:
     """The strip of a PRD's (uncut) items; None with none."""
     if not items:
         return None
-    groups: dict[tuple[str, date | None], list[PlanItem]] = {}
+    keyed: dict[str, list[tuple[str, PlanItem]]] = {}
     loose: list[PlanItem] = []
     for i in items:
-        if i.milestone or i.milestone_date:
-            groups.setdefault((i.milestone or "Milestone", i.milestone_date), []).append(i)
+        if i.record_id:
+            key, label = f"record:{i.record_id}", milestone_of(i.record_name)[1]
+            keyed.setdefault(key, []).append((label, i))
+        elif i.milestone or i.milestone_date:
+            key, label = milestone_of(i.milestone)
+            keyed.setdefault(key, []).append((label, i))
         else:
             loose.append(i)
+    groups: dict[tuple[str, date | None], list[PlanItem]] = {}
+    for key, of in keyed.items():
+        labels = Counter(label for label, _ in of)
+        # A named label ("M4 · Rollout") before the bare code ("M4"), then the commonest.
+        name = min(labels, key=lambda x: (x == key, -labels[x], x))
+        when = max((i.milestone_date for _, i in of if i.milestone_date), default=None)
+        groups[(name, when)] = [i for _, i in of]
     dated = [d for _, d in groups if d is not None]
     committed = [i.end for i in items if not i.estimated]
     first = min([i.start for i in items] + dated)

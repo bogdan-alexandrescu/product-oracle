@@ -43,10 +43,18 @@ const TINT: Record<Line["state"], string> = {
  * API's can_* fields. Inside a review meeting (S8, `sessionId`), its line edits and decisions
  * go through the meeting's session and become the meeting's decisions.
  */
-export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId?: string; onChanged?: () => void }) {
+export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; sessionId?: string; refresh?: string; onChanged?: () => void }) {
   const q = useQuery(`simple-one-pager|${doc}`, () =>
     unwrap(api.GET("/v1/simple/one-pagers/{doc}", { params: { path: { doc } } })),
   );
+  // A meeting's screen: read again when the meeting moves on (Approve publishes the draft).
+  const seenRefresh = useRef(refresh);
+  const reloadPage = q.reload;
+  useEffect(() => {
+    if (seenRefresh.current === refresh) return;
+    seenRefresh.current = refresh;
+    void reloadPage();
+  }, [refresh, reloadPage]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
@@ -54,6 +62,8 @@ export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId
   const [open, setOpen] = useState<string | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
   const [wide, setWide] = useState<string | null>(null);
+  // Lines shortened with "…" shown whole, in place (CLD's production walk, 2026-10-27).
+  const [whole, setWhole] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -217,10 +227,23 @@ export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId
                           </form>
                         ) : (
                           <div className="flex items-start gap-2">
-                            <button type="button" className="flex-1 text-left" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)}>
-                              {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
-                              {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.text}
-                            </button>
+                            <span className="flex-1">
+                              <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)} data-testid="one-pager-line-text">
+                                {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
+                                {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full && whole.has(l.id) ? l.full : l.text}
+                              </button>
+                              {l.full && !l.metric && (
+                                <button
+                                  type="button"
+                                  className="simple-noprint ml-2 text-sm underline"
+                                  aria-expanded={whole.has(l.id)}
+                                  aria-label={`${whole.has(l.id) ? "Show less of" : "Show all of"} line ${numbers.get(l.id)}`}
+                                  onClick={() => setWhole((w) => { const n = new Set(w); if (n.has(l.id)) n.delete(l.id); else n.add(l.id); return n; })}
+                                >
+                                  {whole.has(l.id) ? "Show less" : "Show all"}
+                                </button>
+                              )}
+                            </span>
                             {l.flow_subject && (
                               <button
                                 type="button"
@@ -234,7 +257,7 @@ export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId
                               </button>
                             )}
                             {(v.can_edit || v.can_propose) && (
-                              <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.text); }}>
+                              <button type="button" className="simple-noprint text-sm underline" onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}>
                                 {v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}
                               </button>
                             )}
@@ -275,7 +298,7 @@ export function OnePager({ doc, sessionId, onChanged }: { doc: string; sessionId
                       <div className="md:hidden">{notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, no: numbers.get(l.id)!, busy, diff, setDiff, wide, setWide, undo, decide }} />)}</div>
                     </li>
                   ))}
-                  {b.lines.length === 0 && <li className="list-none text-base text-text-faint">—</li>}
+                  {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">Not written yet</li>}
                 </ul>
               )}
             </section>

@@ -11,10 +11,11 @@ Test cards (protects / fails_when / no_claim):
   window estimates never conflict; fails_when=every Now item depending on another Now
   item is red; no_claim=none.
 - test_blocker_date: protects=an open blocker expected after the start flags it
-  [accept_risk]; a resolved one or one expected before does not; fails_when=either way;
+  [accept_risk], the line naming the item first; a resolved one or one expected before
+  does not; fails_when=either way;
   no_claim=how a blocker's expected date is recorded (the API test seeds it).
 - test_outside_milestone: protects=a bar ending after its milestone's date flags it
-  [accept_risk]; fails_when=either way; no_claim=none.
+  [accept_risk], the line naming the item first; fails_when=either way; no_claim=none.
 - test_cut_with_dependents: protects=a cut item others depend on is flagged
   [accept_risk], naming them; fails_when=either way; no_claim=none.
 - test_draft_without_owner: protects=a draft item without an owner is flagged with no
@@ -74,6 +75,8 @@ def test_blocker_date():
     (flag,) = constraints.check([item])["import"]
     assert (flag.kind, flag.fixes, flag.subject) == ("blocker_date", ["accept_risk"], "b1")
     assert "Rate limit" in flag.reason and "Nov 20" in flag.reason
+    # Named: a change card lists a dependent's lines under the moved item.
+    assert flag.reason.startswith("'Import' starts Nov 1, but blocker 'Rate limit'")
 
 
 def test_outside_milestone():
@@ -83,6 +86,7 @@ def test_outside_milestone():
     (flag,) = out["import"]
     assert (flag.kind, flag.fixes) == ("outside_milestone", ["accept_risk"])
     assert "Beta" in flag.reason and "Nov 15" in flag.reason
+    assert flag.reason == "'Import' ends Dec 1, after its milestone 'Beta' (Nov 15)"
     assert out["export"] == []
 
 

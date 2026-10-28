@@ -83,6 +83,10 @@ class SimpleItemMilestone(BaseModel):
     date: dt.date | None = None
     # item: the item's own milestone; track: a track milestone naming the item.
     source: Literal["item", "track"]
+    # The track milestone record naming the item, whichever source the name and date are
+    # from: the plan strip groups its items by it, whatever their own texts say.
+    record_id: uuid.UUID | None = None
+    record_name: str | None = None
 
 
 class SimpleOwnerRef(BaseModel):
@@ -769,6 +773,9 @@ class OnePagerLine(BaseModel):
     # Stable within a version's one-pager: "<block>-<n>".
     id: str
     text: str
+    # The whole text when ``text`` is shortened (cut at a word boundary with "…"): the page
+    # offers it in place ("Show all").
+    full: str | None = None
     # The PRD sections the line rests on: a click opens the drill-down, "Open the
     # detailed view" lands on the first.
     source_keys: list[str]
@@ -1014,6 +1021,9 @@ class ChatIn(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
     # The Simple page the person asks from (the Ask panel), for context.
     page: str | None = Field(default=None, max_length=300)
+    # The Ask panel's one box: write nothing when Oracle's reader does not know the line
+    # (the answer says understood=false and the panel asks Oracle's Ask instead).
+    only_understood: bool = False
 
 
 class ChatFix(BaseModel):
@@ -1081,6 +1091,8 @@ class ChatThreadOut(BaseModel):
     meeting_id: uuid.UUID | None
     messages: list[ChatMessageOut]
     rules: ChatRulesOut | None
+    # False when Oracle's reader did not know the last line (the Ask panel's one box).
+    understood: bool = True
 
 
 class ChatModeIn(BaseModel):
@@ -1124,6 +1136,9 @@ ChangeMode = Literal["everyone", "presenter", "named"]
 MeetingOrigin = Literal["one_pager", "roadmap", "ritual"]
 MeetingStatus = Literal["live", "ended"]
 MinutesState = Literal["drafting", "ready", "sent"]
+# The ``meeting_minutes`` job while the minutes are drafting: running, past
+# meetings.MINUTES_SLOW ("slow": send what is written), or failed (draft again).
+MinutesJobState = Literal["drafting", "slow", "failed"]
 
 
 class SimpleAttendee(BaseModel):
@@ -1234,6 +1249,8 @@ class SimpleMeetingCan(BaseModel):
     approve: bool
     # The presenter, an owner or the decider ends it, edits and sends the minutes.
     end: bool
+    # The same people requeue a failed minutes job ("Draft again").
+    redraft: bool = False
 
 
 class SimpleMeetingOut(SimpleMeetingBrief):
@@ -1247,6 +1264,8 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     pending_proposals: list[SimpleChangeOut] = []
     drafts: list[SimpleDraftOut] = []
     minutes: SimpleMinutes | None = None
+    # The minutes job's state while ``minutes_state`` is "drafting" (else None).
+    minutes_job: MinutesJobState | None = None
     delivery: SimpleDelivery | None = None
     slack: SimpleSlackState
     email_available: bool
@@ -1256,15 +1275,21 @@ class SimpleMeetingOut(SimpleMeetingBrief):
 
 
 class SimpleUpcomingMeeting(BaseModel):
-    """A scheduled ritual occurrence: a review to start from."""
+    """A scheduled review to start from: a ritual occurrence, or an active ritual's next
+    due time before its occurrence is made (``occurrence_id`` None; starting it makes it)."""
 
-    occurrence_id: uuid.UUID
+    occurrence_id: uuid.UUID | None = None
+    ritual_id: uuid.UUID
     ritual_title: str
     due_at: dt.datetime
     ends_at: dt.datetime
     length_min: int
     attendees: list[SimplePersonRef]
     meeting_id: uuid.UUID | None = None
+    # Its occurrence's pre-read is built (Home's "Open pre-read").
+    pre_read_ready: bool = False
+    # Owners and the ritual's owner start a ritual's review (the caller may).
+    can_start: bool = False
 
 
 class SimpleMeetingsOut(BaseModel):
@@ -1294,6 +1319,10 @@ class SimpleMeetingIn(BaseModel):
     title: str | None = Field(default=None, max_length=200)
     origin: MeetingOrigin = "one_pager"
     occurrence_id: uuid.UUID | None = None
+    # A ritual's next review before its occurrence is made (Meetings > Upcoming), with the
+    # row's due time: a start the ritual has moved past is 409, never next week's review.
+    ritual_id: uuid.UUID | None = None
+    due_at: dt.datetime | None = None
     attendee_ids: list[uuid.UUID] = Field(default_factory=list, max_length=50)
     change_mode: ChangeMode = "everyone"
     change_people: list[uuid.UUID] = Field(default_factory=list, max_length=2)

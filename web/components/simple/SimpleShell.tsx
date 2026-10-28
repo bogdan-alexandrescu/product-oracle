@@ -11,6 +11,7 @@ import { TAB_BAR } from "@/components/ds/rail";
 import { setPanelOpen } from "@/components/hop/open-state";
 import { SIMPLE_HOME, switchTarget } from "@/lib/experience";
 import { useMe } from "@/lib/me";
+import { api, unwrap } from "@/lib/api/client";
 import { loadInbox, onWaitingChanged } from "@/lib/waiting";
 
 type Dest = { label: string; href: string; icon: IconName; testId: string };
@@ -36,11 +37,15 @@ function isActive(pathname: string, d: Dest): boolean {
 /**
  * The rail's yellow counts (S1 restyle, the owner's pick): only where something waits on the
  * signed-in person, from the Inbox: Decisions (decisions they decide), Roadmap (proposals they
- * decide and drafts waiting for their approval), Meetings (pre-reads and notes waiting).
+ * decide and drafts waiting for their approval); Meetings counts what its page lists (the
+ * production walk): the live meetings and the upcoming reviews not started yet, read when the
+ * rail mounts, when something waiting changes and on the Meetings pages, not on every other
+ * route change (review).
  */
 function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
+  const [meetings, setMeetings] = useState<number | null>(null);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
@@ -52,7 +57,6 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
         setCounts({
           Decisions: inbox.decisions.filter((d) => d.counts).length,
           Roadmap: inbox.simple_proposals.length + inbox.simple_approvals.length,
-          Meetings: inbox.rituals.filter((r) => r.counts).length,
         });
       })
       .catch(() => undefined);
@@ -60,7 +64,24 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
       alive = false;
     };
   }, [enabled, pathname, changes]);
-  return counts;
+  const meetingsPath = pathname.startsWith("/simple/meetings") ? pathname : "";
+  useEffect(() => {
+    if (!enabled) return;
+    let alive = true;
+    unwrap(api.GET("/v1/simple/meetings"))
+      .then((m) => alive && setMeetings(m.live.length + m.upcoming.filter((o) => !o.meeting_id).length))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [enabled, changes, meetingsPath]);
+  return counts && { ...counts, Meetings: meetings ?? 0 };
+}
+
+/** What a rail count counts, said in words (its label and tooltip). */
+function countWords(label: string, n: number): string {
+  if (label === "Meetings") return `${n} ${n === 1 ? "review" : "reviews"} live or coming up`;
+  return `${n} waiting on you`;
 }
 
 /**
@@ -84,7 +105,7 @@ export function useSimpleShown(): boolean {
 export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet") => ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
-  const { me, role, capsReady, simpleMode } = useMe();
+  const { me, role, capsReady, capsError, simpleMode } = useMe();
   const counts = useSimpleCounts(!!me);
   const [more, setMore] = useState(false);
   const [lastPath, setLastPath] = useState(pathname);
@@ -98,6 +119,28 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
   }, [off, pathname, router]);
 
   const shown = useSimpleShown();
+  // While the person's permissions load, the rail's frame (its width, the brand) so the page
+  // beside it never jumps; nothing when Simple turns out to be off (Detailed opens instead).
+  if (!shown && !off && !capsError)
+    return (
+      <nav
+        aria-label="Simple"
+        aria-busy="true"
+        data-testid="simple-nav-skeleton"
+        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [border-right:var(--simple-rail-border)] max-[600px]:hidden"
+      >
+        <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
+          <Mark size={32} tone="sky" className="block" />
+          <span className="font-display text-[18px] font-semibold text-rail-active-text">Oracle</span>
+        </span>
+        {SIMPLE_DESTINATIONS.map((d) => (
+          <span key={d.href} aria-hidden className="flex h-12 items-center gap-3 px-3">
+            <span className="size-5 flex-none animate-pulse rounded bg-rail-hover" />
+            <span className="h-3 w-24 animate-pulse rounded bg-rail-hover" />
+          </span>
+        ))}
+      </nav>
+    );
   if (!shown) return null;
 
   const tabDests = TABS.map((t) => SIMPLE_DESTINATIONS.find((d) => d.label === t)!);
@@ -124,12 +167,15 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               href={d.href}
               data-testid={d.testId}
               aria-current={isActive(pathname, d) ? "page" : undefined}
+              // The destination is the link's name; its count is the description (never "Meetings 3").
+              aria-label={d.label}
+              aria-describedby={n > 0 ? `${d.testId}-count` : undefined}
               className="flex h-12 items-center gap-3 rounded-xl px-3 text-[length:var(--simple-rail-label)] leading-6 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text aria-[current=page]:bg-rail-active aria-[current=page]:font-semibold aria-[current=page]:text-rail-active-text"
             >
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {n > 0 && (
-                <span data-testid={`${d.testId}-count`} aria-label={`${n} waiting on you`} className="simple-count tnum">
+                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className="simple-count tnum">
                   {n}
                 </span>
               )}

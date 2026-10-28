@@ -72,7 +72,7 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
   const red = card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red").map((x) => ({ item: f.item_id, ...x })));
 
   return (
-    <div data-testid="chat-card" data-status={card.status} data-card-id={card.id} className="flex flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-text">
+    <div data-testid="chat-card" data-status={card.status} data-card-id={card.id} className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-text">
       <p className="font-semibold" data-testid="chat-card-summary">
         {card.summary}
       </p>
@@ -101,9 +101,9 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
         </div>
       )}
       {open && card.fixes.length > 0 && (
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Fixes">
+        <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label="Fixes">
           {card.fixes.map((f, n) => (
-            <button key={n} type="button" className="simple-button" disabled={busy || !card.may} onClick={() => void apply(n)} data-testid="chat-card-fix">
+            <button key={n} type="button" className="simple-button simple-button-wrap" disabled={busy || !card.may} onClick={() => void apply(n)} data-testid="chat-card-fix">
               {card.may === "propose" ? `Propose: ${f.label}` : f.label}
             </button>
           ))}

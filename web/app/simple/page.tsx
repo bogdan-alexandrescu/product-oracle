@@ -3,13 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { Avatar, Block, HomeCard, HomeRow, RowIcon, Top } from "@/app/simple/_home/cards";
+import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
 import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { SimplePage } from "@/components/simple/SimplePage";
-import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
@@ -75,16 +74,16 @@ export default function SimpleHome() {
     },
     { keepPrevious: true },
   );
+  // The one list of scheduled reviews (Meetings > Upcoming): its first row is the next.
   const meeting = useQuery(k("meeting"), async () => {
-    const rituals = await unwrap(api.GET("/v1/rituals"));
-    const next = rituals.filter((r) => r.status === "active" && r.next_due_at).sort((a, b) => a.next_due_at!.localeCompare(b.next_due_at!))[0];
-    return { next: next ?? null };
+    const list = await unwrap(api.GET("/v1/simple/meetings"));
+    return { next: list.upcoming[0] ?? null };
   });
   const personIds = useMemo(() => {
-    const ids = new Set<string>([...(meeting.data?.next?.attendee_ids.slice(0, 4) ?? []), ...(drafts.data ?? []).flatMap((d) => d.waiting_on)]);
+    const ids = new Set<string>((drafts.data ?? []).flatMap((d) => d.waiting_on));
     for (const c of changes.data ?? []) if (c.status === "proposed") c.routed_to.forEach((id) => ids.add(id));
     return [...ids].sort();
-  }, [meeting.data, drafts.data, changes.data]);
+  }, [drafts.data, changes.data]);
   // keepPrevious: names already read stay while a new id set loads (a toast never reads a gap).
   const people = useQuery(
     k(`people|${personIds.join(",")}`),
@@ -246,7 +245,7 @@ export default function SimpleHome() {
       {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
       <header data-testid="home-greeting" className="-mt-4 flex flex-col gap-1">
         <p className="simple-small tnum">{formatInZone(now.toISOString(), zone, { weekday: "long", month: "long", day: "numeric" })}</p>
-        <p className="simple-lead">
+        <p className="simple-lead max-[600px]:min-h-[2lh]">
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
@@ -255,6 +254,12 @@ export default function SimpleHome() {
             <button type="button" className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
               Walk me through it
             </button>
+          </div>
+        )}
+        {/* A reader has no walk: its slot keeps its height so nothing below moves from the skeleton. */}
+        {!walking && reads && (
+          <div aria-hidden data-testid="home-walk-slot" className="invisible">
+            <span className="simple-button">Walk me through it</span>
           </div>
         )}
       </header>
@@ -271,14 +276,8 @@ export default function SimpleHome() {
       {!walking && (
       <>
 
-      {(roadmap.data?.changes_in_review ?? 0) > 0 && (
-        <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
-          {roadmap.data!.changes_in_review} {roadmap.data!.changes_in_review === 1 ? "change is" : "changes are"} in review. You see the published plan until they are approved.
-        </p>
-      )}
-
       <section aria-label="Goals" data-testid="home-goals">
-        <Block q={{ ...goals, data: tiles }} testId="home-goals">
+        <Block q={{ ...goals, data: tiles }} testId="home-goals" skeleton={<GoalBandSkeleton />}>
           {(rows) =>
             rows.length === 0 ? (
               <p className="simple-small" data-testid="home-goals-empty">
@@ -411,7 +410,7 @@ export default function SimpleHome() {
       )}
 
       <HomeCard id="meeting" icon="clock" title="Next review meeting" all="/simple/meetings">
-        <Block q={meeting} testId="home-meeting">
+        <Block q={meeting} testId="home-meeting" skeleton={<SkeletonRows n={1} />}>
           {({ next }) =>
             !next ? (
               <p className="simple-small" data-testid="home-meeting-empty">
@@ -423,40 +422,43 @@ export default function SimpleHome() {
                   testId="home-meeting-next"
                   lead={
                     <span className="simple-date-tile tnum" aria-hidden>
-                      <span>{formatInZone(next.next_due_at!, zone, { month: "short" })}</span>
-                      <strong>{formatInZone(next.next_due_at!, zone, { day: "numeric" })}</strong>
+                      <span>{formatInZone(next.due_at, zone, { month: "short" })}</span>
+                      <strong>{formatInZone(next.due_at, zone, { day: "numeric" })}</strong>
                     </span>
                   }
-                  title={next.title}
+                  title={next.ritual_title}
                   meta={
                     <>
                       <span className="tnum">
-                        {formatInZone(next.next_due_at!, zone, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })} · {next.duration_min} min
+                        {formatInZone(next.due_at, zone, { weekday: "short", hour: "numeric", minute: "2-digit", timeZoneName: "short" })} · {next.length_min} min
                       </span>
                       <br />
-                      {next.attendee_ids.length} {next.attendee_ids.length === 1 ? "attendee" : "attendees"}
-                      {next.attendee_ids.length > 0 &&
-                        `: ${next.attendee_ids
+                      {next.attendees.length} {next.attendees.length === 1 ? "attendee" : "attendees"}
+                      {next.attendees.length > 0 &&
+                        `: ${next.attendees
                           .slice(0, 4)
-                          .map((id) => nameOf(id, "someone"))
+                          .map((a) => a.name)
                           .join(", ")}`}
-                    </>
-                  }
-                  actions={
-                    <>
-                      {(next.owner_id === myId || can("update_ritual")) && (
-                        <Link href={`/simple/meetings/${next.id}?start=1`} className="simple-button simple-button-primary">
-                          Start meeting
-                        </Link>
-                      )}
-                      {next.last_pre_read ? (
-                        <Link href={`/simple/meetings/${next.id}?pre_read=${next.last_pre_read.id}`} className="simple-button">
+                      <br />
+                      {next.pre_read_ready && next.occurrence_id ? (
+                        <Link className="underline" href={`/company/rituals/${next.occurrence_id}`}>
                           Open pre-read
                         </Link>
                       ) : (
-                        <span className="simple-small">Pre-read not ready yet</span>
+                        "Pre-read not ready yet"
                       )}
                     </>
+                  }
+                  actions={
+                    next.meeting_id ? (
+                      <Link href={`/simple/meetings/${next.meeting_id}`} className="simple-button simple-button-primary">
+                        Open meeting
+                      </Link>
+                    ) : next.can_start ? (
+                      <Link href={`/simple/meetings?start=${next.ritual_id}`} className="simple-button simple-button-primary">
+                        Start meeting
+                      </Link>
+                    ) : undefined
                   }
                 />
               </ul>
@@ -467,10 +469,16 @@ export default function SimpleHome() {
 
       <HomeCard id="plan" icon="roadmap" title="The plan this quarter" all="/simple/roadmap">
         <Block q={roadmap} testId="home-plan">
-          {() => (
+          {(r) => (
             <>
+              {/* In the plan's card, filled with it: above the goal band it pushed everything down. */}
+              {r.changes_in_review > 0 && (
+                <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
+                  {r.changes_in_review} {r.changes_in_review === 1 ? "change is" : "changes are"} in review. You see the published plan until they are approved.
+                </p>
+              )}
               {planPrd === undefined ? (
-                <Loading />
+                <SkeletonRows />
               ) : plan && planPrd ? (
                 <PlanByMonth plan={plan} prd={planPrd} testId="home-strip" />
               ) : (

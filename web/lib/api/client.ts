@@ -111,10 +111,12 @@ export async function unwrap<T>(call: Promise<Result<T>>): Promise<T> {
     const message = "message" in inner && typeof inner.message === "string" ? inner.message : response.statusText;
     throw new ApiError(response.status, message, inner.code);
   }
+  // {detail: {message, …}} without a code (e.g. S8's 409 "has its meeting already") says its message.
+  const said = inner && typeof inner === "object" && "message" in inner && typeof inner.message === "string" ? inner.message : null;
   const detail =
     error && typeof error === "object" && "detail" in error && typeof error.detail === "string"
       ? error.detail
-      : response.statusText;
+      : (said ?? response.statusText);
   throw new ApiError(response.status, describeStatus(response.status, detail), undefined, retryAfter(response));
 }
 

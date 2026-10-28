@@ -12918,6 +12918,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/meetings/{meeting_id}/minutes/redraft": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redraft Simple Meeting Minutes
+         * @description Draft again: the presenter, the PRD's decider or an owner requeues a failed minutes
+         *     job (409 unless it failed).
+         */
+        post: operations["redraft_simple_meeting_minutes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/meetings/{meeting_id}/send": {
         parameters: {
             query?: never;
@@ -17539,6 +17560,11 @@ export interface components {
             text: string;
             /** Page */
             page?: string | null;
+            /**
+             * Only Understood
+             * @default false
+             */
+            only_understood: boolean;
         };
         /** ChatMessageOut */
         ChatMessageOut: {
@@ -17609,6 +17635,11 @@ export interface components {
             /** Messages */
             messages: components["schemas"]["ChatMessageOut"][];
             rules: components["schemas"]["ChatRulesOut"] | null;
+            /**
+             * Understood
+             * @default true
+             */
+            understood: boolean;
         };
         /** CheckOut */
         CheckOut: {
@@ -29442,6 +29473,8 @@ export interface components {
             id: string;
             /** Text */
             text: string;
+            /** Full */
+            full?: string | null;
             /** Source Keys */
             source_keys: string[];
             metric?: components["schemas"]["OnePagerMetric"] | null;
@@ -37483,6 +37516,10 @@ export interface components {
              * @enum {string}
              */
             source: "item" | "track";
+            /** Record Id */
+            record_id?: string | null;
+            /** Record Name */
+            record_name?: string | null;
         };
         /**
          * SimpleKeyDate
@@ -37611,6 +37648,11 @@ export interface components {
             approve: boolean;
             /** End */
             end: boolean;
+            /**
+             * Redraft
+             * @default false
+             */
+            redraft: boolean;
         };
         /** SimpleMeetingCommentIn */
         SimpleMeetingCommentIn: {
@@ -37676,6 +37718,10 @@ export interface components {
             origin: "one_pager" | "roadmap" | "ritual";
             /** Occurrence Id */
             occurrence_id?: string | null;
+            /** Ritual Id */
+            ritual_id?: string | null;
+            /** Due At */
+            due_at?: string | null;
             /** Attendee Ids */
             attendee_ids?: string[];
             /**
@@ -37773,6 +37819,8 @@ export interface components {
              */
             drafts: components["schemas"]["SimpleDraftOut"][];
             minutes?: components["schemas"]["SimpleMinutes"] | null;
+            /** Minutes Job */
+            minutes_job?: ("drafting" | "slow" | "failed") | null;
             delivery?: components["schemas"]["SimpleDelivery"] | null;
             slack: components["schemas"]["SimpleSlackState"];
             /** Email Available */
@@ -38493,14 +38541,17 @@ export interface components {
         };
         /**
          * SimpleUpcomingMeeting
-         * @description A scheduled ritual occurrence: a review to start from.
+         * @description A scheduled review to start from: a ritual occurrence, or an active ritual's next
+         *     due time before its occurrence is made (``occurrence_id`` None; starting it makes it).
          */
         SimpleUpcomingMeeting: {
+            /** Occurrence Id */
+            occurrence_id?: string | null;
             /**
-             * Occurrence Id
+             * Ritual Id
              * Format: uuid
              */
-            occurrence_id: string;
+            ritual_id: string;
             /** Ritual Title */
             ritual_title: string;
             /**
@@ -38519,6 +38570,16 @@ export interface components {
             attendees: components["schemas"]["SimplePersonRef"][];
             /** Meeting Id */
             meeting_id?: string | null;
+            /**
+             * Pre Read Ready
+             * @default false
+             */
+            pre_read_ready: boolean;
+            /**
+             * Can Start
+             * @default false
+             */
+            can_start: boolean;
         };
         /** SimpleVisualCommentIn */
         SimpleVisualCommentIn: {
@@ -68870,6 +68931,37 @@ export interface operations {
                 "application/json": components["schemas"]["SimpleMinutesIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleMeetingOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redraft_simple_meeting_minutes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                meeting_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

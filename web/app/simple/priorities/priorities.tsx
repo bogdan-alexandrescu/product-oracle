@@ -274,11 +274,13 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
     }
   }
 
-  const firstBelow = rows.findIndex((r) => !r.above_line);
+  const split = lineSplit(rows);
   return (
+    <>
+    <LineCaption data={data} />
     <ol aria-label="Ranked list" className="flex flex-col gap-[var(--simple-gap)]">
       {rows.flatMap((r, i) => {
-        const divider = i === firstBelow ? [<LineDivider key="the-line" data={data} />] : [];
+        const divider = i === split ? [<LineDivider key="the-line" data={data} />] : [];
         // Any of the feature's items (a proposal on its later item shows here too).
         const proposals = data.proposals.filter((p) => p.feature_id === r.feature_id && (p.op === "override_priority" || p.op === "estimate_feature"));
         const target = drag && drag.to === i && drag.from !== i;
@@ -293,7 +295,8 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
             data-code={r.code}
             data-above={r.above_line ? "true" : "false"}
             data-end={r.end_date ?? ""}
-            className={`rounded-[var(--simple-card-radius)] border bg-surface p-3 ${target ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
+            data-misses={r.above_line ? undefined : "true"}
+            className={`rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"} ${target ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {mayChange && r.can_reorder && (
@@ -331,7 +334,8 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
                 data-testid="prio-line-mark"
               />
               <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{r.code}</span>
-              <span className="min-w-[12rem] flex-1 font-medium">{r.title}</span>
+              <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">{r.title}</span>
+              {!r.above_line && <MissesTag data={data} />}
               <span className="ml-auto flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
                 {r.no_goal ? (
                   <span className="rounded-full bg-warn-bg px-2 text-warn">No goal</span>
@@ -368,6 +372,7 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
         ];
       })}
     </ol>
+    </>
   );
 }
 
@@ -706,6 +711,7 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
     }
   }
 
+  const split = lineSplit(rows);
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <section aria-label="Value / effort">
@@ -772,13 +778,15 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
       </section>
       <section aria-label="Ranked side list">
         <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Ranked</h2>
+        <LineCaption data={data} compact />
         <ol className="flex flex-col gap-1">
           {rows.flatMap((r, i) => [
-            ...(i === rows.findIndex((x) => !x.above_line) ? [<LineDivider key="the-line" data={data} compact />] : []),
-            <li key={r.feature_id} data-testid="side-row" data-code={r.code} data-above={r.above_line ? "true" : "false"} className={`flex items-center gap-2 rounded-lg border border-line bg-surface px-2 py-1 text-[length:var(--simple-small)] ${r.above_line ? "" : "text-text2"}`}>
+            ...(i === split ? [<LineDivider key="the-line" data={data} compact />] : []),
+            <li key={r.feature_id} data-testid="side-row" data-code={r.code} data-above={r.above_line ? "true" : "false"} data-misses={r.above_line ? undefined : "true"} className={`flex items-center gap-2 rounded-lg border border-line px-2 py-1 text-[length:var(--simple-small)] ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}>
               <span className="w-6 text-right font-semibold tabular-nums">{r.rank}</span>
               <span className="font-mono text-[length:var(--simple-small)]">{r.code}</span>
-              <span className="min-w-0 flex-1 truncate">{r.title}</span>
+              <span className="min-w-0 flex-1 truncate" data-testid="prio-title">{r.title}</span>
+              {!r.above_line && <MissesTag data={data} compact />}
               <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
             </li>,
           ])}
@@ -834,15 +842,50 @@ function LinePicker({ data, onPick }: { data: Out; onPick: (key: string) => void
   );
 }
 
-/** The divider row: everything after it in rank order that is hollow falls below the line. */
+const lineLabel = (data: Out): string => data.line?.label ?? "This quarter (Now)";
+
+/**
+ * Where a single divider may sit: before the first row that misses the line, only when every
+ * row after it misses it too (rank order is dependency order and stays; otherwise each row
+ * that misses is marked on its own and there is no divider). -1: no divider.
+ */
+function lineSplit(rows: Row[]): number {
+  const first = rows.findIndex((r) => !r.above_line);
+  return first >= 0 && rows.slice(first).every((r) => !r.above_line) ? first : -1;
+}
+
+/**
+ * Above the list: "N of M miss <line>" and the names of those that miss it. Compact (Value/effort's
+ * 320 px side list): three names and "and N more", every name in its title.
+ */
+function LineCaption({ data, compact = false }: { data: Out; compact?: boolean }) {
+  const misses = data.rows.filter((r) => !r.above_line).map((r) => r.title);
+  const cut = compact && misses.length > 3;
+  return (
+    <p data-testid="line-caption" title={cut ? misses.join(", ") : undefined} className="mb-2 text-[length:var(--simple-small)] text-text2">
+      <span className="font-medium text-accent-ink">
+        {misses.length} of {data.rows.length} miss {lineLabel(data)}
+      </span>
+      {misses.length > 0 && `: ${cut ? `${misses.slice(0, 3).join(", ")} and ${misses.length - 3} more` : misses.join(", ")}`}
+    </p>
+  );
+}
+
+/** A row's own mark when it misses the line. */
+function MissesTag({ data, compact = false }: { data: Out; compact?: boolean }) {
+  return (
+    <span data-testid="prio-misses" className={`flex-none rounded-full border border-line-strong bg-surface px-2 text-[length:var(--simple-small)] text-text2 ${compact ? "max-w-[10rem] truncate" : ""}`}>
+      Misses {lineLabel(data)}
+    </span>
+  );
+}
+
+/** The divider row, drawn only when every row after it misses the line. */
 function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }) {
-  const below = data.rows.filter((r) => !r.above_line);
   return (
     <li role="separator" data-testid="line-divider" className={`flex items-center gap-2 text-[length:var(--simple-small)] font-medium text-accent-ink ${compact ? "py-0.5" : "py-1"}`}>
       <span aria-hidden className="h-0.5 w-6 flex-none bg-accent-ink" />
-      <span>
-        The line: {data.line?.label ?? "This quarter (Now)"} · below it: {below.length} ({below.map((r) => r.code).join(", ")})
-      </span>
+      <span>The line: {lineLabel(data)} · everything below misses it</span>
       <span aria-hidden className="h-0.5 flex-1 bg-accent-ink" />
     </li>
   );
