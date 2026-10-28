@@ -24,11 +24,11 @@ export function milestoneColour(plan: Plan, code: string): { bg: string; ink: st
   return { bg: `var(--simple-m${k + 1})`, ink: `var(--simple-m${k + 1}-ink)` };
 }
 
-/** "M2 Scale volume · 30 Nov - 25 Dec · 15.0 of 16.0 wk" (no dates or capacity: left out). */
+/** "M2 · 30 Nov - 25 Dec · 15.0 of 16.0 wk", the owner's words (no dates or capacity: left out); its name is the chip's title. */
 function chipWords(m: Milestone): string {
   const dates = m.start_date && m.end_date ? ` · ${day(m.start_date)} - ${day(m.end_date)}` : "";
   const full = m.effort_weeks != null ? `${wk(m.planned_weeks ?? 0)} of ${wk(m.effort_weeks)} wk` : `${wk(m.planned_weeks ?? 0)} wk planned`;
-  return `${m.code} ${m.name}${dates} · ${full}`;
+  return `${m.code}${dates} · ${full}`;
 }
 
 /** "This quarter: 56.0 engineer-weeks over three milestones (51.0 planned + 5.0 spare). Bars are engineer-weeks." */
@@ -134,7 +134,7 @@ export function PlanBucketsHead({ plan }: { plan: Plan }) {
       </p>
       <ul className="mt-3 flex flex-wrap gap-2" aria-label="Milestones">
         {plan.milestones.map((m) => (
-          <li key={m.code} data-testid="milestone-chip" className="flex items-center gap-2 rounded-full border border-line bg-bg px-3 py-0.5 text-[length:var(--simple-small)] tabular-nums">
+          <li key={m.code} data-testid="milestone-chip" title={`${m.code} ${m.name}`} className="flex items-center gap-2 rounded-full border border-line bg-bg px-3 py-0.5 text-[length:var(--simple-small)] tabular-nums">
             <span aria-hidden className="inline-block h-3 w-3 flex-none rounded-sm" style={{ background: milestoneColour(plan, m.code).bg }} />
             {chipWords(m)}
           </li>

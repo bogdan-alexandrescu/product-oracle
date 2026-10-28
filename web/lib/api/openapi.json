@@ -116131,6 +116131,11 @@
             "title": "No Goal",
             "default": false
           },
+          "in_plan": {
+            "type": "boolean",
+            "title": "In Plan",
+            "default": false
+          },
           "can_reorder": {
             "type": "boolean",
             "title": "Can Reorder",

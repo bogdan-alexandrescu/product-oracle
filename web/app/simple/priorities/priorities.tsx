@@ -8,6 +8,7 @@ import { Button, Sheet, toast } from "@/components/ds";
 import { FlowThumb } from "@/components/simple/Flow";
 import { GoalSuggestionList, useGoalSuggestions, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { FlowPanel, subjectOf } from "@/components/simple/FlowVisual";
+import { usePanelOpen } from "@/components/hop/open-state";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
@@ -745,12 +746,17 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   const sideRefs = useRef(new Map<string, HTMLLIElement>());
   const markRefs = useRef(new Map<string, HTMLButtonElement>());
 
+  const panelOpen = usePanelOpen();
   useEffect(() => {
     if (!selected) return;
-    const off = (e: globalThis.KeyboardEvent) => e.key === "Escape" && setSelected(null);
+    // Escape closes what is open on top first (a dialog, a sheet, the Ask panel), then the selection.
+    const off = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented || panelOpen || document.querySelector('[role="dialog"], [aria-modal="true"]')) return;
+      setSelected(null);
+    };
     window.addEventListener("keydown", off);
     return () => window.removeEventListener("keydown", off);
-  }, [selected]);
+  }, [selected, panelOpen]);
 
   /** Selects a feature and brings its other half (the row, or the mark) into view. */
   function select(id: string, from: "mark" | "row") {
@@ -950,7 +956,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span className="font-mono text-[length:var(--simple-small)]" data-testid="side-code" title={r.code}>
                     {r.short_code || r.code}
                   </span>
-                  <span className="min-w-0 flex-1 truncate" data-testid="prio-title">
+                  <span className="min-w-[8rem] flex-1 break-words" data-testid="prio-title">
                     {r.title}
                   </span>
                   {!r.above_line && <MissesTag data={data} compact />}
@@ -1116,6 +1122,11 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
   const noGoal = plan.slices.some((x) => !x.goal);
   // A confirmed goal of the same name keeps its suggestions under its card.
   const bucketOf = (goal: string) => data.buckets.find((b) => !b.no_goal && b.title.toLowerCase() === goal.toLowerCase());
+  // This quarter's roadmap items the plan does not hold (another PRD's, or none), by their goal.
+  const rowOf = new Map(data.rows.map((r) => [r.code, r]));
+  const outside = data.buckets
+    .map((b) => ({ b, rows: b.codes.map((c) => rowOf.get(c)).filter((r): r is Row => !!r && !r.in_plan) }))
+    .filter((x) => x.rows.length > 0);
   return (
     <section aria-label="Goal buckets">
       <PlanBucketsHead plan={plan} />
@@ -1144,6 +1155,20 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
             <h3 className="font-semibold">No goal</h3>
             <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no goal in the plan</p>
             <PlanFeatureList plan={plan} goal={null} />
+          </li>
+        )}
+        {outside.length > 0 && (
+          <li data-testid="plan-outside" className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 sm:col-span-2">
+            <h3 className="font-semibold">Also this quarter, outside the plan</h3>
+            <ul className="mt-1 flex flex-col gap-1.5 text-[length:var(--simple-small)]">
+              {outside.map(({ b, rows }) => (
+                <li key={b.key} data-testid="plan-outside-goal" data-key={b.key}>
+                  <span className={`font-medium ${b.no_goal ? "text-warn" : ""}`}>{b.no_goal ? "⚠ Serves no confirmed goal" : b.title}</span>
+                  {": "}
+                  {rows.map((r) => `${r.short_code || r.code} ${r.title}`).join(", ")} · {fmt(rows.reduce((n, r) => n + (r.effort ?? 0), 0))} wk
+                </li>
+              ))}
+            </ul>
           </li>
         )}
       </ul>

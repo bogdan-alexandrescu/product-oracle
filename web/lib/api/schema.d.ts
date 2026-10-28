@@ -38688,6 +38688,11 @@ export interface components {
              */
             no_goal: boolean;
             /**
+             * In Plan
+             * @default false
+             */
+            in_plan: boolean;
+            /**
              * Can Reorder
              * @default false
              */

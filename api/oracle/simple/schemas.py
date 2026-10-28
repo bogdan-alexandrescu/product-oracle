@@ -704,6 +704,9 @@ class SimplePriorityRow(BaseModel):
     end_estimated: bool = False
     # Serves no confirmed goal.
     no_goal: bool = False
+    # plan-charts: the item is the PRD's whose plan "this quarter" is (Goal buckets lists the
+    # rest outside the plan).
+    in_plan: bool = False
     can_reorder: bool = False
     # The caller's change applies (else it is proposed).
     applies: bool = False

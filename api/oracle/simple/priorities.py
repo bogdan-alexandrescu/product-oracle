@@ -426,10 +426,12 @@ async def build(
     id_of = {f.key: f.entity_id for f in ranking.features}
     rows: list[SimplePriorityRow] = []
     deps: dict[str, list[str]] = {}
+    prd_of: list[str | None] = []
     for f in ranking.features:
         e = items.get(f.entity_id)
         deps[f.entity_id] = [id_of[d] for d in f.depends_on if d in id_of]
         gv = f.explanation.inputs.get("goal_value")
+        prd_of.append(str(e.prd.id) if e is not None and e.prd is not None else None)
         o = active.get(f.override.id) if f.override is not None else None
         rows.append(
             SimplePriorityRow(
@@ -469,6 +471,9 @@ async def build(
     _after(rows, deps)
     buckets, total = _buckets(rows)
     this_quarter, plan_out = await plan_in_play(db, read_)
+    if plan_out is not None:
+        for r, pid in zip(rows, prd_of, strict=True):
+            r.in_plan = pid == str(plan_out.prd.id)
     return SimplePrioritiesOut(
         today=read_.today,
         quarter=this_quarter,

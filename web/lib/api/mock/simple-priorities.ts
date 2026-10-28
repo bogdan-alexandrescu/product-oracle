@@ -285,6 +285,7 @@ export function prioritiesOut(
       end_date: mine ? readItems.get(i.id)!.end.date : null,
       end_estimated: mine && readItems.get(i.id)!.end.estimated,
       no_goal: !i.goal,
+      in_plan: false,
       can_reorder: can && mine,
       applies: mine && decides(i.id),
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
@@ -335,13 +336,19 @@ export function prioritiesOut(
   buckets.sort((a, b) => Number(a.no_goal) - Number(b.no_goal));
   const total = round(buckets.reduce((s, b) => s + b.weeks, 0));
   for (const b of buckets) b.share = total ? round(b.weeks / total) : 0;
+  // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
+  const plan = planOf(db, read, ctx.role);
+  if (plan) {
+    const prdOf = new Map(read.items.map((i) => [i.id, i.prd?.slug]));
+    yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
+  }
   return {
     // The plan-model lane: with a plan, its span ("2 Nov - 12 Feb"), else the calendar quarter.
     today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
     rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,
     // plan-charts: the plan this quarter is, when the reader sees its PRD's items.
-    plan: planOf(db, read, ctx.role),
+    plan,
   };
 }
 
