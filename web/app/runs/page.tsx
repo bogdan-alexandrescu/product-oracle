@@ -60,11 +60,12 @@ export default function RunsPage() {
    * qa-work-1/17: a row's button says what it does, as the run page does, and shows only to
    * whoever can act on it (a viewer gets none; the whole row opens the run). A checkpoint opens
    * its decision: Review items for roadmap items, Decide for the rest; a cost approval and an
-   * overrun open the run, where Approve and Resume are.
+   * overrun open the run, where Approve and Resume are. fix-work review: Decide is per item
+   * (an approver decides an approver's checkpoint), so the row passes its can_decide.
    */
   const rowAction = (r: RunSummary): { label: string; go: () => void } | null => {
     if (isDelivering(r)) return null;
-    if (r.status === "awaiting_checkpoint" && can("decide_checkpoint")) {
+    if (r.status === "awaiting_checkpoint" && can("decide_checkpoint", r.can_decide)) {
       return {
         label: r.waiting_on === "roadmap_items" ? "Review items" : "Decide",
         go: () => {

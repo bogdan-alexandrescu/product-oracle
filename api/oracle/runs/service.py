@@ -1677,7 +1677,16 @@ async def list_runs(db: AsyncSession, status: str | None = None) -> list[RunSumm
         )
         for seg in rows:
             segments[seg.run_id].append(seg)
-    return [_summary(r, refs, pending.get(r.id), segments[r.id], owed.get(r.id)) for r in runs]
+    principal = visibility.principal_of(db)
+    leads = await engineering_leads(db) if principal is not None and pending else frozenset()
+    out = []
+    for r in runs:
+        row = _summary(r, refs, pending.get(r.id), segments[r.id], owed.get(r.id))
+        cp = pending.get(r.id)
+        if cp is not None and principal is not None:
+            row.can_decide = may_decide(principal, cp, r.flow, leads)
+        out.append(row)
+    return out
 
 
 async def read_scope(db: AsyncSession, run_id: uuid.UUID) -> PrdScopeOut:

@@ -474,6 +474,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     sent_back: refused(r, true),
     progress: progressOf(r),
     delivering: r.delivering ?? null,
+    can_decide: false,
   };
 }
 
@@ -1744,7 +1745,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       ctx.db.runs
         .filter((r) => !status || r.status === status)
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
-        .map(summary),
+        .map((r) => {
+          // As the API: the row's Decide follows the run page's can_decide for its waiting checkpoint.
+          const cp = r.checkpoints.find((c) => c.status === "pending");
+          return { ...summary(r), can_decide: !!cp && mayStage(ctx, r, cp, ctx.userRole ?? null) };
+        }),
     );
   }
   if (p.length === 2 && m === "POST") {
