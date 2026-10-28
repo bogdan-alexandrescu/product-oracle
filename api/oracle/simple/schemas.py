@@ -1080,6 +1080,11 @@ class ChatCardOut(BaseModel):
     decision_id: uuid.UUID | None
 
 
+class ChatChoiceOut(BaseModel):
+    index: int
+    label: str
+
+
 class ChatMessageOut(BaseModel):
     id: uuid.UUID
     author_kind: Literal["person", "oracle"]
@@ -1087,8 +1092,15 @@ class ChatMessageOut(BaseModel):
     author_name: str
     body: str
     at: dt.datetime
-    kind: Literal["request", "cards", "question", "answer", "note"]
+    # pending: Oracle's reader is reading the line; failed: it could not (``retry``); ask:
+    # a question for Oracle's Ask (the Ask panel's one box hands the line there).
+    kind: Literal["request", "cards", "question", "answer", "note", "pending", "failed", "ask"]
     cards: list[ChatCardOut]
+    reply_to: uuid.UUID | None = None
+    # A question's clickable choices ("Neither" last); ``picked``: the one taken.
+    choices: list[ChatChoiceOut] = Field(default_factory=list)
+    picked: int | None = None
+    retry: bool = False
 
 
 class ChatRulesOut(BaseModel):
@@ -1108,6 +1120,23 @@ class ChatThreadOut(BaseModel):
     rules: ChatRulesOut | None
     # False when Oracle's reader did not know the last line (the Ask panel's one box).
     understood: bool = True
+
+
+class ChatChooseIn(BaseModel):
+    index: int = Field(ge=0, le=10)
+
+
+class ChatStopOut(BaseModel):
+    card_id: uuid.UUID
+    summary: str
+    reason: str
+
+
+class ChatApplyAllOut(BaseModel):
+    thread: ChatThreadOut
+    applied: list[uuid.UUID]
+    # The first card that could not apply, and why (the rest stay open); None: all applied.
+    stopped: ChatStopOut | None
 
 
 class ChatModeIn(BaseModel):

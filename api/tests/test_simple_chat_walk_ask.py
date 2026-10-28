@@ -25,7 +25,7 @@ Test cards (protects / fails_when / no_claim):
   understands (a change request, who owns, who decides, when is) gets its reply in the
   thread with understood=true, while any other line (or a question about something not on
   the roadmap) answers understood=false and writes nothing, so the panel sends it to
-  Oracle's Ask; without the flag the old reply ("I did not understand") is kept;
+  Oracle's Ask; chat-reader: a line parse() does not know is pending for Oracle's reader;
   fails_when=an unknown line writes a message, or a change request falls through to Ask;
   no_claim=Ask's model answer (the discussions' own tests).
 - test_constraint_line_names_the_dependent_and_the_dependency: protects=moving an item
@@ -134,11 +134,16 @@ async def test_only_understood_routes_the_rest_to_ask(client):
         assert r.status_code == 200, r.text
         return r.json()
 
-    for line in ("What should we cut first?", "when is the offsite?", "who owns pricing?",
-                 "Summarise this page"):  # fmt: skip
+    for line in ("when is the offsite?", "who owns pricing?"):
         out = await ask("commenter", line)
         assert out["understood"] is False, line
         assert out["messages"] == [], line
+    # chat-reader: any other line is read by Oracle's reader first (it answers "ask" for a
+    # plain question, test_simple_chat_reader).
+    for line in ("What should we cut first?", "Summarise this page"):
+        out = await ask("commenter", line)
+        assert out["understood"] is True, line
+        assert out["messages"][-1]["kind"] == "pending", line
     for who, line, kind in (
         ("commenter", "who owns Ledger v2?", "answer"),
         ("viewer", "who decides Ledger v2?", "answer"),
@@ -152,10 +157,9 @@ async def test_only_understood_routes_the_rest_to_ask(client):
         assert out["messages"][-1]["kind"] == kind, line
         assert out["messages"][-2]["body"] == line
     assert await n_changes(ctx) == 0
-    # Without the flag the old reply stands.
+    # Without the flag too, a line parse() does not know is for the reader.
     r = await client.post(ASK, json={"text": "make it better"}, headers=ctx.as_("owner"))
-    assert r.json()["understood"] is False
-    assert r.json()["messages"][-1]["body"].startswith("I did not understand that.")
+    assert r.json()["messages"][-1]["body"] == "Reading that…"
 
 
 async def test_constraint_line_names_the_dependent_and_the_dependency(client):

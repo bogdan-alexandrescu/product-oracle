@@ -47,6 +47,7 @@ CURRENT = {
     "goal_suggestions": "goal_suggestions.v1",
     "simple_visual": "simple_visual.v1",
     "meeting_minutes": "meeting_minutes.v1",
+    "chat_reader": "chat_reader.v1",
     "discussion_reply": "discussion_reply.v2",
     # B6: appended to discussion_reply's for a discussion on a goal.
     "discussion_reply_goal": "discussion_reply_goal.v2",

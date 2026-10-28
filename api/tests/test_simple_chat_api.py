@@ -301,10 +301,13 @@ async def test_requests_become_cards_for_each_op_family(client):
 async def test_ambiguous_or_unknown_gets_one_question(client):
     ctx = await make_people()
     await World(ctx).build()
-    for line in ("move alert to Q2", "move Nothing like it to Q2", "make it better"):
+    for line in ("move alert to Q2", "move Nothing like it to Q2"):
         m = await say(client, ctx, "owner", line)
         assert m["kind"] == "question", line
         assert m["cards"] == []
+    # chat-reader: a line parse() does not know goes to Oracle's reader (pending).
+    m = await say(client, ctx, "owner", "make it better")
+    assert m["kind"] == "pending" and m["cards"] == []
     m = await say(client, ctx, "owner", "move alert to Q2")
     assert m["body"] == "Which one: Alert digest or Alert export?"
     r = await client.get("/v1/simple/chat", headers=ctx.as_("owner"))
