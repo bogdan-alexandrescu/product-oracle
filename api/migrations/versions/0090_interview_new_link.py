@@ -1,7 +1,8 @@
 """Make a new link (qa-work-43): an interview's link can be replaced.
 
 - ``interviews.link_created_at``: when the current link was made (the members' page says
-  so). Backfilled from the expiry, which is 7 days after it.
+  so). Backfilled from the expiry, which is 7 days (168 hours, whatever the session's time
+  zone and its daylight-saving change) after it.
 - ``interviews.replaced_link_hashes``: the sha256 of each link a new one replaced, so
   opening an old link says it was replaced (oracle.interviews.public); never the token.
 
@@ -42,7 +43,7 @@ def upgrade() -> None:
         postgresql_using="gin",
     )
     op.execute(
-        "UPDATE interviews SET link_created_at = link_expires_at - interval '7 days' "
+        "UPDATE interviews SET link_created_at = link_expires_at - interval '168 hours' "
         "WHERE link_token_hash IS NOT NULL AND link_expires_at IS NOT NULL"
     )
 
