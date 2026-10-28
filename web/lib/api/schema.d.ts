@@ -12727,6 +12727,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/chat/messages/{message_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Simple Chat Read
+         * @description Read again a line Oracle's reader could not read (its job failed or was
+         *     cancelled): the line is "Reading that…" again.
+         */
+        post: operations["retry_simple_chat_read"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/chat/messages/{message_id}/choose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Choose Simple Chat Choice
+         * @description Pick one of Oracle's question's choices: the choice is the caller's next line and
+         *     its card Oracle's reply (no model call); "Neither" builds nothing. Nothing changes
+         *     until Apply.
+         */
+        post: operations["choose_simple_chat_choice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/chat/messages/{message_id}/apply-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply All Simple Chat Cards
+         * @description Apply a reply's open cards in order, each as its own Apply; stop at the first that
+         *     cannot apply and say which and why (the rest stay open).
+         */
+        post: operations["apply_all_simple_chat_cards"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/walk": {
         parameters: {
             query?: never;
@@ -17464,6 +17528,13 @@ export interface components {
             /** New Sources */
             new_sources: components["schemas"]["NewSource"][];
         };
+        /** ChatApplyAllOut */
+        ChatApplyAllOut: {
+            thread: components["schemas"]["ChatThreadOut"];
+            /** Applied */
+            applied: string[];
+            stopped: components["schemas"]["ChatStopOut"] | null;
+        };
         /** ChatApplyIn */
         ChatApplyIn: {
             /** Fix */
@@ -17533,6 +17604,18 @@ export interface components {
             /** Decision Id */
             decision_id: string | null;
         };
+        /** ChatChoiceOut */
+        ChatChoiceOut: {
+            /** Index */
+            index: number;
+            /** Label */
+            label: string;
+        };
+        /** ChatChooseIn */
+        ChatChooseIn: {
+            /** Index */
+            index: number;
+        };
         /**
          * ChatFix
          * @description A one-click fix for a broken link the card would make: its own change-engine op.
@@ -17597,9 +17680,20 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "request" | "cards" | "question" | "answer" | "note";
+            kind: "request" | "cards" | "question" | "answer" | "note" | "pending" | "failed" | "ask";
             /** Cards */
             cards: components["schemas"]["ChatCardOut"][];
+            /** Reply To */
+            reply_to?: string | null;
+            /** Choices */
+            choices?: components["schemas"]["ChatChoiceOut"][];
+            /** Picked */
+            picked?: number | null;
+            /**
+             * Retry
+             * @default false
+             */
+            retry: boolean;
         };
         /** ChatModeIn */
         ChatModeIn: {
@@ -17629,6 +17723,18 @@ export interface components {
             ask_only: boolean;
             /** Ended */
             ended: boolean;
+        };
+        /** ChatStopOut */
+        ChatStopOut: {
+            /**
+             * Card Id
+             * Format: uuid
+             */
+            card_id: string;
+            /** Summary */
+            summary: string;
+            /** Reason */
+            reason: string;
         };
         /** ChatThreadOut */
         ChatThreadOut: {
@@ -27554,7 +27660,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "meeting_minutes" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply" | "item_draft" | "goal_suggestions" | "simple_visual";
+            kind: "review_comments" | "reporting" | "refinement" | "quality_review" | "refinement_batch" | "public_text" | "one_pager" | "meeting_minutes" | "intake_analysis" | "decision_options" | "scope_enhance" | "why_not_reply" | "item_draft" | "goal_suggestions" | "simple_visual" | "chat_reader";
             /** Document Id */
             document_id?: string | null;
             /** Intake Id */
@@ -68662,6 +68768,114 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatCardOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_simple_chat_read: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    choose_simple_chat_choice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatChooseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_all_simple_chat_cards: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                message_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatApplyAllOut"];
+                };
+            };
+            /** @description Stale: nothing written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: components["schemas"]["SimpleChangeConflict"];
+                    };
                 };
             };
             /** @description Validation Error */

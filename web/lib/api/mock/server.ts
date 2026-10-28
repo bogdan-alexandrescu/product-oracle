@@ -156,7 +156,7 @@ import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simpl
 import { ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
-import { routeSimpleChat, seedSimpleChat, type ChatDb } from "./simple-chat";
+import { routeSimpleChat, seedReaderItems, seedSimpleChat, takeReaderWrote, type ChatDb } from "./simple-chat";
 import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
@@ -2640,6 +2640,8 @@ function load(): Db {
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
+                    // chat-reader: the two "Delivery …" items its rules talk about.
+                    if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
                     return db;
                   }
               : scenario === "simple-500"
@@ -5751,7 +5753,9 @@ export async function mockFetch(req: Request): Promise<Response> {
     if (marks) await captureRunChanges(webhooksDeliveryContext(db), marks, db.runs?.runs);
     // S9: a meeting chat's poll (every 2 s, in each attendee's tab) writes nothing, so it never
     // saves a stale copy over another tab's line, card or sign-in.
-    if (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname))) save(db);
+    // chat-reader: unless it read a pending line (the reader's job ended).
+    const readerWrote = takeReaderWrote();
+    if (!(req.method === "GET" && /^\/v1\/simple\/meetings\/[^/]+\/chat$/.test(url.pathname)) || readerWrote) save(db);
     return res;
   });
   queue = next.catch(() => undefined);

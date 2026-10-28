@@ -338,7 +338,7 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
                 setTick((t) => t + 1);
               }}
               onChanged={() => setTick((t) => t + 1)}
-              say={simple && isPanelChat ? (text) => askInChat(text, pathname) : undefined}
+              say={simple && isPanelChat ? (text, handOff) => askInChat(text, pathname, handOff) : undefined}
             />
             {isPanelChat && d.me.can_manage && writes && (
               <div>

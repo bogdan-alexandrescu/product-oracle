@@ -63,6 +63,8 @@ MAX_TOKENS = {
     "simple_visual": 3000,
     # Simple S8: one meeting's minutes.
     "meeting_minutes": 3000,
+    # Simple chat-reader: one free-form chat line read into actions, a question or an answer.
+    "chat_reader": 1500,
 }
 
 # ask(kind, payload) -> the parsed answer: one model call with the kind's prompt.
@@ -1078,6 +1080,14 @@ async def meeting_minutes(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, A
     return await meetings.run_job(s, job, ask)
 
 
+async def chat_reader(s: AsyncSession, job: LlmJob, ask: Ask) -> dict[str, Any]:
+    """Reads a free-form chat line into change cards, a question or an answer
+    (oracle.simple.chat)."""
+    from oracle.simple import chat
+
+    return await chat.run_reader(s, job, ask)
+
+
 # Run when a job of the kind fails for good, in the transaction that records it.
 ON_FAILURE: dict[str, Callable[[AsyncSession, LlmJob], Awaitable[None]]] = {
     "why_not_reply": why_not_reply_failed,
@@ -1102,6 +1112,7 @@ RUNNERS: dict[str, Callable[[AsyncSession, LlmJob, Ask], Awaitable[dict[str, Any
     "goal_suggestions": goal_suggestions,
     "simple_visual": simple_visual,
     "meeting_minutes": meeting_minutes,
+    "chat_reader": chat_reader,
 }
 
 

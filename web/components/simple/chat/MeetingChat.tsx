@@ -6,7 +6,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { meetingSay, meetingThread, setChatMode, type ChangeMode, type ChatRules, type ChatThread } from "@/lib/api/simple-chat";
 import { errorMessage } from "@/lib/use-query";
 
-import { ChatThreadView } from "./ChatThread";
+import { ChatThreadView, usePendingPoll } from "./ChatThread";
 
 const POLL_MS = 2000;
 const MODE_WORDS: Record<ChangeMode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter + named people" };
@@ -56,6 +56,9 @@ export function MeetingChat({ meetingId, sessionId }: { meetingId: string; sessi
     };
   }, [meetingId]);
 
+  // chat-reader: a line Oracle's reader is reading is read again sooner than the shared poll.
+  usePendingPoll(thread, load);
+
   const rules = thread?.rules ?? null;
   return (
     <section aria-label="Meeting chat" data-testid="meeting-chat" data-session={sessionId || undefined} className="simple-card flex min-h-0 flex-col gap-3 max-[600px]:mb-[76px]">
@@ -82,6 +85,7 @@ export function MeetingChat({ meetingId, sessionId }: { meetingId: string; sessi
           hint={rules?.ask_only ? "You can ask questions here; viewers don't change the plan." : undefined}
           send={async (text) => setThread(await meetingSay(meetingId, text))}
           onCardChanged={() => void load()}
+          onThread={setThread}
         />
       )}
     </section>

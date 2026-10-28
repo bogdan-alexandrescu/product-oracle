@@ -66,6 +66,9 @@ SCOPE_JOB_KINDS = ("scope_enhance",)
 REQUEST_JOB_KINDS = ("why_not_reply",)
 # Simple S10: a proposal's visual drawn or revised (oracle.simple.visuals): ``visual_id``.
 VISUAL_JOB_KINDS = ("simple_visual",)
+# Simple chat-reader (migration 0087): a free-form chat line read in context; no document,
+# ``input.read_id`` names its simple_chat_reads row.
+CHAT_JOB_KINDS = ("chat_reader",)
 ALL_JOB_KINDS = (
     JOB_KINDS
     + INTAKE_JOB_KINDS
@@ -74,6 +77,7 @@ ALL_JOB_KINDS = (
     + SCOPE_JOB_KINDS
     + REQUEST_JOB_KINDS
     + VISUAL_JOB_KINDS
+    + CHAT_JOB_KINDS
 )
 JOB_STATUSES = ("queued", "running", "succeeded", "failed", "cancelled")
 CLASSIFICATIONS = ("question", "change_request", "factual_correction", "approval", "other")
@@ -89,7 +93,7 @@ class LlmJob(TenantScoped, Base):
         CheckConstraint(
             "document_id IS NOT NULL OR intake_id IS NOT NULL OR decision_id IS NOT NULL "
             "OR interview_id IS NOT NULL OR scope_id IS NOT NULL OR request_id IS NOT NULL "
-            "OR visual_id IS NOT NULL",
+            "OR visual_id IS NOT NULL OR kind = 'chat_reader'",
             name="subject",
         ),
         Index("ix_llm_jobs_document_status", "document_id", "status"),

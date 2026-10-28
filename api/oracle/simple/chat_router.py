@@ -21,9 +21,11 @@ from oracle.auth.deps import TenantDB
 from oracle.simple import changes, chat, drafts
 from oracle.simple.changes_router import CONFLICT, Commenter, Reader, _one_commit
 from oracle.simple.schemas import (
+    ChatApplyAllOut,
     ChatApplyIn,
     ChatApplyOut,
     ChatCardOut,
+    ChatChooseIn,
     ChatIn,
     ChatModeIn,
     ChatRulesOut,
@@ -52,7 +54,8 @@ async def get_simple_chat(principal: Reader, db: TenantDB) -> ChatThreadOut:
 async def post_simple_chat(body: ChatIn, principal: Reader, db: TenantDB) -> ChatThreadOut:
     """Ask Oracle in plain words; a change request gets change cards (nothing applies
     until Apply), an ambiguous one a question, a question about the plan an answer."""
-    return await _run(db, chat.post(db, principal, body.text, only_understood=body.only_understood))
+    return await _run(db, chat.post(db, principal, body.text, only_understood=body.only_understood,
+                                    page=body.page))  # fmt: skip
 
 
 @router.get("/meetings/{meeting_id}/chat", response_model=ChatThreadOut,
@@ -118,6 +121,38 @@ async def undo_simple_chat_card(
 ) -> ChatCardOut:
     """Undo the change an applied card made (its author, in its session)."""
     return await _run(db, chat.undo(db, principal, card_id))
+
+
+@router.post("/chat/messages/{message_id}/retry", response_model=ChatThreadOut,
+             name="retry_simple_chat_read")  # fmt: skip
+async def retry_simple_chat_read(
+    message_id: uuid.UUID, principal: Reader, db: TenantDB
+) -> ChatThreadOut:
+    """Read again a line Oracle's reader could not read (its job failed or was
+    cancelled): the line is "Reading that…" again."""
+    return await _run(db, chat.retry(db, principal, message_id))
+
+
+@router.post("/chat/messages/{message_id}/choose", response_model=ChatThreadOut,
+             name="choose_simple_chat_choice")  # fmt: skip
+async def choose_simple_chat_choice(
+    message_id: uuid.UUID, body: ChatChooseIn, principal: Reader, db: TenantDB
+) -> ChatThreadOut:
+    """Pick one of Oracle's question's choices: the choice is the caller's next line and
+    its card Oracle's reply (no model call); "Neither" builds nothing. Nothing changes
+    until Apply."""
+    return await _run(db, chat.choose(db, principal, message_id, body.index))
+
+
+@router.post("/chat/messages/{message_id}/apply-all", response_model=ChatApplyAllOut,
+             name="apply_all_simple_chat_cards", responses=CONFLICT)  # fmt: skip
+async def apply_all_simple_chat_cards(
+    message_id: uuid.UUID, principal: Commenter, db: TenantDB
+) -> ChatApplyAllOut:
+    """Apply a reply's open cards in order, each as its own Apply; stop at the first that
+    cannot apply and say which and why (the rest stay open)."""
+    out, applied, stopped = await _run(db, chat.apply_all(db, principal, message_id, _one_commit))
+    return ChatApplyAllOut(thread=out, applied=applied, stopped=stopped)
 
 
 @router.get("/walk", response_model=WalkOut, name="get_simple_walk")
