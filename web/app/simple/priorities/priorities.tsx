@@ -13,6 +13,8 @@ import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { goalTotal, PlanBucketsHead, PlanFeatureList, wk } from "./plan-buckets";
+
 type Out = Schemas["SimplePrioritiesOut"];
 type Row = Schemas["SimplePriorityRow"];
 type Proposal = Schemas["SimplePriorityProposal"];
@@ -698,13 +700,64 @@ function ShapeMark({ shape, hollow, code }: { shape: Shape; hollow: boolean; cod
   );
 }
 
+/** The effort axis's ticks: 0.5, 1, 2, 4 weeks, doubling on while efforts run longer. */
+function effortTicks(maxE: number): number[] {
+  const out = [0.5, 1, 2, 4];
+  while (out.at(-1)! < maxE) out.push(out.at(-1)! * 2);
+  return out;
+}
+
+/**
+ * Half the rows on each side: the first half by rank order of `key` (descending for value,
+ * ascending for effort) is "high value" / "low effort"; a mark on a median line counts on the
+ * side its rank puts it. The median itself is where the line is drawn.
+ */
+function medianSplit(rows: Row[], key: (r: Row) => number, high: boolean): { median: number; firstHalf: Set<string> } {
+  const sorted = [...rows].sort((a, b) => (high ? key(b) - key(a) : key(a) - key(b)) || a.rank - b.rank);
+  const n = sorted.length;
+  const vals = sorted.map(key).sort((a, b) => a - b);
+  const median = n === 0 ? 0 : n % 2 ? vals[(n - 1) / 2] : (vals[n / 2 - 1] + vals[n / 2]) / 2;
+  return { median, firstHalf: new Set(sorted.slice(0, Math.ceil(n / 2)).map((r) => r.feature_id)) };
+}
+
 function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; shapes: Map<string, Shape>; mayChange: boolean; changed: Changed; moved: Moved | null }) {
   const box = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ code: string; x0: number; y0: number; dx: number; dy: number } | null>(null);
+  // plan-charts: the mark and row selected together (Escape clears); a drag is not a selection.
+  const [selected, setSelected] = useState<string | null>(null);
+  const dragged = useRef(false);
   const rows = data.rows;
-  const maxE = Math.max(4, ...rows.map((r) => (r.effort ?? 0) * 1.25));
+  const effortOf = (r: Row) => Math.max(0.25, r.effort ?? 0);
+  const maxE = Math.max(4, ...rows.map(effortOf));
+  const minE = Math.min(0.5, ...rows.map(effortOf));
   const maxV = Math.max(4, ...rows.map((r) => (r.goal_value ?? 0) * 1.25));
+  // The log effort axis, a little room past the first and last tick.
+  const lo = Math.log2(minE) - 0.4;
+  const hi = Math.log2(maxE) + 0.4;
+  const xPct = (e: number) => 4 + ((Math.log2(Math.max(0.25, e)) - lo) / (hi - lo)) * 92;
+  const yPct = (v: number) => 4 + (1 - v / maxV) * 92;
+  const ticks = effortTicks(maxE);
+  const byValue = medianSplit(rows, (r) => r.goal_value ?? 0, true);
+  const byEffort = medianSplit(rows, effortOf, false);
+  const quadrant = (r: Row) => (byValue.firstHalf.has(r.feature_id) ? (byEffort.firstHalf.has(r.feature_id) ? 0 : 1) : byEffort.firstHalf.has(r.feature_id) ? 2 : 3);
+  const counts = [0, 1, 2, 3].map((q) => rows.filter((r) => quadrant(r) === q).length);
   const shapeOf = (r: Row): Shape => (r.goal ? (shapes.get(r.goal.key) ?? "circle") : "cross");
+  const sideRefs = useRef(new Map<string, HTMLLIElement>());
+  const markRefs = useRef(new Map<string, HTMLButtonElement>());
+
+  useEffect(() => {
+    if (!selected) return;
+    const off = (e: globalThis.KeyboardEvent) => e.key === "Escape" && setSelected(null);
+    window.addEventListener("keydown", off);
+    return () => window.removeEventListener("keydown", off);
+  }, [selected]);
+
+  /** Selects a feature and brings its other half (the row, or the mark) into view. */
+  function select(id: string, from: "mark" | "row") {
+    setSelected(id);
+    const other = from === "mark" ? sideRefs.current.get(id) : markRefs.current.get(id);
+    other?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
 
   async function estimate(r: Row, after: { goal_value?: number; effort?: number }) {
     const words = after.effort != null ? `effort ${after.effort} wk` : `goal value ${after.goal_value}`;
@@ -728,8 +781,9 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     setDrag(null);
     const round = (n: number) => Math.max(0.5, Math.round(n * 2) / 2);
     if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
-    // Sideways changes effort, up/down goal value.
-    if (Math.abs(dx) >= Math.abs(dy)) void estimate(r, { effort: round((r.effort ?? 0) + (dx / (width * 0.92)) * maxE) });
+    dragged.current = true;
+    // Sideways changes effort (on the log scale: the same distance is the same factor), up/down goal value.
+    if (Math.abs(dx) >= Math.abs(dy)) void estimate(r, { effort: round(effortOf(r) * 2 ** ((dx / (width * 0.92)) * (hi - lo))) });
     else void estimate(r, { goal_value: round((r.goal_value ?? 0) - (dy / (height * 0.92)) * maxV) });
   }
 
@@ -748,6 +802,21 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
     }
   }
 
+  // Marks on the same spot fan out sideways around it so none hides another.
+  const spot = (r: Row) => `${effortOf(r)}|${r.goal_value ?? 0}`;
+  const twins = new Map<string, string[]>();
+  for (const r of rows) twins.set(spot(r), [...(twins.get(spot(r)) ?? []), r.feature_id]);
+  const fan = (r: Row) => {
+    const at = twins.get(spot(r))!;
+    return (at.indexOf(r.feature_id) - (at.length - 1) / 2) * 34;
+  };
+
+  const QUADRANTS = [
+    { name: "Quick wins", at: "left-0 top-0" },
+    { name: "Big bets", at: "right-0 top-0 text-right" },
+    { name: "Fill-ins", at: "bottom-0 left-0" },
+    { name: "Later", at: "bottom-0 right-0 text-right" },
+  ];
   const split = lineSplit(rows);
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -757,31 +826,49 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
             <span className="-rotate-90 whitespace-nowrap text-[length:var(--simple-small)] text-text2">Goal value ↑</span>
           </div>
           <div ref={box} data-testid="vxe-plot" className="relative aspect-[4/3] flex-1 touch-none rounded-[var(--simple-card-radius)] border border-line bg-surface">
-            <div className="pointer-events-none absolute inset-0 grid grid-cols-2 grid-rows-2 text-[length:var(--simple-small)] text-text-faint">
-              <span className="border-b border-r border-dashed border-line p-2">Quick wins</span>
-              <span className="border-b border-dashed border-line p-2 text-right">Big bets</span>
-              <span className="border-r border-dashed border-line p-2">Fill-ins</span>
-              <span className="p-2 text-right">Later</span>
+            <div aria-hidden className="pointer-events-none absolute inset-0">
+              {ticks.map((t) => (
+                <span key={t} className="absolute inset-y-0 border-l border-line/60" style={{ left: `${xPct(t)}%` }} />
+              ))}
+              <span data-testid="vxe-median-effort" className="absolute inset-y-0 w-0 border-l-2 border-dashed border-line-strong" style={{ left: `${xPct(byEffort.median)}%` }} />
+              <span data-testid="vxe-median-value" className="absolute inset-x-0 h-0 border-t-2 border-dashed border-line-strong" style={{ top: `${yPct(byValue.median)}%` }} />
             </div>
-            {rows.map((r, n) => {
+            {QUADRANTS.map((q, k) => (
+              <span key={q.name} data-testid="vxe-quadrant" className={`pointer-events-none absolute p-2 text-[length:var(--simple-small)] font-medium text-text2 ${q.at}`}>
+                {q.name} · {counts[k]}
+              </span>
+            ))}
+            {rows.map((r) => {
               const d = drag?.code === r.code ? drag : null;
-              // Marks on the same spot fan out sideways so each stays visible.
-              const twins = rows.slice(0, n).filter((x) => x.effort === r.effort && x.goal_value === r.goal_value).length;
-              const left = `calc(${4 + ((r.effort ?? 0) / maxE) * 92}% + ${(d?.dx ?? 0) + twins * 34}px)`;
-              const top = `calc(${4 + (1 - (r.goal_value ?? 0) / maxV) * 92}% + ${d?.dy ?? 0}px)`;
+              const left = `calc(${xPct(effortOf(r))}% + ${(d?.dx ?? 0) + fan(r)}px)`;
+              const top = `calc(${yPct(r.goal_value ?? 0)}% + ${d?.dy ?? 0}px)`;
               const isMoved = !!movedWords(moved, r);
+              const isSelected = selected === r.feature_id;
               return (
                 <button
                   key={r.feature_id}
+                  ref={(el) => {
+                    if (el) markRefs.current.set(r.feature_id, el);
+                    else markRefs.current.delete(r.feature_id);
+                  }}
                   data-testid="vxe-point"
                   data-code={r.code}
                   data-above={r.above_line ? "true" : "false"}
                   data-moved={isMoved ? "true" : undefined}
+                  aria-pressed={isSelected}
                   aria-label={`#${r.rank} ${r.code}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}`}
                   title={`#${r.rank} ${r.short_code || r.code} · ${r.title}`}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-lg ${isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-default"}`}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-lg ${isSelected ? "z-20 scale-125 ring-4 ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-pointer"}`}
                   style={{ left, top }}
+                  onClick={() => {
+                    if (dragged.current) {
+                      dragged.current = false;
+                      return;
+                    }
+                    select(r.feature_id, "mark");
+                  }}
                   onPointerDown={(e) => {
+                    dragged.current = false;
                     if (!mayChange || !r.can_reorder) return;
                     e.preventDefault();
                     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
@@ -798,7 +885,17 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
             })}
           </div>
         </div>
-        <p className="mt-1 pl-6 text-center text-[length:var(--simple-small)] text-text2">Effort (weeks) →</p>
+        <div className="flex" aria-hidden>
+          <div className="w-6 flex-none" />
+          <div className="relative h-6 flex-1">
+            {ticks.map((t) => (
+              <span key={t} data-testid="vxe-tick" className="absolute top-0.5 -translate-x-1/2 whitespace-nowrap text-[length:var(--simple-small)] tabular-nums text-text2" style={{ left: `${xPct(t)}%` }}>
+                {t} wk
+              </span>
+            ))}
+          </div>
+        </div>
+        <p className="mt-1 pl-6 text-center text-[length:var(--simple-small)] text-text2">Effort (weeks, each step doubles) →</p>
         <ul className="mt-2 flex flex-wrap gap-4 pl-6 text-[length:var(--simple-small)] text-text2" aria-label="Legend">
           {[...shapes.entries()].map(([k, s]) => (
             <li key={k} className="flex items-center gap-1">
@@ -812,9 +909,11 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
               No goal
             </li>
           )}
-          <li>Codes stay with the item; ranks are in the list. Hollow is below the line ({lineWords(data)}).</li>
+          <li>Codes stay with the item; ranks are in the list. Hollow is below the line ({lineWords(data)}). The dashed lines are the middle value and the middle effort: half the features sit on each side.</li>
         </ul>
-        {mayChange && <p className="mt-1 pl-6 text-[length:var(--simple-small)] text-text-faint">Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys).</p>}
+        <p className="mt-1 pl-6 text-[length:var(--simple-small)] text-text-faint">
+          Select a mark to find it in the list{mayChange ? "; drag it sideways to change its effort, up or down to change its goal value (or use the arrow keys)" : ""}. Escape clears.
+        </p>
       </section>
       <section aria-label="Ranked side list">
         <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Ranked</h2>
@@ -822,29 +921,42 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
         <ol className="flex flex-col gap-1">
           {rows.flatMap((r, i) => {
             const words = movedWords(moved, r);
+            const isSelected = selected === r.feature_id;
             return [
               ...(i === split ? [<LineDivider key="the-line" data={data} compact />] : []),
               <li
                 key={r.feature_id}
+                ref={(el) => {
+                  if (el) sideRefs.current.set(r.feature_id, el);
+                  else sideRefs.current.delete(r.feature_id);
+                }}
                 data-testid="side-row"
                 data-code={r.code}
                 data-above={r.above_line ? "true" : "false"}
                 data-misses={r.above_line ? undefined : "true"}
                 data-moved={words ? "true" : undefined}
-                className={`flex flex-wrap items-center gap-x-2 rounded-lg border px-2 py-1 text-[length:var(--simple-small)] ${words ? "border-accent ring-2 ring-accent" : "border-line"} ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}
+                data-selected={isSelected ? "true" : undefined}
+                className={`scroll-my-4 rounded-lg border text-[length:var(--simple-small)] ${isSelected ? "border-accent bg-accent-soft ring-2 ring-accent" : words ? "border-accent ring-2 ring-accent" : "border-line"} ${isSelected ? "" : r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}
               >
-                <span className="w-6 text-right font-semibold tabular-nums" data-testid="side-rank">
-                  {r.rank}
-                </span>
-                <span className="font-mono text-[length:var(--simple-small)]" data-testid="side-code" title={r.code}>
-                  {r.short_code || r.code}
-                </span>
-                <span className="min-w-0 flex-1 truncate" data-testid="prio-title">
-                  {r.title}
-                </span>
-                {!r.above_line && <MissesTag data={data} compact />}
-                <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
-                {words && <MovedTag words={words} />}
+                <button
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() => select(r.feature_id, "row")}
+                  className="flex w-full flex-wrap items-center gap-x-2 rounded-lg px-2 py-1 text-left"
+                >
+                  <span className="w-6 text-right font-semibold tabular-nums" data-testid="side-rank">
+                    {r.rank}
+                  </span>
+                  <span className="font-mono text-[length:var(--simple-small)]" data-testid="side-code" title={r.code}>
+                    {r.short_code || r.code}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate" data-testid="prio-title">
+                    {r.title}
+                  </span>
+                  {!r.above_line && <MissesTag data={data} compact />}
+                  <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
+                  {words && <MovedTag words={words} />}
+                </button>
               </li>,
             ];
           })}
@@ -952,13 +1064,15 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 // --------------------------------------------------------------------------- goal buckets
 
 function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
+  // plan-charts: with a dated plan, where each goal's work lands milestone by milestone.
+  if (data.plan?.milestones.length && data.plan.span) return <PlanBuckets data={data} plan={data.plan} suggestions={suggestions} />;
   const buckets: Bucket[] = data.buckets;
   // The rows' short codes, as the 2x2 and the lists show them.
   const short = new Map(data.rows.map((r) => [r.code, r.short_code || r.code]));
   return (
     <section aria-label="Goal buckets">
       <p className="mb-3 text-text2">
-        Share of {data.quarter.label}&apos;s plan per confirmed goal, by engineer-weeks ({fmt(data.weeks_total)} wk in all).
+        No dated plan yet, so the work is not placed by milestone. Engineer-weeks per confirmed goal this quarter: {fmt(data.weeks_total)} wk in all.
       </p>
       <div className="hidden overflow-hidden rounded-[var(--simple-card-radius)] border border-line sm:flex" data-testid="bucket-bar" aria-hidden>
         {buckets
@@ -990,6 +1104,48 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
             )}
           </li>
         ))}
+      </ul>
+    </section>
+  );
+}
+
+/** plan-charts: the plan's header, then a card per goal listing each feature with its milestone chips. */
+function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi }) {
+  const goals = [...plan.goals.map((g) => g.name)];
+  for (const w of plan.goal_weeks) if (!goals.includes(w.goal)) goals.push(w.goal);
+  const noGoal = plan.slices.some((x) => !x.goal);
+  // A confirmed goal of the same name keeps its suggestions under its card.
+  const bucketOf = (goal: string) => data.buckets.find((b) => !b.no_goal && b.title.toLowerCase() === goal.toLowerCase());
+  return (
+    <section aria-label="Goal buckets">
+      <PlanBucketsHead plan={plan} />
+      <ul className="mt-[var(--simple-gap)] grid gap-[var(--simple-gap)] sm:grid-cols-2">
+        {goals.map((g) => {
+          const b = bucketOf(g);
+          return (
+            <li key={g} data-testid="plan-goal" data-goal={g} className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-3">
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 className="font-semibold">{g}</h3>
+                <span data-testid="plan-goal-total" className="tabular-nums">
+                  {wk(goalTotal(plan, g))} wk
+                </span>
+              </div>
+              <PlanFeatureList plan={plan} goal={g} />
+              {b && (
+                <div className="mt-3 border-t border-line pt-3">
+                  <GoalSuggestionList goal={{ id: "", key: b.key, title: b.title }} api={suggestions} />
+                </div>
+              )}
+            </li>
+          );
+        })}
+        {noGoal && (
+          <li data-testid="plan-goal" data-goal="" className="rounded-[var(--simple-card-radius)] border border-warn bg-surface p-3">
+            <h3 className="font-semibold">No goal</h3>
+            <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no goal in the plan</p>
+            <PlanFeatureList plan={plan} goal={null} />
+          </li>
+        )}
       </ul>
     </section>
   );

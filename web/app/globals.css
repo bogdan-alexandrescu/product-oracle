@@ -158,10 +158,40 @@
   --simple-card-radius: 18px;
   --simple-lead: 22px;
   --simple-ghost: #7d8ea3;
+  /* plan-charts: the milestones' colours (M1 light to M3 deep, M4 aside) and the text on them. */
+  --simple-m1: #b6daf2;
+  --simple-m1-ink: #0b2e4a;
+  --simple-m2: #5aa9dc;
+  --simple-m2-ink: #04233a;
+  --simple-m3: #075985;
+  --simple-m3-ink: #ffffff;
+  --simple-m4: #d9c27a;
+  --simple-m4-ink: #2e2400;
 }
 :root[data-theme="dark"] [data-mode="simple"],
 :root[data-theme="dark"][data-mode="simple"] {
   --simple-ghost: #828d9b;
+  --simple-m1: #1f4a7a;
+  --simple-m1-ink: #e6f4fd;
+  --simple-m2: #3a86c4;
+  --simple-m2-ink: #ffffff;
+  --simple-m3: #9fd6fa;
+  --simple-m3-ink: #06263d;
+  --simple-m4: #c9ad5a;
+  --simple-m4-ink: #1f1600;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) [data-mode="simple"],
+  :root:not([data-theme="light"])[data-mode="simple"] {
+    --simple-m1: #1f4a7a;
+    --simple-m1-ink: #e6f4fd;
+    --simple-m2: #3a86c4;
+    --simple-m2-ink: #ffffff;
+    --simple-m3: #9fd6fa;
+    --simple-m3-ink: #06263d;
+    --simple-m4: #c9ad5a;
+    --simple-m4-ink: #1f1600;
+  }
 }
 @media (max-width: 600px) {
   [data-mode="simple"] {
