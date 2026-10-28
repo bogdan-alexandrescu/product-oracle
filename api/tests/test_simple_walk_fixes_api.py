@@ -43,8 +43,10 @@ from oracle.rituals.models import Ritual
 from oracle.simple import chat, service
 from oracle.simple.priorities import prd_code, short_codes
 from oracle.tenancy import tenant_session
-from tests.test_simple_chat_api import ASK, World as ChatWorld, make_people as chat_people
+from tests.test_simple_chat_api import ASK
+from tests.test_simple_chat_api import World as ChatWorld
 from tests.test_simple_chat_api import clock as clock  # noqa: F401
+from tests.test_simple_chat_api import make_people as chat_people
 from tests.test_simple_meetings_api import start, uid
 from tests.test_simple_meetings_api import world as meeting_world
 from tests.test_simple_meetings_walk import ritual
@@ -191,6 +193,10 @@ async def test_item_card_names_the_prd_section(client):
     r = await client.get("/v1/simple/roadmap", headers=ctx.as_("viewer"))
     assert r.status_code == 200, r.text
     reasons = {i["key"]: i["reasons"] for i in r.json()["items"]}
+    assert {i["key"]: i["code"] for i in r.json()["items"]} == {
+        "loop-guards": "F-06",
+        "other": None,
+    }
     assert "From Guards Prd, F-06 Loop and blast-radius guards." in reasons["loop-guards"]
     assert "From Guards Prd, section scope." in reasons["other"]
     assert service.prd_section_label("f-06", None) == "F-06"

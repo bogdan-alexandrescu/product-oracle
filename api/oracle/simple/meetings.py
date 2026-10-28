@@ -973,6 +973,21 @@ async def _upcoming(
             )
         ).all()
     ) if occ_ids else {}  # fmt: skip
+    # The walk: the ritual's real attendees are its owner and attendees and whoever
+    # attended the last review held from it (a meeting started from one of its occurrences).
+    held: dict[uuid.UUID, list[uuid.UUID]] = {}
+    ritual_ids = [r.id for _, r in rows]
+    if ritual_ids:
+        for rid, ids in await db.execute(
+            select(RitualOccurrence.ritual_id, SimpleMeeting.attendee_ids)
+            .join(RitualOccurrence, RitualOccurrence.id == SimpleMeeting.occurrence_id)
+            .where(RitualOccurrence.ritual_id.in_(ritual_ids))
+            .order_by(SimpleMeeting.started_at.desc())
+        ):
+            held.setdefault(rid, list(ids or []))
+    missing = {i for ids in held.values() for i in ids} - set(names)
+    if missing:
+        names.update(await _names(db, missing))
     out = []
     for o, r in rows:
         due = o.due_at if o is not None else r.next_due_at
@@ -985,7 +1000,7 @@ async def _upcoming(
             length_min=min(max(r.duration_min, 5), 240),
             attendees=[
                 SimplePersonRef(id=i, name=names.get(i, "someone"))
-                for i in dict.fromkeys([r.owner_id, *(r.attendee_ids or [])])
+                for i in dict.fromkeys([r.owner_id, *(r.attendee_ids or []), *held.get(r.id, [])])
             ],
             meeting_id=started.get(o.id) if o is not None else None,
             pre_read_ready=o is not None and o.status == "ready",

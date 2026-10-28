@@ -589,16 +589,31 @@ async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
     }
 
 
-def _key(meeting_id: uuid.UUID | None, me: uuid.UUID) -> tuple[str, str]:
-    path = f"/simple/meetings/{meeting_id}" if meeting_id else f"/simple/ask/{me}"
+def page_of(page: str | None) -> str:
+    """The Simple page an Ask thread belongs to: its path without query, fragment or
+    trailing slash; Home (``/simple``) for none or a path outside Simple."""
+    path = (page or "").split("?")[0].split("#")[0].strip()
+    path = "/" + "/".join(p for p in path.split("/") if p)
+    return path if path == "/simple" or path.startswith("/simple/") else "/simple"
+
+
+def _key(meeting_id: uuid.UUID | None, me: uuid.UUID, page: str | None = None) -> tuple[str, str]:
+    """A meeting's one shared thread; else the person's Ask thread on one page (the walk:
+    a thread per person and page, so a page shows only its own lines; the old per-person
+    thread, ``/simple/ask/<me>``, stays readable but is no page's)."""
+    path = f"/simple/meetings/{meeting_id}" if meeting_id else f"/simple/ask/{me}{page_of(page)}"
     return path, f"screen:{path}"
 
 
 async def _thread(
-    db: AsyncSession, principal: Any, meeting_id: uuid.UUID | None, create: bool
+    db: AsyncSession,
+    principal: Any,
+    meeting_id: uuid.UUID | None,
+    create: bool,
+    page: str | None = None,
 ) -> Discussion | None:
     me = _me(principal)
-    path, key = _key(meeting_id, me)
+    path, key = _key(meeting_id, me, page)
     d = await db.scalar(
         select(Discussion)
         .where(Discussion.subject_key == key, Discussion.origin == "panel")
@@ -624,14 +639,14 @@ async def _thread(
 
 
 async def thread(
-    db: AsyncSession, principal: Any, meeting_id: uuid.UUID | None = None
+    db: AsyncSession, principal: Any, meeting_id: uuid.UUID | None = None, page: str | None = None
 ) -> ChatThreadOut:
     rules = None
     if meeting_id is not None:
         rules = await rules_of(db, meeting_id)
         if not _attends(principal, rules):
             raise ChatError(403, "Only the meeting's attendees use its chat")
-    d = await _thread(db, principal, meeting_id, create=False)
+    d = await _thread(db, principal, meeting_id, create=False, page=page)
     messages: list[ChatMessageOut] = []
     if d is not None:
         msgs = list(
@@ -675,6 +690,7 @@ async def post(
     text: str,
     meeting_id: uuid.UUID | None = None,
     only_understood: bool = False,
+    page: str | None = None,
 ) -> ChatThreadOut:
     """The person's line and Oracle's reply, in one go. ``only_understood`` (the Ask
     panel's one box): a line Oracle's reader does not know writes nothing and answers
@@ -688,10 +704,10 @@ async def post(
     ctx = await Ctx(db, principal, rules).load()
     reply = parse(ctx, text)
     if only_understood and not reply.understood:
-        out = await thread(db, principal, meeting_id)
+        out = await thread(db, principal, meeting_id, page)
         out.understood = False
         return out
-    d = await _thread(db, principal, meeting_id, create=True)
+    d = await _thread(db, principal, meeting_id, create=True, page=page)
     assert d is not None
     # Real time orders the lines (the company clock may stand still in tests).
     at = datetime.now(UTC)
@@ -713,7 +729,7 @@ async def post(
         if card.op in FLOW_OPS:
             await _request_visual(db, principal, card)
     await db.commit()
-    out = await thread(db, principal, meeting_id)
+    out = await thread(db, principal, meeting_id, page)
     out.understood = reply.understood
     return out
 

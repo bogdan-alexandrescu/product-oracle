@@ -91,6 +91,9 @@ class Entry:
     owner_role: str | None = None
     # S4: the track owner's name (or e-mail) when enabled.
     owner_name: str | None = None
+    # The heading of the PRD section the item was imported from (the walk: "F-06 Loop
+    # and blast-radius guards" in the card's reasons).
+    prd_heading: str | None = None
 
 
 @dataclass
@@ -318,6 +321,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 owner_name=owner_names.get(track.id) if track is not None else None,
             )
         )
+    await _prd_headings(db, entries)
     # Dependencies within each roadmap version, by item key.
     by_version: dict[tuple[Any, str], Entry] = {
         (e.row.roadmap_version_id, e.row.item_key): e for e in entries
@@ -509,6 +513,48 @@ def suggestion_out(s: RoadmapDateSuggestion, row: RoadmapItem, may: bool) -> Dat
     )
 
 
+async def _prd_headings(db: AsyncSession, entries: list[Entry]) -> None:
+    """Each entry's PRD section heading, in one statement."""
+    from oracle.docs.models import Section
+
+    wanted = {
+        (e.row.prd_version_id, e.row.prd_section_key)
+        for e in entries
+        if e.row.prd_version_id and e.row.prd_section_key
+    }
+    if not wanted:
+        return
+    heads = {
+        (x.version_id, x.section_key): x.heading
+        for x in await db.scalars(
+            select(Section).where(Section.version_id.in_({v for v, _ in wanted}))
+        )
+    }
+    for e in entries:
+        e.prd_heading = heads.get((e.row.prd_version_id, e.row.prd_section_key))
+
+
+def _prd_code(section_key: str | None) -> str | None:
+    from oracle.simple.priorities import prd_code
+
+    return prd_code(section_key)
+
+
+def prd_section_label(section_key: str, heading: str | None) -> str:
+    """How the card names the PRD section an item came from: the PRD's code and the
+    section's heading ("F-06 Loop and blast-radius guards"); "section <key>" when the
+    key is no code and the heading is unknown."""
+    from oracle.simple.priorities import prd_code
+
+    code = prd_code(section_key)
+    words = (heading or "").strip()
+    if code and words.upper().startswith(code):
+        words = words[len(code) :].lstrip(" :.-·–—")
+    if code:
+        return f"{code} {words}".strip()
+    return words or f"section {section_key}"
+
+
 def _reasons(e: Entry) -> list[str]:
     """S4: up to 3 one-line reasons, from the item's evidence: its priority's rationale,
     the goal its feature supports, the PRD section it was drawn from."""
@@ -519,7 +565,8 @@ def _reasons(e: Entry) -> list[str]:
     if e.goal is not None:
         out.append(f"Serves the goal {e.goal.title}.")
     if e.prd is not None and e.row.prd_section_key:
-        out.append(f"From {e.prd.title}, section {e.row.prd_section_key}.")
+        label = prd_section_label(e.row.prd_section_key, e.prd_heading)
+        out.append(f"From {e.prd.title}, {label}.")
     return out[:3]
 
 
@@ -566,6 +613,7 @@ def item_out(
     return SimpleRoadmapItem(
         id=row.id,
         key=row.item_key,
+        code=_prd_code(row.prd_section_key),
         title=row.title,
         outcome=row.outcome,
         horizon=row.horizon,  # type: ignore[arg-type]

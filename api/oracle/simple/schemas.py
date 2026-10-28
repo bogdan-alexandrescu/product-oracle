@@ -123,6 +123,9 @@ class DateSuggestionOut(BaseModel):
 class SimpleRoadmapItem(BaseModel):
     id: uuid.UUID
     key: str
+    # The PRD's own code of the section the item was imported from ("f-06" -> "F-06");
+    # null when that section key is no code.
+    code: str | None = None
     title: str
     outcome: str | None = None
     horizon: Literal["now", "next", "later"]
@@ -667,6 +670,10 @@ class SimpleVisualOut(BaseModel):
     comments: list[SimpleVisualCommentOut]
     # Oracle is drawing it (a queued or running job).
     pending: bool
+    # Oracle's newest drawing job ended without a drawing (it failed, or its answer did
+    # not check out): the panel says so and offers Retry. ``failure``: why, in words.
+    failed: bool = False
+    failure: str | None = None
     # Commenters and up comment on a drawn visual; who changes the subject directly asks
     # for a drawing and revises.
     can_comment: bool
