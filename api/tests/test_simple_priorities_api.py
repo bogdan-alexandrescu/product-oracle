@@ -19,6 +19,7 @@ tests.test_simple_changes_api; the reason check never reaches a model (``no_llm`
 Each test's card is its docstring (protects / fails_when / no_claim).
 """
 
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
@@ -389,3 +390,88 @@ async def test_confirm_item_into_the_working_draft(client):
         assert d.overlay[w.ids["pay-5"]]["draft"] is False
     assert (await w.read(client))["drafts"] == []
     assert [d["code"] for d in (await w.read(client, "viewer"))["drafts"]] == ["pay-5"]
+
+
+def test_short_codes_feature_code_initials_and_clashes():
+    """protects=each row's short code is its feature's code when it has one (F-12), else two
+    or three capitals from its feature's key (initials of up to three words, or a one-word
+    key's first two letters), unique with a digit added on a clash in the features' creation
+    order (the order given), never by key or rank; fails_when=a code repeats, a later feature
+    takes an earlier one's code, drops the feature code or runs past three letters;
+    no_claim=the web's drawing."""
+    from oracle.simple.priorities import short_codes
+
+    # In creation order: data-ingest came after delivery-integrity, pay-10 after pay-2.
+    keys = ["pay-10", "delivery-integrity", "data-ingest", "F-12", "pricing", "a-b-c-d", "x",
+            "pay-3"]  # fmt: skip
+    assert short_codes(keys) == ["PA", "DI", "DI2", "F-12", "PR", "ABC", "XX", "PA2"]
+
+
+async def test_short_codes_stay_when_the_rank_moves(client):
+    """protects=each priorities row carries a short code computed once on the API (its
+    feature's key's initials: ledger LE for pay-1, sync SY for pay-2, ...), and a re-estimate
+    that moves pay-2 from rank 2 to rank 1 leaves every code where it was; fails_when=a row has
+    no short code, two rows share one, or a code follows the rank; no_claim=the web's highlight
+    of the moved row."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    before = {r["code"]: r["short_code"] for r in (await w.read(client))["rows"]}
+    assert before == {"pay-1": "LE", "pay-2": "SY", "pay-3": "EX", "pay-4": "CH",
+                      "insights": "IN", "widgets": "WI"}  # fmt: skip
+    r = await w.change(client, "owner", "estimate_feature", "pay-2",
+                       {"goal_value": None, "effort": 8}, {"goal_value": 20})  # fmt: skip
+    assert r.status_code == 201, r.text
+    out = await w.read(client)
+    assert out["rows"][0]["code"] == "pay-2"
+    assert {r["code"]: r["short_code"] for r in out["rows"]} == before
+    # A commenter reads the same codes.
+    assert {
+        r["code"]: r["short_code"] for r in (await w.read(client, "commenter"))["rows"]
+    } == before
+
+
+async def test_short_codes_are_the_same_for_every_reader(client):
+    """protects=a feature's short code comes from the feature, never from the item a reader
+    happens to see: board-sync's item sits on a roadmap only approvers see, so the owner's row
+    reads its item (code ``secret``) and the commenter's the feature (``board-sync``), and both
+    read BS; fails_when=a reader's visible item decides the code (owner SE, commenter BS);
+    no_claim=the web."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    async with tenant_session(ctx.tenant_id) as s:
+        seed = Seed(s)
+        _, hpv, _, hrv = await seed.roadmap("board-plan", visibility="approvers")
+        board = await seed.entity("feature", "board-sync", effort=1)
+        await seed.item(hrv, hpv, "secret", feature_id=board.id)
+        await s.commit()
+    seen = {}
+    for who in ("owner", "commenter"):
+        rows = (await w.read(client, who))["rows"]
+        seen[who] = {r["feature_id"]: r["short_code"] for r in rows}
+        assert seen[who][str(board.id)] == "BS", who
+    assert seen["owner"] == seen["commenter"]
+
+
+async def test_short_codes_a_new_feature_never_renames_an_older_one(client):
+    """protects=clash digits follow the features' creation order: delivery-integrity reads DI,
+    and data-ingest, created later though its key sorts first, reads DI2; delivery-integrity
+    keeps DI; fails_when=a new feature whose key sorts earlier takes DI and renames the older
+    one DI2; no_claim=the web."""
+    ctx = await make_people()
+    w = await World(ctx).build()
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Entity(type="feature", key="delivery-integrity", title="Delivery integrity",
+                     status="confirmed", origin="user", attrs={"effort": 1},
+                     created_at=datetime(2026, 1, 1, tzinfo=UTC)))  # fmt: skip
+        await s.commit()
+    code = lambda out, key: next(  # noqa: E731
+        r["short_code"] for r in out["rows"] if r["code"] == key
+    )
+    assert code(await w.read(client), "delivery-integrity") == "DI"
+    async with tenant_session(ctx.tenant_id) as s:
+        s.add(Entity(type="feature", key="data-ingest", title="Data ingest",
+                     status="confirmed", origin="user", attrs={"effort": 1},
+                     created_at=datetime(2026, 2, 1, tzinfo=UTC)))  # fmt: skip
+        await s.commit()
+    out = await w.read(client)
+    assert (code(out, "delivery-integrity"), code(out, "data-ingest")) == ("DI", "DI2")

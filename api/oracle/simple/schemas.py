@@ -548,6 +548,11 @@ class SimplePriorityRow(BaseModel):
     item_id: uuid.UUID | None = None
     # The item's key, else the feature's key.
     code: str
+    # What a mark on the value/effort 2x2 shows: a short code that never changes with rank, the
+    # feature's code (F-12) else 2-3 capitals from the feature's key, the same for every
+    # reader, unique in the company (a digit added on a clash, in the features' creation
+    # order). oracle.simple.priorities.short_codes.
+    short_code: str = ""
     title: str
     goal: SimplePriorityGoal | None = None
     milestone: str | None = None

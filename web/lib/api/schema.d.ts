@@ -38211,6 +38211,11 @@ export interface components {
             item_id?: string | null;
             /** Code */
             code: string;
+            /**
+             * Short Code
+             * @default
+             */
+            short_code: string;
             /** Title */
             title: string;
             goal?: components["schemas"]["SimplePriorityGoal"] | null;

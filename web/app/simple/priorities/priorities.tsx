@@ -97,14 +97,20 @@ export function Priorities() {
   const mayChange = capsReady && can("create_simple_change") && !!data?.can_change;
   // S7: Oracle's suggested features under each goal bucket (an accept adds a draft here).
   const suggestions = useGoalSuggestions(() => q.reload());
+  // The item just moved (dragged, re-estimated or moved with the keys) and its rank before, kept
+  // until the next move or leaving the page: highlighted with "moved #a → #b".
+  const [moved, setMoved] = useState<Moved | null>(null);
 
-  async function changed(r: Sent, done: string, proposedTo: string): Promise<void> {
+  // An applied change is the next move: `row` is the item it moved (highlighted), none clears
+  // the highlight; `moves` false (a decline) leaves it.
+  async function changed(r: Sent, done: string, proposedTo: string, row?: Row, moves = true): Promise<void> {
     if (!r.ok) {
       toast({ message: r.message });
       return;
     }
     await q.reload();
     const c = r.change;
+    if (c.status === "applied" && moves) setMoved(row ? { featureId: row.feature_id, from: row.rank } : null);
     if (c.status === "applied")
       toast({
         message: done,
@@ -113,6 +119,7 @@ export function Priorities() {
               label: "Undo",
               onClick: async () => {
                 const u = await api.POST("/v1/simple/changes/{change_id}/undo", { params: { path: { change_id: c.id } } });
+                if (row) setMoved(null);
                 await q.reload();
                 toast({ message: u.response.ok ? "Undone" : "Could not undo" });
               },
@@ -173,9 +180,9 @@ export function Priorities() {
       {q.error && !data && <p role="alert" className="text-crit">{q.error}</p>}
       {!data && !q.error && <p className="text-text2">Loading priorities…</p>}
       {data && tab === "ranked" && (
-        <Ranked data={data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} />
+        <Ranked data={data} phone={phone} compare={compare} mayChange={mayChange} changed={changed} moved={moved} />
       )}
-      {data && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} />}
+      {data && tab === "value-effort" && <ValueEffort data={data} shapes={shapes} mayChange={mayChange} changed={changed} moved={moved} />}
       {data && tab === "buckets" && <Buckets data={data} suggestions={suggestions} />}
     </div>
   );
@@ -188,14 +195,38 @@ function goalShapes(rows: Row[]): Map<string, Shape> {
   return out;
 }
 
-type Changed = (r: Sent, done: string, proposedTo: string) => Promise<void>;
+type Changed = (r: Sent, done: string, proposedTo: string, row?: Row, moves?: boolean) => Promise<void>;
+type Moved = { featureId: string; from: number };
+
+/** "moved #8 → #3" for the row just moved (its rank now from the read); null for any other row. */
+function movedWords(moved: Moved | null, r: Row): string | null {
+  if (moved?.featureId !== r.feature_id) return null;
+  return moved.from === r.rank ? `stays #${r.rank}` : `moved #${moved.from} → #${r.rank}`;
+}
+
+function MovedTag({ words }: { words: string }) {
+  return (
+    <span data-testid="moved" className="flex-none whitespace-nowrap rounded-full bg-accent px-2 text-[length:var(--simple-small)] font-medium text-on-accent">
+      {words}
+    </span>
+  );
+}
+
+/** The row's short code (stays with the item however it ranks); its key in the title. */
+function CodeChip({ r }: { r: Row }) {
+  return (
+    <span data-testid="prio-code" title={r.code} className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">
+      {r.short_code || r.code}
+    </span>
+  );
+}
 
 // --------------------------------------------------------------------------- ranked list
 
-function Ranked({ data, phone, compare, mayChange, changed }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed }) {
+function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out; phone: boolean; compare: boolean; mayChange: boolean; changed: Changed; moved: Moved | null }) {
   const [side, setSide] = useState<"yours" | "oracle">("yours");
   const [move, setMove] = useState<{ row: Row; position: number } | null>(null);
-  const list = <YourList data={data} mayChange={mayChange} onMove={(row, position) => setMove({ row, position })} changed={changed} />;
+  const list = <YourList data={data} mayChange={mayChange} onMove={(row, position) => setMove({ row, position })} changed={changed} moved={moved} />;
   return (
     <>
       {compare && phone && (
@@ -227,7 +258,7 @@ function Ranked({ data, phone, compare, mayChange, changed }: { data: Out; phone
           onClose={() => setMove(null)}
           changed={async (r, done, to) => {
             setMove(null);
-            await changed(r, done, to);
+            await changed(r, done, to, move.row);
           }}
         />
       )}
@@ -235,7 +266,7 @@ function Ranked({ data, phone, compare, mayChange, changed }: { data: Out; phone
   );
 }
 
-function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed }) {
+function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
   const rows = data.rows;
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
@@ -284,6 +315,7 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
         // Any of the feature's items (a proposal on its later item shows here too).
         const proposals = data.proposals.filter((p) => p.feature_id === r.feature_id && (p.op === "override_priority" || p.op === "estimate_feature"));
         const target = drag && drag.to === i && drag.from !== i;
+        const words = movedWords(moved, r);
         return [
           ...divider,
           <li
@@ -296,7 +328,8 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
             data-above={r.above_line ? "true" : "false"}
             data-end={r.end_date ?? ""}
             data-misses={r.above_line ? undefined : "true"}
-            className={`rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"} ${target ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
+            data-moved={words ? "true" : undefined}
+            className={`rounded-[var(--simple-card-radius)] border p-3 ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"} ${target || words ? "border-accent ring-2 ring-accent" : "border-line"} ${drag?.from === i ? "opacity-60" : ""}`}
           >
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               {mayChange && r.can_reorder && (
@@ -333,8 +366,9 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
                 className={`inline-block h-3 w-3 flex-none rounded-full border-2 border-accent ${r.above_line ? "bg-accent" : "bg-transparent"}`}
                 data-testid="prio-line-mark"
               />
-              <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{r.code}</span>
+              <CodeChip r={r} />
               <span className="min-w-[12rem] flex-1 font-medium" data-testid="prio-title">{r.title}</span>
+              {words && <MovedTag words={words} />}
               {!r.above_line && <MissesTag data={data} />}
               <span className="ml-auto flex flex-wrap items-center gap-x-3 text-[length:var(--simple-small)] text-text2">
                 {r.no_goal ? (
@@ -366,7 +400,7 @@ function YourList({ data, mayChange, onMove, changed }: { data: Out; mayChange: 
               </p>
             )}
             {proposals.map((p) => (
-              <ProposalCard key={p.change_id} p={p} changed={changed} />
+              <ProposalCard key={p.change_id} p={p} row={r} changed={changed} />
             ))}
           </li>,
         ];
@@ -386,7 +420,7 @@ function OracleOrder({ rows }: { rows: Row[] }) {
           <li key={r.feature_id} data-testid="oracle-row" data-code={r.code} className="rounded-[var(--simple-card-radius)] border border-dashed border-line-strong bg-surface p-3">
             <div className="flex flex-wrap items-center gap-3">
               <span className="w-8 text-right text-[length:var(--simple-lead)] font-semibold tabular-nums">{r.oracle_rank ?? "–"}</span>
-              <span className="rounded-md bg-surface2 px-1.5 font-mono text-[length:var(--simple-small)]">{r.code}</span>
+              <CodeChip r={r} />
               <span className="flex-1 font-medium">{r.title}</span>
               <span className="text-[length:var(--simple-small)] text-text2">score {fmt(r.score, 2)}</span>
             </div>
@@ -504,7 +538,7 @@ function proposalWords(p: Proposal): string {
 }
 
 /** A proposal inline under its row: the flow thumbnail (or "No flow yet") widens the card in place; a phone opens a full-height sheet. */
-function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
+function ProposalCard({ p, row, changed }: { p: Proposal; row?: Row; changed: Changed }) {
   const [open, setOpen] = useState(false);
   const phone = usePhone();
   const [busy, setBusy] = useState(false);
@@ -519,6 +553,8 @@ function ProposalCard({ p, changed }: { p: Proposal; changed: Changed }) {
         : { ok: false, status: r.response.status, message: `Could not decide: ${detailMessage(r.error, r.response)}`, pushback: false },
       action === "accept" ? `Accepted ${p.code}'s proposal` : `Declined ${p.code}'s proposal`,
       "",
+      row,
+      action === "accept",
     );
   }
 
@@ -638,7 +674,7 @@ function Drafts({ drafts, proposals, mayChange, changed }: { drafts: Draft[]; pr
 
 // --------------------------------------------------------------------------- value / effort
 
-function ShapeMark({ shape, hollow, rank }: { shape: Shape; hollow: boolean; rank?: number }) {
+function ShapeMark({ shape, hollow, code }: { shape: Shape; hollow: boolean; code?: string }) {
   const fill = hollow ? "var(--surface)" : "var(--accent)";
   const text = hollow ? "var(--text)" : "var(--on-accent)";
   const common = { fill, stroke: "var(--accent)", strokeWidth: 2 };
@@ -653,16 +689,16 @@ function ShapeMark({ shape, hollow, rank }: { shape: Shape; hollow: boolean; ran
   return (
     <svg width="32" height="32" viewBox="0 0 32 32" aria-hidden>
       {path[shape]}
-      {rank != null && (
-        <text x="16" y={shape === "triangle" ? 23 : 20.5} textAnchor="middle" fontSize="12" fontWeight="700" fill={text}>
-          {rank}
+      {code != null && (
+        <text data-testid="vxe-code" x="16" y={shape === "triangle" ? 23 : 20} textAnchor="middle" fontSize={code.length <= 2 ? 11 : code.length === 3 ? 9.5 : 8} fontWeight="700" fill={text}>
+          {code}
         </text>
       )}
     </svg>
   );
 }
 
-function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: Map<string, Shape>; mayChange: boolean; changed: Changed }) {
+function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; shapes: Map<string, Shape>; mayChange: boolean; changed: Changed; moved: Moved | null }) {
   const box = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ code: string; x0: number; y0: number; dx: number; dy: number } | null>(null);
   const rows = data.rows;
@@ -681,6 +717,7 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
       }),
       `Re-estimated ${r.code}: ${words}`,
       "the decider",
+      r,
     );
   }
 
@@ -732,14 +769,17 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
               const twins = rows.slice(0, n).filter((x) => x.effort === r.effort && x.goal_value === r.goal_value).length;
               const left = `calc(${4 + ((r.effort ?? 0) / maxE) * 92}% + ${(d?.dx ?? 0) + twins * 34}px)`;
               const top = `calc(${4 + (1 - (r.goal_value ?? 0) / maxV) * 92}% + ${d?.dy ?? 0}px)`;
+              const isMoved = !!movedWords(moved, r);
               return (
                 <button
                   key={r.feature_id}
                   data-testid="vxe-point"
                   data-code={r.code}
                   data-above={r.above_line ? "true" : "false"}
+                  data-moved={isMoved ? "true" : undefined}
                   aria-label={`#${r.rank} ${r.code}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}`}
-                  className={`absolute -translate-x-1/2 -translate-y-1/2 ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-default"}`}
+                  title={`#${r.rank} ${r.short_code || r.code} · ${r.title}`}
+                  className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-lg ${isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-default"}`}
                   style={{ left, top }}
                   onPointerDown={(e) => {
                     if (!mayChange || !r.can_reorder) return;
@@ -752,7 +792,7 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
                   onPointerCancel={() => setDrag(null)}
                   onKeyDown={(e) => key(e, r)}
                 >
-                  <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} rank={r.rank} />
+                  <ShapeMark shape={shapeOf(r)} hollow={!r.above_line} code={r.short_code || r.code} />
                 </button>
               );
             })}
@@ -772,7 +812,7 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
               No goal
             </li>
           )}
-          <li>Numbers are ranks; hollow is below the line ({lineWords(data)}).</li>
+          <li>Codes stay with the item; ranks are in the list. Hollow is below the line ({lineWords(data)}).</li>
         </ul>
         {mayChange && <p className="mt-1 pl-6 text-[length:var(--simple-small)] text-text-faint">Drag a mark sideways to change its effort, up or down to change its goal value (or use the arrow keys).</p>}
       </section>
@@ -780,16 +820,34 @@ function ValueEffort({ data, shapes, mayChange, changed }: { data: Out; shapes: 
         <h2 className="mb-2 text-[length:var(--simple-h2)] font-semibold leading-[var(--simple-h2-leading)]">Ranked</h2>
         <LineCaption data={data} compact />
         <ol className="flex flex-col gap-1">
-          {rows.flatMap((r, i) => [
-            ...(i === split ? [<LineDivider key="the-line" data={data} compact />] : []),
-            <li key={r.feature_id} data-testid="side-row" data-code={r.code} data-above={r.above_line ? "true" : "false"} data-misses={r.above_line ? undefined : "true"} className={`flex items-center gap-2 rounded-lg border border-line px-2 py-1 text-[length:var(--simple-small)] ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}>
-              <span className="w-6 text-right font-semibold tabular-nums">{r.rank}</span>
-              <span className="font-mono text-[length:var(--simple-small)]">{r.code}</span>
-              <span className="min-w-0 flex-1 truncate" data-testid="prio-title">{r.title}</span>
-              {!r.above_line && <MissesTag data={data} compact />}
-              <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
-            </li>,
-          ])}
+          {rows.flatMap((r, i) => {
+            const words = movedWords(moved, r);
+            return [
+              ...(i === split ? [<LineDivider key="the-line" data={data} compact />] : []),
+              <li
+                key={r.feature_id}
+                data-testid="side-row"
+                data-code={r.code}
+                data-above={r.above_line ? "true" : "false"}
+                data-misses={r.above_line ? undefined : "true"}
+                data-moved={words ? "true" : undefined}
+                className={`flex flex-wrap items-center gap-x-2 rounded-lg border px-2 py-1 text-[length:var(--simple-small)] ${words ? "border-accent ring-2 ring-accent" : "border-line"} ${r.above_line ? "bg-surface" : "bg-surface2 text-text2"}`}
+              >
+                <span className="w-6 text-right font-semibold tabular-nums" data-testid="side-rank">
+                  {r.rank}
+                </span>
+                <span className="font-mono text-[length:var(--simple-small)]" data-testid="side-code" title={r.code}>
+                  {r.short_code || r.code}
+                </span>
+                <span className="min-w-0 flex-1 truncate" data-testid="prio-title">
+                  {r.title}
+                </span>
+                {!r.above_line && <MissesTag data={data} compact />}
+                <span className="tabular-nums text-text2">{fmt(r.score, 2)}</span>
+                {words && <MovedTag words={words} />}
+              </li>,
+            ];
+          })}
         </ol>
       </section>
     </div>
@@ -895,6 +953,8 @@ function LineDivider({ data, compact = false }: { data: Out; compact?: boolean }
 
 function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestionsApi }) {
   const buckets: Bucket[] = data.buckets;
+  // The rows' short codes, as the 2x2 and the lists show them.
+  const short = new Map(data.rows.map((r) => [r.code, r.short_code || r.code]));
   return (
     <section aria-label="Goal buckets">
       <p className="mb-3 text-text2">
@@ -922,7 +982,7 @@ function Buckets({ data, suggestions }: { data: Out; suggestions: GoalSuggestion
               <div className={`h-full ${b.no_goal ? "bg-warn" : "bg-accent"}`} style={{ width: `${b.share * 100}%` }} />
             </div>
             {b.no_goal && <p className="mt-1 text-[length:var(--simple-small)] text-warn">⚠ Serves no confirmed goal</p>}
-            <p className="mt-1 text-[length:var(--simple-small)] text-text2">{b.codes.length ? b.codes.join(", ") : "Nothing this quarter"}</p>
+            <p className="mt-1 text-[length:var(--simple-small)] text-text2">{b.codes.length ? b.codes.map((c) => short.get(c) ?? c).join(", ") : "Nothing this quarter"}</p>
             {!b.no_goal && (
               <div className="mt-3 border-t border-line pt-3">
                 <GoalSuggestionList goal={{ id: "", key: b.key, title: b.title }} api={suggestions} />

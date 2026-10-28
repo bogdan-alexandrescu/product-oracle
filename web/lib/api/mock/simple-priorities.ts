@@ -27,15 +27,18 @@ export interface PrioritiesCtx {
   roles?: Record<string, Role>;
 }
 
-/** Each item's feature: Oracle's goal value (Σ goal weight x contribution) and effort in weeks. */
-const FEATURES: Record<string, { value: number; effort: number }> = {
+/**
+ * Each item's feature: Oracle's goal value (Σ goal weight x contribution) and effort in weeks;
+ * `code`: the feature's own code (its key in the baseline), when it has one.
+ */
+const FEATURES: Record<string, { value: number; effort: number; code?: string }> = {
   "alert-rules": { value: 6, effort: 4 },
   "alert-digest": { value: 5, effort: 2 },
   "alert-mobile": { value: 4, effort: 3 },
   "alert-export": { value: 0, effort: 1 },
   "alert-sso": { value: 3, effort: 2 },
   "setup-checklist": { value: 4, effort: 2 },
-  "setup-import": { value: 6, effort: 3 },
+  "setup-import": { value: 6, effort: 3, code: "F-12" },
   "setup-video": { value: 0, effort: 1 },
   "price-tiers": { value: 0, effort: 3 },
 };
@@ -43,6 +46,34 @@ const CONFIDENCE: Record<string, number> = { high: 0.8, medium: 0.5, low: 0.3 };
 
 const round = (n: number): number => Math.round(n * 1000) / 1000;
 const featureId = (itemId: string): string => `feature-${itemId}`;
+
+const FEATURE_CODE = /^[A-Z]{1,3}-\d+$/;
+
+/** Initials of up to three words of `key`; a one-word key's first two letters. */
+function initials(key: string): string {
+  const words = key.toLowerCase().match(/[a-z]+/g) ?? [];
+  if (words.length >= 2) return words.slice(0, 3).map((w) => w[0]).join("").toUpperCase();
+  return `${words[0] ?? ""}xx`.slice(0, 2).toUpperCase();
+}
+
+/**
+ * priorities.short_codes: each feature's short code, for feature keys in creation order: the
+ * key when it is a code (F-12), else its initials, a digit added on a clash in creation order,
+ * so every reader reads the same code and a new feature never renames an older one.
+ */
+export function shortCodes(keys: string[]): string[] {
+  const out: (string | null)[] = keys.map((k) => (FEATURE_CODE.test(k) ? k : null));
+  const taken = new Set(out.filter((c): c is string => c !== null));
+  keys.forEach((k, i) => {
+    if (out[i] !== null) return;
+    const base = initials(k);
+    let code = base;
+    for (let n = 2; taken.has(code); n++) code = `${base}${n}`;
+    taken.add(code);
+    out[i] = code;
+  });
+  return out as string[];
+}
 
 function quarter(today: string): Schemas["SimpleQuarter"] {
   const d = new Date(`${today}T00:00:00Z`);
@@ -220,6 +251,7 @@ export function prioritiesOut(
       feature_id: featureId(i.id),
       item_id: mine ? i.id : null,
       code: i.key,
+      short_code: "",
       title: i.title,
       goal: i.goal ? { key: i.goal.key, title: i.goal.title } : null,
       milestone: mine ? (i.milestone?.name ?? null) : null,
@@ -240,6 +272,13 @@ export function prioritiesOut(
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
     };
   });
+  // In the mock each item's key is its feature's key (its own code when it has one); FEATURES
+  // is in creation order, a feature outside it after them by key.
+  const featureKey = (k: string): string => FEATURES[k]?.code ?? k;
+  const created = [...Object.keys(FEATURES), ...yours.map((i) => i.key).filter((k) => !FEATURES[k]).sort()].map(featureKey);
+  const shorts = shortCodes(created);
+  const short = new Map(created.map((k, n) => [k, shorts[n]]));
+  yours.forEach((i, n) => (rows[n].short_code = short.get(featureKey(i.key))!));
   const codes = new Map(read.items.map((i) => [i.id, i]));
   const proposals: Schemas["SimplePriorityProposal"][] = (db.changes ?? [])
     // Ranking proposals, and a draft's Confirm or Merge (S7: a merge_item), as priorities.py.
