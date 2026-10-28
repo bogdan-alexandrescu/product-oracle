@@ -221,7 +221,7 @@ for (const scheme of ["light", "dark"] as const) {
     });
 
     /**
-     * Card simple-additions-suggest: protects = "Suggest features" on a goal's header asks
+     * Card simple-additions-suggest: protects = "✦ Ask Oracle for more" in a goal's header asks
      * Oracle, the panel says "Oracle is suggesting features…" while the job runs, then shows
      * 3 new suggestions; fails_when = no job, the pending line never shows or never ends, or
      * the suggestions do not arrive; no_claim = the number Oracle proposes for real (3-5).
@@ -231,8 +231,9 @@ for (const scheme of ["light", "dark"] as const) {
       await page.getByRole("button", { name: "Suggested features for Faster activation", exact: true }).click();
       const panel = page.getByTestId("goal-panel");
       await expect(panel).toBeVisible();
+      await panel.getByRole("tab", { name: "✦ Oracle · 0" }).click();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(0);
-      await panel.getByRole("button", { name: "Suggest features" }).click();
+      await panel.getByRole("button", { name: "✦ Ask Oracle for more" }).click();
       await expect(panel.getByTestId("suggest-pending")).toHaveText("Oracle is suggesting features…");
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(3, { timeout: 10_000 });
       await expect(panel.getByTestId("suggest-pending")).toHaveCount(0);
@@ -242,8 +243,8 @@ for (const scheme of ["light", "dark"] as const) {
     /**
      * Card simple-additions-approver: protects = an approver's quick add and Accept are
      * proposals (nothing is drawn until the owner accepts the "Add an item" proposal in the
-     * tray); an approver may reject a suggestion; fails_when = an approver's add applies,
-     * Reject is hidden from an approver, or the owner cannot accept the proposal; no_claim =
+     * tray); an approver reads a goal's suggestions without Accept / Reject (the decider's);
+     * fails_when = an approver's add applies, an approver sees Accept or Reject, or the owner cannot accept the proposal; no_claim =
      * routing to a named decider (simple-deciders.spec).
      */
     test("an approver proposes a quick add the owner accepts in the tray", async ({ page }) => {
@@ -253,10 +254,13 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(toastWith(page, "Proposed Rule import from a file (Next): it waits for the decider")).toBeVisible();
       await expect(boardCard(page, "rule-import-from-a-file")).toHaveCount(0);
       await page.getByRole("button", { name: "Suggested features for Grow retention", exact: true }).first().click();
-      const s = page.getByTestId("goal-panel").getByTestId("goal-suggestion").first();
-      await expect(s.getByRole("button", { name: "Reject" })).toBeVisible();
-      await s.getByRole("button", { name: "Accept" }).click();
-      await expect(toastWith(page, "Proposed Alert templates for new teams: it waits for the decider")).toBeVisible();
+      // Only the decider accepts or rejects a goal's suggestions (pick D): an approver reads them.
+      const panel = page.getByTestId("goal-panel");
+      await panel.getByRole("tab", { name: "✦ Oracle · 1" }).click();
+      await expect(panel.getByTestId("goal-suggestion")).toHaveCount(1);
+      await expect(panel.getByRole("button", { name: "Accept" })).toHaveCount(0);
+      await expect(panel.getByRole("button", { name: "Reject" })).toHaveCount(0);
+      await panel.getByRole("button", { name: "Close" }).click();
 
       await switchTo(page, "admin@example.com");
       await expect(bar(page, "alert-rules")).toBeVisible();
@@ -272,7 +276,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     /**
      * Card simple-additions-viewer: protects = a viewer sees no quick add, no drop targets'
-     * effect and no Accept, Reject or Suggest features, but reads the suggestions; fails_when
+     * effect and no Accept, Reject, form or Ask Oracle for more, but reads the suggestions; fails_when
      * = any of them shows; no_claim = the API's 403s (its tests).
      */
     test("a viewer reads suggestions and cannot add or accept", async ({ page }) => {
@@ -281,15 +285,17 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.getByTestId("quick-add-open")).toHaveCount(0);
       await page.getByTestId("goal-counter-empty").getByTestId("goal-counter-suggestions").click();
       const panel = page.getByTestId("goal-panel");
+      await expect(panel.getByTestId("suggest-form")).toHaveCount(0);
+      await panel.getByRole("tab", { name: "✦ Oracle · 2" }).click();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(2);
       await expect(panel.getByRole("button", { name: "Accept" })).toHaveCount(0);
       await expect(panel.getByRole("button", { name: "Reject" })).toHaveCount(0);
-      await expect(panel.getByRole("button", { name: "Suggest features" })).toHaveCount(0);
+      await expect(panel.getByRole("button", { name: "✦ Ask Oracle for more" })).toHaveCount(0);
     });
 
     /**
      * Card simple-additions-priorities: protects = Priorities' goal buckets show a goal's
-     * suggestions with Suggest features and Accept; Merge on an unranked draft is a real
+     * one Suggestions button whose drawer has Ask Oracle for more and Accept; Merge on an unranked draft is a real
      * merge (merge_item): the roadmap shows the draft "Merged into <code>"; fails_when = the
      * bucket lacks the suggestions, or Merge is a cut on the roadmap; no_claim = bucket shares.
      */
@@ -297,12 +303,16 @@ for (const scheme of ["light", "dark"] as const) {
       await login(page);
       await page.goto("/simple/priorities?tab=buckets");
       const bucket = page.locator('[data-testid="goal-bucket"][data-key="grow-retention"]');
-      const s = bucket.locator('[data-testid="goal-suggestion"][data-title="Alert templates for new teams"]');
+      await bucket.getByRole("button", { name: "Suggestions for Grow retention" }).click();
+      const drawer = page.getByTestId("goal-panel");
+      await drawer.getByRole("tab", { name: "✦ Oracle · 1" }).click();
+      const s = drawer.locator('[data-testid="goal-suggestion"][data-title="Alert templates for new teams"]');
       await expect(s).toBeVisible();
-      await expect(bucket.getByRole("button", { name: "Suggest features" })).toBeVisible();
+      await expect(drawer.getByRole("button", { name: "✦ Ask Oracle for more" })).toBeVisible();
       await s.getByRole("button", { name: "Accept" }).click();
       await expect(toastWith(page, "Added Alert templates for new teams as a draft")).toBeVisible();
       await expect(s).toHaveCount(0);
+      await drawer.getByRole("button", { name: "Close" }).click();
 
       await page.goto("/simple/priorities");
       const draft = page.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
@@ -384,13 +394,14 @@ for (const scheme of ["light", "dark"] as const) {
       await login(page);
       await page.goto("/simple");
       const quiet = page.getByTestId("home-goal").filter({ hasText: "Keep alerts quiet" });
-      await expect(quiet.getByTestId("home-goal-suggestions")).toHaveText("✦ 2 suggested features");
-      await quiet.getByTestId("home-goal-suggestions").click();
+      await expect(quiet.getByTestId("goal-suggestions-open")).toHaveText("Suggestions · 2");
+      await quiet.getByTestId("goal-suggestions-open").click();
       const panel = page.getByTestId("goal-panel");
+      await panel.getByRole("tab", { name: "✦ Oracle · 2" }).click();
       await panel.locator('[data-testid="goal-suggestion"][data-title="Quiet hours for alerts"]').getByRole("button", { name: "Accept" }).click();
       await expect(toastWith(page, "Added Quiet hours for alerts as a draft")).toBeVisible();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(1);
-      await panel.getByRole("button", { name: "Suggest features" }).click();
+      await panel.getByRole("button", { name: "✦ Ask Oracle for more" }).click();
       await expect(panel.getByTestId("goal-suggestion")).toHaveCount(4, { timeout: 10_000 });
       await noSidewaysScroll(page);
     });
