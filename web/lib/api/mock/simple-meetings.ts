@@ -35,7 +35,7 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from "@/lib/api/client";
-import { questionsCounts, questionsOut, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
+import { questionsCounts, questionsOfMeeting, questionsOut, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
 import { plainFlow } from "./simple-visuals";
 import { seedSimpleProposal } from "./simple-changes";
 import { mockNowMs } from "./clock";
@@ -372,7 +372,8 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
       flow: decidedFlow(ctx, d),
     })),
     open_decisions: openDecisions(ctx, db, p),
-    decisions_due: questionsCounts(ctx, qdb(ctx, db)).mine,
+    // The meeting PRD's open questions, whoever decides them (questions.due_for).
+    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id).filter((q) => q.status === "proposed"),
     pending_proposals: proposals(ctx, p),
     drafts: meetingDrafts(ctx, db, m, p),
     waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
@@ -728,6 +729,17 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   const of = (m: Meeting) => db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst);
   if (prd) shown = shown.filter((m) => m.prd === prd.slug || of(m).some(keep));
   else if (match) shown = shown.filter((m) => of(m).some(keep));
+  // The questions follow the filters too (as the API): the PRD's, the goal's PRDs', the meeting's.
+  const qd = qdb(ctx, db);
+  let qs = questionsOut(ctx, qd, prdQ);
+  if (goal) {
+    const goalPrds = all.filter((i) => i.goal?.id === goal.id && i.prd).map((i) => i.prd!.id);
+    qs = qs.filter((x) => ps.some((p) => p.ids.includes(x.prd.id) && goalPrds.some((g) => p.ids.includes(g))));
+  }
+  if (meetingQ) {
+    const ids = questionsOfMeeting(qd, meetingQ);
+    qs = qs.filter((x) => ids.has(x.id));
+  }
   const others = meetingQ ? [] : db.decisions.filter((d) => !d.meeting_id && keep(d)).sort((a, b) => b.number - a.number);
   const out: Schemas["SimpleDecisionsOut"] = {
     meetings: shown.map((m) => {
@@ -739,8 +751,8 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     goals: [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
     meeting_options: ms.map((m) => ({ id: m.id, title: m.title })),
     // prd-questions: the PRD's open questions (List and Board), counts and the remembered view.
-    questions: goal || meetingQ ? [] : questionsOut(ctx, qdb(ctx, db), prdQ),
-    ...(({ waiting_count, late_count, approvals_waiting }) => ({ waiting_count, late_count, approvals_waiting }))(questionsCounts(ctx, qdb(ctx, db))),
+    questions: qs,
+    ...(({ waiting_count, late_count, approvals_waiting }) => ({ waiting_count, late_count, approvals_waiting }))(questionsCounts(ctx, qd, qs)),
     view: ctx.view?.() ?? "list",
   };
   return json(200, out);
@@ -959,6 +971,6 @@ export function routeMeetingQuestions(db: MeetingsDb, ctx: MeetingsCtx, req: Req
     if (m.status !== "live") return "ended";
     const prd = prds(ctx).find((x) => x.slug === m.prd);
     record(db, ctx, m, title, prd ? [{ kind: "document", id: prd.id }] : [], []);
-    return true;
+    return m.id;
   });
 }

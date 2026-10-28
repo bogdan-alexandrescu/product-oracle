@@ -3,7 +3,7 @@ import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 
 /**
- * prd-questions (mock): an invented PRD's open questions (Q1..Q16 of "Team health log"), read
+ * prd-questions (mock): an invented PRD's open questions (Q1..Q16 of "Guided setup"), read
  * in as decisions: List and Board on Simple's Decisions, Home's "Decisions waiting for you",
  * the rail's count and a review meeting's "Decisions due". Their writes go through
  * POST /v1/simple/changes (decide_question, name_decider) and its undo, role-aware as the
@@ -36,6 +36,8 @@ interface Q {
   decided_at?: string | null;
   in_prd?: boolean;
   pending?: { change_id: string; by: string; answer: string } | null;
+  /** The meeting it was decided in. */
+  meeting_id?: string | null;
 }
 
 interface QChange {
@@ -52,7 +54,8 @@ export interface QuestionsDb {
 const DAY = 86_400_000;
 const RANK: Record<Role, number> = { viewer: 0, commenter: 1, approver: 2, owner: 3 };
 const MILESTONES = { M1: "Prove it", M2: "Scale volume", M3: "Open to all" } as const;
-export const QUESTIONS_PRD = { id: stableUuid("simple-prd/team-health-log"), slug: "team-health-log", title: "Team health log" };
+/** The mock's "Guided setup" PRD (./simple-one-pager.ts, ./simple-meetings.ts): its questions. */
+export const QUESTIONS_PRD = { id: stableUuid("simple-one-pager-doc"), slug: "guided-setup", title: "Guided setup" };
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 const iso = (t: number) => new Date(t).toISOString();
@@ -155,9 +158,14 @@ export function questionsOut(ctx: QuestionsCtx, db: QuestionsDb, prd?: string | 
   return [...open, ...done].map(([, o]) => o);
 }
 
-/** The person's waiting questions and counts (SimpleDecisionsOut's new fields). */
-export function questionsCounts(ctx: QuestionsCtx, db: QuestionsDb) {
-  const mine = questionsOut(ctx, db).filter((q) => q.waiting_for_me);
+/** The ids of the questions decided in this meeting (the Decisions page's meeting filter). */
+export function questionsOfMeeting(db: QuestionsDb, meetingId: string): Set<string> {
+  return new Set(db.questions.filter((q) => q.meeting_id === meetingId).map((q) => stableUuid(`simple-question/${q.n}`)));
+}
+
+/** The person's waiting questions and counts (SimpleDecisionsOut's new fields), of `shown` when given. */
+export function questionsCounts(ctx: QuestionsCtx, db: QuestionsDb, shown?: Question[]) {
+  const mine = (shown ?? questionsOut(ctx, db)).filter((q) => q.waiting_for_me);
   return { mine, waiting_count: mine.length, late_count: mine.filter((q) => q.late).length, approvals_waiting: RANK[ctx.me.role] >= RANK.approver ? 1 : 0 };
 }
 
@@ -181,7 +189,7 @@ export async function routeQuestionChanges(
   db: QuestionsDb,
   req: Request,
   p: string[],
-  inMeeting: (sessionId: string, title: string) => boolean | "ended",
+  inMeeting: (sessionId: string, title: string) => string | false | "ended",
 ): Promise<Response | null> {
   if (p[1] !== "simple" || p[2] !== "changes" || req.method !== "POST") return null;
   if (p.length === 5 && p[4] === "undo") {
@@ -230,10 +238,12 @@ export async function routeQuestionChanges(
     decided_by: applies ? ctx.me.id : null, decided_at: applies ? iso(mockNowMs()) : null, reason: null, decision_reason: null,
     routed_to: routed, undoes_id: null, undone: false, can_decide: false, can_undo: applies,
   };
+  let meetingId: string | null = null;
   if (change.session_id) {
     const words = b.op === "decide_question" ? `Q${q.n} ${q.title}: ${answer}` : `Q${q.n} ${q.title}: ${nameOf(ctx, String(after.decider_id))} decides`;
     const ok = inMeeting(change.session_id, applies ? `Decided ${words}` : `Proposed: ${words}`);
     if (ok === "ended") return json(409, { detail: "This meeting has ended" });
+    if (ok) meetingId = ok;
   }
   if (applies) {
     if (b.op === "decide_question") {
@@ -241,6 +251,7 @@ export async function routeQuestionChanges(
       q.decided_by = ctx.me.id;
       q.decided_at = iso(mockNowMs());
       q.pending = null;
+      q.meeting_id = meetingId;
     } else q.decider = String(after.decider_id);
   } else if (b.op === "decide_question") q.pending = { change_id: change.id, by: ctx.me.id, answer };
   db.changes.push({ change, was });

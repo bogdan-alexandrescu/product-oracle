@@ -74,12 +74,8 @@ export function useQuestionActions(onDone: () => unknown, sessionId?: string | n
 }
 
 /** "Ask Oracle" on a question: Simple's Ask panel opens with the question in its box. */
-export function askAbout(q: Question, who = false) {
-  askOracle(
-    who
-      ? `Who should answer ${q.code} ${q.title} in ${q.prd.title}?`
-      : `${q.code} ${q.title} in ${q.prd.title}: what should we decide?${q.recommendation ? ` The PRD recommends: ${q.recommendation}.` : ""}`,
-  );
+export function askAbout(q: Question) {
+  askOracle(`${q.code} ${q.title} in ${q.prd.title}: what should we decide?${q.recommendation ? ` The PRD recommends: ${q.recommendation}.` : ""}`);
 }
 
 /** "Late · due Fri 6 Nov" in the late tone, "Due Fri 27 Nov" plain. */
@@ -135,11 +131,26 @@ export function AnotherAnswer({ q, busy, onPick }: { q: Question; busy: boolean;
 }
 
 /** Pick a person (the members Simple's meetings list) to name as the question's decider. */
-export function PersonPicker({ q, busy, onPick, onClose }: { q: Question; busy: boolean; onPick: (p: { id: string; name: string }) => void; onClose: () => void }) {
+export function PersonPicker({
+  q,
+  busy,
+  onPick,
+  onClose,
+  verb = "decides",
+}: {
+  q: Question;
+  busy: boolean;
+  onPick: (p: { id: string; name: string }) => void;
+  onClose: () => void;
+  /** "answers": the person named gives the answer the PRD does not recommend yet (and decides it). */
+  verb?: "decides" | "answers";
+}) {
   const members = useQuery("simple-question-members", () => unwrap(api.GET("/v1/simple/meetings/options")).then((o) => o.members));
   return (
-    <div role="group" aria-label={`Who decides ${q.code}`} data-testid="question-people" className="mt-2 flex flex-col gap-2">
-      <span className="simple-small">Who decides {q.code}?</span>
+    <div role="group" aria-label={`Who ${verb} ${q.code}`} data-testid="question-people" className="mt-2 flex flex-col gap-2">
+      <span className="simple-small">
+        Who {verb} {q.code}?
+      </span>
       {members.error && <span className="simple-small text-crit">{members.error}</span>}
       {!members.data && !members.error && <span className="simple-small">Loading people…</span>}
       <div className="flex flex-wrap gap-2">
@@ -175,11 +186,11 @@ export function QuestionRow({
   actions: ReturnType<typeof useQuestionActions>;
   as?: "li" | "div";
 }) {
-  const [open, setOpen] = useState<"answers" | "people" | null>(null);
+  const [open, setOpen] = useState<"answers" | "people" | "answerer" | null>(null);
   const { busy, decide, nameDecider } = actions;
   const writes = q.can.decide || q.can.propose;
   const verb = q.can.decide ? "Decide" : "Propose";
-  const toggle = (what: "answers" | "people") => setOpen((o) => (o === what ? null : what));
+  const toggle = (what: "answers" | "people" | "answerer") => setOpen((o) => (o === what ? null : what));
   const recommended = !!q.recommendation && writes && q.column !== "decided";
   return (
     <Tag data-testid="question-row" data-code={q.code} aria-label={`${q.code} ${q.title}`} className="flex flex-col gap-1 py-3">
@@ -249,7 +260,7 @@ export function QuestionRow({
                 </button>
               )}
               {q.missing === "recommendation" && writes && (
-                <button type="button" className="simple-button simple-button-primary" onClick={() => askAbout(q, true)}>
+                <button type="button" aria-expanded={open === "answerer"} className="simple-button simple-button-primary" onClick={() => toggle("answerer")}>
                   Name a person
                 </button>
               )}
@@ -268,10 +279,11 @@ export function QuestionRow({
           }}
         />
       )}
-      {open === "people" && (
+      {(open === "people" || open === "answerer") && (
         <PersonPicker
           q={q}
           busy={busy}
+          verb={open === "answerer" ? "answers" : "decides"}
           onClose={() => setOpen(null)}
           onPick={(p) => {
             setOpen(null);
