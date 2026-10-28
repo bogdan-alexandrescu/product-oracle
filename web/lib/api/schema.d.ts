@@ -10571,7 +10571,9 @@ export interface paths {
          *     (for every token, known or not, and nothing else), then ``active`` or ``ended`` with
          *     the link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF
          *     only when it is on); an active link also gives its document's ``title``, the company
-         *     that shared it (``shared_by``) and ``expires_at``, for the page's header.
+         *     that shared it (``shared_by``, null when it has no name), the person who made the link
+         *     (``shared_by_name``), ``expires_at`` and ``expires_on`` (its day in the Company time
+         *     zone, as the page's footer), for the page's header.
          */
         get: operations["public_share_status"];
         put?: never;

@@ -36817,7 +36817,7 @@
           "shares"
         ],
         "summary": "Public Share Status",
-        "description": "For the web page: ``locked`` until the passcode opened the link in this browser\n(for every token, known or not, and nothing else), then ``active`` or ``ended`` with\nthe link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF\nonly when it is on); an active link also gives its document's ``title``, the company\nthat shared it (``shared_by``) and ``expires_at``, for the page's header.",
+        "description": "For the web page: ``locked`` until the passcode opened the link in this browser\n(for every token, known or not, and nothing else), then ``active`` or ``ended`` with\nthe link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF\nonly when it is on); an active link also gives its document's ``title``, the company\nthat shared it (``shared_by``, null when it has no name), the person who made the link\n(``shared_by_name``), ``expires_at`` and ``expires_on`` (its day in the Company time\nzone, as the page's footer), for the page's header.",
         "operationId": "public_share_status",
         "parameters": [
           {
