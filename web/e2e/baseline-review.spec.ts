@@ -24,7 +24,7 @@ async function seeded(page: Page, scenario = "baseline-review", email?: string) 
 async function fromInbox(page: Page) {
   await page.goto("/inbox");
   const row = page.locator("tr[data-row]").filter({ has: page.locator(`a[href="/baseline?run=${RUN}"]`) }).filter({ visible: true });
-  await expect(row).toContainText("Confirm the baseline · 4 need you · 2 not decided");
+  await expect(row).toContainText("Confirm the baseline: 4 need you, 2 not decided");
   await row.getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(new RegExp(`/baseline\\?run=${RUN}$`));
 }
@@ -81,7 +81,8 @@ test("the Inbox's Review opens the run's rows, and Approve baseline waits until 
   await why.locator("xpath=..").getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByTestId("band-not-decided")).toHaveText("1 not decided");
   await leaveProposed(page, "Bring buyers back", "Revisit after the board meeting");
-  await expect(page.getByTestId("band-not-decided")).toHaveText("0 not decided");
+  // Nothing left undecided: the band says no "0 not decided" (qa-company-12).
+  await expect(page.getByTestId("band-not-decided")).toHaveCount(0);
   await expect(bar(page).getByTestId("bar-tally")).toHaveText("3 of 5 handled · 0 not decided");
   await expect(approve).toBeEnabled();
   await approve.click();
@@ -208,7 +209,8 @@ test("a console approval is held while a goal is undecided, and deciding the las
   await expect(confirm).toBeDisabled();
   await page.goto(`/baseline?run=${RUN}`);
   await row(page, "Bring buyers back").getByRole("button", { name: "Confirm" }).click();
-  await expect(page.getByTestId("band-not-decided")).toHaveText("0 not decided");
+  // Nothing left undecided: the band says no "0 not decided" (qa-company-12).
+  await expect(page.getByTestId("band-not-decided")).toHaveCount(0);
   await page.goto(`/runs/${RUN}`);
   await expect(confirm).toBeEnabled();
 });

@@ -9,6 +9,7 @@ import { MarkdownBody } from "@/components/MarkdownBody";
 import { Button, Chip, LinkButton, PageHeader, Panel } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatMoney } from "@/lib/format";
 import { parseBlocks } from "@/lib/markdown";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -260,6 +261,16 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
   const digest = occ.kind === "competitive_digest";
   // H5: a metrics review's summary is Explain with Oracle (its own run drafts each variance's explanation).
   const metrics = occ.kind === "metrics_review";
+  // qa-company-31: what the button makes and what it costs, said before it is pressed.
+  const costQ = useQuery(canAsk ? "rituals|summaries" : "rituals|summaries|none", () => (canAsk ? unwrap(api.GET("/v1/rituals/summaries")) : Promise.resolve(undefined)));
+  const estimate = costQ.data?.estimate;
+  const price = estimate && (estimate.rituals.find((r) => r.ritual_id === occ.ritual_id)?.per_summary_usd ?? estimate.per_summary_usd);
+  const cost = price !== undefined ? ` · one Oracle run, about ${formatMoney(price)}` : "";
+  const makes = digest
+    ? "Oracle writes this week's digest from the findings below"
+    : metrics
+      ? "Oracle drafts an explanation for each open variance below"
+      : "Oracle reads this pre-read and writes a short summary of it for the attendees";
   const words = digest
     ? { title: "Digest", ask: "Write the digest with Oracle", running: "Writing the digest…", failed: "Digest failed · Write the digest with Oracle to retry", none: "No digest" }
     : metrics
@@ -281,9 +292,15 @@ function SummaryCard({ occ, canAsk, onChanged }: { occ: Occurrence; canAsk: bool
   };
   // Not offered when Oracle does not write it (a digest at H11 "Watch the market" Observe).
   const button = canAsk && occ.pre_read.built_at && occ.summary_offered !== false && (
-    <Button variant="solid" disabled={busy} onClick={ask}>
-      {words.ask}
-    </Button>
+    <>
+      <p className="basis-full text-sm text-text2" data-testid="summary-what">
+        {makes}
+        {cost}.
+      </p>
+      <Button variant="solid" disabled={busy} onClick={ask}>
+        {words.ask}
+      </Button>
+    </>
   );
   return (
     <section data-testid="occurrence-summary" className="rounded-panel border border-line bg-surface px-4 py-3 shadow-panel">

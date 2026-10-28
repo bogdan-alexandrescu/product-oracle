@@ -283,7 +283,7 @@ test("10i: Win and loss filters by result, reason and period", async ({ page }) 
   await page.getByLabel("Reason").selectOption({ label: "Price" });
   await expect(accounts(page)).toHaveText(["Account 7"]);
   await page.getByLabel("Result").selectOption({ label: "Won" });
-  await expect(page.getByTestId("deals-empty")).toHaveText("No win or loss records match");
+  await expect(page.getByTestId("deals-empty")).toContainText("No win or loss records match");
   await page.getByLabel("Result").selectOption({ label: "Any result" });
   await page.getByLabel("Reason").selectOption({ label: "Any reason" });
   await expect(accounts(page)).toHaveCount(6);

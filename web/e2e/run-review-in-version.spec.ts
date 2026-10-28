@@ -34,7 +34,7 @@ test("Decide in the Inbox and the runs list opens the version with the run revie
   // misreads the review; no_claim=the API's matching rule (api/tests/test_run_review_link.py).
   await start(page);
   await page.goto("/inbox");
-  const row = page.getByTestId("inbox-checkpoints").locator("tr[data-row]").filter({ hasText: "usage-alerts" });
+  const row = page.getByTestId("inbox-checkpoints").locator("tr[data-row]").filter({ hasText: "Usage alerts" });
   await row.getByRole("link", { name: "Decide" }).click();
   await expect(page).toHaveURL(new RegExp(`${VERSION}\\?run_review=`));
   await expect(barText(page)).toHaveText("Run review · Baseline to PRD · draft v2 · 0 of 3 sections reviewed");

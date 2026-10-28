@@ -20,7 +20,7 @@ test("Cancel again pressed twice, from two tabs, is refused without the workflow
   const other = await context.newPage();
   await other.goto("/inbox");
   // A second visit: what was new is Open.
-  await other.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
+  await other.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
   const otherLookups = other.getByTestId("inbox-lookups");
   await otherLookups.getByRole("button", { name: "Cancel again" }).click();
   await other.getByRole("alertdialog", { name: "Cancel again" }).getByRole("button", { name: "Cancel again" }).click();

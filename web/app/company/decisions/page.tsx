@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
@@ -14,6 +15,7 @@ import { useSetParams } from "@/lib/use-set-params";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
 import { DecisionInspector } from "./_components/DecisionInspector";
+import { useSubjectLabel } from "./_components/LinksPicker";
 import { ProposeDialog } from "./_components/ProposeDialog";
 import {
   CLASS_FILTERS,
@@ -22,7 +24,6 @@ import {
   STATE_FILTERS,
   STATE_KIND,
   STATE_LABEL,
-  SUBJECT_LABEL,
   isCheckpoint,
   personName,
   shortDate,
@@ -130,6 +131,7 @@ function Decisions() {
   const mineQ = useQuery(`decisions|mine|${me?.user_id}`, () =>
     unwrap(api.GET("/v1/decisions", { params: { query: { class: "judgement", status: "open", approver: "me", limit: 1 } } })),
   );
+  const subjectName = useSubjectLabel();
   const peopleQ = useQuery("decisions|people", () => unwrap(api.GET("/v1/decisions/people")));
   // Names as the company knows them (GET /v1/people); an email is the second line, never the name.
   const namesQ = useQuery("decisions|names", () => unwrap(api.GET("/v1/people", { params: { query: { limit: 500 } } })));
@@ -382,7 +384,7 @@ function Decisions() {
             </div>
             {(run || subject) && (
               <p className="flex flex-wrap items-center gap-2 text-sm text-text2">
-                {run ? "Decisions in this run" : `About ${SUBJECT_LABEL[subject?.kind ?? ""]?.toLowerCase() ?? "it"}${subject?.ref ? ` ${subject.ref}` : ""}`}
+                {run ? "Decisions in this run" : subject ? `About ${subjectName(subject)}` : null}
                 <Button variant="ghost" onClick={() => setParams({ run: null, subject: null, d: null })}>
                   Show every decision
                 </Button>
@@ -392,9 +394,13 @@ function Decisions() {
           {listQ.data && rows.length === 0 ? (
             <div data-testid="decisions-empty" className="flex flex-col items-center gap-2 px-4 py-8 text-center text-[15px] text-text2">
               {state === "needs_me" && !from && !q ? (
-                <p>
-                  Nothing waits on you. Needs me lists the proposals you are the approver of and your decisions whose review date has come; run
-                  approvals wait in the Inbox.
+                <p data-testid="decisions-needs-me-empty">
+                  Nothing waits on you here. Needs me lists the proposals you are the approver of and your decisions whose review date has come. Run
+                  stops and document approvals wait in the{" "}
+                  <Link href="/inbox" className="font-medium text-accent-ink hover:underline">
+                    Inbox
+                  </Link>
+                  .
                 </p>
               ) : (
                 <p>{hiding.length > 0 ? `No decisions match ${hiding.join(", ")}.` : "No decisions here yet."}</p>

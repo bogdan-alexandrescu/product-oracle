@@ -236,7 +236,7 @@ test("at 390 px rows are cards, the inspector is a sheet, the bar collapses, no 
 test("a held console approval is confirmed once the blocking row is waived", async ({ page }) => {
   await seeded(page);
   await page.goto("/inbox");
-  const inboxRow = page.locator("tr[data-row]").filter({ hasText: "address-book" }).filter({ visible: true });
+  const inboxRow = page.locator("tr[data-row]").filter({ hasText: "Address book" }).filter({ visible: true });
   await expect(inboxRow).toHaveCount(1);
   await inboxRow.getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(/\/review\//);

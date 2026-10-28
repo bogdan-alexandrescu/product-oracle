@@ -18,8 +18,8 @@ async function checkpointsOnDecisions(page: Page) {
   await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByRole("navigation", { name: "Company" }).getByTestId("company-tab-decisions").click();
   await expect(page).toHaveURL(/\/company\/decisions/);
-  await chip(page, "State", "All").click();
-  await chip(page, "Class", "Checkpoints").click();
+  await chip(page, "State", "Any state").click();
+  await chip(page, "Kind", "Checkpoints").click();
 }
 
 for (const who of ["commenter", "viewer"]) {

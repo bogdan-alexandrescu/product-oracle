@@ -150,7 +150,7 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   await expect(tabs.getByRole("tab", { name: /^New/ })).toBeVisible();
   expect(await answers()).toBe(1);
   await tabs.getByRole("tab", { name: /^New/ }).click();
-  if (!(await answer.count())) await tabs.getByRole("tab", { name: /^Open/ }).click();
+  if (!(await answer.count())) await tabs.getByRole("tab", { name: /^Seen/ }).click();
   const answerRow = page.locator("tr, li, [role=row]").filter({ has: answer }).last();
   await answerRow.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(/\/requests\?request=/);

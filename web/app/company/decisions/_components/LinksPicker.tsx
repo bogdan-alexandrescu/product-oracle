@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { Button } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { docLabel, runLabel } from "@/lib/labels";
 import { useQuery } from "@/lib/use-query";
 
 import { SUBJECT_LABEL, entityTypeLabel, type Decision } from "./lib";
@@ -31,7 +32,42 @@ const KINDS = [
 ] as const;
 type PickKind = (typeof KINDS)[number]["value"];
 
-export const subjectLabel = (s: { kind: string; ref?: string | null }) => `${SUBJECT_LABEL[s.kind] ?? s.kind} ${s.ref ?? ""}`.trim();
+type Named = { kind: unknown; id: unknown; ref?: unknown };
+
+/**
+ * What a decision is about, by name (prod-3): a document by its title (docLabel), never its
+ * slug or a bare "Document"; a version as "Usage alerts PRD v2"; a run by runLabel; anything
+ * else by its kind word and the name it was saved with.
+ */
+export function useSubjectLabel(): (s: Named) => string {
+  const docsQ = useQuery("decisions|documents", () => unwrap(api.GET("/v1/documents")));
+  const runsQ = useQuery("decisions|runs", () => unwrap(api.GET("/v1/runs")));
+  const docs = docsQ.data ?? [];
+  const runs = runsQ.data ?? [];
+  return (s) => {
+    const kind = String(s.kind);
+    const id = String(s.id);
+    const ref = s.ref == null ? null : String(s.ref);
+    if (kind === "document") {
+      const doc = docs.find((d) => d.id === id || (ref !== null && d.slug === ref));
+      return doc ? docLabel(doc) : docsQ.data ? "A document" : "Document";
+    }
+    if (kind === "document_version") {
+      // "slug@2" (a published version) or "slug v2" (a pricing memo's).
+      const m = /^(.*?)(?:@| v)(\d+)$/.exec(ref ?? "");
+      const [slug, n] = m ? [m[1], m[2]] : [ref ?? "", ""];
+      const doc = docs.find((d) => d.slug === slug);
+      return doc ? `${docLabel(doc)}${n ? ` v${n}` : ""}` : n ? `Version ${n}` : "A version";
+    }
+    if (kind === "run") {
+      const run = runs.find((r) => r.id === id);
+      if (run) return runLabel(run, docs.find((d) => d.slug === run.document_slug)?.title);
+      return ref && !ref.startsWith("run:") ? ref : "A run";
+    }
+    const word = SUBJECT_LABEL[kind] ?? "Item";
+    return ref && !/^[a-z_]+:/.test(ref) ? `${word} ${ref}` : word;
+  };
+}
 const short = (text: string, n = 160) => (text.length > n ? `${text.slice(0, n - 1)}…` : text);
 
 /**
@@ -160,13 +196,14 @@ function SubjectsPicker({ subjects, entities, onChange }: { subjects: Subject[];
   const [picked, setPicked] = useState("");
   const docsQ = useQuery("decisions|documents", () => unwrap(api.GET("/v1/documents")));
   const runsQ = useQuery("decisions|runs", () => unwrap(api.GET("/v1/runs")));
+  const nameOf = useSubjectLabel();
   const taken = new Set(subjects.map((s) => `${s.kind}:${s.id}`));
   const choices: (Subject & { label: string })[] =
     kind === "document"
-      ? (docsQ.data ?? []).map((d) => ({ kind: "document", id: d.id, ref: d.slug, label: d.title }))
+      ? (docsQ.data ?? []).map((d) => ({ kind: "document", id: d.id, ref: d.slug, label: docLabel(d) }))
       : kind === "entity"
         ? entities.map((e) => ({ kind: "entity", id: e.id, ref: e.title, label: e.title }))
-        : (runsQ.data ?? []).map((r) => ({ kind: "run", id: r.id, ref: r.flow_title, label: `${r.flow_title}${r.document_slug ? ` · ${r.document_slug}` : ""}` }));
+        : (runsQ.data ?? []).map((r) => ({ kind: "run", id: r.id, ref: r.flow_title, label: runLabel(r, (docsQ.data ?? []).find((d) => d.slug === r.document_slug)?.title) }));
   const open = choices.filter((c) => !taken.has(`${c.kind}:${c.id}`));
   const full = subjects.length >= MAX_SUBJECTS;
   const add = () => {
@@ -182,8 +219,8 @@ function SubjectsPicker({ subjects, entities, onChange }: { subjects: Subject[];
         <ul className="flex flex-wrap gap-1.5">
           {subjects.map((s) => (
             <li key={`${s.kind}:${s.id}`} className="flex items-center gap-1 rounded-lg border border-line px-2 py-0.5 text-sm">
-              <span>{subjectLabel(s)}</span>
-              <Button variant="ghost" aria-label={`Remove ${subjectLabel(s)}`} onClick={() => onChange(subjects.filter((x) => `${x.kind}:${x.id}` !== `${s.kind}:${s.id}`))}>
+              <span>{nameOf(s)}</span>
+              <Button variant="ghost" aria-label={`Remove ${nameOf(s)}`} onClick={() => onChange(subjects.filter((x) => `${x.kind}:${x.id}` !== `${s.kind}:${s.id}`))}>
                 Remove
               </Button>
             </li>

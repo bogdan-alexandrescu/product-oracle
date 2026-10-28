@@ -3,7 +3,7 @@ import type { Schemas } from "@/lib/api/client";
 import { displayZone, formatInZone } from "@/lib/dates";
 import { formatDate, zoneName } from "@/lib/format";
 import { displayName } from "@/lib/names";
-import { DEFAULT_ZONE } from "@/lib/zone";
+import { ZONE_NOT_SET } from "@/lib/zone";
 
 export type Ritual = Schemas["RitualOut"];
 export type Occurrence = Schemas["OccurrenceOut"];
@@ -56,6 +56,19 @@ function clockOnly(t: string): string {
   const [h, m] = t.split(":").map(Number);
   return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
+/** The Time picker's choices, every 15 minutes in the page's format ("9:00 AM"), with a stored time off the grid kept. */
+export function timeOptions(current: string): { value: string; label: string }[] {
+  const out: { value: string; label: string }[] = [];
+  for (let m = 0; m < 24 * 60; m += 15) {
+    const value = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    out.push({ value, label: clockOnly(value) });
+  }
+  if (/^\d{2}:\d{2}$/.test(current) && !out.some((o) => o.value === current)) {
+    out.push({ value: current, label: clockOnly(current) });
+    out.sort((a, b) => a.value.localeCompare(b.value));
+  }
+  return out;
+}
 const plural = (day: string) => `${day}s`;
 
 /** When the ritual meets, in the Company time zone: "Mondays 9:00 AM PT", "First Tuesday of the month, 10:00 AM PT". */
@@ -90,7 +103,7 @@ export const zoneTime = (iso: string, timezone: string) => `${formatInZone(iso, 
  * The Company time zone in words (qa-company-23/24): "Pacific Time (Los Angeles)"; when no
  * owner chose one yet, it says so and names the default used meanwhile, as Home's set-up does.
  */
-export const zoneText = (zone: string, isDefault: boolean) => (isDefault ? `Not set · ${zoneName(DEFAULT_ZONE)} is used` : zoneName(zone));
+export const zoneText = (zone: string, isDefault: boolean) => (isDefault ? ZONE_NOT_SET : zoneName(zone));
 
 export const STATE_LABEL: Record<OccurrenceSummary["status"], string> = {
   scheduled: "Scheduled",

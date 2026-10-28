@@ -58,7 +58,7 @@ test("inbox: declining an access request shows Declined in place, and Home count
   await expect(row).toContainText("Declined");
   await expect(badge(page)).toHaveText(String(before - 1));
   // The tab changes: what was decided here leaves.
-  await page.getByRole("tab", { name: /Open/ }).click();
+  await page.getByRole("tab", { name: /^Seen/ }).click();
   await page.getByRole("tab", { name: /New/ }).click();
   await expect(page.getByTestId("inbox-access-requests")).toHaveCount(0);
 });

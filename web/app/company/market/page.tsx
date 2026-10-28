@@ -84,7 +84,7 @@ function Market() {
           onPick={(id) => setParams({ alternative: id })}
           onOpenChange={(id) => setParams({ change: id })}
           adding={adding && mayWrite}
-          onAdding={mayWrite ? setAdding : undefined}
+          onAdding={setAdding}
         />
       )}
       {tab === "changes" && (

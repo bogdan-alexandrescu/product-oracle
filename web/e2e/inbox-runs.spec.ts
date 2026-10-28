@@ -27,9 +27,9 @@ test("stuck runs and failed imports are rows of the Inbox, counted alike by the 
   await expect(page.getByTestId("inbox-questions").locator("tr[data-row]")).toHaveCount(2);
   await expect(page.getByTestId("inbox-questions")).toContainText("Which metric shows repeat checkout got faster?");
   // Looking rows are not items: under Open, and the tab does not count them.
-  await tabs.getByRole("tab", { name: /^Open/ }).click();
+  await tabs.getByRole("tab", { name: /^Seen/ }).click();
   await expect(page.getByTestId("inbox-searches")).toContainText("still looks for submission seg-1-a1");
-  await expect(tabs.getByRole("tab", { name: /^Open/ })).toHaveText("Open0");
+  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveText("Seen");
 
   // Home draws the same rows and the same count; its chips add up to it.
   await page.goto("/home");
@@ -51,7 +51,7 @@ test("stuck runs and failed imports are rows of the Inbox, counted alike by the 
   // Retry the lost submission and the import from the Inbox: both leave, and every count follows.
   // A second visit: what was new is Open.
   await page.goto("/inbox");
-  await tabs.getByRole("tab", { name: /^Open/ }).click();
+  await tabs.getByRole("tab", { name: /^Seen/ }).click();
   await lookups.locator("tr[data-row]").filter({ hasText: "seg-1-a2" }).getByRole("button", { name: "Retry" }).click();
   const retry = page.getByRole("alertdialog", { name: "Retry" });
   await expect(retry).toContainText("This can start a paid duplicate run");
@@ -61,7 +61,7 @@ test("stuck runs and failed imports are rows of the Inbox, counted alike by the 
   await expect(page.getByTestId("inbox-imports")).toHaveCount(0);
   await expect(page.getByText("12 waiting").filter({ visible: true })).toBeVisible();
   await expect(badge).toHaveText("12");
-  await expect(tabs.getByRole("tab", { name: /^Open/ })).toHaveText("Open12");
+  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveText("Seen12");
   // Back first: nothing is cancelled.
   await lookups.getByRole("button", { name: "Cancel again" }).click();
   const again = page.getByRole("alertdialog", { name: "Cancel again" });

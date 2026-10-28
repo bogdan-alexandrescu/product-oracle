@@ -464,13 +464,14 @@ test("mock run ids and times are stable: every page load, the runs list, the inb
     await expect(inspector).toContainText("Started");
     dates.push(await inspector.innerText());
 
-    // The inbox shows the same short ids as the list; run detail the same id.
+    // The Inbox and the run page name a run in words, never a short id (qa-company-11).
     const short = (slug: string) => byRun[slug]!.split("/").pop()!.slice(0, 4);
     await page.goto("/inbox");
-    await expect(page.getByTestId("inbox-approvals")).toContainText(short("usage-alerts-v2"));
-    await expect(page.getByTestId("inbox-checkpoints")).toContainText(short("team-onboarding"));
+    await expect(page.getByTestId("inbox-state-tabs")).toBeVisible();
+    await expect(page.getByTestId("inbox-needs")).not.toContainText(` ${short("usage-alerts-v2")}`);
     await page.goto(byRun["team-onboarding"]!);
-    await expect(page.getByText(`Run ${short("team-onboarding")}`)).toBeVisible();
+    await expect(page.getByTestId("run-name")).toContainText("Team onboarding");
+    await expect(page.getByText(`Run ${short("team-onboarding")}`)).toHaveCount(0);
     await context.close();
   }
   expect(Object.keys(ids[0]!).sort()).toEqual(["checkout-redesign", "saved-carts", "team-onboarding", "team-workspaces", "usage-alerts-v2"]);

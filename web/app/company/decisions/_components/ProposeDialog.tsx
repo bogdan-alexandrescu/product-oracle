@@ -8,7 +8,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { hasRole } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
-import { optionKey, type Decision, type DecisionOption, type Person } from "./lib";
+import { optionKey, personName, personOption, type Decision, type DecisionOption, type Person } from "./lib";
 import { LinksPicker, type Links } from "./LinksPicker";
 
 /** An option as typed; `key` keeps an existing option's key (and so its evidence and recommendation). */
@@ -49,18 +49,34 @@ export function ProposeDialog({
   const [informed, setInformed] = useState<string[]>([]);
   const [links, setLinks] = useState<Links>({ entity_ids: [], evidence_ids: [], subjects: subject ? [subject] : [] });
   const [error, setError] = useState<string | null>(null);
+  // A missing field's note sits under that field, which is marked invalid, scrolled to and focused.
+  const [invalid, setInvalid] = useState<{ field: Field; note: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const form = useRef<HTMLFormElement>(null);
+
+  function flag(field: Field, note: string) {
+    setError(null);
+    setInvalid({ field, note });
+    // After the render that marks it: scroll the field into view and put the cursor in it.
+    requestAnimationFrame(() => {
+      const el = form.current?.querySelector<HTMLElement>(`[data-field="${field}"]`);
+      el?.scrollIntoView({ block: "center" });
+      el?.focus({ preventScroll: true });
+    });
+  }
+  const noteOf = (field: Field) => (invalid?.field === field ? invalid.note : null);
 
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     const filled = options.filter((o) => o.label.trim());
-    if (!title.trim()) return setError("Write the decision in one sentence");
-    if (filled.length < 2) return setError("Add at least two options");
-    if (!approver) return setError("Name the approver");
+    if (!title.trim()) return flag("title", "Write the decision in one sentence");
+    if (filled.length < 2) return flag("options", "Add at least two options");
+    if (!approver) return flag("approver", "Name the approver");
     setBusy(true);
     setError(null);
+    setInvalid(null);
     const body: Schemas["DecisionCreate"] = {
       title: title.trim(),
       question: question.trim() || null,
@@ -97,28 +113,65 @@ export function ProposeDialog({
             Propose decision
           </h2>
         </div>
-        <form className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4" onSubmit={submit} noValidate>
-          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-            Decision
-            <input data-autofocus className={INPUT} value={title} maxLength={200} onChange={(e) => setTitle(e.target.value)} placeholder="Ship usage caps before detection" />
-          </label>
+        <form ref={form} className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4" onSubmit={submit} noValidate>
+          <div className="flex flex-col gap-1">
+            <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+              Decision
+              <input
+                data-autofocus
+                data-field="title"
+                className={INPUT}
+                value={title}
+                maxLength={200}
+                aria-invalid={noteOf("title") ? true : undefined}
+                aria-describedby={noteOf("title") ? "propose-note-title" : undefined}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  if (invalid?.field === "title") setInvalid(null);
+                }}
+                placeholder="Ship usage caps before detection"
+              />
+            </label>
+            <FieldNote id="propose-note-title" note={noteOf("title")} />
+          </div>
           <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
             Question
             <input className={INPUT} value={question} maxLength={1000} onChange={(e) => setQuestion(e.target.value)} placeholder="What is being decided" />
           </label>
-          <OptionsEditor options={options} setOptions={setOptions} />
+          <OptionsEditor
+            options={options}
+            setOptions={(next) => {
+              setOptions(next);
+              if (invalid?.field === "options") setInvalid(null);
+            }}
+            note={noteOf("options")}
+          />
           <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
-            <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-              Approver
-              <select aria-label="Approver" className={INPUT} value={approver} onChange={(e) => setApprover(e.target.value)}>
-                <option value="">Choose the approver</option>
-                {approvers.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.email}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="flex flex-col gap-1">
+              <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+                Approver
+                <select
+                  aria-label="Approver"
+                  data-field="approver"
+                  className={INPUT}
+                  value={approver}
+                  aria-invalid={noteOf("approver") ? true : undefined}
+                  aria-describedby={noteOf("approver") ? "propose-note-approver" : undefined}
+                  onChange={(e) => {
+                    setApprover(e.target.value);
+                    if (invalid?.field === "approver") setInvalid(null);
+                  }}
+                >
+                  <option value="">Choose the approver</option>
+                  {approvers.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {personOption(p)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <FieldNote id="propose-note-approver" note={noteOf("approver")} />
+            </div>
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Reversibility
               <select aria-label="Reversibility" className={INPUT} value={reversibility} onChange={(e) => setReversibility(e.target.value as typeof reversibility)}>
@@ -145,6 +198,18 @@ export function ProposeDialog({
   );
 }
 
+type Field = "title" | "options" | "approver";
+
+/** The note under a field that needs filling in, read with the field (aria-describedby). */
+export function FieldNote({ id, note }: { id: string; note: string | null }) {
+  if (!note) return null;
+  return (
+    <span id={id} role="alert" className="text-sm font-medium text-crit">
+      {note}
+    </span>
+  );
+}
+
 /** The typed options as the API takes them; an existing option keeps its key, evidence and recommendation. */
 export function optionsOf(drafts: Draft[], before: DecisionOption[] = []): DecisionOption[] {
   const filled = drafts.filter((o) => o.label.trim());
@@ -167,16 +232,31 @@ export function optionsOf(drafts: Draft[], before: DecisionOption[] = []): Decis
 }
 
 /** Two to six options: a label, a summary, pros and cons one a line, the cost if wrong. */
-export function OptionsEditor({ options, setOptions }: { options: Draft[]; setOptions: Dispatch<SetStateAction<Draft[]>> }) {
+export function OptionsEditor({
+  options,
+  setOptions,
+  note = null,
+}: {
+  options: Draft[];
+  setOptions: Dispatch<SetStateAction<Draft[]>>;
+  /** Why the options will not do yet; the first empty option is marked invalid and is where the cursor goes. */
+  note?: string | null;
+}) {
   const set = (i: number, patch: Partial<Draft>) => setOptions((o) => o.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const firstEmpty = options.findIndex((o) => !o.label.trim());
+  const flagged = note ? (firstEmpty >= 0 ? firstEmpty : 0) : -1;
   return (
-    <fieldset className="flex flex-col gap-2">
+    <fieldset className="flex flex-col gap-2" aria-describedby={note ? "options-note" : undefined}>
       <legend className="mb-1 text-sm font-semibold text-text2">Options</legend>
+      <FieldNote id="options-note" note={note} />
       {options.map((o, i) => (
         <div key={i} className="flex flex-col gap-1.5 rounded-lg border border-line p-2.5">
           <div className="flex items-center gap-2">
             <input
               aria-label={`Option ${i + 1}`}
+              data-field={i === flagged ? "options" : undefined}
+              aria-invalid={i === flagged ? true : undefined}
+              aria-describedby={i === flagged ? "options-note" : undefined}
               className={INPUT}
               value={o.label}
               maxLength={200}
@@ -214,7 +294,8 @@ export function People({ label, people, chosen, onToggle }: { label: string; peo
         {people.map((p) => (
           <label key={p.id} className="flex items-center gap-1.5 text-sm">
             <input type="checkbox" checked={chosen.includes(p.id)} onChange={() => onToggle(p.id)} />
-            {p.email}
+            <span>{personName(p)}</span>
+            {personName(p) !== p.email && <span className="text-text2">{p.email}</span>}
           </label>
         ))}
       </div>

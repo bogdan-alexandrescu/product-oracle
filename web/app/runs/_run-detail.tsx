@@ -6,6 +6,7 @@ import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react
 import { flushSync } from "react-dom";
 
 import { DeleteMenu } from "@/components/ArtifactMenu";
+import { runLabel } from "@/lib/labels";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
@@ -63,7 +64,6 @@ import {
   SENT_BACK_STATE,
   RunCost,
   deliveryText,
-  shortId,
   usd,
   type CheckpointChoice,
   type CheckpointOut,
@@ -434,7 +434,8 @@ export function RunDetail({ id }: { id: string }) {
         <Panel
           title={
             <>
-              Run <span className="tnum font-mono text-base font-semibold">{shortId(run.id)}</span>
+              {/* The run by its human name, never an id (qa-company-11). */}
+              <span data-testid="run-name">{runLabel(run)}</span>
             </>
           }
           tools={

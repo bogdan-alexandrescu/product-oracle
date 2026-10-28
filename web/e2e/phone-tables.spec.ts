@@ -63,7 +63,7 @@ test("phone inbox: each row shows its item, kind and context, its action, and co
   const approval = page.getByTestId("inbox-approvals").locator("tr[data-row]").first();
   await expect(approval.locator('[data-cost="prominent"]')).toBeVisible();
   await expect(approval).toContainText("Cost approval");
-  await expect(approval).toContainText("usage-alerts-v2");
+  await expect(approval).toContainText("Usage alerts v2");
   await expect(approval.getByRole("button", { name: /^Approve \$/ })).toBeVisible();
 
   const overrun = page.getByTestId("inbox-overruns").locator("tr[data-row]").first();

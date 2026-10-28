@@ -42,9 +42,9 @@ test("Home: needs you lists the inbox and the questions asked of me, one action 
   // B2: a baseline checkpoint is reviewed in the Baseline, filtered to its run.
   await expect(rows.filter({ hasText: "Confirm the baseline" }).getByRole("link", { name: "Review" })).toHaveAttribute("href", /^\/baseline\?run=/);
   await expect(rows.filter({ hasText: "$53.00 est." }).getByRole("button", { name: "Approve $53.00" })).toBeVisible();
-  await expect(rows.filter({ hasText: "$14.20 / $9.00" }).getByRole("link", { name: "Decide" })).toBeVisible();
+  await expect(rows.filter({ hasText: "$14.20 / $9.00" }).getByRole("link", { name: "Open", exact: true })).toBeVisible();
   await expect(rows.filter({ hasText: "Oracle asks" })).toHaveCount(1);
-  await expect(needs.getByText("Decisions 3")).toBeVisible();
+  await expect(needs.getByText("Approvals 3")).toBeVisible();
   // Each feedback item counts, not one per document.
   await expect(needs.getByText("Reviews 5")).toBeVisible();
   await expect(needs.getByText("Questions 2")).toBeVisible();

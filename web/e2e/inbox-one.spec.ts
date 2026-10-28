@@ -19,7 +19,7 @@ test("the badge counts each new or open item and equals New + Open; no item is d
   const badge = page.getByTestId("nav-inbox-badge");
   // The seed's 10 and the pending access request (A5, #203 part 3).
   await expect(badge).toHaveText("11");
-  expect((await tabCount(page, "New")) + (await tabCount(page, "Open"))).toBe(11);
+  expect((await tabCount(page, "New")) + (await tabCount(page, "Seen"))).toBe(11);
   await expect(page.getByText("11 waiting")).toBeVisible();
 
   // Every kind under New on a first visit, the feedback one row per item (no per-document row).
@@ -88,7 +88,7 @@ test("a second visit: what was new is Open; Home's Needs you lists the same New 
   await expect(page.getByTestId("home-needs-table").locator("tr[data-row]")).toHaveCount(7);
   await page.goto("/inbox");
   await expect(tab(page, "New")).not.toContainText("11");
-  await tab(page, "Open").click();
-  expect(await tabCount(page, "Open")).toBe(11);
+  await tab(page, "Seen").click();
+  expect(await tabCount(page, "Seen")).toBe(11);
   await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
 });

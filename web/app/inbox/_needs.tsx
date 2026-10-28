@@ -154,7 +154,7 @@ export const NEED_COLUMNS: Column<Need>[] = [
     cell: (n) => (
       <span
         data-row-actions
-        className="inline-flex flex-wrap items-center justify-end gap-1.5 min-[601px]:flex-nowrap has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full"
+        className="inline-flex flex-wrap items-center justify-end gap-1.5 min-[601px]:flex-nowrap min-[601px]:[&>a]:whitespace-nowrap min-[601px]:[&>button]:whitespace-nowrap has-[[data-inbox-actions]]:flex has-[[data-inbox-actions]]:w-full has-[[data-child-actions]]:flex has-[[data-child-actions]]:w-full"
       >
         {n.action}
       </span>
@@ -1207,11 +1207,36 @@ function ChildActions({
   );
 }
 
+/** The run page's question before cancelling (app/runs/_run-detail.tsx). */
+const CANCEL_RUN_CONFIRM = "Cancel this run? Agents still working are stopped.";
+
+/** Who a role is, said of the people holding it: "Approvers decide". */
+const ROLE_WORD: Record<InboxOut["checkpoints"][number]["approver_role"], string> = {
+  viewer: "Viewers",
+  commenter: "Commenters",
+  approver: "Approvers",
+  owner: "Owners",
+};
+
+/**
+ * Confirm the baseline's line (qa-company-12): what still needs the person, or that every
+ * item is handled; never "0 need you".
+ */
+function baselineLabel(title: string, summary: { need_you: number; blocking: number; handled: number }): string {
+  if (summary.need_you === 0 && summary.blocking === 0) {
+    return summary.handled > 0 ? `${title}: all ${plural(summary.handled, "item")} handled` : `${title}: all items handled`;
+  }
+  const parts = [summary.need_you > 0 && `${summary.need_you} need you`, summary.blocking > 0 && `${summary.blocking} not decided`].filter(Boolean);
+  return `${title}: ${parts.join(", ")}`;
+}
+
 /**
  * The Inbox's rows, each with its action. `compact` (Home) gives an overrun, a stuck run and
  * a failed import one action that opens the run, where the rest are.
  */
-export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false, fixed?: FixedHere) {
+export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compact = false, fixed?: FixedHere, perms: Perms = ALL) {
+  // What the signed-in person may do on a run (qa-company-3): its starter may manage it too.
+  const may = (op: Operation, r: { created_by?: string | null }) => perms.can(op, !!perms.userId && r.created_by === perms.userId);
   // D3: a console approval held while blocking problems are open waits for a review.
   const isHeld = (c: InboxOut["checkpoints"][number]) => c.console?.needs === "confirm" && !!c.gate && !c.gate.open;
   const checkpoints: Need[] = inbox.checkpoints.map((c) => {
@@ -1223,8 +1248,8 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         ? "Roadmap items · ready to approve"
         : `Roadmap items · ${summary.need_you} need you`
       : c.kind === "baseline_confirm" && summary
-        ? // B2: Confirm the baseline's counts, read from the run's rows.
-          `${CHECKPOINT_LABEL[c.kind]} · ${summary.need_you} need you · ${summary.blocking} not decided`
+        ? // B2: Confirm the baseline's counts, read from the run's rows; none left is said so (qa-company-12).
+          baselineLabel(CHECKPOINT_LABEL[c.kind], summary)
         : checkpointSummary(c);
     const from = counted && summary.source ? `from ${summary.source.title} v${summary.source.version}` : null;
     const wait = summary?.wait;
@@ -1270,15 +1295,24 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
             {isHeld(c) && <span className="block truncate text-warn">{CONSOLE_HELD}</span>}
           </span>
         ) : (
-          <span className="block truncate" title={[c.flow_title, c.segment_title, c.document_slug].filter(Boolean).join(" · ")}>
+          // The run by its human name, never its slug (qa-company-11).
+          <span className="block truncate" title={[c.segment_title, runLabel(c)].filter(Boolean).join(" · ")}>
             {c.segment_title ?? c.flow_title}
-            {c.document_slug && <span className="ml-1.5 font-mono text-sm text-text2">{c.document_slug}</span>}
+            {c.document_slug && <span className="ml-1.5 text-sm text-text2">{runLabel(c).split(" · ")[0]}</span>}
             {isHeld(c) && <span className="block truncate text-warn">{CONSOLE_HELD}</span>}
           </span>
         ),
       at: c.created_at,
       left: wait?.state === "open" && wait.seconds_left != null ? timeLeft(wait.seconds_left) : null,
-      action: c.kind === "baseline_confirm" ? (
+      action: !c.can_decide ? (
+        // qa-company-3: a role that cannot decide reads the review; who decides is said.
+        <>
+          <ByRole who={`${ROLE_WORD[c.approver_role]} decide`} title={c.cannot_approve ?? `Only ${ROLE_WORD[c.approver_role].toLowerCase()} can decide this`} />
+          <LinkButton variant="ghost" href={c.kind === "baseline_confirm" ? `/baseline?run=${c.run_id}` : (reviewHref(c) ?? review)}>
+            Open
+          </LinkButton>
+        </>
+      ) : c.kind === "baseline_confirm" ? (
         // B2: the run's review opens in the Baseline, filtered to the run.
         <LinkButton href={`/baseline?run=${c.run_id}`}>Review</LinkButton>
       ) : isHeld(c) ? (
@@ -1300,6 +1334,13 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     };
   });
 
+  const runContext = (r: RunSummary) => (
+    <Link href={`/runs/${r.id}`} className="block truncate hover:underline">
+      <RunName run={r} />
+    </Link>
+  );
+  const openRun = (r: RunSummary) => <LinkButton href={`/runs/${r.id}`}>Open</LinkButton>;
+
   const approvals: Need[] = inbox.approvals.map((r) => ({
     key: r.id,
     icon: "coin",
@@ -1308,7 +1349,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       <>
         <span className="truncate">Start run</span>
         <CostFigure usd={r.estimate_usd} est prominent />
-        <span className="sr-only">Estimated {usd(r.estimate_usd)}, over the $50 approval threshold.</span>
+        <span className="sr-only">Estimated {money(r.estimate_usd)}, over the $50 approval threshold.</span>
       </>
     ),
     context: (
@@ -1317,9 +1358,15 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </Link>
     ),
     at: r.created_at,
-    action: (
+    action: !may("approve_run", r) ? (
+      // qa-company-3: owners approve spend; anyone else sees the request, read-only.
+      <>
+        <ByRole who="Owners approve" title="Only an owner can approve a run's cost" />
+        {openRun(r)}
+      </>
+    ) : (
       <Button
-        aria-label={`Approve ${usd(r.estimate_usd)}`}
+        aria-label={`Approve ${money(r.estimate_usd)}`}
         disabled={busy !== null}
         onClick={() => act(`approve-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/approve", path(r.id))))}
       >
@@ -1337,7 +1384,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         <span className="truncate">Resume or cancel</span>
         <CostFigure usd={r.spent_usd} of={r.estimate_usd} prominent />
         <span className="sr-only">
-          Spent {usd(r.spent_usd)} of {usd(r.estimate_usd)} estimated
+          Spent {money(r.spent_usd)} of {money(r.estimate_usd)} estimated
         </span>
       </>
     ),
@@ -1347,33 +1394,41 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </Link>
     ),
     at: r.started_at ?? r.created_at,
+    // Home (qa-company-10): one Open, the run's page holds Resume and Cancel run.
     action: compact ? (
-      <LinkButton href={`/runs/${r.id}`}>Decide</LinkButton>
+      openRun(r)
+    ) : !may("resume_run", r) && !may("cancel_run", r) ? (
+      <>
+        <ByRole who="Owners decide" title="Only an owner can resume or cancel this run" />
+        {openRun(r)}
+      </>
     ) : (
       <>
-        <Button
-          disabled={busy !== null}
-          onClick={() => act(`resume-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/resume", path(r.id))))}
-        >
-          Resume
-        </Button>
-        <Button
-          variant="ghost"
-          disabled={busy !== null}
-          onClick={() => act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))))}
-        >
-          Cancel run
-        </Button>
+        {may("resume_run", r) && (
+          <Button
+            disabled={busy !== null}
+            onClick={() => act(`resume-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/resume", path(r.id))))}
+          >
+            Resume
+          </Button>
+        )}
+        {may("cancel_run", r) && (
+          <Button
+            variant="ghost"
+            disabled={busy !== null}
+            onClick={async () => {
+              // qa-company-1: asked first, as the run page does.
+              if (await confirmInPage({ destructive: true, action: "Cancel run", message: CANCEL_RUN_CONFIRM })) {
+                void act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))));
+              }
+            }}
+          >
+            Cancel run
+          </Button>
+        )}
       </>
     ),
   }));
-
-  const runContext = (r: RunSummary) => (
-    <Link href={`/runs/${r.id}`} className="block truncate hover:underline">
-      <RunName run={r} />
-    </Link>
-  );
-  const openRun = (r: RunSummary) => <LinkButton href={`/runs/${r.id}`}>Open</LinkButton>;
 
   const lookups: Need[] = inbox.lookups.map((r) => ({
     key: r.id,
@@ -1390,7 +1445,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       openRun(r)
     ) : (
       <>
-        {r.can_retry && (
+        {r.can_retry && may("retry_run", r) && (
           <Button
             disabled={busy !== null}
             onClick={async () => {
@@ -1402,7 +1457,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
             Retry
           </Button>
         )}
-        {r.can_stop_cancelling && (
+        {r.can_stop_cancelling && may("stop_cancelling_run", r) && (
           <Button
             disabled={busy !== null}
             onClick={async () => {
@@ -1414,7 +1469,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
             Stop cancelling
           </Button>
         )}
-        {r.can_retry_lookup && (
+        {r.can_retry_lookup && may("retry_lookup_run", r) && (
           <Button
             disabled={busy !== null}
             onClick={() => act(`lookup-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry-lookup", path(r.id))))}
@@ -1422,7 +1477,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
             Retry lookup
           </Button>
         )}
-        {(r.cancel_again ?? []).map((wid, _, all) => (
+        {(may("cancel_again_run", r) ? (r.cancel_again ?? []) : []).map((wid, _, all) => (
           <Button
             key={wid}
             disabled={busy !== null}
@@ -1437,7 +1492,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
             {all.length > 1 ? `Cancel again ${wid}` : "Cancel again"}
           </Button>
         ))}
-        {r.can_dismiss_overrun && (
+        {r.can_dismiss_overrun && may("dismiss_overrun_run", r) && (
           <Button
             variant="ghost"
             disabled={busy !== null}
@@ -1446,11 +1501,15 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
             Dismiss
           </Button>
         )}
-        {!FINAL_STATUSES.includes(r.status) && (
+        {!FINAL_STATUSES.includes(r.status) && may("cancel_run", r) && (
           <Button
             variant="ghost"
             disabled={busy !== null}
-            onClick={() => act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))))}
+            onClick={async () => {
+              if (await confirmInPage({ destructive: true, action: "Cancel run", message: CANCEL_RUN_CONFIRM })) {
+                void act(`cancel-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/cancel", path(r.id))));
+              }
+            }}
           >
             Cancel run
           </Button>
@@ -1474,13 +1533,15 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
     at: r.started_at ?? r.created_at,
     action: compact
       ? openRun(r)
-      : r.can_retry_import && (
+      : r.can_retry_import && may("retry_import_run", r) ? (
           <Button
             disabled={busy !== null}
             onClick={() => act(`import-${r.id}`, () => unwrap(api.POST("/v1/runs/{run_id}/retry-import", path(r.id))))}
           >
             Retry
           </Button>
+        ) : (
+          openRun(r)
         ),
   }));
 
@@ -1524,7 +1585,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </span>
     ),
     context: (
-      <Link href={`/runs/${c.run_id}`} className="block truncate hover:underline" title={[c.flow_title, c.segment_title, c.document_slug].filter(Boolean).join(" · ")}>
+      <Link href={`/runs/${c.run_id}`} className="block truncate hover:underline" title={runLabel(c)}>
         <RunName run={c} />
       </Link>
     ),
@@ -1896,8 +1957,10 @@ export function allNeeds(
   fixed?: FixedHere,
   /** A5: the access request rows (./_access), decided in place. */
   accessRequests: Need[] = [],
+  /** What the signed-in person may do (usePerms): rows draw only those actions. */
+  perms: Perms = ALL,
 ): StatedNeed[] {
-  const n = inboxNeeds(inbox, busy, act, compact, fixed);
+  const n = inboxNeeds(inbox, busy, act, compact, fixed, perms);
   // A row may carry its own state and count (a question answered in place: ./_questions).
   const launches = launchNeeds(inbox);
   const requests = requestNeeds(inbox, busy, act);
@@ -1932,7 +1995,7 @@ export function allNeeds(
     ...metricNeeds(inbox, seenBefore),
     ...stated(outcomes.counted, "outcomes"),
     ...oracleActionNeeds(inbox.oracle_actions ?? [], busy, act, seenBefore),
-    ...feedbackNeeds(inbox, seenBefore, onActed, compact),
+    ...feedbackNeeds(inbox, seenBefore, onActed, compact, perms),
     ...decisionNeeds(inbox, busy, act, seenBefore),
     ...stated(accessRequests, "access-requests"),
     ...stated(asked, "questions"),

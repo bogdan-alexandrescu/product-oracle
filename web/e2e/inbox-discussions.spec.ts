@@ -87,7 +87,7 @@ test("a mention shows its excerpt in quotes", async ({ page }) => {
 test("the badge equals New + Open with discussion rows present", async ({ page }) => {
   await inboxAs(page, APPROVER);
   await expect(group(page, "new").locator("tr[data-row]")).toHaveCount(2);
-  const total = (await tabCount(page, "New")) + (await tabCount(page, "Open"));
+  const total = (await tabCount(page, "New")) + (await tabCount(page, "Seen"));
   await expect(badge(page)).toHaveText(String(total));
   await expect(page.getByText(`${total} waiting`)).toBeVisible();
 });

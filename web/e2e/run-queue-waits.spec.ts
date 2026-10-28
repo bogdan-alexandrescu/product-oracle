@@ -88,13 +88,15 @@ test("a run not started after 30 minutes is an Inbox row with Open and Cancel, c
 
   await page.goto("/inbox");
   await expect(badge).toHaveText(String(before + 1));
-  const row = page.getByTestId("inbox-lookups").locator("tr[data-row]").filter({ hasText: "queued-onboarding" });
+  const row = page.getByTestId("inbox-lookups").locator("tr[data-row]").filter({ hasText: "Queued onboarding" });
   await expect(row).toContainText(QUOTA);
   await expect(row).toContainText(`since ${SINCE_WORDS}`);
   await expect(row.getByRole("button", { name: "Retry" })).toHaveCount(0);
   await expect(row.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", `/runs/${RUN_ID}`);
 
   await row.getByRole("button", { name: "Cancel run" }).click();
+  // Asked first, as the run page asks (qa-company-1).
+  await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
   await expect(row).toHaveCount(0);
   await expect(badge).toHaveText(String(before));
 

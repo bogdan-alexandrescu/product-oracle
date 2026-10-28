@@ -20,7 +20,7 @@ const dayAhead = (n: number) => new Date(mockNow().getTime() + n * 86_400_000).t
 
 async function openCaps(page: Page) {
   await page.goto("/company/decisions");
-  await chip(page, "All").click();
+  await chip(page, "Any state").click();
   await row(page, CAPS).click();
   await expect(inspector(page)).toContainText("Do caps wait for detection?");
 }
@@ -66,10 +66,10 @@ test("the creator edits every field of a proposal; the inspector and a reload sh
   await expect(ins).toContainText("Hard to reverse");
   await expect(ins).toContainText("Spend incidents drop below 2 a month");
   await expect(ins).toContainText("spend incidents per month: 6 → 2");
-  await expect(ins).toContainText(/Informed[^]*approver@example\.com/);
+  await expect(ins).toContainText(/Informed[^]*Approver/);
 
   await page.reload();
-  await chip(page, "All").click();
+  await chip(page, "Any state").click();
   await row(page, "Ship usage caps in the next sprint").click();
   await inspector(page).getByRole("button", { name: "Edit", exact: true }).click();
   const again = inspector(page).getByRole("form", { name: "Edit decision" });
@@ -105,7 +105,7 @@ test("a stale save shows the conflict message and keeps the form", async ({ brow
   await expect(stale).toContainText("Someone else changed this since you loaded it; reload and try again");
   await expect(stale.getByLabel("Decision", { exact: true })).toHaveValue("A stale title");
   await second.reload();
-  await chip(second, "All").click();
+  await chip(second, "Any state").click();
   await expect(row(second, "The fresh title")).toBeVisible();
   await context.close();
 });
