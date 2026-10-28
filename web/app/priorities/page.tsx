@@ -244,6 +244,17 @@ function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] 
         title: "A feature that others depend on is placed above its score, so features scored higher can sit below it.",
       });
     }
+    // Or it sits above features scored higher that rank lower for their own reason.
+    const below = features
+      .slice(at + 1)
+      .filter((x) => s(x) > s(f))
+      .map((x) => `${x.title} (${!x.serves_goal ? "no confirmed goal" : "waits for a dependency"})`);
+    if (above.length === 0 && below.length > 0) {
+      out.push({
+        label: `Above ${below.join(", ")}`,
+        title: "Features scored higher rank below this one: features with no confirmed goal come last, and a feature waits for those it depends on.",
+      });
+    }
   }
   return out;
 }
@@ -1003,7 +1014,7 @@ function Priorities() {
       header: "Confidence",
       width: "104px",
       hideOnPhone: true,
-      narrow: "hide",
+      narrow: "mid",
       cell: (f) => {
         const c = pct(f.explanation.confidence.value);
         return c == null ? (
@@ -1030,7 +1041,7 @@ function Priorities() {
       header: "Depends on",
       width: "140px",
       hideOnPhone: true,
-      narrow: "hide",
+      narrow: "mid",
       wrap: true,
       cell: (f) => {
         const text = f.depends_on.map((k) => featureName(features, k)).join(", ");

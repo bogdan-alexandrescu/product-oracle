@@ -354,7 +354,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       width: "120px",
       hideOnPhone: true,
       // A drawer beside the table drops Horizon, Owner and Confidence before the goal's name (qa-plan-3).
-      narrow: "hide",
+      narrow: "mid",
       cell: (g) => {
         const h = horizonLabel(g.attrs ?? {});
         if (!h) return <TextFallback attr="horizon" text={g.attrs?.horizon_text ?? g.attrs?.horizon} />;
@@ -370,7 +370,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       header: "Owner",
       width: "120px",
       hideOnPhone: true,
-      narrow: "hide",
+      narrow: "mid",
       cell: (g) => <OwnerName id={g.attrs?.owner} owners={owners} />,
     },
     {
@@ -401,7 +401,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       width: "96px",
       align: "center",
       hideOnPhone: true,
-      narrow: "hide",
+      narrow: "mid",
       cell: (g) => <ConfidenceRing value={g.confidence} low={low} size={32} />,
     },
   ];

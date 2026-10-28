@@ -30,7 +30,7 @@ test("qa-plan-18: New launch names the track and points to approving its roadmap
   // No dead button: Create launch is not offered until there is something to plan.
   await expect(dialog.getByRole("button", { name: "Create launch" })).toHaveCount(0);
   await expect(dialog.getByLabel("Name")).toHaveCount(0);
-  await dialog.getByRole("button", { name: "Close" }).click();
+  await dialog.getByTestId("dialog-footer").getByRole("button", { name: "Close" }).click();
   await expect(dialog).toBeHidden();
 });
 

@@ -26,9 +26,9 @@ export type Column<T> = {
    * "hide" drops the column when the table itself is under 760 px wide above phone width (the
    * docked Ask panel or an inspector beside it), so the other columns keep their room and the
    * last one is never cut off. A container query: the window's width does not tell.
-   * "wide" drops it already under 1320 px, for a wide table's least needed columns.
+   * "mid" drops it under 1000 px (a docked drawer); "wide" drops it already under 1320 px, for a wide table's least needed columns.
    */
-  narrow?: "hide" | "wide";
+  narrow?: "hide" | "mid" | "wide";
   className?: string;
 };
 
@@ -36,8 +36,10 @@ type PhoneRole = NonNullable<Column<unknown>["phone"]>;
 
 /** A `narrow: "hide"` column's cells and <col> in a table under 760 px wide; a phone keeps its own layout. */
 const NARROW_HIDE = "min-[601px]:@max-[760px]:hidden";
+const MID_HIDE = "min-[601px]:@max-[1000px]:hidden";
 const WIDE_HIDE = "min-[601px]:@max-[1320px]:hidden";
-const narrowClass = (n: "hide" | "wide" | undefined) => (n === "hide" ? NARROW_HIDE : n === "wide" ? WIDE_HIDE : "");
+const narrowClass = (n: Column<unknown>["narrow"]) =>
+  n === "hide" ? NARROW_HIDE : n === "mid" ? MID_HIDE : n === "wide" ? WIDE_HIDE : "";
 
 /** Phone-only classes per role; the row itself becomes a wrapping flex block. */
 const PHONE_CELL: Record<PhoneRole, string> = {
