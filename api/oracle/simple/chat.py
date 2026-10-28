@@ -1404,6 +1404,12 @@ def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
         return not _actions().proposes(principal)
     if card.op == "add_feature_ask" or card.op in _actions().DIRECT_OPS:
         return True
+    if card.op == "add_item":
+        # roadmap-talk: a new item is the roadmap's to add (an owner, else its decider).
+        me = getattr(principal, "user_id", None)
+        return has_role(principal.role, "owner") or (
+            has_role(principal.role, "approver") and me in read_.deciders.values()
+        )
     if card.item_id is None:
         return has_role(principal.role, "owner")
     e = read_.by_id().get(card.item_id)

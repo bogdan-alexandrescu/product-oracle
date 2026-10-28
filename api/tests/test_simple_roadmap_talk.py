@@ -198,6 +198,8 @@ async def test_new_actions_per_role(client, who):
     }  # fmt: skip
     assert first["after"]["end_date"] < "2026-12-15" and slice2["after"]["title"].endswith("2")
     assert after["after"]["start_date"] == "2026-12-16"
+    may = "apply" if APPLIES[who] == "applied" else "propose"
+    assert [c["may"] for c in m["cards"]] == [may] * 5
     for card in (ms, add, first, slice2):
         r = await apply(client, w, who, card["id"])
         assert r.status_code == 200, r.text
