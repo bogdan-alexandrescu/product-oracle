@@ -143,7 +143,7 @@ for (const scheme of ["light", "dark"] as const) {
       const twin = tray.getByTestId("tray-twin").filter({ hasText: TWIN });
       await expect(twin.getByTestId("looks-like-match").first()).toContainText("Looks like F-06 Weekly alert digest");
       await twin.getByTestId("looks-like-match").first().getByRole("button", { name: "Merge" }).click();
-      await expect(toastWith(page, `Merged '${TWIN}' into alert-digest in your working draft`)).toBeVisible();
+      await expect(toastWith(page, `Merged '${TWIN}' into F-06 Weekly alert digest in your working draft`)).toBeVisible();
       await tray.getByRole("button", { name: "Close" }).click();
       await expect(column(page, "later").getByTestId("board-below").locator(`[data-item="${TWIN_KEY}"]`)).toBeVisible();
       await expect(c.getByTestId("item-merged")).toHaveText("Merged into alert-digest");

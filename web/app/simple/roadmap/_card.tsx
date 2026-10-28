@@ -223,7 +223,7 @@ export function LooksLike({ item, act, canChange }: { item: Item; act: Act; canC
             <Button
               className="!h-7"
               onClick={() =>
-                void act(`Merged '${item.title}' into ${m.code}`, {
+                void act(`Merged '${item.title}' into ${`${m.code} ${m.title}`.trim()}`, {
                   op: "merge_item",
                   target: m.kind === "item" ? { item_id: item.id, into_id: m.id } : { item_id: item.id, feature_id: m.id },
                   before: {},
