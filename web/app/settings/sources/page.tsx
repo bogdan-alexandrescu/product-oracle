@@ -96,14 +96,22 @@ type RowNotice = { tone: "pass" | "warn"; text: string };
 function RowMenu({ label, items }: { label: string; items: { label: string; onSelect: () => void; danger?: boolean }[] }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLSpanElement>(null);
   const id = useId();
+  const menuItems = () => [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
   useEffect(() => {
     if (!open) return;
+    // Opening moves focus to the first item (qa-settings-12); Escape returns it to the button.
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
     const away = (e: PointerEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
     const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setOpen(false);
+      trigger.current?.focus();
     };
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
@@ -115,6 +123,7 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
   return (
     <span ref={box} className="relative">
       <button
+        ref={trigger}
         type="button"
         aria-label={label}
         aria-haspopup="menu"
@@ -127,9 +136,21 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
       </button>
       {open && (
         <span
+          ref={menu}
           id={id}
           role="menu"
           aria-label={label}
+          onKeyDown={(e) => {
+            // Arrow keys move between the items; Tab leaves the menu and closes it.
+            if (e.key === "Tab") return setOpen(false);
+            if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+            e.preventDefault();
+            const els = menuItems();
+            const i = els.indexOf(document.activeElement as HTMLElement);
+            const next =
+              e.key === "Home" ? 0 : e.key === "End" ? els.length - 1 : (i + (e.key === "ArrowDown" ? 1 : -1) + els.length) % els.length;
+            els[next]?.focus();
+          }}
           className="absolute top-full right-0 z-20 mt-1 flex min-w-40 flex-col rounded-button border border-line bg-surface p-1 shadow-panel"
         >
           {items.map((it) => (
@@ -137,6 +158,7 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
               key={it.label}
               type="button"
               role="menuitem"
+              tabIndex={-1}
               onClick={() => {
                 setOpen(false);
                 it.onSelect();

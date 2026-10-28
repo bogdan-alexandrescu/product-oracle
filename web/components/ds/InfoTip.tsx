@@ -87,7 +87,7 @@ export function InfoTip({
   return (
     <span
       ref={root}
-      className="relative inline-flex flex-none align-middle"
+      className="relative inline-flex flex-none self-center align-middle"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
     >
@@ -100,11 +100,18 @@ export function InfoTip({
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onClick={() => setPinned((p) => !p)}
-        className={`grid size-5 place-items-center rounded-full border-[1.5px] font-serif text-[13px] leading-none font-bold italic ${
-          shown ? "border-accent bg-accent text-on-accent" : ring
-        }`}
+        // A 24 px hit area round the 20 px (i) (qa-company-49), 44 px on a phone (an invisible
+        // pad); never stretched by a row or a touch sheet's 44 px min-height (qa-shell-21).
+        className="relative grid size-6 min-h-6! flex-none place-items-center self-center rounded-full before:absolute before:inset-0 before:rounded-full before:content-[''] max-[600px]:before:-inset-2.5"
       >
-        i
+        <span
+          aria-hidden
+          className={`grid size-5 place-items-center rounded-full border-[1.5px] font-serif text-[13px] leading-none font-bold italic ${
+            shown ? "border-accent bg-accent text-on-accent" : ring
+          }`}
+        >
+          i
+        </span>
       </button>
       <span
         ref={tip}

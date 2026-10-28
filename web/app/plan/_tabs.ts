@@ -4,11 +4,19 @@
  * (/plan/dates, F3), Outcomes (/plan/outcomes, H3), Launches and Changelog (/plan/launches,
  * /plan/changelog, H6). An entry whose page has not landed is absent.
  */
-export type PlanTab = { key: string; label: string; href: string; testId: string };
+export type PlanTab = {
+  key: string;
+  /** The strip's label: short, so the tabs fit (or nearly) a phone's strip. */
+  label: string;
+  /** The full name where `label` shortens it: the link's accessible name and tooltip. */
+  name?: string;
+  href: string;
+  testId: string;
+};
 
 export const PLAN_TABS: PlanTab[] = [
   { key: "plan", label: "Plan", href: "/plan", testId: "plan-tab-plan" },
-  { key: "documents", label: "Roadmap documents", href: "/plan/documents", testId: "plan-tab-documents" },
+  { key: "documents", label: "Documents", name: "Roadmap documents", href: "/plan/documents", testId: "plan-tab-documents" },
   { key: "dates", label: "Dates", href: "/plan/dates", testId: "plan-tab-dates" },
   { key: "outcomes", label: "Outcomes", href: "/plan/outcomes", testId: "plan-tab-outcomes" },
 ];

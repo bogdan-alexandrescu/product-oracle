@@ -81,6 +81,11 @@ export function RitualInspector({
   const active = (members ?? []).filter((m) => m.status !== "disabled");
   const preset = presetOf(schedule);
   const set = (patch: Partial<Schedule>) => setSchedule((s) => ({ ...s, ...patch }));
+  // Save is offered once something changed (qa-company-30): until then it says so.
+  const edits = (sc: Schedule, d: string, p: string, o: typeof owner, a: string[]) => JSON.stringify([ruleOf(sc), d, p, o, [...a].sort()]);
+  const changed =
+    edits(schedule, duration, prep, owner, attendees) !==
+    edits(saved, String(ritual.duration_min), String(ritual.prep_hours), ritual.owner_id, ritual.attendee_ids);
 
   async function act(call: () => Promise<unknown>) {
     setBusy(true);
@@ -296,9 +301,16 @@ export function RitualInspector({
             </div>
           </fieldset>
           <div className="col-span-2 flex flex-wrap gap-2 max-[600px]:col-span-1">
-            <Button type="submit" variant="solid" disabled={busy}>
-              Save
-            </Button>
+            <span className="flex items-center gap-2">
+              <Button type="submit" variant="solid" disabled={busy || !changed} title={changed ? undefined : "No changes to save"}>
+                Save
+              </Button>
+              {!changed && (
+                <span className="text-sm text-text2" data-testid="ritual-no-changes">
+                  No changes
+                </span>
+              )}
+            </span>
             <Button
               disabled={busy}
               onClick={() =>

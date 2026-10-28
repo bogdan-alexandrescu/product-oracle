@@ -264,17 +264,20 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
         </div>
       )}
       <div className="flex flex-none flex-col gap-2 border-b border-line px-4 py-3">
-        <p className="flex min-w-0 items-center gap-1.5 text-[15px]" data-testid="hop-about">
-          <span className="min-w-0 truncate rounded-full bg-accent-soft px-2.5 py-0.5 font-semibold text-accent-ink">
-            {about.url ? (
-              <Link href={about.url} className="hover:underline">
-                About: {about.label}
-              </Link>
-            ) : (
-              <>About: {about.label}</>
-            )}
-          </span>
-        </p>
+        {/* In a thread its own header names the subject (qa-shell-20): the chip is for the list. */}
+        {view.kind === "list" && (
+          <p className="flex min-w-0 items-center gap-1.5 text-[15px]" data-testid="hop-about">
+            <span className="min-w-0 truncate rounded-full bg-accent-soft px-2.5 py-0.5 font-semibold text-accent-ink">
+              {about.url ? (
+                <Link href={about.url} className="hover:underline">
+                  About: {about.label}
+                </Link>
+              ) : (
+                <>About: {about.label}</>
+              )}
+            </span>
+          </p>
+        )}
         {view.kind === "list" && (
           <SegmentedControl
             label="About"

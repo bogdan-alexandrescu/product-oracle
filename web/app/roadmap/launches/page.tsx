@@ -24,6 +24,7 @@ import {
   type ChipKind,
   type Column,
 } from "@/components/ds";
+import { PlanCrumb } from "@/app/plan/_crumb";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
 import { formatDate } from "@/lib/format";
@@ -175,11 +176,7 @@ function Launches() {
     <Page>
       <PageHeader
         title="Launches"
-        back={
-          <Link href="/roadmap" className="hover:underline">
-            Roadmap
-          </Link>
-        }
+        back={<PlanCrumb />}
         status={
           q.data && (
             <>

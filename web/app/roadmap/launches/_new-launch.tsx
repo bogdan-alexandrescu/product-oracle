@@ -2,12 +2,10 @@
 
 import { useState } from "react";
 
-import { Chip } from "@/components/ds";
-import { INPUT } from "@/components/ui";
+import { Button, Chip, Dialog } from "@/components/ds";
+import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
-
-import { FormDialog } from "../_form-dialog";
 
 type Track = Schemas["TrackSummary"];
 type Item = Schemas["RoadmapItemOut"];
@@ -60,17 +58,23 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
     }
   }
 
+  const problem = error ?? tracksQ.error ?? itemsQ.error;
+  const canSubmit = !!track && picked.length > 0 && !!name.trim();
+
   return (
-    <FormDialog
+    <Dialog
       title="New launch"
       testId="new-launch-dialog"
-      submitLabel="Create launch"
-      submit="Creating…"
-      canSubmit={!!track && picked.length > 0 && !!name.trim()}
-      busy={busy}
-      error={error ?? tracksQ.error ?? itemsQ.error}
-      onSubmit={create}
+      dirty={picked.length > 0 || customName !== null}
       onClose={onClose}
+      onSubmit={() => {
+        if (canSubmit && !busy) void create();
+      }}
+      actions={
+        <Button type="submit" variant="primary" disabled={busy || !canSubmit}>
+          {busy ? "Creating…" : "Create launch"}
+        </Button>
+      }
     >
       {tracks.length > 1 && (
         <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
@@ -125,6 +129,7 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
         The launch starts Planned with Oracle&apos;s suggested tier and its checklist. It is ready when the items&apos; tracker issues or
         milestones are done.
       </p>
-    </FormDialog>
+      {problem && <ErrorNote>{problem}</ErrorNote>}
+    </Dialog>
   );
 }

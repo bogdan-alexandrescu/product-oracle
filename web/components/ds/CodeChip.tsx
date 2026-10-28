@@ -199,7 +199,7 @@ export function HoverCard({
             enter();
           }
         }}
-        className={unstyled ? className : `inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-goal text-left align-middle outline-offset-2 ${className}`}
+        className={unstyled ? className : `inline-flex min-h-6 max-w-full min-w-6 items-center gap-1.5 rounded-goal text-left align-middle outline-offset-2 ${className}`}
       >
         {trigger}
       </button>
