@@ -111439,6 +111439,18 @@
               }
             ],
             "title": "Due Date"
+          },
+          "action_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Item Id"
           }
         },
         "type": "object",
@@ -111478,6 +111490,18 @@
               }
             ],
             "title": "Due Date"
+          },
+          "action_item_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action Item Id"
           },
           "owner_name": {
             "anyOf": [

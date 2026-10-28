@@ -53,7 +53,7 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision
 from oracle.docs.models import Document
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import drafts
+from oracle.simple import drafts, minutes
 from oracle.simple.models import (
     SimpleChange,
     SimpleDraft,
@@ -1063,23 +1063,26 @@ async def _waits(db: AsyncSession, m: SimpleMeeting) -> list[dict]:
 
 
 async def extract(db: AsyncSession, m: SimpleMeeting) -> dict[str, Any]:
-    """Oracle's quick draft of the minutes, shown at once."""
+    """Oracle's quick draft of the minutes, shown at once: only the meeting's own record
+    (oracle.simple.minutes): its decisions, the chat's questions and its action items."""
     links = (await _decisions(db, [m.id]))[m.id]
     titles = [d.title for _, d in reversed(links)]
+    waits = await _waits(db, m)
+    rec = await minutes.record(db, m, [d for _, d in reversed(links)], waits)
     if titles:
         word = "decision" if len(titles) == 1 else "decisions"
         more = "…" if len(titles) > 6 else "."
         summary = f"{len(titles)} {word} in {m.title}: " + "; ".join(titles[:6]) + more
+    elif rec.empty:
+        summary = minutes.nothing(m.title)
     else:
         summary = f"{m.title}: no decision was taken."
-    document = await db.get(Document, m.prd_document_id)
-    item_ids, _ = await _prd_items(db, document)
-    questions = [f"D-{d.number}: {d.title}" for d in await _open_decisions(db, document, item_ids)]
+    actions = [minutes.recorded(a) for a in rec.actions]
     return {
         "summary": summary[:SUMMARY_MAX],
-        "open_questions": questions[:MAX_QUESTIONS],
-        "action_items": [],
-        "waits": await _waits(db, m),
+        "open_questions": rec.questions()[:MAX_QUESTIONS],
+        "action_items": actions[:MAX_ACTIONS],
+        "waits": waits,
         "written_by": "extract",
     }
 
@@ -1132,9 +1135,28 @@ def _clean_actions(raw: Any, members: set[uuid.UUID], default: uuid.UUID | None)
             due = date.fromisoformat(str(a["due_date"])).isoformat() if a.get("due_date") else None
         except ValueError:
             due = None
-        out.append({"title": " ".join(str(a["title"]).split())[:200],
-                    "owner_id": str(owner) if owner else None, "due_date": due})  # fmt: skip
+        row = {"title": " ".join(str(a["title"]).split())[:200],
+               "owner_id": str(owner) if owner else None, "due_date": due}  # fmt: skip
+        if a.get("action_item_id"):  # one recorded in the meeting (Send skips it)
+            row["action_item_id"] = str(a["action_item_id"])
+        out.append(row)
     return out[:MAX_ACTIONS]
+
+
+def _answer_actions(raw: Any) -> list[dict]:
+    """The answer's action items, tidied; owners and dates checked against the record."""
+    out = []
+    for a in raw if isinstance(raw, list) else []:
+        if not isinstance(a, dict) or not str(a.get("title") or "").strip():
+            continue
+        due = None
+        try:
+            due = date.fromisoformat(str(a["due_date"])).isoformat() if a.get("due_date") else None
+        except ValueError:
+            due = None
+        out.append({"title": " ".join(str(a["title"]).split())[:200],
+                    "owner_id": a.get("owner_id"), "due_date": due})  # fmt: skip
+    return out
 
 
 async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
@@ -1153,6 +1175,16 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     links = (await _decisions(s, [m.id]))[m.id]
     names = await _names(s, set(m.attendee_ids) | {d.approver_id for _, d in links})
     waits = await _waits(s, m)
+    rec = await minutes.record(s, m, [d for _, d in reversed(links)], waits)
+    if rec.empty:
+        # Nothing was said, decided or assigned: nothing to ask a model about.
+        if (m.minutes or {}).get("written_by") == "edited" or m.minutes_state == "sent":
+            return {"written": False, "reason": "a person edited or sent the minutes first"}
+        m.minutes = {"summary": minutes.nothing(m.title), "open_questions": [],
+                     "action_items": [], "waits": waits, "written_by": "oracle"}  # fmt: skip
+        m.minutes_state = "ready"
+        await s.flush()
+        return {"written": True, "empty": True}
     payload = {
         "title": m.title,
         "prd": document.title if document else "",
@@ -1161,6 +1193,15 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
             {"title": d.title, "by": names.get(d.approver_id, "someone")}
             for _, d in reversed(links)
         ],  # fmt: skip
+        "chat": [
+            {"by": names.get(c.by, "someone") if c.by else "someone", "text": c.text}
+            for c in rec.chat
+        ],  # fmt: skip
+        "notes": rec.notes,
+        "action_items": [
+            {"title": a["title"], "owner_id": str(a["owner_id"]), "due_date": a["due_date"]}
+            for a in rec.actions
+        ],
         "pending": [w["what"] for w in waits],
         "waits": [{"what": w["what"], "on": [p["name"] for p in w["on"]]} for w in waits],
     }
@@ -1172,13 +1213,16 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
         m.minutes_state = "ready"
         return {"written": False, "reason": "the answer had no summary"}
     questions = [" ".join(str(q).split())[:300] for q in answer.get("open_questions") or []
-                 if str(q).strip()][:MAX_QUESTIONS]  # fmt: skip
+                 if str(q).strip()]  # fmt: skip
+    # The output check: only what the meeting's record supports (the rest is logged).
+    questions, actions = minutes.check(
+        m.id, rec, questions, _answer_actions(answer.get("action_items")),
+        set(m.attendee_ids), names,
+    )  # fmt: skip
     m.minutes = {
         "summary": summary,
-        "open_questions": questions,
-        "action_items": _clean_actions(
-            answer.get("action_items"), set(m.attendee_ids), m.ended_by
-        ),  # fmt: skip
+        "open_questions": questions[:MAX_QUESTIONS],
+        "action_items": actions[:MAX_ACTIONS],
         "waits": waits,
         "written_by": "oracle",
     }
@@ -1250,6 +1294,8 @@ async def send(
     email and to Slack when chosen. Action items are added through the change engine
     (owners apply, others propose). Commits."""
     from oracle.simple import changes
+    from oracle.simple import minutes as minutes_mod
+    from oracle.simple.models import SimpleActionItem
     from oracle.simple.schemas import SimpleChangeIn
 
     m, document = await _get(db, principal, meeting_id, lock=True)
@@ -1290,8 +1336,21 @@ async def send(
                        data={"email": body.email, "slack": body.slack})  # fmt: skip
     await db.commit()
     # Action items through the change engine (each commits on its own), into a session
-    # of the sender's: the meeting's is closed.
+    # of the sender's: the meeting's is closed. One recorded in the meeting has its row
+    # already: by its id, or by its title when a person's edit dropped the id (the review).
+    have = list(
+        await db.execute(
+            select(SimpleActionItem.id, SimpleActionItem.title).where(
+                SimpleActionItem.meeting_id == m.id
+            )
+        )
+    )
+    ids = {str(i) for i, _ in have}
+    titles = {frozenset(minutes_mod.words(t)) for _, t in have}
     for a in minutes.get("action_items") or []:
+        same = frozenset(minutes_mod.words(a["title"]))
+        if str(a.get("action_item_id") or "") in ids or same in titles:
+            continue
         owner = a.get("owner_id") or str(_me(principal))
         try:
             await changes.create(db, principal, SimpleChangeIn(

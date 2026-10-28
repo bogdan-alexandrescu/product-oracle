@@ -370,6 +370,22 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
 }
 
 /** The roadmap as the reader reads it (and as an owner, for the constraint check). */
+/**
+ * Oracle's Ask on a Simple page reads the company's plan first (oracle.discussions.plan): a
+ * question naming a roadmap item the asker may read is answered from the plan, its dates,
+ * status and outcome; null when it names none (the canned reply).
+ */
+export function planAnswer(db: SimpleDb, ctx: ChatCtx, question: string): string | null {
+  const q = question.toLowerCase();
+  const [i] = itemsFor(db, ctx)
+    .filter((x) => q.includes(x.title.toLowerCase()))
+    .sort((a, b) => b.title.length - a.title.length);
+  if (!i) return null;
+  const when = `${dayWords(i.start.date)} – ${dayWords(i.end.date, true)}${i.estimated ? " (estimated)" : ""}`;
+  const outcome = i.outcome ? ` Its outcome: ${i.outcome}.` : "";
+  return `From the plan: ${i.title} runs ${when}; it is ${i.status.replace("_", " ")} (${i.horizon}).${outcome}`;
+}
+
 function itemsFor(db: SimpleDb, ctx: ChatCtx): Item[] {
   return roadmapOut(db, ctx.role, new URLSearchParams(), { id: ctx.id, role: ctx.role, roles: ctx.roles, owners: ctx.owners, names: ctx.names })?.items ?? [];
 }

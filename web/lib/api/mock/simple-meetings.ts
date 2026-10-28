@@ -60,6 +60,8 @@ export interface MeetingsCtx {
   onePager: OnePagerDb;
   /** The rituals (./rituals.ts): Meetings > Upcoming lists each active one's next review, as Home does. */
   rituals?: RitualsDb;
+  /** The people's lines in a meeting's chat (S9's ./simple-chat.ts): part of its record (minutes.record). */
+  chatLines?: (meetingId: string) => string[];
 }
 
 interface Meeting {
@@ -334,7 +336,10 @@ function settleLater(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting) {
   if (!m.minutes_due || m.minutes_state !== "drafting" || mockNowMs() < m.minutes_due.at) return;
   if (m.minutes_due.outcome === "failed") m.minutes_job = "failed";
   else {
-    m.minutes = { ...extract(ctx, db, m), summary: `Oracle's minutes of ${m.title}: ${db.decisions.filter((d) => d.meeting_id === m.id).length} decisions taken.`, written_by: "oracle" };
+    const quick = extract(ctx, db, m);
+    const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
+    // An empty record: the plain line, no model's words (meetings.run_job).
+    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
     m.minutes_state = "ready";
     m.minutes_job = null;
   }
@@ -543,9 +548,13 @@ export async function withMeeting(db: MeetingsDb, ctx: MeetingsCtx, req: Request
 function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   const p = prds(ctx).find((x) => x.slug === m.prd)!;
   const titles = db.decisions.filter((d) => d.meeting_id === m.id).sort((a, b) => -newestFirst(a, b)).map((d) => d.title);
+  // Only the meeting's own record (minutes.record): its decisions and its chat's lines.
+  const lines = ctx.chatLines?.(m.id) ?? [];
   const summary = titles.length
     ? `${titles.length} ${titles.length === 1 ? "decision" : "decisions"} in ${m.title}: ${titles.slice(0, 6).join("; ")}${titles.length > 6 ? "…" : "."}`
-    : `${m.title}: no decision was taken.`;
+    : lines.length
+      ? `${m.title}: no decision was taken.`
+      : `${m.title}: nothing was decided or recorded.`;
   const waits: Schemas["SimpleWait"][] = [];
   for (const d of meetingDrafts(ctx, db, m, p)) {
     if (d.status === "submitted" && d.waiting_on.length) waits.push({ what: `Publishing ${d.document.title}: their approval`, on: d.waiting_on.map((i) => ref(ctx, i)) });
@@ -557,7 +566,7 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   }
   return {
     summary: summary.slice(0, 4000),
-    open_questions: openDecisions(ctx, db, p).map((d) => `D-${d.number}: ${d.title}`),
+    open_questions: lines.filter((x) => x.trim().endsWith("?")).slice(0, 5),
     action_items: [],
     waits,
     written_by: "extract",
@@ -769,7 +778,10 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
     if (!presenterOrDecider(ctx, m, prd)) return json(403, { detail: "Only the presenter, the PRD's decider or an owner drafts again" });
     if (!(m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed")) return json(409, { detail: "Oracle is not failing to draft these minutes" });
     // The requeued job answers (the fake model): Oracle's minutes, ready to edit and send.
-    m.minutes = { ...extract(ctx, db, m), summary: `Oracle's minutes of ${m.title}: ${db.decisions.filter((d) => d.meeting_id === m.id).length} decisions taken.`, written_by: "oracle" };
+    const quick = extract(ctx, db, m);
+    const n = db.decisions.filter((d) => d.meeting_id === m.id).length;
+    // An empty record: the plain line, no model's words (meetings.run_job).
+    m.minutes = { ...quick, summary: n || (ctx.chatLines?.(m.id) ?? []).length ? `Oracle's minutes of ${m.title}: ${n} decisions taken.` : quick.summary, written_by: "oracle" };
     m.minutes_state = "ready";
     m.minutes_job = null;
     return ok();
@@ -784,7 +796,7 @@ export async function routeSimpleMeetings(db: MeetingsDb, ctx: MeetingsCtx, req:
       open_questions: (b.open_questions ?? []).map((x) => x.trim()).filter(Boolean),
       action_items: (b.action_items ?? []).filter((a) => a.title?.trim()).map((a) => {
         const owner = a.owner_id && members.has(a.owner_id) ? a.owner_id : m.ended_by;
-        return { title: a.title.trim(), owner_id: owner, owner_name: owner ? nameOf(ctx, owner) : null, due_date: a.due_date ?? null };
+        return { title: a.title.trim(), owner_id: owner, owner_name: owner ? nameOf(ctx, owner) : null, due_date: a.due_date ?? null, action_item_id: a.action_item_id ?? null };
       }),
       waits: m.minutes?.waits ?? [],
       written_by: "edited",

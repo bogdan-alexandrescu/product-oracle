@@ -8,7 +8,7 @@ import { expect, test, type BrowserContext, type Page } from "./test";
  * phone, light and dark; Slack and email set through the mock's MOCK_MEETINGS_KEY.
  *
  * Card meeting-end-minutes: protects = End meeting shows Oracle's minutes at once (the
- * summary names the decisions, the PRD's open decision is an open question), the decisions
+ * summary names the decisions; open questions only from the meeting's record), the decisions
  * taken and what still waits on whom; the minutes are edited before sending (an action
  * item with its owner and date) and the edit is what is sent; on a phone the screen
  * stacks minutes, waits, delivery; fails_when = the minutes are missing or not editable,

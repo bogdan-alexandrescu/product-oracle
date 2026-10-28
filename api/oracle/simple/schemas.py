@@ -1191,6 +1191,8 @@ class SimpleActionItemIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     owner_id: uuid.UUID | None = None
     due_date: dt.date | None = None
+    # An action item recorded in the meeting (its row): Send adds only the new ones.
+    action_item_id: uuid.UUID | None = None
 
 
 class SimpleActionItemOut(SimpleActionItemIn):

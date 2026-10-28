@@ -160,9 +160,18 @@ class Catalog:
             op = self.generated.get(name)
             if op is None:
                 raise ToolError(f"Unknown tool: {name}")
-            return to_result(await call_operation(self.app, self.caller, op, args))
+            resp = await call_operation(self.app, self.caller, op, args)
+            return to_result(resp, plain=plain_for(self.caller))
         except ToolError as exc:
             return types.CallToolResult(content=[types.TextContent(text=str(exc))], is_error=True)
+
+
+def plain_for(caller: auth.McpCaller) -> bool:
+    """An Ask reply's live token (``live:sources`` only): a live source's failure reaches
+    its answer as one plain line (oracle.mcp.tools.to_result)."""
+    from oracle.live.tokens import SCOPE
+
+    return caller.scopes == frozenset({SCOPE})
 
 
 def build_server(catalog: Catalog) -> Server:

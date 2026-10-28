@@ -30,7 +30,8 @@ Test cards (protects / fails_when / no_claim):
   reviewer, or never publishes; no_claim=PRD drafts (same path, S5's tests).
 - test_end_and_minutes_job: protects=ending writes Oracle's quick minutes at once (the
   decisions in the summary, what waits on whom) and queues the ``meeting_minutes`` job;
-  its answer (fake) replaces them, held to attendees as owners; a person's edit wins over
+  its answer (fake) replaces them, held to the meeting's record (an item nobody said is
+  dropped, test_simple_minutes_record has the rest); a person's edit wins over
   a later answer; only the presenter, decider or an owner ends; a change through an
   ended meeting is refused; fails_when=no minutes, the job overwrites an edit, or anyone
   ends it; no_claim=the prompt's wording.
@@ -303,6 +304,11 @@ async def test_end_and_minutes_job(client):
     w = await world()
     m = await start(client, w)
     assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
+    # The meeting's record: the chat's question and a task someone took on.
+    for line in ("Who owns QA?", "I will write the QA plan by Nov 2"):
+        r = await client.post(f"{MEETINGS}/{m['id']}/chat/messages", json={"text": line},
+                              headers=w.ctx.as_("approver"))  # fmt: skip
+        assert r.status_code == 200, r.text
     for who in ("approver", "commenter"):
         r = await client.post(f"{MEETINGS}/{m['id']}/end", headers=w.ctx.as_(who))
         assert r.status_code == 403, (who, r.text)
@@ -336,10 +342,10 @@ async def test_end_and_minutes_job(client):
         "Who owns QA?"
     ]
     assert mins["action_items"][0] == {"title": "Write the QA plan", "owner_id": uid(w, "approver"),
-                                       "due_date": "2026-11-02", "owner_name": None}  # fmt: skip
-    # Not an attendee: the person who ended it owns it; a date that is no date is dropped.
-    assert mins["action_items"][1]["owner_id"] == uid(w, "decider")
-    assert mins["action_items"][1]["due_date"] is None
+                                       "due_date": "2026-11-02", "owner_name": None,
+                                       "action_item_id": None}  # fmt: skip
+    # Nobody said it (the meeting's record does not hold it): dropped.
+    assert len(mins["action_items"]) == 1
     body = {"summary": "Edited summary", "open_questions": [], "action_items": []}
     r = await client.put(f"{MEETINGS}/{m['id']}/minutes", json=body, headers=w.ctx.as_("commenter"))
     assert r.status_code == 403
