@@ -982,21 +982,11 @@ def _ask_of(d: Discussion | None) -> uuid.UUID | None:
     return uuid.UUID(ask) if ask else None
 
 
-SIMPLE_PAGE_NAMES = {
-    "": "Home",
-    "one-pagers": "One-pagers",
-    "roadmap": "Roadmap",
-    "priorities": "Priorities",
-    "meetings": "Meetings",
-    "decisions": "Decisions",
-    "prds": "PRD",
-}
-
-
 def page_name(page: str | None) -> str:
-    """A Simple page's name as the rail says it (never its route): Home, Roadmap..."""
-    rest = page_of(page)[len("/simple") :].strip("/")
-    return SIMPLE_PAGE_NAMES.get(rest.split("/")[0], "Home")
+    """A Simple page's name as the panel says it (never its route): Home, Roadmap..."""
+    from oracle.discussions.context import page_name as named
+
+    return named(page_of(page))
 
 
 async def recent(db: AsyncSession, principal: Any, limit: int = 10) -> list[ChatSummaryOut]:

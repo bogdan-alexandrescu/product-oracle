@@ -5207,7 +5207,9 @@ async function route(db: Db, req: Request): Promise<Response> {
       reviews.propose(b.title, b.approver_id, doc, id);
       return id;
     };
-    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d) };
+    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d),
+      ownsDiscussion: (id: string) => !!(db.discussions ??= emptyDiscussions()).discussions.find((d) => d.id === id && d.origin === "panel" && d.started_by === me.id),
+    };
     const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, chatCtx, req, p, reviews);
     if (chatRes) return chatRes;
   }
