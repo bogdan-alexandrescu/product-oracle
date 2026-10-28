@@ -265,9 +265,14 @@ export function FlowPanel({
 
   useEffect(() => {
     if (!full) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setFull(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Escape leaves the viewer only: caught first, so the card under it stays open.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setFull(false);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
   }, [full]);
 
   async function post(run: () => Promise<{ data?: Visual; error?: unknown; response: Response }>, after?: () => void) {
