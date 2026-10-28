@@ -2691,6 +2691,13 @@ function load(): Db {
                     db.simple_roadmap!.plan!.undated = true;
                     return db;
                   }
+              : scenario === "simple-plan-goalless"
+                ? () => {
+                    // prd-timeline review: Guided setup's plan with work that names no goal.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.plan!.goalless = true;
+                    return db;
+                  }
               : scenario === "simple-chat"
                 ? () => {
                     const db = seedSimpleHomeScenario();

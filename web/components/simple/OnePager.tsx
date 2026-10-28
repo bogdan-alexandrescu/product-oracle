@@ -70,21 +70,27 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   // A meeting's screen: read again when the meeting moves on (Approve publishes the draft).
   const seenRefresh = useRef(refresh);
   const reloadPage = q.reload;
-  useEffect(() => {
-    if (seenRefresh.current === refresh) return;
-    seenRefresh.current = refresh;
-    void reloadPage();
-  }, [refresh, reloadPage]);
   // prd-timeline: the PRD's plan leads the page (its timeline, goal lanes and milestone parts).
   const planQ = useQuery(`simple-prd-plan|${doc}`, () =>
     unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd: doc } } })).catch(() => null),
   );
+  const reloadPlan = planQ.reload;
   const [planNow, setPlanNow] = useState<Schemas["SimplePlanOut"] | null>(null);
+  useEffect(() => {
+    if (seenRefresh.current === refresh) return;
+    seenRefresh.current = refresh;
+    void reloadPage();
+    // A newly approved version's plan shows at once, not only after moving away and back.
+    setPlanNow(null);
+    void reloadPlan();
+  }, [refresh, reloadPage, reloadPlan]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [draftText, setDraftText] = useState("");
   const [open, setOpen] = useState<string | null>(null);
+  // A phone: the line last tapped shows its Edit (a tap is no hover; it need not open the line).
+  const [tapped, setTapped] = useState<string | null>(null);
   const [diff, setDiff] = useState<string | null>(null);
   const [wide, setWide] = useState<string | null>(null);
   // The walk: a bet's flow drawn while its card was open shows on its thumbnail at once.
@@ -248,7 +254,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
               ) : (
                 <ul className="mt-1 space-y-1">
                   {b.lines.map((l) => (
-                    <li key={l.id} data-line={l.id} data-state={l.state} className="group list-none">
+                    <li key={l.id} data-line={l.id} data-state={l.state} className="group list-none" onPointerDown={(e) => { if (e.pointerType !== "mouse") setTapped(l.id); }}>
                       <div className={`rounded px-2 py-1 ${TINT[l.state]}`}>
                         {editing === l.id ? (
                           <form onSubmit={(e) => { e.preventDefault(); void save(l); }} className="space-y-2">
@@ -294,7 +300,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                               // The owner's P6: "Edit" shows when the line is pointed at or tapped, not on every line.
                               <button
                                 type="button"
-                                className="simple-noprint text-sm underline opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100"
+                                className={`simple-noprint text-sm underline group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 ${tapped === l.id ? "opacity-100" : "opacity-0"}`}
                                 onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}
                               >
                                 <span aria-hidden data-testid="line-edit-word">{v.can_edit ? "Edit" : "Propose wording"}</span>

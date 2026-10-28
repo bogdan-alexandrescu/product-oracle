@@ -76,8 +76,6 @@ function lanesOf(plan: Plan): { name: string; goal: Goal | null; pieces: Piece[]
     goal: plan.goals.find((g) => g.name === n) ?? null,
     pieces: piecesOf(plan.slices.filter((s) => !s.pm_owned && s.goal === n)),
   }));
-  const loose = plan.slices.filter((s) => !s.pm_owned && !s.goal);
-  if (loose.length) lanes.push({ name: "No goal named", goal: null, pieces: piecesOf(loose) });
   const pm = plan.slices.filter((s) => s.pm_owned);
   if (pm.length) lanes.push({ name: PM_LANE, goal: null, pieces: piecesOf(pm) });
   return lanes;
@@ -119,7 +117,8 @@ export function fitCodes(codes: string[], px: number): string {
     const text = codes.slice(0, k).join(" · ") + (k < codes.length ? ` +${codes.length - k}` : "");
     if (text.length * CH + 20 <= px) return text;
   }
-  return codes.length > 1 ? `${codes[0]} +${codes.length - 1}` : codes[0] ?? "";
+  // Too narrow even for "F-05b +2": its first code alone (the bar is at least that wide).
+  return codes[0] ?? "";
 }
 
 /**
@@ -324,7 +323,7 @@ function Lanes({ plan, lanes, today, onPick }: { plan: Plan; lanes: ReturnType<t
                       aria-label={`${p.slices.map(named).join(", ")} (${p.milestone} ${mile?.name ?? ""})`}
                       title={p.slices.map(named).join("\n")}
                       onClick={() => onPick(p.milestone)}
-                      className={`absolute h-8 whitespace-nowrap rounded-full border px-2.5 text-left text-sm font-semibold ${p.pm ? "border-dashed" : ""}`}
+                      className={`absolute h-8 overflow-hidden whitespace-nowrap rounded-full border px-2.5 text-left text-sm font-semibold ${p.pm ? "border-dashed" : ""}`}
                       style={{ left: `${left}%`, width: `${w}%`, minWidth: codesOf(p)[0].length * 7.8 + 22, top: 6 + p.row * ROW, background: c.fill, color: c.ink, borderColor: c.edge, borderWidth: p.pm ? 2 : 1 }}
                     >
                       {fitCodes(codesOf(p), (w / 100) * width)}
