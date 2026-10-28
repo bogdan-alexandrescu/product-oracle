@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "@/components/ds/Toast";
 import { ChatCard } from "@/components/simple/chat/ChatCard";
 import { api, unwrap } from "@/lib/api/client";
-import { askSay, undoCard, walk, type ChatCard as Card, type ChatMessage, type WalkStep } from "@/lib/api/simple-chat";
+import { askSay, askThread, PENDING_POLL_MS, undoCard, walk, type ChatCard as Card, type ChatMessage, type WalkStep } from "@/lib/api/simple-chat";
 import { beforeAfter, OP_WORDS } from "@/lib/simple-home";
 import { errorMessage } from "@/lib/use-query";
 
@@ -190,8 +190,16 @@ function TypeInstead() {
     setError(null);
     try {
       const thread = await askSay(t, "/simple");
-      setReply([...thread.messages].reverse().find((m) => m.author_kind === "oracle") ?? null);
+      let last = [...thread.messages].reverse().find((m) => m.author_kind === "oracle") ?? null;
+      setReply(last);
       setText("");
+      // chat-reader: a line Oracle's reader is still reading shows "Reading that…" until it is read.
+      for (let n = 0; last?.kind === "pending" && n < 40; n++) {
+        await new Promise((r) => window.setTimeout(r, PENDING_POLL_MS));
+        const id = last.id;
+        last = (await askThread()).messages.find((m) => m.id === id) ?? null;
+        setReply(last);
+      }
     } catch (e) {
       setError(detail(e));
     } finally {

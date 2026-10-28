@@ -45,9 +45,27 @@ export type ChatMessage = {
   author_name: string;
   body: string;
   at: string;
-  kind: "request" | "cards" | "question" | "answer" | "note";
+  /** chat-reader: "pending" (the reader's job runs: "Reading that…"), "failed" (Retry reads it again), "ask" (the Ask box: a question for Oracle's Ask). */
+  kind: "request" | "cards" | "question" | "answer" | "note" | "pending" | "failed" | "ask";
   cards: ChatCard[];
+  /** Oracle's line: the person's line it answers. */
+  reply_to: string | null;
+  /** A clarify question's choices (the last is "Neither"); [] otherwise. */
+  choices: ChatChoice[];
+  /** The choice already picked (the choices then close). */
+  picked: number | null;
+  /** A failed line: Retry reads it again. */
+  retry: boolean;
 };
+
+export type ChatChoice = { index: number; label: string };
+export type ApplyAll = { thread: ChatThread; applied: string[]; stopped: { card_id: string; summary: string; reason: string } | null };
+
+/** How often a thread with a pending line is read again. */
+export const PENDING_POLL_MS = 1500;
+
+/** Whether Oracle's reader is still reading a line of the thread (the thread then polls). */
+export const hasPending = (t: { messages: ChatMessage[] } | null | undefined): boolean => !!t?.messages.some((m) => m.kind === "pending");
 
 export type PersonRef = { id: string; name: string };
 export type ChangeMode = "everyone" | "presenter" | "named";
@@ -130,6 +148,21 @@ export function discardCard(cardId: string): Promise<ChatCard> {
 /** POST /v1/simple/chat/cards/{card_id}/undo. */
 export function undoCard(cardId: string): Promise<ChatCard> {
   return unwrap(loose.POST("/v1/simple/chat/cards/{card_id}/undo", { params: { path: { card_id: cardId } } })) as Promise<ChatCard>;
+}
+
+/** POST /v1/simple/chat/messages/{message_id}/retry: a failed line is read again (pending). */
+export function retryMessage(messageId: string): Promise<ChatThread> {
+  return unwrap(loose.POST("/v1/simple/chat/messages/{message_id}/retry", { params: { path: { message_id: messageId } } })) as Promise<ChatThread>;
+}
+
+/** POST /v1/simple/chat/messages/{message_id}/choose: the choice's label as the person's line, and its card (or "Say it another way"). */
+export function chooseChoice(messageId: string, index: number): Promise<ChatThread> {
+  return unwrap(loose.POST("/v1/simple/chat/messages/{message_id}/choose", { params: { path: { message_id: messageId } }, body: { index } })) as Promise<ChatThread>;
+}
+
+/** POST /v1/simple/chat/messages/{message_id}/apply-all: the line's open cards in order, stopping at the first that cannot apply. */
+export function applyAll(messageId: string): Promise<ApplyAll> {
+  return unwrap(loose.POST("/v1/simple/chat/messages/{message_id}/apply-all", { params: { path: { message_id: messageId } } })) as Promise<ApplyAll>;
 }
 
 /** GET /v1/simple/walk. */

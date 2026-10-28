@@ -67,8 +67,18 @@ interface StoredMessage {
   author_name: string;
   body: string;
   at: string;
-  kind: "request" | "cards" | "question" | "answer" | "note";
+  kind: "request" | "cards" | "question" | "answer" | "note" | "pending" | "failed" | "ask";
   card_ids: string[];
+  /** Oracle's line: the person's line it answers. */
+  reply_to: string | null;
+  /** A clarify question's choices (the last is "Neither"), and the one picked. */
+  choices: { index: number; label: string }[];
+  picked: number | null;
+  retry: boolean;
+  /** Private: each choice's card (Neither: null). */
+  choice_drafts?: (Draft | null)[];
+  /** Private: the reader's job for a pending (or failed) line. */
+  reading?: { text: string; role: Role; meeting_id: string | null; attempts: number; ask: boolean };
 }
 
 interface Thread {
@@ -191,7 +201,13 @@ const EXAMPLES = "Try “move Weekly alert digest to Q2”, “rename Setup chec
 
 type Draft = Omit<StoredCard, "id" | "message_id" | "thread" | "meeting_id" | "status" | "change_id" | "decided_by_name" | "decided_at" | "decision_id">;
 /** `understood: false`: a line the plan reader does not know (the Ask panel's one box sends it to Oracle's Ask); `missing`: no item has that name. */
-type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[]; understood?: boolean; missing?: boolean };
+type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[]; understood?: boolean; missing?: boolean; hits?: Item[]; choices?: { label: string; draft: Draft | null }[] };
+
+/** An ambiguous item's question gains one choice per item (its card) and "Neither". */
+function withChoices(r: Reply, build: (i: Item) => Reply): Reply {
+  if (!r.hits?.length) return r;
+  return { ...r, choices: [...r.hits.map((h) => ({ label: h.title, draft: build(h).cards[0] ?? null })), { label: "Neither", draft: null }] };
+}
 
 /** The item X names: one, or Oracle's question. */
 function findItem(items: Item[], text: string): Item | Reply {
@@ -200,7 +216,7 @@ function findItem(items: Item[], text: string): Item | Reply {
   if (exact.length === 1) return exact[0];
   const hits = items.filter((i) => i.title.toLowerCase().includes(x));
   if (hits.length === 1) return hits[0];
-  if (hits.length > 1) return { kind: "question", body: `Which one: ${or(hits.slice(0, 5).map((i) => i.title))}?`, cards: [] };
+  if (hits.length > 1) return { kind: "question", body: `Which one: ${or(hits.slice(0, 5).map((i) => i.title))}?`, cards: [], hits: hits.slice(0, 5) };
   return { kind: "question", body: `I could not find “${unquote(text)}” on the roadmap. Which item do you mean?`, cards: [], missing: true };
 }
 
@@ -275,7 +291,7 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
       if (!period && !day) continue;
       return change(() => {
         const i = findItem(items, x);
-        if (!isItem(i)) return i;
+        if (!isItem(i)) return withChoices(i, (h) => (period ? move(h, period[0], dated(h) ? addDays(period[0], length(h)) : period[1]) : move(h, day!, addDays(day!, dated(h) ? length(h) : 29))));
         if (period) {
           const r = move(i, period[0], dated(i) ? addDays(period[0], length(i)) : period[1]);
           // As chat.parse: "this quarter" / "this month" / the current Qn start on their first day.
@@ -367,6 +383,164 @@ function parse(db: SimpleDb, ctx: ChatCtx, text: string, meeting: Meeting | null
     });
   }
   return { kind: "question", body: `I did not understand that. ${EXAMPLES}`, cards: [], understood: false };
+}
+
+
+/*
+ * Oracle's reader (chat-reader), as a deterministic stand-in: a line the fixed parser above
+ * does not know becomes a "pending" line ("Reading that…"), and the thread's next GET reads
+ * it with keyword rules over the mock's invented items (no model). Each change is one op of
+ * `mockReaderOps` (later steps add ops); a line with two changes gets two cards, an item
+ * that names several gets "Which item?" with clickable choices (the last "Neither"), a line
+ * with no change a plain refusal, a question (in the Ask panel's one box) kind "ask" for
+ * Oracle's Ask, and a line with "flaky" in it fails its first read (Retry reads it again).
+ */
+
+/** The invented items the reader's rules talk about (the "simple-chat" scenario adds them). */
+export function seedReaderItems(db: SimpleDb): void {
+  const add: SimpleDb["items"] = [
+    { key: "delivery-integrity", title: "Delivery integrity and release safety", horizon: "now", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", start: 45, end: 85, source: "typed" },
+    { key: "delivery-pipeline", title: "Delivery pipeline v2", horizon: "next", roadmap: "alerts-roadmap", track: "alerts", confidence: "medium", start: 10, end: 60, source: "typed" },
+  ];
+  for (const s of add) {
+    if (db.items.some((x) => x.key === s.key)) continue;
+    db.items.push(s);
+    db.ids[s.key] = stableUuid(`simple-item/${s.key}`);
+  }
+}
+
+function plusMonths(day: string, n: number): string {
+  const d = new Date(msOf(day));
+  const last = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n + 1, 0)).getUTCDate();
+  return isoDay(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, Math.min(d.getUTCDate(), last)));
+}
+
+function moveDraft(db: SimpleDb, i: Item, start: string, end: string): Draft {
+  const s = storedDates(db, i.key);
+  return {
+    op: "move_dates", target: { item_id: i.id }, before: { start_date: s.start, end_date: s.end }, after: { start_date: start, end_date: end },
+    summary: `Move ${i.title} to ${dayWords(start)} – ${dayWords(end, true)}`, item_id: i.id, item_title: i.title,
+    preview: { kind: "dates", item_id: i.id, start_date: start, end_date: end }, flow: null, fixes: [],
+  };
+}
+
+export type ReaderArgs = { db: SimpleDb; ctx: ChatCtx; item: Item; months?: number; period?: [string, string]; rest?: string };
+export type ReaderOut = { card: Draft } | { refusal: string };
+
+/** The reader's ops: op -> builder (its args) -> a card or a refusal. An op not here is skipped. */
+export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
+  move_dates: ({ db, item, months: n, period }) => {
+    if (period) {
+      const len = Math.round((msOf(item.end.date) - msOf(item.start.date)) / DAY);
+      return { card: moveDraft(db, item, period[0], dated(item) ? addDays(period[0], len) : period[1]) };
+    }
+    return { card: moveDraft(db, item, plusMonths(item.start.date, n ?? 3), plusMonths(item.end.date, n ?? 3)) };
+  },
+  cut: ({ item }) =>
+    item.status === "cut"
+      ? { refusal: `${item.title} is cut already.` }
+      : { card: { op: "cut", target: { item_id: item.id }, before: { cut: false }, after: { cut: true }, summary: `Cut ${item.title}`, item_id: item.id, item_title: item.title, preview: { kind: "cut", item_id: item.id }, flow: null, fixes: [] } },
+};
+
+type Clause = { op: string; x: string; months?: number; period?: [string, string]; rest?: string };
+
+/** The line's changes, one clause per verb ("… and cut …"; an item's own "and" stays). */
+function clauses(text: string): Clause[] {
+  const t = text.trim().replace(/\s+/g, " ").replace(/[?.!]+$/, "");
+  const out: Clause[] = [];
+  for (const part of t.split(/,?\s+and\s+(?:then\s+)?(?=(?:push|move|shift|slip|cut|drop|make)\b)/i)) {
+    let m: RegExpExecArray | null;
+    if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:by\s+)?(?:a|one)\s+quarter$/i.exec(part))) out.push({ op: "move_dates", x: m[1], months: 3 });
+    else if ((m = /\b(?:push|move|shift|slip)\s+(.+?)\s+(?:out\s+)?(?:to|into)\s+(.+)$/i.exec(part)) && parsePeriod(m[2])) out.push({ op: "move_dates", x: m[1], period: parsePeriod(m[2])! });
+    else if ((m = /\b(?:cut|drop)\s+(.+)$/i.exec(part))) out.push({ op: "cut", x: m[1] });
+    else if ((m = /\bmake\s+(.+?)\s+own\s+(.+)$/i.exec(part))) out.push({ op: "set_owner", x: m[2], rest: m[1] });
+  }
+  return out;
+}
+
+const QUESTION = /^(why|how|what|who|when|where|which|should|is|are|does|do)\b/i;
+const SAY_AGAIN = "I could not tell what to change. Say it another way.";
+
+/** The items a phrase names (exact first, then every title that holds it). */
+function named(items: Item[], x: string): Item[] {
+  const q = unquote(x).toLowerCase().replace(/^the /, "");
+  const exact = items.filter((i) => i.title.toLowerCase() === q);
+  return exact.length ? exact : items.filter((i) => i.title.toLowerCase().includes(q));
+}
+
+/** The reader's reply to one line (deterministic). */
+function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["reading"]>, items: Item[]): Reply {
+  const cs = clauses(r.text);
+  // "What should we cut first?" is a question, whatever verbs it holds.
+  if (!cs.length || QUESTION.test(r.text.trim())) {
+    if (QUESTION.test(r.text.trim()) || r.text.trim().endsWith("?"))
+      return r.ask ? { kind: "ask", body: "Asking Oracle…", cards: [] } : { kind: "note", body: "That reads as a question, not a change to the plan. Ask it in Oracle's Ask.", cards: [] };
+    return { kind: "note", body: SAY_AGAIN, cards: [] };
+  }
+  if (r.meeting_id && r.role === "viewer") return { kind: "note", body: "Viewers ask questions here; ask the presenter to make a change.", cards: [] };
+  const drafts: Draft[] = [];
+  const refusals: string[] = [];
+  let last: Item | null = null;
+  for (const c of cs) {
+    const build = mockReaderOps[c.op];
+    let item: Item;
+    if (/^(it|that)$/i.test(c.x.trim()) && last) item = last;
+    else {
+      const hits = named(items, c.x);
+      if (!hits.length) return { kind: "note", body: `I could not find “${unquote(c.x)}” on the roadmap. Say it another way.`, cards: [] };
+      if (hits.length > 1) {
+        if (cs.length > 1 || !build) return { kind: "note", body: `“${unquote(c.x)}” names more than one item. Say one change at a time.`, cards: [] };
+        const choices = hits.slice(0, 5).map((h) => {
+          const o = build({ db, ctx, item: h, months: c.months, period: c.period, rest: c.rest });
+          return { label: h.title, draft: "card" in o ? o.card : null };
+        });
+        return { kind: "question", body: "Which item?", cards: [], choices: [...choices, { label: "Neither", draft: null }] };
+      }
+      item = hits[0];
+    }
+    last = item;
+    if (!build) continue;
+    const o = build({ db, ctx, item, months: c.months, period: c.period, rest: c.rest });
+    if ("card" in o) drafts.push(o.card);
+    else refusals.push(o.refusal);
+  }
+  if (!drafts.length) return { kind: "note", body: refusals.length ? `I can't do that here: ${refusals.join(" ")}` : SAY_AGAIN, cards: [] };
+  const n = drafts.length;
+  return { kind: "cards", body: `I understood ${n === 1 ? "one change" : n === 2 ? "two changes" : `${n} changes`}:`, cards: drafts };
+}
+
+let readerWrote = false;
+
+/** Whether the last call's read wrote (a meeting chat's poll then saves, unlike other polls); clears it. */
+export function takeReaderWrote(): boolean {
+  const was = readerWrote;
+  readerWrote = false;
+  return was;
+}
+
+/** The thread's pending lines, read now (the reader's job ends on the thread's next read). */
+function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): void {
+  const t = chat.threads[key];
+  if (!t) return;
+  for (const msg of t.messages) {
+    if (msg.kind !== "pending" || !msg.reading) continue;
+    readerWrote = true;
+    const r = msg.reading;
+    r.attempts += 1;
+    if (/\bflaky\b/i.test(r.text) && r.attempts === 1) {
+      Object.assign(msg, { kind: "failed", body: "I couldn't read that just now.", retry: true });
+      continue;
+    }
+    const reply = readLine(db, { ...ctx, role: r.role }, r, itemsFor(db, ctx));
+    const meeting = r.meeting_id ? (chat.meetings[r.meeting_id] ?? null) : null;
+    Object.assign(msg, {
+      kind: reply.kind, body: reply.body, retry: false, at: now(),
+      card_ids: storeCards(db, chat, reply.cards, msg.id, key, meeting),
+      choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })),
+      choice_drafts: (reply.choices ?? []).map((c) => c.draft),
+    });
+    delete msg.reading;
+  }
 }
 
 /** The roadmap as the reader reads it (and as an owner, for the constraint check). */
@@ -464,28 +638,82 @@ function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, m
     understood: true,
     id: t?.id ?? null,
     meeting_id: meeting?.id ?? null,
-    messages: (t?.messages ?? []).map(({ card_ids, ...msg }) => ({ ...msg, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) })),
+    messages: (t?.messages ?? []).map(({ card_ids, choice_drafts: _drafts, reading: _reading, ...msg }) => {
+      void _drafts;
+      void _reading;
+      return { ...msg, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
+    }),
     rules: meeting ? rulesOut(meeting, ctx) : null,
   };
 }
 
-/** The line and Oracle's reply; with `onlyUnderstood` a line the reader does not know writes nothing. Whether it understood. */
-function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string, onlyUnderstood = false): boolean {
-  const reply = parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names));
-  const understood = reply.understood !== false;
-  if (onlyUnderstood && !understood) return false;
-  const t = (chat.threads[key] ??= { id: crypto.randomUUID(), meeting_id: meeting?.id ?? null, owner_id: meeting ? null : ctx.id, messages: [] });
-  const at = now();
-  t.messages.push({ id: crypto.randomUUID(), author_kind: "person", author_id: ctx.id, author_name: ctx.names[ctx.id] ?? "someone", body: text, at, kind: "request", card_ids: [] });
-  const id = crypto.randomUUID();
-  const ids = reply.cards.map((d) => {
-    const c: StoredCard = { ...d, id: crypto.randomUUID(), message_id: id, thread: key, meeting_id: meeting?.id ?? null, status: "open", change_id: null, decided_by_name: null, decided_at: null, decision_id: null };
+/** The new cards of Oracle's line `messageId`. */
+function storeCards(db: SimpleDb, chat: ChatDb, drafts: Draft[], messageId: string, key: string, meeting: Meeting | null): string[] {
+  return drafts.map((d) => {
+    const c: StoredCard = { ...d, id: crypto.randomUUID(), message_id: messageId, thread: key, meeting_id: meeting?.id ?? null, status: "open", change_id: null, decided_by_name: null, decided_at: null, decision_id: null };
     c.fixes = asIf(db, c).fixes;
     chat.cards[c.id] = c;
     return c.id;
   });
-  t.messages.push({ id, author_kind: "oracle", author_id: null, author_name: "Oracle", body: reply.body, at, kind: reply.kind, card_ids: ids });
-  return understood;
+}
+
+const line = (ctx: ChatCtx, body: string, at: string): StoredMessage => ({
+  id: crypto.randomUUID(), author_kind: "person", author_id: ctx.id, author_name: ctx.names[ctx.id] ?? "someone", body, at, kind: "request", card_ids: [], reply_to: null, choices: [], picked: null, retry: false,
+});
+
+/**
+ * The line and Oracle's reply. A line the fixed parser does not know goes to the reader: its
+ * Oracle line is "pending" until the thread's next read. `onlyUnderstood` (the Ask panel's one
+ * box): a question the reader finds comes back kind "ask", for the panel to hand to Ask.
+ */
+function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string, onlyUnderstood = false): boolean {
+  const reply = parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names));
+  const t = (chat.threads[key] ??= { id: crypto.randomUUID(), meeting_id: meeting?.id ?? null, owner_id: meeting ? null : ctx.id, messages: [] });
+  const at = now();
+  const person = line(ctx, text, at);
+  t.messages.push(person);
+  const id = crypto.randomUUID();
+  const base = { id, author_kind: "oracle" as const, author_id: null, author_name: "Oracle", at, reply_to: person.id, picked: null, retry: false };
+  if (reply.understood === false) {
+    t.messages.push({ ...base, kind: "pending", body: "Reading that…", card_ids: [], choices: [], reading: { text, role: ctx.role, meeting_id: meeting?.id ?? null, attempts: 0, ask: onlyUnderstood } });
+    return true;
+  }
+  t.messages.push({
+    ...base, body: reply.body, kind: reply.kind, card_ids: storeCards(db, chat, reply.cards, id, key, meeting),
+    choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })), choice_drafts: (reply.choices ?? []).map((c) => c.draft),
+  });
+  return true;
+}
+
+/** The line `id` in a thread the caller reads: their Ask thread or a meeting they attend. */
+function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; meeting: Meeting | null; msg: StoredMessage } | null {
+  for (const [key, t] of Object.entries(chat.threads)) {
+    const msg = t.messages.find((x) => x.id === id);
+    if (!msg) continue;
+    const meeting = t.meeting_id ? (chat.meetings[t.meeting_id] ?? null) : null;
+    if (meeting ? !meeting.attendee_ids.includes(ctx.id) : key !== `ask:${ctx.id}`) return null;
+    return { key, meeting, msg };
+  }
+  return null;
+}
+
+/** One card through the change engine (or its fix n): the card out and the result, or the engine's refusal. */
+async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
+  const use = n == null ? c : c.fixes[n];
+  const res = await engine(db, ctx, "POST", "/v1/simple/changes", { op: use.op, target: use.target, before: use.before, after: use.after });
+  if (!res.ok) return res;
+  const result = (await res.json()) as Schemas["SimpleChangeResult"];
+  Object.assign(c, {
+    status: result.change.status === "applied" ? "applied" : "proposed", change_id: result.change.id,
+    decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: now(),
+  });
+  if (n != null) Object.assign(c, { op: use.op, target: use.target, before: use.before, after: use.after });
+  const meeting = meetingOf(chat, c);
+  if (meeting && (c.status as StoredCard["status"]) === "applied") {
+    c.decision_id = crypto.randomUUID();
+    meeting.decisions.push({ id: c.decision_id, title: n == null ? c.summary : c.fixes[n].label, card_id: c.id, at: c.decided_at! });
+  }
+  return { card: cardOut(db, chat, c, ctx), result };
 }
 
 /** Whether the reader sees the card: their own Ask thread's, or a meeting they attend. */
@@ -557,7 +785,62 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
 
   if (p[2] === "walk" && !p[3] && m === "GET") return json(200, await walkOut(db, chat, ctx));
 
-  if (p[2] === "chat" && !p[3] && m === "GET") return json(200, threadOut(db, chat, chat.threads[`ask:${ctx.id}`] ?? null, ctx, null));
+  if (p[2] === "chat" && !p[3] && m === "GET") {
+    resolvePending(db, chat, `ask:${ctx.id}`, ctx);
+    return json(200, threadOut(db, chat, chat.threads[`ask:${ctx.id}`] ?? null, ctx, null));
+  }
+  // chat-reader: Retry a failed line, pick a clarify question's choice, apply a line's open cards in order.
+  if (p[2] === "chat" && p[3] === "messages" && p[4] && p[5] && m === "POST") {
+    const found = findMessage(chat, ctx, p[4]);
+    if (!found) return json(404, { detail: "No such message" });
+    const { key, meeting, msg } = found;
+    const out = () => threadOut(db, chat, chat.threads[key], ctx, meeting);
+    if (p[5] === "retry") {
+      if (msg.kind !== "failed" || !msg.retry || !msg.reading) return json(409, { detail: "Only a failed line is read again" });
+      Object.assign(msg, { kind: "pending", body: "Reading that…", retry: false });
+      return json(200, out());
+    }
+    if (p[5] === "choose") {
+      const b = await body();
+      const n = Number(b.index);
+      if (!msg.choices.length) return json(409, { detail: "This line has no choices" });
+      if (msg.picked != null) return json(409, { detail: "A choice is picked already" });
+      if (!Number.isInteger(n) || !msg.choices[n]) return json(422, { detail: "index: one of the line's choices" });
+      msg.picked = n;
+      const t = chat.threads[key];
+      const at = now();
+      const person = line(ctx, msg.choices[n].label, at);
+      t.messages.push(person);
+      const id = crypto.randomUUID();
+      const draft = msg.choice_drafts?.[n] ?? null;
+      t.messages.push({
+        id, author_kind: "oracle", author_id: null, author_name: "Oracle", at, reply_to: person.id, picked: null, retry: false, choices: [],
+        kind: draft ? "cards" : "note", body: draft ? "I understood one change:" : "Say it another way.", card_ids: draft ? storeCards(db, chat, [draft], id, key, meeting) : [],
+      });
+      return json(200, out());
+    }
+    if (p[5] === "apply-all") {
+      const applied: string[] = [];
+      let stopped: { card_id: string; summary: string; reason: string } | null = null;
+      for (const c of msg.card_ids.map((id) => chat.cards[id]).filter((c) => c.status === "open")) {
+        const { may, why_not } = mayOf(db, chat, c, ctx);
+        if (!may) {
+          stopped = { card_id: c.id, summary: c.summary, reason: why_not ?? "You may not apply this change" };
+          break;
+        }
+        const r = await applyOne(db, chat, c, ctx, null);
+        if (r instanceof Response) {
+          const d = ((await r.json().catch(() => ({}))) as { detail?: unknown }).detail;
+          const reason = typeof d === "string" ? d : d && typeof d === "object" && "message" in d ? String((d as { message: unknown }).message) : "The change engine refused it";
+          stopped = { card_id: c.id, summary: c.summary, reason };
+          break;
+        }
+        applied.push(c.id);
+      }
+      return json(200, { thread: out(), applied, stopped });
+    }
+    return null;
+  }
   if (p[2] === "chat" && p[3] === "messages" && !p[4] && m === "POST") {
     const b = await body();
     const text = String(b.text ?? "").trim();
@@ -571,7 +854,10 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (!meeting) return json(404, { detail: "No such meeting" });
     if (!meeting.attendee_ids.includes(ctx.id)) return json(403, { detail: "Only the meeting's attendees read and write its chat" });
     const key = `meeting:${meeting.id}`;
-    if (!p[5] && m === "GET") return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, meeting));
+    if (!p[5] && m === "GET") {
+      resolvePending(db, chat, key, ctx);
+      return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, meeting));
+    }
     if (p[5] === "messages" && m === "POST") {
       const text = String((await body()).text ?? "").trim();
       if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
@@ -620,21 +906,8 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const b = await body();
       const n = b.fix == null ? null : Number(b.fix);
       if (n != null && !c.fixes[n]) return json(422, { detail: "fix: one of the card's fixes" });
-      const use = n == null ? c : c.fixes[n];
-      const res = await engine(db, ctx, "POST", "/v1/simple/changes", { op: use.op, target: use.target, before: use.before, after: use.after });
-      if (!res.ok) return res;
-      const result = (await res.json()) as Schemas["SimpleChangeResult"];
-      Object.assign(c, {
-        status: result.change.status === "applied" ? "applied" : "proposed", change_id: result.change.id,
-        decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: now(),
-      });
-      if (n != null) Object.assign(c, { op: use.op, target: use.target, before: use.before, after: use.after });
-      const meeting = meetingOf(chat, c);
-      if (meeting && (c.status as StoredCard["status"]) === "applied") {
-        c.decision_id = crypto.randomUUID();
-        meeting.decisions.push({ id: c.decision_id, title: n == null ? c.summary : c.fixes[n].label, card_id: c.id, at: c.decided_at! });
-      }
-      return json(200, { card: cardOut(db, chat, c, ctx), result });
+      const out = await applyOne(db, chat, c, ctx, n);
+      return out instanceof Response ? out : json(200, out);
     }
   }
   return null;
