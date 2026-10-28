@@ -113,7 +113,7 @@ test("the other paths: I don't know, Defer and Ask someone leave Open; the deleg
   await expect(badge(page)).toHaveText("10");
 
   // Neither under New nor under Open any more: all three are Done.
-  for (const name of ["New", "Open"]) {
+  for (const name of ["New", "Seen"]) {
     await tab(page, name).click();
     for (const text of [METRIC, REFUND, TIERS]) await expect(questionRow(page, text)).toHaveCount(0);
   }

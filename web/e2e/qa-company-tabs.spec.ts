@@ -56,7 +56,8 @@ test.describe("desktop", () => {
     await expect(board.getByTestId("update-period")).toHaveText("Sep 8 – Oct 20, 2026");
     const investor = page.getByTestId("update-row").filter({ hasText: "Investor update · September 2026" });
     await expect(investor.getByTestId("update-period")).toHaveText("Sep 1 – Sep 30, 2026");
-    await expect(page.getByTestId("updates-table")).not.toContainText("Sept");
+    // "Sept" as a short month, not inside "September" (a title).
+    await expect(page.getByTestId("updates-table")).not.toContainText(/\bSept\b/);
     await expect(page.getByTestId("updates-table")).not.toContainText(" - ");
     await investor.getByRole("button", { name: "Actions for Investor update · September 2026" }).click();
     await expect(page.getByRole("menuitem")).toHaveText(["Share with the whole company…"]);

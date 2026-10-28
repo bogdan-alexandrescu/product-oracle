@@ -94,7 +94,7 @@ async function noRowInTheInbox(page: Page) {
   await page.getByTestId("nav-inbox").click();
   await expect(page).toHaveURL(/\/inbox$/);
   const tabs = page.getByTestId("inbox-state-tabs").filter({ visible: true });
-  for (const tab of [/^New/, /^Open/]) {
+  for (const tab of [/^New/, /^Seen/]) {
     await tabs.getByRole("tab", { name: tab }).click();
     await expect(tabs.getByRole("tab", { name: tab })).toHaveAttribute("aria-selected", "true");
     await expect(page.getByTestId("inbox-no-document")).toHaveCount(0);

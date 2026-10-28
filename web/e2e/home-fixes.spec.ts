@@ -66,9 +66,10 @@ async function editDb(page: Page, edit: string, arg?: unknown) {
  * one: a shown goal with a typed current reads its trend from its measurements first, and
  * from its revisions only when it has fewer than two (here: paid conversion). The owner
  * (2026-10-24) set it at 18, accepting three fixed costs: the capabilities call, the names
- * lookup behind goal chips and the goal-trend fallback.
+ * lookup behind goal chips and the goal-trend fallback. qa-company-45 adds one more fixed
+ * call: the selected PRD's blockers, so the inspector names each blocker (selected row only).
  */
-const CALL_BUDGET = 18;
+const CALL_BUDGET = 19;
 
 test("Home: a large company's first paint stays within the call budget", async ({ page }) => {
   await openHome(page, "large");

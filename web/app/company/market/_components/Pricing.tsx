@@ -7,7 +7,7 @@ import { Button, Chip, DataTable, InfoTip, Panel, type Column } from "@/componen
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
-import { formatDate } from "@/lib/format";
+import { formatDate, zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -67,7 +67,7 @@ export function Pricing() {
           <span className="text-sm text-text2">—</span>
         ),
     },
-    { key: "updated", header: `Updated (${zone})`, width: "200px", phone: "hide", cell: (m) => <span className="tnum text-sm">{formatDate(m.updated_at)}</span> },
+    { key: "updated", header: `Updated, ${zoneName(zone)}`, width: "264px", phone: "hide", cell: (m) => <span className="tnum text-sm">{formatDate(m.updated_at)}</span> },
   ];
 
   return (

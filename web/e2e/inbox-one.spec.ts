@@ -38,7 +38,7 @@ test("the badge counts each new or open item and equals New + Open; no item is d
 
   // Each row once across all five tabs.
   const seen = new Map<string, string>();
-  for (const name of ["New", "Open", "Staged", "Declined", "Done"]) {
+  for (const name of ["New", "Seen", "Staged", "Declined", "Done"]) {
     await tab(page, name).click();
     const rows = page.locator("[role=tabpanel] tr[data-row]");
     for (const text of await rows.allInnerTexts()) {

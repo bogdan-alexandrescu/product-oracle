@@ -102,6 +102,20 @@ export function HoverCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, at]);
 
+  // A card opened from the keyboard before its link loaded holds focus itself; the link,
+  // once drawn, takes it (Enter lands on the card's Open, not on a stop before it).
+  useEffect(() => {
+    const el = card.current;
+    if (!open || !at || !el) return;
+    const watch = new MutationObserver(() => {
+      if (document.activeElement !== el) return;
+      const first = el.querySelector<HTMLElement>(FOCUSABLE);
+      if (first) first.focus({ preventScroll: true });
+    });
+    watch.observe(el, { childList: true, subtree: true });
+    return () => watch.disconnect();
+  }, [open, at]);
+
   useLayoutEffect(() => {
     if (!open || !button.current) return;
     const r = button.current.getBoundingClientRect();

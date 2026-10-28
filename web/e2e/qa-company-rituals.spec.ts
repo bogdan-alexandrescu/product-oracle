@@ -122,7 +122,7 @@ test("qa-company-25: one time format, with the zone, in the table, inspector and
   const row = ritualRow(page, "Weekly goals check-in");
   await expect(row).toContainText("Mondays 9:00 AM PT");
   await row.click();
-  const time = inspector(page).getByLabel("Time", { exact: true });
+  const time = inspector(page).getByRole("combobox", { name: /^Time\b/ });
   await expect(time.locator("option:checked")).toHaveText("9:00 AM");
   await time.selectOption({ label: "4:30 PM" });
   await inspector(page).getByRole("button", { name: "Save" }).click();

@@ -20,7 +20,9 @@ const dayAhead = (n: number) => new Date(mockNow().getTime() + n * 86_400_000).t
 
 async function openCaps(page: Page) {
   await page.goto("/company/decisions");
-  await chip(page, "Any state").click();
+  // A phone picks the state from a menu; a wider screen from the chips.
+  if ((page.viewportSize()?.width ?? 1280) <= 600) await page.getByTestId("decision-filters").getByRole("combobox", { name: "State" }).selectOption({ label: "Any state" });
+  else await chip(page, "Any state").click();
   await row(page, CAPS).click();
   await expect(inspector(page)).toContainText("Do caps wait for detection?");
 }

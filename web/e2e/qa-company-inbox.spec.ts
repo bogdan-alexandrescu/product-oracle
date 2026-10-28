@@ -1,6 +1,9 @@
 import { expect, test, type Page } from "./test";
 
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
+
+const BASELINE_RUN = "7a11c0de-0000-4000-8000-0000000000b2";
 
 /*
  * QA findings on /inbox (Detailed): Cancel run asks first (qa-company-1), the Inbox opens on
@@ -68,9 +71,11 @@ for (const role of ["viewer", "commenter"] as const) {
   });
 }
 
-test("an approver may cancel an overrun but not resume it or approve spend", async ({ page }) => {
+test("an approver is not offered Resume, Cancel run or Approve on a run someone else started", async ({ page }) => {
+  // Resume and Approve are an owner's; Cancel run is an owner's or the run's starter's.
   await openInbox(page, "approver");
-  await expect(overrun(page).getByRole("button", { name: "Cancel run" })).toBeVisible();
+  await expect(overrun(page).getByTestId("need-by-role")).toHaveText("Owners decide");
+  await expect(overrun(page).getByRole("button", { name: "Cancel run" })).toHaveCount(0);
   await expect(overrun(page).getByRole("button", { name: "Resume" })).toHaveCount(0);
   await expect(page.getByTestId("inbox-approvals").getByRole("button", { name: /^Approve/ })).toHaveCount(0);
 });
@@ -101,10 +106,19 @@ test("runs are named in words: no short id, slug, section key or code font", asy
 });
 
 test("Confirm the baseline says what needs me in words, never '0 need you'", async ({ page }) => {
+  // The default seed's baseline run has no rows left: said in words, with no zero counts.
   await openInbox(page);
-  const label = page.getByTestId("inbox-checkpoints").getByTestId("checkpoint-label").filter({ hasText: "Confirm the baseline" });
-  await expect(label).toHaveText("Confirm the baseline: 4 need you, 2 not decided");
+  const label = () => page.getByTestId("inbox-checkpoints").getByTestId("checkpoint-label").filter({ hasText: "Confirm the baseline" });
+  await expect(label()).toHaveText(/^Confirm the baseline: (nothing left to decide|all \d+ items? handled)$/);
   await expect(page.getByTestId("inbox-needs")).not.toContainText(/\b0 need you|\b0 not decided/);
+});
+
+test("Confirm the baseline with work left counts it in words", async ({ page }) => {
+  // The "baseline-review" scenario: a run whose rows still need the owner.
+  await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "baseline-review"] as const);
+  await openInbox(page);
+  const row = page.locator("tr[data-row]").filter({ has: page.locator(`a[href="/baseline?run=${BASELINE_RUN}"]`) }).filter({ visible: true });
+  await expect(row.getByTestId("checkpoint-label")).toHaveText("Confirm the baseline: 4 need you, 2 not decided");
 });
 
 test("ages are in one unit, never a dash or more than 23 hours", async ({ page }) => {

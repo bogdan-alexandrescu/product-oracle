@@ -73,7 +73,7 @@ test("12a: an owner moves the roadmap refresh to the last Friday at 16:00 and Ne
   await panel.getByLabel("Repeats").selectOption("monthly");
   await panel.getByLabel("Week of the month").selectOption("-1");
   await panel.getByLabel("Day").selectOption("4");
-  await panel.getByLabel("Time", { exact: true }).selectOption({ label: "4:00 PM" });
+  await panel.getByRole("combobox", { name: /^Time\b/ }).selectOption({ label: "4:00 PM" });
   await panel.getByRole("button", { name: "Save" }).click();
   await expect(row).toContainText("Last Friday of the month, 4:00 PM PT");
   await expect(row.locator('[data-col="next"]')).toHaveText("Fri, Oct 30, 4:00 PM PDT");

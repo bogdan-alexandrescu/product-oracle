@@ -15,7 +15,8 @@ async function openHome(page: Page) {
   await expect(page.getByTestId("home-goal-G1")).toBeVisible();
 }
 
-const flight = (page: Page, slug: string) => page.locator(`[data-testid="flight-row"][data-document="${slug}"]`);
+const flight = (page: Page, slug: string, kind: "prd" | "run" = "run") =>
+  page.locator(`[data-testid="flight-row"][data-kind="${kind}"][data-document="${slug}"]`);
 
 // qa-company-4, qa-shell-31: Tab passes a goal chip without opening its card; one stop per control.
 test("goal chips: Tab moves on past the chip, Enter opens its card, Tab leaves the card", async ({ page }) => {
@@ -94,7 +95,7 @@ test("in flight: the PRD's step and its sections approved are labelled apart", a
   await openHome(page);
   const table = page.getByTestId("home-in-flight-table");
   await expect(table.getByRole("columnheader", { name: "Progress" })).toBeAttached();
-  const checkout = flight(page, "checkout-redesign");
+  const checkout = flight(page, "checkout-redesign", "prd");
   await expect(checkout).toHaveAttribute("aria-selected", "true");
   await expect(checkout.getByTestId("row-journey")).toContainText("Step 8/9");
   const inspector = page.getByTestId("home-inspector");
@@ -155,7 +156,7 @@ test.describe("on a phone", () => {
     await expect(page.getByTestId("home-goal-G3").getByTestId("goal-confidence")).toHaveCount(0);
     await expect(page.getByTestId("home-goal-G1").getByTestId("goal-change")).toHaveText("+7 pts in 6 months");
     await expect(flight(page, "team-workspaces").getByTestId("row-paused")).toBeVisible();
-    await expect(flight(page, "checkout-redesign").getByTestId("row-journey")).toContainText("Step 8/9");
+    await expect(flight(page, "checkout-redesign", "prd").getByTestId("row-journey")).toContainText("Step 8/9");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   });
 });

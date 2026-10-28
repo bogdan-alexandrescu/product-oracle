@@ -1224,7 +1224,7 @@ const ROLE_WORD: Record<InboxOut["checkpoints"][number]["approver_role"], string
  */
 function baselineLabel(title: string, summary: { need_you: number; blocking: number; handled: number }): string {
   if (summary.need_you === 0 && summary.blocking === 0) {
-    return summary.handled > 0 ? `${title}: all ${plural(summary.handled, "item")} handled` : `${title}: all items handled`;
+    return summary.handled > 0 ? `${title}: all ${plural(summary.handled, "item")} handled` : `${title}: nothing left to decide`;
   }
   const parts = [summary.need_you > 0 && `${summary.need_you} need you`, summary.blocking > 0 && `${summary.blocking} not decided`].filter(Boolean);
   return `${title}: ${parts.join(", ")}`;

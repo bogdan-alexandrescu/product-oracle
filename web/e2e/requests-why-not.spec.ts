@@ -122,7 +122,7 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   await page.goto("/inbox");
   const tabs = page.getByTestId("inbox-state-tabs");
   await expect(tabs.getByRole("tab", { name: /^New/ })).toBeVisible();
-  for (const tab of [/^New/, /^Open/, /^Done/]) {
+  for (const tab of [/^New/, /^Seen/, /^Done/]) {
     await tabs.getByRole("tab", { name: tab }).click();
     await expect(page.getByTestId("request-need").filter({ hasText: "Replies to send" })).toHaveCount(0);
   }
@@ -140,7 +140,7 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   // the row moves from New to Open, so each state tab is read.
   const answers = async () => {
     let n = 0;
-    for (const tab of [/^New/, /^Open/, /^Done/]) {
+    for (const tab of [/^New/, /^Seen/, /^Done/]) {
       await tabs.getByRole("tab", { name: tab }).click();
       n += await answer.count();
     }

@@ -270,7 +270,7 @@ export function RitualInspector({
           )}
           <Field label="Time">
             {/* The page's one time format, "9:00 AM" (qa-company-25), not the browser's "09:00 AM". */}
-            <select required className={INPUT} value={schedule.time} onChange={(e) => set({ time: e.target.value })}>
+            <select required aria-label="Time" className={INPUT} value={schedule.time} onChange={(e) => set({ time: e.target.value })}>
               {timeOptions(schedule.time).map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}

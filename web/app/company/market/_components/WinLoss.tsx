@@ -6,7 +6,7 @@ import { Button, DataTable, InfoTip, Panel, confirmInPage, type Column } from "@
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { addDays, todayIn, useCompanyZone } from "@/lib/dates";
-import { formatDate } from "@/lib/format";
+import { formatDate, zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -69,7 +69,7 @@ export function WinLoss() {
   }
 
   const columns: Column<Deal>[] = [
-    { key: "decided", header: `Decided on (${zone})`, width: "200px", phone: "hide", cell: (d) => <span className="tnum text-sm">{formatDate(d.decided_on)}</span> },
+    { key: "decided", header: `Decided on, ${zoneName(zone)}`, width: "284px", phone: "hide", cell: (d) => <span className="tnum text-sm">{formatDate(d.decided_on)}</span> },
     { key: "result", header: "Result", width: "120px", phone: "title", cell: (d) => <span className="font-medium" data-testid="deal-result">{RESULTS[d.result]}</span> },
     { key: "account", header: "Account", phone: "hide", cell: (d) => <span className="truncate text-sm" data-testid="deal-account">{d.account}</span> },
     { key: "plan", header: "Plan", width: "120px", phone: "hide", cell: (d) => <span className="text-sm">{d.plan ?? "—"}</span> },

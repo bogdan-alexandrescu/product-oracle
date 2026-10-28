@@ -75,7 +75,8 @@ test("inbox: retry importing a run's output Oracle stopped trying to import", as
   await page.goto("/inbox");
   const imports = page.getByTestId("inbox-imports");
   await expect(imports).toContainText("Couldn't import team-onboarding's output: DataError");
-  await imports.getByRole("link").click();
+  // The run's name opens it (Open, the row's action, goes there too).
+  await imports.getByRole("link").first().click();
   await expect(page.getByTestId("run-import-failed")).toContainText("DataError");
   // A second visit: the row is Open.
   await page.goto("/inbox");
