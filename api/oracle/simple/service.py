@@ -94,6 +94,9 @@ class Entry:
     # The heading of the PRD section the item was imported from (the walk: "F-06 Loop
     # and blast-radius guards" in the card's reasons).
     prd_heading: str | None = None
+    # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
+    # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
+    code: str | None = None
 
 
 @dataclass
@@ -540,6 +543,27 @@ def _prd_code(section_key: str | None) -> str | None:
     return prd_code(section_key)
 
 
+async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
+    """Each entry's ``code``: its feature's short code when that is a code (the feature's
+    key, F-12, or its PRD section's, F-06; the same as Priorities reads), else the PRD
+    code of its own section; None for an item with neither (no initials outside
+    Priorities)."""
+    from oracle.simple.priorities import FEATURE_CODE, _short_codes
+
+    fids = {e.row.feature_id for e in entries if e.row.feature_id}
+    codes: dict[str, str] = {}
+    keys: dict[uuid.UUID, str] = {}
+    if fids:
+        codes = await _short_codes(db)
+        keys = dict(
+            (await db.execute(select(Entity.id, Entity.key).where(Entity.id.in_(fids)))).all()
+        )
+    for e in entries:
+        code = codes.get(keys.get(e.row.feature_id, "")) if e.row.feature_id else None
+        e.code = code if code and FEATURE_CODE.fullmatch(code.split(".")[0]) else None
+        e.code = e.code or _prd_code(e.row.prd_section_key)
+
+
 def prd_section_label(section_key: str, heading: str | None) -> str:
     """How the card names the PRD section an item came from: the PRD's code and the
     section's heading ("F-06 Loop and blast-radius guards"); "section <key>" when the
@@ -613,7 +637,7 @@ def item_out(
     return SimpleRoadmapItem(
         id=row.id,
         key=row.item_key,
-        code=_prd_code(row.prd_section_key),
+        code=e.code or _prd_code(row.prd_section_key),
         title=row.title,
         outcome=row.outcome,
         horizon=row.horizon,  # type: ignore[arg-type]
@@ -779,6 +803,7 @@ async def build(
     decisions = await _open_decisions(db, {e.row.id for e in shown})
     from oracle.simple import additions
 
+    await item_codes(db, read.entries)
     extra = await additions.item_extras(db, read, shown)
     decided = await _decided(db, shown)
     ids = {e.row.id for e in read.entries}

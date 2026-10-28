@@ -119,7 +119,7 @@ async def test_looks_like_and_merged_into_read_prd_codes(client):
         await s.commit()
     c = (await w.add(client, "owner", "Bulk import"))["change"]
     draft = c["target"]["item_id"]
-    for who in ("owner", "viewer"):
+    for who in ("owner", "approver"):
         item = (await w.items(client, who))[draft]
         assert item["looks_like"][0]["code"] == "F-06", who
     r = await client.post(CHANGES, headers=w.as_("owner"), json={

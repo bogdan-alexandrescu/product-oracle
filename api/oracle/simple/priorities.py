@@ -239,12 +239,22 @@ def short_codes(keys: list[str], prd: dict[str, str] | None = None) -> list[str]
     order. From the feature alone, never the item a reader sees, nor the key's order or the
     rank: every reader reads the same code, and a new feature never renames an older one."""
     prd = prd or {}
-    out: list[str | None] = [k if FEATURE_CODE.fullmatch(k) else None for k in keys]
-    taken = {c for c in out if c is not None}
+    out: list[str | None] = [None] * len(keys)
+    taken: set[str] = set()
+    # Codes (the key's own, else the PRD's) in creation order: the older feature keeps a
+    # code; a later one that would read the same reads it with a digit (F-06.2).
     for i, k in enumerate(keys):
-        if out[i] is None and prd.get(k) and prd[k] not in taken:
-            out[i] = prd[k]
-            taken.add(prd[k])
+        own = k if FEATURE_CODE.fullmatch(k) else prd.get(k)
+        if own is None:
+            continue
+        if own in taken and not FEATURE_CODE.fullmatch(k):
+            continue  # a PRD code already taken: initials below
+        code, n = own, 1
+        while code in taken:
+            n += 1
+            code = f"{own}.{n}"
+        out[i] = code
+        taken.add(code)
     for i, k in enumerate(keys):
         if out[i] is not None:
             continue
@@ -274,8 +284,13 @@ async def _short_codes(db: AsyncSession) -> dict[str, str]:
     prd: dict[str, str] = {}
     for fid, section in await db.execute(
         select(RoadmapItem.feature_id, RoadmapItem.prd_section_key)
-        .where(RoadmapItem.feature_id.is_not(None), RoadmapItem.prd_section_key.is_not(None))
-        .order_by(RoadmapItem.draft_roadmap_id.is_not(None), RoadmapItem.created_at)
+        .where(
+            RoadmapItem.feature_id.is_not(None),
+            RoadmapItem.prd_section_key.is_not(None),
+            # Published roadmaps only: a draft's code is not every reader's.
+            RoadmapItem.roadmap_version_id.is_not(None),
+        )
+        .order_by(RoadmapItem.created_at)
     ):
         code = prd_code(section)
         if code and fid in key_of:

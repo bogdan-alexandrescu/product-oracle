@@ -12,7 +12,7 @@
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from oracle.auth.deps import TenantDB
 from oracle.simple import visuals
@@ -25,7 +25,15 @@ from oracle.simple.schemas import (
     SimpleVisualReviseIn,
 )
 
-router = APIRouter(prefix="/v1/simple/visuals", tags=["simple"])
+
+def _no_store(response: Response) -> None:
+    """The walk-fixes review: a visual's read changes when Oracle's job ends, and the panel
+    polls it while Oracle draws; no browser or proxy may answer a poll from a copy kept
+    from before (the place that asked kept "Oracle is drawing..." until a reload)."""
+    response.headers["Cache-Control"] = "no-store"
+
+
+router = APIRouter(prefix="/v1/simple/visuals", tags=["simple"], dependencies=[Depends(_no_store)])
 SUBJECT = "/{kind}/{subject_id}"
 
 

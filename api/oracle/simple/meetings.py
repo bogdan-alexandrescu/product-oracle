@@ -973,18 +973,23 @@ async def _upcoming(
             )
         ).all()
     ) if occ_ids else {}  # fmt: skip
-    # The walk: the ritual's real attendees are its owner and attendees and whoever
-    # attended the last review held from it (a meeting started from one of its occurrences).
+    # The walk: the ritual's real attendees are its owner and attendees and whoever was
+    # present at the last review held from it (a meeting started from one of its
+    # occurrences), until the ritual's list is edited after that review: then its list is.
     held: dict[uuid.UUID, list[uuid.UUID]] = {}
-    ritual_ids = [r.id for _, r in rows]
-    if ritual_ids:
-        for rid, ids in await db.execute(
-            select(RitualOccurrence.ritual_id, SimpleMeeting.attendee_ids)
+    edited = {r.id: r.updated_at for _, r in rows}
+    if edited:
+        for rid, ids, absent, at in await db.execute(
+            select(RitualOccurrence.ritual_id, SimpleMeeting.attendee_ids,
+                   SimpleMeeting.absent_ids, SimpleMeeting.started_at)
             .join(RitualOccurrence, RitualOccurrence.id == SimpleMeeting.occurrence_id)
-            .where(RitualOccurrence.ritual_id.in_(ritual_ids))
+            .where(RitualOccurrence.ritual_id.in_(list(edited)))
             .order_by(SimpleMeeting.started_at.desc())
-        ):
-            held.setdefault(rid, list(ids or []))
+        ):  # fmt: skip
+            if rid in held:
+                continue
+            fresh = edited[rid] is None or at is None or at >= edited[rid]
+            held[rid] = [i for i in ids or [] if i not in (absent or [])] if fresh else []
     missing = {i for ids in held.values() for i in ids} - set(names)
     if missing:
         names.update(await _names(db, missing))
