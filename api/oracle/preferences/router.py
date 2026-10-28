@@ -25,6 +25,8 @@ PrioritiesLine = Annotated[
 SimpleRoadmapPick = Annotated[str, StringConstraints(pattern=r"^(all|[0-9a-f-]{36})$")]
 # One of the Simple roadmap's PRD, Goal and Track picks: a PRD's slug, a goal's key or a
 # track's id; empty for all.
+# prd-questions: how Simple's Decisions opens for this person (List, Board or By meeting).
+DecisionsView = Literal["list", "board", "meetings"]
 SimpleFilterPick = Annotated[str, StringConstraints(pattern=r"^[A-Za-z0-9_.-]{0,200}$")]
 
 
@@ -70,7 +72,8 @@ class Preferences(BaseModel):
     last switched to (#723); unset, they land by role (viewers and commenters in Simple).
     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).
     ``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);
-    unset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all."""
+    unset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all.
+    ``simple_decisions_view``: Simple's Decisions as List, Board or By meeting; unset, List."""
 
     document_view: DocumentView = "brief"
     setup_hidden: bool = False
@@ -80,6 +83,7 @@ class Preferences(BaseModel):
     priorities_line: str | None = None
     simple_roadmap: str | None = None
     simple_filters: SimpleFilters | None = None
+    simple_decisions_view: DecisionsView | None = None
 
 
 class PreferencesUpdate(BaseModel):
@@ -91,6 +95,7 @@ class PreferencesUpdate(BaseModel):
     priorities_line: PrioritiesLine | None = None
     simple_roadmap: SimpleRoadmapPick | None = None
     simple_filters: SimpleFilters | None = None
+    simple_decisions_view: DecisionsView | None = None
 
 
 router = APIRouter(prefix="/v1/me", tags=["auth"])

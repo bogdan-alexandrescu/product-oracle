@@ -42,3 +42,30 @@ function subscribe(l: () => void) {
 export function usePanelOpen(): boolean {
   return useSyncExternalStore(subscribe, read, () => false);
 }
+
+/**
+ * prd-questions: a line to put in Simple's Ask box when the panel opens ("Ask Oracle" on a
+ * question): the box shows it, ready to send or edit; `n` grows with each ask so the same
+ * line asked twice fills the box again.
+ */
+let prefill: { text: string; n: number } = { text: "", n: 0 };
+const prefillListeners = new Set<() => void>();
+
+export function askOracle(text: string) {
+  prefill = { text, n: prefill.n + 1 };
+  prefillListeners.forEach((l) => l());
+  setPanelOpen(true);
+}
+
+export function useAskPrefill(): { text: string; n: number } {
+  return useSyncExternalStore(
+    (l) => {
+      prefillListeners.add(l);
+      return () => {
+        prefillListeners.delete(l);
+      };
+    },
+    () => prefill,
+    () => prefill,
+  );
+}

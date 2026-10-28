@@ -13,6 +13,8 @@ people: a run's token is refused (the ``simple`` area is in no run-token scope).
 - ``PUT .../minutes``: edit them before sending; ``POST .../send``: Decisions and Inbox
   always, email and Slack when chosen, whatever the minutes job's state (what is written).
 - ``POST .../minutes/redraft``: "Draft again", requeues a failed ``meeting_minutes`` job.
+- ``GET /v1/simple/decisions/waiting`` (prd-questions): viewer and up; the product
+  decisions waiting for the caller, PRD questions first, soonest due first.
 - ``GET /v1/simple/decisions``: viewer and up; grouped by meeting, filters ``prd``,
   ``goal``, ``meeting``.
 
@@ -30,6 +32,7 @@ from oracle.simple import meetings
 from oracle.simple.router import _people
 from oracle.simple.schemas import (
     SimpleDecisionsOut,
+    SimpleDecisionsWaitingOut,
     SimpleMeetingCommentIn,
     SimpleMeetingIn,
     SimpleMeetingOut,
@@ -209,5 +212,19 @@ async def get_simple_decisions(
     """Every decision newest first, grouped under the meeting that took it (beside its
     minutes), then those taken outside meetings; filter by PRD, goal or meeting."""
     out = await _run(db, meetings.decisions_page(db, principal, prd, goal, meeting))
+    await db.commit()
+    return out
+
+
+@router.get(
+    "/decisions/waiting", response_model=SimpleDecisionsWaitingOut,
+    name="get_simple_decisions_waiting",
+)  # fmt: skip
+async def get_simple_decisions_waiting(principal: Reader, db: TenantDB) -> SimpleDecisionsWaitingOut:
+    """prd-questions: the product decisions waiting for this person (Home's card, the rail's
+    count, the review's "Decisions due"); Oracle's run approvals only counted, for Detailed."""
+    from oracle.simple import questions
+
+    out = await _run(db, questions.waiting(db, principal))
     await db.commit()
     return out

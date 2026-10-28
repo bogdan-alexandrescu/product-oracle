@@ -13088,6 +13088,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/decisions/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Decisions Waiting
+         * @description prd-questions: the product decisions waiting for this person (Home's card, the rail's
+         *     count, the review's "Decisions due"); Oracle's run approvals only counted, for Detailed.
+         */
+        get: operations["get_simple_decisions_waiting"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/priorities": {
         parameters: {
             query?: never;
@@ -17596,7 +17617,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -17665,7 +17686,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -25382,7 +25403,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
             /**
              * Status
              * @enum {string}
@@ -30851,6 +30872,7 @@ export interface components {
          *     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).
          *     ``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);
          *     unset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all.
+         *     ``simple_decisions_view``: Simple's Decisions as List, Board or By meeting; unset, List.
          */
         Preferences: {
             /**
@@ -30886,6 +30908,8 @@ export interface components {
             /** Simple Roadmap */
             simple_roadmap?: string | null;
             simple_filters?: components["schemas"]["SimpleFilters"] | null;
+            /** Simple Decisions View */
+            simple_decisions_view?: ("list" | "board" | "meetings") | null;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -30903,6 +30927,8 @@ export interface components {
             /** Simple Roadmap */
             simple_roadmap?: string | null;
             simple_filters?: components["schemas"]["SimpleFilters"] | null;
+            /** Simple Decisions View */
+            simple_decisions_view?: ("list" | "board" | "meetings") | null;
         };
         /**
          * PreviousAttempt
@@ -37082,7 +37108,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -37118,7 +37144,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -37256,7 +37282,9 @@ export interface components {
         /**
          * SimpleDecisionsOut
          * @description Simple's Decisions (direction B "By meeting"): the meetings' decisions grouped under
-         *     them, newest first, then the decisions taken outside meetings.
+         *     them, newest first, then the decisions taken outside meetings. prd-questions: the
+         *     PRDs' open questions as decisions (List and Board), the person's remembered view and
+         *     how many of Oracle's run approvals Simple leaves to Detailed.
          */
         SimpleDecisionsOut: {
             /** Meetings */
@@ -37269,6 +37297,59 @@ export interface components {
             goals: components["schemas"]["SimpleFilterOption"][];
             /** Meeting Options */
             meeting_options: components["schemas"]["SimpleFilterOption"][];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["SimpleQuestion"][];
+            /**
+             * Waiting Count
+             * @default 0
+             */
+            waiting_count: number;
+            /**
+             * Late Count
+             * @default 0
+             */
+            late_count: number;
+            /**
+             * Approvals Waiting
+             * @default 0
+             */
+            approvals_waiting: number;
+            /**
+             * View
+             * @default list
+             * @enum {string}
+             */
+            view: "list" | "board" | "meetings";
+        };
+        /**
+         * SimpleDecisionsWaitingOut
+         * @description prd-questions: the one list Home's "Decisions waiting for you", the rail's count and
+         *     the review meeting's "Decisions due" read: product decisions waiting for this person
+         *     (the PRDs' open questions and other judgement calls), never Oracle's run approvals.
+         */
+        SimpleDecisionsWaitingOut: {
+            /** Count */
+            count: number;
+            /** Late */
+            late: number;
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["SimpleQuestion"][];
+            /**
+             * Others
+             * @default 0
+             */
+            others: number;
+            /**
+             * Approvals Waiting
+             * @default 0
+             */
+            approvals_waiting: number;
         };
         /** SimpleDelivery */
         SimpleDelivery: {
@@ -38068,6 +38149,11 @@ export interface components {
              */
             open_decisions: components["schemas"]["SimpleOpenDecision"][];
             /**
+             * Decisions Due
+             * @default []
+             */
+            decisions_due: components["schemas"]["SimpleQuestion"][];
+            /**
              * Pending Proposals
              * @default []
              */
@@ -38715,6 +38801,137 @@ export interface components {
             end: string;
             /** Label */
             label: string;
+        };
+        /**
+         * SimpleQuestion
+         * @description prd-questions: one of a PRD's open questions, read in as a decision (origin
+         *     ``prd``): the PRD's code (Q7), its recommendation and alternatives, what it blocks,
+         *     its due day and decider.
+         */
+        SimpleQuestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /**
+             * Column
+             * @enum {string}
+             */
+            column: "needs_input" | "recommended" | "decided";
+            prd: components["schemas"]["SimpleDocRef"];
+            decider?: components["schemas"]["SimplePersonRef"] | null;
+            /** Missing */
+            missing?: ("decider" | "recommendation") | null;
+            /** Due On */
+            due_on?: string | null;
+            /** Due Label */
+            due_label?: string | null;
+            /**
+             * Late
+             * @default false
+             */
+            late: boolean;
+            blocks?: components["schemas"]["SimpleQuestionBlocks"] | null;
+            /** Recommendation */
+            recommendation?: string | null;
+            /**
+             * Alternatives
+             * @default []
+             */
+            alternatives: components["schemas"]["SimpleQuestionOption"][];
+            /** Chosen */
+            chosen?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            decided_by?: components["schemas"]["SimplePersonRef"] | null;
+            /** Decided Label */
+            decided_label?: string | null;
+            /**
+             * Waiting For Me
+             * @default false
+             */
+            waiting_for_me: boolean;
+            pending?: components["schemas"]["SimpleQuestionPending"] | null;
+            /**
+             * @default {
+             *       "decide": false,
+             *       "propose": false,
+             *       "name_decider": false
+             *     }
+             */
+            can: components["schemas"]["SimpleQuestionCan"];
+        };
+        /**
+         * SimpleQuestionBlocks
+         * @description What the question blocks: a milestone of the PRD's plan and its features.
+         */
+        SimpleQuestionBlocks: {
+            /** Milestone */
+            milestone?: string | null;
+            /** Milestone Name */
+            milestone_name?: string | null;
+            /**
+             * Features
+             * @default []
+             */
+            features: components["schemas"]["SimpleQuestionFeature"][];
+            /** Label */
+            label: string;
+        };
+        /** SimpleQuestionCan */
+        SimpleQuestionCan: {
+            /**
+             * Decide
+             * @default false
+             */
+            decide: boolean;
+            /**
+             * Propose
+             * @default false
+             */
+            propose: boolean;
+            /**
+             * Name Decider
+             * @default false
+             */
+            name_decider: boolean;
+        };
+        /** SimpleQuestionFeature */
+        SimpleQuestionFeature: {
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleQuestionOption */
+        SimpleQuestionOption: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * SimpleQuestionPending
+         * @description A proposed answer waiting for the decider (a change through the engine).
+         */
+        SimpleQuestionPending: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            by: components["schemas"]["SimplePersonRef"];
+            /** Answer */
+            answer: string;
         };
         /** SimpleResumeOut */
         SimpleResumeOut: {
@@ -69730,6 +69947,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_decisions_waiting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDecisionsWaitingOut"];
                 };
             };
         };

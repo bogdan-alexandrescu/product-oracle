@@ -6,7 +6,7 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternal
 
 import { HopPanel } from "@/components/hop/HopPanel";
 import { SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
-import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
+import { setPanelOpen, useAskPrefill, usePanelOpen } from "@/components/hop/open-state";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { homeOf, modeOf } from "@/lib/experience";
 import { resetMockData } from "@/lib/api/mock/server";
@@ -483,6 +483,13 @@ function PhoneHeader() {
   if (askPath !== pathname) {
     setAskPath(pathname);
     setAsk(false);
+  }
+  // prd-questions: "Ask Oracle" on a question opens the phone's Ask sheet with it in the box.
+  const prefill = useAskPrefill();
+  const [asked, setAsked] = useState(prefill.n);
+  if (asked !== prefill.n) {
+    setAsked(prefill.n);
+    setAsk(true);
   }
   if (pathname.startsWith("/i/") || pathname.startsWith("/s/")) return null;
   return (

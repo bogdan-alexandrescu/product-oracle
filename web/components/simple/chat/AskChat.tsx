@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+import { useAskPrefill } from "@/components/hop/open-state";
 import { askSay, askThread, hasPending, PENDING_POLL_MS, type ChatMessage, type ChatThread } from "@/lib/api/simple-chat";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
@@ -24,6 +25,7 @@ export function AskChat({ about, ask }: { about: string; ask?: (text: string) =>
   const thread = held && held.page === page ? held.thread : null;
   const setThread = useCallback((t: ChatThread) => setHeld({ page, thread: t }), [page]);
   const [error, setError] = useState<string | null>(null);
+  const prefill = useAskPrefill();
   // The walk: the thread belongs to the page the panel was opened from (a new page starts empty).
   const load = useCallback(async () => {
     try {
@@ -78,6 +80,7 @@ export function AskChat({ about, ask }: { about: string; ask?: (text: string) =>
         send={send}
         onCardChanged={() => void load()}
         onThread={setThread}
+        prefill={prefill}
       />
     </section>
   );

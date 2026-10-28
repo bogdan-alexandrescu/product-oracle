@@ -18,12 +18,15 @@ export function HomeCard({
   title,
   count,
   all,
+  extra,
   children,
 }: {
   id: string;
   icon: IconName;
   title: string;
   count?: number | null;
+  /** Beside the count ("1 late"). */
+  extra?: ReactNode;
   all?: string;
   children: ReactNode;
 }) {
@@ -39,6 +42,7 @@ export function HomeCard({
             {count}
           </span>
         )}
+        {extra}
         {all && (
           <Link href={all} className="simple-small font-semibold whitespace-nowrap text-accent-ink hover:underline">
             All -&gt;

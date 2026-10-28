@@ -18,6 +18,7 @@ export function ChatThreadView({
   testId,
   onCardChanged,
   onThread,
+  prefill,
 }: {
   thread: Thread | null;
   send: (text: string) => Promise<unknown>;
@@ -27,8 +28,15 @@ export function ChatThreadView({
   onCardChanged?: () => void;
   /** chat-reader: Retry, a choice or Apply all answered this thread. */
   onThread?: (t: Thread) => void;
+  /** prd-questions: a line put in the box by "Ask Oracle" (n: which ask). */
+  prefill?: { text: string; n: number };
 }) {
-  const [text, setText] = useState("");
+  const [text, setText] = useState(prefill?.n ? prefill.text : "");
+  const [filled, setFilled] = useState(prefill?.n ?? 0);
+  if (prefill && prefill.n !== filled) {
+    setFilled(prefill.n);
+    setText(prefill.text);
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null);
