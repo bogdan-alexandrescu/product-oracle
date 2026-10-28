@@ -120,9 +120,11 @@ export function usePendingPoll(thread: { messages: ChatMessage[] } | null, reloa
  * thread, which `onThread` takes.
  */
 export function ChatMessages({ messages, onCardChanged, onThread }: { messages: Thread["messages"]; onCardChanged?: () => void; onThread?: (t: Thread) => void }) {
+  // A line handed to Oracle's Ask (kind "ask") lives in Ask's chat: neither it nor the person's line shows here.
+  const handed = new Set(messages.filter((m) => m.kind === "ask").flatMap((m) => [m.id, m.reply_to]));
   return (
     <ol className="flex flex-col gap-3" aria-label="Messages">
-      {messages.map((m) => (
+      {messages.filter((m) => !handed.has(m.id)).map((m) => (
         <li key={m.id} data-testid="chat-message" data-kind={m.kind} data-author={m.author_kind} className={`flex flex-col gap-2 ${m.author_kind === "person" ? "items-end" : "items-start"}`}>
           <div className={`max-w-[95%] rounded-xl px-3 py-2 ${m.author_kind === "person" ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}>
             <p className="simple-small font-semibold">{m.author_name}</p>

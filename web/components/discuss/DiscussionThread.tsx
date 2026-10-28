@@ -418,7 +418,7 @@ function Composer({
   messages: Message[];
   onSent: () => Promise<void>;
   handle?: Ref<ComposerHandle>;
-  say?: (text: string) => Promise<ReactNode | null>;
+  say?: (text: string, handOff: (text: string) => Promise<void>) => Promise<ReactNode | null>;
   onSaid?: (shown: ReactNode) => void;
 }) {
   const { me } = useMe();
@@ -487,7 +487,9 @@ function Composer({
       setSending(true);
       setError(null);
       try {
-        const shown = await say(text.trim());
+        const shown = await say(text.trim(), async (later) => {
+          if (await post(later, [])) await onSent();
+        });
         if (shown !== null) {
           onSaid?.(shown);
           setText("");
@@ -662,7 +664,7 @@ export function DiscussionThread({
    * The composer's line goes here first (Simple's one Ask box: S9's plan reader); what it
    * returns shows in the thread after the last message, and null posts the line as usual.
    */
-  say?: (text: string) => Promise<ReactNode | null>;
+  say?: (text: string, handOff: (text: string) => Promise<void>) => Promise<ReactNode | null>;
 }) {
   const { me, can } = useMe();
   const myId = me?.user_id ?? null;

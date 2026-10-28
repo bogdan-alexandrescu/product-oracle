@@ -1005,12 +1005,17 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             one_ = None
         if one_ is not None:
             context["meeting"]["title"] = getattr(one_, "title", None)
-            context["meeting"]["agenda"] = [
+            agenda = [
                 getattr(x, "title", str(x)) for x in getattr(one_, "open_decisions", []) or []
             ][:20]
-            # The meeting has no item cursor: the PRD under review is what it discusses.
+            context["meeting"]["agenda"] = agenda
             prd = getattr(one_, "prd", None)
-            context["meeting"]["under_discussion"] = getattr(prd, "title", None)
+            context["meeting"]["prd"] = getattr(prd, "title", None)
+            # The agenda's first open decision is the item taken now ("take X next" puts
+            # X first); with none open, the PRD under review.
+            context["meeting"]["under_discussion"] = (
+                agenda[0] if agenda else getattr(prd, "title", None)
+            )
     else:
         context["page"] = read.page
     items = []
@@ -1042,6 +1047,15 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
     }
 
 
+def _grounded(c: Ctx, said: str) -> bool:
+    """Whether the reader's answer speaks of Oracle's data: it names an item (its title or
+    key) or a person it was given; any other answer is not Oracle's to give."""
+    t = said.lower()
+    names = [e.row.title for e in c.entries()] + [e.row.item_key or "" for e in c.entries()]
+    names += [display_name(u.email, u.name) for u in c.people]
+    return any(len(n) >= 3 and n.lower() in t for n in names)
+
+
 def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
     """The reader's answer, validated: every action through ChatOp.build (an unknown op, a
     bad arg or an item the caller cannot read is a plain refusal, never a card); a clarify
@@ -1056,33 +1070,55 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
         if viewer_in_meeting:
             return Reply("note", VIEWER_NOTE)
         cards: list[dict[str, Any]] = []
+        refused: list[str] = []
         for a in actions[:5]:
             if not isinstance(a, dict):
-                return Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
+                refused.append(f"I could not tell what to change. {SAY_AGAIN}")
+                continue
             r = build(c, str(a.get("op")), a.get("args") or {})
             if r.kind != "cards":
                 if r.choices:
                     # An action naming an item that matches several: ask which.
                     return Reply("question", "Which item?", choices=r.choices)
-                return Reply("note", r.body if r.kind == "note" else f"I can't do that: {r.body}")
+                if r.kind == "question" and not r.missing:
+                    # An unknown person, a day it cannot read: ask (the next line answers).
+                    return Reply("question", r.body)
+                refused.append(r.body if r.kind == "note" else f"I can't do that: {r.body}")
+                continue
             cards += r.cards
+        if not cards:
+            return Reply("note", refused[0])
+        if refused:
+            # The valid cards stay; the line says which one it cannot do.
+            why = (
+                refused[0].removeprefix("I can't do that here: ").removeprefix("I can't do that: ")
+            )
+            return Reply("cards", f"One I can't do: {why} {_count(len(cards))}", cards)
         return Reply("cards", _count(len(cards)), cards)
     if isinstance(clarify, dict) and clarify.get("choices"):
         if viewer_in_meeting:
             return Reply("note", VIEWER_NOTE)
-        choices = []
+        built: list[tuple[dict[str, Any], dict[str, Any]]] = []
         for ch in clarify["choices"][:5]:
             if not isinstance(ch, dict) or not ch.get("op"):
                 continue
             r = build(c, str(ch["op"]), ch.get("args") or {})
             if r.kind == "cards":
-                choices.append({"label": str(ch.get("label") or r.cards[0]["summary"])[:120],
-                                "op": ch["op"], "args": ch.get("args") or {}})  # fmt: skip
+                built.append((ch, r.cards[0]))
+        # A choice's label (the person's line when picked) is Oracle's words, never the
+        # model's: the item's title when each choice is another item, else the card's
+        # restatement.
+        titles = {str(e.row.id): e.row.title for e in c.entries()}
+        items = [str(card.get("item_id")) for _, card in built]
+        by_item = len(set(items)) == len(items) and all(i in titles for i in items)
+        choices = [{"label": titles[i] if by_item else card["summary"], "op": ch["op"],
+                    "args": ch.get("args") or {}}
+                   for i, (ch, card) in zip(items, built, strict=True)]  # fmt: skip
         if not choices:
             return Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
         question = str(clarify.get("question") or "Which one?")[:200]
         return Reply("question", question, choices=[*choices, NEITHER])
-    if isinstance(said, str) and said.strip():
+    if isinstance(said, str) and said.strip() and _grounded(c, said):
         return Reply("answer", said.strip()[:1500])
     if ask_box:
         return Reply("ask", "Asking Oracle…")
