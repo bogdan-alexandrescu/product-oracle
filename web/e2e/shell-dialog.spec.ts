@@ -183,7 +183,7 @@ test.describe("phone", () => {
     await page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, DATE_BASES_SCENARIO]);
     await login(page, LEAD);
     await page.goto("/plan");
-    await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Alerts in the team chat" }).click();
+    await page.getByTestId("plan-row").filter({ visible: true }).filter({ hasText: "Alerts in the team chat" }).getByTestId("plan-title").click();
     const sheet = page.getByTestId("sheet-plan-item");
     await expect(sheet).toBeVisible();
     await sheet.getByRole("button", { name: "Verify date" }).click();

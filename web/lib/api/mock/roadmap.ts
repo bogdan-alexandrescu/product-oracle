@@ -247,6 +247,16 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
     if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO || scenario === TRACK_ALERTS_HISTORY_SCENARIO)
       seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO);
+    // "launches": a second track, Checkout redesign PRD, with no roadmap yet (New launch's Track picker).
+    const checkout = scenario === "launches" ? ctx.documents.find((d) => d.slug === "checkout-redesign") : undefined;
+    if (checkout) {
+      const started = latest(ctx, checkout.id)?.number ?? 1;
+      db.tracks.push({
+        id: mockUuid(), prd_id: checkout.id, roadmap_id: null, title: checkout.title, status: "active",
+        owner_id: null, started_version: started, current_version: started, lock_version: 1,
+        created_at: AT, monitored_at: null, monitor: {},
+      });
+    }
     return db;
   });
 }
