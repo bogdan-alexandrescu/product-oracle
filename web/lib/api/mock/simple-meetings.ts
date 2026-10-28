@@ -393,12 +393,17 @@ function upcoming(ctx: MeetingsCtx, db: MeetingsDb, only?: string): Schemas["Sim
         return { id: o.id, ritual_id: r.id, ritual_title: r.title, due_at: o.due_at, ends_at: o.ends_at ?? iso(Date.parse(o.due_at) + r.duration_min * 60_000), length_min: r.duration_min, attendee_ids: [r.owner_id, ...r.attendee_ids], ready: o.status === "ready" };
       }),
   ];
-  // The walk: the ritual's real attendees add whoever attended the last review held from it.
+  // The walk: the ritual's real attendees add whoever was present at the last review held
+  // from it, until its attendees are edited after that review (attendees_edited_at, as the
+  // API: not the ritual's updated_at, which the scheduler moves).
   const ritualOf = new Map<string, string>([...db.occurrences, ...(ctx.rituals?.occurrences ?? [])].map((o) => [o.id, o.ritual_id]));
-  const held = (ritualId: string): string[] =>
-    [...db.meetings]
-      .filter((m) => m.occurrence_id && ritualOf.get(m.occurrence_id) === ritualId)
-      .sort((a, b) => b.started_at.localeCompare(a.started_at))[0]?.attendee_ids ?? [];
+  const held = (ritualId: string): string[] => {
+    const last = [...db.meetings].filter((m) => m.occurrence_id && ritualOf.get(m.occurrence_id) === ritualId).sort((a, b) => b.started_at.localeCompare(a.started_at))[0];
+    if (!last) return [];
+    const edited = rituals.find((r) => r.id === ritualId)?.attendees_edited_at;
+    if (edited && Date.parse(last.started_at) < Date.parse(edited)) return [];
+    return last.attendee_ids.filter((i) => !last.absent_ids.includes(i));
+  };
   const open = made
     .filter((o) => (only ? o.id === only : Date.parse(o.ends_at) >= now && (active.has(o.ritual_id) || !rituals.some((r) => r.id === o.ritual_id))))
     .sort((a, b) => a.due_at.localeCompare(b.due_at))

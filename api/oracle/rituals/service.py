@@ -513,6 +513,8 @@ async def update(
         ritual.owner_id = body.owner_id
     if body.attendee_ids is not None:
         await _check_members(db, body.attendee_ids, "attendee_ids")
+        if list(body.attendee_ids) != list(ritual.attendee_ids or []):
+            ritual.attendees_edited_at = clock.now()
         ritual.attendee_ids = body.attendee_ids
     if body.title is not None:
         ritual.title = body.title

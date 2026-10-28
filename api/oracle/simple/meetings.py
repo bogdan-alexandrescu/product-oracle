@@ -975,9 +975,10 @@ async def _upcoming(
     ) if occ_ids else {}  # fmt: skip
     # The walk: the ritual's real attendees are its owner and attendees and whoever was
     # present at the last review held from it (a meeting started from one of its
-    # occurrences), until the ritual's list is edited after that review: then its list is.
+    # occurrences), until the ritual's attendees are edited after that review: then its list
+    # is. Not ``updated_at``: the scheduler bumps it whenever it moves ``next_due_at``.
     held: dict[uuid.UUID, list[uuid.UUID]] = {}
-    edited = {r.id: r.updated_at for _, r in rows}
+    edited = {r.id: r.attendees_edited_at for _, r in rows}
     if edited:
         for rid, ids, absent, at in await db.execute(
             select(RitualOccurrence.ritual_id, SimpleMeeting.attendee_ids,
