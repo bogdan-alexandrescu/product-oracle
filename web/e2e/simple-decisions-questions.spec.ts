@@ -3,7 +3,7 @@ import { expect, test, type Page } from "./test";
 
 /**
  * prd-questions: a PRD's open questions read in as decisions, driven through Simple's UI on
- * the mock's invented PRD "Team health log" (Q1..Q16, ./lib/api/mock/simple-questions.ts; the
+ * the mock's invented PRD "Guided setup" (Q1..Q16, ./lib/api/mock/simple-questions.ts; the
  * mock's today is Thu 22 Oct 2026), desktop and phone, light and dark.
  */
 
@@ -60,7 +60,7 @@ for (const phone of [false, true]) {
         await expect(region(page, "Review: Usage alerts")).toBeVisible();
         // Ask Oracle opens Simple's Ask panel with the question in its box.
         await row(page, "Q5").getByRole("button", { name: "Ask Oracle" }).click();
-        await expect(page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true })).toHaveValue(/^Q5 Reminder default time in Team health log: what should we decide\?/);
+        await expect(page.getByRole("textbox", { name: "Message Oracle" }).filter({ visible: true })).toHaveValue(/^Q5 Reminder default time in Guided setup: what should we decide\?/);
       });
 
       /**
@@ -68,7 +68,8 @@ for (const phone of [false, true]) {
        * their counts (one column at a time behind tabs on a phone); "Name a decider" picks a person
        * and the question moves to Recommended; the view is remembered after a reload; fails_when =
        * a column, a count, the phone tabs, the picker or the remembered view is wrong;
-       * no_claim = "Name a person" (it opens Ask Oracle).
+       * "Name a person" on a question with no recommendation names who answers it;
+       * no_claim = Ask Oracle's reply.
        */
       test("Board: columns (tabs on a phone), Name a decider, remembered after reload", async ({ page }) => {
         await decisions(page);
@@ -95,7 +96,11 @@ for (const phone of [false, true]) {
           await expect(decided).toBeVisible();
         }
         const q2 = needs.locator('[data-code="Q2"]');
-        await expect(needs.locator('[data-code="Q3"]').getByRole("button", { name: "Name a person" })).toBeVisible();
+        const q3 = needs.locator('[data-code="Q3"]');
+        await q3.getByRole("button", { name: "Name a person" }).click();
+        await q3.getByRole("group", { name: "Who answers Q3" }).getByRole("button", { name: "Commenter", exact: true }).click();
+        await expect(page.getByText("Commenter decides Q3")).toBeVisible();
+        await expect(needs.locator('[data-code="Q3"]')).toContainText("Commenter decides");
         await q2.getByRole("button", { name: "Name a decider" }).click();
         await q2.getByRole("group", { name: "Who decides Q2" }).getByRole("button", { name: "Approver" }).click();
         await expect(page.getByText("Approver decides Q2")).toBeVisible();
@@ -213,6 +218,8 @@ for (const phone of [false, true]) {
         await expect(due.getByTestId("question-row").first()).toContainText("Q5 Reminder default time");
         await expect(due.getByTestId("question-row").first()).toContainText("Late · due Fri 16 Oct");
         await expect(due.getByTestId("question-row").first()).toContainText("Blocks M1: F-03 Health log");
+        // The PRD's open questions, whoever decides them (Q7 is the approver's), not only mine.
+        await expect(due.locator('[data-code="Q7"]')).toContainText("Q7 Legal input on health notes");
         await due.getByTestId("question-row").first().getByRole("button", { name: "Decide as recommended" }).click();
         await expect(region(page, "All decisions")).toContainText("Decided Q5 Reminder default time: 9:00 in each person's zone");
         await expect(due.locator('[data-code="Q5"]')).toHaveCount(0);
