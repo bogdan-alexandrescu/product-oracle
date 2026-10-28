@@ -82,7 +82,7 @@ def test_0013_follows_0012_and_the_0014_lanes_chain_on_it():
     # Lanes add 0014_<lane> on top of 0013 (waves.md); the integrator re-chains them in
     # merge order so the chain stays linear, one head.
     script = ScriptDirectory.from_config(_cfg())
-    assert script.get_heads() == ["0086_simple_meetings"]
+    assert script.get_heads() == ["0087_ritual_attendees_edited_at"]
     assert script.get_revision("0013").down_revision == "0012"
     assert script.get_revision("0014_quality").down_revision == "0013"
     assert script.get_revision("0014_usage_retry_at").down_revision == "0014_quality"
