@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 
 import { PageTabsProvider } from "@/components/ds";
 
@@ -13,7 +13,9 @@ export default function RequestsLayout({ children }: { children: ReactNode }) {
   return (
     <PageTabsProvider tabs={<RequestsNav where="header" />}>
       <div className="hidden px-2.5 pt-3 max-[600px]:block">
-        <RequestsNav where="top" />
+        <Suspense fallback={null}>
+          <RequestsNav where="top" />
+        </Suspense>
       </div>
       {children}
     </PageTabsProvider>
