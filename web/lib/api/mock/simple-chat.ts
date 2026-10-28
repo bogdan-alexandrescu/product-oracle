@@ -1224,7 +1224,8 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
     const msg = t.messages.find((x) => x.id === id);
     if (!msg) continue;
     const meeting = t.meeting_id ? (chat.meetings[t.meeting_id] ?? null) : null;
-    if (meeting ? !meeting.attendee_ids.includes(ctx.id) : key !== `ask:${ctx.id}`) return null;
+    // The person's own Ask threads (one per page: "ask:<id>:<page>"), as the API.
+    if (meeting ? !meeting.attendee_ids.includes(ctx.id) : key !== `ask:${ctx.id}` && !key.startsWith(`ask:${ctx.id}:`)) return null;
     return { key, meeting, msg };
   }
   return null;
