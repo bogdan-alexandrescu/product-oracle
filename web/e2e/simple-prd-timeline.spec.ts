@@ -38,7 +38,8 @@ import { expect, test, type Page } from "./test";
  * no_claim = the flow viewer (the flows lane).
  *
  * Card timeline-edit-hover: protects = a line's "Edit" shows only when the line is pointed at
- * (desktop) or tapped (phone), with no "Edit line N" written on every line, and the header
+ * (desktop) or tapped (phone: the first tap shows Edit without opening the line, a second
+ * tap on its words opens it), with no "Edit line N" written on every line, and the header
  * names the PRD's owner and the plan's span; fails_when = Edit shows on every line at rest
  * or "Edit line" is written; no_claim = the edit itself (simple-one-pager.spec).
  *
@@ -204,11 +205,18 @@ for (const phone of [false, true]) {
         await expect(edit).toHaveCSS("opacity", "0");
         if (!phone) await line.hover();
         else {
-          // A tap on the line (not on its words) shows Edit and does not open the line.
+          // A tap on the line shows Edit and does not open the line (a phone snaps a tap near
+          // the words onto them; a second tap on the words opens it, below). The touchscreen
+          // taps where the viewport is, so the line is brought into view first.
+          await line.scrollIntoViewIfNeeded();
           const box = (await line.boundingBox())!;
           const words = (await line.getByTestId("one-pager-line-text").boundingBox())!;
           await page.touchscreen.tap(words.x + words.width + 2 < box.x + box.width ? words.x + words.width + 2 : box.x + 2, box.y + box.height - 2);
           await expect(line.getByTestId("one-pager-line-text")).toHaveAttribute("aria-expanded", "false");
+          await expect(edit).toHaveCSS("opacity", "1");
+          await line.getByTestId("one-pager-line-text").tap();
+          await expect(line.getByTestId("one-pager-line-text")).toHaveAttribute("aria-expanded", "true");
+          await line.getByTestId("one-pager-line-text").tap();
         }
         await expect(edit).toHaveCSS("opacity", "1");
         await edit.click();

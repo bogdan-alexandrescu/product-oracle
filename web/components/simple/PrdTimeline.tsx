@@ -110,12 +110,16 @@ function currentOf(plan: Plan, today: string): string | null {
 const named = (s: Slice) => `${s.code} ${s.name}`;
 const codesOf = (p: Piece) => p.slices.map((s) => s.code);
 
+// A bar's label: at most CH px a character (text-sm semibold codes run about 8.5), and
+// BAR_PAD px of padding (20) and border (up to 2 a side: a PM-owned bar's).
+const CH = 9;
+const BAR_PAD = 24;
+
 /** The bar's label fitted to its width: as many codes as fit, then "+N" for the rest. */
 export function fitCodes(codes: string[], px: number): string {
-  const CH = 7.8;
   for (let k = codes.length; k >= 1; k--) {
     const text = codes.slice(0, k).join(" · ") + (k < codes.length ? ` +${codes.length - k}` : "");
-    if (text.length * CH + 20 <= px) return text;
+    if (text.length * CH + BAR_PAD <= px) return text;
   }
   // Too narrow even for "F-05b +2": its first code alone (the bar is at least that wide).
   return codes[0] ?? "";
@@ -324,7 +328,7 @@ function Lanes({ plan, lanes, today, onPick }: { plan: Plan; lanes: ReturnType<t
                       title={p.slices.map(named).join("\n")}
                       onClick={() => onPick(p.milestone)}
                       className={`absolute h-8 overflow-hidden whitespace-nowrap rounded-full border px-2.5 text-left text-sm font-semibold ${p.pm ? "border-dashed" : ""}`}
-                      style={{ left: `${left}%`, width: `${w}%`, minWidth: codesOf(p)[0].length * 7.8 + 22, top: 6 + p.row * ROW, background: c.fill, color: c.ink, borderColor: c.edge, borderWidth: p.pm ? 2 : 1 }}
+                      style={{ left: `${left}%`, width: `${w}%`, minWidth: codesOf(p)[0].length * CH + BAR_PAD, top: 6 + p.row * ROW, background: c.fill, color: c.ink, borderColor: c.edge, borderWidth: p.pm ? 2 : 1 }}
                     >
                       {fitCodes(codesOf(p), (w / 100) * width)}
                     </button>

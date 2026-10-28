@@ -90,7 +90,10 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const [draftText, setDraftText] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   // A phone: the line last tapped shows its Edit (a tap is no hover; it need not open the line).
+  // A phone snaps a tap near the words onto them, so a line's first tap only shows its Edit and
+  // a second tap on its words opens it.
   const [tapped, setTapped] = useState<string | null>(null);
+  const firstTap = useRef(false);
   const [diff, setDiff] = useState<string | null>(null);
   const [wide, setWide] = useState<string | null>(null);
   // The walk: a bet's flow drawn while its card was open shows on its thumbnail at once.
@@ -254,7 +257,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
               ) : (
                 <ul className="mt-1 space-y-1">
                   {b.lines.map((l) => (
-                    <li key={l.id} data-line={l.id} data-state={l.state} className="group list-none" onPointerDown={(e) => { if (e.pointerType !== "mouse") setTapped(l.id); }}>
+                    <li key={l.id} data-line={l.id} data-state={l.state} className="group list-none" onPointerDown={(e) => { const touch = e.pointerType !== "mouse"; firstTap.current = touch && tapped !== l.id; if (touch) setTapped(l.id); }} onClick={() => { firstTap.current = false; }}>
                       <div className={`rounded px-2 py-1 ${TINT[l.state]}`}>
                         {editing === l.id ? (
                           <form onSubmit={(e) => { e.preventDefault(); void save(l); }} className="space-y-2">
@@ -268,7 +271,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                         ) : (
                           <div className="flex items-start gap-2">
                             <span className="flex-1">
-                              <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => setOpen(open === l.id ? null : l.id)} data-testid="one-pager-line-text">
+                              <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => { if (!firstTap.current) setOpen(open === l.id ? null : l.id); }} data-testid="one-pager-line-text">
                                 {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
                                 {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
                               </button>
