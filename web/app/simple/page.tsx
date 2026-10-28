@@ -450,7 +450,7 @@ export default function SimpleHome() {
                           .join(", ")}`}
                       <br />
                       {next.pre_read_ready && next.occurrence_id ? (
-                        <Link className="underline" href={`/company/rituals/${next.occurrence_id}`}>
+                        <Link className="underline" href={`/simple/meetings?pre_read=${next.occurrence_id}`}>
                           Open pre-read
                         </Link>
                       ) : (
@@ -566,8 +566,9 @@ export default function SimpleHome() {
               const seen = inbox.data?.last_seen_at ?? null;
               const recent = [
                 ...rows
-                  .filter((c) => c.status !== "proposed" && (!seen || (c.decided_at ?? c.at) > seen))
-                  .map((c) => ({ key: c.id, at: c.decided_at ?? c.at, icon: "roadmap" as const, title: changeWords(c, roadmap.data?.items.find((i) => i.id === c.target.item_id)), who: c.by_name, status: c.status })),
+                  // An undo says itself on the change it undid ("· undone"), not as a row of its own.
+                  .filter((c) => c.status !== "proposed" && !c.undoes_id && (!seen || (c.decided_at ?? c.at) > seen))
+                  .map((c) => ({ key: c.id, at: c.decided_at ?? c.at, icon: "roadmap" as const, title: c.words || `${c.by_name}: ${changeWords(c, roadmap.data?.items.find((i) => i.id === c.target.item_id))}`, who: null, status: null })),
                 ...(inbox.data?.decisions ?? [])
                   .filter((d) => (d.reason === "oracle_decided" || d.reason === "informed") && (!seen || d.since > seen))
                   .map((d) => ({ key: d.id, at: d.since, icon: "flag" as const, title: d.title, who: "Decision", status: "decided" })),
@@ -584,7 +585,7 @@ export default function SimpleHome() {
                       testId="home-since-row"
                       lead={<RowIcon name={r.icon} />}
                       title={r.title}
-                      meta={`${r.who} · ${r.status} · ${formatInZone(r.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
+                      meta={`${r.who && r.status ? `${r.who} · ${r.status} · ` : ""}${formatInZone(r.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
                     />
                   )}
                 </Top>

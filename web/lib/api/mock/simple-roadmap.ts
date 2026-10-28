@@ -152,10 +152,11 @@ interface MockDraft {
   published: { items: SeedItem[]; own: SimpleDb["own"]; key_dates?: MockKeyDate[] };
 }
 
-const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string }> = {
-  "alerts-roadmap": { title: "Alerts roadmap", visibility: "company", prd: "Usage alerts" },
-  "onboarding-roadmap": { title: "Onboarding roadmap", visibility: "company", prd: "Guided setup" },
-  "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes" },
+/** `draft`: the number of the PRD draft (version) the roadmap's items were imported from. */
+const ROADMAPS: Record<string, { title: string; visibility: "company" | "approvers"; prd: string; draft: number }> = {
+  "alerts-roadmap": { title: "Alerts roadmap", visibility: "company", prd: "Usage alerts", draft: 5 },
+  "onboarding-roadmap": { title: "Onboarding roadmap", visibility: "company", prd: "Guided setup", draft: 2 },
+  "pricing-roadmap": { title: "Pricing roadmap", visibility: "approvers", prd: "Plan changes", draft: 3 },
 };
 /** S7 adds Keep alerts quiet, a goal with no items yet (Oracle suggested features for it on its own). */
 export const GOALS: Record<string, string> = { "grow-retention": "Grow retention", "faster-activation": "Faster activation", "quiet-alerts": "Keep alerts quiet" };
@@ -165,13 +166,13 @@ export function prdCode(section: string | null | undefined): string | null {
   return m ? `${m[1].toUpperCase()}-${m[2]}` : null;
 }
 
-/** "F-06 Loop guards" for a coded section, else "section <key>" (service.prd_section_label). */
-function sectionLabel(section: string, heading?: string): string {
+/** "F-06 Loop guards": the section's code with its heading, else with the feature's name;
+ * never the section's key (service.prd_section_label). */
+function sectionLabel(section: string, heading: string | undefined, name: string): string {
   const code = prdCode(section);
-  let words = (heading ?? "").trim();
+  let words = (heading ?? "").trim() || name.trim();
   if (code && words.toUpperCase().startsWith(code)) words = words.slice(code.length).replace(/^[\s:.\-·–—]+/, "");
-  if (code) return `${code} ${words}`.trim();
-  return words || `section ${section}`;
+  return `${code ?? ""} ${words}`.trim();
 }
 
 /** S4: each goal's metric (the goal counters' line). */
@@ -217,13 +218,14 @@ function addMonths(day: string, months: number): string {
   return iso(Date.UTC(y, m, Math.min(d.getUTCDate(), last)));
 }
 
-/** tenant_settings_api.horizon_windows with the default horizons, on the mock's day. */
+/** oracle.simple.dates.windows with the default horizons, on the mock's day: Later starts the
+ * day after Next ends (no gap) and ends where the long horizon ends (today + 24 months). */
 export function simpleWindows(today: string): Record<Horizon, [string, string]> {
   const d = new Date(ms(today));
   const q = iso(Date.UTC(d.getUTCFullYear(), 3 * Math.floor(d.getUTCMonth() / 3), 1));
   const medium = addMonths(q, 3);
   const mediumEnd = addMonths(medium, 6);
-  return { now: [q, addDays(medium, -1)], next: [medium, addDays(mediumEnd, -1)], later: [addMonths(today, 12), addMonths(today, 24)] };
+  return { now: [q, addDays(medium, -1)], next: [medium, addDays(mediumEnd, -1)], later: [mediumEnd, addMonths(today, 24)] };
 }
 
 /**
@@ -586,7 +588,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         ...(s.notes ?? []),
         ...(s.why ? [s.why] : []),
         ...(s.goal ? [`Serves the goal ${GOALS[s.goal]}.`] : []),
-        ...(s.section ? [`From ${rm.prd}, ${sectionLabel(s.section, s.heading)}.`] : []),
+        ...(s.section ? [`From ${rm.prd} (draft ${rm.draft}): ${sectionLabel(s.section, s.heading, s.title)}.`] : []),
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],

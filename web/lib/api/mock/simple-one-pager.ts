@@ -72,6 +72,11 @@ export interface OnePagerDb {
   decisions?: Record<string, { id: string; number: number; title: string }[]>;
   /** Imported by a service token: the PRD has no owner yet. */
   ownerless?: boolean;
+  /**
+   * The document's owner (one_pager.document_owner, P4): the member who brought the PRD in;
+   * unset, the company's first owner (who imported the seeded PRD).
+   */
+  owner?: string;
   /** The PRD's roadmap slice, when not the default invented one (SLICE). */
   slice?: SliceItem[];
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
@@ -193,6 +198,18 @@ export function seedSkeletonOnePager(doc: OnePagerDb["doc"]): OnePagerDb {
   db.sections = db.sections.map((x) => ({ ...x, body: "<!-- Write this section. -->\n- <Milestone>: <Feature>\n- →" }));
   db.blocks = db.blocks.map((b) => ({ ...b, lines: b.kind === "timeline" ? [] : [{ id: `${b.key}-1`, text: guide[b.key] ?? "→", keys: [db.sections[0].key] }] }));
   return db;
+}
+
+/**
+ * As one_pager.milestone_span (P4): from the earliest start of the items under dated milestones
+ * (or that date, when earlier) to the latest milestone date; null with no dated milestone.
+ */
+function milestoneSpan(items: SliceItem[]): [string, string] | null {
+  const dated = items.filter((i) => i.milestone?.[1]);
+  if (!dated.length) return null;
+  const end = dated.map((i) => i.milestone![1]).sort().pop()!;
+  const start = dated.flatMap((i) => [i.start, i.milestone![1]]).sort()[0];
+  return [start < end ? start : end, end];
 }
 
 /** The API's one_pager.template_only: only a template's comments, placeholders or arrows. */
@@ -337,15 +354,16 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const notes = [...live.map((c) => note(c, "change")), ...shown.map((c) => note(c, "proposal"))];
   const proposed = new Set(notes.filter((n) => n.kind === "proposal").map((n) => n.line_id));
   const hiddenDraft = !sees && db.draft ? Object.keys(db.draft.lines).length : 0;
-  const owner = db.ownerless ? undefined : ctx.owners[0];
+  const owner = db.ownerless ? undefined : db.owner ?? ctx.owners[0];
+  const span = milestoneSpan(db.slice ?? SLICE);
   return {
     document: db.doc,
     version: db.version,
     published_at: "2026-10-20T15:00:00Z",
     owner: owner ? { id: owner, name: ctx.names[owner] ?? "Owner" } : null,
     decider: null,
-    span_start: "2026-10-05",
-    span_end: "2027-03-12",
+    span_start: span?.[0] ?? null,
+    span_end: span?.[1] ?? null,
     built_by: "oracle",
     built_at: "2026-10-20T15:05:00Z",
     blocks: db.blocks.map((b) => ({

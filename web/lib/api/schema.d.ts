@@ -37133,6 +37133,8 @@ export interface components {
              * @default false
              */
             can_undo: boolean;
+            /** Words */
+            words?: string | null;
         };
         /** SimpleChangeResult */
         SimpleChangeResult: {

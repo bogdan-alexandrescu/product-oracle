@@ -779,10 +779,16 @@ def email_available() -> bool:
     return mailer.get_mailer() is not None
 
 
+# The walk (M1): Simple reads product decisions only: a run's stop (a checkpoint decision,
+# Oracle's run approval) is Detailed's, never a meeting's pre-read or the Decisions page's.
+PRODUCT = Decision.origin != "checkpoint"
+
+
 async def _open_decisions(db: AsyncSession, document: Document, item_ids: set[uuid.UUID]):
+    """The PRD's open product decisions, never a run's approval (PRODUCT)."""
     rows = await db.scalars(
         select(Decision)
-        .where(Decision.status == "proposed")
+        .where(Decision.status == "proposed", PRODUCT)
         .where(
             or_(
                 Decision.subjects.contains([{"kind": "document", "id": str(document.id)}]),
@@ -1764,7 +1770,7 @@ async def decisions_page(
         shown_ms = [m for m in shown_ms if any(keep(d) for _, d in links[m.id])]
     others: list[Decision] = []
     if meeting is None:
-        q = select(Decision).where(Decision.origin != "meeting")
+        q = select(Decision).where(Decision.origin != "meeting", PRODUCT)
         if in_meetings:
             q = q.where(Decision.id.not_in(in_meetings))
         if match is not None:

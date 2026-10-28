@@ -5,6 +5,7 @@ import { notFound, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
 import { Button } from "@/components/ds";
+import { PreRead } from "@/components/simple/meetings/PreRead";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -20,7 +21,8 @@ import { SIMPLE_MODE } from "../_flag";
  * opens the start sheet. Upcoming is the one list of scheduled reviews: Home's "Next review
  * meeting" is its first row and the rail's Meetings count is its rows not started plus the
  * live meetings; Home's Start opens here (`?start=` the ritual) with the sheet open. Start shows
- * where the row's can_start says (owners and the ritual's owner).
+ * where the row's can_start says (owners and the ritual's owner). Home's "Open pre-read" opens
+ * here (`?pre_read=` the occurrence) with that review's pre-read on top (PreRead).
  */
 export default function SimpleMeetings() {
   return (
@@ -34,7 +36,11 @@ function Meetings() {
   const zone = useCompanyZone();
   const q = useQuery("simple-meetings-page", () => unwrap(api.GET("/v1/simple/meetings")));
   const [sheet, setSheet] = useState<{ occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"] } | null>(null);
-  const startParam = useSearchParams().get("start");
+  const params = useSearchParams();
+  const startParam = params.get("start");
+  // Home's "Open pre-read" (`?pre_read=` the occurrence): that review's pre-read, here in Simple.
+  const preReadParam = params.get("pre_read");
+  const preRead = preReadParam ? q.data?.upcoming.find((x) => x.occurrence_id === preReadParam) : undefined;
   const [opened, setOpened] = useState(false);
   // Home's Start meeting (`?start=` its ritual): the sheet opens on that review, once.
   if (startParam && !opened && q.data) {
@@ -50,6 +56,8 @@ function Meetings() {
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {q.data && (
         <>
+          {preRead && <PreRead review={preRead} />}
+          {preReadParam && !preRead && <SimpleEmpty testId="meetings-pre-read-gone">This review is no longer scheduled.</SimpleEmpty>}
           <SimpleSection title="Live" testId="meetings-live">
             {q.data.live.length === 0 && <SimpleEmpty testId="meetings-live-empty">No meeting is on now.</SimpleEmpty>}
             <ul className="space-y-2">

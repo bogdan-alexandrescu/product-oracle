@@ -94,6 +94,8 @@ class Entry:
     # The heading of the PRD section the item was imported from (the walk: "F-06 Loop
     # and blast-radius guards" in the card's reasons).
     prd_heading: str | None = None
+    # The number of the PRD draft (version) the item was imported from: "(draft 5)".
+    prd_draft: int | None = None
     # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
     # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
     code: str | None = None
@@ -528,9 +530,22 @@ def suggestion_out(s: RoadmapDateSuggestion, row: RoadmapItem, may: bool) -> Dat
 
 
 async def _prd_headings(db: AsyncSession, entries: list[Entry]) -> None:
-    """Each entry's PRD section heading, in one statement."""
-    from oracle.docs.models import Section
+    """Each entry's PRD section heading and PRD draft number, in two statements."""
+    from oracle.docs.models import DocumentVersion, Section
 
+    drafts_of = {e.row.prd_version_id for e in entries if e.row.prd_version_id}
+    if drafts_of:
+        numbers = dict(
+            (
+                await db.execute(
+                    select(DocumentVersion.id, DocumentVersion.number).where(
+                        DocumentVersion.id.in_(drafts_of)
+                    )
+                )
+            ).all()
+        )
+        for e in entries:
+            e.prd_draft = numbers.get(e.row.prd_version_id)
     wanted = {
         (e.row.prd_version_id, e.row.prd_section_key)
         for e in entries
@@ -575,19 +590,32 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
         e.code = e.code or _prd_code(e.row.prd_section_key)
 
 
-def prd_section_label(section_key: str, heading: str | None) -> str:
+def prd_section_label(section_key: str, heading: str | None, name: str = "") -> str:
     """How the card names the PRD section an item came from: the PRD's code and the
-    section's heading ("F-06 Loop and blast-radius guards"); "section <key>" when the
-    key is no code and the heading is unknown."""
+    section's heading ("F-06 Loop and blast-radius guards"); with no heading, the code and
+    ``name`` (the item's feature name); never the section's key (an anchor, "f-06")."""
     from oracle.simple.priorities import prd_code
 
     code = prd_code(section_key)
-    words = (heading or "").strip()
+    words = (heading or "").strip() or name.strip()
     if code and words.upper().startswith(code):
         words = words[len(code) :].lstrip(" :.-·–—")
-    if code:
-        return f"{code} {words}".strip()
-    return words or f"section {section_key}"
+    return f"{code or ''} {words}".strip()
+
+
+def prd_provenance(e: Entry) -> str | None:
+    """The card's "Why" line naming where the item came from: "From <PRD> (draft 5):
+    F-01 Sign-up flow." (the PRD, its draft, the code with the feature's name). The code is
+    the PRD section's, else the item's own; no section anchor is ever shown."""
+    if e.prd is None or not e.row.prd_section_key:
+        return None
+    label = prd_section_label(e.row.prd_section_key, e.prd_heading, e.row.title or "")
+    if e.code and not _prd_code(e.row.prd_section_key) and not label.startswith(e.code):
+        label = f"{e.code} {label}".strip()
+    if not label:
+        return None
+    draft = f" (draft {e.prd_draft})" if e.prd_draft else ""
+    return f"From {e.prd.title}{draft}: {label}."
 
 
 def _reasons(e: Entry) -> list[str]:
@@ -599,9 +627,8 @@ def _reasons(e: Entry) -> list[str]:
         out.append(why.strip().splitlines()[0])
     if e.goal is not None:
         out.append(f"Serves the goal {e.goal.title}.")
-    if e.prd is not None and e.row.prd_section_key:
-        label = prd_section_label(e.row.prd_section_key, e.prd_heading)
-        out.append(f"From {e.prd.title}, {label}.")
+    if (where := prd_provenance(e)) is not None:
+        out.append(where)
     return out[:3]
 
 

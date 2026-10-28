@@ -5,8 +5,10 @@ The ``roadmap.items`` handler on :mod:`oracle.changes` runs after the trace lane
 dependencies) and marks the *items*:
 
 - ``document_version`` on a PRD: items traced to an earlier version of that PRD whose
-  section's content hash differs in the new version, or is gone (an item with no section
-  goes stale on any new version);
+  section's content hash differs in the new version, or is gone. An item with no PRD
+  section has nothing of its own a new version changes: it is not marked (the owner's
+  walk, P11: a plan approved a week ago read "40 of 40 items need attention (40 stale)");
+  the track says the PRD has a newer approved version instead;
 - ``document_section``: items traced to that section of that PRD;
 - ``requirement``, ``decision``, ``entity``, ``blocker_status``: items whose feature,
   requirements or blockers include the changed entity (or a batch's roots, or what the
@@ -118,6 +120,27 @@ def stale_why(reasons: Iterable[str] | None, default: str) -> str:
 HIDDEN_REASON = "a linked baseline item changed"
 
 
+# The reason an earlier rule wrote on an item with no PRD section for any new PRD version:
+# not a reason of the item's own (P11), so it never makes the item stale on a read.
+_WHOLE_PRD = re.compile(r"the PRD has a new version \(\d+\)")
+STALE_STATES = ("potentially_stale", "under_review")
+
+
+def own_reasons(item: Any) -> list[str]:
+    """The item's stale reasons of its own: without "the PRD has a new version (N)"."""
+    return [r for r in item.stale_reasons or [] if not _WHOLE_PRD.fullmatch(r)]
+
+
+def is_stale(item: Any) -> bool:
+    """The per-item stale rule, as every read counts it (the track's headline, its at-risk
+    list, alerts): the item is potentially stale or under review for a reason of its own
+    (what it traces changed). An item marked only because the PRD got a new version (the
+    earlier rule for an item with no section) is not stale."""
+    if item.freshness not in STALE_STATES:
+        return False
+    return not item.stale_reasons or bool(own_reasons(item))
+
+
 def for_reader(reasons: Iterable[str] | None, hidden: Any) -> list[str]:
     """``reasons`` as the reader may read them: one naming a decision or document the
     reader may not see (``hidden``, :func:`oracle.docs.visibility.hidden_for_reader`;
@@ -171,8 +194,8 @@ async def _by_prd_version(db: AsyncSession, event: ChangeEvent, found: dict) -> 
             continue
         key = item.prd_section_key
         if key is None:
-            found[item.id] = (item, f"the PRD has a new version ({new.number})")
-        elif key not in hashes:
+            continue  # nothing of its own changed (P11): see the module's docstring
+        if key not in hashes:
             found[item.id] = (item, f"PRD section {key} is gone in version {new.number}")
         elif hashes[key] != section_hash:
             found[item.id] = (item, f"PRD section {key} changed in version {new.number}")

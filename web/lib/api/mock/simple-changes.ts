@@ -25,6 +25,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
+import { changeSentence } from "./simple-change-words";
 import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import {
   canDecideItem,
@@ -38,6 +39,7 @@ import {
   itemOwnerId,
   lookalikes,
   ownDates,
+  prdCode,
   ROADMAP_SLUGS,
   readsRoadmap,
   roadmapId,
@@ -253,7 +255,15 @@ function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
     undone,
     can_decide: c.status === "proposed" && decidesChange(db, ctx, c),
     can_undo: c.status === "applied" && c.by === ctx.id && !undone && !!s && !s.closed_at && !idle(s),
+    words: changeSentence(c, c.by_name, itemLabel(db, c.target.item_id), undone),
   };
+}
+
+/** The walk (H2): "F-08 Billing page", the item's code and name as the change's words name it. */
+function itemLabel(db: SimpleDb, id: unknown): string | null {
+  const key = id ? keyOf(db, id) : undefined;
+  const s = key ? db.items.find((x) => x.key === key) : undefined;
+  return s ? `${prdCode(s.section) ?? ""} ${s.title}`.trim() : null;
 }
 
 function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {

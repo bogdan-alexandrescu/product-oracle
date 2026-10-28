@@ -1041,7 +1041,20 @@ def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChange
         decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
         routed_to=v.route(c), undoes_id=c.undoes_id, undone=c.id in v.undone,
         can_decide=c.status == "proposed" and v.may_decide(c), can_undo=v.can_undo(c),
+        words=_words(c, v, names),
     )  # fmt: skip
+
+
+def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
+    """The change in plain words (oracle.simple.change_words): who, what, the item's code
+    and name as this reader reads it, "· undone" once undone."""
+    from oracle.simple import change_words
+
+    e = v.entry(c) if c.target.get("item_id") else None
+    item = f"{e.code or ''} {e.row.title}".strip() if e is not None else None
+    return change_words.sentence(c.op, c.target, c.before, c.after,
+                                 who=names.get(c.by, "someone"), item=item,
+                                 status=c.status, undone=c.id in v.undone)  # fmt: skip
 
 
 async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -> _View:

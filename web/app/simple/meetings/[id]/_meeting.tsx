@@ -371,7 +371,7 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
         <ul className="mt-2 space-y-1">
           {m.open_decisions.map((d) => (
             <li key={d.id}>
-              <Link className="font-semibold text-accent-ink hover:underline" href={`/company/decisions?d=${d.id}`}>D-{d.number}</Link> {d.title}
+              <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions#d-${d.number}`}>D-{d.number}</Link> {d.title}
             </li>
           ))}
         </ul>

@@ -290,10 +290,13 @@ function brief(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMee
 
 const newestFirst = (a: Decision, b: Decision) => (a.at === b.at ? b.number - a.number : a.at < b.at ? 1 : -1);
 
+/** As meetings.PRODUCT: Simple reads product decisions, never a run's approval (a checkpoint). */
+const product = (d: Decision): boolean => d.origin !== "checkpoint";
+
 function openDecisions(ctx: MeetingsCtx, db: MeetingsDb, p: Prd): Schemas["SimpleOpenDecision"][] {
   const ids = new Set([...p.ids, ...prdItems(ctx, p).map((i) => i.id)]);
   return db.decisions
-    .filter((d) => d.status === "proposed" && d.subjects.some((s) => ids.has(s.id)))
+    .filter((d) => d.status === "proposed" && product(d) && d.subjects.some((s) => ids.has(s.id)))
     .sort((a, b) => b.number - a.number)
     .map((d) => ({ id: d.id, number: d.number, title: d.title }));
 }
@@ -720,7 +723,7 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
   const of = (m: Meeting) => db.decisions.filter((d) => d.meeting_id === m.id).sort(newestFirst);
   if (prd) shown = shown.filter((m) => m.prd === prd.slug || of(m).some(keep));
   else if (match) shown = shown.filter((m) => of(m).some(keep));
-  const others = meetingQ ? [] : db.decisions.filter((d) => !d.meeting_id && keep(d)).sort((a, b) => b.number - a.number);
+  const others = meetingQ ? [] : db.decisions.filter((d) => !d.meeting_id && product(d) && keep(d)).sort((a, b) => b.number - a.number);
   const out: Schemas["SimpleDecisionsOut"] = {
     meetings: shown.map((m) => {
       const whole = !!prd && !goal && m.prd === prd.slug;

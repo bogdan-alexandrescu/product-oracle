@@ -112304,6 +112304,17 @@
             "type": "boolean",
             "title": "Can Undo",
             "default": false
+          },
+          "words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Words"
           }
         },
         "type": "object",

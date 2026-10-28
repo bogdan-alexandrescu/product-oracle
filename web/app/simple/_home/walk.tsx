@@ -154,7 +154,7 @@ export function Walk({ onDone }: { onDone: () => void }) {
           {step.kind === "proposal" && step.change && (
             <div className="flex flex-col gap-2">
               <p className="simple-small">
-                {OP_WORDS[step.change.op] ?? step.change.op}
+                {OP_WORDS[step.change.op] ?? "A change"}
                 {(() => {
                   const ba = beforeAfter(step.change);
                   return ba ? `: ${ba.before} → ${ba.after}` : "";

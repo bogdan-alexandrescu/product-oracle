@@ -390,6 +390,9 @@ class SimpleChangeOut(BaseModel):
     # The caller may accept or decline this proposal / undo this change now.
     can_decide: bool = False
     can_undo: bool = False
+    # The walk (H2): the change in plain words, as Home's "Since your last visit" says it:
+    # "Ana changed the estimate of F-08 Billing page · undone" (oracle.simple.change_words).
+    words: str | None = None
 
 
 class SimpleItemFlags(BaseModel):
