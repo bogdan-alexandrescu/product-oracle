@@ -223,9 +223,27 @@ test.describe("chat-reader review", () => {
     await expect(last(chat).getByTestId("chat-message-body")).toHaveText("I could not tell what to change. Say it another way.");
   });
 
-  test("Ask: a line handed to Oracle's Ask leaves nothing in the plan thread, even one read slowly", async ({ page }) => {
-    // protects: a question the reader hands to Oracle's Ask shows neither the person's line nor "Asking Oracle…" in the plan thread; inside an Ask chat a line still being read after the first wait goes to Ask once the reader is done
-    // fails_when: the plan thread keeps "Asking Oracle…" and the line, or a slow line stays "Asking Oracle…" and never reaches Ask
+  test("Ask: a line handed to Oracle's Ask leaves nothing in the plan thread", async ({ page }) => {
+    // protects: a question the reader hands to Oracle's Ask shows neither the person's line nor "Asking Oracle…" in the plan thread (This page)
+    // fails_when: the plan thread keeps "Asking Oracle…" and the person's line
+    // no_claim: the model's Ask answer (the mock streams a canned reply)
+    await signIn(page, EMAILS.commenter, "/simple/roadmap");
+    const panel = await openAsk(page, false);
+    await say(panel, "why is Delivery pipeline v2 after the integrity work");
+    const discussion = panel.getByTestId("discussion-thread");
+    await expect(discussion.getByTestId("discussion-message").filter({ hasText: "why is Delivery pipeline v2 after the integrity work" })).toHaveCount(1);
+    await tap(panel.getByRole("button", { name: "New chat" }));
+    const thread = panel.getByTestId("ask-chat-thread");
+    await expect(thread).toBeVisible();
+    await say(panel, "can we push Delivery pipeline v2 out a quarter");
+    await expect(last(thread).getByTestId("chat-message-body")).toHaveText("I understood one change:");
+    await expect(thread.getByText("Asking Oracle…")).toHaveCount(0);
+    await expect(thread.getByText("why is Delivery pipeline v2 after the integrity work")).toHaveCount(0);
+  });
+
+  test("Ask chat: a line still being read after the first wait goes to Oracle's Ask when read", async ({ page }) => {
+    // protects: inside an Ask chat a line the reader is still reading after askInChat's first wait (20 polls) is handed to Oracle's Ask once the reader reads it as a question
+    // fails_when: the slow line stays "Asking Oracle…" and never reaches Ask
     // no_claim: the model's Ask answer (the mock streams a canned reply)
     test.setTimeout(150_000);
     await signIn(page, EMAILS.commenter, "/simple/roadmap");
@@ -233,16 +251,9 @@ test.describe("chat-reader review", () => {
     await say(panel, "why is Delivery pipeline v2 after the integrity work");
     const discussion = panel.getByTestId("discussion-thread");
     await expect(discussion.getByTestId("discussion-message").filter({ hasText: "why is Delivery pipeline v2 after the integrity work" })).toHaveCount(1);
-
-    await discussion.getByRole("textbox", { name: "Message" }).fill("slowly: why is Delivery pipeline v2 so late");
+    await discussion.getByRole("textbox", { name: "Message" }).fill("why is Delivery pipeline v2 moving so slowly");
     await tap(discussion.getByRole("button", { name: "Send" }));
-    await expect(discussion.getByTestId("discussion-message").filter({ hasText: "slowly: why is Delivery pipeline v2 so late" })).toHaveCount(1, { timeout: 90_000 });
+    await expect(discussion.getByTestId("discussion-message").filter({ hasText: "why is Delivery pipeline v2 moving so slowly" })).toHaveCount(1, { timeout: 90_000 });
     await expect(panel.getByText("Asking Oracle…")).toHaveCount(0);
-
-    await tap(panel.getByRole("button", { name: "New chat" }));
-    const thread = panel.getByTestId("ask-chat-thread");
-    await expect(thread).toBeVisible();
-    await expect(thread.getByText("Asking Oracle…")).toHaveCount(0);
-    await expect(thread.getByText("why is Delivery pipeline v2 after the integrity work")).toHaveCount(0);
   });
 });
