@@ -98,4 +98,7 @@ test("errors: a role refusal names who may act; a message reads as a sentence or
   expect(asSentence("reconciling needs a reason")).toBe("reconciling needs a reason");
   expect(asSentence("source_changed")).toBeNull();
   expect(asSentence("bad {json}")).toBeNull();
+  expect(asSentence("a dated milestone needs a verified estimate (basis_ids); Oracle never invents dates")).toBe(
+    "a dated milestone needs a verified estimate; Oracle never invents dates",
+  );
 });

@@ -144,8 +144,9 @@ export function roleRefusal(message: string): string | null {
 export function asSentence(message: string | null | undefined): string | null {
   // A field's name before its problem ("project_id: give the PostHog project id") is left out.
   const text = message?.trim().replace(/^[a-z]+[_.][a-z0-9_.]*: (?=\S)/, "") ?? "";
-  if (!/\s/.test(text) || /[{}]|\w_\w|^\w+:\S/.test(text)) return null;
-  return text;
+  if (!/\s/.test(text) || /[{}]/.test(text)) return null;
+  // A field's name in brackets inside the sentence ("(basis_ids)") is left out too.
+  return text.replace(/ \([a-z]+_[a-z0-9_]*\)/g, "");
 }
 
 export const SOMETHING_WENT_WRONG = "Something went wrong. Try again.";
