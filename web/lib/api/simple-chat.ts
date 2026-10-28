@@ -13,6 +13,27 @@ export type ChatPreview =
   | { kind: "cut"; item_id: string }
   | null;
 
+/**
+ * Chat actions' previews (no roadmap ghost: the card says what changes): an item's owner or
+ * decider, a decision, a minutes note or open question, and the meeting's agenda.
+ */
+export type ActionPreview =
+  | { kind: "owner" | "decider"; item_id: string; person_id: string; person_name: string; before_name: string | null }
+  | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page" }
+  | { kind: "note" | "question"; text: string }
+  | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string };
+
+/** A card's preview: a roadmap ghost (ChatPreview) or a chat action's description. */
+export type CardPreview = ChatPreview | ActionPreview;
+
+const ACTION_KINDS = new Set(["owner", "decider", "decision", "note", "question", "agenda"]);
+export const isActionPreview = (p: CardPreview): p is ActionPreview => !!p && ACTION_KINDS.has(p.kind);
+
+/** A meeting's live notes and open questions typed in its chat (SimpleMeetingOut.notes). */
+export type MeetingNote = { kind: "note" | "question"; text: string; by_name: string; card_id: string };
+/** A meeting's agenda changes made in its chat (SimpleMeetingOut.agenda). */
+export type MeetingAgenda = { next: { id: string; title: string } | null; skipped: { id: string; title: string }[] };
+
 export type ChatFix = { label: string; op: string; target: Record<string, unknown>; before: Record<string, unknown>; after: Record<string, unknown> };
 
 export type ChatCard = {
@@ -30,7 +51,7 @@ export type ChatCard = {
   why_not: string | null;
   flags: Schemas["SimpleItemFlags"][];
   fixes: ChatFix[];
-  preview: ChatPreview;
+  preview: CardPreview;
   flow: Schemas["SimpleFlow"] | null;
   change_id: string | null;
   decided_by_name: string | null;
@@ -76,6 +97,10 @@ export type WalkStep = {
   decision: { id: string; title: string; url: string } | null;
 };
 export type Walk = { steps: WalkStep[] };
+
+/** The chat actions' ops (restated as one change: "I understood one change:"). */
+export const ACTION_OPS = ["set_owner", "set_decider", "record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip"] as const;
+export type ActionOp = (typeof ACTION_OPS)[number];
 
 /** Ops that add or change a flow or a feature: their cards show the flow (or "No flow yet"). */
 export const FLOW_OPS = new Set(["add_feature_ask", "add_item_task"]);

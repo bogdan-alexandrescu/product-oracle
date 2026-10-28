@@ -34,6 +34,8 @@ import {
   draftChanges,
   GOALS,
   goalId,
+  itemDeciderId,
+  itemOwnerId,
   lookalikes,
   ownDates,
   ROADMAP_SLUGS,
@@ -99,6 +101,9 @@ const TARGETS: Record<string, { id: string; adds?: boolean }> = {
   // S9: a milestone typed in chat, and a new feature ask (targets.py set_milestone, add_feature_ask).
   set_milestone: { id: "item_id" },
   add_feature_ask: { id: "ask_id", adds: true },
+  // Chat actions: an item's owner or decider (stored by item id; simple-roadmap's itemOwnerId / itemDeciderId read them).
+  set_owner: { id: "item_id" },
+  set_decider: { id: "item_id" },
 };
 
 /** Roadmap-plus: a roadmap's key dates (api/oracle/simple/key_dates.py), into its working draft. */
@@ -370,7 +375,11 @@ function createTarget(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
   if (typeof after === "string") return json(422, { detail: after });
   const before: Values = ranking
     ? priorityBefore(db, keyOf(db, target.item_id)!, body.op, id)
-    : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
+    : (body.op as string) === "set_owner"
+      ? { owner_id: itemOwnerId(db, keyOf(db, target.item_id)!) }
+      : (body.op as string) === "set_decider"
+        ? { decider_id: itemDeciderId(db, keyOf(db, target.item_id)!, ctx.roles) }
+        : spec.adds ? {} : Object.fromEntries(Object.keys(body.before).map((k) => [k, stored[k] ?? null]));
   const seen = ranking ? Object.fromEntries(Object.keys(before).map((k) => [k, body.before[k] ?? null])) : body.before;
   if (!spec.adds && !same(before, seen)) return conflict(db, ctx, before, [id], "Changed since you saw it");
   const change: Change = {

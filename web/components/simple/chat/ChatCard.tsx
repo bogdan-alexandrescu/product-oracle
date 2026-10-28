@@ -4,10 +4,27 @@ import { useEffect, useState } from "react";
 
 import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
 import { api, unwrap } from "@/lib/api/client";
-import { applyCard, discardCard, FLOW_OPS, sendPreview, undoCard, type ChatCard as Card } from "@/lib/api/simple-chat";
+import { applyCard, discardCard, FLOW_OPS, isActionPreview, sendPreview, undoCard, type ActionPreview, type ChatCard as Card } from "@/lib/api/simple-chat";
 import { errorMessage } from "@/lib/use-query";
 
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
+
+/** A chat action's Preview in words: what Apply changes (it has no roadmap ghost). */
+export function actionWords(p: ActionPreview): string[] {
+  switch (p.kind) {
+    case "owner":
+    case "decider":
+      return [`${p.kind === "owner" ? "Owner" : "Decider"}: ${p.before_name ?? "none"} → ${p.person_name}`];
+    case "decision":
+      return [`Decision: ${p.text} — decided by ${p.decider_name}`, p.where === "meeting" ? "In this meeting's decisions" : "On the Decisions page"];
+    case "note":
+      return [`Adds to the minutes' notes: ${p.text}`];
+    case "question":
+      return [`Adds to the open questions: ${p.text}`];
+    case "agenda":
+      return [p.move === "next" ? `${p.item_title} is taken next` : `${p.item_title} is skipped`];
+  }
+}
 
 /**
  * One change card (Simple S9): what it changes, the constraint check as if applied (red, with
@@ -23,6 +40,8 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState(false);
+  // A chat action's Preview: its description, shown in the card.
+  const [described, setDescribed] = useState(false);
   const [wide, setWide] = useState(false);
   const [routedTo, setRoutedTo] = useState<string[] | null>(null);
   useEffect(
@@ -38,6 +57,7 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
     onChanged?.(c);
   };
   const stopPreview = () => {
+    setDescribed(false);
     if (previewing) {
       sendPreview({ card_id: card.id, preview: null });
       setPreviewing(false);
@@ -69,6 +89,7 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
 
   const open = card.status === "open";
   const label = card.may === "propose" ? "Propose" : "Apply";
+  const action = isActionPreview(card.preview) ? card.preview : null;
   const red = card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red").map((x) => ({ item: f.item_id, ...x })));
 
   return (
@@ -100,6 +121,15 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
           {wide && card.flow && <FlowDetail flow={card.flow} />}
         </div>
       )}
+      {open && described && action && (
+        <div className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-dashed border-line px-2 py-1.5 [overflow-wrap:anywhere]" data-testid="chat-card-preview" data-kind={action.kind}>
+          {actionWords(action).map((line, n) => (
+            <p key={n} className={n === 0 ? "simple-small text-text" : "simple-small text-text2"}>
+              {line}
+            </p>
+          ))}
+        </div>
+      )}
       {open && card.fixes.length > 0 && (
         <div className="flex min-w-0 flex-wrap gap-2" role="group" aria-label="Fixes">
           {card.fixes.map((f, n) => (
@@ -111,20 +141,26 @@ export function ChatCard({ card: initial, onChanged }: { card: Card; onChanged?:
       )}
       {open ? (
         <div className="flex flex-wrap items-center gap-2">
-          {card.preview && (
-            <button
-              type="button"
-              className="simple-button"
-              aria-pressed={previewing}
-              disabled={busy}
-              onClick={() => {
-                const next = !previewing;
-                sendPreview({ card_id: card.id, preview: next ? card.preview : null });
-                setPreviewing(next);
-              }}
-            >
-              {previewing ? "Hide preview" : "Preview"}
+          {action ? (
+            <button type="button" className="simple-button" aria-pressed={described} aria-expanded={described} disabled={busy} onClick={() => setDescribed((d) => !d)}>
+              {described ? "Hide preview" : "Preview"}
             </button>
+          ) : (
+            card.preview && (
+              <button
+                type="button"
+                className="simple-button"
+                aria-pressed={previewing}
+                disabled={busy}
+                onClick={() => {
+                  const next = !previewing;
+                  sendPreview({ card_id: card.id, preview: next ? (card.preview as Exclude<Card["preview"], ActionPreview>) : null });
+                  setPreviewing(next);
+                }}
+              >
+                {previewing ? "Hide preview" : "Preview"}
+              </button>
+            )
           )}
           <button type="button" className="simple-button simple-button-primary" disabled={busy || !card.may} onClick={() => void apply()} title={card.why_not ?? undefined}>
             {label}
