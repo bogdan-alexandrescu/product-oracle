@@ -12,7 +12,11 @@ import {
   closedItem,
   daysBetween,
   liveBreaks,
+  milestoneInk,
+  milestoneWords,
   ms,
+  planMilestones,
+  currentMilestone,
   quarters,
   rephase,
   quarterValue,
@@ -21,13 +25,14 @@ import {
   type Format,
   type GanttUnit,
   type Item,
+  type Lane,
   type Roadmap,
   type Scale,
   whereAttr,
 } from "./_lib";
 
 /** One row of the chart: a group's heading (its metric line) or an item. */
-export type Row = { kind: "group"; key: string; title: string; metric: string | null; below?: boolean } | { kind: "item"; item: Item; place?: number };
+export type Row = { kind: "group"; key: string; title: string; metric: string | null; below?: boolean; count?: number } | { kind: "item"; item: Item; place?: number };
 
 export interface Layout {
   rows: Row[];
@@ -42,7 +47,7 @@ const AXIS_H = 40;
 const LONG_PRESS_MS = 450;
 
 /** The rows: each group with its items (cut items below the line, in their return-queue order). */
-export function layout(data: Roadmap, compact: boolean): Layout {
+export function layout(data: Roadmap, compact: boolean, lane: Lane = data.group): Layout {
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const rows: Row[] = [];
   const below: Item[] = [];
@@ -52,7 +57,7 @@ export function layout(data: Roadmap, compact: boolean): Layout {
     below.push(...items.filter((i) => closedItem(i)));
     if (!live.length) continue;
     const metric = live.find((i) => i.goal?.metric)?.goal?.metric ?? null;
-    rows.push({ kind: "group", key: g.key, title: g.title, metric: data.group === "goal" ? metric : null });
+    rows.push({ kind: "group", key: g.key, title: g.title, metric: lane === "goal" ? metric : null, count: live.length });
     for (const item of live) rows.push({ kind: "item", item });
   }
   if (below.length) {
@@ -78,12 +83,13 @@ export const PHASES: { key: Item["phases"][number]["key"]; label: string; ink: s
 
 /** The chart's span and pixels per day: the timeline and the waterfall fit their quarters to
  * the width; the Gantt is a day or week scale around the items, scrolling sideways. */
-export function chartScale(data: Roadmap, format: Format, unit: GanttUnit, width: number): { scale: Scale; ticks: { day: string; label: string; major: boolean }[] } {
+export function chartScale(data: Roadmap, format: Format, unit: GanttUnit, width: number, weeks = false): { scale: Scale; ticks: { day: string; label: string; major: boolean }[] } {
   const starts = data.items.map((i) => i.start.date).concat(data.today);
   const ends = data.items.map((i) => i.end.date).concat(data.today);
   const lo = starts.reduce((a, b) => (a < b ? a : b));
   const hi = ends.reduce((a, b) => (a > b ? a : b));
-  if (format !== "gantt") {
+  if (weeks) unit = "week";
+  if (format !== "gantt" && !weeks) {
     const qs = quarters(lo < data.windows.now.start ? lo : data.windows.now.start, hi);
     const s = qs[0].start;
     const e = qs[qs.length - 1].end;
@@ -130,7 +136,20 @@ export interface ChartProps {
   /** S7: a goal header's suggested-features button (group by goal): the count of open suggestions by goal id. */
   goalSuggestions?: Map<string, number>;
   onGoal?: (goalId: string, title: string) => void;
+  /** roadmap-gantt: what the rows sit under (the data's groups are already these lanes). */
+  lane?: Lane;
+  /** The plan's no-work weeks (holidays), drawn grey. */
+  noWork?: { start: string; end: string; label?: string | null }[];
 }
+
+/** An item the plan dates by its slices: drawn one bar per slice, its dates the plan's (not dragged). */
+const planned = (i: Item): boolean => i.slices.some((x) => x.start_date && x.end_date);
+/** A milestone's code from its name ("M2 · Scale volume": "M2"). */
+const codeOf = (name: string): string => name.split(/[\s·]/)[0];
+
+const LANE_WORDS: Record<Lane, string> = { goal: "Goal", milestone: "Milestone", track: "Track", prd: "PRD" };
+/** A goal lane the API names (its key is a goal's id): quick add and the suggestions button work on it. */
+const goalLane = (key: string) => key !== "none" && !key.startsWith("plan-goal:");
 
 type Drag = {
   id: string;
@@ -156,7 +175,7 @@ declare global {
   }
 }
 
-export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, goalSuggestions, onGoal }: ChartProps) {
+export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpen, onMove, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion, overlay, chartRef, dropTargets, goalSuggestions, onGoal, lane = data.group, noWork = [] }: ChartProps) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(900);
   useEffect(() => {
@@ -166,8 +185,21 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  const l = useMemo(() => layout(data, compact), [data, compact]);
-  const { scale: sc, ticks } = useMemo(() => chartScale(data, format, unit, width), [data, format, unit, width]);
+  const l = useMemo(() => layout(data, compact, lane), [data, compact, lane]);
+  // A phone's chart of planned work scrolls sideways by weeks (the names stay pinned on the left).
+  const weeks = compact && format !== "waterfall" && data.items.some((i) => i.slices.length > 0);
+  const { scale: sc, ticks } = useMemo(() => chartScale(data, format, unit, width, weeks), [data, format, unit, width, weeks]);
+  const axisFormat: Format = weeks ? "gantt" : format;
+  // The current milestone scrolled into view once per format (where the chart scrolls).
+  const scrolled = useRef("");
+  const current = currentMilestone(data);
+  useEffect(() => {
+    const el = box.current;
+    const key = `${format}:${unit}:${weeks}`;
+    if (!el || !current?.start_date || scrolled.current === key || !(weeks || format === "gantt") || !compact) return;
+    scrolled.current = key;
+    el.scrollLeft = Math.max(0, sc.x(current.start_date) - 16);
+  }, [format, unit, weeks, compact, current, sc]);
   const items = useMemo(() => new Map(data.items.map((i) => [i.id, i])), [data]);
   const svg = useRef<SVGSVGElement | null>(null);
   const live = useRef<HTMLDivElement>(null);
@@ -232,13 +264,13 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     const r = (e.currentTarget.querySelector("rect[data-body]") as SVGRectElement).getBoundingClientRect();
     const edge = Math.min(10, r.width / 4);
     // The waterfall moves the whole item (its phases follow); the timeline and Gantt also stretch an end.
-    const mode = !canDrag || closedItem(item) || format === "waterfall" ? "move" : e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
+    const mode = !canDrag || closedItem(item) || planned(item) || format === "waterfall" ? "move" : e.clientX - r.left < edge ? "start" : r.right - e.clientX < edge ? "end" : "move";
     const touch = e.pointerType === "touch";
     // React clears currentTarget once the handler returns: keep the bar for the timeout.
     const target = e.currentTarget;
     const d: Drag = { id: item.id, mode, x0: e.clientX, start, end, dx: 0, moved: false, frame: null, pointer: e.pointerId, touch, armed: !touch, timer: null };
     drag.current = d;
-    if (touch && canDrag && !closedItem(item)) {
+    if (touch && canDrag && !closedItem(item) && !planned(item)) {
       // Phone: a long press picks the bar up; moving first scrolls.
       d.timer = window.setTimeout(() => {
         begin(d);
@@ -259,7 +291,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       }
       return;
     }
-    if (!canDrag || (items.get(d.id) && closedItem(items.get(d.id)!))) return;
+    const it0 = items.get(d.id);
+    if (!canDrag || (it0 && (closedItem(it0) || planned(it0)))) return;
     if (!d.moved && Math.abs(dx) < 4) return;
     e.preventDefault();
     if (!d.moved) {
@@ -309,7 +342,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   // week; Shift+arrow moves only its end. Each press builds on the last one's local move;
   // the burst is one change (onKeyMove's caller sends it on a pause or blur).
   const keyMove = (it: Item, dir: 1 | -1, resize: boolean) => {
-    if (!canDrag || closedItem(it)) return;
+    if (!canDrag || closedItem(it) || planned(it)) return;
     const [s, e] = moved[it.id] ?? barSpan(it);
     // The waterfall moves the whole item: Shift+arrow moves it too.
     if (format === "waterfall") resize = false;
@@ -338,30 +371,37 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   const today = sc.x(data.today);
   const chartW = sc.width;
   return (
-    <div className="flex border border-line bg-surface" data-testid="simple-chart" data-format={format} data-unit={format === "gantt" ? unit : undefined}>
+    <div className="flex border border-line bg-surface" data-testid="simple-chart" data-format={format} data-unit={format === "gantt" ? unit : undefined} data-weeks={weeks ? "true" : undefined}>
       <div className="flex-none border-r border-line" style={{ width: l.labelW }} data-testid="chart-labels">
         <div style={{ height: l.top }} className="flex items-end px-3 pb-1 text-xs font-semibold tracking-wide text-text2 uppercase">
-          {data.group === "goal" ? "Goal" : data.group === "track" ? "Track" : "PRD"}
+          {LANE_WORDS[lane]}
         </div>
         {l.rows.map((r, n) =>
           r.kind === "group" ? (
             <div
               key={`g-${r.key}-${n}`}
               data-testid={r.below ? "below-the-line" : "chart-group"}
-              data-add-where={dropTargets && data.group === "goal" && !r.below && r.key !== "none" ? whereAttr("goal", r.key) : undefined}
+              data-add-where={dropTargets && lane === "goal" && !r.below && goalLane(r.key) ? whereAttr("goal", r.key) : undefined}
               data-add-label={r.title}
               style={{ height: l.rowH }}
               className={`flex items-center gap-1 truncate bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
             >
               <span className="flex min-w-0 flex-1 flex-col justify-center">
-                <span className="truncate text-[15px] leading-tight font-semibold">{r.title}</span>
+                <span className="flex min-w-0 items-baseline gap-2">
+                  <span className="truncate text-[15px] leading-tight font-semibold">{r.title}</span>
+                  {r.count != null && !r.below && (
+                    <span className="tnum flex-none text-xs text-text2" data-testid="lane-count">
+                      {r.count} {r.count === 1 ? "item" : "items"}
+                    </span>
+                  )}
+                </span>
                 {r.metric && (
                   <span className="truncate text-xs text-text2" data-testid="group-metric">
                     {r.metric}
                   </span>
                 )}
               </span>
-              {onGoal && data.group === "goal" && !r.below && r.key !== "none" && (
+              {onGoal && lane === "goal" && !r.below && goalLane(r.key) && (
                 <button
                   type="button"
                   data-testid="goal-suggestions-open"
@@ -438,12 +478,43 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               </marker>
             </defs>
             <rect x={0} y={0} width={chartW} height={l.height} fill="var(--surface)" />
-            <Axis ticks={ticks} sc={sc} height={l.height} format={format} drop={!!dropTargets && format !== "gantt"} />
+            <Axis ticks={ticks} sc={sc} height={l.height} format={axisFormat} drop={!!dropTargets && axisFormat !== "gantt"} />
+            {noWork.map((h) => (
+              <rect
+                key={h.start}
+                data-testid="no-work"
+                data-start={h.start}
+                data-end={h.end}
+                x={sc.x(h.start)}
+                y={l.top}
+                width={Math.max(sc.px, sc.x(h.end) - sc.x(h.start) + sc.px)}
+                height={l.height - l.top}
+                fill="var(--na)"
+                opacity={0.16}
+                pointerEvents="none"
+              >
+                <title>{`${h.label || "No-work week"}: ${shortDay(h.start)} – ${shortDay(h.end)}`}</title>
+              </rect>
+            ))}
             {l.rows.map((r, n) =>
               r.kind === "group" ? <rect key={`gb-${n}`} x={0} y={l.top + n * l.rowH} width={chartW} height={l.rowH} fill="var(--surface2)" /> : null,
             )}
+            {planMilestones(data).map((m) => {
+              const mx = sc.x(m.end_date!) + sc.px;
+              const words = `${milestoneWords(m.name)} ends ${shortDay(m.end_date!)}`;
+              return (
+                <g key={m.id} data-testid="milestone-end" data-date={m.end_date!} role="img" aria-label={words} pointerEvents="none">
+                  <title>{words}</title>
+                  <line data-testid="milestone-end-line" x1={mx} x2={mx} y1={l.top - 4} y2={l.height} stroke="var(--text2)" strokeWidth={1} strokeDasharray="5 4" opacity={0.8} />
+                  <rect x={mx - 6} y={l.top - 16} width={12} height={12} transform={`rotate(45 ${mx} ${l.top - 10})`} fill={milestoneInk(codeOf(m.name))} stroke="var(--surface)" />
+                  <text x={mx + 9} y={l.top - 6} fontSize={11} fontWeight={600} fill="var(--text2)">
+                    {codeOf(m.name)}
+                  </text>
+                </g>
+              );
+            })}
             {data.milestones
-              .filter((m) => m.date)
+              .filter((m) => m.date && !(m.start_date && m.end_date))
               .map((m) => (
                 <g key={m.id} data-testid="track-milestone" transform={`translate(${sc.x(m.date!)}, ${l.top - 10})`}>
                   <rect x={-5} y={-5} width={10} height={10} transform="rotate(45)" fill="var(--warn)" />
@@ -600,7 +671,9 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
   // A moved bar's phases as the API will work them out again (dated gates stay).
   const phases = phased && span ? rephase(item, start, end) : item.phases;
   const phaseWords = phased ? `, ${phases.map((p) => `${p.key} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${canDrag && !closedItem(item) ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  const sliced = !phased && planned(item);
+  const fixed = closedItem(item) || planned(item);
+  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
   return (
     <g>
       <g
@@ -616,8 +689,8 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
         role="button"
         tabIndex={0}
         aria-label={label}
-        className={`${canDrag && !closedItem(item) ? "cursor-grab" : "cursor-pointer"} data-[picked=true]:[filter:drop-shadow(0_3px_6px_rgb(0_0_0/0.35))]`}
-        style={{ touchAction: canDrag ? "none" : "auto" }}
+        className={`${canDrag && !fixed ? "cursor-grab" : "cursor-pointer"} data-[picked=true]:[filter:drop-shadow(0_3px_6px_rgb(0_0_0/0.35))]`}
+        style={{ touchAction: canDrag && !fixed ? "none" : "auto" }}
         onPointerDown={(e) => onDown(e, item)}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -660,12 +733,13 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
           width={w}
           height={h - 2 * pad}
           rx={5}
-          fill={phased ? "transparent" : fill}
-          stroke={stroke}
+          fill={phased || sliced ? "transparent" : fill}
+          stroke={sliced ? (open || red || amber ? stroke : "none") : stroke}
           strokeWidth={red || amber || open ? 2.5 : 1.25}
           strokeDasharray={kind === "draft" ? "6 4" : undefined}
         />
-        {item.milestone?.date && (
+        {sliced && <Slices item={item} y={y + pad} h={h - 2 * pad} sc={sc} />}
+        {item.milestone?.date && !sliced && (
           <rect
             data-testid="item-milestone"
             x={sc.x(item.milestone.date) - 5}
@@ -719,6 +793,53 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
     </g>
   );
 });
+
+/** roadmap-gantt: a planned item's slices, one bar each on its row, coloured by milestone,
+ * labelled with code and name where the words fit, joined by a dotted line. */
+function Slices({ item, y, h, sc }: { item: Item; y: number; h: number; sc: Scale }) {
+  const dated = item.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : 1));
+  const feature = dated[0]?.feature_code ?? item.code ?? item.key;
+  const box = (x: (typeof dated)[number]) => ({ x: sc.x(x.start_date!), w: Math.max(sc.px, sc.x(x.end_date!) - sc.x(x.start_date!) + sc.px) });
+  return (
+    <g>
+      {dated.slice(1).map((x, n) => {
+        const a = box(dated[n]);
+        const b = box(x);
+        return (
+          <line
+            key={`link-${x.code}`}
+            data-testid="slice-connector"
+            data-feature={feature}
+            x1={a.x + a.w}
+            x2={Math.max(a.x + a.w, b.x)}
+            y1={y + h / 2}
+            y2={y + h / 2}
+            stroke="var(--text2)"
+            strokeWidth={1.5}
+            strokeDasharray="2 3"
+          />
+        );
+      })}
+      {dated.map((x) => {
+        const b = box(x);
+        const ink = milestoneInk(x.milestone);
+        const words = `${x.code} ${x.name}`;
+        const fits = words.length * 6.6 + 12 <= b.w;
+        return (
+          <g key={x.code} data-testid="slice-bar" data-code={x.code} data-milestone={x.milestone} data-start={x.start_date!} data-end={x.end_date!} data-colour={ink} data-estimated={x.estimated ? "true" : "false"}>
+            <title>{`${words} · ${x.milestone} ${x.milestone_name} · ${shortDay(x.start_date!)} – ${shortDay(x.end_date!)}${x.pm_owned || x.effort_weeks == null ? " · PM-owned" : ` · ${x.effort_weeks} engineer-weeks`}${x.estimated ? " · placed by Oracle" : ""}`}</title>
+            <rect data-slice-body x={b.x} y={y} width={b.w} height={h} rx={4} fill={ink} />
+            {fits && (
+              <text data-testid="slice-label" x={b.x + 6} y={y + h / 2 + 4} fontSize={11} fontWeight={600} fill="var(--on-accent)" pointerEvents="none">
+                {words}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
 
 /** S9: a chat card's Preview, ghosted on its bar ("simple:preview"): new dates, horizon, title, milestone, or a cut strike. */
 function PreviewGhost({ l, sc, items }: { l: Layout; sc: Scale; items: Map<string, Item> }) {

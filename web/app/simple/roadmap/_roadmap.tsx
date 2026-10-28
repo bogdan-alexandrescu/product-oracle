@@ -24,6 +24,7 @@ import {
   ChangeFailed,
   closedItem,
   decide,
+  lanes,
   nearWords,
   propose,
   quarters,
@@ -39,6 +40,7 @@ import {
   type Format,
   type GanttUnit,
   type Item,
+  type Lane,
   type Roadmap,
   type Where,
 } from "./_lib";
@@ -60,8 +62,7 @@ async function brandOf(): Promise<Brand | null> {
   }
 }
 
-type Group = Roadmap["group"];
-type Filters = { group: Group; roadmap: string; prd: string; goal: string; track: string; from: string; to: string };
+type Filters = { group: Lane; roadmap: string; prd: string; goal: string; track: string; from: string; to: string };
 const NO_FILTERS: Filters = { group: "goal", roadmap: "", prd: "", goal: "", track: "", from: "", to: "" };
 
 const PHONE = "(max-width: 640px)";
@@ -376,7 +377,8 @@ export function SimpleRoadmap() {
   const svg = useRef<SVGSVGElement | null>(null);
 
   const qs = useMemo(() => {
-    const q: Record<string, string> = { group: f.group };
+    // Group by Milestone reads the goal grouping and regroups by the items' slices (lanes()).
+    const q: Record<string, string> = { group: f.group === "milestone" ? "goal" : f.group };
     for (const k of ["roadmap", "prd", "goal", "track", "from", "to"] as const) if (f[k]) q[k] = f[k];
     return q;
   }, [f]);
@@ -449,6 +451,11 @@ export function SimpleRoadmap() {
 
   // The filters' choices: every PRD, goal and track seen, so narrowing keeps the others.
   const data = roadmap.data;
+  // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
+  const laned = useMemo(() => (data ? lanes(data, f.group) : null), [data, f.group]);
+  const planPrds = useMemo(() => [...new Set((data?.items ?? []).flatMap((i) => (i.slices.length && i.prd ? [i.prd.slug] : [])))].sort(), [data]);
+  const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, () => Promise.all(planPrds.map((prd) => unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd } } })))));
+  const noWork = useMemo(() => [...new Map((plans.data ?? []).flatMap((p) => p.holidays).map((h) => [h.start, h])).values()], [plans.data]);
   const [seen, setSeen] = useState<{ of: Roadmap | null; prd: [string, string][]; goal: [string, string][]; track: [string, string][] }>({ of: null, prd: [], goal: [], track: [] });
   if (data && seen.of !== data) {
     const add = (list: [string, string][], pairs: [string, string][]) => [...new Map([...list, ...pairs])];
@@ -788,13 +795,14 @@ export function SimpleRoadmap() {
         <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
         <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setF({ ...f, from })} />
         <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setF({ ...f, to })} />
-        <SegmentedControl<Group>
+        <SegmentedControl<Lane>
           label="Group by"
           size="sm"
           value={f.group}
           onChange={(group) => setF({ ...f, group })}
           items={[
             { value: "goal", label: "Goal", testId: "group-goal" },
+            { value: "milestone", label: "Milestone", testId: "group-milestone" },
             { value: "track", label: "Track", testId: "group-track" },
             { value: "prd", label: "PRD", testId: "group-prd" },
           ]}
@@ -835,7 +843,9 @@ export function SimpleRoadmap() {
           />
         ) : (
           <Chart
-            data={data}
+            data={laned ?? data}
+            lane={f.group}
+            noWork={noWork}
             format={format}
             unit={unit}
             compact={phone}

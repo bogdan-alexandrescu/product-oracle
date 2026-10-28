@@ -10,7 +10,7 @@ import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
 import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
-import { shortDay, sourceWord, storedDates, type Change, type Flag, type Item } from "./_lib";
+import { milestoneInk, shortDay, sourceWord, storedDates, type Change, type Flag, type Item } from "./_lib";
 
 /** What a change asks the engine, built by the page and sent through `act`. */
 export type Act = (what: string, body: Parameters<typeof import("./_lib").propose>[0]) => Promise<void>;
@@ -377,6 +377,33 @@ export function FloatingCard({
           <dd data-testid="card-owner">{item.owner?.name ?? <span className="text-text2">No owner yet</span>}</dd>
           <dt className="text-text2">Dates</dt>
           <dd data-testid="card-dates">{dates}</dd>
+          {item.slices.length > 0 && (
+            <>
+              <dt className="text-text2">Milestone</dt>
+              <dd data-testid="card-milestone">{[...new Map(item.slices.map((x) => [x.milestone, `${x.milestone} ${x.milestone_name}`])).values()].join(", ")}</dd>
+              <dt className="text-text2">Slices</dt>
+              <dd>
+                <ul className="space-y-1" data-testid="card-slices">
+                  {item.slices.map((x) => (
+                    <li key={x.code} data-testid="card-slice" className="flex gap-2">
+                      <span aria-hidden className="mt-1.5 h-2.5 w-2.5 flex-none rounded-sm" style={{ background: milestoneInk(x.milestone) }} />
+                      <span>
+                        <b className="font-semibold">
+                          {x.code} {x.name}
+                        </b>
+                        <span className="block text-sm text-text2">
+                          {x.milestone} {x.milestone_name}
+                          {x.start_date && x.end_date ? ` · ${shortDay(x.start_date)} – ${shortDay(x.end_date)}` : " · not dated yet"}
+                          {x.pm_owned || x.effort_weeks == null ? " · PM-owned" : ` · ${x.effort_weeks} engineer-week${x.effort_weeks === 1 ? "" : "s"}`}
+                          {x.estimated ? " · placed by Oracle" : ""}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </>
+          )}
           {near && (
             <>
               <dt className="text-text2">Near</dt>

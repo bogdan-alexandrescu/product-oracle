@@ -242,3 +242,63 @@ export function quarterValue(start: string): string {
 /** S7: where a quick-added item goes: a quarter, a horizon or a goal (data-add-where="kind:value"). */
 export type Where = { kind: "quarter" | "horizon" | "goal"; value: string; label: string };
 export const whereAttr = (kind: Where["kind"], value: string): string => `${kind}:${value}`;
+
+/** roadmap-gantt: what the rows sit under (Goal by default; Milestone is read from the items' slices). */
+export type Lane = "goal" | "milestone" | "track" | "prd";
+export type Slice = Schemas["SimpleSlice"];
+export type Milestone = Roadmap["milestones"][number];
+
+/** A milestone's colour, by its code (M1, M2, M3, then round again). */
+const MILESTONE_INKS = ["var(--accent)", "var(--pass)", "var(--warn)", "var(--na)"];
+export function milestoneInk(code: string): string {
+  const n = Number(code.replace(/\D/g, "")) || 1;
+  return MILESTONE_INKS[(n - 1) % MILESTONE_INKS.length];
+}
+
+/** A milestone's words, its code with its name ("M2 Scale volume", never "M2 · Scale volume"). */
+export const milestoneWords = (name: string): string => name.replace(/\s*·\s*/, " ");
+
+/** The plan's dated milestones (a start and an end), in date order. */
+export const planMilestones = (data: Roadmap): Milestone[] =>
+  data.milestones.filter((m) => m.start_date && m.end_date).sort((a, b) => (a.end_date! < b.end_date! ? -1 : 1));
+
+/** The milestone a person is in now: the one running today, else the next one, else the last. */
+export function currentMilestone(data: Roadmap): Milestone | null {
+  const list = planMilestones(data);
+  return list.find((m) => m.end_date! >= data.today) ?? list.at(-1) ?? null;
+}
+
+/**
+ * The rows' lanes. Goal: the API's goal groups, an item with no goal of its own going under the
+ * goal its plan slices move most (one lane per goal, "No goal" last); Milestone: an item under
+ * the milestone of its first slice, in code order ("No milestone" last); Track and PRD: the API's.
+ */
+export function lanes(data: Roadmap, by: Lane): Roadmap {
+  if (by === "track" || by === "prd") return data;
+  const byId = new Map(data.items.map((i) => [i.id, i]));
+  const out = new Map<string, { key: string; title: string; item_ids: string[] }>();
+  const put = (key: string, title: string, id: string) => {
+    const g = out.get(key) ?? { key, title, item_ids: [] };
+    g.item_ids.push(id);
+    out.set(key, g);
+  };
+  if (by === "goal") {
+    for (const g of data.groups)
+      for (const id of g.item_ids) {
+        const goal = g.key === "none" ? byId.get(id)?.slices.find((x) => x.goal)?.goal : null;
+        if (goal) put(`plan-goal:${goal}`, goal, id);
+        else put(g.key, g.title, id);
+      }
+  } else {
+    for (const g of data.groups)
+      for (const id of g.item_ids) {
+        const first = byId.get(id)?.slices[0];
+        if (first) put(`milestone:${first.milestone}`, `${first.milestone} ${first.milestone_name}`, id);
+        else put("none", "No milestone", id);
+      }
+  }
+  const groups = [...out.values()];
+  if (by === "milestone") groups.sort((a, b) => (a.key === "none" ? 1 : b.key === "none" ? -1 : a.key.localeCompare(b.key, undefined, { numeric: true })));
+  else groups.sort((a, b) => Number(a.key === "none") - Number(b.key === "none"));
+  return { ...data, groups };
+}
