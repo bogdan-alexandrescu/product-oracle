@@ -42,7 +42,7 @@ test("autonomy: at Act Oracle decides a reversible call and Undo hands it back",
   await setLevel(page, "decisions", "Decide reversible calls", "Act");
   await signOutAndIn(page, APPROVER);
   await page.goto("/company/decisions");
-  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^All/ }).click();
+  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^Any state/ }).click();
   await page.getByTestId("decision-row").filter({ hasText: "Ship usage caps before anomaly detection" }).click();
   const inspector = page.getByTestId("decision-inspector").filter({ visible: true });
   await inspector.getByRole("button", { name: "Ask Oracle for options" }).click();
@@ -58,7 +58,7 @@ test("autonomy: at Act Oracle decides a reversible call and Undo hands it back",
   await expect(did).toHaveCount(0);
 
   await page.goto("/company/decisions");
-  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^All/ }).click();
+  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^Any state/ }).click();
   const calls = page.getByTestId("decision-row").filter({ hasText: "Ship usage caps before anomaly detection" });
   await expect(calls).toHaveCount(2);
   await calls.filter({ hasText: /Proposed|Needs/ }).first().click();
