@@ -76,6 +76,7 @@ for (const theme of ["light", "dark"] as const) {
       // One ring: Tab from the body to Cancel (outline) and on to Add entry (filled).
       const ring = (b: Locator) =>
         b.evaluate((el) => {
+          el.getAnimations().forEach((a) => a.finish());
           const s = getComputedStyle(el);
           return `${s.outlineStyle} ${s.outlineWidth} ${s.outlineColor} ${s.outlineOffset}`;
         });

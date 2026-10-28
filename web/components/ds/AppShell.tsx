@@ -553,6 +553,8 @@ function PhoneHeader() {
   const pathname = usePathname();
   const { me } = useMe();
   const { title } = usePageTitle(pathname);
+  // The section from the path waits for hydration too (qa-shell-24, see usePageTitle).
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
   const info = usePageInfo();
   const [ask, setAsk] = useState(false);
   const [askPath, setAskPath] = useState(pathname);
@@ -571,7 +573,7 @@ function PhoneHeader() {
       </Link>
       <span className="flex min-w-0 flex-1 items-center gap-2">
         <p data-testid="phone-title" className="min-w-0 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
-          {sectionOf(pathname) ?? title}
+          {(hydrated && sectionOf(pathname)) || title}
         </p>
         {info && (
           <span
