@@ -89,16 +89,22 @@ export function StartDiscussion({
         onChange={(e) => setTitle(e.target.value)}
         className={`${TEXTAREA} -mt-2 h-9`}
       />
-      <SegmentedControl<"open" | "private">
-        label="Who can read it"
-        size="sm"
-        value={visibility}
-        onChange={setVisibility}
-        items={[
-          { value: "open", label: "Open" },
-          { value: "private", label: "Private" },
-        ]}
-      />
+      {/* qa-docs-52: the choice says who can see it. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span aria-hidden className="text-sm font-semibold text-text2">
+          Visible to
+        </span>
+        <SegmentedControl<"open" | "private">
+          label="Visible to"
+          size="sm"
+          value={visibility}
+          onChange={setVisibility}
+          items={[
+            { value: "open", label: "Everyone" },
+            { value: "private", label: "Only people I pick" },
+          ]}
+        />
+      </div>
       {visibility === "private" ? (
         <div className="flex min-w-0 flex-col gap-2">
           <p className="text-sm leading-5 text-text2">Only the people you pick can read it. Everyone else sees that a private discussion exists.</p>
@@ -152,8 +158,10 @@ export function StartDiscussion({
             Cancel
           </Button>
         )}
-        <label className="inline-flex items-center gap-1.5 text-sm text-text">
-          <input type="checkbox" checked={askOracle} onChange={(e) => setAskOracle(e.target.checked)} />
+        {/* qa-docs-52: the hint follows the box. Alone in it, Oracle answers the first message
+            anyway (#402), so the box shows ticked and fixed. */}
+        <label className="inline-flex items-center gap-1.5 text-sm text-text" title={solo ? "Oracle answers the first message while you are the only one in it" : undefined}>
+          <input type="checkbox" checked={solo || askOracle} disabled={solo} onChange={(e) => setAskOracle(e.target.checked)} />
           Ask Oracle
         </label>
         <span className="text-[13px] text-text2" data-testid="oracle-rule">

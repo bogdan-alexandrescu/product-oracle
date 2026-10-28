@@ -128,7 +128,22 @@ export function BeforeDrafting({ id }: { id: string }) {
 
   // #482: owners delete a brief (and the PRD it became) to Trash.
   const mayDelete = can("delete_intake");
-  const inspector = <IntakeInspector summary={s} role={role} onChanged={changed} />;
+  // qa-docs-19: an open critical question in the inspector opens its bubble in the thread.
+  const questionFor = (gapId: string) => batchesQ.data?.flatMap((b) => b.questions).find((c) => c.question.gap_id === gapId)?.question.id ?? null;
+  const answer = (questionId: string) => {
+    setSheet(false);
+    setTab("questions");
+    window.setTimeout(() => {
+      const li = document.getElementById(`q-${questionId}`);
+      li?.scrollIntoView({ block: "center" });
+      const button = [...(li?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find((b) => b.textContent?.trim() === "Answer");
+      if (button) return button.focus();
+      // Asked of someone else: the question itself takes the focus.
+      li?.setAttribute("tabindex", "-1");
+      li?.focus();
+    }, 50);
+  };
+  const inspector = <IntakeInspector summary={s} role={role} onChanged={changed} questionFor={questionFor} onAnswer={answer} />;
   const live = !converted && (mayAnalyze || mayRepin || (mayArchive && !archived));
   // qa-docs-65: one ⋯ menu holds every secondary action, Delete… last.
   const more = (live || mayDelete) && (

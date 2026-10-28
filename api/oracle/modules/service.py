@@ -481,6 +481,7 @@ async def build(
         origins=catalog.origins(),
         unavailable={k for k, e in catalog.entries.items() if e.archived},
         packs=packs,
+        pack_titles={pid: known[pid].title for pid in pack_ids},
         template_key=template.key if template else None,
         template_version=str(template_version.version) if template_version else None,
         template_sections=sections,

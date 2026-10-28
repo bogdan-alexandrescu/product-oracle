@@ -763,7 +763,10 @@ export async function routePublicShares(ctx: SharesContext, req: Request, p: str
   if (p[4] === "status" && m === "GET") {
     if (!open) return json(200, { state: "locked" });
     // allow_download only once the passcode opened the link (owner decision 2026-10-26).
-    return json(200, { state: state(link!, at) === "active" ? "active" : "ended", allow_download: link!.allow_download });
+    if (state(link!, at) !== "active") return json(200, { state: "ended", allow_download: link!.allow_download });
+    // qa-docs-71: as the API, an active link also names its roadmap, the company and its end.
+    const doc = ctx.documents.find((d) => d.id === link!.document_id);
+    return json(200, { state: "active", allow_download: link!.allow_download, title: doc?.title ?? null, shared_by: ctx.company, expires_at: link!.expires_at });
   }
   if (!open) return p[4] === "pdf" ? json(404, { reason: "not_found" }) : html(401, page("Enter the passcode", "<h1>Enter the passcode</h1>"));
   if (state(link!, at) !== "active") return html(410, page("Link ended", `<p>${esc(ENDED)}</p>`));

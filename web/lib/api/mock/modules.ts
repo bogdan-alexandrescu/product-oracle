@@ -95,6 +95,7 @@ function mod(
 }
 
 const BOTH = [PACK_A, PACK_B];
+const PACK_TITLE: Record<string, string> = { [PACK_A]: "General Tech Startup", [PACK_B]: "Multi-tenant AI Agent Platform" };
 
 export function seedModules(documentId: string | null, userId: string): ModulesDb {
   const catalog: Catalog[] = [
@@ -234,7 +235,8 @@ function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, 
     .sort((a, b) => Number(a.contract.display_order) - Number(b.contract.display_order))
     .map((c, i) => {
       if (c.policy === "required" || db.policy.required.includes(c.key)) {
-        return composed(c, true, "mandatory", `Mandatory in pack ${pack}.`, (i + 1) * 10);
+        // As the API: the pack by its title.
+        return composed(c, true, "mandatory", `Mandatory in the ${PACK_TITLE[pack] ?? pack} pack.`, (i + 1) * 10);
       }
       const held = caps.includes(hints[c.key] ?? "");
       const out = held
@@ -685,6 +687,8 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       const fatal = problems.filter((x) => x.fatal);
       if (fatal.length) return json(422, { detail: fatal[0].message, problems: fatal });
       rec.summary = summary(rec.modules);
+      // As the API: the outline keeps the template's sections, the brief among them.
+      rec.outline = templateOutline(db, rec, doc.sections);
       const status = data.status ?? "confirmed";
       if (status === "confirmed") {
         // Confirming supersedes the revision in force and any drafts; a working save

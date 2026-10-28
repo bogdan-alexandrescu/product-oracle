@@ -32,16 +32,23 @@ function useNames() {
 
 export function CatalogFacts({ e }: { e: Entry }) {
   const names = useNames();
-  const list = (xs: (string | null)[]) => {
+  // Names under their label, wrapping: a long list never squeezes the label to nothing.
+  const list = (label: string, xs: (string | null)[]) => {
     const shown = xs.filter((x): x is string => !!x);
-    return shown.length ? <span className="font-normal whitespace-normal [overflow-wrap:anywhere]">{shown.join(", ")}</span> : "None";
+    if (!shown.length) return <InspectorRow value="None">{label}</InspectorRow>;
+    return (
+      <div className="py-1.5">
+        <p>{label}</p>
+        <p className="font-semibold [overflow-wrap:anywhere]">{shown.join(", ")}</p>
+      </div>
+    );
   };
   return (
     <>
       <InspectorSection label="Catalog facts">
-        <InspectorRow value={list(e.applies_to.map(names.pack))}>Applies to packs</InspectorRow>
-        <InspectorRow value={list(e.depends_on.map(names.module))}>Depends on</InspectorRow>
-        <InspectorRow value={list(e.conflicts_with.map(names.module))}>Conflicts with</InspectorRow>
+        {list("Applies to packs", e.applies_to.map(names.pack))}
+        {list("Depends on", e.depends_on.map(names.module))}
+        {list("Conflicts with", e.conflicts_with.map(names.module))}
         <InspectorRow value={plural(e.section_ids.length, "section")}>Sections</InspectorRow>
         <InspectorRow value={[e.brief_layer && "Brief", e.full_layer && "Full"].filter(Boolean).join(" and ") || "None"}>Layers</InspectorRow>
         <InspectorRow value={ROLE[e.required_review_role] ?? e.required_review_role}>Review role</InspectorRow>
@@ -116,6 +123,7 @@ export function CatalogTab({ phone }: { phone: boolean }) {
       key: "module",
       header: "Module",
       phone: "title",
+      wrap: true,
       cell: (e) => (
         <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{e.title}</span>
       ),

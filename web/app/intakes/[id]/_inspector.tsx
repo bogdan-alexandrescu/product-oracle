@@ -143,11 +143,17 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
 export function IntakeInspector({
   summary: s,
   onChanged,
+  questionFor,
+  onAnswer,
 }: {
   summary: Summary;
   /** Unused (#370: the capabilities decide); kept for the intake shell. */
   role?: Role | null;
   onChanged: () => void;
+  /** The question that asks about a gap, when one was asked (qa-docs-19: it gets an Answer). */
+  questionFor?: (gapId: string) => string | null;
+  /** Shows that question in the thread, ready to answer. */
+  onAnswer?: (questionId: string) => void;
 }) {
   const { can } = useMe();
   const [deciding, setDeciding] = useState<string | null>(null);
@@ -200,6 +206,19 @@ export function IntakeInspector({
                 <li key={g.id} className="flex min-w-0 flex-col gap-0.5" data-testid="missing-gap">
                   <span className="text-sm break-words text-text">{g.statement}</span>
                   {categoryNote(g) && <span className="text-[13px] text-text2">{categoryNote(g)}</span>}
+                  {/* qa-docs-19: each open question has a way to answer it, in the thread. */}
+                  {(() => {
+                    const q = questionFor?.(g.id);
+                    return q && onAnswer ? (
+                      <div className="mt-1">
+                        <Button variant="secondary" aria-label={`Answer: ${g.statement}`} onClick={() => onAnswer(q)}>
+                          Answer
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-[13px] text-text2">Not asked yet: ask it from Next questions.</span>
+                    );
+                  })()}
                 </li>
               ))}
             </ul>

@@ -47,7 +47,7 @@ export function ReviewPanel({
   version: VersionOut | undefined;
   doc: string;
   n: number;
-  stats: { reviewed: number; total: number; locked: number; lockedLabel?: string; openFeedback: number | null };
+  stats: { reviewed: number; total: number; reviewedLabel?: string; locked: number; lockedLabel?: string; openFeedback: number | null };
   tab: PanelTab;
   setTab: (t: PanelTab) => void;
   feedback: FeedbackProps;
@@ -87,7 +87,7 @@ export function ReviewPanel({
           <dl className="mt-2.5 flex flex-wrap gap-x-7 gap-y-2">
             {(
               [
-                ["Reviewed", `${stats.reviewed}/${stats.total}`, "stat-reviewed"],
+                [stats.reviewedLabel ?? "Reviewed", `${stats.reviewed}/${stats.total}`, "stat-reviewed"],
                 [stats.lockedLabel ?? "Locked", stats.locked, "stat-locked"],
                 ["Open feedback", stats.openFeedback ?? "–", "stat-open-feedback"],
               ] as const

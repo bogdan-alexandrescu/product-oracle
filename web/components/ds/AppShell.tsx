@@ -101,6 +101,8 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
   if (d.href === "/documents" && pathname.startsWith("/intakes/")) return true;
   // A spec's flows and wireframes (v2 screen 4) belong with its tech brief, a document.
   if (d.href === "/documents" && pathname.startsWith("/specs/")) return true;
+  // qa-docs-65: a feature's tech brief belongs with its PRD.
+  if (d.href === "/documents" && pathname.startsWith("/briefs/")) return true;
   // qa-plan-19: the Roadmap's tabs (changelog, launches) are tabs of Plan.
   if (d.href === "/plan" && (pathname === "/roadmap" || pathname.startsWith("/roadmap/"))) return true;
   return pathname === base || pathname.startsWith(`${base}/`);
@@ -333,7 +335,8 @@ function Navs() {
   const pathname = usePathname();
   const { me, loading } = useMe();
   // While /v1/me loads, keep the rail so a signed-in page never jumps.
-  const shown = (loading || !!me) && !bare(pathname);
+  // qa-docs-59: Present mode covers the screen; no rail or account button under (or over) its controls.
+  const shown = (loading || !!me) && !bare(pathname) && !/\/present\/?$/.test(pathname);
   const inbox = useInboxCount(shown);
   const home = useDocumentHome(pathname);
   const [more, setMore] = useState(false);

@@ -564,6 +564,7 @@ function RecommendationInspector({
 /** New-draft picker: a few questions, the recommended template and theme, overrides, create. */
 export function NewDraft({ kind }: { kind: Kind }) {
   const router = useRouter();
+  const { can, capsReady } = useMe();
   const label = kind === "prd" ? "PRD" : "roadmap";
   const [prd, setPrd] = useState<PrdAnswers>({});
   const [roadmap, setRoadmap] = useState<RoadmapAnswers>({});
@@ -596,19 +597,41 @@ export function NewDraft({ kind }: { kind: Kind }) {
 
   const formId = `new-draft-${kind}`;
   const inspector = <RecommendationInspector kind={kind} choice={choice} onError={setError} />;
+  const backHref = kind === "roadmap" ? "/plan/documents" : "/documents";
+  const back = (
+    <Link href={backHref} className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
+      <Icon name="back" size={16} />
+      {kind === "roadmap" ? "Plan" : "PRDs"}
+    </Link>
+  );
+
+  // As New PRD (QA docs-10): a role that cannot start a draft is told so up front, with no form.
+  if (!capsReady || !can("start_draft", true)) {
+    return (
+      <Page>
+        <PageHeader back={back} title={`New ${label}`} />
+        {!capsReady ? (
+          <Loading />
+        ) : (
+          <Notice
+            testId="new-draft-not-allowed"
+            action={
+              <Link href={backHref} className="font-semibold underline-offset-2 hover:underline">
+                Back
+              </Link>
+            }
+          >
+            Only approvers and owners can start a {label}. Ask one of them to start it; you can read every {label}.
+          </Notice>
+        )}
+      </Page>
+    );
+  }
 
   return (
     <Page>
       <PageHeader
-        back={
-          <Link
-            href={kind === "roadmap" ? "/plan/documents" : "/documents"}
-            className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
-          >
-            <Icon name="back" size={16} />
-            {kind === "roadmap" ? "Plan" : "PRDs"}
-          </Link>
-        }
+        back={back}
         title={`New ${label}`}
         info={
           <InfoTip label={`new ${label}s`} align="start" side="bottom">

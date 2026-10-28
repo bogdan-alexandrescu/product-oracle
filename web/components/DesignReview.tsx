@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 
-import { Button, Chip, Inspector, InspectorSection, LinkButton, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
+import { Button, Chip, Icon, Inspector, InspectorSection, LinkButton, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type ChipKind } from "@/components/ds";
 import { FRESHNESS } from "@/components/tech-brief";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -58,7 +58,46 @@ export function designHref(specId: string, versionId: string): string {
 }
 
 const kb = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`);
-const shortHash = (h: string | null | undefined) => (h ? `${h.slice(0, 4)}…${h.slice(-4)}` : "—");
+const shortHash = (h: string | null | undefined) => (h ? `${h.slice(0, 4)}…${h.slice(-4)}` : "Not recorded");
+const MEDIA: Record<string, string> = { "image/svg+xml": "Drawing (SVG)", "text/html": "Web page (HTML)" };
+
+/** How the page names the PRD a design rests on, and its sections (qa-docs-35). */
+type PrdWords = { slug: string | null; title: string | null; heading: (key: string) => string | null };
+
+/** A PRD slug the reasons name ("section s-5-2 changed in checkout-redesign v2"). */
+const SLUG_IN_REASON = /\b(?:in|of) ([a-z0-9]+(?:-[a-z0-9]+)+)\b/;
+
+/**
+ * The PRD by its title and its sections by their headings: from the spec's PRD, the version's
+ * dependencies, or the slug its staleness reasons name.
+ */
+function usePrdWords(spec: Spec | undefined, d: Design | undefined): PrdWords {
+  const view = spec && d ? spec.stale.find((x) => x.artifact_version_id === d.version.id) : undefined;
+  const deps = [...(d?.lineage?.dependencies ?? []), ...(view?.dependencies ?? []), ...(spec?.stale ?? []).flatMap((x) => x.dependencies)];
+  const reasons = (spec?.stale ?? []).flatMap((x) => x.reasons);
+  const slug =
+    spec?.prd?.slug ??
+    deps.find((x) => x.upstream.document_kind === "prd" && x.upstream.document_slug)?.upstream.document_slug ??
+    reasons.map((r) => SLUG_IN_REASON.exec(r)?.[1]).find(Boolean) ??
+    null;
+  const docQ = useQuery(`doc|${slug}`, () => (slug ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: slug } } })) : Promise.resolve(null)));
+  const n = docQ.data?.latest_version ?? null;
+  const versionQ = useQuery(`design-prd-sections|${slug}|${n}`, () =>
+    slug && n ? unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc: slug, n } } })) : Promise.resolve(null),
+  );
+  const headings = new Map((versionQ.data?.sections ?? []).map((x) => [x.section_key, x.heading]));
+  return { slug, title: spec?.prd?.title ?? docQ.data?.title ?? null, heading: (key) => headings.get(key) ?? null };
+}
+
+/** A section by its heading ("5.2 Shipping step"), or "a section" while it is not known. */
+const sectionName = (w: PrdWords, key: string) => w.heading(key) ?? "a section";
+
+/** A staleness reason in words: section headings and the PRD's title, never keys or slugs. */
+function reasonText(reason: string, w: PrdWords): string {
+  let out = reason.replace(/\bsection ([A-Za-z0-9._-]+)/g, (_, key: string) => (w.heading(key) ? `section "${w.heading(key)}"` : "a section"));
+  if (w.slug) out = out.replaceAll(w.slug, w.title ?? "the PRD");
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
 
 /**
  * v2 screen 4: one flow or wireframe version of a spec (picks.md 4: A's canvas + review
@@ -75,6 +114,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
   const designQ = useQuery(`design-artifact|${versionId}`, () =>
     unwrap(api.GET("/v1/design-artifacts/{version_id}", { params: { path: { version_id: versionId } } })),
   );
+  const words = usePrdWords(specQ.data, designQ.data);
   const [picked, setPicked] = useState<string | null>(null);
   const [compare, setCompare] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -124,7 +164,8 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
   const fresh = FRESHNESS[v.freshness];
   const running = v.freshness === "potentially_stale" && !!spec.regeneration_run_id;
   const view = spec.stale.find((s) => s.artifact_version_id === v.id);
-  const reasons = [...new Set([...(view?.reasons ?? []), ...(d.lineage?.reasons ?? [])])];
+  const rawReasons = [...new Set([...(view?.reasons ?? []), ...(d.lineage?.reasons ?? [])])];
+  const reasons = [...new Set(rawReasons.map((r) => reasonText(r, words)))];
   const status = VERSION_STATUS[v.status];
   const chipsOf = (kind: ChipKind) => (
     <>
@@ -144,6 +185,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
       shown={shown}
       brief={brief}
       reasons={reasons}
+      words={words}
       chips={chipsOf("na")}
       roles={roles}
       meId={me?.user_id ?? null}
@@ -157,23 +199,22 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
         testId="page-header"
         back={
           brief ? (
-            <Link href={brief} className="hover:underline">
-              ← {spec.request.title} · tech brief
+            <Link href={brief} className="inline-flex items-center gap-1 hover:text-text hover:underline">
+              <Icon name="back" size={16} />
+              {spec.request.title}
             </Link>
           ) : undefined
         }
         title={d.title}
         suffix={`v${v.number}`}
+        phoneTitle
         status={chips}
         action={
-          <>
-            {brief && !phone && <LinkButton href={brief}>Open tech brief</LinkButton>}
-            {phone && (
-              <Button variant="primary" onClick={() => setSheetOpen(true)}>
-                Review
-              </Button>
-            )}
-          </>
+          phone ? (
+            <Button variant="primary" onClick={() => setSheetOpen(true)}>
+              Review
+            </Button>
+          ) : undefined
         }
       />
       <nav aria-label="Design artifacts" className="mb-4 flex gap-1 overflow-x-auto border-b border-line">
@@ -205,15 +246,15 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
               </>
             }
           >
-            {running ? "Potentially stale · regeneration running" : "Potentially stale"}
-            {reasons.length > 0 && `: ${reasons.join("; ")}`}
+            {running ? "Potentially stale, regeneration running" : "Potentially stale"}
+            {reasons.length > 0 && `: ${reasons.join("; ")}`}. Review or reconcile it on the tech brief before approving.
           </Notice>
         )}
         {shown
           .filter((o) => o.removed.length > 0)
           .map((o) => (
             <Notice key={o.name} tone="info" testId="sanitised">
-              Sanitised: Oracle removed {o.removed.join("; ")} from {o.name} when it stored it.
+              Sanitised: Oracle removed {o.removed.join("; ")} from {o.title ?? o.name} when it stored it.
             </Notice>
           ))}
         <Panel
@@ -225,7 +266,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
                 <SegmentedControl
                   label="Files"
                   size="sm"
-                  items={d.outputs.map((o) => ({ value: o.name, label: o.name }))}
+                  items={d.outputs.map((o) => ({ value: o.name, label: o.title ?? o.name }))}
                   value={output?.name}
                   onChange={setPicked}
                 />
@@ -251,8 +292,8 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5 text-sm">
               <span className="font-semibold text-text2">PRD sections</span>
               {[...new Set(shown.flatMap((o) => o.section_keys))].map((k) => (
-                <Chip key={k} kind={reasons.some((r) => r.includes(k)) ? "warn" : "line"}>
-                  {k}
+                <Chip key={k} kind={rawReasons.some((r) => r.includes(k)) ? "warn" : "line"}>
+                  {sectionName(words, k)}
                 </Chip>
               ))}
               <span className="font-semibold text-text2 sm:ml-2">Requirements</span>
@@ -277,7 +318,7 @@ export function DesignReview({ specId, versionId }: { specId: string; versionId:
 
 function requirementName(spec: Spec, id: string): string {
   const r = spec.requirements.find((x) => x.id === id);
-  return r?.key ?? r?.title ?? id.slice(0, 8);
+  return r?.title ?? "a requirement";
 }
 
 function LoadingState() {
@@ -313,15 +354,24 @@ function OutputFrame({ versionId, output }: { versionId: string; output: Output 
   );
   return (
     <figure className="m-0 min-w-0 overflow-hidden rounded-button border border-line-strong bg-surface">
-      <figcaption className="flex flex-wrap items-center gap-x-2.5 gap-y-1 border-b border-line bg-surface2 px-2.5 py-1.5 font-mono text-[13px] text-text2">
-        {output.title && <b className="font-sans font-semibold text-text">{output.title}</b>}
-        <span className="break-all">{output.name}</span>
-        <span>
-          {output.media_type} · {kb(output.size_bytes)}
-        </span>
-        <span className="ml-auto" title={output.sha256}>
-          sha256 {shortHash(output.sha256)}
-        </span>
+      {/* qa-docs-35: the file by its title; its name, type, size and fingerprint in a closed Details. */}
+      <figcaption className="flex flex-wrap items-start gap-x-2.5 gap-y-1 border-b border-line bg-surface2 px-2.5 py-1.5 text-[13px] text-text2">
+        <b className="min-w-0 font-semibold break-words text-text">{output.title ?? output.name}</b>
+        <details data-testid="file-details" className="ml-auto min-w-0">
+          <summary className="cursor-pointer select-none hover:text-text">Details</summary>
+          <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+            <dt>File</dt>
+            <dd className="break-words text-text">{output.name}</dd>
+            <dt>Type</dt>
+            <dd className="text-text">{MEDIA[output.media_type] ?? output.media_type}</dd>
+            <dt>Size</dt>
+            <dd className="tnum text-text">{kb(output.size_bytes)}</dd>
+            <dt>Fingerprint</dt>
+            <dd className="text-text" title={output.sha256}>
+              {shortHash(output.sha256)}
+            </dd>
+          </dl>
+        </details>
       </figcaption>
       <div className="p-3 max-[600px]:p-2">
         {q.error ? (
@@ -350,6 +400,7 @@ function ReviewInspector({
   shown,
   brief,
   reasons,
+  words,
   chips,
   roles,
   meId,
@@ -360,6 +411,7 @@ function ReviewInspector({
   shown: Output[];
   brief: string | null;
   reasons: string[];
+  words: PrdWords;
   chips: ReactNode;
   roles: Roles;
   meId: string | null;
@@ -386,9 +438,9 @@ function ReviewInspector({
       ]}
     >
       <InspectorSection label={`Verdict on v${v.number}`} testId="verdict">
-        <VerdictSection spec={spec} d={d} brief={brief} reasons={reasons} roles={roles} readOnly={readOnly} post={post} />
+        <VerdictSection spec={spec} d={d} brief={brief} roles={roles} readOnly={readOnly} post={post} />
       </InspectorSection>
-      <AnnotationsSection spec={spec} outputs={shown} roles={roles} meId={meId} post={post} />
+      <AnnotationsSection spec={spec} words={words} outputs={shown} roles={roles} meId={meId} post={post} />
       <InspectorSection label="Version reviews · oldest first" testId="version-reviews">
         <div className="flex flex-col gap-3.5">
           {d.reviews.length === 0 ? (
@@ -400,7 +452,7 @@ function ReviewInspector({
         </div>
       </InspectorSection>
       <InspectorSection label="Version" testId="version-meta">
-        <VersionMeta spec={spec} d={d} reasons={reasons} meId={meId} />
+        <VersionMeta spec={spec} d={d} reasons={reasons} words={words} meId={meId} />
       </InspectorSection>
     </Inspector>
   );
@@ -410,7 +462,6 @@ function VerdictSection({
   spec,
   d,
   brief,
-  reasons,
   roles,
   readOnly,
   post,
@@ -418,7 +469,6 @@ function VerdictSection({
   spec: Spec;
   d: Design;
   brief: string | null;
-  reasons: string[];
   roles: Roles;
   readOnly: boolean;
   post: (body: Schemas["DesignReviewIn"]) => Promise<void>;
@@ -437,7 +487,7 @@ function VerdictSection({
         </Notice>
       );
     }
-    return <Notice tone="info">{`version ${v.number} is ${v.status}`}: comments are still allowed; verdicts are not.</Notice>;
+    return <Notice tone="info">{`Version ${v.number} is ${VERSION_STATUS[v.status].label.toLowerCase()}`}: comments are still allowed; verdicts are not.</Notice>;
   }
   if (!roles.comment) return <Notice tone="info">You can read this review. Commenting needs the commenter role.</Notice>;
   const named = spec.engineering_approvers ?? [];
@@ -465,14 +515,17 @@ function VerdictSection({
     }
   };
   const off = busy || !roles.decide;
+  // qa-docs-67: when Approve is off it says why, once (the stale notice is on the page, not here too).
+  const approveOff = !roles.decide
+    ? null
+    : v.status === "approved"
+      ? "This version is already approved."
+      : stale
+        ? "Approve opens once this version is reviewed or reconciled on the tech brief: it may be stale."
+        : null;
   return (
     <div className="flex flex-col gap-2.5">
       {approvedLine}
-      {stale && (
-        <Notice tone="warn" action={brief ? <LinkButton href={brief}>Open tech brief</LinkButton> : undefined}>
-          Potentially stale{reasons.length > 0 && `: ${reasons.join("; ")}`}. Review or reconcile it on the tech brief before approving.
-        </Notice>
-      )}
       <div className="flex flex-wrap gap-2 max-[600px]:[&>button]:flex-1">
         <Button variant="primary" disabled={off || stale || v.status === "approved"} onClick={() => void decide("approved")}>
           Approve
@@ -484,6 +537,19 @@ function VerdictSection({
           Reject
         </Button>
       </div>
+      {approveOff && (
+        <p data-testid="approve-off" className="text-[13px] text-text2">
+          {approveOff}
+          {stale && brief && (
+            <>
+              {" "}
+              <Link href={brief} className="font-medium text-accent-ink hover:underline">
+                Go to the tech brief
+              </Link>
+            </>
+          )}
+        </p>
+      )}
       {roles.decide && (
         <label className="flex flex-col gap-1.5">
           <span className="text-[13px] font-semibold text-text2">{NOTE_LABEL}</span>
@@ -493,9 +559,11 @@ function VerdictSection({
       {err && <ErrorNote>{err}</ErrorNote>}
       {!roles.decide ? (
         <>
-          <Notice tone="error">only the spec&apos;s engineering approvers (or an owner) decide on it</Notice>
+          <Notice tone="info">Only the spec&apos;s engineering approvers (or an owner) decide on it.</Notice>
           <p className="text-[13px] text-text2">
-            Engineering approver{named.length === 1 ? "" : "s"} named on this spec: {named.map((x) => x.name).join(", ") || "—"}
+            {named.length > 0
+              ? `Engineering approver${named.length === 1 ? "" : "s"} named on this spec: ${named.map((x) => x.name).join(", ")}`
+              : "No engineering approvers are named on this spec."}
           </p>
         </>
       ) : (
@@ -513,12 +581,14 @@ function VerdictSection({
 
 function AnnotationsSection({
   spec,
+  words,
   outputs,
   roles,
   meId,
   post,
 }: {
   spec: Spec;
+  words: PrdWords;
   outputs: Output[];
   roles: Roles;
   meId: string | null;
@@ -545,7 +615,7 @@ function AnnotationsSection({
       })}
     </span>
   );
-  const label = outputs.length === 1 ? `Annotations · ${outputs[0].name}` : "Annotations";
+  const label = outputs.length === 1 ? `Annotations · ${outputs[0].title ?? outputs[0].name}` : "Annotations";
   return (
     <InspectorSection label={label} tools={total > 0 ? filter : undefined} testId="annotations">
       {total === 0 ? (
@@ -557,7 +627,7 @@ function AnnotationsSection({
             const rows = o.annotations.map((a, i) => ({ a, n: i + 1 })).filter(({ a }) => !quiet || a.reviews.length === 0);
             return (
               <div key={o.name} className="flex flex-col gap-3">
-                {outputs.length > 1 && <p className="font-mono text-[13px] text-text2">{o.name}</p>}
+                {outputs.length > 1 && <p className="text-[13px] font-semibold text-text2">{o.title ?? o.name}</p>}
                 {rows.length === 0 ? (
                   <p className="text-sm text-text2">{quiet ? "Every annotation here has comments." : "No annotations on this file."}</p>
                 ) : (
@@ -566,6 +636,7 @@ function AnnotationsSection({
                       <AnnotationRow
                         key={a.id}
                         spec={spec}
+                        words={words}
                         a={a}
                         n={n}
                         output={o.name}
@@ -588,6 +659,7 @@ function AnnotationsSection({
 
 function AnnotationRow({
   spec,
+  words,
   a,
   n,
   output,
@@ -597,6 +669,7 @@ function AnnotationRow({
   post,
 }: {
   spec: Spec;
+  words: PrdWords;
   a: Annotation;
   n: number;
   output: string;
@@ -616,9 +689,7 @@ function AnnotationRow({
           {a.note}
         </p>
         <div className="mt-1 flex flex-wrap gap-1.5">
-          <Chip kind="line">{a.id}</Chip>
-          <Chip kind="na">→ {a.target}</Chip>
-          {a.section_key && <Chip kind="na">{a.section_key}</Chip>}
+          {a.section_key && <Chip kind="na">{sectionName(words, a.section_key)}</Chip>}
           {a.requirement_ids.map((id) => (
             <Chip key={id} kind="line">
               {requirementName(spec, id)}
@@ -717,45 +788,44 @@ function approverName(d: Design, meId: string | null): string {
   return meId && v.approved_by === meId ? "you" : "a member";
 }
 
-function VersionMeta({ spec, d, reasons, meId }: { spec: Spec; d: Design; reasons: string[]; meId: string | null }) {
+function VersionMeta({ spec, d, reasons, words, meId }: { spec: Spec; d: Design; reasons: string[]; words: PrdWords; meId: string | null }) {
   const v = d.version;
   const p = v.provenance as Record<string, unknown>;
   const str = (k: string) => (typeof p[k] === "string" || typeof p[k] === "number" ? String(p[k]) : null);
   const reqs = Array.isArray(p.requirement_ids) ? (p.requirement_ids as string[]) : [];
   const runId = str("run_id");
   const deps = d.lineage?.dependencies ?? [];
+  const prd = words.title ?? "The PRD";
+  // qa-docs-35: names, not ids; the technical record stays in a closed Details.
+  const technical = [
+    str("prompt_version") && { k: "Prompt", value: str("prompt_version") },
+    str("runner_profile") && { k: "Runner", value: str("runner_profile") },
+    v.composition_revision != null && { k: "Composition revision", value: String(v.composition_revision) },
+    v.content_hash && { k: "Content fingerprint", value: shortHash(v.content_hash), title: v.content_hash },
+  ].filter((x): x is { k: string; value: string; title?: string } => !!x);
   return (
     <div className="flex flex-col">
       {v.summary && <p className="mb-1.5 text-sm">{v.summary}</p>}
       <MetaRow k="Made by">
         {runId ? (
           <>
-            Oracle run{" "}
-            <Link href={`/runs/${runId}`} className="font-mono text-accent-ink hover:underline">
-              {runId.slice(0, 8)}
+            Oracle,{" "}
+            <Link href={`/runs/${runId}`} className="text-accent-ink hover:underline">
+              in a run
             </Link>
           </>
+        ) : str("origin") === "upload" ? (
+          "Uploaded"
         ) : (
-          (str("origin") ?? "—")
+          "A person"
         )}
       </MetaRow>
       {str("prd_version") && (
         <MetaRow k="From PRD">
-          {spec.prd?.slug ?? "PRD"} v{str("prd_version")}
+          {prd} v{str("prd_version")}
         </MetaRow>
       )}
       {reqs.length > 0 && <MetaRow k="Requirements">{reqs.map((id) => requirementName(spec, id)).join(", ")}</MetaRow>}
-      {(str("prompt_version") || str("runner_profile")) && (
-        <MetaRow k="Prompt · runner">
-          <span className="font-mono">{[str("prompt_version"), str("runner_profile")].filter(Boolean).join(" · ")}</span>
-        </MetaRow>
-      )}
-      <MetaRow k="Composition revision">{v.composition_revision ?? "—"}</MetaRow>
-      <MetaRow k="Content hash">
-        <span className="font-mono" title={v.content_hash ?? undefined}>
-          {shortHash(v.content_hash)}
-        </span>
-      </MetaRow>
       <MetaRow k="Created">
         <span className="tnum">{formatDateTime(v.created_at)}</span>
       </MetaRow>
@@ -771,15 +841,30 @@ function VersionMeta({ spec, d, reasons, meId }: { spec: Spec; d: Design; reason
         {deps.length > 0
           ? deps.map((dep) => (
               <span key={dep.id} className="block">
-                {dep.upstream.document_slug ?? "PRD"}
+                {dep.upstream.document_slug === words.slug || dep.upstream.document_kind === "prd" ? prd : "A document"}
                 {dep.upstream.version_number != null && ` v${dep.upstream.version_number}`}
-                {dep.upstream.section_key && ` · ${dep.upstream.section_key}`} <Chip kind={FRESHNESS[dep.freshness].kind}>{FRESHNESS[dep.freshness].label}</Chip>
+                {dep.upstream.section_key && `, ${sectionName(words, dep.upstream.section_key)}`}{" "}
+                <Chip kind={FRESHNESS[dep.freshness].kind}>{FRESHNESS[dep.freshness].label}</Chip>
               </span>
             ))
           : reasons.length > 0
             ? reasons.join("; ")
-            : (spec.prd?.slug ?? "—")}
+            : words.slug
+              ? prd
+              : "Nothing recorded"}
       </MetaRow>
+      {technical.length > 0 && (
+        <details data-testid="version-details" className="mt-1.5 text-sm">
+          <summary className="cursor-pointer text-text2 select-none hover:text-text">Technical details</summary>
+          <div className="mt-1 flex flex-col">
+            {technical.map((t) => (
+              <MetaRow key={t.k} k={t.k}>
+                <span title={t.title}>{t.value}</span>
+              </MetaRow>
+            ))}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

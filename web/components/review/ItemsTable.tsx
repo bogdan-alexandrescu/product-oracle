@@ -133,7 +133,7 @@ export function ItemsTable({
     },
     { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => (r.horizon ? <HorizonChip horizon={r.horizon} /> : <span className="text-text2">—</span>) },
     { key: "milestone", header: "Milestone", width: "172px", phone: "meta", cell: (r) => <MilestoneCell row={r} /> },
-    { key: "confidence", header: "Conf.", width: "76px", phone: "meta", phoneLabel: "Conf.", cell: (r) => <Confidence value={r.confidence} /> },
+    { key: "confidence", header: "Confidence", width: "104px", phone: "meta", phoneLabel: "Confidence", cell: (r) => <Confidence value={r.confidence} /> },
     {
       key: "depends_on",
       header: "Depends on",
@@ -152,8 +152,11 @@ export function ItemsTable({
     {
       key: "prd",
       header: "PRD",
-      width: "124px",
-      phone: "hide",
+      // qa-docs-61/62: the section's full name (wrapped), and on a phone too.
+      width: "160px",
+      wrap: true,
+      phone: "meta",
+      phoneLabel: "PRD",
       cell: (r) =>
         r.prd ? (
           <Link href={r.prd.href} onClick={(e) => e.stopPropagation()} className="text-accent-ink underline-offset-2 hover:underline" title={r.prd.label}>
@@ -183,7 +186,10 @@ export function ItemsTable({
           groupLabel(g, shown.filter((r) => groupOf(r) === g))
         ) : (
           <>
-            {horizonLabel(g)} <span className="tnum font-sans text-sm font-semibold text-text2">{counts.get(g) ?? 0}</span>
+            {/* qa-docs-62: a phone's header is a flex row, which drops the space: the gap keeps it. */}
+            <span className="inline-flex items-baseline gap-1.5">
+              {horizonLabel(g)} <span className="tnum font-sans text-sm font-semibold text-text2">{counts.get(g) ?? 0}</span>
+            </span>
           </>
         )
       }

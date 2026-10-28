@@ -187,6 +187,8 @@ export function CompositionView({ doc }: { doc: string }) {
         key: "module",
         header: "Module",
         phone: "title",
+        // Names wrap, never cut (also when the inspector narrows the table).
+        wrap: true,
         cell: (m) => (
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 flex-wrap items-center gap-1.5">
@@ -204,11 +206,12 @@ export function CompositionView({ doc }: { doc: string }) {
           </span>
         ),
       },
-      { key: "selection", header: "Selection", width: "110px", cell: (m) => SELECTION_LABEL[m.selection] },
+      { key: "selection", header: "Selection", width: "110px", wrap: true, cell: (m) => SELECTION_LABEL[m.selection] },
       {
         key: "decided",
         header: "Decided by",
         width: "150px",
+        wrap: true,
         phoneLabel: "Decided by",
         cell: (m) => (m.decided_by === "policy" ? POLICY_SOURCE[m.policy_source] : DECIDED_BY[m.decided_by]),
       },
@@ -216,6 +219,8 @@ export function CompositionView({ doc }: { doc: string }) {
         key: "layout",
         header: "Sections",
         width: "130px",
+        wrap: true,
+        narrow: "hide",
         cell: (m) => {
           const brief = m.layer_impact.brief_sections.length;
           const full = m.layer_impact.full_sections.length;
@@ -250,7 +255,7 @@ export function CompositionView({ doc }: { doc: string }) {
         {data.legacy && data.recommendation && (
           <Notice testId="legacy-notice">
             This PRD has no composition yet. Oracle recommends {plural(data.recommendation.summary.included, "module")}
-            {packNames.length ? ` from ${packNames.join(", ")}` : ""}.{mayConfirm ? " Review them below, then confirm revision 1." : ""}
+            {packNames.length ? ` from ${packNames.join(", ")}` : ""}.{mayConfirm ? " Review them below; nothing is in force until you confirm." : ""}
           </Notice>
         )}
         {previewError && <Notice tone="error">{previewError}</Notice>}

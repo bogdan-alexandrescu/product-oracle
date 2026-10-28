@@ -187,6 +187,8 @@ export function RoadmapItemsPane({
             filter={filterFn}
             extraColumns={changeColumn}
             rowDecorations={decorate}
+            // qa-docs-34: no item is stale or under review: no empty State column.
+            hide={rows.some((r) => r.freshness === "potentially_stale" || r.freshness === "under_review") ? [] : ["state"]}
           />
         </Panel>
       </Split>

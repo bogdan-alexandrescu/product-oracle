@@ -21,6 +21,7 @@ from pathlib import Path
 
 from markupsafe import Markup, escape
 
+from oracle import company_time
 from oracle.branding import BRAND_CSS, render_brand_logo
 from oracle.docs import layers
 from oracle.docs.models import Section
@@ -148,14 +149,23 @@ def _mark_expand(html: str) -> str:
     )
 
 
+def _moment(value, zone: str) -> str:
+    """A moment in the Company time zone in words: "Oct 18, 1:30 AM PDT" (a slide is read
+    by people, not parsed: no ISO date)."""
+    words = company_time.in_words(value, zone)
+    # in_words leads with the weekday ("Sun Oct 18, ..."); a footer needs only the day.
+    return words.split(" ", 1)[1]
+
+
 def _banner(ev: ExportVersion) -> str:
-    parts = [ev.title, f"Version {ev.version.number}", ev.status.replace("_", " ")]
+    status = ev.status.replace("_", " ")
+    parts = [ev.title, f"Version {ev.version.number}", status[:1].upper() + status[1:]]
     if ev.audience_label:
         parts.insert(2, f"Audience {ev.audience_label}")
     if ev.version.approved_at is not None:
-        parts.append(f"approved {_format_dt(ev.version.approved_at, ev.zone)}")
+        parts.append(f"Approved {_moment(ev.version.approved_at, ev.zone)}")
     else:
-        parts.append(f"imported {_format_dt(ev.version.created_at, ev.zone)}")
+        parts.append(f"Imported {_moment(ev.version.created_at, ev.zone)}")
     if ev.source_label:
         parts.append(ev.source_label)
     return " · ".join(parts)
@@ -331,7 +341,7 @@ def build_deck(ev: ExportVersion) -> Deck:
         number=ev.version.number,
         latest_number=ev.latest_number,
         status=ev.status,
-        as_of=ev.version.snapshot or _format_dt(ev.date, ev.zone),
+        as_of=ev.version.snapshot or _moment(ev.date, ev.zone),
         banner=_banner(ev),
         source_label=ev.source_label,
         theme_key=theme.key if theme else None,

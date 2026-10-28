@@ -92,11 +92,12 @@ export function ReportsPanel({
           )}
           {r && (
             <>
-              <Button variant="ghost" onClick={() => download("md")} aria-label="Export reports MD">
-                MD
-              </Button>
+              {/* qa-docs-53: the export order used everywhere: HTML before MD. */}
               <Button variant="ghost" onClick={() => download("html")} aria-label="Export reports HTML">
                 HTML
+              </Button>
+              <Button variant="ghost" onClick={() => download("md")} aria-label="Export reports MD">
+                MD
               </Button>
             </>
           )}

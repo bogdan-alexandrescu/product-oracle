@@ -21,6 +21,7 @@ import {
   ViewOnly,
   type Column,
 } from "@/components/ds";
+import { DocCrumb } from "@/components/DocToolbar";
 import { api, unwrap } from "@/lib/api/client";
 import { shownDay } from "@/lib/dates";
 import { formatDate } from "@/lib/format";
@@ -101,12 +102,12 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
     onChanged: reload,
   });
 
-  const back =
-    source.kind === "version" ? (
-      <Link href={`/documents/${source.doc}/v/${source.n}`} className="hover:underline">
-        ← {report?.subject.title ?? `${source.doc} v${source.n}`}
-      </Link>
-    ) : undefined;
+  // qa-docs-58: a version's Impact has the header of its other sub-pages (Quality): the
+  // documents list and the document by name, then "Impact v2".
+  const docQ = useQuery(source.kind === "version" ? `doc|${source.doc}` : "doc|none", () =>
+    source.kind === "version" ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: source.doc } } })) : Promise.resolve(null),
+  );
+  const back = source.kind === "version" ? <DocCrumb doc={docQ.data ?? undefined} withTitle /> : undefined;
   const counts = report ? countFreshness(report.affected) : null;
   const status = report && (
     <>
@@ -120,7 +121,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
       {counts!.under_review > 0 && <Chip kind="na">{counts!.under_review} under review</Chip>}
     </>
   );
-  const suffix = report ? (source.kind === "version" ? report.subject.title : (report.subject.title ?? report.subject.ref)) : null;
+  const suffix = source.kind === "version" ? `v${source.n}` : report ? (report.subject.title ?? report.subject.ref) : null;
 
   return (
     <Page>
@@ -151,7 +152,8 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
         <LoadingBoard />
       ) : (
         <div className="flex flex-col gap-4 max-[600px]:gap-3">
-          <Notice>{intro(report, source)}</Notice>
+          {/* The intro explains the lines and columns: only when there are some (qa-docs-58). */}
+          {report.affected.length > 0 && <Notice>{intro(report, source)}</Notice>}
           {report.truncated && (
             <Notice tone="warn">Lineage cut off at the walk limit (depth 8, 2000 nodes or 500 roots). Some outputs may be missing.</Notice>
           )}
@@ -160,7 +162,7 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
             <Panel>
               <Empty icon="check" testId="impact-empty">
                 {source.kind === "version"
-                  ? `No outputs depend on what v${source.n} changed. Nothing to regenerate.`
+                  ? `No outputs depend on what v${source.n} changed. Nothing to regenerate. When a roadmap, spec or other output is built from this version, Impact shows what a new version would change for it.`
                   : "No outputs depend on this. Nothing to regenerate."}
               </Empty>
             </Panel>

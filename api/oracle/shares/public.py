@@ -529,14 +529,29 @@ async def public_share_status(token: str, request: Request) -> JSONResponse:
     """For the web page: ``locked`` until the passcode opened the link in this browser
     (for every token, known or not, and nothing else), then ``active`` or ``ended`` with
     the link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF
-    only when it is on)."""
+    only when it is on); an active link also gives its document's ``title``, the company
+    that shared it (``shared_by``) and ``expires_at``, for the page's header."""
     if (busy := _client_allowed(request)) is not None:
         return busy  # type: ignore[return-value]
     link, claims = await _opened(token, request)
     if link is None or claims is None:
         return _json({"state": "locked"}, 200)
     state = "active" if service.state(link) == "active" else "ended"
-    return _json({"state": state, "allow_download": link.allow_download}, 200)
+    body: dict[str, Any] = {"state": state, "allow_download": link.allow_download}
+    if state == "active":
+        # qa-docs-71: the page's header names what was shared, by whom and until when (the
+        # same facts the shared page's own footer gives), only once the passcode opened it.
+        from oracle.docs.models import Document
+        from oracle.roadmap.public import company_name
+
+        async with tenant_session(link.tenant_id) as db:
+            document = await db.get(Document, link.document_id)
+            body.update(
+                title=document.title if document is not None else None,
+                shared_by=await company_name(db),
+                expires_at=link.expires_at.isoformat(),
+            )
+    return _json(body, 200)
 
 
 @short_router.get("/s/{token}")

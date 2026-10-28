@@ -18,6 +18,16 @@ const LEVEL: Record<string, ChipKind> = { low: "na", medium: "warn", high: "crit
 
 const sentence = (value: string) => value.charAt(0).toUpperCase() + value.slice(1).replaceAll("_", " ");
 
+/**
+ * A code map reference in words (qa-docs-36): "module:checkout-web" reads "Checkout web", the
+ * module's name, not its key.
+ */
+function refName(ref: string): string {
+  const name = ref.includes(":") ? ref.slice(ref.indexOf(":") + 1) : ref;
+  const words = name.replace(/[-_./]+/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : ref;
+}
+
 function Block({ title, testId, children }: { title: string; testId: string; children: ReactNode }) {
   return (
     <Panel title={title} testId={testId} bodyClassName="px-4 py-3 text-[15px] leading-6">
@@ -43,9 +53,8 @@ function CodeMap({ b }: { b: TechBrief }) {
     <Block title="Code map" testId="brief-code-map">
       <ul className="flex flex-col gap-1">
         {b.code_map.repos.map((r) => (
-          <li key={r.repo} className="break-words">
-            <span className="font-mono text-[13px]">{r.repo}</span>
-            {r.commit && <span className="text-text2"> at {r.commit}</span>}
+          <li key={r.repo} className="break-words" title={r.commit ? `${r.repo} at commit ${r.commit}` : r.repo}>
+            <span>{r.repo}</span>
             {r.as_of && <span className="text-text2"> · as of {formatDateTime(r.as_of)}</span>}
             {r.partial && (
               <>
@@ -73,16 +82,16 @@ function Touches({ b }: { b: TechBrief }) {
                 <th className="py-1 pr-3 font-semibold">Area</th>
                 <th className="py-1 pr-3 font-semibold">Kind</th>
                 <th className="py-1 pr-3 font-semibold">Change</th>
-                <th className="py-1 font-semibold">Code map ref</th>
+                <th className="py-1 font-semibold">In the code map</th>
               </tr>
             </thead>
             <tbody>
               {b.touches.map((t, i) => (
                 <tr key={`${t.area}-${i}`} className="border-t border-line align-top">
-                  <td className="py-1.5 pr-3 break-all">{t.area}</td>
+                  <td className="py-1.5 pr-3 break-words">{t.area}</td>
                   <td className="py-1.5 pr-3">{KIND[t.kind] ?? t.kind}</td>
                   <td className="py-1.5 pr-3">{CHANGE[t.change] ?? t.change}</td>
-                  <td className="py-1.5 font-mono text-[13px] break-all">{t.ref ?? "—"}</td>
+                  <td className="py-1.5 break-words">{t.ref ? refName(t.ref) : <span className="text-text2">Not mapped</span>}</td>
                 </tr>
               ))}
             </tbody>
@@ -91,7 +100,7 @@ function Touches({ b }: { b: TechBrief }) {
       )}
       {b.reuse.length > 0 && (
         <p className="mt-2 break-words text-text2">
-          Reuses <span className="font-mono text-[13px] text-text">{b.reuse.join(", ")}</span>
+          Reuses <span className="text-text">{b.reuse.map(refName).join(", ")}</span>
         </p>
       )}
     </Block>
@@ -112,7 +121,7 @@ function Questions({ b }: { b: TechBrief }) {
                 {q.question} {q.blocking && <Chip kind="crit">Blocking</Chip>}
               </p>
               {q.why && <p className="text-text2">Why: {q.why}</p>}
-              <p>{answers.get(q.id) ? <>Answer: {answers.get(q.id)}</> : <span className="text-text2">Not answered</span>}</p>
+              <p>{answers.get(q.id) ? <>Answer: {answers.get(q.id)}</> : <span className="text-text2">Not answered at the Engineering check</span>}</p>
             </li>
           ))}
         </ul>
@@ -141,6 +150,14 @@ function Verdict({ b }: { b: TechBrief }) {
 export function BriefDetail({ id }: { id: string }) {
   const q = useQuery(`tech-brief|${id}`, () => unwrap(api.GET("/v1/tech-briefs/{artifact_version_id}", { params: { path: { artifact_version_id: id } } })));
   const b = q.data;
+  // qa-docs-36: the PRD by its title, and the features this one depends on by theirs.
+  const slug = b?.prd.slug ?? "";
+  const prdQ = useQuery(`doc|${slug}`, () => (slug ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: slug } } })) : Promise.resolve(null)));
+  const siblingsQ = useQuery(`tech-briefs|${slug}`, () =>
+    slug && b?.depends_on.length ? unwrap(api.GET("/v1/tech-briefs", { params: { query: { prd: slug } } })) : Promise.resolve(null),
+  );
+  const featureTitle = (key: string) => siblingsQ.data?.find((x) => x.feature.key === key)?.feature.title ?? refName(key);
+  const prdTitle = prdQ.data?.title ?? (prdQ.error ? "The PRD" : "…");
   const fresh = b ? FRESHNESS[b.freshness] : null;
   return (
     <Page>
@@ -153,7 +170,7 @@ export function BriefDetail({ id }: { id: string }) {
             back={
               <Link href={`/documents/${b.prd.slug}`} className="inline-flex items-center gap-1 hover:text-text hover:underline">
                 <Icon name="back" size={16} />
-                {b.prd.slug}
+                {prdTitle}
                 {b.prd.version != null ? ` v${b.prd.version}` : ""}
               </Link>
             }
@@ -200,7 +217,7 @@ export function BriefDetail({ id }: { id: string }) {
               <Block title="Size" testId="brief-size">
                 <p className="font-semibold">{sizeText(b.size)}</p>
                 {b.size_why && <p className="text-text2">{b.size_why}</p>}
-                {b.depends_on.length > 0 && <p className="mt-1">Depends on {b.depends_on.join(", ")}</p>}
+                {b.depends_on.length > 0 && <p className="mt-1">Depends on {b.depends_on.map(featureTitle).join(", ")}</p>}
               </Block>
               <CodeMap b={b} />
             </div>

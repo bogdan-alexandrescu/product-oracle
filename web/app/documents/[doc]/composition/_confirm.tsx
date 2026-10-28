@@ -174,7 +174,7 @@ export function ConfirmStep({
   const outline = preview?.outline ?? [];
   // Each heading once: a module adding several sections under its own name is one line.
   const entries = (which: "brief" | "full") =>
-    outline.filter((o, i) => o.layer === which && !outline.slice(0, i).some((p) => p.layer === which && p.heading === o.heading && p.module === o.module));
+    outline.filter((o, i) => o.layer === which && !outline.slice(0, i).some((p) => p.layer === which && p.heading === o.heading));
   const column = (which: "brief" | "full") => (
     <div data-testid={`outline-${which}`} className="min-w-0">
       <Label>

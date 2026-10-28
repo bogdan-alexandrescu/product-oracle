@@ -6,7 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
-import { citationHref } from "@/lib/format";
+import { citationHref, formatDate } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
@@ -3322,9 +3322,11 @@ function escapeHtml(s: string) {
 
 /** `audience`: O5, the label of the audience the export renders for (as the API's banner). */
 function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
-  const status = v.approved_at ? "approved" : doc.status;
-  const badge = audience ? ` · audience ${audience}` : "";
-  return `${doc.title} · version ${v.number}${badge} · ${status} · ${(v.approved_at ?? v.created_at).slice(0, 10)}`;
+  // qa-docs-39: as the API's export banner (prd.html.j2): the state in words and a readable date.
+  const status = (v.approved_at ? "approved" : doc.status).replace(/_/g, " ");
+  const badge = audience ? ` · Audience ${audience}` : "";
+  const when = v.approved_at ? `Approved ${formatDate(v.approved_at)}` : `Imported ${formatDate(v.created_at)}`;
+  return `${doc.title} · Version ${v.number}${badge} · ${status.charAt(0).toUpperCase()}${status.slice(1)} · ${when}`;
 }
 
 /** Every HTML export starts with the company's brand header (O5 lane 4); never "Made with Product Oracle". */
@@ -5608,10 +5610,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       const marked = dateMarks(db.roadmap, v.source?.document_id, v.sections).filter((d) => d.label);
       if (marked.length) {
         return json(409, {
-          detail: `${marked.length} date${marked.length === 1 ? " rests" : "s rest"} on no verified basis: ${marked
-            .map((d) => `${d.text} (${d.section_key}: ${d.label})`)
+          detail: `${marked.length} date${marked.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${marked
+            .map((d) => `${formatDate(d.date)} (${d.section_key}: ${d.label})`)
             .join(", ")}`,
-          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: d.text, rationale: `${d.text} is marked ${d.label}` })),
+          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: formatDate(d.date), rationale: `${formatDate(d.date)} is not backed by a confirmed schedule` })),
           dates: marked,
         });
       }
@@ -5621,10 +5623,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       const marked = updateDateMarks(db.roadmap, v.sections).filter((d) => d.label);
       if (marked.length) {
         return json(409, {
-          detail: `${marked.length} date${marked.length === 1 ? " rests" : "s rest"} on no verified basis: ${marked
-            .map((d) => `${d.text} (${d.section_key}: ${d.label})`)
+          detail: `${marked.length} date${marked.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${marked
+            .map((d) => `${formatDate(d.date)} (${d.section_key}: ${d.label})`)
             .join(", ")}`,
-          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: d.text, rationale: `${d.text} is marked ${d.label}` })),
+          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: formatDate(d.date), rationale: `${formatDate(d.date)} is not backed by a confirmed schedule` })),
           dates: marked,
         });
       }

@@ -305,7 +305,8 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
   const [editing, setEditing] = useState<string | null>(null);
   // qa-docs-45: sections nobody owns yet fold into one line; Assign (Show, read-only) lists them.
   const [unfolded, setUnfolded] = useState(false);
-  const assigned = (s: SectionState) => !!s.owner_id || (s.reviewer_ids ?? []).length > 0 || !!s.due_at;
+  // A required section keeps its row: its Required chip says something about it.
+  const assigned = (s: SectionState) => !!s.owner_id || (s.reviewer_ids ?? []).length > 0 || !!s.due_at || !!s.required;
   const open = states.filter((s) => !assigned(s));
   const shown = states.filter((s) => assigned(s) || unfolded || editing === s.section_key);
   return (

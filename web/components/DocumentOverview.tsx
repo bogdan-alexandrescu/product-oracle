@@ -161,7 +161,7 @@ function VersionInspector({
         {v.imported_by_name && (
           <InspectorRow
             value={
-              <span data-testid="version-importer" title={v.imported_by ?? undefined}>
+              <span data-testid="version-importer">
                 {v.imported_by_name}
               </span>
             }

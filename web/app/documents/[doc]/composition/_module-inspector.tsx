@@ -6,12 +6,15 @@ import { plural } from "@/lib/format";
 
 import { DECIDED_BY, KNOWLEDGE, ORIGIN, PACK_POLICY, POLICY_SOURCE, SELECTION_LABEL, type Changes, type Module } from "./_lib";
 
-const MONO = "font-mono text-[13px]";
-
-/** Modules by name, one per line, wrapping (never cut). */
-function Names({ keys, titleOf }: { keys: string[]; titleOf: (key: string) => string }) {
-  if (!keys.length) return <span className="text-text2">None</span>;
-  return <span className="font-normal whitespace-normal [overflow-wrap:anywhere]">{keys.map(titleOf).join(", ")}</span>;
+/** Modules by name under their label, wrapping (never cut, never squeezing the label). */
+function Names({ label, keys, titleOf }: { label: string; keys: string[]; titleOf: (key: string) => string }) {
+  if (!keys.length) return <InspectorRow value={<span className="font-normal text-text2">None</span>}>{label}</InspectorRow>;
+  return (
+    <div className="py-1.5">
+      <p>{label}</p>
+      <p className="font-semibold [overflow-wrap:anywhere]">{keys.map(titleOf).join(", ")}</p>
+    </div>
+  );
 }
 
 /** A count of sections in words ("2 sections", "None"). */
@@ -19,9 +22,41 @@ function Sections({ keys }: { keys: string[] }) {
   return keys.length ? <span className="font-normal">{plural(keys.length, "section")}</span> : <span className="text-text2">None</span>;
 }
 
+/** A value in words: lists joined, yes/no, nothing as a dash (never raw JSON). */
 function shown(v: unknown): string {
-  return v == null ? "—" : JSON.stringify(v);
+  if (v == null || v === "") return "—";
+  if (Array.isArray(v)) return v.length ? v.map(shown).join(", ") : "none";
+  if (typeof v === "boolean") return v ? "yes" : "no";
+  if (typeof v === "object") return Object.entries(v as Record<string, unknown>).map(([k, x]) => `${words(k)}: ${shown(x)}`).join("; ");
+  return String(v).replace(/[_]/g, " ");
 }
+
+/** An input's path in words: "scope.capabilities" is "Capabilities (scope)". */
+function words(path: string): string {
+  const parts = path.split(".").map((p) => p.replace(/[_-]/g, " "));
+  const last = parts.pop() ?? "";
+  const head = last.charAt(0).toUpperCase() + last.slice(1);
+  return parts.length ? `${head} (${parts.join(", ")})` : head;
+}
+
+const OP: Record<string, string> = {
+  eq: "is",
+  ne: "is not",
+  in: "is one of",
+  not_in: "is none of",
+  contains: "includes",
+  contains_any: "includes any of",
+  contains_all: "includes all of",
+  gt: "is more than",
+  gte: "is at least",
+  lt: "is less than",
+  lte: "is at most",
+  exists: "is given",
+  missing: "is not given",
+  truthy: "is set",
+};
+
+const IMPORTANCE: Record<string, string> = { critical: "Critical", high: "Important", medium: "Useful", low: "Nice to have" };
 
 /**
  * The selected module (A's 380 px inspector): why it is here, what it rests on, missing
@@ -95,15 +130,16 @@ export function ModuleDetail({
             {m.basis.map((b, i) => (
               <li key={`${b.path}-${i}`} className="text-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={MONO}>
-                    {b.path} {b.op} {shown(b.expected)}
+                  <span className="font-medium [overflow-wrap:anywhere]">
+                    {words(b.path)} {OP[b.op] ?? b.op.replace(/_/g, " ")}
+                    {b.op === "exists" || b.op === "missing" || b.op === "truthy" ? "" : ` ${shown(b.expected)}`}
                   </span>
                   <Chip kind={b.missing ? "warn" : b.holds ? "pass" : "na"}>{b.missing ? "Missing" : b.holds ? "Holds" : "Does not hold"}</Chip>
                 </div>
                 <p className="mt-0.5 text-text2">
-                  Read: <span className={MONO}>{shown(b.actual)}</span> · {KNOWLEDGE[b.knowledge_state]}
-                  {b.source ? ` · source: ${b.source}` : ""}
-                  {b.evidence_ids.length ? ` · evidence ${b.evidence_ids.join(", ")}` : ""}
+                  Found: {shown(b.actual)} · {KNOWLEDGE[b.knowledge_state]}
+                  {b.source ? ` · from ${b.source}` : ""}
+                  {b.evidence_ids.length ? ` · ${plural(b.evidence_ids.length, "piece")} of evidence` : ""}
                 </p>
               </li>
             ))}
@@ -115,9 +151,9 @@ export function ModuleDetail({
           <ul className="space-y-1.5 text-sm">
             {m.questions.map((q) => (
               <li key={q.key} className="flex items-start gap-2">
-                <Chip kind={q.importance === "high" ? "warn" : "na"}>{q.importance}</Chip>
+                <Chip kind={q.importance === "high" || q.importance === "critical" ? "warn" : "na"}>{IMPORTANCE[q.importance] ?? "Question"}</Chip>
                 <span className="min-w-0">
-                  {q.prompt} <span className="text-text2">· {q.category}</span>
+                  {q.prompt} <span className="text-text2">· about {words(q.category).toLowerCase()}</span>
                 </span>
               </li>
             ))}
@@ -134,12 +170,12 @@ export function ModuleDetail({
           <ul className="space-y-1.5 text-sm">
             {m.field_problems.map((p) => (
               <li key={`${p.field}-${p.kind}`}>
-                <span className={MONO}>{p.field}</span> {p.kind} · {p.message}
+                <span className="font-medium">{words(p.field)}</span> · {p.message}
               </li>
             ))}
             {m.condition_error && (
               <li>
-                <span className={MONO}>condition_error</span> {m.condition_error}
+                <span className="font-medium">When it applies could not be checked</span> · {m.condition_error}
               </li>
             )}
           </ul>
@@ -156,9 +192,9 @@ export function ModuleDetail({
         {present.length > 0 && <InspectorRow value={<Sections keys={present} />}>In the latest version</InspectorRow>}
       </InspectorSection>
       <InspectorSection label="Dependencies and conflicts">
-        <InspectorRow value={<Names keys={m.depends_on} titleOf={titleOf} />}>Depends on</InspectorRow>
-        <InspectorRow value={<Names keys={m.required_by} titleOf={titleOf} />}>Required by</InspectorRow>
-        <InspectorRow value={<Names keys={m.conflicts_with} titleOf={titleOf} />}>Conflicts with</InspectorRow>
+        <Names label="Depends on" keys={m.depends_on} titleOf={titleOf} />
+        <Names label="Required by" keys={m.required_by} titleOf={titleOf} />
+        <Names label="Conflicts with" keys={m.conflicts_with} titleOf={titleOf} />
       </InspectorSection>
       <InspectorSection label="Version">
         <InspectorRow value={ORIGIN[m.origin] ?? "Company module"}>Source</InspectorRow>

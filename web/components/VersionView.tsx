@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
 
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { CommentPopover, SelectionButton, type PageRect } from "@/components/CommentPopover";
@@ -72,6 +72,17 @@ function subtree(sections: SectionOut[], key: string): SectionOut[] {
     out.push(s);
   }
   return out;
+}
+
+const PHONE = "(max-width: 639px)";
+function subscribePhone(cb: () => void) {
+  const mq = window.matchMedia(PHONE);
+  mq.addEventListener("change", cb);
+  return () => mq.removeEventListener("change", cb);
+}
+/** A phone-width window; false on the server and while hydrating, so both render the same. */
+function usePhone() {
+  return useSyncExternalStore(subscribePhone, () => window.matchMedia(PHONE).matches, () => false);
 }
 
 function isTyping(target: EventTarget | null) {
@@ -174,7 +185,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const arrivedAtFeedback = useRef(false);
   // Navigation: the switcher's popover, the phone's sheets, the rail's collapsed state.
   const [switcherOpen, setSwitcherOpen] = useState(false);
-  const [sheet, setSheet] = useState<"sections" | "review" | null>(null);
+  const [sheet, setSheet] = useState<"sections" | "review" | "more" | null>(null);
+  const phone = usePhone();
   const [railCollapsed, setRailCollapsed] = useRailCollapsed(me?.user_id ?? me?.token_id ?? null);
   const railFilter = useOutlineFilter();
   const switcherFilter = useOutlineFilter();
@@ -307,7 +319,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     [statesQ.data],
   );
 
-  const sections = useMemo(() => version?.sections ?? [], [version]);
+  // qa-docs-50: the version's opening section, the document's own title as its heading
+  // (the "# Title" line), reads as the Introduction it is, not as a second title.
+  const docTitle = document_?.title;
+  const sections = useMemo(
+    () =>
+      (version?.sections ?? []).map((s, i) =>
+        i === 0 && s.level === 1 && docTitle && s.heading.trim() === docTitle.trim() ? { ...s, heading: "Introduction" } : s,
+      ),
+    [version, docTitle],
+  );
   const allKeys = useMemo(() => new Set(sections.map((s) => s.section_key)), [sections]);
   const briefSections = useMemo(() => sections.filter((s) => s.layer === "brief"), [sections]);
   const hasBrief = briefSections.length > 0;
@@ -431,7 +452,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
   const placed = useMemo(() => {
     if (!version || !commentsQ.data) return [];
-    const order = new Map(version.sections.map((s) => [s.section_key, s]));
+    const order = new Map(sections.map((s) => [s.section_key, s]));
     return commentsQ.data
       .map((c) => {
         const text = parsed.get(c.section_key)?.text ?? "";
@@ -445,7 +466,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         };
       })
       .sort((a, b) => a.ordinal - b.ordinal || (a.range?.start ?? 0) - (b.range?.start ?? 0));
-  }, [version, commentsQ.data, parsed]);
+  }, [version, sections, commentsQ.data, parsed]);
 
   const highlights = useMemo(() => {
     const m = new Map<string, Highlight[]>();
@@ -700,8 +721,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       ? // H8: an update's Approve names what is left to resolve.
         `Resolve ${flaggedDates.length} unverified date${flaggedDates.length === 1 ? "" : "s"}`
       : flaggedDates.length > 0
-      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " rests" : "s rest"} on no verified schedule basis: ${flaggedDates
-          .map((m) => `${m.text} (${m.label})`)
+      ? // qa-docs-34: plain words and a readable date.
+        `${flaggedDates.length} date${flaggedDates.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${flaggedDates
+          .map((m) => `${formatDate(m.date)} (${m.label})`)
           .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
       : undefined;
   // H4: a vision or a product strategy is an owner's to approve; approvers still set
@@ -859,6 +881,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     openKey,
     openCounts,
     closed: readOnly,
+    noun: hasBrief ? (view === "brief" ? "brief sections" : "sections") : undefined,
     onSelect: (key: string) => {
       select(key);
       setSheet(null);
@@ -936,7 +959,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       version={version}
       doc={doc}
       n={n}
-      stats={{ reviewed: reviewedCount, total: sections.length, locked: lockedCount, lockedLabel: version?.approved_at ? "Locked" : "Approved", openFeedback }}
+      // qa-docs-13: the head counts every section; with a brief it says so, as the outline
+      // (which counts the sections shown) says "brief sections".
+      stats={{
+        reviewed: reviewedCount,
+        total: sections.length,
+        reviewedLabel: hasBrief ? "Reviewed, all sections" : undefined,
+        locked: lockedCount,
+        lockedLabel: version?.approved_at ? "Locked" : "Approved",
+        openFeedback,
+      }}
       openFeedback={openFeedback}
       tab={tab}
       setTab={openTab}
@@ -984,6 +1016,48 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
     />
   );
 
+  // The version's other actions: in the toolbar on a wide screen, in the More sheet on a phone.
+  // qa-docs-47: each action once: the whole-draft comment is the Feedback tab's, and Brief /
+  // Full is the switch above.
+  const moreActions = document_ && (
+    <>
+      {n > 1 && (
+        <LinkButton variant="ghost" href={`/documents/${doc}/diff?from=${n - 1}&to=${n}`}>
+          Compare with v{n - 1}
+        </LinkButton>
+      )}
+      {/* v2 screen 2: what this version changes for the outputs built on earlier ones. */}
+      {document_.kind === "prd" && (
+        <LinkButton variant="ghost" href={`/documents/${doc}/v/${n}/impact`}>
+          Impact
+        </LinkButton>
+      )}
+      {version?.source && (
+        <span className="text-sm text-text2">
+          <SourceLink source={version.source} />
+        </span>
+      )}
+      {!phone && <span className="flex-1" />}
+      {hasBrief && (
+        <LinkButton icon="monitor" href={`/documents/${doc}/v/${n}/present`}>
+          Present
+        </LinkButton>
+      )}
+      <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
+      {document_.kind === "prd" && (
+        <LinkButton icon="priorities" href={`/documents/${doc}/v/${n}/quality`} data-testid="quality-link">
+          Quality
+        </LinkButton>
+      )}
+      {document_.kind === "prd" && n === latest && !canDecide && (
+        <LinkButton icon="check" href={`/documents/${doc}/publish`}>
+          Check readiness
+        </LinkButton>
+      )}
+      {document_.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
+    </>
+  );
+
   // The evidence pane says itself when the version is not found.
   if (missing === "doc" || (missing === "version" && pane !== "evidence")) {
     return (
@@ -1014,6 +1088,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       <Page>
         <PageHeader
           testId="doc-header"
+          phoneTitle
           back={<DocCrumb doc={document_} withTitle={false} />}
           title={
             titleMarks.length ? (
@@ -1052,7 +1127,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               {document_ && canComment && !readOnly && (
                 <Button
                   icon="comment"
-                  className="max-[639px]:hidden"
+                  // qa-docs-61/62: level with a blocked Approve (its reason sits below it); on the
+                  // Items tab (no sections, so no section menus) a phone keeps Discuss too.
+                  className={`${approveBlocked ? "self-start" : ""} ${pane === "items" ? "" : "max-[639px]:hidden"}`}
                   data-testid="doc-discuss"
                   onClick={() => discuss({ kind: "document", subject: { document_id: document_.id, version: n }, label: document_.title })}
                 >
@@ -1069,7 +1146,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 (document_?.kind === "prd" && !version.approved_at ? (
                   // T2 publish gate: a PRD is published from the Publish screen, latest version only.
                   <LinkButton
-                    variant={templateOnly ? "secondary" : "primary"}
+                    // qa-docs-66: an earlier version does not push publishing (it publishes the latest).
+                    variant={templateOnly || (latest != null && n !== latest) ? "secondary" : "primary"}
                     icon="check"
                     href={`/documents/${doc}/publish`}
                     aria-description={n !== latest && latest != null ? `Publishes v${latest}, the latest version` : undefined}
@@ -1105,7 +1183,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
         {/* No actions until the document is there: a missing one shows only its not-found state. */}
         {document_ && (
-        <div className="mb-3 flex flex-wrap items-center gap-2 max-[600px]:gap-y-2.5">
+        <div className="mb-3 flex flex-wrap items-center gap-2 max-[600px]:gap-y-2.5" data-testid="version-toolbar">
           {versions.length > 0 && <VersionSwitcher doc={doc} versions={versions} current={n} variant="segments" hrefFor={paneHref} />}
           {onDocument && hasBrief && (
             <SegmentedControl<DocumentView>
@@ -1118,56 +1196,22 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
               ]}
             />
           )}
-          {n > 1 && (
-            <LinkButton variant="ghost" href={`/documents/${doc}/diff?from=${n - 1}&to=${n}`}>
-              Compare with v{n - 1}
-            </LinkButton>
-          )}
-          {/* v2 screen 2: what this version changes for the outputs built on earlier ones. */}
-          {document_?.kind === "prd" && (
-            <LinkButton variant="ghost" href={`/documents/${doc}/v/${n}/impact`}>
-              Impact
-            </LinkButton>
-          )}
-          {version?.source && (
-            <span className="text-sm text-text2">
-              <SourceLink source={version.source} />
-            </span>
-          )}
-          <span className="flex-1" />
-          {hasBrief && (
-            <LinkButton icon="monitor" href={`/documents/${doc}/v/${n}/present`}>
-              Present
-            </LinkButton>
-          )}
-          {canComment && !readOnly && (
-            <Button
-              icon="comment"
-              data-testid="doc-general-feedback"
-              onClick={() => {
-                setGeneralOpen(true);
-                showFeedback();
-              }}
-            >
-              Comment on the whole draft
-            </Button>
-          )}
+          {!phone && moreActions}
           {(held.rows.length > 0 || heldOpen) && (
             <HeldRewritesButton open={held.open} active={heldOpen} onClick={() => setHeldOpen((o) => !o)} />
           )}
-          <ExportButtons doc={doc} n={n} hasBrief={hasBrief} />
-          {document_?.kind === "prd" && (
-            <LinkButton icon="priorities" href={`/documents/${doc}/v/${n}/quality`} data-testid="quality-link">
-              Quality
-            </LinkButton>
+          {/* qa-docs-12: a phone keeps the version and the view in one row; the rest is behind More. */}
+          {phone && (
+            <Button icon="more" className="ml-auto" aria-haspopup="dialog" data-testid="version-more" onClick={() => setSheet("more")}>
+              More
+            </Button>
           )}
-          {document_?.kind === "prd" && n === latest && !canDecide && (
-            <LinkButton icon="check" href={`/documents/${doc}/publish`}>
-              Check readiness
-            </LinkButton>
-          )}
-          {document_?.kind === "prd" && <BuildRoadmapButton prd={document_} size="sm" />}
         </div>
+        )}
+        {document_ && (
+          <Sheet open={phone && sheet === "more"} title={`More on v${n}`} onClose={() => setSheet(null)} testId="sheet-more">
+            <div className="flex flex-col items-start gap-2.5 px-4 py-3">{moreActions}</div>
+          </Sheet>
         )}
         {/* #481: a spec version that may be stale is reviewed or reconciled here. */}
         {document_?.kind === "spec" && version && !version.approved_at && (
@@ -1187,11 +1231,8 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                   <b className="font-semibold text-text">Brief</b>: {briefSections.length} of {sections.length} sections
                 </span>
                 <InfoTip label="the brief" side="bottom">
-                  Expand a feature or milestone to see its detail.
+                  Expand a feature or milestone to see its detail. Full above shows every section.
                 </InfoTip>
-                <Button variant="ghost" onClick={() => switchView("full")}>
-                  Show full document
-                </Button>
               </>
             ) : (
               <>
@@ -1201,9 +1242,6 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 <InfoTip label="the full document" side="bottom">
                   The {briefSections.length} sections marked Brief make up the brief.
                 </InfoTip>
-                <Button variant="ghost" onClick={() => switchView("brief")}>
-                  Show brief
-                </Button>
               </>
             )}
           </p>
@@ -1241,9 +1279,9 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                       if (!shownSections.some((s) => s.section_key === k)) setViewOverride("full");
                       select(k);
                     }}
-                    className="font-mono text-[13px] font-medium underline underline-offset-2"
+                    className="font-medium underline underline-offset-2"
                   >
-                    #{k}
+                    {headings.get(k) ?? k}
                   </a>
                 ))}
               </div>
@@ -1436,7 +1474,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
         <SectionsSheetBody
           {...outlineProps}
           filter={sheetFilter}
-          header={<ReviewProgress reviewed={reviewedShown} total={shownSections.length} />}
+          header={<ReviewProgress reviewed={reviewedShown} total={shownSections.length} noun={outlineProps.noun} />}
         />
       </Sheet>
       <Sheet open={sheet === "review"} title="Review" onClose={() => setSheet(null)} testId="sheet-review">

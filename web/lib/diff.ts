@@ -44,6 +44,61 @@ export function wordDiff(from: string, to: string): WordOp[] {
   return ops;
 }
 
+/** An unchanged run short enough to read as part of the change around it: a few words on one line. */
+function bridge(text: string): boolean {
+  return !/[\n|]/.test(text) && text.trim().split(/\s+/).filter(Boolean).length <= 3;
+}
+
+/**
+ * The word diff as people read it (qa-docs-11): a changed sentence shows its old words as one
+ * removed phrase, then its new words as one added phrase, never "Most start More over; than…".
+ * A short unchanged run between two changes (a few words, on one line, outside a table cell)
+ * joins both phrases; longer runs, line breaks and table pipes stay as they are.
+ */
+export function readableWords(ops: WordOp[]): WordOp[] {
+  const out: WordOp[] = [];
+  let del = "";
+  let ins = "";
+  let gap = "";
+  let open = false;
+  const equal = (text: string) => {
+    if (!text) return;
+    const last = out[out.length - 1];
+    if (last?.op === "equal") last.text += text;
+    else out.push({ op: "equal", text });
+  };
+  const close = () => {
+    if (del) out.push({ op: "delete", text: del });
+    if (ins) out.push({ op: "insert", text: ins });
+    del = "";
+    ins = "";
+    open = false;
+  };
+  for (const w of ops) {
+    if (w.op === "equal") {
+      if (open && !gap && bridge(w.text)) {
+        gap = w.text;
+        continue;
+      }
+      close();
+      equal(gap + w.text);
+      gap = "";
+      continue;
+    }
+    if (gap) {
+      del += gap;
+      ins += gap;
+      gap = "";
+    }
+    open = true;
+    if (w.op === "delete") del += w.text;
+    else ins += w.text;
+  }
+  close();
+  equal(gap);
+  return out;
+}
+
 /** Indexes (into `seq`) of one longest increasing subsequence. */
 function longestIncreasing(seq: number[]): Set<number> {
   const tails: number[] = [];

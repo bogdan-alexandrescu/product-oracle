@@ -7,7 +7,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { parseBlocks, type Block, type Inline } from "@/lib/markdown";
 
-import { companyStamp } from "./connections";
+import { companyZone } from "./connections";
 
 type Section = { section_key: string; level: number; heading: string; body_md: string; layer?: Schemas["SectionOut"]["layer"] };
 type Layered = { brief_source: Schemas["VersionOut"]["brief_source"]; brief: Set<string> };
@@ -154,6 +154,26 @@ type DeckInput = {
   slides?: string[][];
 };
 
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** "Oct 18, 1:30 AM PDT": the Company time zone, in words, as the API's deck banner (export/deck.py _moment). */
+function momentInWords(at: string): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: companyZone(),
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+      timeZoneName: "short",
+    })
+      .formatToParts(new Date(at))
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.month} ${p.day}, ${p.hour}:${p.minute} ${p.dayPeriod} ${p.timeZoneName}`;
+}
+
 export function deckOut(d: DeckInput): Schemas["DeckOut"] {
   const sections = d.sections;
   const brief = sections.filter((s) => s.layer === "brief");
@@ -163,8 +183,8 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
   const banner = [
     d.title,
     `Version ${d.number}`,
-    d.status.replace("_", " "),
-    `imported ${companyStamp(d.created_at)}`,
+    capitalise(d.status.replace("_", " ")),
+    `Imported ${momentInWords(d.created_at)}`,
     ...(sourceLabel ? [sourceLabel] : []),
   ].join(" · ");
   const slideLinks = (key: string, inner: string) =>
@@ -181,7 +201,7 @@ export function deckOut(d: DeckInput): Schemas["DeckOut"] {
       kind: "title",
       heading: d.title,
       expand: [],
-      inner: `<p class="slide-kicker">Brief</p><h1 class="slide-title">${esc(d.title)}</h1><p class="slide-subtitle">Version ${d.number} · ${esc(d.status.replace("_", " "))}</p>${sourceLabel ? `<p class="slide-source">${esc(sourceLabel)}</p>` : ""}`,
+      inner: `<p class="slide-kicker">Brief</p><h1 class="slide-title">${esc(d.title)}</h1><p class="slide-subtitle">Version ${d.number} · ${esc(capitalise(d.status.replace("_", " ")))}</p>${sourceLabel ? `<p class="slide-source">${esc(sourceLabel)}</p>` : ""}`,
     },
   ];
   const grouped = new Set<string>();
