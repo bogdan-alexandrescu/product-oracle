@@ -102,7 +102,7 @@ export default function RunsPage() {
     {
       key: "flow",
       header: "Flow",
-      width: "230px",
+      width: "200px",
       phone: "meta",
       narrow: "hide",
       // qa-work-23: wide enough for the flows' names; one cut short shows in full on hover.
@@ -115,7 +115,7 @@ export default function RunsPage() {
     {
       key: "state",
       header: "State",
-      width: "320px",
+      width: "360px",
       phone: "meta",
       cell: (r) => (
         <span className="flex min-w-0 flex-wrap items-center gap-2.5 gap-y-1">

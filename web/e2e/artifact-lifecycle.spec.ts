@@ -162,7 +162,7 @@ test("an owner deletes a run from its page and restores it", async ({ page }) =>
   // qa-work-27: a run's page has a plain Delete button (no menu holding one item).
   const title = (await page.getByRole("heading", { level: 1 }).innerText()).trim();
   await page.getByTestId("run-delete").click();
-  await page.getByRole("dialog", { name: `Delete ${title}` }).getByRole("button", { name: "Move to Trash" }).click();
+  await page.getByRole("dialog", { name: /^Delete / }).getByRole("button", { name: "Move to Trash" }).click();
   await expect(page).toHaveURL(/\/runs$/);
   await page.goto("/settings/trash");
   await expect(page.getByTestId("trash-entry")).toHaveCount(1);

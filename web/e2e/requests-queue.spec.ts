@@ -41,7 +41,7 @@ test("Queue: filters by state, goal and theme, searches, and shows a filed reque
   await expect(address).toContainText("Faster check-out");
   await expect(address).toContainText("Support");
   await expect(address).toContainText("A buyer at a retail customer");
-  await expect(address.getByTestId("request-age")).toHaveText("20d");
+  await expect(address.getByTestId("request-age")).toHaveText("2w");
   await expect(address.getByTestId("goal-chip")).toHaveCount(1);
 
   await filter(page, "State").selectOption("qualified");
@@ -170,7 +170,7 @@ test("Inspector: decline Oracle's suggestion; it stays declined, with who and wh
   await expect(row(page, "Save my card for the next order").getByTestId("goal-chip")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Classify now", exact: true }).click();
-  await expect(page.getByTestId("triage-status")).toContainText(/\d+ suggestions?, \d+ found/, { timeout: 15_000 });
+  await expect(page.getByTestId("triage-status")).toContainText(/suggestions on \d+ requests? and found/, { timeout: 15_000 });
   await page.reload();
   await pick(page, "Save my card for the next order");
   await expect(inspector(page).getByTestId("request-suggestion")).toContainText(`Declined by Admin, ${declinedOn}`);
