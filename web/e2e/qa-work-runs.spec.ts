@@ -84,7 +84,7 @@ test("qa-work-7: New run is a guide to where runs start, with no disabled Estima
   await expect(dialog.getByTestId("flow-guide")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Start run" })).toHaveCount(0);
   await expect(dialog.getByRole("button", { name: "Estimate" })).toHaveCount(0);
-  await dialog.getByRole("button", { name: "Close" }).click();
+  await dialog.getByRole("button", { name: "Close" }).last().click();
   await expect(dialog).toHaveCount(0);
 });
 

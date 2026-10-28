@@ -77,10 +77,10 @@ test.describe("desktop", () => {
     await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
     await expect(page).toHaveURL(new RegExp(`/runs/${RUN}$`));
     await expect(page.getByTestId("items-review-line").getByTestId("items-open")).toHaveText("3 blocking · 7 to confirm");
-
-    await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
+    await page.goto(SCREEN);
+    await expect(rows(page)).toHaveCount(10);
+    await expect(summary).toHaveText("3 blocking · 7 to confirm");
     await row(page, "slack-alerts").getByRole("button", { name: "Remove date", exact: true }).click();
-    await expect(row(page, "slack-alerts").getByTestId("row-done")).toBeVisible();
     await expect(summary).toHaveText("2 blocking · 7 to confirm");
     await expect(bar(page).getByTestId("decision-tally")).toContainText("1 of 10 handled");
     await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();

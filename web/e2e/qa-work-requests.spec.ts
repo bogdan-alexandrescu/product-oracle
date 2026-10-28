@@ -103,6 +103,7 @@ test("qa-work-16: New request offers the list's goals and a Channel select", asy
   expect(listGoals).toContain("Cut early churn");
   await page.getByRole("button", { name: "New request" }).first().click();
   const dialog = page.getByRole("dialog", { name: "New request" });
+  await expect(dialog.getByTestId("new-request-goal").first()).toBeVisible();
   const offered = (await dialog.getByTestId("new-request-goal").allTextContents()).map((g) => g.replace("(not confirmed yet)", "").trim());
   expect(offered).toEqual(listGoals);
   const channel = dialog.getByLabel("Channel");

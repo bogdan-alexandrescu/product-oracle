@@ -38,7 +38,7 @@ test("qa-work-2: Sync now says it started and finished, and Synced reads now", a
 
 test("qa-work-49: the Kind filter and the selected result name kinds in words", async ({ page }) => {
   await openCoverage(page);
-  const kind = page.getByLabel("Kind", { exact: true });
+  const kind = page.getByRole("combobox", { name: "Kind", exact: true });
   for (const label of ["Messages", "Pull requests", "READMEs"]) {
     await expect(kind.locator("option", { hasText: label })).toHaveCount(1);
   }
