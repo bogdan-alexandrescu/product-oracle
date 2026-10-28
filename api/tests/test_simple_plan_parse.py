@@ -23,6 +23,12 @@ Test cards (protects / fails_when / no_claim):
   plan's data gives them, each slice's kind, "what it does" and flow steps, and each
   milestone's open decisions and risks; a plan without them reads empty; fails_when=one of
   them is dropped on the way to the API; no_claim=how the reader finds them in a PRD.
+- test_features_table_with_a_risk_column_stays_features: protects=a features table with a
+  "Risk" column (| Feature | Name | Milestone | Effort | Goals | Risk |) is read as features
+  (codes, names, milestones), its Risk column no milestone's risk, while a questions table
+  (its first column the question) and a risks table still give decisions and risks;
+  fails_when=a Risk column makes the features table a risks table (no features, names filed
+  as risks); no_claim=a feature's own risk on the page.
 """
 
 from datetime import date
@@ -155,3 +161,27 @@ def test_part_fields_pass_through():
     )
     assert (f2.kind, f2.what, f2.flow_steps) == (None, None, [])
     assert all(g.measured is None and g.on_track is None for g in view.goals)
+
+
+def test_features_table_with_a_risk_column_stays_features():
+    text = (
+        "| Milestone | Name | Start | End |\n|---|---|---|---|\n"
+        "| M1 | Prove it | 2 Nov 2026 | 27 Nov 2026 |\n"
+        "| M2 | Scale volume | 30 Nov 2026 | 25 Dec 2026 |\n\n"
+        "| Feature | Name | Milestone | Effort | Goals | Risk |\n|---|---|---|---|---|---|\n"
+        "| F-01 | Setup checklist | M1 | 3 | Activation | Teams skip setup |\n"
+        "| F-02 | Faster import | M2 | 2 | Growth | Big files time out |\n\n"
+        "| Question | Title | Milestone |\n|---|---|---|\n"
+        "| Q7 | Legal input on the sample data | M1 |\n\n"
+        "| Milestone | Risk |\n|---|---|\n| M2 | Pilot teams may be busy |\n"
+    )
+    data = plan.parse(text, date(2026, 10, 28))
+    assert data is not None
+    assert [(f["code"], f["name"], f["milestones"]) for f in data["features"]] == [
+        ("F-01", "Setup checklist", ["M1"]),
+        ("F-02", "Faster import", ["M2"]),
+    ]
+    m1, m2 = plan.compute(data).milestones
+    assert [(d.code, d.title) for d in m1.decisions] == [("Q7", "Legal input on the sample data")]
+    assert m1.risks == []
+    assert m2.risks == ["Pilot teams may be busy"]

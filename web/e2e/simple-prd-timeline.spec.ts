@@ -16,11 +16,13 @@ import { expect, test, type Page } from "./test";
  *
  * Card timeline-lanes: protects = the timeline's axis (months, a Today pill, the year-end
  * break hatched), one lane per goal and a "PM-owned · no engineering" lane, each piece a bar
- * labelled with its codes in its milestone's colour, a lane whose pieces run back to back
- * (Growth: F-05a in M1, F-05b in M2) stacked in two rows, the milestone flags ("M1 ends
- * 27 Nov"); on a phone the same plan down the page, each milestone with each goal's chips;
- * fails_when = a lane or a flag is missing, a piece lands in the wrong lane, the stacked
- * pieces share one row, or the page scrolls sideways; no_claim = the exact colours (the
+ * labelled with its codes in its milestone's colour, a lane whose pieces run back to back,
+ * less than a week apart (Growth: F-05a in M1, F-05b in M2), stacked in two rows while two
+ * pieces more than a week apart (Revenue: F-11a in M2, F-11b in M3 past the break) share
+ * one, the milestone flags ("M1 ends 27 Nov"); on a phone the same plan down the page, each
+ * milestone with each goal's chips; fails_when = a lane or a flag is missing, a piece lands
+ * in the wrong lane, the close pieces share one row, the far ones stack, or the page
+ * scrolls sideways; no_claim = the exact colours (the
  * tokens), the API's reading of the plan (api pytest).
  *
  * Card timeline-goals: protects = each lane's label names its goal, its targets per
@@ -115,17 +117,22 @@ for (const phone of [false, true]) {
           // Each bar names what it builds; a bar too narrow for its codes ends with "+N".
           await expect(m2).toHaveAttribute("aria-label", /F-05b Team invites, part 2 of 2|F-05b Team invites/);
           await expect(m2).toHaveText(/^F-05b( · F-08)*( · F-12a)?( \+\d)?$/);
-          // prd-timeline review: the mock's other two-milestone features stack too (F-11 in
-          // Revenue, F-12 in Growth): each one's two slices sit in different rows.
-          for (const [goal, code] of [["Revenue", "F-11"], ["Growth", "F-12"]] as const) {
-            const row = tl.getByTestId("timeline-lane").filter({ hasText: goal });
-            const first = row.locator(`[data-testid="timeline-bar"][aria-label*="${code}a "]`);
-            const second = row.locator(`[data-testid="timeline-bar"][aria-label*="${code}b "]`);
-            await expect(first).toHaveAttribute("data-milestone", "M2");
-            await expect(second).toHaveAttribute("data-milestone", "M3");
-            const [x, y] = [(await first.boundingBox())!, (await second.boundingBox())!];
-            expect(Math.abs(x.y - y.y)).toBeGreaterThan(x.height / 2);
-          }
+          // prd-timeline fix2: the layout's rule (the owner's open question, built as
+          // recommended): two pieces in one lane stack only when they overlap or are less than
+          // a week apart. F-05a ends 27 Nov and F-05b's piece starts 30 Nov (3 days): two rows,
+          // above. F-11a ends 25 Dec and F-11b starts 4 Jan, past the year-end break (10 days):
+          // one row.
+          const revenue = tl.getByTestId("timeline-lane").filter({ hasText: "Revenue" });
+          const f11a = revenue.locator('[data-testid="timeline-bar"][aria-label*="F-11a "]');
+          const f11b = revenue.locator('[data-testid="timeline-bar"][aria-label*="F-11b "]');
+          await expect(f11a).toHaveAttribute("data-milestone", "M2");
+          await expect(f11b).toHaveAttribute("data-milestone", "M3");
+          await expect(f11b).toHaveAttribute("data-row", (await f11a.getAttribute("data-row"))!);
+          const [x, y] = [(await f11a.boundingBox())!, (await f11b.boundingBox())!];
+          expect(Math.abs(x.y - y.y)).toBeLessThan(1);
+          expect(x.x + x.width).toBeLessThan(y.x);
+          await expect(m1).toHaveAttribute("data-row", "0");
+          await expect(m2).toHaveAttribute("data-row", "1");
           // No bar's label spills past the bar: it is fitted, never wider than the bar.
           for (const bar of await tl.getByTestId("timeline-bar").all()) {
             const [inner, outer] = await bar.evaluate((el) => [el.scrollWidth, el.clientWidth]);
