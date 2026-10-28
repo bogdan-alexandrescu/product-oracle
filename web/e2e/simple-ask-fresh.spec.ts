@@ -25,7 +25,7 @@ import { ADMIN } from "./helpers";
 
 const MEETING = `/simple/meetings/${CHAT_MEETING_ID}/chat`;
 const INK = { light: "rgb(7, 89, 133)", dark: "rgb(185, 227, 252)" } as const;
-const WHEN = String.raw`Today, \d{1,2}:\d{2}\s?[AP]M`;
+const WHEN = String.raw`Today, \d{1,2}:\d{2}\s?[AP]M [A-Z]{2,5}`;
 
 /** Clicks `l` once it is scrolled to the middle (on a phone the tab bar covers the bottom). */
 async function tap(l: Locator) {
@@ -128,7 +128,7 @@ for (const [phone, dark] of [
       await expect(rows.nth(0)).toHaveText(new RegExp(`^Roadmap · ${WHEN}$`));
       await expect(rows.nth(1)).toHaveText(new RegExp(`^Home · ${WHEN}$`));
       await expect(panel.getByTestId("ask-recent-meetings")).toHaveText("Meeting chats stay in their meeting.");
-      await expect(panel.getByTestId("ask-recent-list")).not.toContainText("Meeting");
+      await expect(rows.filter({ hasText: /Meeting/ })).toHaveCount(0);
 
       // Choosing Home's chat (from the Roadmap page) reopens it and continues it.
       await tap(rows.nth(1));
