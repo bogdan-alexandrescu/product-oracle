@@ -10570,7 +10570,8 @@ export interface paths {
          * @description For the web page: ``locked`` until the passcode opened the link in this browser
          *     (for every token, known or not, and nothing else), then ``active`` or ``ended`` with
          *     the link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF
-         *     only when it is on).
+         *     only when it is on); an active link also gives its document's ``title``, the company
+         *     that shared it (``shared_by``) and ``expires_at``, for the page's header.
          */
         get: operations["public_share_status"];
         put?: never;
