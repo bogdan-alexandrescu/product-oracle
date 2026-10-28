@@ -249,6 +249,28 @@ for (const [phone, dark] of [
     });
 
     /**
+     * Card roadmap-talk-wide-edge: protects = the widened talk card opened from the bar
+     * nearest the right edge stays inside the roadmap (it moves left), not at the narrow
+     * card's offset; fails_when = its right edge runs past the roadmap; no_claim = a phone
+     * (a bottom sheet there).
+     */
+    test(`the talk card opened near the right edge stays inside the roadmap (${where})`, async ({ page }) => {
+      test.skip(phone, "a phone's card is a bottom sheet");
+      await signIn(page, EMAILS.owner, "/simple/roadmap");
+      const bars = page.locator('[data-testid="bar"]');
+      await expect(bars.first()).toBeVisible();
+      const rights = await bars.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().right));
+      await bars.nth(rights.indexOf(Math.max(...rights))).click();
+      const floating = page.getByTestId("floating-card");
+      await tap(floating.getByRole("button", { name: "Talk to Oracle" }));
+      await expect(floating).toHaveAttribute("data-talk", "true");
+      await expect(floating.getByTestId("item-talk")).toBeVisible();
+      const over = await floating.evaluate((el) => el.getBoundingClientRect().right - (el as HTMLElement).offsetParent!.getBoundingClientRect().right);
+      expect(over).toBeLessThanOrEqual(0);
+      expect((await floating.boundingBox())!.width).toBeGreaterThan(800);
+    });
+
+    /**
      * Card roadmap-talk-viewer: protects = a viewer may talk with Oracle about an item but a
      * change gets a plain note and no action card; fails_when = a viewer is shown a card or
      * an Apply button; no_claim = the note's exact words.
