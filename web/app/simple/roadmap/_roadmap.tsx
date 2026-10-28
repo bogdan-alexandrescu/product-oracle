@@ -467,7 +467,10 @@ export function SimpleRoadmap() {
   // roadmap-gantt: the rows' lanes, and the plans' no-work weeks (each PRD with planned items).
   const laned = useMemo(() => (data ? lanes(data, f.group) : null), [data, f.group]);
   const planPrds = useMemo(() => [...new Set((data?.items ?? []).flatMap((i) => (i.slices.length && i.prd ? [i.prd.slug] : [])))].sort(), [data]);
-  const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, () => Promise.all(planPrds.map((prd) => unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd } } })))));
+  // A plan the reader cannot open (404) leaves the other plans' no-work weeks.
+  const plans = useQuery(`simple-plan-no-work:${planPrds.join(",")}`, async () =>
+    (await Promise.allSettled(planPrds.map((prd) => unwrap(api.GET("/v1/simple/prds/{prd}/plan", { params: { path: { prd } } }))))).flatMap((r) => (r.status === "fulfilled" ? [r.value] : [])),
+  );
   const noWork = useMemo(() => [...new Map((plans.data ?? []).flatMap((p) => p.holidays).map((h) => [h.start, h])).values()], [plans.data]);
   const [seen, setSeen] = useState<{ of: Roadmap | null; prd: [string, string][]; goal: [string, string][]; track: [string, string][] }>({ of: null, prd: [], goal: [], track: [] });
   if (data && seen.of !== data) {

@@ -268,15 +268,30 @@ export function currentMilestone(data: Roadmap): Milestone | null {
   return list.find((m) => m.end_date! >= data.today) ?? list.at(-1) ?? null;
 }
 
+/** The PRDs the plan's items come from (slug -> title), in the order first seen. */
+export function planPrds(data: Roadmap): Map<string, string> {
+  return new Map(data.items.flatMap((i) => (i.slices.length && i.prd ? [[i.prd.slug, i.prd.title] as [string, string]] : [])));
+}
+
+/** A dated milestone's PRD: the PRD of the items it names (null when it names none). */
+export function milestonePrd(data: Roadmap, m: Milestone): { slug: string; title: string } | null {
+  const ids = new Set(m.item_ids);
+  const prd = data.items.find((i) => ids.has(i.id) && i.prd)?.prd;
+  return prd ? { slug: prd.slug, title: prd.title } : null;
+}
+
 /**
  * The rows' lanes. Goal: the API's goal groups, an item with no goal of its own going under the
- * goal its plan slices move most (one lane per goal, "No goal" last); Milestone: an item under
- * the milestone of its first slice, in code order ("No milestone" last); Track and PRD: the API's.
+ * goal its plan slices move most (the API's lane of that goal when there is one; one lane per
+ * goal, "No goal" last); Milestone: an item under its PRD's milestone of its first slice, in code
+ * order, titled with the PRD when the plan's items come from more than one ("No milestone"
+ * last); Track and PRD: the API's.
  */
 export function lanes(data: Roadmap, by: Lane): Roadmap {
   if (by === "track" || by === "prd") return data;
   const byId = new Map(data.items.map((i) => [i.id, i]));
   const out = new Map<string, { key: string; title: string; item_ids: string[] }>();
+  const order = new Map<string, [string, string]>();
   const put = (key: string, title: string, id: string) => {
     const g = out.get(key) ?? { key, title, item_ids: [] };
     g.item_ids.push(id);
@@ -286,19 +301,33 @@ export function lanes(data: Roadmap, by: Lane): Roadmap {
     for (const g of data.groups)
       for (const id of g.item_ids) {
         const goal = g.key === "none" ? byId.get(id)?.slices.find((x) => x.goal)?.goal : null;
-        if (goal) put(`plan-goal:${goal}`, goal, id);
+        const named = goal ? data.groups.find((x) => x.key !== "none" && x.title === goal) : undefined;
+        if (named) put(named.key, named.title, id);
+        else if (goal) put(`plan-goal:${goal}`, goal, id);
         else put(g.key, g.title, id);
       }
   } else {
+    const many = planPrds(data).size > 1;
     for (const g of data.groups)
       for (const id of g.item_ids) {
-        const first = byId.get(id)?.slices[0];
-        if (first) put(`milestone:${first.milestone}`, `${first.milestone} ${first.milestone_name}`, id);
-        else put("none", "No milestone", id);
+        const item = byId.get(id);
+        const first = item?.slices[0];
+        if (first) {
+          const prd = item!.prd;
+          const key = `milestone:${prd?.slug ?? ""}:${first.milestone}`;
+          order.set(key, [first.milestone, prd?.title ?? ""]);
+          put(key, `${first.milestone} ${first.milestone_name}${many && prd ? ` (${prd.title})` : ""}`, id);
+        } else put("none", "No milestone", id);
       }
   }
   const groups = [...out.values()];
-  if (by === "milestone") groups.sort((a, b) => (a.key === "none" ? 1 : b.key === "none" ? -1 : a.key.localeCompare(b.key, undefined, { numeric: true })));
+  if (by === "milestone")
+    groups.sort((a, b) => {
+      if (a.key === "none" || b.key === "none") return Number(a.key === "none") - Number(b.key === "none");
+      const [ac, ap] = order.get(a.key)!;
+      const [bc, bp] = order.get(b.key)!;
+      return ac.localeCompare(bc, undefined, { numeric: true }) || ap.localeCompare(bp);
+    });
   else groups.sort((a, b) => Number(a.key === "none") - Number(b.key === "none"));
   return { ...data, groups };
 }

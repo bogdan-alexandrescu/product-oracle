@@ -13,9 +13,11 @@ import {
   daysBetween,
   liveBreaks,
   milestoneInk,
+  milestonePrd,
   milestoneWords,
   ms,
   planMilestones,
+  planPrds,
   currentMilestone,
   quarters,
   rephase,
@@ -501,14 +503,16 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             )}
             {planMilestones(data).map((m) => {
               const mx = sc.x(m.end_date!) + sc.px;
-              const words = `${milestoneWords(m.name)} ends ${shortDay(m.end_date!)}`;
+              // Two or more planned PRDs: each diamond names its PRD ("M1 Prove it (Usage alerts)").
+              const prd = planPrds(data).size > 1 ? milestonePrd(data, m) : null;
+              const words = `${milestoneWords(m.name)}${prd ? ` (${prd.title})` : ""} ends ${shortDay(m.end_date!)}`;
               return (
                 <g key={m.id} data-testid="milestone-end" data-date={m.end_date!} role="img" aria-label={words} pointerEvents="none">
                   <title>{words}</title>
                   <line data-testid="milestone-end-line" x1={mx} x2={mx} y1={l.top - 4} y2={l.height} stroke="var(--text2)" strokeWidth={1} strokeDasharray="5 4" opacity={0.8} />
                   <rect x={mx - 6} y={l.top - 16} width={12} height={12} transform={`rotate(45 ${mx} ${l.top - 10})`} fill={milestoneInk(codeOf(m.name))} stroke="var(--surface)" />
                   <text x={mx + 9} y={l.top - 6} fontSize={11} fontWeight={600} fill="var(--text2)">
-                    {codeOf(m.name)}
+                    {prd ? `${codeOf(m.name)} ${prd.title}` : codeOf(m.name)}
                   </text>
                 </g>
               );
@@ -673,7 +677,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, canDrag, phased, onD
   const phaseWords = phased ? `, ${phases.map((p) => `${p.key} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
   const sliced = !phased && planned(item);
   const fixed = closedItem(item) || planned(item);
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
   return (
     <g>
       <g
