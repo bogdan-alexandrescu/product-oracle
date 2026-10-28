@@ -1141,6 +1141,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
             reminded_at=reminded_at(d),
             can_remind=may_remind(principal, w) and bool(due_reminders(d, now)),
             approved_in=titles.get(uuid.UUID(approved_sid)) if approved_sid else None,
+            blocked_by=drafts.held(d),
         )
     patched = ((d.overlay or {}).get("sections") or {}) if sees and d else {}
     used = {k for blk in b.row.blocks for x in blk["lines"] for k in x["source_keys"]}

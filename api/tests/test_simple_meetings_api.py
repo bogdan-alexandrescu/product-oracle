@@ -274,7 +274,9 @@ async def test_approve_absent_reviewer_then_publish(client):
     [row] = (await inbox(client, w, "reviewer2"))["simple_approvals"]
     assert row["draft_id"] == d["id"] and row["decider_approved"]
     approval = (await meeting_decisions(w))[-1]
-    assert approval.title == "Approved Plan changes (publishes when Rae Viewer approves)"
+    assert approval.title == (
+        "Approved Plan changes (not yet published: Waiting on Rae Viewer's approval)"
+    )
     r = await client.post(f"{DRAFTS}/{d['id']}/approve", headers=w.ctx.as_("reviewer2"))
     assert r.status_code == 200 and r.json()["status"] == "approved", r.text
     view = await roadmap(client, w, "viewer")

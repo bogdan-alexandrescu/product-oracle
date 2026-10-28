@@ -75,7 +75,7 @@ export interface OnePagerDb {
   /** The PRD's roadmap slice, when not the default invented one (SLICE). */
   slice?: SliceItem[];
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
-  approval?: { approved_in: string; waiting_on: { id: string; name: string }[] } | null;
+  approval?: { approved_in: string; waiting_on: { id: string; name: string }[]; blocked_by?: string[] } | null;
 }
 
 const DOC_ID = stableUuid("simple-one-pager-doc");
@@ -371,7 +371,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     notes,
     draft: sees && db.draft
       ? {
-          id: db.draft.id, status: db.draft.status ?? "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: !!db.approval, approved_in: db.approval?.approved_in ?? null,
+          id: db.draft.id, status: db.draft.status ?? "working", changes: liveChanges(db).length, base_version: db.draft.base, decider_approved: !!db.approval, approved_in: db.approval?.approved_in ?? null, blocked_by: db.approval?.blocked_by ?? [],
           waiting_on: db.approval?.waiting_on ?? (db.draft.waiting_on ?? []).map((i) => ({ id: i, name: ctx.names[i] ?? "someone" })),
           can_submit: (db.draft.status ?? "working") === "working" && decides(ctx) && liveChanges(db).length > 0,
           reminded_at: remindedAt(db), can_remind: mayRemind(ctx) && dueReminders(db).length > 0,

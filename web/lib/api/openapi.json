@@ -90143,6 +90143,14 @@
               }
             ],
             "title": "Approved In"
+          },
+          "blocked_by": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Blocked By",
+            "default": []
           }
         },
         "type": "object",
@@ -113890,6 +113898,14 @@
             },
             "type": "array",
             "title": "Drafts",
+            "default": []
+          },
+          "waiting_people": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePersonRef"
+            },
+            "type": "array",
+            "title": "Waiting People",
             "default": []
           },
           "minutes": {

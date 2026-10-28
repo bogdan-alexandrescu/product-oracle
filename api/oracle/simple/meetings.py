@@ -628,6 +628,20 @@ async def comment(
     return did
 
 
+def published_words(d: Any, names: dict[uuid.UUID, str]) -> str:
+    """ "published" only when the draft's version really is (#723, production); else what
+    still holds it, in the meeting banner's words: "not yet published: Waiting on Rae's
+    approval · Sections Scope need a reviewer"."""
+    if d.status == "approved":
+        return "published"
+    why = []
+    if d.waiting_on:
+        who = drafts._people([names.get(i, "someone") for i in d.waiting_on])
+        why.append(f"Waiting on {who}'s approval")
+    why += list(d.blocked_by or [])
+    return "not yet published: " + (" · ".join(why) or "its review is not complete")
+
+
 async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     """The decider's Approve: every draft the meeting worked on, with the required
     reviewers present approving too (oracle.simple.drafts.approve_in_meeting); the
@@ -652,11 +666,7 @@ async def approve(db: AsyncSession, principal: Any, meeting_id: uuid.UUID):
     names = await _names(db, {i for d in result.drafts for i in d.waiting_on})
     parts = []
     for d in result.drafts:
-        wait = ", ".join(names.get(i, "someone") for i in d.waiting_on)
-        parts.append(
-            f"{d.document.title} (publishes when {wait} approves)" if d.waiting_on
-            else f"{d.document.title} (published)"
-        )  # fmt: skip
+        parts.append(f"{d.document.title} ({published_words(d, names)})")
     await record_meeting_decision(
         db, principal, m.id, f"Approved {'; '.join(parts)}",
         [{"kind": "document", "id": str(d.document.id)} for d in result.drafts], [],
@@ -831,6 +841,8 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
     )
     dw = await drafts.who(db, {d.document_id for d in ds})
     ds = [d for d in ds if drafts.sees(principal, d, dw)]
+    waiting = list(dict.fromkeys(i for d in ds for i in d.waiting_on or []))
+    waiting_names = await _names(db, set(waiting))
     decider_or_owner = me is not None and (me == w.decider or has_role(principal.role, "owner"))
     job_state = await _minutes_job(db, m)
     return SimpleMeetingOut(
@@ -855,7 +867,8 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         ],
         open_decisions=await _open_decisions(db, document, item_ids),
         pending_proposals=[await changes.one_out(db, principal, c) for c in seen],
-        drafts=await drafts.outs(db, principal, ds) if ds else [],
+        drafts=await _draft_outs(db, principal, ds),
+        waiting_people=[_ref(i, waiting_names) for i in waiting],
         minutes=SimpleMinutes.model_validate(m.minutes) if m.minutes else None,
         minutes_job=job_state,
         delivery=SimpleDelivery.model_validate(m.delivery) if m.delivery else None,
@@ -870,6 +883,18 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         ),
         not_approved=not_approved or [],
     )
+
+
+async def _draft_outs(db: AsyncSession, principal: Any, ds: list) -> list:
+    """The meeting's drafts; one its decider approved that has not published names what
+    still holds it (``blocked_by``, as last settled: drafts.held), so the banner never
+    says "published" for it."""
+    if not ds:
+        return []
+    out = await drafts.outs(db, principal, ds)
+    for o, d in zip(out, ds, strict=True):
+        o.blocked_by = drafts.held(d)
+    return out
 
 
 async def _minutes_job(db: AsyncSession, m: SimpleMeeting) -> str | None:

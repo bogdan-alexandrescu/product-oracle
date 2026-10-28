@@ -29415,6 +29415,11 @@ export interface components {
             can_remind: boolean;
             /** Approved In */
             approved_in?: string | null;
+            /**
+             * Blocked By
+             * @default []
+             */
+            blocked_by: string[];
         };
         /**
          * OnePagerFlow
@@ -37818,6 +37823,11 @@ export interface components {
              * @default []
              */
             drafts: components["schemas"]["SimpleDraftOut"][];
+            /**
+             * Waiting People
+             * @default []
+             */
+            waiting_people: components["schemas"]["SimplePersonRef"][];
             minutes?: components["schemas"]["SimpleMinutes"] | null;
             /** Minutes Job */
             minutes_job?: ("drafting" | "slow" | "failed") | null;

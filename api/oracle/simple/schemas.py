@@ -873,6 +873,9 @@ class OnePagerDraft(BaseModel):
 
     # S8: the meeting the decider approved it in ("Approved in <meeting title>").
     approved_in: str | None = None
+    # What else, besides ``waiting_on``, holds a decider-approved draft back (#723 review:
+    # "Sections Scope need a reviewer"), as the meeting's banner says it.
+    blocked_by: list[str] = []
 
 
 class OnePagerRemindOut(BaseModel):
@@ -1268,6 +1271,9 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     open_decisions: list[SimpleOpenDecision] = []
     pending_proposals: list[SimpleChangeOut] = []
     drafts: list[SimpleDraftOut] = []
+    # Everyone its drafts wait on, named (#723 review: an absent section reviewer need not
+    # be an attendee), for the banner's "Waiting on <name>'s approval".
+    waiting_people: list[SimplePersonRef] = []
     minutes: SimpleMinutes | None = None
     # The minutes job's state while ``minutes_state`` is "drafting" (else None).
     minutes_job: MinutesJobState | None = None
