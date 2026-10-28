@@ -65,8 +65,8 @@ for (const [phone, dark] of [
     });
 
     test(`one box: plan lines get S9's answer, any other line goes to Oracle's Ask (${where})`, async ({ page }) => {
-      // protects: the Simple Ask panel shows exactly one question box and one Send, with the This page / General switch; "who owns <item>" is answered in the panel's plan thread; "What should we cut first?" opens Oracle's Ask chat about the page (the old box's thread) with the line in it; in that thread's one box a change line gets S9's move card and the next other line goes on to Ask in the same thread; New chat lists it under Here (this page's chats only)
-      // fails_when: two boxes show, a plan question goes to the model's Ask (in the list or in a started thread), or an other line gets "I did not understand"
+      // protects: the Simple Ask panel shows exactly one question box and one Send, with the This page / General switch; "who owns <item>" is answered in the panel's chat; "What should we cut first?" goes to Oracle's Ask and its answer shows in the same chat (ask-fresh: Simple's own panel, none of Detailed's discussion screen); in that chat's one box a change line gets S9's move card and the next other line goes on to Ask in the same chat; New chat clears it
+      // fails_when: two boxes show, a plan question goes to the model's Ask, an other line gets "I did not understand", or Detailed's discussion screen opens
       // no_claim: the model's answer itself (the mock streams a canned reply); Detailed's panel (hop-panel.spec.ts)
       await signIn(page, EMAILS.commenter, "/simple/roadmap");
       if (dark) await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
@@ -80,26 +80,23 @@ for (const [phone, dark] of [
       const thread = panel.getByTestId("ask-chat-thread");
       await expect(thread.getByTestId("chat-message").last()).toHaveAttribute("data-kind", "answer");
       await expect(thread.getByTestId("chat-message").last()).toContainText(/Weekly alert digest (has no owner yet|\(its track's owner\))|owns Weekly alert digest/);
-      await expect(panel.getByTestId("discussion-thread")).toHaveCount(0);
+      await expect(thread.getByTestId("ask-answer")).toHaveCount(0);
 
       await say(panel, "What should we cut first?");
-      await expect(panel.getByTestId("discussion-thread")).toBeVisible();
-      await expect(panel.getByTestId("discussion-thread")).toContainText("What should we cut first?");
+      await expect(thread.getByTestId("chat-message-body").filter({ hasText: "What should we cut first?" })).toHaveCount(1);
+      await expect(thread.getByTestId("ask-answer").last()).toHaveAttribute("data-status", "complete");
+      await expect(panel.getByTestId("discussion-thread")).toHaveCount(0);
       await expect(page.getByText("I did not understand that.")).toHaveCount(0);
-      // The same thread's one box: a change line gets S9's card there, any other line stays Ask's.
-      const discussion = panel.getByTestId("discussion-thread");
+      // The same chat's one box: a change line gets S9's card there, any other line stays Ask's.
       await expect(panel.getByRole("textbox")).toHaveCount(1);
-      await discussion.getByRole("textbox", { name: "Message", exact: true }).fill("move Alert rules engine to next quarter");
-      await tap(discussion.getByRole("button", { name: "Send" }));
-      await expect(discussion.getByTestId("chat-card").filter({ hasText: "Move Alert rules engine to 1 Jan" })).toBeVisible();
-      await expect(discussion.getByTestId("discussion-message").filter({ hasText: "move Alert rules engine" })).toHaveCount(0);
-      await discussion.getByRole("textbox", { name: "Message", exact: true }).fill("And what is missing?");
-      await tap(discussion.getByRole("button", { name: "Send" }));
-      await expect(discussion.getByTestId("discussion-message").filter({ hasText: "And what is missing?" })).toHaveCount(1);
+      await say(panel, "move Alert rules engine to next quarter");
+      await expect(thread.getByTestId("chat-card").filter({ hasText: "Move Alert rules engine to 1 Jan" })).toBeVisible();
+      await say(panel, "And what is missing?");
+      await expect(thread.getByTestId("chat-message-body").filter({ hasText: "And what is missing?" })).toHaveCount(1);
+      await expect(thread.getByTestId("ask-answer")).toHaveCount(2);
       await expect(page.getByText("I did not understand that.")).toHaveCount(0);
       await tap(panel.getByRole("button", { name: "New chat" }));
-      await expect(panel.getByRole("region", { name: "Here" }).getByTestId("hop-chat-row")).not.toHaveCount(0);
-      await expect(panel.getByRole("region", { name: "Recent" })).toHaveCount(0);
+      await expect(panel.getByTestId("chat-message")).toHaveCount(0);
       await expect(panel.getByRole("textbox")).toHaveCount(1);
     });
 

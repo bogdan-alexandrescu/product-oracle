@@ -46,7 +46,7 @@ for (const who of ["commenter", "owner"] as const) {
     const panel = page.getByTestId("hop-panel").filter({ visible: true });
     await expect(panel.getByTestId("ask-chat")).toBeVisible();
     await say(panel, QUESTION);
-    const reply = panel.getByTestId("discussion-thread").getByTestId("oracle-reply").last();
+    const reply = panel.getByTestId("ask-chat-thread").getByTestId("ask-answer").last();
     await expect(reply).toHaveAttribute("data-status", "complete");
     await expect(reply).toContainText(/From the plan: Weekly alert digest runs .+ – .+; it is /);
     await expect(reply).not.toContainText("to go on");

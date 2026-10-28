@@ -136,13 +136,13 @@ for (const phone of [false, true]) {
       });
 
       for (const email of ["admin@example.com", "commenter@example.com", "viewer@example.com"]) {
-        test(`${email.split("@")[0]}: the Ask thread belongs to the page, its chip names the page (${where})`, async ({ context, page }) => {
+        test(`${email.split("@")[0]}: the Ask chat is about its page, named by the page (ask-fresh: a clean chat each time) (${where})`, async ({ context, page }) => {
           await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
           await login(page, email);
           await page.goto("/simple/roadmap");
           let panel = await openAsk(page, phone);
-          await expect(panel.getByText("About: Roadmap")).toBeVisible();
-          await expect(panel.getByText("About: /simple/roadmap")).toHaveCount(0);
+          await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Roadmap");
+          await expect(panel.getByText("/simple/roadmap")).toHaveCount(0);
           await panel.getByRole("textbox", { name: "Message Oracle" }).fill("who owns Weekly alert digest?");
           await tap(panel.getByRole("button", { name: "Send" }));
           const thread = panel.getByTestId("ask-chat-thread");
@@ -150,18 +150,21 @@ for (const phone of [false, true]) {
 
           await page.goto("/simple/priorities");
           panel = await openAsk(page, phone);
-          await expect(panel.getByText("About: Priorities")).toBeVisible();
+          await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Priorities");
           await expect(panel.getByText("who owns Weekly alert digest?")).toHaveCount(0);
 
           await page.goto("/simple");
           panel = await openAsk(page, phone);
-          await expect(panel.getByText("About: Home")).toBeVisible();
+          await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Home");
           await expect(panel.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about Home/);
           await expect(panel.getByText("who owns Weekly alert digest?")).toHaveCount(0);
 
           await page.goto("/simple/roadmap");
           panel = await openAsk(page, phone);
-          await expect(panel.getByTestId("ask-chat-thread").getByTestId("chat-message").filter({ hasText: "who owns Weekly alert digest?" })).toHaveCount(1);
+          // ask-fresh: back on the Roadmap the panel starts clean; the earlier chat is in Recent chats.
+          await expect(panel.getByTestId("ask-chat-thread").getByTestId("chat-message")).toHaveCount(0);
+          await tap(panel.getByRole("button", { name: "Recent chats" }));
+          await expect(panel.getByTestId("ask-recent-row").first()).toContainText("Roadmap · Today");
         });
       }
 

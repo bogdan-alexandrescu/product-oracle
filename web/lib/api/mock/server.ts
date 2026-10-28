@@ -5180,7 +5180,7 @@ async function route(db: Db, req: Request): Promise<Response> {
   const simpleRes = await simpleRoute(req);
   if (simpleRes) return simpleRes;
   // Simple S9: change by chat and "Walk me through it", through the change engine above.
-  if (p[1] === "simple" && ["chat", "meetings", "walk"].includes(p[2] ?? "")) {
+  if (p[1] === "simple" && ["chat", "chats", "meetings", "walk"].includes(p[2] ?? "")) {
     db.simple_chat ??= seedSimpleChat(db.members);
     // S8's review meetings host the chat too (their notes, agenda and decisions), read and seeded on first use.
     const roadmapDb = db.simple_roadmap;
