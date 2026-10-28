@@ -6,6 +6,7 @@ import { useId, useState, type FormEvent } from "react";
 
 import { Button, Chip, InfoTip, Notice, PageHeader, Panel, type ChipKind } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatCount } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -58,24 +59,27 @@ export function ConnectionsSettings() {
     <>
       <PageHeader
         title="Connections"
+        info={
+          <InfoTip label="connections" align="start" side="bottom">
+            Your own accounts. Only you see these connections and what they pull in; nobody else in the company can
+            use them. Oracle&apos;s own Claude calls run on the company&apos;s{" "}
+            <Link href="/settings/claude-accounts" className="underline">
+              Claude accounts
+            </Link>
+            .
+          </InfoTip>
+        }
         status={
           <>
-            <InfoTip label="connections" align="start" side="bottom">
-              Your own accounts. Only you see these connections and what they pull in; nobody else in the company can
-              use them. Oracle&apos;s own Claude calls run on the company&apos;s{" "}
-              <Link href="/settings/claude-accounts" className="underline">
-                Claude accounts
-              </Link>
-              .
-            </InfoTip>
             {q.data && (
-              <Chip kind="line">
-                <span className="tnum">{active}</span> active
+              // A count chip, filled like every page header's (no outline): green once one is active.
+              <Chip kind={active > 0 ? "pass" : "na"} data-testid="active-count">
+                <span className="tnum">{formatCount(active)}</span> active
               </Chip>
             )}
             {broken > 0 && (
               <Chip kind="warn" dot>
-                {broken} to fix
+                {formatCount(broken)} to fix
               </Chip>
             )}
           </>
@@ -179,7 +183,7 @@ function ProviderCard({
           </Button>
         )}
         {!pasting && (
-          <Button variant="ghost" className="first:-ml-2.5" onClick={() => setPasting(true)}>
+          <Button variant="secondary" onClick={() => setPasting(true)}>
             Paste a token
           </Button>
         )}
@@ -276,7 +280,8 @@ function ConnectionRow({ connection: c, reload }: { connection: Connection; relo
           )}
         </span>
       </div>
-      {c.endpoint_url && (
+      {/* Fireflies' own API goes unsaid; an owner-set endpoint is named. */}
+      {c.endpoint_url && c.endpoint_url !== FIREFLIES_DEFAULT_ENDPOINT && (
         <p className="mt-0.5 truncate text-sm text-text2" title={c.endpoint_url}>
           Endpoint: <span className="font-mono">{c.endpoint_url}</span>
         </p>
@@ -398,7 +403,7 @@ function TokenForm({
   );
 }
 
-const FIREFLIES_DEFAULT_ENDPOINT = "https://api.fireflies.ai/graphql";
+export const FIREFLIES_DEFAULT_ENDPOINT = "https://api.fireflies.ai/graphql";
 
 /** Owners only: another GraphQL endpoint for a Fireflies connection, with the key again. */
 function EndpointForm({ connection: c, reload, close }: { connection: Connection; reload: () => Promise<void>; close: () => void }) {

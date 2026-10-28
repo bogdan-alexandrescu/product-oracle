@@ -54,9 +54,6 @@ const VERB_OP: Partial<Record<ChangeVerb, Operation>> = {
   Apply: "apply_discussion_change",
 };
 
-/** The API's words without the status suffix the client adds ("… (403)"). */
-const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
-
 function byWhom(c: ChangeOut): string {
   if (c.suggested_by) return `Suggested by ${c.suggested_by.name}`;
   if (c.proposed_by_kind === "oracle") return "Proposed by Oracle";
@@ -203,7 +200,7 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
       setMode(null);
       await onDone();
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
       await onDone();
     } finally {
       setBusy(false);
@@ -222,7 +219,7 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
         setPushback(e.pushback);
         setMode("apply");
       } else {
-        setError(detail(e));
+        setError(errorMessage(e));
         await onDone();
       }
     } finally {
@@ -306,7 +303,7 @@ function ChangeRow({ c, d, onDone }: { c: ChangeOut; d: Discussion; onDone: () =
                 return null;
               } catch (e) {
                 await onDone();
-                return detail(e);
+                return errorMessage(e);
               }
             }}
           />
@@ -331,7 +328,7 @@ function ProposeChange({ d, onDone }: { d: Discussion; onDone: () => Promise<voi
       setKinds(rows);
       setKind(rows[0]?.kind ?? "");
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     }
   };
   const close = () => {
@@ -405,7 +402,7 @@ function ProposeChange({ d, onDone }: { d: Discussion; onDone: () => Promise<voi
               await onDone();
               return null;
             } catch (e) {
-              return detail(e);
+              return errorMessage(e);
             }
           }}
         />
@@ -439,7 +436,7 @@ function SummaryBlock({ d, onChanged }: { d: Discussion; onChanged: () => void }
       await call();
       setEditing(false);
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
       onChanged();
@@ -539,7 +536,7 @@ export function ChangesCard({
         setChanges(rows);
         setError(null);
       })
-      .catch((e: unknown) => live && setError(detail(e)));
+      .catch((e: unknown) => live && setError(errorMessage(e)));
     return () => {
       live = false;
     };

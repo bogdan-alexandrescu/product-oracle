@@ -46,6 +46,8 @@ export function PlanNav() {
               key={t.key}
               href={t.href}
               data-testid={t.testId}
+              aria-label={t.name}
+              title={t.name}
               aria-current={on ? "page" : undefined}
               className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap ${
                 on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"

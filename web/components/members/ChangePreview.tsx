@@ -7,6 +7,8 @@ import { SELECT } from "@/app/settings/_components/fields";
 import { Chip } from "@/components/ds";
 import { MemberApprovals } from "@/components/members/MemberApprovals";
 import type { Member } from "@/lib/api/client";
+import { plural } from "@/lib/format";
+import { displayName } from "@/lib/names";
 import { hasRole, membersApi, type HandOver, type Impact, type Responsibility, type Role } from "@/lib/api/members-types";
 import { errorMessage } from "@/lib/use-query";
 
@@ -27,7 +29,6 @@ const PROVIDER: Record<string, string> = {
   jira: "Jira",
   linear: "Linear",
 };
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const andList = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 /** "feature_set" reads "Feature set". */
 const kindWord = (kind: string) => {
@@ -35,8 +36,8 @@ const kindWord = (kind: string) => {
   return w.charAt(0).toUpperCase() + w.slice(1);
 };
 
-/** "Admin" or the email: the one name rule on a member row. */
-export const personName = (m: Pick<Member, "email" | "name">) => m.name?.trim() || m.email;
+/** A member's name by the one rule (lib/names): their own, or one made from the email. */
+export const personName = (m: Pick<Member, "email" | "name">) => displayName(m.email, m.name);
 
 function Group({ title, testId, children }: { title: string; testId: string; children: ReactNode }) {
   return (

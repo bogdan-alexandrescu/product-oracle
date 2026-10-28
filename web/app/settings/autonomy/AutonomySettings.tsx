@@ -12,13 +12,14 @@ import { Field, INPUT, TEXTAREA } from "../_components/fields";
 type Item = Schemas["AutonomyItem"];
 type Level = Item["level"];
 
-const LEVELS: { value: Level; label: string; title: string }[] = [
-  { value: "observe", label: "Observe", title: "Observe" },
-  { value: "draft", label: "Draft", title: "Draft" },
-  { value: "recommend", label: "Recommend", title: "Recommend" },
-  { value: "act", label: "Act", title: "Act within limits" },
+/** One word per level, the same on the step, the chip, the tip and the sheet. */
+const LEVELS: { value: Level; label: string }[] = [
+  { value: "observe", label: "Observe" },
+  { value: "draft", label: "Draft" },
+  { value: "recommend", label: "Recommend" },
+  { value: "act", label: "Act" },
 ];
-const TITLE: Record<Level, string> = Object.fromEntries(LEVELS.map((l) => [l.value, l.title])) as Record<Level, string>;
+const LABEL: Record<Level, string> = Object.fromEntries(LEVELS.map((l) => [l.value, l.label])) as Record<Level, string>;
 /** What each level means (H11's Settings copy). */
 const LEVEL_COPY: Record<Level, string> = {
   observe: "Oracle watches and flags. It makes nothing for you to act on.",
@@ -30,6 +31,8 @@ const GROUPS = ["knowledge", "planning", "documents", "operating", "outside"];
 
 type Prop = { title?: string; type?: string; minimum?: number; maximum?: number; fixed?: boolean; items?: { enum?: string[] } };
 const propsOf = (item: Item) => ((item.limits_schema?.properties ?? {}) as Record<string, Prop>);
+/** At Act with a limit an owner may set: the row offers Change limits (the Act step itself is the current one). */
+const editableLimits = (item: Item) => item.level === "act" && Object.values(propsOf(item)).some((p) => !p.fixed);
 
 /**
  * Settings › Autonomy (H11): how far Oracle goes on its own, per responsibility. Everyone
@@ -48,18 +51,16 @@ export function AutonomySettings() {
     <>
       <PageHeader
         title="Autonomy"
-        status={
-          <>
-            <InfoTip label="autonomy" align="start" side="bottom">
-              {LEVELS.map((l) => (
-                <span key={l.value} className="block">
-                  <b>{l.title}:</b> {LEVEL_COPY[l.value]}
-                </span>
-              ))}
-            </InfoTip>
-            {capsReady && !owner && <ViewOnly />}
-          </>
+        info={
+          <InfoTip label="autonomy" align="start" side="bottom">
+            {LEVELS.map((l) => (
+              <span key={l.value} className="block">
+                <b>{l.label}:</b> {LEVEL_COPY[l.value]}
+              </span>
+            ))}
+          </InfoTip>
         }
+        status={capsReady && !owner && <ViewOnly />}
       />
       <div className="flex flex-col gap-4 max-[600px]:gap-3">
         <p className="text-[15px] text-text2">How far Oracle goes on its own. You can change this any time.</p>
@@ -121,7 +122,7 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
   return (
     <li
       data-testid={`autonomy-row-${item.key}`}
-      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 border-t border-line px-4 py-3 first:border-t-0 max-[600px]:grid-cols-1 max-[600px]:px-3"
+      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 border-t border-line px-4 py-3 first:border-t-0 max-[900px]:grid-cols-1 max-[600px]:px-3"
     >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
         <span className="font-semibold">{item.title}</span>
@@ -135,7 +136,7 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
         <Steps item={item} onPick={onPick} />
       ) : (
         <Chip kind="acc" data-testid="autonomy-level">
-          {LEVELS.find((l) => l.value === item.level)?.label ?? item.level}
+          {LABEL[item.level] ?? item.level}
         </Chip>
       )}
       <p className="col-span-full flex min-w-0 flex-wrap items-center gap-x-2 text-[15px] text-text2">
@@ -145,30 +146,44 @@ function Row({ item, owner, onPick }: { item: Item; owner: boolean; onPick: (lev
             <span className="truncate">{item.limits_summary}</span>
           </Chip>
         )}
+        {owner && editableLimits(item) && (
+          <Button variant="ghost" onClick={() => onPick("act")}>
+            Change limits
+          </Button>
+        )}
       </p>
     </li>
   );
 }
 
-/** Observe · Draft · Recommend · Act: one line, steps above the ceiling locked. */
+/**
+ * Observe · Draft · Recommend · Act: one line, steps above the ceiling locked. Every step is
+ * the same width, lock or not, so the controls of all rows line up on both edges (on a narrow
+ * screen, under the title, they fill the row).
+ */
 function Steps({ item, onPick }: { item: Item; onPick: (level: Level) => void }) {
   return (
-    <div role="group" aria-label={`${item.title}: level`} className="inline-flex flex-none rounded-button border border-line-strong bg-surface">
+    <div
+      role="group"
+      aria-label={`${item.title}: level`}
+      data-testid="autonomy-steps"
+      className="inline-flex flex-none rounded-button border border-line-strong bg-surface max-[900px]:flex max-[900px]:w-full"
+    >
       {LEVELS.map((l) => {
         const on = item.level === l.value;
         const locked = !item.allowed.includes(l.value);
-        // Picking the current level again only means something at Act: its limits.
-        const idle = on && l.value !== "act";
+        // The current level is where the row is: pressing it again opens nothing (limits have their own button).
         return (
           <button
             key={l.value}
             type="button"
             aria-pressed={on}
+            aria-current={on ? "true" : undefined}
             disabled={locked}
-            title={locked ? `Stays with people: ${item.ceiling_reason ?? "above this responsibility's ceiling"}` : undefined}
-            onClick={() => !idle && onPick(l.value)}
-            className={`flex h-8 items-center gap-1 border-r border-line px-3 text-sm font-medium whitespace-nowrap last:border-r-0 max-[600px]:px-2 ${
-              on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
+            title={locked ? `Stays with people: ${item.ceiling_reason ?? "above this responsibility's ceiling"}` : on ? `Now ${l.label}` : undefined}
+            onClick={() => !on && onPick(l.value)}
+            className={`flex h-8 w-[7.5rem] items-center justify-center gap-1 border-r border-line px-2 text-sm font-medium whitespace-nowrap last:border-r-0 max-[900px]:w-auto max-[900px]:flex-auto ${
+              on ? "cursor-default bg-accent text-on-accent" : "text-text hover:bg-surface2"
             } disabled:cursor-not-allowed disabled:hover:bg-transparent ${on ? "" : "disabled:text-text2"}`}
           >
             {locked && <Icon name="lock" size={16} />}
@@ -223,11 +238,11 @@ function ChangeSheet({
     <Sheet open title={`Change ${item.title}`} onClose={onClose} testId="autonomy-sheet">
       <div className="mx-auto flex w-full max-w-[640px] flex-col gap-3 px-4 py-3 text-[15px]">
         <p data-testid="autonomy-from">
-          <span className="font-semibold">Now, {TITLE[item.level]}:</span> {item.levels[item.level]}
+          <span className="font-semibold">Now {LABEL[item.level]}:</span> {item.levels[item.level]}
         </p>
         <p data-testid="autonomy-to">
           <span className="font-semibold">
-            {level === item.level ? "Stays" : "Becomes"} {TITLE[level]}:
+            {level === item.level ? "Stays" : "Becomes"} {LABEL[level]}:
           </span>{" "}
           {item.levels[level]}
         </p>

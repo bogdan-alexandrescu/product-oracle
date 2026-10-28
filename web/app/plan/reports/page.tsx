@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 
-import { Button, Chip, DataTable, Empty, Notice, Page, PageHeader, Panel, useFocusTrap, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, Dialog, Empty, Notice, Page, PageHeader, Panel, type Column } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { PlanCrumb } from "../_crumb";
 import { type ReportItem } from "./_lib";
 
 const SLACK_KIND = { posted: "pass", failed: "crit", pending: "warn", not_configured: "na", not_requested: "na" } as const;
@@ -68,7 +69,7 @@ export default function ReportsPage() {
     <Page>
       <PageHeader
         title="Alignment reports"
-        back={<Link href="/roadmap" className="hover:underline">Roadmap</Link>}
+        back={<PlanCrumb />}
         action={
           can("create_alignment_report") && (
             <Button variant="primary" icon="plus" onClick={() => setOpen(true)}>
@@ -97,11 +98,9 @@ export default function ReportsPage() {
 
 function GenerateDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
-  const ref = useRef<HTMLDivElement>(null);
   const [post, setPost] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useFocusTrap(ref, true, onClose);
 
   async function generate() {
     setBusy(true);
@@ -116,39 +115,23 @@ function GenerateDialog({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4">
-      <div
-        ref={ref}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="generate-report-title"
-        className="w-full max-w-lg min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip"
-      >
-        <div className="flex min-h-14 items-center gap-2 border-b border-line px-5 max-[600px]:px-4">
-          <h2 id="generate-report-title" className="font-display text-xl font-bold tracking-heading">
-            Generate a report now
-          </h2>
-          <span className="flex-1" />
-          <Button variant="ghost" icon="x" onClick={onClose} aria-label="Close" />
-        </div>
-        <div className="space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4">
-          <p className="text-text2">The roadmap against engineering for the week so far, for every active or paused track.</p>
-          <label className="flex items-center gap-2 font-medium">
-            <input type="checkbox" checked={post} onChange={(e) => setPost(e.target.checked)} className="size-4 accent-[var(--accent)]" />
-            Post to Slack
-          </label>
-          {error && <Notice tone="error">{error}</Notice>}
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button variant="solid" disabled={busy} onClick={generate} data-autofocus>
-              Generate
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+    <Dialog
+      title="Generate a report now"
+      onClose={onClose}
+      testId="generate-report-dialog"
+      dirty={post}
+      actions={
+        <Button variant="primary" disabled={busy} onClick={generate} data-autofocus>
+          Generate
+        </Button>
+      }
+    >
+      <p className="text-text2">The roadmap against engineering for the week so far, for every active or paused track.</p>
+      <label className="flex items-center gap-2 font-medium">
+        <input type="checkbox" checked={post} onChange={(e) => setPost(e.target.checked)} className="size-4 accent-[var(--accent)]" />
+        Post to Slack
+      </label>
+      {error && <Notice tone="error">{error}</Notice>}
+    </Dialog>
   );
 }

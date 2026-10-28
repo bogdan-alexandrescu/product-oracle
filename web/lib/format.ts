@@ -1,4 +1,4 @@
-import { displayZone, shownDay, zoneDateTime } from "@/lib/dates";
+import { calendarDay, dayIn, displayZone, formatInZone, shownDay, zoneDateTime } from "@/lib/dates";
 import type { CitationOut, FeedbackStatus, JobSettings, LlmJob, LlmJobKind, Suggestion, Verdict } from "@/lib/api/client";
 
 // #447: display dates in the Company time zone (lib/dates.ts), not the browser's.
@@ -11,6 +11,101 @@ export const formatDay = (iso: string) => shownDay(iso, { month: "short", day: "
 export const formatDateTime = (iso: string) => zoneDateTime(iso, displayZone());
 
 export { inWords } from "@/lib/dates";
+
+/*
+ * One way to write each value (#QA): dates, times, ranges and ages in the Company time zone,
+ * money, counts, plurals and percentages. `zone` and `now` default to the Company zone and
+ * the clock; tests pass them.
+ */
+
+/** A calendar day with no zone, kept as written. */
+const NAIVE_DAY = /^\d{4}-\d{2}-\d{2}(T[\d:.]+)?$/;
+
+/** The calendar day (YYYY-MM-DD) `value` falls on in `zone`; a calendar day as written. */
+function dayOf(value: string | number | Date, zone: string): string | null {
+  if (typeof value === "string" && NAIVE_DAY.test(value)) return value.slice(0, 10);
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) ? null : dayIn(at, zone);
+}
+
+/** "Oct 28", or "Oct 28, 2026" when the year is not the current one. */
+export function formatShortDate(value: string, now: number | Date = Date.now(), zone = displayZone()): string {
+  const day = dayOf(value, zone);
+  if (!day) return value;
+  const sameYear = day.slice(0, 4) === dayOf(now, zone)?.slice(0, 4);
+  return calendarDay(day, sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+}
+
+/** "Mon, Nov 2". */
+export function formatWeekday(value: string, zone = displayZone()): string {
+  const day = dayOf(value, zone);
+  return day ? calendarDay(day, { weekday: "short", month: "short", day: "numeric" }) : value;
+}
+
+/** "9:00 AM PDT". */
+export const formatTime = (iso: string, zone = displayZone()) => formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" });
+
+/** "Sep 8 – Oct 20, 2026"; "Dec 8, 2026 – Jan 20, 2027" across years; one day alone when they are the same. */
+export function formatDateRange(start: string, end: string, zone = displayZone()): string {
+  const from = dayOf(start, zone);
+  const to = dayOf(end, zone);
+  if (!from || !to) return `${start} – ${end}`;
+  const full = { month: "short", day: "numeric", year: "numeric" } as const;
+  if (from === to) return calendarDay(to, full);
+  const head = from.slice(0, 4) === to.slice(0, 4) ? calendarDay(from, { month: "short", day: "numeric" }) : calendarDay(from, full);
+  return `${head} – ${calendarDay(to, full)}`;
+}
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/** How long ago `value` was: "now" (under a minute), "5m", "3h", "2d", "3w", "4mo", "2y". */
+export function formatAge(value: string | number | Date, now: number | Date = Date.now()): string {
+  const ms = new Date(now).getTime() - new Date(value).getTime();
+  if (Number.isNaN(ms)) return "";
+  if (ms < MINUTE) return "now";
+  if (ms < HOUR) return `${Math.floor(ms / MINUTE)}m`;
+  if (ms < DAY) return `${Math.floor(ms / HOUR)}h`;
+  if (ms < 14 * DAY) return `${Math.floor(ms / DAY)}d`;
+  if (ms < 60 * DAY) return `${Math.floor(ms / (7 * DAY))}w`;
+  if (ms < 365 * DAY) return `${Math.floor(ms / (30 * DAY))}mo`;
+  return `${Math.floor(ms / (365 * DAY))}y`;
+}
+
+const MONEY = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** "$6.82", "$1,250.00". */
+export const formatMoney = (value: number) => MONEY.format(value);
+
+/** "$6.82 of $4.00": spent against a budget. */
+export const formatMoneyOf = (spent: number, budget: number) => `${formatMoney(spent)} of ${formatMoney(budget)}`;
+
+/** "12,345". */
+export const formatCount = (n: number) => n.toLocaleString("en-US");
+
+/** "1 item", "2 items", "1,234 runs"; an irregular plural as the third argument: plural(2, "person", "people"). */
+export const plural = (n: number, one: string, many = `${one}s`) => `${formatCount(n)} ${n === 1 ? one : many}`;
+
+/** A fraction (0 to 1) as a whole percent: formatPercent(0.375) is "38%". */
+export const formatPercent = (fraction: number) => `${Math.round(fraction * 100)}%`;
+
+/** A time zone in words: "Pacific Time (Los Angeles)"; the zone's city alone when it has no name. */
+export function zoneName(zone: string): string {
+  const city = (zone.split("/").pop() ?? zone).replace(/_/g, " ");
+  let name: string | undefined;
+  try {
+    // The zone's name, not a date: nothing here is shown in another zone.
+    // eslint-disable-next-line no-restricted-syntax
+    name = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "longGeneric" })
+      .formatToParts(new Date())
+      .find((p) => p.type === "timeZoneName")?.value;
+  } catch {
+    return city;
+  }
+  if (!name || /^GMT[+-]/.test(name)) return city;
+  return name.includes(city) ? name : `${name} (${city})`;
+}
 
 export const SOURCE_LABEL: Record<CitationOut["source"], string> = {
   slack: "Slack",

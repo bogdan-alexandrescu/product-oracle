@@ -1911,7 +1911,7 @@ function state(db: Db): LaneFState {
 }
 
 const isMethod = (m: string | null): m is Method => !!m && (METHODS as string[]).includes(m);
-const KEY_RE = /^[a-z0-9][a-z0-9-]{1,62}$/;
+const KEY_RE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 /** Each goal term titled as the baseline titles the goal now, as the API reads it. */
 function goalTitles(db: Db, r: Schemas["PriorityRanking"]): Schemas["PriorityRanking"] {

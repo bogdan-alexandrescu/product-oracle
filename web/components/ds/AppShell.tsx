@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 
 import { HopPanel } from "@/components/hop/HopPanel";
 import { SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
-import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
+import { setPanelOpen, takeAskFocus, usePanelOpen } from "@/components/hop/open-state";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { homeOf, modeOf } from "@/lib/experience";
 import { resetMockData } from "@/lib/api/mock/server";
@@ -24,6 +24,7 @@ import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
 import { Notice } from "./Layout";
 import { ModeRoot, ModeSwitch } from "./ModeSwitch";
+import { usePageInfo } from "./page-info";
 import { RAIL_SELECTED, TAB_BAR } from "./rail";
 import { Sheet } from "./Sheet";
 
@@ -77,13 +78,15 @@ export function useDocumentDestination(slug: string | undefined, href: string | 
   }, [slug, href]);
 }
 
-/** The destination the open document page belongs to, once it has said so. */
+/** The destination the open document page belongs to, once it has said so; a new roadmap's is Plan (qa-shell-14). */
 function useDocumentHome(pathname: string): string | undefined {
+  const kind = useSearchParams().get("kind");
   useSyncExternalStore(
     subscribeDocumentHomes,
     () => documentHomesVersion,
     () => 0,
   );
+  if (pathname === "/documents/new") return kind === "roadmap" ? "/plan" : undefined;
   const slug = /^\/documents\/([^/]+)/.exec(pathname)?.[1];
   return slug ? documentHomes.get(decodeURIComponent(slug)) : undefined;
 }
@@ -98,8 +101,8 @@ function isActive(pathname: string, d: Dest, home?: string): boolean {
   if (d.href === "/documents" && pathname.startsWith("/intakes/")) return true;
   // A spec's flows and wireframes (v2 screen 4) belong with its tech brief, a document.
   if (d.href === "/documents" && pathname.startsWith("/specs/")) return true;
-  // The Plan's alignment reports (F6) belong with the Roadmap.
-  if (d.href === "/roadmap" && (pathname === "/plan" || pathname.startsWith("/plan/"))) return true;
+  // qa-plan-19: the Roadmap's tabs (changelog, launches) are tabs of Plan.
+  if (d.href === "/plan" && (pathname === "/roadmap" || pathname.startsWith("/roadmap/"))) return true;
   return pathname === base || pathname.startsWith(`${base}/`);
 }
 
@@ -144,18 +147,31 @@ const THEMES: { value: ThemeChoice; label: string; icon: IconName }[] = [
   { value: "dark", label: "Dark", icon: "moon" },
 ];
 
-/** The user menu: who is signed in, the theme switch, My account, mock reset, sign out. */
-function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
+/**
+ * The user menu: who is signed in, the theme switch, My account, mock reset, sign out. On open,
+ * focus moves to the checked theme; Escape closes it and returns focus to the avatar
+ * (qa-shell-12, qa-shell-18). The avatar is marked current on /account (qa-shell-15).
+ */
+function UserMenu({ placement }: { placement: "rail" | "header" }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { me, clear } = useMe();
   const [theme, setTheme] = useTheme();
-  const [open, setOpen] = useState(placement === "sheet");
+  const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
   const email = me?.email ?? me?.token_name ?? "";
 
   useEffect(() => {
-    if (!open || placement === "sheet") return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    if (!open) return;
+    root.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      // Only this menu closes (not the Ask panel).
+      e.preventDefault();
+      setOpen(false);
+      button.current?.focus();
+    };
     const onDown = (e: PointerEvent) => root.current && !root.current.contains(e.target as Node) && setOpen(false);
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onDown);
@@ -163,7 +179,14 @@ function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onDown);
     };
-  }, [open, placement]);
+  }, [open]);
+
+  // Close on navigation (My account).
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    setLastPath(pathname);
+    setOpen(false);
+  }
 
   async function signOut() {
     await api.POST("/v1/auth/logout").catch(() => undefined);
@@ -181,22 +204,20 @@ function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
   }
 
   const initials = initialsOf(email);
+  const rail = placement === "rail";
+  const current = pathname === "/account" || pathname.startsWith("/account/");
 
   const panel = (
     <div
-      role={placement === "sheet" ? undefined : "dialog"}
+      role="dialog"
       aria-label="Account"
       className={
-        placement === "rail"
+        rail
           ? "absolute bottom-0 left-[calc(100%+12px)] z-50 w-72 rounded-panel border border-line bg-surface p-3 text-text shadow-tip [--focus-ring:var(--accent)]"
-          : placement === "header"
-            ? "absolute top-[calc(100%+8px)] right-0 z-50 w-72 max-w-[calc(100vw-20px)] rounded-panel border border-line bg-surface p-3 text-left text-text shadow-tip [--focus-ring:var(--accent)]"
-            : "border-t border-line pt-3"
+          : "absolute top-[calc(100%+8px)] right-0 z-50 w-72 max-w-[calc(100vw-20px)] rounded-panel border border-line bg-surface p-3 text-left text-text shadow-tip [--focus-ring:var(--accent)]"
       }
     >
-      <p className="mb-3 truncate px-1 text-sm font-medium" data-testid={placement === "sheet" ? "signed-in-as-sheet" : undefined}>
-        {email}
-      </p>
+      <p className="mb-3 truncate px-1 text-sm font-medium">{email}</p>
       <div role="radiogroup" aria-label="Theme" className="mb-3 grid grid-cols-3 overflow-hidden rounded-button border border-line-strong">
         {THEMES.map((t) => (
           <button
@@ -219,9 +240,10 @@ function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
         // A person's own account; a service token has none.
         <Link
           href="/account"
-          data-testid={placement === "sheet" ? "nav-my-account-sheet" : "nav-my-account"}
-          onClick={() => setOpen(placement === "sheet")}
-          className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2"
+          data-testid="nav-my-account"
+          aria-current={current ? "page" : undefined}
+          onClick={() => setOpen(false)}
+          className="mb-1 flex h-9 w-full items-center gap-2 rounded-lg px-2 text-sm font-medium text-text hover:bg-surface2 aria-[current=page]:bg-accent-soft aria-[current=page]:text-accent-ink"
         >
           <Icon name="user" size={16} />
           My account
@@ -254,19 +276,19 @@ function UserMenu({ placement }: { placement: "rail" | "header" | "sheet" }) {
     </div>
   );
 
-  if (placement === "sheet") return panel;
-  const rail = placement === "rail";
   return (
     <div ref={root} className={rail ? "relative mt-2" : "relative flex-none"}>
       <button
+        ref={button}
         type="button"
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={`Account ${email}`}
+        aria-current={current ? "page" : undefined}
         title={email}
         data-testid={rail ? "user-menu" : "phone-user-menu"}
         onClick={() => setOpen((o) => !o)}
-        className={`grid place-items-center rounded-full bg-rail-avatar font-semibold text-on-rail-avatar ring-2 ring-rail-avatar-ring ${
+        className={`grid place-items-center rounded-full bg-rail-avatar font-semibold text-on-rail-avatar ring-2 ring-rail-avatar-ring aria-[current=page]:ring-[3px] aria-[current=page]:ring-rail-active-text ${
           rail ? "size-[38px] text-sm" : "size-8 text-[13px]"
         }`}
       >
@@ -330,7 +352,8 @@ function Navs() {
   }
   if (!shown) return null;
   // #723: Simple's pages have Simple's own rail, nothing of Detailed's.
-  if (modeOf(pathname) === "simple") return <SimpleNavs account={(placement) => <UserMenu placement={placement} />} />;
+  // qa-shell-27: on a phone the header's avatar is the one account control, never the More sheet.
+  if (modeOf(pathname) === "simple") return <SimpleNavs account={(placement) => (placement === "rail" ? <UserMenu placement="rail" /> : null)} />;
 
   const tabDests = TABS.map((t) => DESTINATIONS.find((d) => d.label === t)!);
   const moreDests = [...DESTINATIONS.filter((d) => !TABS.includes(d.label)), ...(settings ? [settings] : [])];
@@ -393,15 +416,11 @@ function Navs() {
           More
         </button>
       </nav>
-      {more && (
-        <div
-          id="more-sheet"
-          role="dialog"
-          aria-label="More"
-          className="fixed inset-x-0 bottom-[var(--phone-tab-bar)] z-40 hidden rounded-t-inspector border-t border-line bg-surface p-3 shadow-tip max-[600px]:block"
-        >
+      {/* qa-shell-10: a sheet above the tab bar, with a backdrop; Escape, a tap outside or a swipe down closes it. */}
+      <Sheet open={more} title="More" onClose={() => setMore(false)} testId="more-sheet" id="more-sheet" above>
+        <div className="p-3">
           <ModeSwitch placement="sheet" documentHome={home} />
-          <ul className="mb-2 grid grid-cols-3 gap-1">
+          <ul className="grid grid-cols-3 gap-1">
             {moreDests.map((d) => (
               <li key={d.href}>
                 <Link
@@ -415,9 +434,8 @@ function Navs() {
               </li>
             ))}
           </ul>
-          <UserMenu placement="sheet" />
         </div>
-      )}
+      </Sheet>
     </>
   );
 }
@@ -429,6 +447,7 @@ const OTHER_TITLES: [string, string][] = [
   ["/oauth", "Connect an MCP client"],
   ["/sources", "Sources"],
   ["/design", "Design system"],
+  ["/account", "My account"],
 ];
 
 function fallbackTitle(pathname: string): string {
@@ -442,49 +461,108 @@ function fallbackTitle(pathname: string): string {
 }
 
 /**
+ * qa-shell-23: the phone header's one rule. A tab of a section (Plan's tabs and the Roadmap's,
+ * Company's, Settings' and /sources, one level below the section) shows the section's name, as
+ * the rail names it; every other page (a document, a run, a report, a template) shows its H1.
+ * The browser tab always names the page itself ("Dates · Product Oracle").
+ */
+function sectionOf(pathname: string): string | null {
+  if (/^\/(plan|roadmap)(\/[^/]+)?\/?$/.test(pathname)) return "Plan";
+  if (/^\/company(\/[^/]+)?\/?$/.test(pathname)) return "Company";
+  if (/^\/settings(\/[^/]+)?\/?$/.test(pathname) || /^\/sources(\/|$)/.test(pathname)) return SETTINGS.label;
+  return null;
+}
+
+/** An H1's words, without its suffix ("v3") when `plain`. */
+function h1Text(h1: Element | undefined, plain: boolean): string {
+  if (!h1) return "";
+  return Array.from(h1.childNodes, (n) => (plain && n instanceof Element && n.hasAttribute("data-title-suffix") ? "" : (n.textContent?.trim() ?? "")))
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ");
+}
+
+/**
  * The open page's title, read from its H1 (PageHeader's title and suffix, "Checkout PRD v3")
  * and kept in step as the page loads; the destination's label until the page draws one.
+ * `plain`: the title without the suffix, for the browser tab ("Checkout PRD").
  */
-function usePageTitle(pathname: string): string {
-  const [title, setTitle] = useState<string | null>(null);
+const noSubscribe = () => () => undefined;
+
+function usePageTitle(pathname: string): { title: string; plain: string } {
+  const [read, setRead] = useState<{ title: string; plain: string } | null>(null);
   useEffect(() => {
     const main = document.querySelector("main");
     if (!main) return;
-    const read = () => {
-      const h1 = main.querySelector("h1");
-      const text = h1
-        ? Array.from(h1.childNodes, (n) => n.textContent?.trim() ?? "")
-            .filter(Boolean)
-            .join(" ")
-            .replace(/\s+/g, " ")
-        : "";
-      setTitle(text || null);
+    const update = () => {
+      // Next keeps recently visited routes mounted but hidden: the shown page's H1.
+      const h1s = Array.from(main.querySelectorAll("h1"));
+      const h1 = h1s.find((h) => h.checkVisibility()) ?? h1s[0];
+      const title = h1Text(h1, false);
+      const plain = h1Text(h1, true);
+      setRead((r) => (r?.title === title && r.plain === plain ? r : title ? { title, plain: plain || title } : null));
     };
-    read();
-    const watch = new MutationObserver(read);
-    watch.observe(main, { subtree: true, childList: true, characterData: true });
+    update();
+    const watch = new MutationObserver(update);
+    watch.observe(main, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style"] });
     return () => watch.disconnect();
   }, [pathname]);
-  return title ?? fallbackTitle(pathname);
+  // qa-shell-24: a not-found page renders on the server under another path than the
+  // browser's, so the path's fallback title waits for hydration (no #418 mismatch).
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  if (read) return read;
+  const fallback = hydrated ? fallbackTitle(pathname) : "";
+  return { title: fallback, plain: fallback };
+}
+
+/** Public pages that set their own title (a customer's interview link, a shared roadmap). */
+const ownTitle = (pathname: string) => pathname.startsWith("/i/") || pathname.startsWith("/s/");
+
+/**
+ * qa-shell-2: the browser tab names the page, "<title> · Product Oracle", from the same H1
+ * the phone header reads; signed out too ("Sign in · Product Oracle").
+ */
+function DocumentTitle() {
+  const pathname = usePathname();
+  const { plain } = usePageTitle(pathname);
+  const text = !plain || plain === "Product Oracle" ? "Product Oracle" : `${plain} · Product Oracle`;
+  useEffect(() => {
+    if (ownTitle(pathname) || !plain) return;
+    document.title = text;
+    // Next may write the layout's title back after a navigation: keep ours.
+    const head = document.querySelector("head");
+    if (!head) return;
+    const keep = new MutationObserver(() => {
+      if (document.title !== text) document.title = text;
+    });
+    keep.observe(head, { subtree: true, childList: true, characterData: true });
+    return () => keep.disconnect();
+  }, [pathname, plain, text]);
+  return null;
 }
 
 /**
  * The phone header (I3, 2026-10-19): a slim 44 px bar in the rail's navy on top of every phone
  * screen, below the top safe-area inset: the compact sky Compass mark (links Home), the page's
- * title and the user menu. The page's own H1 hides on a phone (kept for screen readers). The
- * title is white in both themes: rail-active-text, since `white` follows the theme. Desktop: hidden.
+ * title (or its section's, qa-shell-23), the page's info tip (qa-shell-22) and the user menu.
+ * The page's own H1 hides on a phone (kept for screen readers). The title is white in both
+ * themes: rail-active-text, since `white` follows the theme. Desktop: hidden. Not on the pages
+ * without the shell (sign-in, access, consent, a customer's link): they keep their own heading.
  */
 function PhoneHeader() {
   const pathname = usePathname();
   const { me } = useMe();
-  const title = usePageTitle(pathname);
+  const { title } = usePageTitle(pathname);
+  // The section from the path waits for hydration too (qa-shell-24, see usePageTitle).
+  const hydrated = useSyncExternalStore(noSubscribe, () => true, () => false);
+  const info = usePageInfo();
   const [ask, setAsk] = useState(false);
   const [askPath, setAskPath] = useState(pathname);
   if (askPath !== pathname) {
     setAskPath(pathname);
     setAsk(false);
   }
-  if (pathname.startsWith("/i/") || pathname.startsWith("/s/")) return null;
+  if (bare(pathname)) return null;
   return (
     <header
       data-testid="phone-header"
@@ -493,9 +571,19 @@ function PhoneHeader() {
       <Link href={homeOf(modeOf(pathname))} aria-label="Product Oracle" data-testid="phone-brand" className="flex-none rounded-md">
         <Mark size={22} tone="sky" className="block" />
       </Link>
-      <p data-testid="phone-title" className="min-w-0 flex-1 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
-        {title}
-      </p>
+      <span className="flex min-w-0 flex-1 items-center gap-2">
+        <p data-testid="phone-title" className="min-w-0 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
+          {(hydrated && sectionOf(pathname)) || title}
+        </p>
+        {info && (
+          <span
+            data-testid="phone-info"
+            className="flex flex-none items-center [&_[data-testid=info-tip][aria-expanded=false]>span]:border-rail-text [&_[data-testid=info-tip][aria-expanded=false]>span]:text-rail-active-text"
+          >
+            {info}
+          </span>
+        )}
+      </span>
       {me && !panelHidden(pathname) && (
         <button
           type="button"
@@ -525,14 +613,21 @@ export function panelHidden(pathname: string): boolean {
 /**
  * The head-of-product panel's place (G7 "Panel place", owner 2026-10-21): a 44 px "Ask" strip
  * on the right edge of every screen; a click or ⌘J / Ctrl+J opens the 400 px panel, docked
- * from 1280 px (the page's grid gives up the width) and an overlay drawer below. Esc or the
- * strip closes it. Phones get the header's Ask button instead. Nothing loads until it opens.
+ * from 1600 px (the page's grid gives up the width; qa-shell-8: below, docking squeezed the
+ * page) and an overlay drawer below. Esc or the strip closes it. Opening focuses the question
+ * box; closing returns focus to the strip (qa-shell-19). Phones get the header's Ask button
+ * instead. On Simple's pages no strip: Simple's rail has its own Ask Oracle, which opens the
+ * same panel (qa-shell-16). Nothing loads until it opens.
  */
 function HopDock() {
   const pathname = usePathname();
   const { me } = useMe();
   const open = usePanelOpen();
   const shown = !!me && !panelHidden(pathname);
+  const simple = modeOf(pathname) === "simple";
+  const strip = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLDivElement>(null);
+  const wasOpen = useRef(open);
   useEffect(() => {
     if (!shown) return;
     const onKey = (e: KeyboardEvent) => {
@@ -546,32 +641,64 @@ function HopDock() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [shown, open]);
+  useEffect(() => {
+    const closed = wasOpen.current && !open;
+    wasOpen.current = open;
+    if (closed) {
+      strip.current?.focus();
+      return;
+    }
+    if (!open || !takeAskFocus()) return;
+    // The panel draws its question box once it has loaded.
+    const focusBox = () => {
+      const box = drawer.current?.querySelector<HTMLTextAreaElement>('textarea[aria-label="Ask Oracle"]') ?? drawer.current?.querySelector<HTMLTextAreaElement>("textarea");
+      if (!box) return false;
+      box.focus();
+      return true;
+    };
+    if (focusBox() || !drawer.current) return;
+    const watch = new MutationObserver(() => focusBox() && watch.disconnect());
+    watch.observe(drawer.current, { subtree: true, childList: true });
+    const stop = window.setTimeout(() => watch.disconnect(), 5000);
+    return () => {
+      watch.disconnect();
+      window.clearTimeout(stop);
+    };
+  }, [open]);
   if (!shown) return null;
+  if (simple && !open) return null;
   // The strip is 44 px and the dock's left border 1 px more: a 44 px dock would push the
   // strip 1 px past the right edge (sideways scroll).
+  const width = simple ? "w-0 min-[1600px]:w-[400px] min-[1600px]:border-l" : open ? "w-[45px] border-l min-[1600px]:w-[400px]" : "w-[45px] border-l";
   return (
     <aside
       aria-label="Ask Oracle"
       data-testid="hop-dock"
       data-open={open ? "true" : "false"}
-      className={`sticky top-0 col-start-3 row-start-1 h-dvh border-l border-line bg-surface max-[600px]:hidden ${open ? "w-[45px] min-[1280px]:w-[400px]" : "w-[45px]"}`}
+      className={`sticky top-0 col-start-3 row-start-1 h-dvh border-line bg-surface max-[600px]:hidden ${width}`}
     >
-      <button
-        type="button"
-        data-testid="hop-strip"
-        aria-expanded={open}
-        aria-label={open ? "Close Ask Oracle" : "Ask Oracle"}
-        title="Ask Oracle (⌘J)"
-        onClick={() => setPanelOpen(!open)}
-        className={`flex h-full w-11 flex-col items-center gap-3 pt-4 text-text hover:bg-surface2 ${open ? "min-[1280px]:hidden" : ""}`}
-      >
-        <Mark size={24} tone="current" className="block flex-none text-accent" />
-        <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
-      </button>
+      {!simple && (
+        <button
+          ref={strip}
+          type="button"
+          data-testid="hop-strip"
+          aria-expanded={open}
+          aria-label={open ? "Close Ask Oracle" : "Ask Oracle"}
+          title="Ask Oracle (⌘J)"
+          onClick={() => setPanelOpen(!open)}
+          className={`flex h-full w-11 flex-col items-center gap-3 pt-4 text-text hover:bg-surface2 ${open ? "min-[1600px]:hidden" : ""}`}
+        >
+          <Mark size={24} tone="current" className="block flex-none text-accent" />
+          <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
+        </button>
+      )}
       {open && (
         <div
+          ref={drawer}
           data-testid="hop-drawer"
-          className="fixed inset-y-0 right-11 z-40 w-[400px] max-w-[calc(100vw-44px)] border-l border-line shadow-tip min-[1280px]:static min-[1280px]:h-full min-[1280px]:w-full min-[1280px]:max-w-none min-[1280px]:border-l-0 min-[1280px]:shadow-none"
+          className={`fixed inset-y-0 z-40 w-[400px] border-l border-line shadow-tip min-[1600px]:static min-[1600px]:h-full min-[1600px]:w-full min-[1600px]:max-w-none min-[1600px]:border-l-0 min-[1600px]:shadow-none ${
+            simple ? "right-0 max-w-[100vw]" : "right-11 max-w-[calc(100vw-44px)]"
+          }`}
         >
           <HopPanel onClose={() => setPanelOpen(false)} />
         </div>
@@ -582,8 +709,8 @@ function HopDock() {
 
 /**
  * The app shell (I3): SwarmCloud's navy rail with its destinations on desktop, a tab bar
- * (Home, PRDs, Roadmap, Inbox, More) and the phone header on a phone. No rail on /login, /oauth, a
- * customer's interview link /i/ (no phone header either) and when
+ * (Home, PRDs, Plan, Inbox, More) and the phone header on a phone. No rail (nor phone header)
+ * on /login, /access, /oauth, a customer's interview link /i/ and when
  * signed out: its grid column then collapses to nothing.
  */
 /**
@@ -613,14 +740,23 @@ export function CapsError() {
 export function AppShell({ children }: { children: ReactNode }) {
   return (
     <ScreenSubjectProvider>
+      {/* qa-plan-63, qa-shell-17: the first stop of Tab. */}
+      <a
+        href="#main"
+        data-testid="skip-link"
+        className="sr-only rounded-button bg-surface px-3 py-2 text-sm font-semibold text-text shadow-tip focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:ring-2 focus:ring-accent"
+      >
+        Skip to content
+      </a>
       <Suspense fallback={null}>
         <ModeRoot />
+        <DocumentTitle />
       </Suspense>
       <div className="grid min-h-dvh grid-cols-[auto_minmax(0,1fr)_auto]">
         <Suspense fallback={null}>
           <Navs />
         </Suspense>
-        <main className="col-start-2 row-start-1 min-w-0">
+        <main id="main" tabIndex={-1} className="col-start-2 row-start-1 min-w-0 outline-none">
           <Suspense fallback={null}>
             <PhoneHeader />
           </Suspense>

@@ -43,7 +43,8 @@ test("fireflies endpoint: an owner sets it and sees it on the source; an approve
 
   // The source reading it shows which endpoint it reads.
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-sources").click();
-  await expect(page.getByRole("listitem", { name: "Customer calls" })).toContainText("Reads https://ff.example.com/v2/graphql");
+  await expect(page.getByRole("listitem", { name: "Customer calls" }).getByTestId("fireflies-endpoint")).toHaveText("Own Fireflies endpoint");
+  await expect(page.getByRole("listitem", { name: "Customer calls" }).getByTestId("fireflies-endpoint")).toHaveAttribute("title", "Reads https://ff.example.com/v2/graphql");
 
   // So does the source's coverage on the Sources page (#602 review).
   await page.goto("/sources");
@@ -54,7 +55,8 @@ test("fireflies endpoint: an owner sets it and sees it on the source; an approve
   // An approver sees it, with no way to change it or to set one.
   await page.evaluate(([k, r]) => localStorage.setItem(k, r), [MOCK_ROLE_KEY, "approver"] as const);
   await page.reload();
-  await expect(page.getByRole("listitem", { name: "Customer calls" })).toContainText("Reads https://ff.example.com/v2/graphql");
+  await expect(page.getByRole("listitem", { name: "Customer calls" }).getByTestId("fireflies-endpoint")).toHaveText("Own Fireflies endpoint");
+  await expect(page.getByRole("listitem", { name: "Customer calls" }).getByTestId("fireflies-endpoint")).toHaveAttribute("title", "Reads https://ff.example.com/v2/graphql");
   await openConnections(page);
   await expect(accounts).toContainText("Endpoint: https://ff.example.com/v2/graphql");
   await expect(accounts.getByRole("button", { name: "Change endpoint" })).toHaveCount(0);

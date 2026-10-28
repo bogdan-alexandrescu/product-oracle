@@ -22,15 +22,16 @@ import {
   type ChipKind,
 } from "@/components/ds";
 import { api, ApiError, type Schemas, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatCount, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
 import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
+import { FIREFLIES_DEFAULT_ENDPOINT } from "../connections/ConnectionsSettings";
 import { labelsOf, type PickerProps } from "./_browse-list";
 import { CodeMaps } from "./_code-maps";
 import { GithubPicker, githubReads } from "./_github-picker";
-import { SlackPicker } from "./_slack-picker";
+import { SlackPicker, useSlackChannelNames } from "./_slack-picker";
 import { CodeMapRefreshSetting } from "./_code-map-refresh";
 import { CompanyDriveSettings } from "./CompanyDrive";
 import { driveConfig, driveFiles, DriveFiles, DriveNotes, ReconnectToChoose, type DriveFile } from "./DriveFiles";
@@ -96,14 +97,22 @@ type RowNotice = { tone: "pass" | "warn"; text: string };
 function RowMenu({ label, items }: { label: string; items: { label: string; onSelect: () => void; danger?: boolean }[] }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLSpanElement>(null);
   const id = useId();
+  const menuItems = () => [...(menu.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
   useEffect(() => {
     if (!open) return;
+    // Opening moves focus to the first item (qa-settings-12); Escape returns it to the button.
+    menu.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
     const away = (e: PointerEvent) => {
       if (!box.current?.contains(e.target as Node)) setOpen(false);
     };
     const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      setOpen(false);
+      trigger.current?.focus();
     };
     document.addEventListener("pointerdown", away);
     document.addEventListener("keydown", esc);
@@ -115,6 +124,7 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
   return (
     <span ref={box} className="relative">
       <button
+        ref={trigger}
         type="button"
         aria-label={label}
         aria-haspopup="menu"
@@ -127,9 +137,21 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
       </button>
       {open && (
         <span
+          ref={menu}
           id={id}
           role="menu"
           aria-label={label}
+          onKeyDown={(e) => {
+            // Arrow keys move between the items; Tab leaves the menu and closes it.
+            if (e.key === "Tab") return setOpen(false);
+            if (e.key !== "ArrowDown" && e.key !== "ArrowUp" && e.key !== "Home" && e.key !== "End") return;
+            e.preventDefault();
+            const els = menuItems();
+            const i = els.indexOf(document.activeElement as HTMLElement);
+            const next =
+              e.key === "Home" ? 0 : e.key === "End" ? els.length - 1 : (i + (e.key === "ArrowDown" ? 1 : -1) + els.length) % els.length;
+            els[next]?.focus();
+          }}
           className="absolute top-full right-0 z-20 mt-1 flex min-w-40 flex-col rounded-button border border-line bg-surface p-1 shadow-panel"
         >
           {items.map((it) => (
@@ -137,6 +159,7 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
               key={it.label}
               type="button"
               role="menuitem"
+              tabIndex={-1}
               onClick={() => {
                 setOpen(false);
                 it.onSelect();
@@ -398,8 +421,7 @@ function ReconnectNotion({ picked }: { picked: number }) {
     >
       <Warn>Reconnect Notion to change pages.</Warn>
       <p className="text-sm text-text2">
-        This source&rsquo;s Notion connection was removed. It keeps its {picked} picked{" "}
-        {picked === 1 ? "page" : "pages"}; changing them needs a Notion connection.
+        This source&rsquo;s Notion connection was removed. It keeps its {plural(picked, "picked page")}; changing them needs a Notion connection.
       </p>
       <div>
         <LinkButton href="/settings/connections" icon="link">
@@ -450,7 +472,7 @@ function SourceRow({
     if (r.outcome === "completed") {
       setNotice({
         tone: "pass",
-        text: `Synced: ${r.upserted} item(s) seen, ${r.versions_written} new version(s), ${r.deleted} deleted.`,
+        text: `Synced: ${plural(r.upserted, "item")} seen, ${plural(r.versions_written, "new version")}, ${formatCount(r.deleted)} deleted.`,
       });
     } else if (r.outcome === "rate_limited") {
       setNotice({ tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
@@ -490,7 +512,7 @@ function SourceRow({
     if (fileRef.current) fileRef.current.value = "";
     if (!r) return;
     const added = r.items.length - r.unchanged.length;
-    setNotice({ tone: "pass", text: `Uploaded ${added} file(s)${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ""}.` });
+    setNotice({ tone: "pass", text: `Uploaded ${plural(added, "file")}${r.unchanged.length ? `, ${formatCount(r.unchanged.length)} unchanged` : ""}.` });
     const fresh = await act(() => unwrap(api.GET("/v1/sources/{source_id}", path)));
     if (fresh) onChange(fresh);
   }
@@ -498,11 +520,14 @@ function SourceRow({
   // Picks by name where the source saved one (labels), else by id (a source saved before
   // names were kept shows ids until it is next saved).
   const names = labelsOf(source.config);
+  const listed = allowlist ? entries(source.config, allowlist.key) : [];
+  // Slack: a channel saved without its name is named from the connection's channel list, never shown as an id.
+  const channelName = useSlackChannelNames(source.kind === "slack" ? source.connection_id : null, source.kind === "slack" ? listed : [], names);
   const items = drive
     ? picked.filter((f) => f.kind === "doc").map((f) => f.name)
-    : allowlist
-      ? entries(source.config, allowlist.key).map((id) => names[id] ?? id)
-      : [];
+    : source.kind === "slack"
+      ? listed.map(channelName)
+      : listed.map((id) => names[id] ?? id);
   // GitHub's include: what the source reads, when it reads only some kinds.
   const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";
@@ -535,10 +560,11 @@ function SourceRow({
               No connector
             </Chip>
           )}
-          {source.kind === "fireflies" && connection?.endpoint_url && (
-            <span className="min-w-0 max-w-full truncate text-sm text-text2" title={connection.endpoint_url}>
-              Reads <span className="font-mono">{connection.endpoint_url}</span>
-            </span>
+          {/* Fireflies' own API goes unsaid; an owner-set endpoint is named, its address on hover. */}
+          {source.kind === "fireflies" && connection?.endpoint_url && connection.endpoint_url !== FIREFLIES_DEFAULT_ENDPOINT && (
+            <Chip kind="line" title={`Reads ${connection.endpoint_url}`} data-testid="fireflies-endpoint">
+              Own Fireflies endpoint
+            </Chip>
           )}
         </span>
         <span className="flex flex-none items-center gap-1">
@@ -597,7 +623,7 @@ function SourceRow({
         </span>
       </div>
       <div className="tnum mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">
-        <span>{source.item_count} item(s)</span>
+        <span data-testid="source-items">{plural(source.item_count, "item")}</span>
         <span data-testid="source-synced">{synced}</span>
         {fireflies && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5" data-testid="fireflies-included">
@@ -640,7 +666,7 @@ function SourceRow({
       {!drive && unavailable.length > 0 && (
         <ul aria-label={`Unreadable files of ${source.name}`} className="mt-2 flex flex-col gap-1">
           {unavailable.map((u) => {
-            const name = picked.find((f) => f.id === u.external_id)?.name ?? u.external_id;
+            const name = picked.find((f) => f.id === u.external_id)?.name ?? u.name ?? names[u.external_id] ?? u.external_id;
             return (
               <li key={u.external_id} className="flex min-w-0 items-center gap-2 text-sm">
                 <Chip kind="warn" title={u.reason}>
@@ -800,12 +826,23 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
     }
   }
 
-  const blocked =
-    !option?.connector_available ||
-    (needsConnection && usable.length === 0) ||
-    (drive && (reconnect || files.length === 0)) ||
-    (kind === "fireflies" && !firefliesReady(meetings)) ||
-    (kind === "notion" && notionRoots(picked).length === 0);
+  // Why Add source is off, said beside it, the first thing missing only.
+  const blocked = !option?.connector_available
+    ? `The ${KIND_LABEL[kind]} connector is not available yet.`
+    : needsConnection && usable.length === 0
+      ? `Connect a ${KIND_LABEL[kind]} account first.`
+      : drive && reconnect
+        ? "Reconnect Google to choose files."
+        : drive && files.length === 0
+          ? "Choose at least one file or folder."
+          : kind === "fireflies" && !firefliesReady(meetings)
+            ? "Pick the meetings or series to pull in."
+            : kind === "notion" && notionRoots(picked).length === 0
+              ? "Tick at least one page."
+              : !name.trim()
+                ? "Give the source a name."
+                : null;
+  const whyId = useId();
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source">
@@ -880,10 +917,15 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       )}
       {Picker && usable.length > 0 && <Picker key={`${kind}:${connectionId}`} connectionId={connectionId} config={picked} onChange={setPicked} />}
       {error && <Notice tone="error">{error}</Notice>}
-      <div>
-        <Button type="submit" variant="solid" icon="plus" disabled={busy || blocked || !name.trim()}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <Button type="submit" variant="solid" icon="plus" disabled={busy || !!blocked} aria-describedby={blocked ? whyId : undefined}>
           Add source
         </Button>
+        {blocked && (
+          <span id={whyId} className="text-sm text-text2" data-testid="add-source-why">
+            {blocked}
+          </span>
+        )}
       </div>
     </form>
   );
@@ -928,9 +970,9 @@ export default function SourceSettingsPage() {
         </>
       }
       stats={[
-        { label: "Sources", value: sources.data ? list.length : "—" },
-        { label: "Items", value: sources.data ? items : "—" },
-        { label: "Errors", value: sources.data ? errors : "—", tone: errors > 0 ? "crit" : undefined },
+        { label: list.length === 1 ? "Source" : "Sources", value: sources.data ? formatCount(list.length) : "—", testId: "stat-sources" },
+        { label: items === 1 ? "Item" : "Items", value: sources.data ? formatCount(items) : "—", testId: "stat-items" },
+        { label: errors === 1 ? "Error" : "Errors", value: sources.data ? formatCount(errors) : "—", tone: errors > 0 ? "crit" : undefined, testId: "stat-errors" },
       ]}
     >
       <InspectorSection>
@@ -945,19 +987,21 @@ export default function SourceSettingsPage() {
     <>
       <PageHeader
         title="Sources"
+        info={
+          <InfoTip label="sources" align="start" side="bottom">
+            What your connections pull in. Only you see it; it reaches others only as evidence you add to the baseline.
+          </InfoTip>
+        }
         status={
           <>
-            <InfoTip label="sources" align="start" side="bottom">
-              What your connections pull in. Only you see it; it reaches others only as evidence you add to the baseline.
-            </InfoTip>
             {errors > 0 && (
               <Chip kind="crit" dot>
-                {errors} in error
+                {formatCount(errors)} in error
               </Chip>
             )}
             {attention > 0 && (
               <Chip kind="warn" dot data-testid="sources-attention">
-                {attention} need{attention === 1 ? "s" : ""} attention
+                {formatCount(attention)} need{attention === 1 ? "s" : ""} attention
               </Chip>
             )}
           </>

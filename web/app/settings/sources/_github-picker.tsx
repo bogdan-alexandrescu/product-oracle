@@ -2,21 +2,9 @@
 
 import { Icon } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { formatAge, formatDate } from "@/lib/format";
 
 import { BrowseList, listOf, type BrowsePage, type PickerProps } from "./_browse-list";
-
-const DAY = 24 * 3600 * 1000;
-
-/** "today", "3d", "5w", "4mo", "2y": how long ago a repo was last pushed to. */
-function ago(iso: string): string {
-  const days = Math.floor((Date.now() - new Date(iso).getTime()) / DAY);
-  if (days < 1) return "today";
-  if (days < 14) return `${days}d`;
-  if (days < 60) return `${Math.floor(days / 7)}w`;
-  if (days < 730) return `${Math.floor(days / 30)}mo`;
-  return `${Math.floor(days / 365)}y`;
-}
 
 /** What a GitHub source can read (oracle.sources.connectors.github INCLUDE), in its order. */
 export const GITHUB_INCLUDE = [
@@ -74,7 +62,7 @@ export function GithubPicker({ connectionId, config, onChange }: PickerProps) {
         meta: r.pushed_at ? (
           <span data-testid="last-push" title={`Last push ${formatDate(r.pushed_at)}`} className="flex items-center gap-1">
             <Icon name="clock" size={16} />
-            {ago(r.pushed_at)}
+            {formatAge(r.pushed_at)}
           </span>
         ) : null,
       })),

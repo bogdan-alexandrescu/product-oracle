@@ -35,11 +35,6 @@ const mirrorConfirm = (channel: string) =>
 const privateStopsMirror = (channel: string) =>
   `This discussion is mirrored to #${channel}. Making it private stops the mirror. What was posted stays in Slack.`;
 
-/** The API's words without the status suffix the client adds ("… (403)"). */
-function detail(e: unknown): string {
-  return errorMessage(e).replace(/ \(\d{3}\)$/, "");
-}
-
 async function load(id: string): Promise<Loaded> {
   try {
     const [d, page] = await Promise.all([
@@ -49,7 +44,7 @@ async function load(id: string): Promise<Loaded> {
     return { kind: "ok", d, messages: page.items };
   } catch (e) {
     if (e instanceof ApiError && e.status === 403) return { kind: "private" };
-    return { kind: "error", message: detail(e) };
+    return { kind: "error", message: errorMessage(e) };
   }
 }
 
@@ -219,7 +214,7 @@ function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussi
     try {
       await unwrap(api.POST("/v1/discussions/{discussion_id}/messages/{reply_id}/cancel", { params: { path: { discussion_id: discussionId, reply_id: m.id } } }));
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     }
   };
   const retry = async () => {
@@ -233,7 +228,7 @@ function OracleReply({ m, discussionId, asker, onEnded }: { m: Message; discussi
       setLive(true);
       setRun((r) => r + 1);
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     }
   };
   const canRetry = can("retry_discussion_reply", asker);
@@ -303,7 +298,7 @@ function MirrorDialog({ discussionId, onDone, onCancel }: { discussionId: string
       await unwrap(api.POST("/v1/discussions/{discussion_id}/slack", { params: { path: { discussion_id: discussionId } }, body: { channel_id: picked.id } }));
       onDone();
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -475,7 +470,7 @@ function Composer({
       );
       return true;
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
       return false;
     } finally {
       setSending(false);
@@ -496,7 +491,7 @@ function Composer({
           return;
         }
       } catch (e) {
-        setError(detail(e));
+        setError(errorMessage(e));
         return;
       } finally {
         setSending(false);
@@ -559,7 +554,7 @@ function Composer({
         aria-label="Message"
         rows={3}
         maxLength={8000}
-        placeholder="Reply to Oracle and the team"
+        placeholder={d.visibility === "private" ? "Reply to Oracle" : "Reply to Oracle and the team"}
         value={text}
         onChange={(e) => onChange(e.target.value, e.target.selectionStart)}
         onKeyDown={(e) => {
@@ -792,7 +787,7 @@ export function DiscussionThread({
       onChanged?.();
       return true;
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
       await reload();
       return false;
     } finally {
@@ -847,7 +842,7 @@ export function DiscussionThread({
       onChanged?.();
       if (next.kind !== "ok") onBack?.();
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -859,7 +854,7 @@ export function DiscussionThread({
       await unwrap(api.POST("/v1/discussions/{discussion_id}/participants", { params: { path: { discussion_id: d.id } }, body: { user_ids: [myId] } }));
       await reload();
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     }
   };
 
@@ -877,7 +872,7 @@ export function DiscussionThread({
         );
       await reload();
     } catch (e) {
-      setPeopleError(detail(e));
+      setPeopleError(errorMessage(e));
     }
   };
 
@@ -890,7 +885,7 @@ export function DiscussionThread({
       );
       await reload();
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     }
   };
 
@@ -911,7 +906,7 @@ export function DiscussionThread({
       await reload();
       onChanged?.();
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     }
   };
 
@@ -1015,7 +1010,10 @@ export function DiscussionThread({
                 <Chip kind="acc">#{d.slack.channel_name}</Chip>
               </span>
             ))}
-          <span className="min-w-0 truncate">{d.subject_label}</span>
+          {/* Named once: no line under the title when it repeats the title. */}
+          {d.subject_label.trim().toLowerCase() !== d.title.trim().toLowerCase() && (
+            <span className="min-w-0 truncate">{d.subject_label}</span>
+          )}
         </div>
         {belowHeader}
       </div>
@@ -1223,7 +1221,7 @@ function ResearchThis({ m, d, onStarted }: { m: Message; d: Discussion; onStarte
       setAsking(false);
       onStarted();
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -1319,7 +1317,7 @@ function OwnMessageActions({
           setEditing(false);
           onSaved();
         } catch (err) {
-          setError(detail(err));
+          setError(errorMessage(err));
         }
       }}
     >

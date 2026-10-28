@@ -133,8 +133,15 @@ function LinkedDiscussion() {
   );
 }
 
+/** A run that is not there, said without its id (the API's 404 names it). */
+const RUN_MISSING = "This run doesn't exist or was deleted.";
+
 export function RunDetail({ id }: { id: string }) {
-  const q = useQuery(`run|${id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })));
+  const q = useQuery(`run|${id}`, () =>
+    unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })).catch((e) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, RUN_MISSING) : e;
+    }),
+  );
   const { me, can } = useMe();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -201,7 +208,18 @@ export function RunDetail({ id }: { id: string }) {
     return (
       <Page>
         <PageHeader back={back} title="Run" />
-        {q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}
+        {q.error === RUN_MISSING ? (
+          <ErrorNote>
+            {RUN_MISSING}{" "}
+            <Link href="/runs" className="underline">
+              Back to Runs
+            </Link>
+          </ErrorNote>
+        ) : q.error ? (
+          <ErrorNote>{q.error}</ErrorNote>
+        ) : (
+          <Loading />
+        )}
       </Page>
     );
   }
@@ -1776,7 +1794,7 @@ function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
       params: { path: { run_id: runId, checkpoint_id: cp.id } },
       parseAs: "text",
     });
-    setText(response.ok ? (data as string) : `Could not load the review (${response.status}).`);
+    setText(response.ok ? (data as string) : "Could not load the review. Try again.");
   }
   return (
     <div data-testid="sent-review">
@@ -1829,7 +1847,7 @@ function Artifacts({
       params: { path: { run_id: runId, seq, name }, query },
       parseAs: "text",
     });
-    setContent(response.ok ? (data as string) : `Could not load ${name} (${response.status}).`);
+    setContent(response.ok ? (data as string) : `Could not load ${name}. Try again.`);
   }
   const file = (name: string, attempt: number | null) => {
     const on = isOpen(name, attempt);

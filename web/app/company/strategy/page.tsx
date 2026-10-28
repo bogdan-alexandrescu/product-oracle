@@ -75,15 +75,13 @@ export default function StrategyPage() {
     <div data-testid="strategy-page" className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
       <PageHeader
         title="Company"
-        status={
-          <>
-            {readOnly && <ViewOnly />}
-            <InfoTip label="the strategy" align="start" side="bottom">
-              The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and
-              each roadmap item from a goal; what does not shows as drift.
-            </InfoTip>
-          </>
+        info={
+          <InfoTip label="the strategy" align="start" side="bottom">
+            The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and
+            each roadmap item from a goal; what does not shows as drift.
+          </InfoTip>
         }
+        status={readOnly && <ViewOnly />}
       />
       {(stackQ.error || docsQ.error) && <ErrorNote>{stackQ.error ?? docsQ.error}</ErrorNote>}
       <div className="grid grid-cols-2 items-stretch gap-4 max-[900px]:grid-cols-1 max-[600px]:gap-3">

@@ -272,16 +272,18 @@ export default function RoadmapDocumentsPage() {
     <Page>
       <PageHeader
         title="Plan"
+        info={
+          <InfoTip label="Roadmap documents" align="start" side="bottom">
+            Each roadmap opens in the document view. A run turns an approved PRD&apos;s version into roadmap items
+            and a roadmap draft for review.
+          </InfoTip>
+        }
         status={
           q.data && (
             <>
               {capsReady && !canBuild && <ViewOnly />}
               <Chip kind="acc">{roadmaps.length} {roadmaps.length === 1 ? "roadmap" : "roadmaps"}</Chip>
               {inReview > 0 && <Chip kind="acc">{inReview} in review</Chip>}
-              <InfoTip label="Roadmap documents" align="start" side="bottom">
-                Each roadmap opens in the document view. A run turns an approved PRD&apos;s version into roadmap items
-                and a roadmap draft for review.
-              </InfoTip>
             </>
           )
         }

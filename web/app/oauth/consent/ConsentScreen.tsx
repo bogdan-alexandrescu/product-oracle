@@ -9,6 +9,7 @@ import { Button, Chip, InfoTip, Label, Notice } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { ApiError, MOCK_MODE, unwrap, type Schemas } from "@/lib/api/client";
 import type { paths } from "@/lib/api/schema";
+import { scopeLabel } from "@/lib/scopes";
 
 import { consentMockFetch } from "./mock";
 
@@ -90,8 +91,13 @@ export function ConsentScreen() {
             <ul className="overflow-hidden rounded-button border border-line">
               {detail.scopes.map((s) => (
                 <li key={s.name} className="border-t border-line px-3 py-2.5 first:border-t-0">
-                  <span className="inline-block rounded-goal bg-accent-soft px-1.5 font-mono text-[13px] leading-6 text-accent-ink">
-                    {s.name}
+                  {/* The scope in words; its code in the title (qa-settings-16). */}
+                  <span
+                    className="inline-block rounded-goal bg-accent-soft px-1.5 text-[13px] leading-6 font-semibold text-accent-ink"
+                    title={s.name}
+                    data-testid="consent-scope"
+                  >
+                    {scopeLabel(s.name)}
                   </span>
                   <p className="mt-1 text-sm text-text">{s.description}</p>
                 </li>

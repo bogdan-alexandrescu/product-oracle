@@ -211,7 +211,7 @@ test("the tab strip lists Plan's tabs in order; Roadmap documents keeps the list
   const strip = page.getByTestId("plan-tabs").filter({ visible: true });
   // F3 (Dates) and H3 (Outcomes) landed in PLAN_TABS, in that order; the registered entry is
   // now H6's Launches, whose page has not landed.
-  await expect(strip.getByRole("link")).toHaveText(["Plan", "Roadmap documents", "Dates", "Outcomes", "Launches"]);
+  await expect(strip.getByRole("link")).toHaveText(["Plan", "Documents", "Dates", "Outcomes", "Launches"]);
   await expect(strip.getByTestId("plan-tab-plan")).toHaveAttribute("aria-current", "page");
   await strip.getByRole("link", { name: "Roadmap documents" }).click();
   await expect(page).toHaveURL(/\/plan\/documents$/);

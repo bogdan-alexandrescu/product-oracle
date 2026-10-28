@@ -17,9 +17,18 @@ const loadPreview = (body: PreviewIn) =>
  * A sample document rendered by POST /v1/themes/preview with unsaved tokens and CSS,
  * refreshed 300 ms after the last change. Sandboxed: no scripts, no same-origin access.
  */
-export function ThemePreview({ tokens, css, kind, title = "Theme preview" }: PreviewIn & { title?: string }) {
+export function ThemePreview({
+  tokens,
+  css,
+  kind,
+  title = "Theme preview",
+  testId = "theme-preview",
+  tall = false,
+}: PreviewIn & { title?: string; testId?: string; tall?: boolean }) {
   const live = useLive<PreviewIn, string>({ tokens, css, kind }, loadPreview, 300);
-  return <PreviewFrame html={live.data} pending={live.pending} error={live.error} title={title} testId="theme-preview" />;
+  return (
+    <PreviewFrame html={live.data} pending={live.pending} error={live.error} title={title} testId={testId} tall={tall} />
+  );
 }
 
 type SlidePreviewIn = {
@@ -42,11 +51,16 @@ export function SlidePreview({
   slideCss,
   kind,
   variant = null,
+  testId = "slide-preview",
+  tall = false,
 }: {
   tokens: Schemas["ThemeTokens"];
   slideCss: string | null;
   kind: "prd" | "roadmap";
   variant?: string | null;
+  testId?: string;
+  /** Taller and at full size: the enlarged preview (qa-settings-21). */
+  tall?: boolean;
 }) {
   const live = useLive<SlidePreviewIn, string>(
     { tokens, slide_css: slideCss, kind, view: "slides", slide_variant: variant },
@@ -59,9 +73,10 @@ export function SlidePreview({
       pending={live.pending}
       error={live.error}
       title="Slide preview"
-      testId="slide-preview"
-      // 960 px slides shown at half size.
-      scale={0.5}
+      testId={testId}
+      // 960 px slides shown at half size; enlarged, as wide as the dialog lets them.
+      scale={tall ? 0.75 : 0.5}
+      tall={tall}
     />
   );
 }
@@ -73,6 +88,7 @@ function PreviewFrame({
   title,
   testId,
   scale = 1,
+  tall = false,
 }: {
   html: string | undefined;
   pending: boolean;
@@ -80,7 +96,9 @@ function PreviewFrame({
   title: string;
   testId: string;
   scale?: number;
+  tall?: boolean;
 }) {
+  const height = tall ? "h-[70vh]" : "h-[34rem]";
   return (
     <div className="relative">
       {scale === 1 ? (
@@ -89,10 +107,10 @@ function PreviewFrame({
           data-testid={testId}
           sandbox=""
           srcDoc={html ?? ""}
-          className="h-[34rem] w-full rounded-button border border-line bg-surface"
+          className={`${height} w-full rounded-button border border-line bg-surface`}
         />
       ) : (
-        <div className="h-[34rem] w-full overflow-hidden rounded-button border border-line bg-surface2">
+        <div className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface2`}>
           <iframe
             title={title}
             data-testid={testId}
@@ -115,7 +133,8 @@ function PreviewFrame({
 
 /**
  * A small, non-interactive picture of a theme: the preview page scaled down (a quarter by
- * default: 160 x 120).
+ * default: 160 x 120), with no scrollbar of its own (qa-settings-21); open ThemePreview for
+ * a legible one.
  */
 export function ThemeThumbnail({ tokens, css, kind, scale = 0.25 }: PreviewIn & { scale?: number }) {
   const live = useLive<PreviewIn, string>({ tokens, css, kind }, loadPreview, 0);
@@ -130,6 +149,7 @@ export function ThemeThumbnail({ tokens, css, kind, scale = 0.25 }: PreviewIn & 
           title="Theme thumbnail"
           tabIndex={-1}
           sandbox=""
+          scrolling="no"
           srcDoc={live.data}
           className="border-0"
           style={{ width: 640, height: 480, transform: `scale(${scale})`, transformOrigin: "top left" }}

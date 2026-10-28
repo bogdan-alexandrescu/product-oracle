@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 
 import { Button, Icon } from "@/components/ds";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
+import { plural } from "@/lib/format";
 import { errorMessage, useAuthRedirect } from "@/lib/use-query";
 
 import { INPUT } from "../_components/fields";
@@ -366,8 +367,8 @@ export function NotionPicker({
                 {parent && <span className="min-w-0 truncate">in {parent.title}</span>}
                 {page.type === "database" && <span>Database</span>}
                 {count > 0 && (
-                  <span title={`${count} shared sub-page(s) known`}>
-                    {count} sub-page{count === 1 ? "" : "s"}
+                  <span title={`${plural(count, "shared sub-page")} known`}>
+                    {plural(count, "sub-page")}
                   </span>
                 )}
                 {included && (
@@ -409,7 +410,7 @@ export function NotionPicker({
           />
         </span>
         <span className="tnum flex-none text-[13px] font-semibold text-accent-ink" aria-live="polite" data-testid="notion-picked-count">
-          {toRead} page{toRead === 1 ? "" : "s"} to read
+          {plural(toRead, "page")} to read
         </span>
       </div>
       {absorbed && (

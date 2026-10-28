@@ -185,7 +185,7 @@ export function RowActions({
         ? { feature: f, kind: "pin", above: null, position: features.length }
         : null;
   const btn =
-    "grid size-8 place-items-center rounded-button text-text2 hover:bg-surface2 hover:text-text disabled:opacity-40 max-[600px]:size-10";
+    "grid size-8 min-h-6 min-w-6 place-items-center rounded-button text-text2 hover:bg-surface2 hover:text-text disabled:opacity-40 max-[600px]:size-11 max-[600px]:min-h-11 max-[600px]:min-w-11";
   return (
     <div
       ref={box}

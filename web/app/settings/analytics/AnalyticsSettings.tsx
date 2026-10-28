@@ -3,10 +3,13 @@
 import { useState } from "react";
 
 import { Button, confirmInPage, PageHeader, Panel } from "@/components/ds";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
+import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone, zoneDateTime } from "@/lib/dates";
+import { plural } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
+
+import { Field, INPUT, SELECT_FIELD } from "../_components/fields";
 
 type Analytics = Schemas["AnalyticsOut"];
 
@@ -72,7 +75,7 @@ export function AnalyticsSettings() {
     const n = a.metrics;
     const ok = await confirmInPage({
       action: "Disconnect",
-      message: `Disconnect PostHog? The key is deleted and ${n} PostHog ${n === 1 ? "metric pauses" : "metrics pause"} until it is connected again. Their values stay.`,
+      message: `Disconnect PostHog? The key is deleted and ${plural(n, "PostHog metric pauses", "PostHog metrics pause")} until it is connected again. Their values stay.`,
       destructive: true,
     });
     if (ok) await run(() => unwrap(api.DELETE("/v1/company-integrations/analytics")));
@@ -89,33 +92,30 @@ export function AnalyticsSettings() {
           {connected && (
             <p className="text-sm text-text2">
               {[a.connected_by_name && `Connected by ${a.connected_by_name}`, a.connected_at && zoneDateTime(a.connected_at, zone)].filter(Boolean).join(", ")}
-              {` · ${a.metrics} PostHog ${a.metrics === 1 ? "metric" : "metrics"}`}
+              {` · ${plural(a.metrics, "PostHog metric")}`}
             </p>
           )}
           {a.last_error && <ErrorNote>{a.last_error}</ErrorNote>}
           <p className="text-sm text-text2">
             Oracle reads each metric&apos;s weekly value with a query in your PostHog project. Use a personal API key that may only read queries.
           </p>
-          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-            Host
-            <select className={INPUT} value={hostChoice} onChange={(e) => setHost(e.target.value)}>
+          {/* Field: the label is bold, the value regular, as in every other settings form. */}
+          <Field label="Host">
+            <select className={SELECT_FIELD} value={hostChoice} onChange={(e) => setHost(e.target.value)}>
               <option value="us">US cloud</option>
               <option value="eu">EU cloud</option>
               <option value="own">Own host</option>
             </select>
-          </label>
+          </Field>
           {hostChoice === "own" && (
-            <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-              Own host address
+            <Field label="Own host address">
               <input className={INPUT} value={ownValue} placeholder="https://posthog.example.com" onChange={(e) => setOwnHost(e.target.value)} />
-            </label>
+            </Field>
           )}
-          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-            Project id
+          <Field label="Project ID">
             <input className={INPUT} value={projectValue} inputMode="numeric" onChange={(e) => setProject(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-            Personal API key
+          </Field>
+          <Field label="Personal API key">
             <input
               className={INPUT}
               type="password"
@@ -124,7 +124,7 @@ export function AnalyticsSettings() {
               placeholder={connected ? "Replace key" : ""}
               onChange={(e) => setKey(e.target.value)}
             />
-          </label>
+          </Field>
           {error && <ErrorNote>{error}</ErrorNote>}
           <div className="flex flex-wrap gap-2">
             <Button variant="solid" disabled={busy || !key.trim() || !projectValue.trim()} onClick={save}>

@@ -36,7 +36,7 @@ async function call<T>(method: string, path: string, body?: BodyInit, json = fal
         ? detail
         : Array.isArray(detail) && typeof detail[0]?.msg === "string"
           ? String(detail[0].msg)
-          : `Request failed (${res.status}).`;
+          : "Something went wrong. Try again.";
   throw new ApiError(res.status, message);
 }
 
