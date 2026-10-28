@@ -7,7 +7,7 @@ import { Button, Chip, Icon, Inspector, InspectorSection, Page, PageHeader, Shee
 import { RawFileSheet } from "@/components/review/RawFileSheet";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { calendarDay } from "@/lib/dates";
+import { formatDay } from "@/lib/format";
 import { errorMessage } from "@/lib/use-query";
 
 import type { CheckpointOut, DatesCheck, RunOut } from "../../../_lib";
@@ -29,7 +29,7 @@ const HORIZON_WORDS = { next: "Next", later: "Later" } as const;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /** "Nov 30 · est-shipping-step": a basis as the row shows it (a calendar day, no time zone). */
-const basisWords = (b: Basis) => `${DATE_RE.test(b.supports_date) ? calendarDay(b.supports_date) : b.supports_date} · ${b.reference}`;
+const basisWords = (b: Basis) => `${DATE_RE.test(b.supports_date) ? formatDay(b.supports_date) : b.supports_date} · ${b.reference}`;
 
 /** A decision action of the date stop: Accept, a changed estimate, or No date. */
 const isDecision = (a: Action) => a.kind === "accept" || (a.kind === "edit" && (a.field === "estimate" || a.field === "no_date"));

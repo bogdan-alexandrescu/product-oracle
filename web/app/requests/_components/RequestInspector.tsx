@@ -8,7 +8,7 @@ import { Button, Chip, Inspector, InspectorSection } from "@/components/ds";
 import { free, startPrdHref } from "@/components/RequestsBehind";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDate, formatDay } from "@/lib/format";
+import { formatDate, formatDay, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -681,7 +681,7 @@ function Decision({
               {!HOUSEKEEPING.includes(reason) && (
                 <p data-testid="disqualify-line" className="text-sm text-text2">
                   {isNo(reason, note)
-                    ? `A decision is logged and Oracle will draft a reply to the ${askers} ${askers === 1 ? "person" : "people"} who asked`
+                    ? `A decision is logged and Oracle will draft a reply to the ${plural(askers, "person", "people")} who asked`
                     : "No note: no decision is logged and no replies are drafted"}
                 </p>
               )}

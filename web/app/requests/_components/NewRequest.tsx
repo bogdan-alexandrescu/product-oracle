@@ -9,6 +9,8 @@ import { useMe } from "@/lib/me";
 import { displayName } from "@/lib/names";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
+import { CHANNEL_LABEL } from "./RequestList";
+
 type Request = Schemas["RequestOut"];
 
 /**
@@ -18,10 +20,12 @@ type Request = Schemas["RequestOut"];
 export function NewRequestButton({
   onFiled,
   variant = "primary",
+  className,
 }: {
   onFiled: (request: Request) => void;
   /** The header's is the page's primary action; the empty state's is secondary. */
   variant?: "primary" | "secondary";
+  className?: string;
 }) {
   const { can } = useMe();
   const [open, setOpen] = useState(false);
@@ -29,7 +33,7 @@ export function NewRequestButton({
   if (!can("create_request", true)) return null;
   return (
     <>
-      <Button variant={variant} icon="plus" onClick={() => setOpen(true)}>
+      <Button variant={variant} icon="plus" className={className} onClick={() => setOpen(true)}>
         New request
       </Button>
       {open && (
@@ -45,24 +49,35 @@ export function NewRequestButton({
   );
 }
 
+/** The channels a request is filed in here, in the queue's words; Interview requests come only from interviews. */
+const CHANNELS = (Object.keys(CHANNEL_LABEL) as Request["channel"][]).filter((c) => c !== "interview");
+
 /**
- * Files a request in the In app channel, as New, through POST /v1/requests: a title, what it
- * is and why, any of the company's confirmed goals, and the requester (the signed-in member;
- * an owner can name someone else). On a phone it is a full-height sheet.
+ * Files a request, as New, through POST /v1/requests: a title, what it is and why, its goals
+ * (the queue's Goal filter's list: a goal not confirmed yet shows, but cannot be picked, as the
+ * API links confirmed goals only, qa-work-16; a rejected or archived goal is not offered), the channel it came in by (the queue's channels)
+ * and the requester (in the In app channel the signed-in member, whom only an owner can change;
+ * in another channel whoever asked). On a phone it is a full-height sheet.
  */
 function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: (request: Request) => void }) {
   const { me, can } = useMe();
   const panel = useRef<HTMLDivElement>(null);
   useFocusTrap(panel, true, onClose);
   const goals = useQuery("new-request-goals", () =>
-    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } })),
+    unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })),
   );
+  // A rejected (or archived) goal has left the baseline: it is no goal to file a request under.
+  const offered = (goals.data ?? []).filter((g) => g.status !== "rejected");
   const myName = me?.email ? displayName(me.email) : "";
   const owner = can("create_request");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [goalIds, setGoalIds] = useState<string[]>([]);
   const [requester, setRequester] = useState(myName);
+  const [channel, setChannel] = useState<Request["channel"]>("in_app");
+  // In the app the requester is the signed-in member unless an owner names someone; another
+  // channel's requester is whoever asked there.
+  const named = owner || channel !== "in_app";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,9 +93,9 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
           body: {
             title: title.trim(),
             body: body.trim(),
-            channel: "in_app",
+            channel,
             goal_ids: goalIds,
-            requester_name: owner ? requester.trim() || null : null,
+            requester_name: named ? requester.trim() || null : null,
             requester_kind: "unknown",
           },
         }),
@@ -120,15 +135,24 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
           </label>
           <fieldset className="flex flex-col gap-1">
             <legend className="text-sm font-semibold text-text2">Goal (optional)</legend>
-            {(goals.data ?? []).length === 0 ? (
-              <p className="text-sm text-text2">{goals.loading ? "Loading goals…" : "No confirmed goals yet"}</p>
+            {offered.length === 0 ? (
+              <p className="text-sm text-text2">{goals.loading ? "Loading goals…" : "No goals yet"}</p>
             ) : (
-              (goals.data ?? []).map((g) => (
-                <label key={g.id} className="flex items-center gap-2 text-[15px]">
-                  <input type="checkbox" checked={goalIds.includes(g.id)} onChange={(e) => toggle(g.id, e.target.checked)} />
-                  {g.title}
-                </label>
-              ))
+              offered.map((g) => {
+                const ready = g.status === "confirmed";
+                return (
+                  <label
+                    key={g.id}
+                    data-testid="new-request-goal"
+                    className={`flex min-h-8 items-center gap-2 text-[15px] ${ready ? "" : "text-text2"}`}
+                    title={ready ? undefined : "Confirm this goal in Company first: a request links confirmed goals only"}
+                  >
+                    <input type="checkbox" disabled={!ready} checked={goalIds.includes(g.id)} onChange={(e) => toggle(g.id, e.target.checked)} />
+                    {g.title}
+                    {!ready && <span className="text-sm">(not confirmed yet)</span>}
+                  </label>
+                );
+              })
             )}
           </fieldset>
           <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
@@ -138,14 +162,20 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
                 className={INPUT}
                 value={requester}
                 maxLength={200}
-                readOnly={!owner}
-                title={owner ? undefined : "Only an owner files a request in someone else's name"}
+                readOnly={!named}
+                title={named ? undefined : "Only an owner files a request in someone else's name"}
                 onChange={(e) => setRequester(e.target.value)}
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
               Channel
-              <input className={INPUT} value="In app" readOnly />
+              <select className={INPUT} value={channel} onChange={(e) => setChannel(e.target.value as Request["channel"])}>
+                {CHANNELS.map((c) => (
+                  <option key={c} value={c}>
+                    {CHANNEL_LABEL[c]}
+                  </option>
+                ))}
+              </select>
             </label>
           </div>
           {error && <ErrorNote>{error}</ErrorNote>}

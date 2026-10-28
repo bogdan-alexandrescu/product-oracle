@@ -33,7 +33,7 @@ test("New request: file one with a goal; it shows as New with its goal chip, sel
 
   const dialog = page.getByRole("dialog", { name: "New request" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByLabel("Channel")).toHaveValue("In app");
+  await expect(dialog.getByLabel("Channel").locator("option:checked")).toHaveText("In app");
   await expect(dialog.getByLabel("Requester")).toHaveValue("Admin");
   await dialog.getByRole("button", { name: "File request" }).click();
   await expect(dialog.getByText("Give the request a title")).toBeVisible();

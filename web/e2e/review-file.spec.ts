@@ -33,7 +33,7 @@ test("send back with staged actions and no note, then view the review that was s
   await bar.getByRole("button", { name: "Send back to agents" }).click();
   await page.getByTestId("sheet-send-back").getByRole("button", { name: "Send back", exact: true }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Sent back · 2 entries");
-  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
+  await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
 
   const items = page.getByTestId("segment-roadmap_items");
   await expect(items).toContainText("attempt 2");

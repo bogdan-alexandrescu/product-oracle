@@ -4,7 +4,7 @@ import { login } from "./helpers";
 
 /**
  * P3d Cost prominence (owner, 2026-10-19): cost is not a headline. A run shows one small line in
- * its details ("$6.30 of $26.50 est."), with no spend bar and no per-segment cost; cost comes
+ * its details ("$6.30 of $26.50 estimated", qa-work-25: one format, in the normal font), with no spend bar and no per-segment cost; cost comes
  * forward only where it needs a decision, the cost approval and the overrun pause.
  */
 
@@ -49,9 +49,9 @@ for (const size of SIZES) {
       }
       // The decisions: the estimate awaiting approval, spent of estimate on the overrun, both prominent.
       const approval = rows.and(page.locator('[data-document="usage-alerts-v2"]'));
-      await expect(approval.locator('[data-cost="prominent"]')).toHaveText(/^\$[\d,.]+ est\.$/);
+      await expect(approval.locator('[data-cost="prominent"]')).toHaveText(/^\$[\d,.]+ estimated$/);
       const overrun = rows.and(page.locator('[data-document="team-workspaces"]'));
-      await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 / $9.00");
+      await expect(overrun.locator('[data-cost="prominent"]')).toHaveText("$14.20 of $9.00 estimated");
     });
 
     test("run page of a waiting run: one small Cost line in Details, no Cost section, no bar", async ({ page }) => {
@@ -60,7 +60,7 @@ for (const size of SIZES) {
       await expect(inspector.getByTestId("spend-bar")).toHaveCount(0);
       const details = inspector.getByTestId("run-details");
       const cost = details.getByTestId("run-cost");
-      await expect(cost).toHaveText("$6.30 of $26.50 est.");
+      await expect(cost).toHaveText("$6.30 of $26.50 estimated");
       await expect(cost).toHaveAttribute("data-cost", "small");
       await expect(details.getByTestId("run-spent")).toHaveText("$6.30");
       await expect(details.getByText("Cost", { exact: true })).toBeVisible();
@@ -71,35 +71,35 @@ for (const size of SIZES) {
     test("run page of a finished run: the same small line, no section", async ({ page }) => {
       const inspector = await openRun(page, "checkout-redesign", "Feedback loop");
       await expect(inspector.getByTestId("run-cost-section")).toHaveCount(0);
-      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$8.10 of $9.00 est.");
+      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$8.10 of $9.00 estimated");
     });
 
     test("run page awaiting cost approval: the Cost approval section, prominent, no per-segment cost", async ({ page }) => {
       const inspector = await openRun(page, "usage-alerts-v2", "Baseline to PRD");
       const section = inspector.getByTestId("run-cost-section");
       await expect(section).toContainText("Cost approval");
-      await expect(section.locator('[data-cost="prominent"]')).toHaveText(/^\$[\d,.]+ est\.$/);
+      await expect(section.locator('[data-cost="prominent"]')).toHaveText(/^\$[\d,.]+ estimated$/);
       await expect(inspector.getByTestId("spend-bar")).toHaveCount(0);
       await section.getByRole("button", { name: "About cost" }).click();
       const tip = section.getByRole("tooltip");
       await expect(tip).toContainText("an owner approves the cost before any agent starts");
       await expect(tip).not.toContainText(/\d\. .+: \$/);
       // The small line in Details stays.
-      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveText(/ est\.$/);
+      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveText(/ estimated$/);
     });
 
     test("run page paused on overrun: the Overrun section, prominent, with ceiling, no per-segment cost", async ({ page }) => {
       const inspector = await openRun(page, "team-workspaces", "Feedback loop");
       const section = inspector.getByTestId("run-cost-section");
       await expect(section).toContainText("Overrun");
-      await expect(section.locator('[data-cost="prominent"]')).toHaveText("$14.20 / $9.00");
+      await expect(section.locator('[data-cost="prominent"]')).toHaveText("$14.20 of $9.00 estimated");
       await expect(inspector.getByTestId("spend-bar")).toHaveCount(0);
       await section.getByRole("button", { name: "About cost" }).click();
       const tip = section.getByRole("tooltip");
       await expect(tip).toContainText("Spend passed $13.50 (1.5× the estimate)");
       await expect(tip).toContainText("Pauses above $13.50.");
       await expect(tip).not.toContainText(/\d\. .+: \$/);
-      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$14.20 of $9.00 est.");
+      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$14.20 of $9.00 estimated");
     });
   });
 }

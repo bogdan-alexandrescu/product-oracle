@@ -42,7 +42,7 @@ test("run page: the sent-back review names the Company day it was sent back on",
   await page.getByTestId("decision-bar").getByRole("button", { name: "Send back to agents" }).click();
   await page.getByTestId("sheet-send-back").getByRole("button", { name: "Send back", exact: true }).click();
   await expect(page.getByTestId("review-status")).toHaveText(/^Sent back/);
-  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
+  await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
 
   const sent = page.getByTestId("segment-roadmap_items").getByTestId("sent-review");
   await sent.getByRole("button", { name: "View review" }).click();

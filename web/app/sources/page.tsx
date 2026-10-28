@@ -16,13 +16,13 @@ import {
   Page,
   PageHeader,
   Panel,
-  Ring,
   Sheet,
   Split,
+  toast,
 } from "@/components/ds";
 import { INPUT, Loading } from "@/components/ui";
 import { api, type Schemas, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useAuthRedirect, useQuery } from "@/lib/use-query";
 
@@ -34,33 +34,20 @@ import {
   CountsOnlyTip,
   type CompanyRow,
 } from "./_components/company-coverage";
-import { ConfidenceBadge, confidenceFactors, KIND_LABEL, pct } from "./_components/confidence";
+import { ConfidenceBadge, confidenceFactors, ITEM_KINDS, itemKind, itemKinds, KIND_LABEL, pct } from "./_components/confidence";
 import { CoverageInspector, CoverageTable, CoverageTabs, NoSources, type CoverageTab } from "./_components/coverage";
 
 type Results = Schemas["SearchResults"];
 type Hit = Schemas["SearchHit"];
+/** How a sync that did not finish went, said as Settings > Sources says it on the source's row. */
+type SyncNotice = { sourceId: string; tone: "pass" | "warn"; text: string };
 
-const ITEM_KINDS = [
-  "file",
-  "page",
-  "doc",
-  "message",
-  "thread",
-  "transcript",
-  "issue",
-  "pull_request",
-  "release",
-  "milestone",
-  "readme",
-] as const;
-
-const kindName = (k: string) => k.replace("_", " ");
 
 /** ts_headline marks matches with <mark>; render them as React nodes, never as HTML. */
-function Snippet({ text, className = "" }: { text: string; className?: string }) {
+function Snippet({ text, className = "", full = false }: { text: string; className?: string; full?: boolean }) {
   const parts = text.split(/<mark>(.*?)<\/mark>/g);
   return (
-    <p className={`text-sm text-text2 ${className}`}>
+    <p className={`text-sm text-text2 ${className}`} title={full ? parts.join("") : undefined}>
       {parts.map((part, i) =>
         i % 2 ? (
           <mark key={i} className="rounded bg-warn-bg px-0.5 font-semibold text-text">
@@ -81,7 +68,7 @@ function HitInspector({ hit, rank, of, sourceName }: { hit: Hit; rank: number; o
     <Inspector
       testId="hit-inspector"
       label="Selected result"
-      eyebrow={`${kindName(item.kind)} · selected`}
+      eyebrow={`${itemKind(item.kind)} · selected`}
       title={item.title || item.external_id}
       chips={
         <>
@@ -97,7 +84,7 @@ function HitInspector({ hit, rank, of, sourceName }: { hit: Hit; rank: number; o
         ) : undefined
       }
       stats={[
-        { label: "Confidence", figure: <Ring value={item.confidence.value * 100} size={44} /> },
+        { label: "Confidence", value: pct(item.confidence.value) },
         { label: "Rank", value: rank, of },
         { label: "Relevance", value: hit.relevance.toFixed(2) },
       ]}
@@ -130,7 +117,7 @@ function HitInspector({ hit, rank, of, sourceName }: { hit: Hit; rank: number; o
         ))}
       </InspectorSection>
       <InspectorSection label="Item">
-        <InspectorRow value={kindName(item.kind)}>Kind</InspectorRow>
+        <InspectorRow value={itemKind(item.kind)}>Kind</InspectorRow>
         {item.author && <InspectorRow value={item.author}>Author</InspectorRow>}
         {item.fetched_at && <InspectorRow value={formatDateTime(item.fetched_at)}>Fetched</InspectorRow>}
       </InspectorSection>
@@ -175,6 +162,8 @@ function SourcesSearchPage() {
   // #370: the Company coverage tab, for whoever may read the company's coverage (its
   // handler checks the role: an owner).
   const owner = can("get_company_source_coverage", false);
+  // qa-work-2: syncing and editing a source follow the capabilities; a viewer reads only.
+  const canSync = can("sync_source");
   const isPhone = useIsPhone();
   const tab: CoverageTab = owner && params.get("tab") === "company" ? "company" : "mine";
   const wanted = params.get("source");
@@ -205,6 +194,7 @@ function SourcesSearchPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<SyncNotice | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const onAuth = useAuthRedirect();
   const names = new Map((sources.data ?? []).map((s) => [s.id, s.name]));
@@ -240,9 +230,24 @@ function SourcesSearchPage() {
     if (!currentId) return;
     setSyncing(true);
     setError(null);
+    setSyncNotice(null);
     try {
-      await unwrap(api.POST("/v1/sources/{source_id}/sync", { params: { path: { source_id: currentId } } }));
+      const name = current?.name ?? "The source";
+      toast({ message: `Sync started: ${name}` });
+      const result = await unwrap(api.POST("/v1/sources/{source_id}/sync", { params: { path: { source_id: currentId } } }));
       await Promise.all([coverage.reload(), detail.reload()]);
+      // qa-work-2: say how the sync went; a sync that did not finish says why.
+      // fix-work review: a rate-limited or superseded sync reads as on Settings > Sources.
+      if (result.outcome === "completed") toast({ message: `${name} synced` });
+      else if (result.outcome === "rate_limited")
+        setSyncNotice({ sourceId: currentId, tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
+      else if (result.outcome === "superseded")
+        setSyncNotice({
+          sourceId: currentId,
+          tone: "warn",
+          text: "Not synced: this source was edited while it synced. Sync again to use the new selection.",
+        });
+      else setError(result.error ?? result.source.last_error ?? `${name} did not finish syncing.`);
     } catch (err) {
       if (!onAuth(err)) setError(errorMessage(err));
     } finally {
@@ -296,6 +301,9 @@ function SourcesSearchPage() {
         summary={current}
         detail={detail.data ?? undefined}
         busy={syncing}
+        canSync={canSync}
+        capsReady={capsReady}
+        notice={syncNotice?.sourceId === current.source_id ? syncNotice : null}
         onSync={() => void syncNow()}
         onLoadMore={() => void loadMore()}
         loadingMore={loadingMore}
@@ -319,15 +327,10 @@ function SourcesSearchPage() {
           <>
             {results && (
               <Chip kind="acc" data-testid="hit-count">
-                {hits.length} {hits.length === 1 ? "hit" : "hits"}
+                {plural(hits.length, "hit")}
               </Chip>
             )}
           </>
-        }
-        action={
-          <LinkButton href="/settings/sources" icon="settings" title="Settings › Sources">
-            Manage
-          </LinkButton>
         }
       />
 
@@ -353,7 +356,7 @@ function SourcesSearchPage() {
               <option value="">Any kind</option>
               {ITEM_KINDS.map((k) => (
                 <option key={k} value={k}>
-                  {kindName(k)}
+                  {itemKinds(k)}
                 </option>
               ))}
             </select>
@@ -408,18 +411,23 @@ function SourcesSearchPage() {
                           aria-pressed={on}
                           onClick={() => setPicked(hit.item.id)}
                           className="min-w-0 flex-1 truncate text-left font-semibold"
+                          title={title}
                         >
                           {title}
                         </button>
-                        <span className="max-w-[40%] flex-none truncate text-sm text-text2 max-[600px]:hidden">
-                          {KIND_LABEL[hit.item.source_kind]} · {names.get(hit.item.source_id) ?? "source"} ·{" "}
-                          {kindName(hit.item.kind)}
-                        </span>
+                        {(() => {
+                          const where = `${KIND_LABEL[hit.item.source_kind]} · ${names.get(hit.item.source_id) ?? "source"} · ${itemKind(hit.item.kind)}`;
+                          return (
+                            <span className="max-w-[40%] flex-none truncate text-sm text-text2 max-[600px]:hidden" title={where}>
+                              {where}
+                            </span>
+                          );
+                        })()}
                         <span className="flex-none" onClick={(e) => e.stopPropagation()}>
                           <ConfidenceBadge confidence={hit.item.confidence} />
                         </span>
                       </div>
-                      <Snippet text={hit.snippet} className="mt-0.5 truncate" />
+                      <Snippet text={hit.snippet} className="mt-0.5 truncate" full />
                     </li>
                   );
                 })}

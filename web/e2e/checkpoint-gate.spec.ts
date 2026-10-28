@@ -40,7 +40,7 @@ test("approve stays disabled with blocking problems; waiving one drops the count
   await login(page);
   await openReview(page);
   const approve = bar(page).getByRole("button", { name: /^Approve/ });
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("3 blocking left");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("3 blocking problems left");
   await expect(approve).toBeDisabled();
   await expect(row(page, "slack-alerts")).toContainText("Date unverified");
   await row(page, "slack-alerts").getByRole("button", { name: "More actions for Slack alerts" }).click();
@@ -48,7 +48,7 @@ test("approve stays disabled with blocking problems; waiving one drops the count
   await page.keyboard.press("Escape");
 
   await waive(page, "usage-export", "Usage export", "Section lands in the next PRD version");
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("2 blocking left");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("2 blocking problems left");
   await expect(approve).toBeDisabled();
 });
 
@@ -60,7 +60,7 @@ test("with only the date left approve stays disabled and send back still sends i
   await openReview(page);
   await waive(page, "usage-export", "Usage export", "Section lands in the next PRD version");
   await waive(page, "budget-caps", "Budget caps", "Anomaly detection ships first in practice");
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("1 blocking left");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("1 blocking problem left");
   await expect(bar(page).getByRole("button", { name: /^Approve/ })).toBeDisabled();
 
   await bar(page).getByRole("button", { name: "Send back to agents" }).click();

@@ -10,6 +10,7 @@ import { Button, Chip, confirmInPage, Icon, Notice, Page, PageHeader, Sheet, Spl
 import { ErrorNote, Loading } from "@/components/ui";
 import { Menu, TabBar } from "@/components/review/parts";
 import { api, unwrap } from "@/lib/api/client";
+import { plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -17,8 +18,8 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 import { DraftSheet } from "./_draft-sheet";
 import { FindingsTab } from "./_findings";
 import { GapsTab } from "./_gaps";
-import { IntakeInspector } from "./_inspector";
-import { OPEN_GAP, STATUS, dayMonth, gateReason, type Batch } from "./_lib";
+import { IntakeInspector, readiness } from "./_inspector";
+import { OPEN_GAP, STATUS, dayMonth, gateReason, tally, type Batch, type Summary } from "./_lib";
 import { ProposalsTab } from "./_proposals";
 import { QuestionsTab } from "./_questions";
 import { ReadLine } from "./_read";
@@ -146,6 +147,8 @@ export function BeforeDrafting({ id }: { id: string }) {
   const mayAnalyze = author && can("analyze_intake");
   const mayRepin = author && can("repin_intake");
   const mayRead = author && can("start_intake_read");
+  // #482: owners delete a brief (and the PRD it became) to Trash.
+  const mayDelete = can("delete_intake");
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
   const reason = blocked ? gateReason(gate.blocking_gap_ids.length) : null;
@@ -153,8 +156,6 @@ export function BeforeDrafting({ id }: { id: string }) {
   const openGaps = s.gaps.filter((g) => OPEN_GAP.has(g.status)).length;
   const fresh = s.new_evidence.visible ? (s.new_evidence.count ?? 0) : 0;
 
-  // #482: owners delete a brief (and the PRD it became) to Trash.
-  const mayDelete = can("delete_intake");
   // qa-docs-19: an open critical question in the inspector opens its bubble in the thread.
   // The gap's newest question still open (asked or delegated), else its newest: an older,
   // answered one is not what Answer is for.
@@ -168,29 +169,38 @@ export function BeforeDrafting({ id }: { id: string }) {
     setTab("questions");
     setFocusing(questionId);
   };
-  const inspector = <IntakeInspector summary={s} role={role} onChanged={changed} questionFor={questionFor} onAnswer={answer} />;
-  const live = !converted && (mayAnalyze || mayRepin || (mayArchive && !archived));
-  // qa-docs-65: one ⋯ menu holds every secondary action, Delete… last.
-  const more = (live || mayDelete) && (
+  const inspector = (
+    <IntakeInspector
+      summary={s}
+      batches={batchesQ.data ?? undefined}
+      role={role}
+      onChanged={changed}
+      questionFor={questionFor}
+      onAnswer={answer}
+    />
+  );
+  // qa-work-11 / qa-docs-65: one overflow menu holds every lesser action, Delete… last.
+  const live = !converted;
+  const more = ((live && (mayAnalyze || mayRepin || (mayArchive && !archived))) || mayDelete) && (
     <Menu label={`Actions for ${s.intake.title}`} icon="more" iconOnly>
       {(close) => (
         <div className="flex min-w-48 flex-col gap-1" role="menu">
-          {!converted && mayAnalyze && (
+          {live && mayAnalyze && (
             <Button variant="ghost" role="menuitem" className="justify-start" disabled={busy} onClick={() => (close(), act(() => unwrap(api.POST("/v1/intakes/{intake_id}/analyze", { params: { path: { intake_id: id } } }))))}>
               Re-analyse
             </Button>
           )}
-          {!converted && mayRepin && (
+          {live && mayRepin && (
             <Button variant="ghost" role="menuitem" className="justify-start" disabled={busy} onClick={() => (close(), act(() => unwrap(api.POST("/v1/intakes/{intake_id}/repin", { params: { path: { intake_id: id } } }))))}>
               Pin new sources
               {fresh > 0 && (
                 <span className="font-normal text-text2">
-                  {fresh} new item{fresh === 1 ? "" : "s"} since {s.new_evidence.as_of ? dayMonth(s.new_evidence.as_of) : "the pin"}
+                  {plural(fresh, "new item")} since {s.new_evidence.as_of ? dayMonth(s.new_evidence.as_of) : "the pin"}
                 </span>
               )}
             </Button>
           )}
-          {!converted && mayArchive && !archived && (
+          {live && mayArchive && !archived && (
             <Button
               variant="ghost"
               role="menuitem"
@@ -265,11 +275,7 @@ export function BeforeDrafting({ id }: { id: string }) {
       {archived && (
         <Notice testId="intake-archived">This brief is archived: it has left PRDs › Ideas and Oracle asks nothing more.</Notice>
       )}
-      {phone && (
-        <Button className="mb-3 w-full" onClick={() => setSheet(true)}>
-          Gaps {openGaps} open
-        </Button>
-      )}
+      {phone && <PhoneReadiness summary={s} batches={batchesQ.data ?? undefined} openGaps={openGaps} onOpen={() => setSheet(true)} />}
       <Split inspector={phone ? undefined : inspector}>
         <TabBar<Tab>
           label="Before drafting"
@@ -313,11 +319,48 @@ export function BeforeDrafting({ id }: { id: string }) {
           document.body,
         )}
       {drafting && <DraftSheet summary={s} onClose={() => (setDrafting(false), changed())} />}
+      {deleting &&
+        createPortal(
+          <DeleteDialog
+            title={s.intake.title}
+            dependents={() => unwrap(api.GET("/v1/intakes/{intake_id}/dependents", { params: { path: { intake_id: id } } }))}
+            remove={(query) => unwrap(api.DELETE("/v1/intakes/{intake_id}", { params: { path: { intake_id: id }, query } }))}
+            onClose={() => setDeleting(false)}
+            onDeleted={() => router.push("/documents")}
+          />,
+          document.body,
+        )}
       {phone && (
         <Sheet open={sheet} title="Before drafting" onClose={() => setSheet(false)} testId="intake-sheet">
           <div className="p-2">{inspector}</div>
         </Sheet>
       )}
     </Page>
+  );
+}
+
+/**
+ * qa-work-22: on a phone the inspector is a sheet, so "Ready to draft?" stays on the page as a
+ * short summary (where the brief stands, the counts) with the sheet behind "Gaps N open".
+ */
+function PhoneReadiness({ summary: s, batches, openGaps, onOpen }: { summary: Summary; batches: Batch[] | undefined; openGaps: number; onOpen: () => void }) {
+  const state = readiness(s);
+  const counts = tally(s, batches);
+  return (
+    <section aria-label="Ready to draft?" data-testid="intake-readiness" className="mb-3 flex flex-col gap-2 rounded-panel border border-line bg-surface p-3 shadow-panel">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="text-[15px] font-semibold text-text">Ready to draft?</h2>
+        <Chip kind={state.kind} dot>
+          {state.label}
+        </Chip>
+      </div>
+      <p className="text-sm text-text2" data-testid="intake-readiness-counts">
+        {counts.open} open · {counts.answered} answered
+        {counts.unknown > 0 ? ` (${counts.unknown} as unknown)` : ""} · {plural(s.readiness.open_critical, "critical question")} open
+      </p>
+      <Button className="w-full" onClick={onOpen}>
+        Gaps {openGaps} open
+      </Button>
+    </section>
   );
 }

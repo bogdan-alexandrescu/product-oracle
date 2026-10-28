@@ -119,7 +119,7 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
   await expect(status(page)).toHaveText("Running");
   await expect(source(page)).toHaveText("From Usage alerts PRD v1");
-  await expect(page.getByText("template outcome-roadmap, theme roadmap-board")).toBeVisible();
+  await expect(page.getByText("Template: Outcome roadmap, theme Roadmap board")).toBeVisible();
 
   // Roadmap items: the check's counts and problems, then the checkpoint.
   await page.getByRole("button", { name: "Check agents now" }).click();
@@ -129,7 +129,7 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await expect(items.getByTestId("items-check")).toContainText("1 roadmap item: 1 now, 0 next, 0 later · 1 blocking");
   // D1 (#542): the run page shows the stop's summary; the item, its reason and its fix are on
   // the Roadmap items review screen, where it is decided.
-  await expect(items.getByTestId("items-review-line")).toContainText("1 need you · 1 blocking");
+  await expect(items.getByTestId("items-review-line").getByTestId("items-open")).toHaveText("1 blocking · 0 to confirm");
   await expect(items.getByTestId("reason-chip")).toHaveCount(0);
   await items.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
@@ -140,7 +140,7 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await expect(page.getByTestId("roadmap-item-inspector").getByTestId("reason-card")).toContainText(/Section features is not in .+ v\d+\./);
   await page.getByTestId("decision-bar").getByRole("button", { name: /^Approve/ }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Approved");
-  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
+  await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
 
   // Roadmap draft: imported as the roadmap's next version, linked to the PRD.
   await page.getByRole("button", { name: "Check agents now" }).click();
@@ -171,8 +171,8 @@ test("build roadmap from the PRD view, into a new roadmap", async ({ page }) => 
   await expect(dialog.getByTestId("estimate-total")).toHaveText("$14.50");
   await dialog.getByRole("button", { name: "Start run" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByText("alerts-plan (new)")).toBeVisible();
-  await expect(page.getByText("template now-next-later, theme roadmap-board")).toBeVisible();
+  await expect(page.getByTestId("run-document").filter({ hasText: /^Alerts plan.* \(new\)$/ })).toBeVisible();
+  await expect(page.getByText("Template: Now / Next / Later, theme Roadmap board")).toBeVisible();
 });
 
 test("a roadmap version names its PRD, and its PRD links open the PRD view at the section", async ({ page }) => {

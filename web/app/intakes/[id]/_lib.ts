@@ -1,6 +1,6 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { formatDateTime, formatDay } from "@/lib/format";
+import { formatDateTime, formatDay, plural } from "@/lib/format";
 
 export type Summary = Schemas["IntakeSummary"];
 export type Batch = Schemas["QuestionBatch"];
@@ -76,15 +76,50 @@ export const NON_ANSWER: Record<Exclude<Answer["kind"], "answer">, string> = {
   research: "Research this",
 };
 
-/** "Oct 20", as every other page writes a day (qa-docs-65: the format module). */
+/**
+ * "Oct 20", as every other page writes a day (qa-docs-65: the format module; qa-work-46: one way
+ * on this page); the full time ("Oct 20, 11:00 AM PDT") goes in the title where it is shown.
+ */
 export const dayMonth = formatDay;
 
-/** "Oct 20, 11:00 AM PDT". */
+/** The full time of a day shown with `dayMonth`, for its title. */
 export const when = formatDateTime;
 
 /** "1 critical question" / "2 critical questions". */
 export function criticalCount(n: number): string {
-  return `${n} critical question${n === 1 ? "" : "s"}`;
+  return plural(n, "critical question");
+}
+
+const WAITING = new Set<Card["question"]["status"]>(["asked", "delegated"]);
+
+/** The answer that stands on a question: its latest. */
+const lastAnswer = (c: Card) => c.answers[c.answers.length - 1];
+
+/** The questions asked so far: still open, answered, and of those answered "I don't know" (unknown). */
+export type Tally = { open: number; answered: number; unknown: number };
+
+/**
+ * qa-work-21: what the asked questions stand at, read off the thread when it is loaded: a
+ * question answered "I don't know" counts as answered, as unknown, never as still open; the
+ * summary's counts until the thread is read.
+ */
+export function tally(s: Summary, batches: Batch[] | undefined): Tally {
+  if (!batches) return { open: s.batch.asked, answered: s.batch.answered, unknown: 0 };
+  const cards = batches.flatMap((b) => b.questions);
+  const unknown = cards.filter((c) => lastAnswer(c)?.kind === "dont_know" && (c.question.status === "answered" || WAITING.has(c.question.status)));
+  const known = cards.filter((c) => c.question.status === "answered" && lastAnswer(c)?.kind !== "dont_know").length;
+  const open = cards.filter((c) => WAITING.has(c.question.status) && lastAnswer(c)?.kind !== "dont_know").length;
+  return { open, answered: known + unknown.length, unknown: unknown.length };
+}
+
+/** The gaps whose question was answered "I don't know", by gap id. */
+export function unknownGaps(batches: Batch[] | undefined): Set<string> {
+  return new Set(
+    (batches ?? [])
+      .flatMap((b) => b.questions)
+      .filter((c) => lastAnswer(c)?.kind === "dont_know" && c.question.gap_id)
+      .map((c) => c.question.gap_id!),
+  );
 }
 
 /** Why Draft with Oracle waits (C5 "Draft gate", decided 2026-10-21). */

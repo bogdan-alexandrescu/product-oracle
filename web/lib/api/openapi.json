@@ -106404,6 +106404,11 @@
             "title": "Can Dismiss Overrun",
             "default": false
           },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
           "searching": {
             "anyOf": [
               {
@@ -107255,6 +107260,11 @@
           "can_dismiss_overrun": {
             "type": "boolean",
             "title": "Can Dismiss Overrun",
+            "default": false
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
             "default": false
           },
           "searching": {

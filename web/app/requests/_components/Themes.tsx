@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { Button, Chip, Empty } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
@@ -122,7 +123,7 @@ function ThemeRow({
         {theme.archived && <Chip kind="na">Archived</Chip>}
         {theme.origin === "oracle" && <Chip kind="line">From Oracle</Chip>}
         <span className="tnum">
-          {theme.request_count} {theme.request_count === 1 ? "request" : "requests"}
+          {plural(theme.request_count, "request")}
         </span>
         {canChange && !renaming && (
           <>

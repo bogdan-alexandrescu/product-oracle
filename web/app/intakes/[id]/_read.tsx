@@ -6,25 +6,23 @@ import { useEffect } from "react";
 import { Button } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
 
-import { when } from "./_lib";
+import { plural } from "@/lib/format";
+
+import { dayMonth, when } from "./_lib";
 
 type AiRead = Schemas["AiReadOut"];
 
 const LIVE = new Set<AiRead["state"]>(["queued", "running"]);
 const POLL_MS = 10_000;
 
-function plural(n: number, word: string): string {
-  return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
-
 function line(read: AiRead): string {
   if (read.state === "off") return read.off_reason === "company" ? "Oracle's read is off for this company." : "Oracle hasn't read this brief.";
   if (LIVE.has(read.state)) {
-    return `Oracle is reading your brief and ${plural(read.sources, "source")}${read.started_at ? ` · started ${when(read.started_at)}` : ""}`;
+    return `Oracle is reading your brief and ${plural(read.sources, "source")}${read.started_at ? ` · started ${dayMonth(read.started_at)}` : ""}`;
   }
   if (read.state === "failed") return read.error?.message ?? "Oracle's read failed. The rules read stands.";
   const added = read.added ?? { items: 0, gaps: 0 };
-  return `Oracle added ${plural(added.items, "inference")} and ${plural(added.gaps, "gap")} · private to you${read.finished_at ? ` · ${when(read.finished_at)}` : ""}`;
+  return `Oracle added ${plural(added.items, "inference")} and ${plural(added.gaps, "gap")} · private to you${read.finished_at ? ` · ${dayMonth(read.finished_at)}` : ""}`;
 }
 
 /**
@@ -43,10 +41,12 @@ export function ReadLine({ read, mayRead, busy, onRead, onPoll }: { read: AiRead
   }, [live, onPoll]);
 
   const refused = read.read_again_refused ?? null;
+  // The day in the line, its full time on hover.
+  const at = live ? read.started_at : read.finished_at;
   const showButton = mayRead && !live && !(read.state === "off" && read.off_reason === "company");
   return (
     <div data-testid="intake-read" className="-mt-1 mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2">
-      <span>{line(read)}</span>
+      <span title={at ? when(at) : undefined}>{line(read)}</span>
       {read.fallback && <span>{read.fallback.message}</span>}
       {read.state === "done" && read.path === "swarmcloud" && read.run_id && (
         <Link href={`/runs/${read.run_id}`} className="font-medium text-text hover:underline">

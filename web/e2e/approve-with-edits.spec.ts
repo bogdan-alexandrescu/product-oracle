@@ -141,7 +141,7 @@ test("approve with 3 edits applies them, moves to the roadmap draft and keeps th
   await expect(approve).toBeEnabled();
   await approve.click();
   await expect(page.getByTestId("review-status")).toHaveText("Approved with 3 edits");
-  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
+  await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
 
   // The run moves on to the roadmap draft: no agent re-ran the roadmap items.
   await expect(page.getByTestId("segment-roadmap_draft").getByTestId("segment-state")).toHaveText("Running");
@@ -159,7 +159,7 @@ test("approve with 3 edits applies them, moves to the roadmap draft and keeps th
 
   // The file the next segment reads is the edited one; the agents' original is kept.
   const content = items.getByTestId("artifact-content");
-  await items.getByRole("button", { name: "roadmap_items.yaml" }).click();
+  await items.getByRole("button", { name: "Roadmap items", exact: true }).click();
   await expect(content).toContainText("3 edits applied by Oracle; no agent ran. The agents' attempt 1 is kept.");
   await expect(content).toContainText("id: budget-caps, title: Budget caps, outcome: No team overspends its budget, horizon: later");
   await expect(content).not.toContainText("mobile-push");

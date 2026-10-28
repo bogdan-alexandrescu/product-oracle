@@ -13,9 +13,9 @@ export type ItemColumn = "position" | "title" | "horizon" | "milestone" | "confi
 
 const HORIZON_ORDER = new Map(HORIZONS.map((h, i) => [h.value, i]));
 
-export function HorizonChip({ horizon, hero = false }: { horizon: string; hero?: boolean }) {
+export function HorizonChip({ horizon, hero = false, plain = false }: { horizon: string; hero?: boolean; plain?: boolean }) {
   return (
-    <Chip kind={horizon === "now" ? "now" : "line"} hero={hero}>
+    <Chip kind={horizon === "now" && !plain ? "now" : "line"} hero={hero}>
       {horizonLabel(horizon)}
     </Chip>
   );
@@ -86,6 +86,7 @@ export function ItemsTable({
   detail,
   empty = "No items match",
   widths,
+  plainHorizons = false,
 }: {
   rows: ItemRow[];
   selected: string | null;
@@ -105,6 +106,8 @@ export function ItemsTable({
   empty?: ReactNode;
   /** Narrower or wider columns than E2's (D1 fits two more beside the inspector). */
   widths?: Partial<Record<ItemColumn, string>>;
+  /** Every horizon in one chip style (D1's review: Now is not set apart from Next and Later). */
+  plainHorizons?: boolean;
 }) {
   const titles = useMemo(() => new Map(rows.map((r) => [r.key, r.title])), [rows]);
   const groupOf = groupBy ?? ((r: ItemRow) => r.horizon);
@@ -131,7 +134,7 @@ export function ItemsTable({
       cell: (r) =>
         r.ghost || r.struck ? <s className="text-text2">{r.title}</s> : <span className={`font-medium ${r.muted ? "text-text2" : ""}`}>{r.title}</span>,
     },
-    { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => (r.horizon ? <HorizonChip horizon={r.horizon} /> : <span className="text-text2">—</span>) },
+    { key: "horizon", header: "Horizon", width: "84px", phone: "action", cell: (r) => (r.horizon ? <HorizonChip horizon={r.horizon} plain={plainHorizons} /> : <span className="text-text2">—</span>) },
     { key: "milestone", header: "Milestone", width: "172px", phone: "meta", cell: (r) => <MilestoneCell row={r} /> },
     { key: "confidence", header: "Confidence", width: "104px", phone: "meta", phoneLabel: "Confidence", cell: (r) => <Confidence value={r.confidence} /> },
     {
