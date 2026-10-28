@@ -110,6 +110,21 @@ for (const phone of [false, true]) {
         await expect(card.getByTestId("flow-svg")).toBeVisible();
       });
 
+      test(`a failed redraw with no open comment still offers Retry (${where})`, async ({ page }) => {
+        await login(page);
+        await page.goto("/simple/roadmap");
+        await expect(bar(page, "alert-mobile")).toBeVisible();
+        await bar(page, "alert-mobile").click();
+        const card = page.getByTestId("floating-card");
+        await tap(card.getByRole("button", { name: "Open the item's flow" }));
+        const failed = card.getByTestId("flow-failed");
+        await expect(failed).toContainText("Oracle could not draw the next version.");
+        await expect(card.getByText("No comments yet.")).toBeVisible();
+        await tap(failed.getByRole("button", { name: "Retry" }));
+        await expect(card.getByTestId("flow-version")).toHaveText("Version 2 of 2");
+        await expect(card.getByTestId("flow-failed")).toHaveCount(0);
+      });
+
       test(`the item card names the PRD's F-code, not the section key (${where})`, async ({ page }) => {
         await login(page, "viewer@example.com");
         await page.goto("/simple/roadmap");

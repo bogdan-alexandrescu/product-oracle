@@ -135,7 +135,7 @@ export function seedVisuals(): VisualsDb {
     steps: [step("s1", "Get the push", "Mobile alert push", "new"), step("s2", "Open the alert", null, "same"), step("s3", "See what crossed the line", "Alert rules", "changed"), step("s4", "Snooze or assign it", null, "new", "decision")],
     screen: { title: "Alert on a phone", regions: ["Header: rule and time", "What crossed the line", "Chart of the last day", "Snooze and Assign buttons"] },
     notes: [{ n: 1, target: "s1", note: "The push names the rule", section_key: "alerts", requirement: "R4" }],
-  }));
+  })).failure = "Oracle could not draw it"; // The walk-fixes review: its redraw failed, no comment open.
   return db;
 }
 
@@ -239,7 +239,10 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
     if ((RANK[ctx.role] ?? 0) < RANK.owner) return json(403, { detail: "Only who changes this directly revises its visual" });
     if (!v?.versions.length) return json(409, { detail: "Oracle has not drawn this visual yet" });
     const open = v.comments.filter((c) => c.addressed_in === null);
-    if (!open.length) return json(409, { detail: "Nothing to revise from: comment first" });
+    const note = String(b.note ?? "").trim();
+    // As the API: a note (Retry after a failed redraw) revises with no open comment.
+    if (!open.length && !note) return json(409, { detail: "Nothing to revise from: comment first" });
+    v.failure = null;
     const cur = v.versions.at(-1)!;
     const n = cur.version + 1;
     const nodes = [...cur.nodes, ...open.map((c, i) => step(`c${n}-${i + 1}`, c.body.slice(0, 40), null, "new"))];

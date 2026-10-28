@@ -101,6 +101,8 @@ export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: 
     unwrap(
       api.GET("/v1/simple/visuals/{kind}/{subject_id}", {
         params: { path: { kind: subject.kind, subject_id: subject.id }, query: documentId ? { document_id: documentId } : {} },
+        // The walk-fixes review: every poll asks the API, never a copy kept from before the job ended.
+        cache: "no-store",
       }),
     ),
   );
@@ -169,6 +171,9 @@ export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: 
       },
     );
   const revise = () => post(() => api.POST("/v1/simple/visuals/{kind}/{subject_id}/revise", { params: { path }, body: {} }));
+  // Retry a failed redraw: from the open comments, or with none, as a note (the API's revise).
+  const retry = () =>
+    post(() => api.POST("/v1/simple/visuals/{kind}/{subject_id}/revise", { params: { path }, body: q.data?.comments.some((c) => c.addressed_in === null) ? {} : { note: "Retry: Oracle could not draw the last version" } }));
   const ask = () => post(() => api.POST("/v1/simple/visuals/{kind}/{subject_id}/request", { params: { path }, body: { brief: "", document_id: documentId ?? null } }));
 
   async function openVersion(n: number) {
@@ -203,8 +208,8 @@ export function FlowPanel({ subject, documentId, onClose, onDrawn }: { subject: 
           {!v.pending && v.failed && shown === null && (
             <span className="text-danger" data-testid="flow-failed">
               Oracle could not draw the next version.{" "}
-              {v.can_revise && open.length > 0 && (
-                <button type="button" className="underline" disabled={busy} onClick={() => void revise()}>
+              {v.can_revise && (
+                <button type="button" className="underline" disabled={busy} onClick={() => void retry()}>
                   Retry
                 </button>
               )}
