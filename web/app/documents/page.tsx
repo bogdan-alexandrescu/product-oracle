@@ -66,7 +66,7 @@ function SortHeader({ label, k, sort, onSort }: { label: string; k: SortKey; sor
       className={`inline-flex items-center gap-1 rounded hover:text-text ${on ? "text-text" : ""}`}
     >
       {label}
-      {on && <Icon name={sort.desc ? "chevron-down" : "chevron-up"} size={14} />}
+      {on && <Icon name={sort.desc ? "chevron-down" : "chevron-up"} size={16} />}
     </button>
   );
 }

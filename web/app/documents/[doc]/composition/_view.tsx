@@ -117,7 +117,7 @@ export function CompositionView({ doc }: { doc: string }) {
   }
 
   const pack = data?.current?.packs ?? data?.working?.packs ?? data?.recommendation?.packs ?? [];
-  const packsSource = (data?.current ?? data?.working)?.inputs.policy?.packs_source;
+  const packsSource = (data?.current ?? data?.working)?.inputs.policy?.packs_source as string | undefined;
   const packNames = pack.map((id) => packsQ.data?.find((p) => p.id === id)?.title).filter(Boolean);
 
   const tabs = (
