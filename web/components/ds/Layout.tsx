@@ -26,6 +26,7 @@ export function PageHeader({
   back,
   info,
   testId,
+  phoneTitle = false,
 }: {
   title: ReactNode;
   /** Right after the title, small: "v3". */
@@ -38,6 +39,8 @@ export function PageHeader({
   /** An InfoTip about the page (qa-shell-22). */
   info?: ReactNode;
   testId?: string;
+  /** The H1 shows on a phone too, wrapping (a long document title the phone header cuts, qa-docs-68). */
+  phoneTitle?: boolean;
 }) {
   // One flat wrapping row. The status chips take their full width (flex-auto, not a 0 basis)
   // so they drop to a line of their own when the title and the actions leave no room for
@@ -52,7 +55,11 @@ export function PageHeader({
       className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 py-3 max-[600px]:min-h-0 max-[600px]:py-3"
     >
       {back && <div className="flex min-h-6 basis-full items-center text-sm text-text2">{back}</div>}
-      <h1 className="min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading max-[600px]:sr-only">
+      <h1
+        className={`min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading ${
+          phoneTitle ? "break-words max-[600px]:text-[22px] max-[600px]:leading-7" : "max-[600px]:sr-only"
+        }`}
+      >
         {title}
         {suffix && <span data-title-suffix className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2">{suffix}</span>}
       </h1>

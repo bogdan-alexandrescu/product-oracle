@@ -58,10 +58,8 @@ test("comment on the whole draft: the item shows under General and All sections,
   await scope(page, /^General/).click();
   await expect(items(page).filter({ hasText: REMARK })).toHaveCount(1);
 
-  // The same action from the version's header row opens the form in the Feedback tab.
-  await scope(page, /^This section/).click();
-  await page.getByTestId("doc-general-feedback").click();
-  await expect(review.getByRole("textbox", { name: "Comment on the whole draft" })).toBeFocused();
+  // qa-docs-47: the action is the Feedback tab's only; the header row does not repeat it.
+  await expect(page.getByTestId("doc-general-feedback")).toHaveCount(0);
 });
 
 test("a viewer has no whole-draft entry; the new item reaches the approver's Inbox as General", async ({ page: viewer, browser }) => {

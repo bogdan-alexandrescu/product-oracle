@@ -30,7 +30,7 @@ test("a brief shows its approach, touches with code map refs, risks, answered qu
   const touches = page.getByRole("table", { name: "What it touches" });
   const pricing = touches.getByRole("row", { name: /web\/checkout\/summary/ });
   await expect(pricing).toContainText("Change");
-  await expect(pricing).toContainText("module:checkout-web");
+  await expect(pricing).toContainText("Checkout web");
   await expect(touches.getByRole("row", { name: /GET \/v1\/quotes/ })).toContainText("New");
 
   await expect(page.getByTestId("brief-risks")).toContainText("Tax rules differ by region");

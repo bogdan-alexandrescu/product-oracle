@@ -7,7 +7,7 @@ import { Button } from "@/components/ds";
 import { FeedbackStatusChip, JobStatusChip, TabBar } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type FeedbackStatus } from "@/lib/api/client";
-import { formatDate, formatDateTime, jobFailure } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { sectionHref } from "@/lib/section-link";
@@ -92,20 +92,28 @@ export function ReportsPanel({
           )}
           {r && (
             <>
-              <Button variant="ghost" onClick={() => download("md")} aria-label="Export reports MD">
-                MD
-              </Button>
+              {/* qa-docs-53: the export order used everywhere: HTML before MD. */}
               <Button variant="ghost" onClick={() => download("html")} aria-label="Export reports HTML">
                 HTML
+              </Button>
+              <Button variant="ghost" onClick={() => download("md")} aria-label="Export reports MD">
+                MD
               </Button>
             </>
           )}
         </span>
       </div>
+      {/* qa-docs-4: plain words and a Retry; why it failed (the Claude accounts, a stored
+          error) is Oracle's work's to say, not this panel's. */}
       {job?.status === "failed" && (
-        <p className="rounded-button bg-crit-bg px-3 py-2 text-sm font-medium text-crit" role="alert">
-          {jobFailure(job, "Oracle could not write the reports.")}
-        </p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-button bg-crit-bg px-3 py-2" role="alert">
+          <p className="min-w-0 flex-1 text-sm font-medium text-crit">The reports could not be written.{canAct && " Try again."}</p>
+          {canAct && (
+            <Button variant="danger" onClick={generate} data-testid="reports-retry">
+              Retry
+            </Button>
+          )}
+        </div>
       )}
       {error && <ErrorNote>{error}</ErrorNote>}
       {(r || c) && (

@@ -96,15 +96,11 @@ function JobRow({ job, onChanged }: { job: LlmJob; onChanged: () => void }) {
         <span className="tnum ml-auto text-[13px] text-text2">{formatDateTime(job.created_at)}</span>
       </div>
       {note && <p className="mt-1 text-[15px] leading-[22px] text-text">{note}</p>}
+      {/* qa-docs-4: a failure in plain words; why (the Claude accounts) is under Details. */}
       {job.status === "failed" && (
-        <div className="mt-1.5 rounded-lg bg-crit-bg px-2.5 py-2 text-sm leading-5 text-crit" data-testid="job-error">
-          <p className="font-semibold">{jobFailure({ error: job.error, error_reason: null })}</p>
-          {job.error_reason && NO_ACCOUNT_REASON[job.error_reason] && <p className="mt-0.5">{NO_ACCOUNT_REASON[job.error_reason]}</p>}
-          {/* A reset already past says nothing about now (#556). */}
-          {job.next_reset_at && Date.parse(job.next_reset_at) > now && (
-            <p className="tnum mt-0.5">Next reset: {formatDateTime(job.next_reset_at)}</p>
-          )}
-        </div>
+        <p className="mt-1.5 rounded-lg bg-crit-bg px-2.5 py-2 text-sm leading-5 font-semibold text-crit" data-testid="job-failed-plain">
+          {retry ? "It could not run. Retry it below." : "It could not run."}
+        </p>
       )}
       {job.status === "queued" && job.error && <p className="mt-1 text-sm font-medium text-warn">{job.error}</p>}
       {job.attempts > 1 && (
@@ -115,6 +111,16 @@ function JobRow({ job, onChanged }: { job: LlmJob; onChanged: () => void }) {
       {/* P3d Cost prominence: the account, tokens and cost sit behind Details. */}
       <details className="mt-1.5 text-[13px] text-text2">
         <summary className="w-fit cursor-pointer font-semibold text-text2 hover:text-text">Details</summary>
+        {job.status === "failed" && (
+          <div className="mt-1 text-sm leading-5 text-text" data-testid="job-error">
+            <p className="font-semibold">{jobFailure({ error: job.error, error_reason: null })}</p>
+            {job.error_reason && NO_ACCOUNT_REASON[job.error_reason] && <p className="mt-0.5">{NO_ACCOUNT_REASON[job.error_reason]}</p>}
+            {/* A reset already past says nothing about now (#556). */}
+            {job.next_reset_at && Date.parse(job.next_reset_at) > now && (
+              <p className="tnum mt-0.5">Next reset: {formatDateTime(job.next_reset_at)}</p>
+            )}
+          </div>
+        )}
         <dl className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1">
           <div className="flex items-center gap-1.5">
             <dt className="font-semibold">Account</dt>

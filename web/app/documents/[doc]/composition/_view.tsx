@@ -7,7 +7,7 @@ import { DocCrumb } from "@/components/DocToolbar";
 import { Button, Chip, DataTable, FilterChips, Notice, Page, PageHeader, Panel, SegmentedControl, Sheet, Split, type Column } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { formatDate } from "@/lib/format";
+import { formatDate, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -18,6 +18,7 @@ import {
   DECIDED_BY,
   FILTER_LABEL,
   NO_CHANGES,
+  PACKS_SOURCE,
   POLICY_SOURCE,
   SELECTION_LABEL,
   diffLine,
@@ -27,7 +28,9 @@ import {
   matches,
   move,
   sortModules,
+  titler,
   toggle,
+  touchedNames,
   type Changes,
   type Filter,
   type InspectorOut,
@@ -39,8 +42,7 @@ import { ModuleDetail } from "./_module-inspector";
 import { PolicyTab } from "./_policy";
 
 const PHONE = "(max-width: 600px)";
-const MONO = "font-mono text-[13px]";
-const META = "inline-flex h-[26px] items-center rounded-full border border-line-strong px-2.5 font-mono text-[13px] text-text2";
+const META = "inline-flex min-h-[26px] items-center rounded-full border border-line-strong px-2.5 text-[13px] text-text2";
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
@@ -59,10 +61,10 @@ function useIsPhone(): boolean {
 type Tab = "modules" | "catalog" | "policy" | "history";
 type Source = "working" | "current" | "preview";
 
-const TABS: { value: Tab; label: string }[] = [
+const TABS: { value: Tab; label: string; short?: string }[] = [
   { value: "modules", label: "Modules" },
   { value: "catalog", label: "Catalog" },
-  { value: "policy", label: "Company policy" },
+  { value: "policy", label: "Company policy", short: "Policy" },
   { value: "history", label: "History" },
 ];
 
@@ -109,16 +111,22 @@ export function CompositionView({ doc }: { doc: string }) {
     setConfirming(false);
     setView(null);
     setResult({
-      text: status === "confirmed" ? `Rev ${n} confirmed.` : `Rev ${n} saved as a working draft. It supersedes nothing until confirmed.`,
+      text: status === "confirmed" ? `Revision ${n} confirmed.` : `Revision ${n} saved as a working draft. It replaces nothing until confirmed.`,
       problems: out.problems,
     });
   }
 
+  const pack = data?.current?.packs ?? data?.working?.packs ?? data?.recommendation?.packs ?? [];
+  const packsSource = (data?.current ?? data?.working)?.inputs.policy?.packs_source as string | undefined;
+  const packNames = pack.map((id) => packsQ.data?.find((p) => p.id === id)?.title).filter(Boolean);
+
   const tabs = (
+    // On a phone the four tabs share the row's width (short labels), so none is cut at the edge.
     <SegmentedControl
       label="Composition views"
       value={tab}
-      items={TABS.map((t) => ({ value: t.value, label: t.label, href: t.value === "modules" ? pathname : `${pathname}?tab=${t.value}` }))}
+      fill={phone}
+      items={TABS.map((t) => ({ value: t.value, label: phone ? (t.short ?? t.label) : t.label, href: t.value === "modules" ? pathname : `${pathname}?tab=${t.value}` }))}
     />
   );
 
@@ -139,8 +147,8 @@ export function CompositionView({ doc }: { doc: string }) {
     body = <HistoryTab data={data} />;
   } else {
     const sources: { value: Source; label: string; modules: Module[] }[] = [];
-    if (data.working) sources.push({ value: "working", label: `Working rev ${data.working.number}`, modules: data.working.modules });
-    if (data.current) sources.push({ value: "current", label: `Confirmed rev ${data.current.number}`, modules: data.current.modules });
+    if (data.working) sources.push({ value: "working", label: `Working revision ${data.working.number}`, modules: data.working.modules });
+    if (data.current) sources.push({ value: "current", label: `Confirmed revision ${data.current.number}`, modules: data.current.modules });
     if (preview || data.recommendation) sources.push({ value: "preview", label: "Recommendation", modules: (preview ?? data.recommendation)!.modules });
     const source = sources.find((s) => s.value === view) ?? sources[0];
     // A new revision starts from the newest one: the draft's order is over its modules.
@@ -151,7 +159,9 @@ export function CompositionView({ doc }: { doc: string }) {
     const rows = all.filter((m) => matches(m, filter));
     const selected = all.find((m) => m.key === picked) ?? null;
     const count = (f: Filter) => all.filter((m) => matches(m, f)).length;
-    const titleOf = (key: string) => all.find((m) => m.key === key)?.title ?? key;
+    const titleOf = titler(all, data.working?.modules, data.current?.modules, data.recommendation?.modules, preview?.modules);
+    // The place in the order (1, 2, 3 …) of each included module, not the API's 10, 20 … steps.
+    const place = new Map([...all].filter((m) => m.included).sort((a, b) => a.order - b.order).map((m, i) => [m.key, i + 1]));
     const detail = (m: Module, bare: boolean) => (
       <ModuleDetail
         m={m}
@@ -167,54 +177,61 @@ export function CompositionView({ doc }: { doc: string }) {
             down: at < order.length - 1 ? () => setChanges((c) => move(c, base, m.key, 1)) : null,
           };
         })()}
+        titleOf={titleOf}
         bare={bare}
       />
     );
     const columns: Column<Module>[] = [
-      { key: "order", header: "#", width: "48px", phone: "hide", cell: (m) => <span className="tnum text-text2">{m.included ? m.order : "—"}</span> },
+      { key: "order", header: "#", width: "48px", phone: "hide", cell: (m) => <span className="tnum text-text2">{place.get(m.key) ?? "—"}</span> },
       {
         key: "module",
         header: "Module",
         phone: "title",
+        // Names wrap, never cut (also when the inspector narrows the table).
+        wrap: true,
         cell: (m) => (
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-              <span className="truncate font-medium">{m.title}</span>
+              <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{m.title}</span>
               {changes.add.includes(m.key) && <Chip kind="acc">+ in draft</Chip>}
               {changes.remove.includes(m.key) && <Chip kind="warn">− in draft</Chip>}
               {m.field_problems.length > 0 && (
                 <Chip kind="warn">
-                  {m.field_problems.length} field problem{m.field_problems.length === 1 ? "" : "s"}
+                  {plural(m.field_problems.length, "field problem")}
                 </Chip>
               )}
-              {m.condition_error && <Chip kind="warn">condition error</Chip>}
+              {m.condition_error && <Chip kind="warn">Condition problem</Chip>}
             </span>
-            <span className={`${MONO} truncate text-text2`}>
-              {m.key}
-              {m.required_review_role === "owner" ? " · owner review" : ""}
-            </span>
+            {m.required_review_role === "owner" && <span className="text-sm text-text2">Owner review</span>}
           </span>
         ),
       },
-      { key: "selection", header: "Selection", width: "110px", cell: (m) => SELECTION_LABEL[m.selection] },
+      { key: "selection", header: "Selection", width: "110px", wrap: true, cell: (m) => SELECTION_LABEL[m.selection] },
       {
         key: "decided",
         header: "Decided by",
         width: "150px",
+        wrap: true,
         phoneLabel: "Decided by",
         cell: (m) => (m.decided_by === "policy" ? POLICY_SOURCE[m.policy_source] : DECIDED_BY[m.decided_by]),
       },
       {
         key: "layout",
-        header: "Layout",
-        width: "90px",
-        cell: (m) => (
-          <span className="tnum" title="B = brief sections, F = full sections">
-            B {m.layer_impact.brief_sections.length} F {m.layer_impact.full_sections.length}
-          </span>
-        ),
+        header: "Sections",
+        width: "130px",
+        wrap: true,
+        narrow: "hide",
+        cell: (m) => {
+          const brief = m.layer_impact.brief_sections.length;
+          const full = m.layer_impact.full_sections.length;
+          if (!brief && !full) return <span className="text-text2">No sections</span>;
+          return (
+            <span className="text-sm">
+              {[brief ? `${brief} in brief` : null, full ? `${full} in full` : null].filter(Boolean).join(", ")}
+            </span>
+          );
+        },
       },
-      { key: "version", header: "Version", width: "80px", align: "right", cell: (m) => <span className="tnum">{m.version}</span> },
       {
         key: "state",
         header: "State",
@@ -232,22 +249,13 @@ export function CompositionView({ doc }: { doc: string }) {
       <Split inspector={!phone && selected ? detail(selected, false) : undefined}>
         {data.policy_changed_at && (
           <Notice testId="policy-changed" tone="warn" action={<Button onClick={loadPreview}>Preview with new policy</Button>}>
-            <b>Company policy changed {formatDate(data.policy_changed_at)}.</b> Compositions are only flagged; confirm a new revision to apply it.
+            <b>Company policy changed on {formatDate(data.policy_changed_at)}.</b> Compositions are only flagged; confirm a new revision to apply it.
           </Notice>
         )}
         {data.legacy && data.recommendation && (
-          <Notice
-            testId="legacy-notice"
-            action={
-              mayConfirm ? (
-                <Button variant="solid" onClick={() => setConfirming(true)}>
-                  Review and confirm rev 1
-                </Button>
-              ) : undefined
-            }
-          >
-            This PRD has no composition yet. Oracle recommends {data.recommendation.summary.included} modules from{" "}
-            {data.recommendation.packs.map((id) => packsQ.data?.find((p) => p.id === id)?.title ?? id).join(", ")}.
+          <Notice testId="legacy-notice">
+            This PRD has no composition yet. Oracle recommends {plural(data.recommendation.summary.included, "module")}
+            {packNames.length ? ` from ${packNames.join(", ")}` : ""}.{mayConfirm ? " Review them below; nothing is in force until you confirm." : ""}
           </Notice>
         )}
         {previewError && <Notice tone="error">{previewError}</Notice>}
@@ -295,32 +303,22 @@ export function CompositionView({ doc }: { doc: string }) {
               </span>
             }
           />
-          <p className="border-t border-line px-4 py-2.5 text-sm text-text2">
-            {data.sections.unmapped.length > 0 && (
-              <>
-                {data.sections.unmapped.length} section{data.sections.unmapped.length === 1 ? "" : "s"} no module claims:{" "}
-                <span className={MONO}>{data.sections.unmapped.join(" ")}</span> (kept as written) ·{" "}
-              </>
-            )}
-            B = brief sections, F = full sections
-          </p>
+          {data.sections.unmapped.length > 0 && (
+            <p className="border-t border-line px-4 py-2.5 text-sm text-text2">
+              {plural(data.sections.unmapped.length, "section")} of the PRD belong to no module. They are kept as written.
+            </p>
+          )}
         </Panel>
         {staged && (
           <Panel
             testId="draft-changes"
             title="Draft changes"
-            tools={
-              <Button variant="solid" onClick={() => setConfirming(true)}>
-                Confirm rev {next}…
-              </Button>
-            }
             bodyClassName="px-4 py-3"
           >
             <ul className="space-y-1.5 text-[15px]">
               {changes.add.map((k) => (
                 <li key={k} className="flex items-center gap-2">
                   <span>+ {titleOf(k)}</span>
-                  <span className={`${MONO} text-text2`}>{k}</span>
                   <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => toggle(c, k, false, last))}>
                     Undo
                   </Button>
@@ -329,7 +327,6 @@ export function CompositionView({ doc }: { doc: string }) {
               {changes.remove.map((k) => (
                 <li key={k} className="flex items-center gap-2">
                   <span>− {titleOf(k)}</span>
-                  <span className={`${MONO} text-text2`}>{k}</span>
                   <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => toggle(c, k, true, last))}>
                     Undo
                   </Button>
@@ -337,26 +334,27 @@ export function CompositionView({ doc }: { doc: string }) {
               ))}
               {changes.order && (
                 <li className="flex items-center gap-2">
-                  <span>↕ Custom order ({changes.order.length} modules)</span>
+                  <span>↕ Custom order ({plural(changes.order.length, "module")})</span>
                   <Button variant="ghost" className="ml-auto" onClick={() => setChanges((c) => ({ ...c, order: null }))}>
                     Reset
                   </Button>
                 </li>
               )}
             </ul>
-            <p className="mt-2 text-sm text-text2">Nothing is written until you confirm or save a working draft.</p>
+            <p className="mt-2 text-sm text-text2">Nothing is saved until you use Confirm revision {next} above.</p>
           </Panel>
         )}
         {data.working && (
-          <Panel testId="working-draft" title={`Working draft rev ${data.working.number}`} tools={<Chip kind="warn">Supersedes nothing until confirmed</Chip>} bodyClassName="space-y-1.5 px-4 py-3 text-[15px]">
+          <Panel testId="working-draft" title={`Working draft, revision ${data.working.number}`} tools={<Chip kind="warn">Replaces nothing until confirmed</Chip>} bodyClassName="space-y-1.5 px-4 py-3 text-[15px]">
             <p className="text-sm text-text2">
-              {data.working.parent_number != null ? `Started from rev ${data.working.parent_number}` : "First draft"}
+              {data.working.parent_number != null ? `Started from revision ${data.working.parent_number}` : "First draft"}
               {data.working.decided_at ? ` · ${formatDate(data.working.decided_at)}` : ""}
             </p>
-            {diffLine(data.working.diff) ? <p className={MONO}>{diffLine(data.working.diff)}</p> : <p className="text-text2">No module changes against the revision in force.</p>}
+            {diffLine(data.working.diff, titleOf) ? <p>{diffLine(data.working.diff, titleOf)}</p> : <p className="text-text2">No module changes against the revision in force.</p>}
             {data.working.diff.material && data.working.diff.affected_sections.length > 0 && (
               <p className="text-sm text-text2">
-                Material change. Approvals on <span className={MONO}>{data.working.diff.affected_sections.join(" ")}</span> will be invalidated when confirmed.
+                Approvals on the sections of{" "}
+                {touchedNames(data.working.diff.added, data.working.diff.removed, data.working.diff.version_changed.map((v) => v.key), titleOf)} will be cleared when it is confirmed.
               </p>
             )}
             {data.working.reason && <q className="block">{data.working.reason}</q>}
@@ -371,9 +369,6 @@ export function CompositionView({ doc }: { doc: string }) {
     );
   }
 
-  const pack = data?.current?.packs ?? data?.working?.packs ?? data?.recommendation?.packs ?? [];
-  const packsSource = (data?.current ?? data?.working)?.inputs.policy?.packs_source;
-  const template = data?.current ?? data?.working ?? data?.recommendation;
 
   return (
     <Page>
@@ -390,27 +385,21 @@ export function CompositionView({ doc }: { doc: string }) {
               )}
               {data.current ? (
                 <Chip kind="pass" data-testid="composition-in-force">
-                  Rev {data.current.number} in force
+                  Revision {data.current.number} in force
                 </Chip>
               ) : (
-                <Chip kind="na">Legacy · no composition yet</Chip>
+                <Chip kind="na">No composition yet</Chip>
               )}
               {data.current?.status === "published" && <Chip kind="acc">Published</Chip>}
               {data.working && (
                 <Chip kind="warn" data-testid="composition-working">
-                  Working draft rev {data.working.number}
+                  Working draft, revision {data.working.number}
                 </Chip>
               )}
-              {template?.template && (
-                <span className={META}>
-                  {template.template}
-                  {template.template_version ? ` v${template.template_version}` : ""}
-                </span>
-              )}
-              {pack.length > 0 && (
-                <span className={META}>
-                  Pack: {pack.join(", ")}
-                  {packsSource ? ` · ${packsSource}` : ""}
+              {packNames.length > 0 && (
+                <span className={META} data-testid="composition-pack">
+                  {packNames.join(", ")}
+                  {packsSource && PACKS_SOURCE[packsSource] ? ` · ${PACKS_SOURCE[packsSource]}` : ""}
                 </span>
               )}
             </>
@@ -420,10 +409,10 @@ export function CompositionView({ doc }: { doc: string }) {
           data && (
             <>
               <Button onClick={loadPreview}>Preview recommendation</Button>
-              {mayPublish && data.current?.status === "confirmed" && <Button onClick={() => setPublishing(true)}>Publish rev {data.current.number}…</Button>}
+              {mayPublish && data.current?.status === "confirmed" && <Button onClick={() => setPublishing(true)}>Publish revision {data.current.number}</Button>}
               {mayConfirm && (
                 <Button variant="primary" onClick={() => setConfirming(true)}>
-                  Confirm rev {next}…
+                  Confirm revision {next}
                 </Button>
               )}
             </>
@@ -440,7 +429,7 @@ export function CompositionView({ doc }: { doc: string }) {
             <p>{result.text}</p>
             {result.problems.map((p, i) => (
               <p key={i} className="text-text">
-                <span className={MONO}>{p.code}</span> {p.message}
+                {p.message}
               </p>
             ))}
           </div>
@@ -469,7 +458,7 @@ export function CompositionView({ doc }: { doc: string }) {
           onClose={() => setPublishing(false)}
           onDone={() => {
             setPublishing(false);
-            setResult({ text: `Rev ${data.current!.number} published.`, problems: [] });
+            setResult({ text: `Revision ${data.current!.number} published.`, problems: [] });
             void q.reload();
           }}
         />

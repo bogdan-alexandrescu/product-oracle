@@ -121,6 +121,8 @@ class Context:
     # Archived (or otherwise unavailable) module ids the company still has.
     unavailable: set[str] = field(default_factory=set)
     packs: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    # Pack ids to their titles, so reasons name a pack as people know it.
+    pack_titles: dict[str, str] = field(default_factory=dict)
     template_key: str | None = None
     template_version: str | None = None
     template_sections: list[TemplateSection] = field(default_factory=list)
@@ -482,6 +484,10 @@ def _version(ctx: Context, key: str, contract: ModuleContract) -> str:
     return entry.version if entry is not None and entry.version else contract.version
 
 
+# A module policy in words, for the reasons people read.
+_POLICY_WORDS = {"required": "required", "conditional": "when it applies", "optional": "optional"}
+
+
 def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noqa: C901
     st = _State(
         m={},
@@ -490,7 +496,7 @@ def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noq
         problems=[],
         display={k: c.display_order for k, c in ctx.contracts.items()},
     )
-    pack_names = ", ".join(ctx.packs) or "no pack"
+    pack_names = ", ".join(ctx.pack_titles.get(p, p) for p in ctx.packs) or "no"
 
     # 1-3: candidates, policy and selection.
     for key in _candidate_keys(ctx, changes):
@@ -542,7 +548,7 @@ def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noq
         if source == "company":
             lines.append(f"Company module policy: {policy}.")
         elif source == "pack":
-            lines.append(f"Pack {pack_names}: {policy}.")
+            lines.append(f"The {pack_names} pack: {_POLICY_WORDS.get(policy, policy)}.")
         elif source == "template":
             lines.append(
                 f"Template {ctx.template_key} renders it in "
@@ -576,7 +582,7 @@ def compose(ctx: Context, changes: Changes | None = None) -> Composition:  # noq
             mod.selection, mod.included, mod.decided_by = "mandatory", True, "policy"
             mod.reason = {
                 "company": "Mandatory: company module policy requires it.",
-                "pack": f"Mandatory in pack {pack_names}.",
+                "pack": f"Mandatory in the {pack_names} pack.",
                 "template": f"Mandatory: template {ctx.template_key} is built around it.",
                 "catalog": "Mandatory.",
             }[source]

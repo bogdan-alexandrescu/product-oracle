@@ -43,7 +43,7 @@ test("roadmap items that failed say when, the refusal in the past", async ({ pag
   const status = page.getByTestId("draft-roadmap-status").filter({ visible: true });
   await expect(status).toHaveAttribute("data-status", "failed");
   await expect(status.getByTestId("failed-at")).toHaveText(`${FAILED}.`);
-  await expect(status).toContainText(`Oracle could not derive roadmap items: ${THEN}`);
+  await expect(status).toContainText(`Oracle could not build the draft roadmap: ${THEN}`);
   await noCurrentRefusal(page);
 });
 

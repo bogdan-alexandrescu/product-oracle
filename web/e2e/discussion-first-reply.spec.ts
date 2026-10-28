@@ -53,7 +53,7 @@ test("a discussion started alone with a first message gets Oracle's reply", asyn
 
 async function startPrivateWithApprover(page: Page, first: string, askOracle: boolean) {
   await openStart(page);
-  await form(page).getByRole("group", { name: "Who can read it" }).getByRole("button", { name: "Private" }).click();
+  await form(page).getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
   await form(page).getByRole("searchbox", { name: "Find a person" }).fill("approver");
   await form(page).getByRole("option", { name: /Approver/ }).click();
   await expect(form(page).getByTestId("oracle-rule")).toHaveText("Oracle replies when you @mention it");

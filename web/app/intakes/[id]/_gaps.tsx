@@ -9,7 +9,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CATEGORY_LABEL, OPEN_GAP, type Category, type Summary } from "./_lib";
+import { CATEGORY_LABEL, OPEN_GAP, categoryNote, type Category, type Summary } from "./_lib";
 
 type RankedGap = Summary["gaps"][number];
 type Importance = Schemas["GapCreate"]["importance"];
@@ -254,7 +254,7 @@ function GapRow({
         </span>
       </div>
       <div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-[13px] text-text2">
-        <span>{CATEGORY_LABEL[gap.category]}</span>
+        {categoryNote(gap) && <span>{categoryNote(gap)}</span>}
         {gap.section_keys.length > 0 && <span className="font-mono break-all">{gap.section_keys.join(", ")}</span>}
         {owner && <span>Owner: {owner.name}</span>}
         {researching && <span className="font-semibold text-accent-ink">Research proposed</span>}

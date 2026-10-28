@@ -64,7 +64,7 @@ COOKIE = "po_interview"
 MIN_INTERVAL_SECONDS = 2.0
 MAX_MESSAGES = 40
 ACTOR = "interviewee"
-CLOSING = "That was my last question. Press Send my answers when you're ready."
+CLOSING = "That was my last question. Press Finish interview when you're ready."
 SKIPPED = "(skipped)"
 #: Refused requests audited per interview per window; past it they are not audited.
 REFUSED_AUDITS = 20

@@ -36,7 +36,7 @@ def test_required_modules_are_mandatory_and_say_who_requires_them():
     for key in ("decision.executive", "constraints.solutions", "sources.data-points"):
         assert m[key].included and m[key].selection == "mandatory"
         assert m[key].decided_by == "policy"
-    assert m["constraints.solutions"].reason == "Mandatory in pack startup.standard."
+    assert m["constraints.solutions"].reason == "Mandatory in the startup.standard pack."
 
 
 def test_company_policy_decides_the_mandatory_modules():

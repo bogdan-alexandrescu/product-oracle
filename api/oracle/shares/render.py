@@ -100,12 +100,31 @@ def ended_page() -> str:
     return page("Link ended", f"<p>{html_lib.escape(ENDED)}</p>")
 
 
-def _footer(company: str, ctx: ShareContext, zone: str) -> str:
+async def company(db) -> str | None:
+    """The company's name for a link holder, or None when it has none (never the "Our"
+    that :func:`oracle.roadmap.public.company_name` puts before "roadmap")."""
+    from oracle.models import Tenant
+    from oracle.tenancy import current_tenant
+
+    tenant = await db.get(Tenant, current_tenant(db))
+    name = (tenant.name or "").strip() if tenant is not None else ""
+    return name or None
+
+
+def day_with_year(moment: datetime, zone: str) -> str:
+    """The company's day at ``moment`` as "Nov 11, 2026" (the link holder's header)."""
+    from oracle.roadmap.doc_dates import shown_day
+
+    return shown_day(company_time.day(moment, zone))
+
+
+def _footer(sender: str | None, ctx: ShareContext, zone: str) -> str:
     shared = company_time.day_in_words(ctx.shared_at, zone)
     expires = company_time.day_in_words(ctx.expires_at, zone)
+    by = f" by {html_lib.escape(sender)}" if sender else ""
     return (
         '<footer class="share-footer" style="margin-top:2rem;font-size:.85rem;color:#4b5563">'
-        f"Shared with you by {html_lib.escape(company)} on {html_lib.escape(shared)} · "
+        f"Shared with you{by} on {html_lib.escape(shared)} · "
         f"link expires {html_lib.escape(expires)}</footer>"
     )
 
@@ -192,7 +211,7 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
         if document is None or version is None or document.visibility != "company":
             raise Unavailable()
         zone = await company_time.company_time_zone(db)
-        company = await public.company_name(db)
+        sender = await company(db)
         if ctx.audience == "public":
             review = await public.review(db, document, version)
             current = public.content_hash(review.page)
@@ -213,7 +232,7 @@ async def render_share(ctx: ShareContext, fmt: str = "html") -> str | bytes:
                 _remember(key, await _on_pool(ctx, _render_public, review.page, fmt,
                                               shared_on, expires_on))  # fmt: skip
             return _cache[key]
-        footer = _footer(company, ctx, zone)
+        footer = _footer(sender, ctx, zone)
         ev = await load_export_version(db, str(document.id), version.number)
         ev = apply_layer(ev, "full")
         ev = await exports.with_audience(db, ev, ctx.audience)

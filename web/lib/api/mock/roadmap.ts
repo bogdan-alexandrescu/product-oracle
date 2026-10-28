@@ -1754,7 +1754,7 @@ export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["Ver
   return [
     {
       code: "unverified_date",
-      message: `the date 2026-12-15 ("Behaviour", line 1) rests on no verified estimate, capacity or commitment of the PRD "${prdTitle}" for this item; ${RECORD_DATE_BASIS} or drop the date. Oracle never invents dates`,
+      message: `the date Dec 15, 2026 ("Behaviour", line 1) is not backed by a confirmed schedule: no verified estimate, capacity or commitment of the PRD "${prdTitle}" for this item; ${RECORD_DATE_BASIS} or drop the date. Oracle never invents dates`,
       section_keys: ["item-behaviour"],
       refs: { date: "2026-12-15", prd: prdSlug },
     },

@@ -74,7 +74,7 @@ async def test_a_persons_import_with_an_unverified_date_is_refused(client, ctx):
     assert resp.status_code == 422, resp.text
     (problem,) = resp.json()["errors"]
     assert problem["code"] == "unverified_date" and problem["section_key"] == "product"
-    assert "2026-12-15" in problem["message"] and "line 1" in problem["message"]
+    assert "Dec 15, 2026" in problem["message"] and "line 1" in problem["message"]
     assert "any PRD with an active product track" in problem["message"]
 
     await record_basis(client, ctx, "2026-12-15")
@@ -106,7 +106,7 @@ async def test_a_runs_import_marks_the_date_and_approval_waits_for_a_basis(clien
 
     resp = await client.post(f"{url}/approve", headers=owner)
     assert resp.status_code == 409, resp.text
-    assert "2026-12-15" in resp.json()["detail"]
+    assert "Dec 15, 2026" in resp.json()["detail"]
 
     await record_basis(client, ctx, "2026-12-15")
     resp = await client.post(f"{url}/approve", headers=owner)

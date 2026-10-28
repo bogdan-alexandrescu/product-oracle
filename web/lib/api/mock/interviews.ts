@@ -97,7 +97,7 @@ const THIN_WORDS = 12;
 
 const INTRO = "Thanks for making time. I'll ask four short questions about your recent experience; it takes about ten minutes.";
 export const MOCK_GUIDE: { prompt: string; purpose: string }[] = [
-  { prompt: "Tell me about the last time you ran into this. What happened?", purpose: "A recent, real story" },
+  { prompt: "Tell me about the last time paying suppliers gave you trouble. What happened?", purpose: "A recent, real story" },
   { prompt: "What did you do to get around it that time?", purpose: "The workaround used today" },
   { prompt: "Tell me about something you tried before that did not work out. Why not?", purpose: "Alternatives already tried" },
   { prompt: "Think of the last time it cost you time or money. How much was it?", purpose: "How much it matters" },
@@ -114,7 +114,7 @@ export const PRICING_GUIDE: { prompt: string; purpose: string }[] = [
 const PRICING_FIXED = "A pricing interview's guide is fixed; edit it instead";
 const ACK = "Thank you, that helps.";
 export const MOCK_FOLLOW_UP = "Could you tell me about one specific time? What happened, step by step?";
-export const MOCK_CLOSING = "That was my last question. Press Send my answers when you're ready.";
+export const MOCK_CLOSING = "That was my last question. Press Finish interview when you're ready.";
 
 const RANK: Role[] = ["viewer", "commenter", "approver", "owner"];
 const atLeast = (role: Role, min: Role) => RANK.indexOf(role) >= RANK.indexOf(min);

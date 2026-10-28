@@ -64,6 +64,8 @@ test("an approver sets a section's owner, reviewers and due date in place", asyn
   await expect(seeded).toContainText("Owner Admin");
   await expect(seeded).toContainText("Due Oct 24");
 
+  // Sections with no owner fold into one line (qa-docs-45); Assign lists them.
+  await panel.getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
   const row = panel.locator('[data-section-key="problem"]');
   await expect(row).toContainText("No owner");
   await row.getByRole("button", { name: "Edit owner and reviewers of 2. Problem" }).click();
@@ -135,6 +137,7 @@ test("an approver can assign sections and run campaigns, and sees the review set
   await asRole(page, "approver");
   await login(page);
   await page.goto(DOC);
+  await page.getByTestId("section-assignments").getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
   await expect(page.getByTestId("section-assignments").getByRole("button", { name: "Edit owner and reviewers of 2. Problem" })).toBeEnabled();
   await expect(page.getByTestId("campaigns").getByRole("button", { name: "Ask for feedback" })).toBeEnabled();
   await page.getByRole("button", { name: "Review settings" }).click();
@@ -198,6 +201,9 @@ for (const theme of ["light", "dark"] as const) {
     const sections = page.getByTestId("section-assignments");
     await expect(sections.locator('[data-section-key="goal-trace"]')).toContainText("Owner Admin");
     await expect(page.getByTestId("campaigns")).toContainText("Company-wide feedback");
+    // Sections with no owner fold into one line (qa-docs-45); Assign lists them.
+    await sections.getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
+    await expect(sections.locator('[data-section-key="problem"]')).toBeVisible();
     for (const sel of [
       '[data-testid="section-assignments"] [data-section-key="goal-trace"] span.font-semibold',
       '[data-testid="section-assignments"] [data-section-key="problem"] div.text-sm > *',
@@ -227,6 +233,8 @@ test("after a 409 on a section's assignment the form shows the other person's ch
   await context.addInitScript(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, "approver"] as const);
   await login(page);
   await page.goto(DOC);
+  // Sections with no owner fold into one line (qa-docs-45); Assign lists them.
+  await page.getByTestId("section-assignments").getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
   const mine = page.getByTestId("section-assignments").locator('[data-section-key="problem"]');
   await mine.getByRole("button", { name: "Edit owner and reviewers of 2. Problem" }).click();
   await mine.getByRole("button", { name: "Choose the owner" }).click();
@@ -235,6 +243,7 @@ test("after a 409 on a section's assignment the form shows the other person's ch
   // Someone else, in another tab, sets the owner first.
   const other = await context.newPage();
   await other.goto(DOC);
+  await other.getByTestId("section-assignments").getByTestId("unassigned-sections").getByRole("button", { name: "Assign" }).click();
   const theirs = other.getByTestId("section-assignments").locator('[data-section-key="problem"]');
   await theirs.getByRole("button", { name: "Edit owner and reviewers of 2. Problem" }).click();
   await theirs.getByRole("button", { name: "Choose the owner" }).click();

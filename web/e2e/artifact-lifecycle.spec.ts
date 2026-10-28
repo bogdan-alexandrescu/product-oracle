@@ -185,28 +185,28 @@ test("an approver sees no ⋮ menu on a run or a brief", async ({ page }) => {
   await expect(page.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
 });
 
-test("an owner sees Edit, Regenerate… and Delete…", async ({ page }) => {
+test("an owner sees Open v1, Regenerate… and Delete…", async ({ page }) => {
   await login(page);
   await page.goto("/documents/usage-alerts-roadmap");
   await page.getByRole("button", { name: `Actions for ${ROADMAP}` }).click();
   const menu = page.getByRole("menu", { name: `Actions for ${ROADMAP}` });
-  await expect(menu.getByRole("menuitem")).toHaveText(["Edit", "Regenerate…", "Delete…"]);
+  await expect(menu.getByRole("menuitem")).toHaveText(["Open v1", "Regenerate…", "Delete…"]);
 });
 
-test("an approver sees Regenerate and Edit but no Delete, and no Trash", async ({ page }) => {
+test("an approver sees Regenerate and Open v1 but no Delete, and no Trash", async ({ page }) => {
   await asRole(page, "approver");
   await login(page);
   await openPrds(page);
   await prdRow(page, PRD).getByRole("button", { name: `Actions for ${PRD}` }).click();
-  await expect(page.getByRole("menu", { name: `Actions for ${PRD}` }).getByRole("menuitem")).toHaveText(["Edit", "Regenerate…"]);
+  await expect(page.getByRole("menu", { name: `Actions for ${PRD}` }).getByRole("menuitem")).toHaveText([/^Open v\d+$/, "Regenerate…"]);
   await page.keyboard.press("Escape");
 
   await page.goto("/documents/usage-alerts-roadmap");
   await page.getByRole("button", { name: `Actions for ${ROADMAP}` }).click();
   const menu = page.getByRole("menu", { name: `Actions for ${ROADMAP}` });
-  await expect(menu.getByRole("menuitem")).toHaveText(["Edit", "Regenerate…"]);
-  // Edit opens the latest version, where the section editors are.
-  await menu.getByRole("menuitem", { name: "Edit" }).click();
+  await expect(menu.getByRole("menuitem")).toHaveText(["Open v1", "Regenerate…"]);
+  // Open v1 opens the latest version, where the section editors are.
+  await menu.getByRole("menuitem", { name: "Open v1" }).click();
   await expect(page).toHaveURL(/\/documents\/usage-alerts-roadmap\/v\/1/);
 
   await page.goto("/settings/members");

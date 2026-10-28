@@ -1,7 +1,6 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { shownDay } from "@/lib/dates";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatDay } from "@/lib/format";
 
 export type Summary = Schemas["IntakeSummary"];
 export type Batch = Schemas["QuestionBatch"];
@@ -30,6 +29,15 @@ export const CATEGORY_LABEL: Record<Category, string> = {
   third_party_policy: "Third-party policy and API limits",
   configurability_scaling: "Configurability and scaling",
 };
+
+/**
+ * The category under a gap's statement, or null when the statement already starts with it
+ * ("Security and privacy: not known yet." needs no "Security and privacy" below: qa-docs-65).
+ */
+export function categoryNote(gap: Pick<Gap, "category" | "statement">): string | null {
+  const label = CATEGORY_LABEL[gap.category];
+  return gap.statement.trim().toLowerCase().startsWith(label.toLowerCase()) ? null : label;
+}
 
 /** A critical gap in these categories is a hard blocker: an owner reviews it (B4). */
 export const HARD_BLOCKERS = new Set<Category>(["blockers", "third_party_policy"]);
@@ -68,10 +76,8 @@ export const NON_ANSWER: Record<Exclude<Answer["kind"], "answer">, string> = {
   research: "Research this",
 };
 
-/** "20 Oct". */
-export function dayMonth(iso: string): string {
-  return shownDay(iso, { day: "numeric", month: "short" }, "en-GB");
-}
+/** "Oct 20", as every other page writes a day (qa-docs-65: the format module). */
+export const dayMonth = formatDay;
 
 /** "Oct 20, 11:00 AM PDT". */
 export const when = formatDateTime;

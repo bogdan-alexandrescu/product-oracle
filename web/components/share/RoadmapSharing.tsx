@@ -7,7 +7,8 @@ import { useId, useRef, useState, type ReactNode } from "react";
 import { Button, DataTable, Icon, LinkButton, Notice, Panel, toast, useFocusTrap, type Column } from "@/components/ds";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { dateBlocksOf } from "@/components/PublishView";
+import { formatDate, formatDateTime, formatShortDate, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -222,6 +223,7 @@ export function RoadmapSharing({ d }: { d: Doc }) {
       {sharing && (
         <ShareSheet
           doc={d.slug}
+          n={d.latest_version}
           initial={sharing}
           onClose={() => {
             setSharing(null);
@@ -247,7 +249,101 @@ function newest(pubs: Schemas["PublicationSummary"][] | null | undefined) {
   return [...(pubs ?? [])].sort((a, b) => b.number - a.number)[0] ?? null;
 }
 
-function ShareSheet({ doc, initial, onClose, onCreated }: { doc: string; initial: Audience; onClose: () => void; onCreated: () => void }) {
+/**
+ * qa-docs-2: what still keeps the latest version from being published (a share needs a
+ * publication): the dates its approve refuses, else the publish check's own problems; when
+ * nothing does, the approver publishes it from here.
+ */
+function NotPublished({ doc, n, onClose, onPublished }: { doc: string; n: number; onClose: () => void; onPublished: () => void }) {
+  const { can } = useMe();
+  const q = useQuery(`share-unpublished|${doc}|${n}`, () =>
+    Promise.all([
+      unwrap(api.GET("/v1/documents/{doc}/versions/{n}/publish-check", { params: { path: { doc, n } } })),
+      unwrap(api.GET("/v1/documents/{doc}/versions/{n}", { params: { path: { doc, n } } })),
+    ]),
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const publishLink = (
+    <Link href={`/documents/${doc}/publish`} onClick={onClose} className="font-semibold text-accent-ink underline">
+      Go to Publish
+    </Link>
+  );
+  if (q.error) return <ErrorNote>{q.error}</ErrorNote>;
+  if (!q.data) return <Loading />;
+  const [check, version] = q.data;
+  const dates = dateBlocksOf(version.date_marks, new Map(version.sections.map((s) => [s.section_key, s.heading])));
+  const problems = check.blockers.filter((b) => b.code !== "already_published");
+  const publish = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await unwrap(api.POST("/v1/documents/{doc}/versions/{n}/publish", { params: { path: { doc, n } }, body: { content_hash: check.content_hash } }));
+      onPublished();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (dates.length > 0) {
+    return (
+      <div role="status" className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">
+        <p className="font-semibold" data-testid="share-not-published">
+          v{n} can&apos;t be published yet: {plural(dates.length, "date")} {dates.length === 1 ? "is" : "are"} not backed by a confirmed schedule.
+        </p>
+        <ul className="my-1 list-disc pl-5" data-testid="share-blocks">
+          {dates.map((b) => (
+            <li key={b.id}>{b.title}</li>
+          ))}
+        </ul>
+        <p>
+          Record a schedule basis for each on{" "}
+          <Link href="/plan/dates" onClick={onClose} className="font-semibold text-accent-ink underline">
+            Plan › Dates
+          </Link>{" "}
+          (or ask the engineering lead to), then publish. {publishLink}
+        </p>
+      </div>
+    );
+  }
+  if (check.can_publish) {
+    return (
+      <div role="status" className="rounded-button bg-accent-soft px-3 py-2 text-sm font-medium text-accent-ink">
+        <p data-testid="share-not-published">v{n} is approved but not published yet. A link shows a published version, never a draft.</p>
+        {can("publish_version") ? (
+          <div className="mt-2">
+            <Button variant="primary" disabled={busy} onClick={publish}>
+              {busy ? "Publishing…" : `Publish v${n}`}
+            </Button>
+          </div>
+        ) : (
+          <p className="mt-1">Ask an approver or owner to publish it.</p>
+        )}
+        {error && <ErrorNote>{error}</ErrorNote>}
+      </div>
+    );
+  }
+  return (
+    <div role="status" className="rounded-button bg-warn-bg px-3 py-2 text-sm font-medium text-warn">
+      <p className="font-semibold" data-testid="share-not-published">
+        Publish v{n} first: a link shows a published version, never a draft.{problems.length > 0 && " What still stops it:"}
+      </p>
+      {/* "Already published" is no reason it can't be (it was filtered out above): no list, no heading, when nothing else is left. */}
+      {problems.length > 0 && (
+        <ul className="my-1 list-disc pl-5" data-testid="share-blocks">
+          {problems.map((b, i) => (
+            // A code can come twice (two sections, two messages): the place keeps each key apart.
+            <li key={`${b.code}-${i}`}>{b.code === "version_not_approved" ? `v${n} is not approved yet` : b.message}</li>
+          ))}
+        </ul>
+      )}
+      <p>{publishLink}</p>
+    </div>
+  );
+}
+
+function ShareSheet({ doc, n, initial, onClose, onCreated }: { doc: string; n: number; initial: Audience; onClose: () => void; onCreated: () => void }) {
   const { can } = useMe();
   const pubs = usePublications(doc);
   const pub = newest(pubs.data);
@@ -267,7 +363,17 @@ function ShareSheet({ doc, initial, onClose, onCreated }: { doc: string; initial
   );
   const checkState = check.data?.check.state ?? "none";
   const blockedPublic = audience === "public" && (!ownerPublic || checkState !== "checked");
-  const ids = { audience: useId(), label: useId(), expires: useId(), download: useId(), passcode: useId() };
+  const ids = { audience: useId(), label: useId(), expires: useId(), download: useId(), passcode: useId(), why: useId() };
+  // qa-docs-20: a disabled Create link says why.
+  const why = !label.trim()
+    ? "Add a label first"
+    : blockedPublic
+      ? !ownerPublic
+        ? "Only an owner can share the public version"
+        : "Check the public version first"
+      : passcode.length > 0 && passcode.length < 8
+        ? "The passcode needs at least 8 characters"
+        : null;
 
   const create = async () => {
     if (!pub) return;
@@ -308,8 +414,13 @@ function ShareSheet({ doc, initial, onClose, onCreated }: { doc: string; initial
       footer={
         <>
           <Button onClick={onClose}>Cancel</Button>
+          {pub && why && (
+            <span id={ids.why} data-testid="create-why" className="mr-auto self-center text-sm text-text2">
+              {why}
+            </span>
+          )}
           {pub && (
-            <Button variant="primary" disabled={busy || !label.trim() || blockedPublic || (passcode.length > 0 && passcode.length < 8)} onClick={create}>
+            <Button variant="primary" disabled={busy || !!why} aria-describedby={why ? ids.why : undefined} onClick={create}>
               Create link
             </Button>
           )}
@@ -318,17 +429,12 @@ function ShareSheet({ doc, initial, onClose, onCreated }: { doc: string; initial
     >
       {pubs.error && <ErrorNote>{pubs.error}</ErrorNote>}
       {!pubs.data && !pubs.error && <Loading />}
-      {pubs.data && !pub && (
-        <Notice>
-          Publish this version first: a link shows a published version, never a draft.{" "}
-          <Link href={`/documents/${doc}/publish`} onClick={onClose} className="font-semibold text-accent-ink underline">
-            Publish
-          </Link>
-        </Notice>
-      )}
+      {pubs.data && !pub && <NotPublished doc={doc} n={n} onClose={onClose} onPublished={() => void pubs.reload()} />}
       {pub && (
         <>
-          <p className="text-text2">Shares v{pub.version_number}, publication {pub.number}.</p>
+          <p className="text-text2" data-testid="share-shares">
+            Shares the published v{pub.version_number} ({formatShortDate(pub.created_at)}).
+          </p>
           <div>
             <label htmlFor={ids.audience} className={LABEL}>
               Audience
@@ -358,9 +464,21 @@ function ShareSheet({ doc, initial, onClose, onCreated }: { doc: string; initial
           )}
           <div>
             <label htmlFor={ids.label} className={LABEL}>
-              Label
+              Label <span className="font-normal">(required)</span>
             </label>
-            <input id={ids.label} className={INPUT} maxLength={120} placeholder="Board, October meeting" value={label} onChange={(e) => setLabel(e.target.value)} />
+            <input
+              id={ids.label}
+              className={INPUT}
+              maxLength={120}
+              required
+              aria-required="true"
+              aria-describedby={`${ids.label}-hint`}
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+            />
+            <p id={`${ids.label}-hint`} className="text-sm text-text2">
+              Who the link is for, for example Board, October meeting. Only you and your team see it.
+            </p>
           </div>
           <div>
             <label htmlFor={ids.expires} className={LABEL}>

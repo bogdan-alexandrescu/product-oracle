@@ -53,7 +53,7 @@ test("owner: thirteen criteria with rules, model, people and agreement side by s
   await scope.click();
   const insp = inspector(page);
   await expect(insp).toContainText("Advisory criterion 6");
-  await expect(insp).toContainText("scope_testability");
+  await expect(insp).not.toContainText("scope_testability");
   await expect(insp.getByRole("heading", { name: "Scope, non-goals and testable requirements" })).toBeVisible();
   await expect(insp.getByTestId("stat-model-agrees")).toContainText("Yes");
   await expect(insp.getByTestId("stat-people-agree")).toContainText("1/2");
@@ -93,8 +93,8 @@ test("partial: a check that could not run says so in the row and the inspector",
 
 test("commenter rates a criterion: one human report, the row and History update", async ({ page }) => {
   await open(page, { role: "commenter", scenario: "quality" });
-  await expect(page.getByRole("button", { name: "Store rules snapshot" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Queue model review" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save this check" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ask Oracle to review" })).toHaveCount(0);
 
   await row(page, "alternatives_tradeoffs").click();
   const form = inspector(page).getByTestId("rating-form");
@@ -102,12 +102,12 @@ test("commenter rates a criterion: one human report, the row and History update"
   await expect(submit).toBeDisabled();
   await form.getByRole("button", { name: "Warning" }).click();
   await expect(submit).toBeDisabled();
-  await form.getByLabel("Rationale").fill("Only one approach is written down.");
+  await form.getByLabel("Reason").fill("Only one approach is written down.");
   await form.getByLabel("Add a section").selectOption("problem");
-  await expect(form.getByTestId("picked-section")).toHaveText(["problem"]);
+  await expect(form.getByTestId("picked-section")).toHaveText(["1. Problem"]);
   await submit.click();
 
-  await expect(page.getByTestId("rating-stored")).toContainText("Rating stored as human report");
+  await expect(page.getByTestId("rating-stored")).toContainText("Rating saved at");
   await expect(row(page, "alternatives_tradeoffs").getByTestId("people-cell")).toHaveText("1 warning");
   await expect(history(page).getByTestId("history-row").first()).toContainText("Human rating · Admin");
 });
@@ -141,11 +141,11 @@ test("hide until I pick: a criterion the rater has rated stays shown, after a re
   await insp.getByLabel("Hide rules, model and other people until I pick").check();
   const form = insp.getByTestId("rating-form");
   await form.getByRole("button", { name: "Warning" }).click();
-  await form.getByLabel("Rationale").fill("Two acceptance criteria cannot be tested.");
+  await form.getByLabel("Reason").fill("Two acceptance criteria cannot be tested.");
   await form.getByRole("button", { name: "Submit rating" }).click();
 
   // Mockup A: the stored message says how the people now agree with the rules.
-  await expect(page.getByTestId("rating-stored")).toContainText(/Rating stored as human report .*; people agreement is now 1\/3\.$/);
+  await expect(page.getByTestId("rating-stored")).toContainText(/Rating saved at .*; people agreement is now 1\/3\.$/);
   await expect(row(page, "scope_testability").getByTestId("rules-cell")).toHaveText("Critical");
   await expect(row(page, "scope_testability").getByTestId("people-cell")).toHaveText(/2 warning\s*1 critical/);
   await expect(insp.getByTestId("hidden-until-pick")).toHaveCount(0);
@@ -167,7 +167,9 @@ test("hide until I pick: counts and filters do not give away what is hidden", as
 
   await row(page, "scope_testability").click();
   await inspector(page).getByLabel("Hide rules, model and other people until I pick").check();
-  await expect(panel).not.toContainText(/\d+ (pass|warning|critical|n\/a)/);
+  // Only the hard checks, never hidden, are still counted: 3 of them.
+  const counted = (await panel.getByTestId("criteria-tally").innerText()).match(/\d+/g)?.map(Number) ?? [];
+  expect(counted.reduce((a, b) => a + b, 0)).toBe(3);
   await expect(disagrees).toHaveText(/Model disagrees\s*0$/);
   await disagrees.click();
   await expect(page.getByTestId("criterion-row")).toHaveCount(0);
@@ -177,8 +179,8 @@ test("hide until I pick: counts and filters do not give away what is hidden", as
 test("viewer: reads everything, rates nothing, queues nothing", async ({ page }) => {
   await open(page, { role: "viewer", scenario: "quality" });
   await expect(page.getByTestId("view-only")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Store rules snapshot" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Queue model review" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Save this check" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ask Oracle to review" })).toHaveCount(0);
   await row(page, "scope_testability").click();
   await expect(inspector(page).getByTestId("evaluator")).toHaveCount(4);
   await expect(inspector(page).getByTestId("rating-form")).toHaveCount(0);
@@ -202,10 +204,10 @@ test("approver: no model review yet, queue one, the job runs and the model colum
   await expect(inspector(page)).toContainText("No human ratings yet");
 
   await page.getByTestId("page-queue-review").click();
-  await expect(page.getByTestId("job-done")).toContainText("Model review done: 2 criteria judged");
+  await expect(page.getByTestId("job-done")).toContainText(/Oracle reviewed this at .*: 2 criteria judged/);
   await expect(row(page, "problem_clarity").getByTestId("model-cell")).toHaveText("Pass");
   await expect(page.getByTestId("model-chip")).toHaveText("Model reviewed 2 of 10");
-  await expect(history(page).getByTestId("history-row").first()).toContainText("Model review");
+  await expect(history(page).getByTestId("history-row").first()).toContainText("Oracle review");
   await expect(history(page).getByTestId("history-row").first()).toContainText("Succeeded");
 });
 
@@ -218,9 +220,9 @@ test("a failed model job says why and retries, once, in History", async ({ page 
   await expect(page.getByText(/Every Claude account is paused/)).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Retry" })).toHaveCount(1);
   await failed.getByRole("button", { name: "Retry" }).click();
-  await expect(page.getByTestId("job-done")).toContainText("Model review done");
-  // Token counts read as the mockup's "12.4k in".
-  await expect(page.getByTestId("job-done")).toContainText(/\b3\.\dk in · 600 out · /);
+  await expect(page.getByTestId("job-done")).toContainText("Oracle reviewed this at");
+  // Tokens and cost are for owners only (e2e/qa-docs-quality.spec.ts): an approver sees none.
+  await expect(page.getByTestId("job-done")).not.toContainText(/\bin · \d+ out/);
   await expect(history(page).getByTestId("history-row").filter({ hasText: "Failed" })).toHaveCount(0);
 });
 
@@ -251,10 +253,10 @@ test("409: the quality review switched off shows the API's words", async ({ page
 test("History: empty, then a stored rules snapshot", async ({ page }) => {
   await open(page, { role: "commenter" });
   await expect(history(page)).toContainText("No evaluation reports for v2 yet");
-  await page.getByRole("button", { name: "Store rules snapshot" }).click();
+  await page.getByRole("button", { name: "Save this check" }).click();
   await expect(history(page).getByTestId("history-row")).toHaveCount(1);
-  await expect(history(page).getByTestId("history-row")).toContainText("Rules snapshot · Admin");
-  await expect(page.getByTestId("latest-report")).toContainText("Latest stored report");
+  await expect(history(page).getByTestId("history-row")).toContainText("Saved check · Admin");
+  await expect(page.getByTestId("latest-report")).toContainText("Last saved check");
 });
 
 test("History filters by evaluator", async ({ page }) => {

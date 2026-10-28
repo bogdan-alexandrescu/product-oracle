@@ -52,7 +52,7 @@ import {
   type SectionLinkTarget,
   type SectionLinkView,
 } from "@/lib/evidence";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -207,7 +207,7 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
       <Panel testId="evidence-no-section">
         <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
           <p className="text-[15px] font-semibold text-text2">
-            v{n} has no section <span className="font-mono">{only}</span>.
+            v{n} has no section {only}.
           </p>
           <Button onClick={() => setParams({ section: null, sel: null })}>Show all sections</Button>
         </div>
@@ -415,11 +415,22 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
           })}
           {toggle("Stale only", stale, staleOnly, () => setStaleOnly((v) => !v))}
           <span className="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-text2 max-[1100px]:hidden" aria-label="Legend">
-            <Cell tone="pass">0.85</Cell>≥ 0.70 <Cell tone="warn">0.55</Cell>0.40–0.70 <Cell tone="crit">0.38</Cell>&lt; 0.40{" "}
-            <Cell tone="na" stale>
-              stale
-            </Cell>
-            section changed
+            <span className="font-semibold">Link confidence, 0 to 1:</span>
+            <span className="flex items-center gap-1.5">
+              <Cell tone="pass">Strong</Cell>0.70 or more
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Cell tone="warn">Fair</Cell>0.40 to 0.70
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Cell tone="crit">Weak</Cell>below 0.40
+            </span>
+            <span className="flex items-center gap-1.5">
+              <Cell tone="na" stale>
+                Stale
+              </Cell>
+              section changed since linking
+            </span>
           </span>
         </div>
         {shown.length === 0 ? (
@@ -442,7 +453,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                           className={`flex w-full flex-col items-start gap-1.5 px-3 py-2.5 text-left ${r.id === selected ? "bg-accent-soft" : ""}`}
                         >
                           <span className={`font-medium [overflow-wrap:anywhere] ${r.muted ? "text-text2" : ""}`}>{r.title}</span>
-                          <span className="font-mono text-[13px] text-text2 [overflow-wrap:anywhere]">{r.sub}</span>
+                          <span className="text-[13px] text-text2 [overflow-wrap:anywhere]">{r.sub}</span>
                           <span className="flex flex-wrap gap-1.5">
                             {sections
                               .filter((s) => r.links.has(s.section_key) || r.cited.has(s.section_key))
@@ -476,7 +487,6 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                         className={`w-[96px] min-w-[96px] px-1 py-2 text-center align-bottom text-[13px] leading-4 font-semibold ${gap ? "bg-crit-bg text-crit" : "text-text2"}`}
                       >
                         <span className="block [overflow-wrap:anywhere]">{s.heading}</span>
-                        <span className="block font-mono font-medium text-text-faint">{s.section_key}</span>
                         {gap && <span className="block">unsupported</span>}
                       </th>
                     );
@@ -496,7 +506,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                       data-gap={gaps.has(s.section_key) ? "true" : undefined}
                       className={`tnum px-1 py-2 text-center ${gaps.has(s.section_key) ? "bg-crit-bg text-crit" : ""}`}
                     >
-                      {s.links.length} · {s.citations.length}
+                      {plural(s.links.length, "link")}, {plural(s.citations.length, "citation")}
                     </td>
                   ))}
                 </tr>
@@ -505,9 +515,8 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
           </div>
         )}
         <p className="border-t border-line px-4 py-2 text-[13px] text-text2">
-          Per section = links · citations. A red column has neither, nor has any section under it. Rendered pages never show these links; exports list them under
-          &ldquo;Sources and data points&rdquo; (rejected and superseded items left out). Snapshot{" "}
-          <span className="font-mono">{data.snapshot ?? "not recorded"}</span>.
+          Per section: its section links and the draft&rsquo;s citations in it. A red column has neither, nor has any section under it. Rendered pages never show
+          these links; exports list them under &ldquo;Sources and data points&rdquo; (rejected and superseded items left out). {sourcesAsOf(data.snapshot)}
         </p>
       </Panel>
       {!phone && !row && <p className="sr-only">Pick a cell to see every section that links its target.</p>}
@@ -533,7 +542,7 @@ function MatrixGroupRows({ group, rows, sections, gaps, selected, select }: { gr
         >
           <td className={`sticky left-0 z-10 max-w-[320px] min-w-[240px] px-4 py-1.5 ${r.id === selected ? "bg-accent-soft" : "bg-surface"}`}>
             <span className={`block truncate font-medium ${r.muted ? "text-text2" : ""}`}>{r.title}</span>
-            <span className="block truncate font-mono text-[13px] text-text-faint">{r.sub}</span>
+            <span className="block truncate text-[13px] text-text2" title={r.sub}>{r.sub}</span>
           </td>
           {sections.map((s) => {
             const ls = r.links.get(s.section_key);
@@ -548,7 +557,7 @@ function MatrixGroupRows({ group, rows, sections, gaps, selected, select }: { gr
                 {ls || r.cited.has(s.section_key) ? (
                   <MatrixCell row={r} section={s.section_key} label={s.heading} onPick={() => select(r.id)} on={r.id === selected} />
                 ) : (
-                  <span aria-hidden className="text-line-strong">
+                  <span aria-hidden data-testid="evidence-empty-cell" className="text-text2">
                     ·
                   </span>
                 )}
@@ -630,7 +639,6 @@ function TargetInspector(props: Shared & { row: MatrixRow }) {
             <div key={l.id} data-testid="evidence-link" className={`flex flex-col gap-1.5 rounded-lg border px-3 py-2.5 ${l.current ? "border-line" : "border-warn border-dashed"}`}>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-semibold">{s.heading}</span>
-                <span className="font-mono text-[13px] text-text2">{s.section_key}</span>
                 <span className="ml-auto text-[13px] font-semibold text-text2">
                   {kindLabel(l.kind)} · {l.precision}
                 </span>
@@ -638,7 +646,7 @@ function TargetInspector(props: Shared & { row: MatrixRow }) {
               {l.claim && <p className="text-sm italic">&ldquo;{l.claim}&rdquo;</p>}
               {!l.current && (
                 <p className="flex flex-wrap items-center gap-2 text-[13px] text-text2">
-                  <Chip kind="warn">Stale link</Chip> Section changed since linking (hash now <span className="font-mono">#{s.section_hash.slice(0, 8)}</span>).
+                  <Chip kind="warn">Stale link</Chip> The section changed since this link was made.
                 </p>
               )}
               <LinkMeta link={l} nameOf={nameOf} canRemove={canRemove} remove={remove} />
@@ -673,7 +681,7 @@ function TargetChips({ target: t, confidence }: { target: SectionLinkTarget; con
   const c = confidence ?? t.confidence;
   return (
     <>
-      {t.ref && <Chip hero className="font-mono">{t.ref}</Chip>}
+      {t.ref && t.type !== "entity" && <Chip hero>{t.ref}</Chip>}
       {t.status && <Chip kind={t.status === "confirmed" ? "pass" : leftOut(t) ? "na" : "warn"}>{cap(t.status)}</Chip>}
       {t.locked && <Chip hero>Locked</Chip>}
       <Chip kind={tone(c)}>{c == null ? "no score" : score(c)}</Chip>
@@ -731,6 +739,12 @@ function LinkMeta({ link: l, nameOf, canRemove, remove }: { link: SectionLinkVie
 
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
 
+/** The draft's front-matter snapshot (when its sources were read), in words. */
+function sourcesAsOf(snapshot: string | null | undefined): string {
+  if (!snapshot) return "The draft does not say when its sources were read.";
+  return Number.isNaN(Date.parse(snapshot)) ? `Sources as of ${snapshot}.` : `Sources as of ${formatDateTime(snapshot)}.`;
+}
+
 function targetBody(t: SectionLinkTarget): Pick<NewLink, "entity_id" | "evidence_id" | "source_item_id"> {
   return t.type === "entity" ? { entity_id: t.id } : t.type === "evidence" ? { evidence_id: t.id } : { source_item_id: t.id };
 }
@@ -763,7 +777,7 @@ function LinkElsewhereForm({ target, sections, gaps, linked, add }: { target: Se
           <select aria-label="Section" className={INPUT} value={section} onChange={(e) => setSection(e.target.value)}>
             {options.map((s) => (
               <option key={s.section_key} value={s.section_key}>
-                {s.heading} ({s.section_key}){gaps.has(s.section_key) ? " · unsupported" : ""}
+                {s.heading}{gaps.has(s.section_key) ? " · unsupported" : ""}
               </option>
             ))}
           </select>
@@ -851,7 +865,7 @@ function CitationInspector({ citation: c, sections, result }: { citation: Eviden
       eyebrow={`Draft citation · ${sourceLabel(c.source)}`}
       title={c.title || c.ref}
       testId="evidence-citation-inspector"
-      chips={<Chip hero className="font-mono">c:{c.cite_key}</Chip>}
+      chips={<Chip hero>{sourceLabel(c.source)}</Chip>}
       action={
         url ? (
           <a href={url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-hero-text underline">
@@ -869,7 +883,7 @@ function CitationInspector({ citation: c, sections, result }: { citation: Eviden
         <ul className="flex flex-col gap-1 text-sm">
           {sections.map((s) => (
             <li key={s.section_key}>
-              <span className="font-semibold">{s.heading}</span> <span className="font-mono text-[13px] text-text2">{s.section_key}</span>
+              <span className="font-semibold">{s.heading}</span>
             </li>
           ))}
         </ul>
@@ -885,11 +899,10 @@ function CitationBody({ c }: { c: EvidenceCitation }) {
   return (
     <div data-testid="evidence-citation" className="flex flex-col gap-1 rounded-lg border border-line px-3 py-2.5 text-sm">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="font-mono text-[13px]">c:{c.cite_key}</span>
         <span className="text-[13px] font-semibold text-text2">{sourceLabel(c.source)}</span>
       </div>
       <span className="font-semibold">{c.title || c.ref}</span>
-      <span className="font-mono text-[13px] break-all text-text2">{c.ref}</span>
+      {c.title && c.ref !== c.title && <span className="text-[13px] break-all text-text2">{c.ref}</span>}
       {c.excerpt && <blockquote className="border-l-2 border-line-strong pl-2.5">{c.excerpt}</blockquote>}
       {(!c.excerpt || !c.retrieved_at) && (
         <span className="text-[13px] text-text2">
@@ -922,7 +935,6 @@ function SectionsView(props: Shared & { doc: string; n: number }) {
       cell: (s) => (
         <span className={`flex min-w-0 flex-col ${s.level > 2 ? "pl-4" : ""}`}>
           <span className="truncate font-medium">{s.heading}</span>
-          <span className="truncate font-mono text-[13px] text-text-faint">{s.section_key}</span>
         </span>
       ),
     },
@@ -964,7 +976,7 @@ function SectionsView(props: Shared & { doc: string; n: number }) {
   const inspector = sel ? <SectionInspector key={sel.section_key} section={sel} {...props} /> : null;
   return (
     <Layout phone={phone} sheetOpen={props.sheetOpen} setSheetOpen={props.setSheetOpen} inspector={inspector} sheetTitle={sel?.heading ?? "Section"}>
-      <Panel title="Sections" count={sections.length} tools={props.data.snapshot ? <span className="text-[13px] font-semibold text-text2">snapshot <span className="font-mono">{props.data.snapshot}</span></span> : undefined}>
+      <Panel title="Sections" count={sections.length} tools={props.data.snapshot ? <span className="text-[13px] font-semibold text-text2">{sourcesAsOf(props.data.snapshot).replace(/\.$/, "")}</span> : undefined}>
         <div className="border-b border-line px-4 py-3 max-[600px]:px-3">
           <FilterChips label="Sections shown" items={items} value={filter} onChange={setFilter} />
         </div>
@@ -980,8 +992,8 @@ function SectionsView(props: Shared & { doc: string; n: number }) {
           rowProps={(s) => ({ "data-section": s.section_key })}
         />
         <p className="border-t border-line px-4 py-2 text-[13px] text-text2">
-          Links are listed strongest first (confidence high to low, unscored last). Citations are the draft&rsquo;s own{" "}
-          <span className="font-mono">[c:id]</span> markers.
+          Links are listed strongest first (confidence high to low, unscored last). Citations are the sources the draft itself
+          cites.
         </p>
       </Panel>
     </Layout>
@@ -1005,8 +1017,6 @@ function SectionInspector(props: Shared & { section: SectionEvidence; doc: strin
       }
       chips={
         <>
-          <Chip hero className="font-mono">{s.section_key}</Chip>
-          <Chip hero className="font-mono">#{s.section_hash.slice(0, 8)}</Chip>
           {st > 0 && (
             <Chip kind="warn">
               {st} stale link{st === 1 ? "" : "s"}
@@ -1086,7 +1096,7 @@ function SectionLinkCard({ link: l, nameOf, canRemove, remove }: { link: Section
       )}
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[13px] font-semibold text-text2">{kindLabel(l.kind)}</span>
-        <span className="text-[13px] text-text-faint">· {l.precision}</span>
+        <span className="text-[13px] text-text2">· {l.precision}</span>
         <span className="ml-auto" data-confidence={c == null ? "" : String(c)}>
           <Chip kind={tone(c)}>{c == null ? "no score" : score(c)}</Chip>
         </span>
@@ -1095,7 +1105,7 @@ function SectionLinkCard({ link: l, nameOf, canRemove, remove }: { link: Section
       <span className={`font-medium [overflow-wrap:anywhere] ${leftOut(t) || t.restricted ? "text-text2" : ""}`}>{targetTitle(t)}</span>
       {t.excerpt && <blockquote className="border-l-2 border-line-strong pl-2.5 text-sm">{t.excerpt}</blockquote>}
       <div className="flex flex-wrap items-center gap-1.5">
-        {t.ref && t.type === "entity" && <span className="font-mono text-[13px] text-text2">{t.ref}</span>}
+        {t.type === "entity" && t.entity_type && <span className="text-[13px] text-text2">{cap(t.entity_type)}</span>}
         {t.type !== "entity" && <span className="text-[13px] text-text2">{sourceLabel(t.source_kind)}</span>}
         {t.status && <Chip kind={t.status === "confirmed" ? "pass" : leftOut(t) ? "na" : "warn"}>{cap(t.status)}</Chip>}
         {t.locked && <Chip kind="line">Locked</Chip>}
@@ -1161,7 +1171,7 @@ function AddSectionLinkForm({ section, rows, add }: { section: SectionEvidence; 
               <optgroup label="Baseline items">
                 {entities.map((e) => (
                   <option key={e.id} value={`entity:${e.id}`}>
-                    {e.title} · {e.type}:{e.key}
+                    {e.title} · {cap(e.type)}
                   </option>
                 ))}
               </optgroup>

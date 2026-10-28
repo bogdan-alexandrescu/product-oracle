@@ -62,7 +62,7 @@ async def test_document_versions_name_their_importer(client):
     got = [(v["number"], v["imported_by_name"], v["imported_by"]) for v in resp.json()["versions"]]
     assert got == [
         (1, "Dana Reyes", str(member_id)),
-        (2, "release-bot", str(token_id)),
+        (2, "API token release-bot", str(token_id)),
         (3, "Oracle", str(member_id)),
     ]
 
@@ -70,8 +70,12 @@ async def test_document_versions_name_their_importer(client):
 async def test_version_list_and_read_name_their_importer(client):
     auth, _, _ = await _three_versions(client)
     listed = (await client.get(f"{DOC}/versions", headers=auth)).json()
-    assert [v["imported_by_name"] for v in listed] == ["Dana Reyes", "release-bot", "Oracle"]
-    for n, name in ((1, "Dana Reyes"), (2, "release-bot"), (3, "Oracle")):
+    assert [v["imported_by_name"] for v in listed] == [
+        "Dana Reyes",
+        "API token release-bot",
+        "Oracle",
+    ]
+    for n, name in ((1, "Dana Reyes"), (2, "API token release-bot"), (3, "Oracle")):
         resp = await client.get(f"{DOC}/versions/{n}", headers=auth)
         assert resp.status_code == 200, resp.text
         assert resp.json()["imported_by_name"] == name

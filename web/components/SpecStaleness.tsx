@@ -144,7 +144,7 @@ function StaleActions({
             Review
           </Button>
           {mayRegenerate && (
-            <Button variant="ghost" onClick={() => setOpen("reconcile")} disabled={busy}>
+            <Button onClick={() => setOpen("reconcile")} disabled={busy}>
               Reconcile
             </Button>
           )}

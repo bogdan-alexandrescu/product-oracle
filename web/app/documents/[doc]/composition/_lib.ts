@@ -163,7 +163,119 @@ export function diffOf(before: Module[], after: Module[]): Diff {
   return { added, removed, versionChanged, reordered, material: touched.size > 0, affectedSections };
 }
 
-/** A revision's added and removed modules in one line ("+ a · − b"). */
-export function diffLine(d: Schemas["RevisionDiff"]): string {
-  return [...d.added.map((k) => `+ ${k}`), ...d.removed.map((k) => `− ${k}`), ...d.version_changed.map((v) => `~ ${v.key} ${v.before} → ${v.after}`)].join(" · ");
+/** A revision's added and removed modules in one line, by name ("+ Risks · − Tool policies"). */
+export function diffLine(d: Schemas["RevisionDiff"], titleOf: (key: string) => string): string {
+  return [...d.added.map((k) => `+ ${titleOf(k)}`), ...d.removed.map((k) => `− ${titleOf(k)}`), ...d.version_changed.map((v) => `~ ${titleOf(v.key)} (newer version)`)].join(" · ");
+}
+
+/** A module key's name from the modules at hand, else the key in words ("tool policies"). */
+export function titler(...lists: (Module[] | null | undefined)[]): (key: string) => string {
+  const names = new Map<string, string>();
+  for (const list of lists) for (const m of list ?? []) if (!names.has(m.key)) names.set(m.key, m.title);
+  return (key) => names.get(key) ?? key.split(".").pop()!.replace(/[-_]/g, " ");
+}
+
+/** The modules a change touches, by name, for "approvals on … will be invalidated". */
+export function touchedNames(added: string[], removed: string[], changed: string[], titleOf: (key: string) => string): string {
+  const names = [...new Set([...added, ...removed, ...changed].map(titleOf))];
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+/** The pack policy in words. */
+export const PACK_POLICY: Record<string, string> = {
+  required: "Required",
+  conditional: "When it applies",
+  optional: "Optional",
+};
+
+/** Where a module comes from, in words. */
+export const ORIGIN: Record<string, string> = {
+  builtin: "Built-in",
+  company: "Company module",
+  override: "Company version",
+};
+
+/** How the packs were picked, in words. */
+export const PACKS_SOURCE: Record<string, string> = {
+  chosen: "chosen by a person",
+  default: "company default",
+  category: "from the product category",
+};
+
+/** A review role in words ("owner" is "Owner"). */
+export const ROLE: Record<string, string> = { viewer: "Viewer", commenter: "Commenter", approver: "Approver", owner: "Owner" };
+
+/** A value a condition compares with, in words: "tool_use" is "Tool use". */
+function valueInWords(v: unknown): string {
+  if (Array.isArray(v)) return v.map(valueInWords).join(", ");
+  if (typeof v === "boolean") return v ? "yes" : "no";
+  if (v == null) return "nothing";
+  const s = String(v).replace(/[_-]+/g, " ").trim();
+  return typeof v === "string" ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+/** An input's path as a phrase: "scope.capabilities" is "the scope's capabilities". */
+function pathInWords(path: string): { phrase: string; many: boolean } {
+  const parts = path.split(".").map((p) => p.replace(/[_-]+/g, " ").trim()).filter(Boolean);
+  const last = parts.pop() ?? "";
+  const owner = parts.join(" ");
+  const phrase = owner ? `the ${owner}${owner.endsWith("s") ? "'" : "'s"} ${last}` : `the ${last}`;
+  return { phrase, many: last.endsWith("s") };
+}
+
+/** The evaluator's operators in words, for one thing and for many. */
+const OP_WORDS: Record<string, [string, string]> = {
+  eq: ["is", "are"],
+  ne: ["is not", "are not"],
+  in: ["is one of", "are one of"],
+  not_in: ["is none of", "are none of"],
+  contains: ["includes", "include"],
+  contains_any: ["includes any of", "include any of"],
+  contains_all: ["includes all of", "include all of"],
+  gt: ["is more than", "are more than"],
+  gte: ["is at least", "are at least"],
+  lt: ["is less than", "are less than"],
+  lte: ["is at most", "are at most"],
+  exists: ["is given", "are given"],
+  present: ["is given", "are given"],
+  missing: ["is not given", "are not given"],
+  absent: ["is not given", "are not given"],
+  truthy: ["is set", "are set"],
+};
+const NO_VALUE = new Set(["exists", "present", "missing", "absent", "truthy"]);
+
+/** One condition in plain words: scope.capabilities contains 'tool_use' is "the scope's
+ * capabilities include Tool use" (qa-docs-27: never the evaluator's own text). */
+export function conditionInWords(b: { path: string; op: string; expected?: unknown }): string {
+  const { phrase, many } = pathInWords(b.path);
+  const op = OP_WORDS[b.op]?.[many ? 1 : 0] ?? b.op.replace(/_/g, " ");
+  return NO_VALUE.has(b.op) ? `${phrase} ${op}` : `${phrase} ${op} ${valueInWords(b.expected)}`;
+}
+
+function joined(parts: string[]): string {
+  return parts.length <= 1 ? parts.join("") : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+/** Why a module is here, in plain words: the API's reason names a condition in the
+ * evaluator's terms ("Suggested: scope.capabilities contains 'tool_use' (actual: …)"); it is
+ * said from the module's basis instead ("Applies when the scope's capabilities include Tool use."). */
+export function reasonInWords(m: Pick<Module, "reason" | "basis">): string {
+  if (!m.basis.length) return m.reason;
+  if (m.reason.startsWith("Suggested: ")) {
+    const held = m.basis.filter((b) => b.holds);
+    return `Applies when ${joined((held.length ? held : m.basis).map(conditionInWords))}.`;
+  }
+  const at = m.reason.indexOf("its condition did not hold");
+  if (at >= 0) return `${m.reason.slice(0, at)}it applies only when ${joined(m.basis.map(conditionInWords))}.`;
+  return m.reason;
+}
+
+/** A missing input in plain words: "Input scope.capabilities is missing." is "The scope's
+ * capabilities are not given." */
+export function missingInWords(line: string): string {
+  const hit = /^Input (\S+) is missing\.$/.exec(line);
+  if (!hit) return line;
+  const { phrase, many } = pathInWords(hit[1]);
+  return `${phrase.charAt(0).toUpperCase()}${phrase.slice(1)} ${many ? "are" : "is"} not given.`;
 }

@@ -1540,9 +1540,20 @@ def _where(mark: Mark, heading: str | None) -> str:
     return f"the heading {section}" if mark.line == 0 else f"{section}, line {mark.line}"
 
 
+def shown_day(day: date) -> str:
+    """A day as people read it (qa-docs-34): "Dec 15, 2026", never "2026-12-15"."""
+    return f"{day:%b} {day.day}, {day.year}"
+
+
+def shown(mark: Mark) -> str:
+    """The marked date as people read it: the day it means, or as written when it reads as
+    more than one day (``_reads_as`` then lists them)."""
+    return mark.text if len(mark.days) > 1 else shown_day(mark.day)
+
+
 def _reads_as(mark: Mark) -> str:
     if len(mark.days) > 1:
-        return f" (it reads as {' or '.join(d.isoformat() for d in mark.days)})"
+        return f" (it reads as {' or '.join(shown_day(d) for d in mark.days)})"
     return ""
 
 
@@ -1557,14 +1568,15 @@ def problem_message(
         of = f'the PRD "{prd_title}"' if prd_title else "the roadmap's PRD (none is known)"
     if mark.status == "withdrawn":
         return (
-            f"the date {mark.text} ({_where(mark, heading)}) rested on "
+            f"the date {shown(mark)} ({_where(mark, heading)}) was backed by "
             f"{', '.join(mark.bases)}, which was withdrawn; drop the date or "
             f"{wording.RECORD_DATE_BASIS}"
         )
+    # qa-docs-34: plain words and a readable date.
     return (
-        f"the date {mark.text}{_reads_as(mark)} ({_where(mark, heading)}) rests on no "
-        f"verified estimate, capacity or commitment of {of} for this item; "
-        f"{wording.RECORD_DATE_BASIS} or drop the date. Oracle never invents dates"
+        f"the date {shown(mark)}{_reads_as(mark)} ({_where(mark, heading)}) is not backed by a "
+        f"confirmed schedule: no verified estimate, capacity or commitment of {of} for this "
+        f"item; {wording.RECORD_DATE_BASIS} or drop the date. Oracle never invents dates"
     )
 
 

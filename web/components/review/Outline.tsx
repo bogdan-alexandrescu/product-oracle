@@ -91,6 +91,8 @@ type ListProps = {
   closed: boolean;
   onSelect: (key: string) => void;
   filter: OutlineFilterState;
+  /** qa-docs-13: what the sections are ("brief sections"), so the count says what it counts. */
+  noun?: string;
 };
 
 /** Scrolls `el` into the scrolling `box` only (never the page), when it is not in full view. */
@@ -281,8 +283,20 @@ export function OutlineList({
 
   if (rows.length === 0) {
     return (
-      <p className="px-4 py-6 text-center text-sm text-text2" data-testid="outline-empty">
-        No sections match
+      // qa-docs-49: a filter with no match says so and offers the way back.
+      <p className="flex flex-wrap items-center justify-center gap-x-1.5 px-4 py-6 text-center text-sm text-text2" data-testid="outline-empty">
+        No sections match ·
+        <button
+          type="button"
+          data-testid="outline-clear-filter"
+          onClick={() => {
+            filter.setQuery("");
+            filter.setChip("all");
+          }}
+          className="font-semibold text-accent-ink underline underline-offset-2"
+        >
+          Clear filter
+        </button>
       </p>
     );
   }
@@ -371,22 +385,33 @@ export function OutlineList({
   );
 }
 
-/** "N of M reviewed" and a bar. */
-export function ReviewProgress({ reviewed, total, compact = false }: { reviewed: number; total: number; compact?: boolean }) {
+/** "N of M reviewed" and a bar; with `noun`, "N of M brief sections reviewed". */
+export function ReviewProgress({
+  reviewed,
+  total,
+  compact = false,
+  noun,
+}: {
+  reviewed: number;
+  total: number;
+  compact?: boolean;
+  noun?: string;
+}) {
+  const what = noun ? `${noun} reviewed` : "reviewed";
   return (
     <div
       className={`flex min-w-0 flex-col gap-1 ${compact ? "w-24" : ""}`}
       data-testid="review-progress"
-      title={compact ? `${reviewed} of ${total} reviewed` : undefined}
+      title={compact ? `${reviewed} of ${total} ${what}` : undefined}
     >
       <span className="tnum text-[13px] leading-4 font-semibold text-text2">
         {compact ? (
           <>
-            <b className="font-bold text-text">{reviewed}</b>/{total} <span className="sr-only">reviewed</span>
+            <b className="font-bold text-text">{reviewed}</b>/{total} <span className="sr-only">{what}</span>
           </>
         ) : (
           <>
-            <b className="font-bold text-text">{reviewed}</b> of {total} reviewed
+            <b className="font-bold text-text">{reviewed}</b> of {total} {what}
           </>
         )}
       </span>
@@ -469,7 +494,7 @@ export function OutlineRail({
           </button>
         </div>
         <div className="px-3">
-          <ReviewProgress reviewed={reviewed} total={props.sections.length} />
+          <ReviewProgress reviewed={reviewed} total={props.sections.length} noun={props.noun} />
         </div>
         <OutlineFilters
           sections={props.sections}
@@ -653,7 +678,7 @@ export function SectionSwitcher({
         {step(next, "next")}
       </div>
       <div className="flex flex-none items-center gap-3">
-        <ReviewProgress reviewed={reviewed} total={props.sections.length} compact />
+        <ReviewProgress reviewed={reviewed} total={props.sections.length} noun={props.noun} compact />
         <Button
           disabled={!nextToReview}
           onClick={() => nextToReview && props.onSelect(nextToReview.section_key)}

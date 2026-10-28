@@ -28,7 +28,7 @@ test("the Warnings panel says what to do, and the date warning opens Plan › Da
   // id; no_claim=the API's wording (api/tests/test_warning_wording.py).
   await openVersion(page);
   const date = warning(page, "unverified_date");
-  await expect(date).toContainText("the date 2026-12-15");
+  await expect(date).toContainText("the date Dec 15, 2026");
   await expect(date).toContainText("record a date basis on Plan › Dates");
   await expect(date).toContainText('"Usage alerts PRD"');
   const citation = warning(page, "unknown_citation_item");

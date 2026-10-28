@@ -45,8 +45,8 @@ test("evidence: the owner reads the coverage matrix and links a target to an uns
   await expect(page.getByTestId("evidence-matrix").getByText("Draft citations")).toBeVisible();
   await expect(cell(page, "Usage export", "goal-trace")).toHaveAttribute("data-stale", "true");
   await expect(cell(page, "Guided setup", "scope")).toContainText("Tests");
-  // The per-section totals: links · citations.
-  await expect(page.getByTestId("evidence-totals").locator('td[data-section="metrics"]')).toHaveText("0 · 0");
+  // The per-section totals, in words: links and citations.
+  await expect(page.getByTestId("evidence-totals").locator('td[data-section="metrics"]')).toHaveText("0 links, 0 citations");
 
   // A cell opens the target-centred inspector: every section that links it.
   await cell(page, "Guided setup", "scope").getByRole("button").click();
@@ -57,7 +57,7 @@ test("evidence: the owner reads the coverage matrix and links a target to an uns
 
   // Link to another section: Metrics is offered first, marked unsupported.
   const form = insp.getByRole("form", { name: "Link to another section" });
-  await form.getByLabel("Section").selectOption({ label: "7. Success metrics (metrics) · unsupported" });
+  await form.getByLabel("Section").selectOption({ label: "7. Success metrics · unsupported" });
   await form.getByLabel("Kind").selectOption("implements");
   await form.getByRole("button", { name: "Add link" }).click();
   await expect(page.getByText("Link added.")).toBeVisible();
@@ -109,7 +109,7 @@ test("evidence: the approver's section view lists links strongest first, the dra
   await expect(insp.getByText("“Week-1 activation rises once the cost shows early.”")).toBeVisible();
   await expect(insp.getByText("Stale link", { exact: true })).toBeVisible();
   // The draft's own citation in this section.
-  await expect(insp.getByTestId("evidence-citation")).toContainText("c:c3");
+  await expect(insp.getByTestId("evidence-citation")).toContainText("Q4 goals: activation and retention");
 
   const before = await links.count();
   await links.filter({ hasText: "Usage export" }).getByRole("button", { name: "Remove" }).click();
@@ -128,7 +128,7 @@ test("evidence: the approver adds a claim link from an unsupported section", asy
   await form.getByLabel("Kind").selectOption("claims");
   await expect(form.getByLabel(/^Claim/)).toBeDisabled();
   await form.getByLabel("Precision").selectOption("claim");
-  await form.getByLabel("Links to").selectOption({ label: "Guided setup · feature:f.guided-setup" });
+  await form.getByLabel("Links to").selectOption({ label: "Guided setup · Feature" });
   await expect(form.getByRole("button", { name: "Add link" })).toBeDisabled();
   await form.getByLabel(/^Claim/).fill("Guided setup lifts week-1 activation.");
   await form.getByRole("button", { name: "Add link" }).click();
@@ -243,7 +243,7 @@ test("evidence: a section counts as unsupported only when nothing under it is su
   await expect(column(page, "title")).not.toHaveAttribute("data-gap", "true");
   // 5. Proposed flow has nothing of its own, but 5.2 under it cites the draft's sources.
   await expect(column(page, "s-5")).not.toHaveAttribute("data-gap", "true");
-  await expect(page.getByTestId("evidence-totals").locator('td[data-section="s-5"]')).toHaveText("0 · 0");
+  await expect(page.getByTestId("evidence-totals").locator('td[data-section="s-5"]')).toHaveText("0 links, 0 citations");
   await expect(page.getByTestId("evidence-totals").locator('td[data-section="s-5"]')).not.toHaveAttribute("data-gap", "true");
   // Leaf sections with nothing behind them still are.
   for (const key of ["users", "s-5-1", "s-5-3", "metrics"]) await expect(column(page, key)).toHaveAttribute("data-gap", "true");
@@ -253,9 +253,9 @@ test("evidence: a section counts as unsupported only when nothing under it is su
   // "Link to another section" marks only those sections unsupported.
   await cell(page, "Guided setup", "scope").getByRole("button").click();
   const select = page.getByRole("complementary", { name: "Guided setup" }).getByRole("form", { name: "Link to another section" }).getByLabel("Section");
-  await expect(select.locator("option", { hasText: "5. Proposed flow" })).toHaveText("5. Proposed flow (s-5)");
-  await expect(select.locator("option", { hasText: "Checkout redesign PRD" })).toHaveText("Checkout redesign PRD (title)");
-  await expect(select.locator("option", { hasText: "5.1 Cart review" })).toHaveText("5.1 Cart review (s-5-1) · unsupported");
+  await expect(select.locator("option", { hasText: "5. Proposed flow" })).toHaveText("5. Proposed flow");
+  await expect(select.locator("option", { hasText: "Checkout redesign PRD" })).toHaveText("Checkout redesign PRD");
+  await expect(select.locator("option", { hasText: "5.1 Cart review" })).toHaveText("5.1 Cart review · unsupported");
 
   // The section view and its "No links or citations" filter follow the same rule.
   await page.getByRole("group", { name: "Evidence view" }).getByRole("button", { name: "Sections" }).click();
@@ -306,7 +306,7 @@ test("evidence: Cancel clears the Add a section link form", async ({ page }) => 
   const form = page.getByRole("complementary", { name: "7. Success metrics" }).getByRole("form", { name: "Add a section link" });
   await form.getByLabel("Kind").selectOption("claims");
   await form.getByLabel("Precision").selectOption("claim");
-  await form.getByLabel("Links to").selectOption({ label: "Guided setup · feature:f.guided-setup" });
+  await form.getByLabel("Links to").selectOption({ label: "Guided setup · Feature" });
   await form.getByLabel(/^Claim/).fill("Guided setup lifts week-1 activation.");
   await form.getByRole("button", { name: "Cancel" }).click();
   await expect(form.getByLabel("Links to")).toHaveValue("");

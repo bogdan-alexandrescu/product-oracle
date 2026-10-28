@@ -27,12 +27,21 @@ export interface ModulesDb {
 export interface ModulesContext {
   userId: string;
   role: Role;
-  /** Resolves a document id or slug to its id and slug (null: not found, or not a PRD). */
-  document: (ref: string) => { id: string; slug: string; template: string | null } | null;
+  /** Resolves a document id or slug to its id and slug (null: not found, or not a PRD), with
+   * its newest version's sections standing in for the template's (brief ones flagged). */
+  document: (ref: string) => { id: string; slug: string; template: string | null; sections?: TemplateSection[] } | null;
   /** The approved version's id for a document version number, else null. */
   approvedVersion: (documentId: string, n: number) => string | null;
   /** Kept learnings about modules: a module they recommend that nothing else brings in is suggested. */
   learned?: () => Nudges;
+}
+
+/** A section of the document's template, as the API reads it from the template body. */
+export interface TemplateSection {
+  key: string;
+  heading: string;
+  level: number;
+  brief: boolean;
 }
 
 const AT = "2026-10-19T09:00:00Z";
@@ -85,16 +94,33 @@ function mod(
   };
 }
 
+/** A brief-layer module: its contract puts these sections in the brief and has no full layer
+ * (brief_section_ids and full_layer: false, as the API's built-in core.yaml). */
+function withBrief(c: Catalog, ids: string[]): Catalog {
+  return { ...c, brief_layer: true, full_layer: false, contract: { ...c.contract, brief_layer: true, full_layer: false, brief_section_ids: ids } };
+}
+
+/** As oracle.modules.composer._layer_impact for a module the template does not map: its
+ * brief sections (brief_section_ids, else all of them for a brief-only module) and the rest. */
+function layerImpactOf(c: Catalog): Composed["layer_impact"] {
+  const sections = c.section_ids;
+  const listed = c.contract.brief_section_ids;
+  const brief = Array.isArray(listed) && listed.length ? (listed as string[]) : c.brief_layer && !c.full_layer ? [...sections] : [];
+  const full = c.full_layer || !brief.length ? sections.filter((s) => !brief.includes(s)) : [];
+  return { brief_sections: brief, full_sections: full, new_sections: [...sections], template_sections: [], absent_template_sections: [] };
+}
+
 const BOTH = [PACK_A, PACK_B];
+const PACK_TITLE: Record<string, string> = { [PACK_A]: "General Tech Startup", [PACK_B]: "Multi-tenant AI Agent Platform" };
 
 export function seedModules(documentId: string | null, userId: string): ModulesDb {
   const catalog: Catalog[] = [
-    mod("decision.executive", "Executive decision", "required", 10, ["executive-decision"], BOTH),
-    mod("strategy.alignment", "Strategic alignment", "required", 20, ["strategic-alignment"], BOTH),
+    withBrief(mod("decision.executive", "Executive decision", "required", 10, ["executive-decision"], BOTH), ["executive-decision"]),
+    withBrief(mod("strategy.alignment", "Strategic alignment", "required", 20, ["strategic-alignment"], BOTH), ["strategic-alignment"]),
     mod("goals.outcomes", "Intended outcomes and success metrics", "required", 60, ["outcomes-metrics"], BOTH, ["strategy.alignment"]),
     mod("constraints.solutions", "Constraints, blockers and solution strategy", "required", 100, ["constraints-solutions"], BOTH, ["goals.outcomes"]),
     mod("economics.value", "Value and cost economics", "conditional", 120, ["value-economics"], BOTH, ["goals.outcomes"]),
-    mod("risks.register", "Risks", "required", 130, ["risk-register"], BOTH),
+    withBrief(mod("risks.register", "Risks", "required", 130, ["risk-register"], BOTH), ["risk-register"]),
     mod("platform.tenant-isolation", "Multi-tenant isolation", "conditional", 210, ["tenant-isolation"], [PACK_B]),
     { ...mod("agents.tool-policies", "Tool policies", "conditional", 240, ["tool-policies"], [PACK_B]), required_review_role: "owner" },
     mod("sources.data-points", "Sources and data points", "required", 1000, ["sources", "sources-list", "sources-data", "sources-evidence"], BOTH),
@@ -150,13 +176,7 @@ function composed(c: Catalog, included: boolean, selection: Composed["selection"
     depends_on: c.depends_on,
     required_by: [],
     conflicts_with: [],
-    layer_impact: {
-      brief_sections: [],
-      full_sections: c.section_ids,
-      new_sections: c.section_ids,
-      template_sections: [],
-      absent_template_sections: [],
-    },
+    layer_impact: layerImpactOf(c),
     field_problems: [],
     condition_error: null,
     user_reason: null,
@@ -225,7 +245,8 @@ function recommend(db: ModulesDb, pack: string, extra: Record<string, unknown>, 
     .sort((a, b) => Number(a.contract.display_order) - Number(b.contract.display_order))
     .map((c, i) => {
       if (c.policy === "required" || db.policy.required.includes(c.key)) {
-        return composed(c, true, "mandatory", `Mandatory in pack ${pack}.`, (i + 1) * 10);
+        // As the API: the pack by its title.
+        return composed(c, true, "mandatory", `Mandatory in the ${PACK_TITLE[pack] ?? pack} pack.`, (i + 1) * 10);
       }
       const held = caps.includes(hints[c.key] ?? "");
       const out = held
@@ -385,13 +406,64 @@ function titleOf(rec: Schemas["RecommendationOut"], key: string): string {
   return rec.modules.find((m) => m.key === key)?.title ?? key;
 }
 
-function outlineOf(modules: Composed[]): Schemas["OutlineEntry"][] {
+/** The sections the included modules add, in their order, each once: in the brief when it
+ * is one of the module's brief sections (as the composer's outline; its _heading names a
+ * second section after the module). */
+function moduleSections(modules: Composed[]): Schemas["OutlineEntry"][] {
   return modules
     .filter((m) => m.included)
-    .flatMap((m) => [
-      ...m.layer_impact.brief_sections.map((s) => ({ section_id: s, heading: m.title, level: 2, layer: "brief" as const, module: m.key, origin: "module" as const })),
-      ...m.section_ids.map((s) => ({ section_id: s, heading: m.title, level: 2, layer: "full" as const, module: m.key, origin: "module" as const })),
-    ]);
+    .flatMap((m) => {
+      const added = m.layer_impact.new_sections;
+      return added.map((s) => ({
+        section_id: s,
+        heading: added.length === 1 || s === added[0] ? m.title : `${m.title}: ${s.replace(/-/g, " ")}`,
+        level: 2,
+        layer: m.layer_impact.brief_sections.includes(s) ? ("brief" as const) : ("full" as const),
+        module: m.key,
+        origin: "module" as const,
+      }));
+    });
+}
+
+/** Without template sections, as the composer: the brief sections modules add, then the full ones. */
+function outlineOf(modules: Composed[]): Schemas["OutlineEntry"][] {
+  const added = moduleSections(modules);
+  return [...added.filter((o) => o.layer === "brief"), ...added.filter((o) => o.layer !== "brief")];
+}
+
+/** As oracle.modules.composer.outline: the template's own sections first (brief and full,
+ * owned by the included module its manifest maps them to), then the sections modules add
+ * that the template lacks, before Sources and data points. Confirming keeps the brief. */
+function templateOutline(db: ModulesDb, rec: Schemas["RecommendationOut"], sections: TemplateSection[] | undefined): Schemas["OutlineEntry"][] {
+  if (!sections?.length) return outlineOf(rec.modules);
+  const manifest = rec.template ? db.manifests[rec.template] : undefined;
+  const included = rec.modules.filter((m) => m.included);
+  const owners = new Map<string, string>();
+  for (const e of manifest?.modules ?? []) {
+    if (included.some((m) => m.key === e.module_key)) for (const s of e.section_ids) owners.set(s, e.module_key);
+  }
+  const keys = new Set(sections.map((s) => s.key));
+  const entries: Schemas["OutlineEntry"][] = sections.map((s) => ({
+    section_id: s.key,
+    heading: s.heading,
+    level: s.level,
+    layer: s.brief ? "brief" : "full",
+    module: owners.get(s.key) ?? null,
+    origin: "template",
+  }));
+  const mapped = new Set(manifest?.modules.map((e) => e.module_key) ?? []);
+  const added = moduleSections(included.filter((m) => !mapped.has(m.key))).filter((o) => !keys.has(o.section_id));
+  // As the composer: added brief sections before the full version (its "full" section, else the
+  // template's first full one), full ones before Sources and data points, new sources last.
+  const briefNew = added.filter((o) => o.layer === "brief");
+  const sourcesNew = added.filter((o) => o.layer !== "brief" && o.section_id.startsWith("sources"));
+  const fullNew = added.filter((o) => o.layer !== "brief" && !sourcesNew.includes(o));
+  const fullHead = entries.findIndex((e) => e.section_id === "full");
+  const firstFull = entries.findIndex((e) => e.layer === "full");
+  const fullAt = fullHead >= 0 ? fullHead : firstFull >= 0 ? firstFull : entries.length;
+  const at = entries.findIndex((e) => e.section_id === "sources");
+  const cut = at < 0 ? entries.length : at;
+  return [...entries.slice(0, fullAt), ...briefNew, ...entries.slice(fullAt, cut), ...fullNew, ...entries.slice(cut), ...sourcesNew];
 }
 
 function inspected(m: Composed, db: ModulesDb): Schemas["InspectedModule"] {
@@ -456,13 +528,14 @@ function inForce(revisions: Revision[]): Revision | null {
   return [...revisions].reverse().find((r) => r.status === "confirmed" || r.status === "published") ?? null;
 }
 
-function inspector(db: ModulesDb, doc: { id: string; slug: string; template: string | null }, role: Role, learned?: Nudges): Schemas["InspectorOut"] {
+function inspector(db: ModulesDb, doc: { id: string; slug: string; template: string | null; sections?: TemplateSection[] }, role: Role, learned?: Nudges): Schemas["InspectorOut"] {
   const revisions = db.revisions[doc.id] ?? [];
   const head = revisions[revisions.length - 1] ?? null;
   const inForceRev = inForce(revisions);
   const current = inForceRev && { ...inForceRev, modules: withCanChange(inForceRev.modules, role) };
   const working = head?.status === "working" ? { ...head, modules: withCanChange(head.modules, role) } : null;
   const rec = current ? null : recommend(db, PACK_A, {}, doc.template, learned);
+  if (rec) rec.outline = templateOutline(db, rec, doc.sections);
   // The company policy saved after the revision in force was decided.
   const saved = db.policy.updated_at;
   const policyChanged = current?.decided_at && saved && saved > current.decided_at ? saved : null;
@@ -616,6 +689,7 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
     const extra = data.inputs && Object.keys(data.inputs).length ? data.inputs : head ? { scope: head.inputs.scope } : {};
     const rec = { ...recommend(db, pack, extra, data.template ?? doc?.template ?? "oracle-default", ctx.learned?.()), document_id: doc?.id ?? null };
     applyChanges(db, rec, head, data.changes, ctx, null);
+    rec.outline = templateOutline(db, rec, doc?.sections);
     return json(200, { ...rec, modules: withCanChange(rec.modules, ctx.role) });
   }
 
@@ -645,6 +719,8 @@ export async function routeModules(db: ModulesDb, ctx: ModulesContext, req: Requ
       const fatal = problems.filter((x) => x.fatal);
       if (fatal.length) return json(422, { detail: fatal[0].message, problems: fatal });
       rec.summary = summary(rec.modules);
+      // As the API: the outline keeps the template's sections, the brief among them.
+      rec.outline = templateOutline(db, rec, doc.sections);
       const status = data.status ?? "confirmed";
       if (status === "confirmed") {
         // Confirming supersedes the revision in force and any drafts; a working save

@@ -459,7 +459,7 @@ async def test_approval_is_refused_while_a_date_is_marked(client, owner, runtime
     resp = await client.post(f"{VERSIONS}/1/approve", headers=auth)
     assert resp.status_code == 409, resp.text
     body = resp.json()
-    assert "2026-12-15" in body["detail"]
+    assert "Dec 15, 2026" in body["detail"]
     assert [(d["text"], d["status"]) for d in body["dates"]] == [("2026-12-15", "unverified")]
     assert [b["key"] for b in body["blocking"]] == ["unverified_date"]
     # Resolved by a basis: the marker goes and the version can be approved.

@@ -58,9 +58,11 @@ export function targetTitle(t: SectionLinkTarget): string {
   return t.ref ?? "Untitled";
 }
 
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace(/_/g, " ");
+
 /** The second line of a target: its ref and status, or its source and state. */
 export function targetSub(t: SectionLinkTarget): string {
-  if (t.type === "entity") return [t.ref, t.status, t.locked ? "locked" : null].filter(Boolean).join(" · ");
+  if (t.type === "entity") return [t.entity_type ? cap(t.entity_type) : "Baseline item", t.status ? t.status.replace(/_/g, " ") : null, t.locked ? "locked" : null].filter(Boolean).join(" · ");
   const parts: string[] = [sourceLabel(t.source_kind)];
   if (t.restricted) parts.push("restricted · kind only");
   if (t.source_removed) parts.push("source removed");
@@ -130,7 +132,7 @@ export function pivot(sections: SectionEvidence[]): MatrixRow[] {
           id,
           group: "citations",
           title: c.title || c.ref,
-          sub: `c:${c.cite_key} · ${sourceLabel(c.source)}`,
+          sub: sourceLabel(c.source),
           muted: false,
           citation: c,
           links: new Map(),

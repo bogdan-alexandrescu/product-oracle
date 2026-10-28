@@ -10,6 +10,8 @@
  * stands in for the link's cookie with `opened` (token -> passcode version, browser id).
  */
 import type { Schemas } from "@/lib/api/client";
+import { formatInZone } from "@/lib/dates";
+import { displayName as personName } from "@/lib/names";
 
 import type { SectionSeed } from "./fixtures";
 
@@ -137,6 +139,8 @@ export interface SharesContext {
   now: () => string;
   /** The export's HTML of `v` rendered for `audience` (./audience.ts), as the export route. */
   renderAudience: (doc: DocLike, v: VersionLike, audience: Audience) => string;
+  /** The Company time zone (Settings › Company), as the API's company_time. */
+  zone?: () => string;
   /** Whether Oracle only observes "Words for people outside" (H11 external_messages). */
   observesOutside?: () => boolean;
   /** Queues the public_text job for `v` (./llm-jobs.ts queueJob): the job, or why it was refused. */
@@ -763,7 +767,21 @@ export async function routePublicShares(ctx: SharesContext, req: Request, p: str
   if (p[4] === "status" && m === "GET") {
     if (!open) return json(200, { state: "locked" });
     // allow_download only once the passcode opened the link (owner decision 2026-10-26).
-    return json(200, { state: state(link!, at) === "active" ? "active" : "ended", allow_download: link!.allow_download });
+    if (state(link!, at) !== "active") return json(200, { state: "ended", allow_download: link!.allow_download });
+    // qa-docs-71: as the API, an active link also names its roadmap, the company, the person
+    // who made the link and its end (its day in the Company time zone, as the footer).
+    const doc = ctx.documents.find((d) => d.id === link!.document_id);
+    const creator = ctx.members.find((x) => x.id === link!.created_by);
+    const zone = ctx.zone?.() ?? "America/Los_Angeles";
+    return json(200, {
+      state: "active",
+      allow_download: link!.allow_download,
+      title: doc?.title ?? null,
+      shared_by: ctx.company.trim() || null,
+      shared_by_name: creator ? personName(creator.email, creator.name) : null,
+      expires_at: link!.expires_at,
+      expires_on: formatInZone(link!.expires_at, zone, { month: "short", day: "numeric", year: "numeric" }),
+    });
   }
   if (!open) return p[4] === "pdf" ? json(404, { reason: "not_found" }) : html(401, page("Enter the passcode", "<h1>Enter the passcode</h1>"));
   if (state(link!, at) !== "active") return html(410, page("Link ended", `<p>${esc(ENDED)}</p>`));

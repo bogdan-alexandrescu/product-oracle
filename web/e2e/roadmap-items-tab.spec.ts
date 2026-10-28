@@ -103,7 +103,7 @@ test("Items lists the version's items grouped by horizon, one line each", async 
   await expect(await cell(page, behaviour, "Milestone")).toContainText("Beta");
   await expect(await cell(page, behaviour, "Milestone")).toContainText("2026-11-30");
   await expect((await cell(page, behaviour, "Milestone")).locator("s")).toHaveCount(0);
-  await expect(await cell(page, behaviour, "Conf.")).toHaveText("High", { useInnerText: true });
+  await expect(await cell(page, behaviour, "Confidence")).toHaveText("High", { useInnerText: true });
   await expect(await cell(page, behaviour, "Depends on")).toHaveText("—", { useInnerText: true });
   await expect((await cell(page, behaviour, "PRD")).getByRole("link")).toHaveAttribute("href", "/documents/usage-alerts/v/1#behaviour");
   await expect((await cell(page, behaviour, "PRD")).getByRole("link")).toHaveText("§ 1. Behaviour");
@@ -111,7 +111,7 @@ test("Items lists the version's items grouped by horizon, one line each", async 
 
   const metrics = row(page, "item-metrics");
   await expect(await cell(page, metrics, "Horizon")).toHaveText("Next");
-  await expect(await cell(page, metrics, "Conf.")).toHaveText("Low", { useInnerText: true });
+  await expect(await cell(page, metrics, "Confidence")).toHaveText("Low", { useInnerText: true });
   const deps = await cell(page, metrics, "Depends on");
   await expect(deps).toHaveText("1", { useInnerText: true });
   await expect(deps.locator("[title]")).toHaveAttribute("title", "Behaviour");
@@ -202,7 +202,8 @@ test("approvers mark a stale item under review, then still valid; viewers and co
   await insp.getByRole("button", { name: "Still valid…" }).click();
   await insp.getByLabel("Why it is still valid").fill("Checked against the PRD; the item stands");
   await insp.getByRole("button", { name: "Mark still valid" }).click();
-  await expect(state).toHaveText("");
+  // qa-docs-34: no item is stale or under review any more: the empty State column goes.
+  await expect(visible(page, "roadmap-items-table").locator("thead th").filter({ hasText: /^State$/ })).toHaveCount(0);
   await expect(attention(page)).toHaveText("Needs attention0");
   await expect(insp.getByTestId("item-freshness")).toHaveCount(0);
 
@@ -341,6 +342,6 @@ test("Items tab: a roadmap version with a marked date cannot be approved", async
   await expect(rows(page)).toHaveCount(2);
   const blocked = page.getByTestId("approve-blocked").filter({ visible: true });
   await expect(blocked.getByRole("button", { name: "Approve version" })).toBeDisabled();
-  await expect(blocked).toContainText("2026-12-15 (date withdrawn)");
+  await expect(blocked).toContainText("Dec 15, 2026 (date withdrawn)");
   await expect(blocked).toContainText("Record a basis");
 });

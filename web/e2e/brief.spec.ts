@@ -28,7 +28,7 @@ const stripItems = (page: Page) => sectionStrip(page).getByTestId("outline-name"
 /** An outline name is its heading. */
 const headingsAre = (names: string[]) => names.map((h) => new RegExp(`${h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`));
 
-test("brief: a document opens on its brief; Show full document switches, and the choice is remembered", async ({
+test("brief: a document opens on its brief; Full switches, and the choice is remembered", async ({
   page,
 }) => {
   await login(page);
@@ -47,10 +47,11 @@ test("brief: a document opens on its brief; Show full document switches, and the
 
   await expect(stripItems(page).filter({ hasText: "Feature detail" })).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Show full document" }).click();
+  await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
   await expect(sections(page)).toHaveAttribute("data-view", "full");
   await expect(sectionStrip(page).getByTestId("chip-all")).toHaveText(/All\s*20/);
-  await expect(stripItems(page).first()).toHaveText(/Saved carts PRD$/);
+  // qa-docs-50: the opening section reads as the Introduction, not the title again.
+  await expect(stripItems(page).first()).toHaveText(/Introduction$/);
   await openSection(page, "feature-detail");
   await expect(section(page, "feature-detail").getByTestId("layer-badge").first()).toHaveText("Detail");
 

@@ -7,9 +7,9 @@ import { INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
 
-import { changesIn, diffOf, type Changes, type InspectorOut, type Module, type Problem, type Recommendation } from "./_lib";
+import { plural } from "@/lib/format";
 
-const MONO = "font-mono text-[13px]";
+import { changesIn, diffOf, titler, touchedNames, type Changes, type InspectorOut, type Module, type Problem, type Recommendation } from "./_lib";
 
 /** Nothing beyond what the API derives from the document and its newest revision. */
 export const EMPTY_INPUTS = { inputs: {}, provenance: {}, advisory: {}, field_values: {} };
@@ -76,7 +76,7 @@ function ProblemList({ problems, testId }: { problems: Problem[]; testId?: strin
     <ul data-testid={testId} className="space-y-1.5 text-sm">
       {problems.map((p, i) => (
         <li key={`${p.code}-${p.module}-${i}`} className="flex flex-wrap items-start gap-2">
-          <Chip kind={p.fatal ? "crit" : "warn"}>{p.code}</Chip>
+          <Chip kind={p.fatal ? "crit" : "warn"}>{p.fatal ? "Blocks confirming" : "Note"}</Chip>
           <span className="min-w-0 flex-1">{p.message}</span>
         </li>
       ))}
@@ -139,7 +139,8 @@ export function ConfirmStep({
   const missing = preview?.modules.filter((m) => m.included && m.missing_information.length).flatMap((m) => m.missing_information.map((x) => `${m.title}: ${x}`)) ?? [];
   const trimmed = reason.trim();
   const ready = !!preview && preview.valid && trimmed.length >= 1 && trimmed.length <= 2000 && !busy;
-  const label = status === "confirmed" ? `Confirm rev ${next}` : "Save working draft";
+  const label = status === "confirmed" ? `Confirm revision ${next}` : "Save working draft";
+  const titleOf = titler(preview?.modules, before);
 
   async function submit() {
     setBusy(true);
@@ -171,31 +172,32 @@ export function ConfirmStep({
   }
 
   const outline = preview?.outline ?? [];
+  // Each heading once: a module adding several sections under its own name is one line.
+  const entries = (which: "brief" | "full") =>
+    outline.filter((o, i) => o.layer === which && !outline.slice(0, i).some((p) => p.layer === which && p.heading === o.heading));
   const column = (which: "brief" | "full") => (
     <div data-testid={`outline-${which}`} className="min-w-0">
-      <Label>{which === "brief" ? "Brief" : "Full"}</Label>
+      <Label>
+        {which === "brief" ? "Brief" : "Full"} · {plural(entries(which).length, "section")}
+      </Label>
       <ul className="mt-1.5 space-y-1 text-sm">
-        {outline
-          .filter((o) => o.layer === which)
-          .map((o, i) => {
-            const isNew = !!o.module && added.has(o.module);
-            return (
-              <li key={`${o.section_id}-${i}`} className={`flex flex-wrap items-center gap-x-2 rounded px-1.5 py-0.5 ${isNew ? "bg-accent-soft text-accent-ink" : ""}`}>
-                {isNew && <span aria-label="new">+</span>}
-                <span className="font-medium">{o.heading}</span>
-                <span className={`${MONO} basis-full text-text2 [overflow-wrap:anywhere]`}>
-                  {o.section_id} · {o.module ?? "template"}
-                </span>
-              </li>
-            );
-          })}
-        {outline.every((o) => o.layer !== which) && <li className="text-text2">No sections</li>}
+        {entries(which).map((o, i) => {
+          const isNew = !!o.module && added.has(o.module);
+          return (
+            <li key={`${o.section_id}-${i}`} className={`flex flex-wrap items-center gap-x-2 rounded px-1.5 py-0.5 ${isNew ? "bg-accent-soft text-accent-ink" : ""}`}>
+              {isNew && <span aria-label="new">+</span>}
+              <span className="min-w-0 font-medium [overflow-wrap:anywhere]">{o.heading}</span>
+              {o.module && o.origin === "template" && <span className="text-text2">· {titleOf(o.module)}</span>}
+            </li>
+          );
+        })}
+        {entries(which).length === 0 && <li className="text-text2">{which === "brief" ? "This PRD has no brief layer." : "No sections"}</li>}
       </ul>
     </div>
   );
 
   return (
-    <Modal title={`Confirm rev ${next}`} eyebrow={data.legacy ? "First composition" : `New revision · based on head rev ${data.head_revision}`} phone={phone} onClose={onClose}>
+    <Modal title={`Confirm revision ${next}`} eyebrow={data.legacy && data.head_revision == null ? "First composition" : `New revision · starts from revision ${data.head_revision}`} phone={phone} onClose={onClose}>
       <div className="grid gap-5 px-5 py-4 text-[15px] min-[901px]:grid-cols-[minmax(0,1fr)_320px] max-[600px]:px-4">
         <div className="min-w-0 space-y-4">
           {!preview && !previewError && <p role="status" className="text-sm text-text2">Previewing…</p>}
@@ -204,30 +206,31 @@ export function ConfirmStep({
             <section data-testid="confirm-diff" className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-display text-lg font-bold">What changes</h3>
-                <span className="text-sm text-text2">{data.current ? `against rev ${data.current.number}` : "recommendation vs nothing"}</span>
-                {diff.material ? <Chip kind="warn">Material</Chip> : diff.reordered ? <Chip kind="na">Reordered only · not material</Chip> : <Chip kind="na">No change</Chip>}
+                <span className="text-sm text-text2">{data.current ? `against revision ${data.current.number}` : "the first composition"}</span>
+                {diff.material ? <Chip kind="warn">Changes sections</Chip> : diff.reordered ? <Chip kind="na">Order only · sections unchanged</Chip> : <Chip kind="na">No change</Chip>}
               </div>
               <ul className="space-y-1 text-sm">
                 {diff.added.map((m) => (
-                  <li key={m.key}>
-                    + {m.title} <span className={`${MONO} text-text2`}>{m.key}</span>
-                  </li>
+                  <li key={m.key}>+ {m.title}</li>
                 ))}
                 {diff.removed.map((m) => (
-                  <li key={m.key}>
-                    − {m.title} <span className={`${MONO} text-text2`}>{m.key}</span>
-                  </li>
+                  <li key={m.key}>− {m.title}</li>
                 ))}
                 {diff.versionChanged.map((v) => (
-                  <li key={v.key}>
-                    ~ {v.title} {v.before} → {v.after}
-                  </li>
+                  <li key={v.key}>~ {v.title} moves to a newer version</li>
                 ))}
                 {diff.reordered && <li>↕ Reordered</li>}
               </ul>
               {diff.material && diff.affectedSections.length > 0 && (
-                <p className="text-sm text-text2">
-                  Approvals on <span className={MONO}>{diff.affectedSections.join(" ")}</span> will be invalidated when confirmed.
+                <p data-testid="confirm-approvals" className="text-sm text-text2">
+                  Approvals on the sections of{" "}
+                  {touchedNames(
+                    diff.added.map((m) => m.key),
+                    diff.removed.map((m) => m.key),
+                    diff.versionChanged.map((v) => v.key),
+                    titleOf,
+                  )}{" "}
+                  will be cleared when you confirm.
                 </p>
               )}
             </section>
@@ -252,19 +255,21 @@ export function ConfirmStep({
                 {layer !== "full" && column("brief")}
                 {layer !== "brief" && column("full")}
               </div>
-              <p className="text-sm text-text2">Preview from the recommendation; nothing is written until you confirm.</p>
+              <p className="text-sm text-text2">
+                {entries("brief").length > 0 ? `The brief keeps its ${plural(entries("brief").length, "section")}. ` : ""}A preview: nothing is saved until you confirm.
+              </p>
             </section>
           )}
         </div>
         <div className="min-w-0 space-y-4">
           {preview && (
             <section className="space-y-2">
-              <Label>Preview: problems and missing information</Label>
-              {preview.problems.length ? <ProblemList testId="preview-problems" problems={preview.problems} /> : <p className="text-sm text-text2">No fatal problems</p>}
+              <Label>Problems and missing information</Label>
+              {preview.problems.length ? <ProblemList testId="preview-problems" problems={preview.problems} /> : <p className="text-sm text-text2">Nothing blocks confirming.</p>}
               {missing.length > 0 && (
                 <ul className="space-y-1 text-sm text-text2">
                   {missing.map((x) => (
-                    <li key={x}>missing · {x}</li>
+                    <li key={x}>Missing: {x}</li>
                   ))}
                 </ul>
               )}
@@ -278,16 +283,16 @@ export function ConfirmStep({
               value={status}
               onChange={setStatus}
               items={[
-                { value: "confirmed", label: "Confirmed · in force" },
+                { value: "confirmed", label: "Confirmed, in force" },
                 { value: "working", label: "Working draft" },
               ]}
             />
             <p className="text-sm text-text2">
               {status === "confirmed"
                 ? data.current
-                  ? `Confirming supersedes rev ${data.current.number} and drafts saved since.`
-                  : "Confirming puts rev 1 in force."
-                : "A working draft supersedes nothing until confirmed."}
+                  ? `Confirming replaces revision ${data.current.number} and drafts saved since.`
+                  : `Confirming puts revision ${next} in force.`
+                : "A working draft replaces nothing until confirmed."}
             </p>
           </section>
           <div>
@@ -297,7 +302,7 @@ export function ConfirmStep({
             <textarea id="composition-reason" rows={4} maxLength={2000} className={INPUT} value={reason} onChange={(e) => setReason(e.target.value)} />
             <p className="tnum mt-1 text-right text-[13px] text-text2">{reason.length} / 2000</p>
           </div>
-          <p className="text-sm text-text2">{data.head_revision != null ? `Based on rev ${data.head_revision} (head)` : "No revision yet: this is the first."}</p>
+          <p className="text-sm text-text2">{data.head_revision != null ? `Starts from revision ${data.head_revision}, the newest.` : "No revision yet: this is the first."}</p>
           {fatal.length > 0 && <Notice tone="error">Can’t confirm: fix the problems above first.</Notice>}
           {refused.length > 0 && (
             <div role="alert" className="rounded-button bg-crit-bg px-3 py-2">
@@ -353,7 +358,7 @@ export function PublishStep({
     }
   }
   return (
-    <Modal title={`Publish rev ${revision}`} eyebrow="Pin the composition to an approved version" phone={phone} onClose={onClose}>
+    <Modal title={`Publish revision ${revision}`} eyebrow="Pin the composition to an approved version" phone={phone} onClose={onClose}>
       <div className="space-y-3 px-5 py-4 text-[15px] max-[600px]:px-4">
         <p className="text-sm text-text2">The published composition is pinned to the version and never changed afterwards.</p>
         <div>

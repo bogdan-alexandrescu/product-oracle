@@ -130,20 +130,22 @@ def dates_refusal(marks: list[doc_dates.Mark], headings: dict[str, str]) -> tupl
             return "the title"
         return wording.quoted(headings.get(m.section_key), "an untitled section")
 
-    listed = ", ".join(f"{m.text} ({where(m)}: {m.label})" for m in marks)
-    noun = "date rests" if len(marks) == 1 else "dates rest"
+    listed = ", ".join(f"{doc_dates.shown(m)} ({where(m)}: {m.label})" for m in marks)
+    noun = "date is" if len(marks) == 1 else "dates are"
     detail = (
-        f"{len(marks)} {noun} on no verified basis: {listed}. Record a date basis for each "
-        "on Plan › Dates (or ask the engineering lead to), or import a draft without them"
+        f"{len(marks)} {noun} not backed by a confirmed schedule: {listed}. Record a date "
+        "basis for each on Plan › Dates (or ask the engineering lead to), or import a draft "
+        "without them"
     )
     blocks = [
         Block(
             key="unverified_date",
             id=f"{m.section_key}:{m.text}",
-            title=m.text,
+            # qa-docs-2: the date as people read it ("Dec 15, 2026"); as written in ``id``.
+            title=doc_dates.shown(m),
             rationale=doc_dates.problem_message(m, None, heading=headings.get(m.section_key))
             if m.status == "withdrawn"
-            else f"{m.text} ({where(m)}) is marked {m.label}",
+            else f"{doc_dates.shown(m)} ({where(m)}) is not backed by a confirmed schedule",
         )
         for m in marks
     ]

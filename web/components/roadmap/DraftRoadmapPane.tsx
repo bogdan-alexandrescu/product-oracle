@@ -248,7 +248,7 @@ export function DraftRoadmapPane({
           <b className="font-semibold text-text">Proposed by draft v{n}</b> · not an approved roadmap
         </span>
         <InfoTip label="draft roadmaps" side="bottom" align="start">
-          Oracle derives an items-only roadmap from every PRD draft, so you can see the plan while the PRD changes. Items
+          Oracle builds an items-only draft roadmap from every PRD draft, so you can see the plan while the PRD changes. Items
           here are proposals until a roadmap is approved.
         </InfoTip>
       </p>
@@ -378,18 +378,18 @@ function StatusRow({
             {data.items.length} item{data.items.length === 1 ? "" : "s"}
           </b>
           {horizons}
-          {data.ready_at ? ` · derived ${formatDateTime(data.ready_at)}` : ""}
+          {data.ready_at ? ` · built ${formatDateTime(data.ready_at)}` : ""}
           {p ? ` · ${p} problem${p === 1 ? "" : "s"}` : ""}
         </span>
       );
-      act = action("Derive again");
+      act = action("Build again");
       break;
     }
     case "failed":
       copy = (
         <span className="font-medium">
           {data.requested_at && <span data-testid="failed-at">{failedAt(data.requested_at)}. </span>}
-          Oracle could not derive roadmap items: {data.error ?? "unknown error"}
+          Oracle could not build the draft roadmap: {data.error ?? "unknown error"}
         </span>
       );
       act = action("Try again");
@@ -397,25 +397,25 @@ function StatusRow({
     case "superseded":
       copy = (
         <>
-          A newer draft (v{latest}) was imported before this one&apos;s items were derived.{" "}
+          A newer draft (v{latest}) was imported before this one&apos;s draft roadmap was built.{" "}
           <Link href={`/documents/${doc}/v/${latest}/roadmap`} className="font-semibold text-accent-ink underline underline-offset-2">
             Go to v{latest}&apos;s roadmap
           </Link>
         </>
       );
-      act = action(`Derive for v${n} anyway`);
+      act = action(`Build for v${n} anyway`);
       break;
     case "off":
-      copy = "Deriving for each new draft is turned off for this PRD.";
-      act = action("Derive now");
+      copy = "Updating the draft roadmap with each new draft is turned off for this PRD.";
+      act = action("Build draft roadmap now");
       break;
     case "skipped":
-      copy = "Nothing to derive yet: this version is the template's empty skeleton.";
-      act = action("Derive anyway");
+      copy = "Nothing to build yet: this version is the template's empty skeleton.";
+      act = action("Build anyway");
       break;
     default:
       copy = "No roadmap items for this version yet.";
-      act = action("Derive now");
+      act = action("Build draft roadmap now");
   }
   return (
     <div
@@ -432,7 +432,7 @@ function StatusRow({
   );
 }
 
-/** Owners: "Derive for each new draft" on this PRD (saved at once). */
+/** Owners: "Update the draft roadmap with each new draft" on this PRD (saved at once). */
 function AutoSwitch({ doc, initial }: { doc: string; initial: boolean }) {
   const [on, setOn] = useState(initial);
   const [busy, setBusy] = useState(false);
@@ -455,9 +455,9 @@ function AutoSwitch({ doc, initial }: { doc: string; initial: boolean }) {
     <div data-testid="draft-roadmap-auto" className="flex flex-wrap items-center gap-x-2 gap-y-1">
       <label className="flex min-h-10 items-center gap-2 text-sm font-medium text-text">
         <input type="checkbox" className="size-4 accent-[var(--accent)]" checked={on} disabled={busy} onChange={(e) => void toggle(e.target.checked)} />
-        Derive for each new draft
+        Update the draft roadmap with each new draft
       </label>
-      <InfoTip label="deriving for each new draft" side="bottom" align="start">
+      <InfoTip label="updating with each new draft" side="bottom" align="start">
         About $5.50 per draft at standard depth. Runs in the background.
       </InfoTip>
       {error && <ErrorNote>{error}</ErrorNote>}

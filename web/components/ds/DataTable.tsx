@@ -28,6 +28,8 @@ export type Column<T> = {
    * last one is never cut off. A container query: the window's width does not tell.
    */
   narrow?: "hide";
+  /** A sortable column's order, as its header's aria-sort. */
+  ariaSort?: "ascending" | "descending" | "none";
   className?: string;
 };
 
@@ -169,6 +171,7 @@ export function DataTable<T>({
                 key={c.key}
                 scope="col"
                 role="columnheader"
+                aria-sort={c.ariaSort}
                 className={`sticky top-0 z-[1] h-9 bg-surface2 px-2 text-[13px] leading-4 font-semibold whitespace-nowrap text-text2 first:pl-4 last:pr-4 max-[600px]:first:pl-3 max-[600px]:last:pr-3 ${align(c)} ${phone(c)}`}
               >
                 {c.header}

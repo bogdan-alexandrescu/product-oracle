@@ -326,7 +326,7 @@ async def list_versions(db: AsyncSession, document: Document) -> list[VersionSum
 async def importer_names(db: AsyncSession, versions: list[DocumentVersion]) -> dict[uuid.UUID, str]:
     """Who imported each version, by name, keyed by version id (#256): "Oracle" for a
     run's draft (its import's audit event names the run; ``imported_by`` is the person
-    the run acted for), else the member's display name or the API token's name."""
+    the run acted for), else the member's display name or "API token <its name>"."""
     ids = {v.imported_by for v in versions if v.imported_by}
     people: dict[uuid.UUID, str] = {
         uid: display_name(email)
@@ -334,8 +334,9 @@ async def importer_names(db: AsyncSession, versions: list[DocumentVersion]) -> d
             await db.execute(select(User.id, User.email).where(User.id.in_(ids)))
         ).all()
     }
+    # An API token says what it is, not only its name (qa-docs-26): "API token release-bot".
     tokens: dict[uuid.UUID, str] = {
-        tid: name
+        tid: f"API token {name}"
         for tid, name in (
             await db.execute(
                 select(ApiToken.id, ApiToken.name).where(ApiToken.id.in_(ids - set(people)))
