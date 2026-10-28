@@ -63,7 +63,8 @@ async def test_new_chat_per_role(client):
 async def test_recent_lists_own_chats_by_page_not_meetings(client):
     w = await world()
     m = await start(client, w)
-    r = await client.post(f"{MEETINGS}/{m['id']}/chat/messages", json={"text": "who owns Ledger v2?"},
+    r = await client.post(f"{MEETINGS}/{m['id']}/chat/messages",
+                          json={"text": "who owns Ledger v2?"},
                           headers=w.ctx.as_("commenter"))  # fmt: skip
     assert r.status_code == 200, r.text
     home = await post(client, w, "commenter", "who owns Ledger v2?", page="/simple", new_chat=True)
@@ -89,7 +90,8 @@ async def test_chat_is_the_callers_own(client):
                               headers=w.ctx.as_(who))  # fmt: skip
         assert r.status_code == 404, who
     m = await start(client, w)
-    r = await client.post(f"{MEETINGS}/{m['id']}/chat/messages", json={"text": "who owns Ledger v2?"},
+    r = await client.post(f"{MEETINGS}/{m['id']}/chat/messages",
+                          json={"text": "who owns Ledger v2?"},
                           headers=w.ctx.as_("decider"))  # fmt: skip
     meeting_chat = r.json()["id"]
     r = await client.get(
