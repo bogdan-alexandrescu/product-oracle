@@ -945,6 +945,8 @@ function seedSimpleWalkScenario(): Db {
  * span on Home and the priorities, its one-pager's Timeline drawn from the same slices.
  * Invented data.
  */
+const UNDATED_PLAN_FEATURE = "F-11";
+
 function seedSimplePlanScenario(): Db {
   const db = seedSimpleHomeOnePrdScenario();
   const rm = db.simple_roadmap!;
@@ -967,7 +969,9 @@ function seedSimplePlanScenario(): Db {
     const horizon = start <= w.now[1] ? "now" : "next";
     const from = w[horizon][0];
     const k = `plan-${section}`;
-    rm.items.push({ key: k, title: of[0].name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", start: days(from, start), end: days(from, end), source: "typed", section, heading: `${code} ${of[0].name}` });
+    // roadmap-gantt: Self-serve checkout (F-11) has no dates yet: its dates to confirm are its slices'.
+    const dated = code === UNDATED_PLAN_FEATURE ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
+    rm.items.push({ key: k, title: of[0].name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", ...dated, section, heading: `${code} ${of[0].name}` });
     rm.ids[k] = stableUuid(`simple-item/${k}`);
   }
   db.simple_one_pager = seedOnePager();

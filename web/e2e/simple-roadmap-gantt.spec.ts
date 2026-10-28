@@ -178,6 +178,34 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("card-slice")).toContainText("PM-owned");
       });
 
+      /**
+       * Card gantt-dates-per-slice: protects = Self-serve checkout (F-11, no dates yet, two
+       * slices) has one date to confirm per slice in "Needs a decision", each inside its
+       * milestone as the plan places it (F-11a in M2 Scale volume 14 Dec - 25 Dec, F-11b in
+       * M3 Open to all from 4 Jan, after the year-end break, to 22 Jan); accepting one dates the
+       * item across both slices (14 Dec - 22 Jan) and both rows leave the tray; fails_when =
+       * the tray shows one row for the item, a date packed from the Now window's start or
+       * months after its milestone, or accepting one slice leaves the other waiting;
+       * no_claim = how the API stores the suggestions (api pytest), dismissing.
+       */
+      test(`dates to confirm: one per slice, inside its milestone (${where})`, async ({ page }) => {
+        await open(page, scheme);
+        await page.getByTestId("needs-decision").click();
+        const tray = page.getByTestId("decision-tray");
+        const rows = tray.locator('[data-testid="tray-date"][data-slice^="F-11"]');
+        await expect(rows).toHaveCount(2);
+        await expect(rows.nth(0)).toContainText("F-11a Self-serve checkout · M2 Scale volume");
+        await expect(rows.nth(0)).toContainText(/Dec 14 – Dec 25|14 Dec – 25 Dec/);
+        await expect(rows.nth(1)).toContainText("F-11b Self-serve checkout · M3 Open to all");
+        await expect(rows.nth(1)).toContainText(/Jan 4 – Jan 22|4 Jan – 22 Jan/);
+        await rows.nth(0).getByRole("button", { name: "Accept" }).click();
+        await expect(rows).toHaveCount(0);
+        await tray.getByRole("button", { name: "Close" }).click();
+        await slice(page, "F-11a").scrollIntoViewIfNeeded();
+        await slice(page, "F-11a").click();
+        await expect(page.getByTestId("card-dates")).toContainText(/Dec 14 – Jan 22|14 Dec – 22 Jan/);
+      });
+
       if (phone) {
         /**
          * Card gantt-phone-scroll: protects = on a phone the weeks scroll sideways inside the

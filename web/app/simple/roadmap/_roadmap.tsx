@@ -220,7 +220,7 @@ function DecisionTray({
   act: Act;
   canChange: boolean;
   onDecide: (c: Change, how: "accept" | "decline") => void;
-  onSuggestion: (i: Item, how: "accept" | "dismiss") => void;
+  onSuggestion: (i: Item, how: "accept" | "dismiss", id?: string) => void;
   onClose: () => void;
   phone: boolean;
   suggestions: GoalSuggestionsApi;
@@ -229,12 +229,24 @@ function DecisionTray({
   const suggested = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject);
   const brokenItems = items.filter((i) => i.can_decide && broken(i).length);
   const dates = items.filter((i) => i.suggestion?.can_decide);
+  // roadmap-gantt: an item the plan places has one date to confirm per slice, inside its milestone.
+  const open = useQuery(`simple-date-suggestions:${dates.map((i) => i.suggestion!.id).join(",")}`, () =>
+    dates.some((i) => i.suggestion!.slice_code) ? unwrap(api.GET("/v1/simple/roadmap/date-suggestions", { params: { query: { status: "open" } } })) : Promise.resolve([]),
+  );
+  const dateRows = dates.flatMap((i) => {
+    const sliced = (open.data ?? []).filter((x) => x.item_id === i.id && x.slice_code).sort((a, b) => (a.start_date < b.start_date ? -1 : 1));
+    const rows = sliced.length ? sliced : [i.suggestion!];
+    return rows.map((x, k) => {
+      const sl = x.slice_code ? i.slices.find((y) => y.code === x.slice_code) : undefined;
+      return { item: i, s: x, words: sl ? `${sl.code} ${sl.name} · ${sl.milestone} ${sl.milestone_name}` : i.title, last: sliced.length > 1 && k === rows.length - 1 };
+    });
+  });
   const mine = proposals.filter((c) => c.can_decide);
   const pulled = mine.filter((c) => c.op === "change_horizon");
   const others = mine.filter((c) => c.op !== "change_horizon");
   const counters: [string, number][] = [
     ["Broken links", brokenItems.length],
-    ["Dates to confirm", dates.length],
+    ["Dates to confirm", dateRows.length],
     ["Proposals", others.length],
     ["Pulled in", pulled.length],
   ];
@@ -296,15 +308,16 @@ function DecisionTray({
       </section>
       <section className="mt-4">
         <h3 className="font-semibold">Dates to confirm</h3>
-        {dates.length ? (
+        {dateRows.length ? (
           <ul>
-            {dates.map((i) => (
-              <li key={i.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-date">
+            {dateRows.map(({ item: i, s, words, last }) => (
+              <li key={s.id} className="flex flex-wrap items-center gap-2 py-1.5" data-testid="tray-date" data-slice={s.slice_code ?? undefined}>
                 <span className="min-w-0 flex-1 text-[15px]">
-                  {i.title}: {shortDay(i.suggestion!.start_date)} – {shortDay(i.suggestion!.end_date)}
+                  {words}: {shortDay(s.start_date)} – {shortDay(s.end_date)}
+                  {last && <span className="block text-sm text-text2">Accepting one dates all of {i.title}&rsquo;s slices.</span>}
                 </span>
-                <Button onClick={() => onSuggestion(i, "accept")}>Accept</Button>
-                <Button variant="ghost" onClick={() => onSuggestion(i, "dismiss")}>
+                <Button onClick={() => onSuggestion(i, "accept", s.id)}>Accept</Button>
+                <Button variant="ghost" onClick={() => onSuggestion(i, "dismiss", s.id)}>
                   Dismiss
                 </Button>
               </li>
@@ -579,10 +592,10 @@ export function SimpleRoadmap() {
   );
 
   const onSuggestion = useCallback(
-    async (i: Item, how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }) => {
+    async (i: Item, how: "accept" | "edit" | "dismiss", dates?: { start_date: string; end_date: string }, id?: string) => {
       if (!i.suggestion) return;
       try {
-        await suggestion(i.suggestion.id, how, dates);
+        await suggestion(id ?? i.suggestion.id, how, dates);
         const words = how === "dismiss" ? "Dismissed Oracle's dates" : i.suggestion.can_decide ? "Dates accepted in your working draft" : "Dates proposed: they wait for the decider";
         toast({ message: words });
       } catch (e) {
@@ -944,7 +957,7 @@ export function SimpleRoadmap() {
           act={act}
           canChange={canChange}
           onDecide={(c, how) => void onDecide(c, how)}
-          onSuggestion={(i, how) => void onSuggestion(i, how)}
+          onSuggestion={(i, how, id) => void onSuggestion(i, how, undefined, id)}
           onClose={() => setTray(false)}
           phone={phone}
           suggestions={suggestions}

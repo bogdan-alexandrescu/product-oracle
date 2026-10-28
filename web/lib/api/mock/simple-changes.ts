@@ -436,8 +436,17 @@ function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
   else write(db, keyOf(db, c.target.item_id)!, values, c.target);
   if (c.op === "accept_date_suggestion") {
     const s = db.suggestions.find((x) => x.id === c.target.suggestion_id);
-    if (s && !undo && s.status === "open") Object.assign(s, { status: c.target.edited ? "edited" : "accepted", decided_at: iso(mockNowMs()) });
-    if (s && undo && (s.status === "accepted" || s.status === "edited")) Object.assign(s, { status: "open", decided_by: null, decided_at: null });
+    // plan-model: the item's other slices are dated with it (and undone with it).
+    const others = (status: string) => (s?.slice_code ? db.suggestions.filter((x) => x !== s && x.item_id === s.item_id && x.status === status) : []);
+    if (s && !undo && s.status === "open") {
+      const decided = { status: c.target.edited ? "edited" : "accepted", decided_at: iso(mockNowMs()) } as const;
+      for (const o of others("open")) Object.assign(o, decided);
+      Object.assign(s, decided);
+    }
+    if (s && undo && (s.status === "accepted" || s.status === "edited")) {
+      for (const o of others(s.status)) if (o.decided_at === s.decided_at) Object.assign(o, { status: "open", decided_by: null, decided_at: null });
+      Object.assign(s, { status: "open", decided_by: null, decided_at: null });
+    }
   }
 }
 
@@ -580,6 +589,12 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       if (!s) return json(404, { detail: "No such date suggestion on this item" });
       if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
       after = { start_date: s.start_date, end_date: s.end_date, date_source: "accepted" };
+      if (s.slice_code) {
+        // plan-model: a slice's dates: the item takes the span of all its slices.
+        const all = db.suggestions.filter((x) => x.item_id === s.item_id && x.status === "open");
+        after.start_date = all.map((x) => x.start_date).sort()[0];
+        after.end_date = all.map((x) => x.end_date).sort().at(-1)!;
+      }
       if (a.start_date != null || a.end_date != null) {
         // The edit variant (D-b): the person's dates.
         if (!a.start_date || !a.end_date || String(a.end_date) < String(a.start_date)) return json(422, { detail: "after: start_date and end_date, the end not before the start" });
