@@ -934,6 +934,8 @@ function seedSimpleWalkScenario(): Db {
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   }
   db.simple_one_pager = seedWalkOnePager();
+  // P4: Guided setup was brought in by the Approver, not the company's owner: its owner.
+  db.simple_one_pager.owner = db.members.find((m) => m.email === "approver@example.com")?.id;
   const skeleton = db.documents.find((d) => d.kind === "prd" && d.slug === "checkout-redesign");
   if (skeleton) db.simple_one_pagers = { [skeleton.id]: seedSkeletonOnePager({ id: skeleton.id, slug: skeleton.slug, title: skeleton.title }) };
   return db;

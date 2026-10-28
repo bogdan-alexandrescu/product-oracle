@@ -779,10 +779,16 @@ def email_available() -> bool:
     return mailer.get_mailer() is not None
 
 
+# The walk (M1): Simple reads product decisions only: a run's stop (a checkpoint decision,
+# Oracle's run approval) is Detailed's, never a meeting's pre-read or the Decisions page's.
+PRODUCT = Decision.origin != "checkpoint"
+
+
 async def _open_decisions(db: AsyncSession, document: Document, item_ids: set[uuid.UUID]):
+    """The PRD's open product decisions, never a run's approval (PRODUCT)."""
     rows = await db.scalars(
         select(Decision)
-        .where(Decision.status == "proposed")
+        .where(Decision.status == "proposed", PRODUCT)
         .where(
             or_(
                 Decision.subjects.contains([{"kind": "document", "id": str(document.id)}]),
@@ -1040,8 +1046,15 @@ async def _upcoming(
     if only is not None:
         q = q.where(RitualOccurrence.id == only)
     else:
+        # Not one whose review was held (a meeting started from it has ended): the ritual's
+        # following occurrence is the next one.
+        held_here = select(SimpleMeeting.occurrence_id).where(
+            SimpleMeeting.occurrence_id.is_not(None), SimpleMeeting.status == "ended"
+        )
         q = q.where(
-            RitualOccurrence.status.in_(("scheduled", "ready")), RitualOccurrence.ends_at >= now
+            RitualOccurrence.status.in_(("scheduled", "ready")),
+            RitualOccurrence.ends_at >= now,
+            RitualOccurrence.id.not_in(held_here),
         )
     rows: list[tuple[Any, Any]] = list(
         (await db.execute(q.order_by(RitualOccurrence.due_at).limit(UPCOMING_MAX))).all()
@@ -1225,6 +1238,14 @@ async def end(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Simple
         raise MeetingError(409, "This meeting has ended already")
     now = company_time.now()
     m.status, m.ended_at, m.ended_by = "ended", now, _me(principal)
+    if m.occurrence_id is not None:
+        # The ritual's occurrence is held: Upcoming and Home's next review move to its next.
+        from oracle.rituals.models import RitualOccurrence
+
+        occ = await db.get(RitualOccurrence, m.occurrence_id, with_for_update=True)
+        if occ is not None and occ.status in ("scheduled", "ready", "missed"):
+            occ.status, occ.held_by, occ.held_at = "held", _me(principal), now
+            await audit.record(db, principal, "ritual.held", "ritual_occurrence", occ.id)
     session = await db.get(SimpleSession, m.session_id, with_for_update=True)
     if session is not None and session.closed_at is None:
         session.closed_at = now
@@ -1764,7 +1785,7 @@ async def decisions_page(
         shown_ms = [m for m in shown_ms if any(keep(d) for _, d in links[m.id])]
     others: list[Decision] = []
     if meeting is None:
-        q = select(Decision).where(Decision.origin != "meeting")
+        q = select(Decision).where(Decision.origin != "meeting", PRODUCT)
         if in_meetings:
             q = q.where(Decision.id.not_in(in_meetings))
         if match is not None:

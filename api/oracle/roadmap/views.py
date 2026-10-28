@@ -566,7 +566,17 @@ async def milestone_bases(
     )
 
 
-def _headline(health: str, counts: dict[str, int], nxt: NextMilestone | None) -> str:
+# The headline's words for each at-risk reason (plain words, P11).
+ATTENTION = (("blocked", "blocked"), ("stale", "may be out of date"), ("slipping", "slipping"))
+
+
+def _headline(
+    health: str, counts: dict[str, int], nxt: NextMilestone | None, prd_moved_to: int | None = None
+) -> str:
+    """The track's health in one plain sentence. It names only what means something: the
+    items that need attention by their own rules (blocked, stale, slipping), how many and
+    why; with none, a newer approved PRD version is the reason, said as that (never
+    "0 of 40 items need attention")."""
     if health == "closed":
         return "Closed."
     if health == "paused":
@@ -576,16 +586,17 @@ def _headline(health: str, counts: dict[str, int], nxt: NextMilestone | None) ->
     when = ""
     if nxt is not None:
         when = f" Next: {nxt.name}" + (f" ({nxt.target_date})." if nxt.target_date else ".")
+    moved = f" The PRD has a newer approved version (v{prd_moved_to})." if prd_moved_to else ""
+    n = counts["items"]
     if health == "on_track":
-        return f"On track: {counts['items']} items.{when}"
-    parts = [
-        f"{counts[k]} {label}"
-        for k, label in (("blocked", "blocked"), ("stale", "stale"), ("slipping", "slipping"))
-        if counts[k]
-    ]
+        return f"On track: {n} {'item' if n == 1 else 'items'}.{when}"
     word = "Off track" if health == "off_track" else "At risk"
-    attention = f"{counts['at_risk']} of {counts['items']} items need attention"
-    return f"{word}: {attention}" + (f" ({', '.join(parts)})." if parts else ".") + when
+    if not counts["at_risk"]:
+        return f"{word}:{moved}{when}" if moved else f"{word}.{when}"
+    parts = [f"{counts[k]} {label}" for k, label in ATTENTION if counts[k]]
+    k = counts["at_risk"]
+    attention = f"{k} of {n} items need attention" if n > 1 else "the item needs attention"
+    return f"{word}: {attention}" + (f" ({', '.join(parts)})." if parts else ".") + when + moved
 
 
 def dated_items(milestones: list[TrackMilestone]) -> dict[str, date]:
@@ -630,9 +641,9 @@ def item_risk(
             reasons.append({"kind": "blocked", "detail": f"{b.title} ({b.blocker_status})"})
             if b.critical and item.horizon == "now":
                 risk.off = True
-    if item.freshness in ("potentially_stale", "under_review"):
+    if staleness.is_stale(item):
         why = staleness.stale_why(
-            staleness.for_reader(item.stale_reasons, ctx.hidden), "its PRD trace changed"
+            staleness.for_reader(staleness.own_reasons(item), ctx.hidden), "its PRD trace changed"
         )
         reasons.append({"kind": "stale", "detail": why})
     when = tracker.milestone_date(item, dated, ctx.milestone_of(item))
@@ -724,9 +735,7 @@ def assess(
         health = "at_risk"
     else:
         health = "on_track"
-    headline = _headline(health, counts, nxt)
-    if prd_moved and health not in ("closed", "paused"):
-        headline += f" The PRD has a newer approved version (v{base.latest_approved_version})."
+    headline = _headline(health, counts, nxt, base.latest_approved_version if prd_moved else None)
     out = TrackOverview(
         **base.model_dump(),
         health=health,  # type: ignore[arg-type]

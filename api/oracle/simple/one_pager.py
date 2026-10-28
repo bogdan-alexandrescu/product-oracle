@@ -36,7 +36,7 @@ import json
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from html import escape
 from typing import Any
 
@@ -792,6 +792,42 @@ async def _person_of(db: AsyncSession, imported_by: uuid.UUID | None) -> uuid.UU
     return await db.scalar(select(ApiToken.user_id).where(ApiToken.id == imported_by))
 
 
+async def document_owner(
+    db: AsyncSession, document: Document, version: DocumentVersion, w: Who
+) -> uuid.UUID | None:
+    """The PRD's owner (the owner's walk, P4): its track owner; else the person who brought
+    the document in (its first version's importer: a user, or the user its API token acts
+    for), else the one who imported or approved the version read. None only when no person
+    is any of those (a PRD a service token imported and nobody approved yet)."""
+    if w.track_owners:
+        return next(iter(w.track_owners))
+    first = await db.scalar(
+        select(DocumentVersion.imported_by)
+        .where(DocumentVersion.document_id == document.id)
+        .order_by(DocumentVersion.number)
+        .limit(1)
+    )
+    for who in (first, version.imported_by, version.approved_by):
+        person = await _person_of(db, who)
+        if person is not None and await db.scalar(
+            select(User.id).where(User.id == person, User.disabled_at.is_(None))
+        ):
+            return person
+    return None
+
+
+def milestone_span(items: list[plan_strip.PlanItem]) -> tuple[date, date] | None:
+    """The PRD's span in the header (P4): from the earliest start of its items that carry a
+    dated milestone (or that milestone's date, when earlier) to its latest milestone date.
+    None with no dated milestone: never the estimated windows' year."""
+    dated = [i for i in items if i.milestone_date is not None]
+    if not dated:
+        return None
+    end = max(i.milestone_date for i in dated)  # type: ignore[type-var]
+    start = min(min(i.start, i.milestone_date) for i in dated)  # type: ignore[type-var]
+    return min(start, end), end
+
+
 def _me(principal: Any) -> uuid.UUID | None:
     if principal is None or getattr(principal, "run_id", None) is not None:
         return None
@@ -1022,7 +1058,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     ids = {c.by for c in live + shown} | ({w.decider} if w.decider else set()) | set(w.track_owners)
     if d is not None:
         ids |= set(d.waiting_on or [])
-    owner_id = next(iter(w.track_owners), None) or await _person_of(db, b.version.imported_by)
+    owner_id = await document_owner(db, document, b.version, w)
     if owner_id:
         ids.add(owner_id)
     names = {
@@ -1136,6 +1172,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         if i.status != "cut"
     ]
     plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
+    span = milestone_span(plan_items(slice_.items))
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )
@@ -1177,8 +1214,8 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         published_at=b.version.approved_at,
         owner=person(owner_id) if owner_id in names else None,
         decider=person(w.decider) if w.decider in names else None,
-        span_start=min((i.start for i in items), default=None),
-        span_end=max((i.end for i in items), default=None),
+        span_start=span[0] if span else None,
+        span_end=span[1] if span else None,
         built_by=b.row.built_by,
         built_at=b.row.built_at,  # type: ignore[arg-type]
         blocks=[*blocks, timeline.model_copy(update={"lines": []})],
