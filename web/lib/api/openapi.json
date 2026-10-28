@@ -40670,7 +40670,8 @@
             }
           }
         },
-        "x-min-role": "commenter"
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
       }
     },
     "/v1/interviews/{interview_id}/revoke": {

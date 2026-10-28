@@ -133,15 +133,16 @@ async def _locate(token: str) -> tuple[Interview, str]:
 
 def _check(row: Interview, token: str, cookie: str | None, *, opening: bool) -> None:
     """Refuse a link that is withdrawn, expired, finished or bound to another browser,
-    and one a new link replaced (``token`` is the request's own link)."""
-    if not secrets.compare_digest(hash_value(token), row.link_token_hash or ""):
-        raise _refuse("replaced")
+    and one a new link replaced (``token`` is the request's own link). A closed interview
+    says why it closed, whichever of its links is opened."""
     if row.status == "revoked":
         raise _refuse("withdrawn")
     if row.status == "expired" or (row.link_expires_at and row.link_expires_at <= _now()):
         raise _refuse("expired")
     if row.status not in ("invited", "in_progress"):
         raise _refuse("used")
+    if not secrets.compare_digest(hash_value(token), row.link_token_hash or ""):
+        raise _refuse("replaced")
     if row.link_opened_at is None:
         if not opening:
             raise _refuse("used")

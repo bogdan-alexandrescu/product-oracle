@@ -49,6 +49,8 @@ NO_GUIDE = "Draft the questions first"
 OPEN = ("draft", "invited", "in_progress")
 PRICING_FIXED = "A pricing interview's guide is fixed; edit it instead"
 NO_LINK_YET = "This interview has no link yet; create its link first."
+#: Replaced links' sha256 kept so opening one says it was replaced; older ones read as expired.
+REPLACED_LINKS_KEPT = 5
 NEW_LINK_REFUSED = {
     "finished": "This interview is finished, so it can't get a new link.",
     "expired": "This interview's link expired, so it can't get a new link. Interview them again.",
@@ -388,10 +390,15 @@ async def new_link(
     _manage(principal, row)
     if row.status not in ("invited", "in_progress") or row.link_token_hash is None:
         raise InterviewError(409, NEW_LINK_REFUSED.get(row.status, NO_LINK_YET))
+    if row.link_expires_at is not None and row.link_expires_at <= _now():
+        # Past its 7 days, before the ticker marks it: refused as an expired one is.
+        raise InterviewError(409, NEW_LINK_REFUSED["expired"])
     from oracle.interviews.public import new_token
 
     raw, digest = new_token()
-    row.replaced_link_hashes = [*row.replaced_link_hashes, row.link_token_hash]
+    row.replaced_link_hashes = [*row.replaced_link_hashes, row.link_token_hash][
+        -REPLACED_LINKS_KEPT:
+    ]
     row.link_token_hash = digest
     row.link_created_at = _now()
     row.link_expires_at = row.link_created_at + timedelta(days=LINK_DAYS)

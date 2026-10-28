@@ -103,7 +103,7 @@ export function InterviewDetail({ id }: { id: string }) {
             </Fact>
             {iv.link_created_at && open && (
               <Fact label="Link made">
-                <span data-testid="interview-link-made">Made {formatDateTime(iv.link_created_at)}</span>
+                <span data-testid="interview-link-made">{formatDateTime(iv.link_created_at)}</span>
               </Fact>
             )}
             {iv.link_expires_at && open && <Fact label="Link expires">{formatDateTime(iv.link_expires_at)}</Fact>}

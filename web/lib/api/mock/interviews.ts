@@ -134,6 +134,8 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 const fail = (status: number, detail: string) => json(status, { detail });
+/** As service.REPLACED_LINKS_KEPT: older replaced links read as expired. */
+const REPLACED_LINKS_KEPT = 5;
 const refuse = (status: number, reason: "used" | "expired" | "withdrawn" | "replaced") => json(status, { reason });
 
 function guideItems(preset: Preset | null = null): GuideItem[] {
@@ -255,10 +257,11 @@ export async function routePublicInterviews(db: InterviewsDb, ctx: InterviewsCon
   const r = db.interviews.find((x) => x.token === token || x.replaced_tokens?.includes(token));
   if (!r) return refuse(404, "expired");
   settle(r);
-  if (r.token !== token) return refuse(410, "replaced");
+  // A closed interview says why it closed, whichever of its links is opened (public._check).
   if (r.status === "revoked") return refuse(410, "withdrawn");
   if (r.status === "expired") return refuse(410, "expired");
   if (r.status === "finished") return refuse(410, "used");
+  if (r.token !== token) return refuse(410, "replaced");
   const cookie = cookieOf(token);
 
   if (p.length === 4 && m === "GET") {
@@ -449,7 +452,8 @@ export async function routeInterviews(db: InterviewsDb, ctx: InterviewsContext, 
     const refused = NEW_LINK_REFUSED[r.status];
     if (refused) return fail(409, refused);
     if (!r.token || (r.status !== "invited" && r.status !== "in_progress")) return fail(409, "This interview has no link yet; create its link first.");
-    r.replaced_tokens = [...(r.replaced_tokens ?? []), r.token];
+    if (r.link_expires_at && Date.parse(r.link_expires_at) <= Date.now()) return fail(409, NEW_LINK_REFUSED.expired!);
+    r.replaced_tokens = [...(r.replaced_tokens ?? []), r.token].slice(-REPLACED_LINKS_KEPT);
     r.token = linkToken(mockUuid().replace(/-/g, ""));
     r.link_created_at = now();
     r.link_expires_at = later(LINK_DAYS * 86_400_000);
