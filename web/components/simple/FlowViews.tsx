@@ -25,19 +25,21 @@ const lower = (s: string): string => (s ? s[0].toLowerCase() + s.slice(1) : s);
 /** "The sign-in page opens." as the end of a sentence ("If no: the sign-in page opens."). */
 const outcome = (s: string): string => lower(s.trim());
 
-/** Words in lines of at most `width` characters, broken only between words; past `max`
- * lines the last line ends at a whole word with "…" (a long single word keeps its room). */
-export function wrapWords(text: string, width: number, max = 3): string[] {
+/** Words in lines of at most `width` characters, broken only between words (a word longer than
+ * the line also after its hyphens); every word is kept: the box grows to hold them. */
+export function wrapWords(text: string, width: number): string[] {
   const lines: string[] = [];
-  for (const w of text.split(/\s+/).filter(Boolean)) {
-    const last = lines.at(-1);
-    if (last !== undefined && (last + " " + w).length <= width) lines[lines.length - 1] = `${last} ${w}`;
-    else lines.push(w);
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    // A long hyphenated word ("alert-history-timeline") in pieces that end at a hyphen.
+    const pieces = word.length > width ? (word.match(/[^-]+-*|-+/g) ?? [word]) : [word];
+    pieces.forEach((w, k) => {
+      const last = lines.at(-1);
+      const sep = k === 0 ? " " : "";
+      if (last !== undefined && (last + sep + w).length <= width) lines[lines.length - 1] = `${last}${sep}${w}`;
+      else lines.push(w);
+    });
   }
-  if (lines.length <= max) return lines;
-  const kept = lines.slice(0, max);
-  kept[max - 1] = `${kept[max - 1]}…`;
-  return kept;
+  return lines;
 }
 
 const LINE = 17;
@@ -112,7 +114,7 @@ export function FlowDiagram({
   );
   const arrow = (d: string, key?: string) => <path key={key} d={d} stroke="var(--line-strong)" strokeWidth={1.5} fill="none" markerEnd="url(#flow-arrow)" />;
   const yesNo = (x: number, y: number, word: "Yes" | "No", anchor: "middle" | "start" = "start") => (
-    <text x={x} y={y} textAnchor={anchor} fontSize={12} fontWeight={600} fill="var(--text2)">
+    <text x={x} y={y} textAnchor={anchor} fontSize={FONT} fontWeight={600} fill="var(--text2)">
       {word}
     </text>
   );
@@ -170,12 +172,12 @@ export function FlowDiagram({
     const body: ReactNode[] = [];
     steps.forEach((s, i) => {
       const dec = s.kind === "decision";
-      const lines = wrapWords(s.label, dec ? 15 : 25, dec ? 3 : 4);
+      const lines = wrapWords(s.label, dec ? 15 : 25);
       const font = fontFor(lines, dec ? W - 70 : W - 16);
       const h = dec ? Math.max(84, 40 + lines.length * LINE) : Math.max(64, 16 + lines.length * LINE);
       const cy = y + h / 2;
       const { stroke, strokeDasharray } = strokeOf(s, dec);
-      const branch = dec && s.no ? wrapWords(s.no.replace(/\.$/, ""), 13, 3) : null;
+      const branch = dec && s.no ? wrapWords(s.no.replace(/\.$/, ""), 13) : null;
       body.push(
         <g key={s.id}>
           {dec ? (
@@ -220,28 +222,36 @@ export function FlowDiagram({
     return svg(342, y + 10, body, { width: w, maxWidth: "100%" }, "block h-auto");
   }
 
-  // Across: 150 x 76 boxes 40 apart, decisions 150 x 100, a decision's No branch under it. As
-  // many a row as fit at three quarters of their size or more; the rows share the steps evenly.
+  // Across: 150 x 76 boxes 40 apart, decisions 150 x 100, a decision's No branch under it; a box
+  // grows down with its words. Drawn at full size (13 px text on the screen): as many a row as
+  // fit the room, the rows sharing the steps evenly; a room narrower than one box scrolls.
   const W = 150;
   const GAP = 40;
-  const fit = Math.max(1, Math.floor(((room ? room / 0.75 : 1120) + 20) / (W + GAP)));
+  const BRANCH = { w: 140, chars: 17, line: LINE };
+  const fit = Math.max(1, Math.floor(((room || 1120) - 4) / (W + GAP)));
   const nRows = Math.max(1, Math.ceil(steps.length / fit));
   const per = Math.max(1, Math.ceil(steps.length / nRows));
-  const rowsOf = Array.from({ length: nRows }, (_, r) => steps.slice(r * per, r * per + per));
-  const rowH = rowsOf.map((row) => (row.some((s) => s.kind === "decision" && s.no) ? 188 : 100));
+  const drawn = steps.map((s) => {
+    const dec = s.kind === "decision";
+    const lines = wrapWords(s.label, dec ? 12 : 19);
+    const h = dec ? Math.max(100, 50 + lines.length * LINE) : Math.max(76, 16 + lines.length * LINE);
+    const branch = dec && s.no ? wrapWords(s.no.replace(/\.$/, ""), BRANCH.chars) : null;
+    return { s, dec, lines, h, branch, bh: branch ? Math.max(40, 10 + branch.length * BRANCH.line) : 0 };
+  });
+  const rowsOf = Array.from({ length: nRows }, (_, r) => drawn.slice(r * per, r * per + per));
+  // A row's middle line: half its tallest box down; its height: down to its lowest No branch.
+  const mid = rowsOf.map((row) => Math.max(...row.map((d) => d.h)) / 2);
+  const rowH = rowsOf.map((row, r) => Math.max(2 * mid[r], ...row.map((d) => (d.branch ? mid[r] + d.h / 2 + 48 + d.bh : 0))));
   const rowTop = rowH.map((_, r) => 20 + rowH.slice(0, r).reduce((a, h) => a + h + 36, 0));
   const across = 10 + Math.min(per, steps.length || 1) * (W + GAP) - GAP + 10;
   const height = rowTop[nRows - 1] + rowH[nRows - 1] + 8;
   const body: ReactNode[] = [];
-  steps.forEach((s, i) => {
+  drawn.forEach(({ s, dec, lines, h, branch, bh }, i) => {
     const r = Math.floor(i / per);
     const c = i % per;
     const x = 10 + c * (W + GAP);
-    const cy = rowTop[r] + 50;
-    const dec = s.kind === "decision";
-    const lines = wrapWords(s.label, dec ? 12 : 19, dec ? 3 : 4);
+    const cy = rowTop[r] + mid[r];
     const font = fontFor(lines, dec ? W - 40 : W - 12);
-    const h = dec ? 100 : 76;
     const top = cy - h / 2;
     const { stroke, strokeDasharray } = strokeOf(s, dec);
     body.push(
@@ -261,16 +271,16 @@ export function FlowDiagram({
         <Num cx={x + 6} cy={dec ? top + 4 : top - 6} n={i + 1} />
       </g>,
     );
-    if (dec && s.no) {
-      const branch = wrapWords(s.no.replace(/\.$/, ""), 18, 2);
+    if (branch) {
+      const bt = top + h + 48;
       body.push(
-        <g key={`${s.id}-no`}>
-          {arrow(`M${x + W / 2} ${top + h} L${x + W / 2} ${cy + 96}`)}
-          {yesNo(x + W / 2 + 6, cy + 76, "No")}
-          <rect x={x + 5} y={cy + 98} width={140} height={40} rx={8} fill="var(--surface2)" stroke="var(--line-strong)" strokeDasharray="4 3" />
-          <text textAnchor="middle" fontSize={12} fontWeight={500} fill="var(--text2)">
+        <g key={`${s.id}-no`} data-testid="flow-no">
+          {arrow(`M${x + W / 2} ${top + h} L${x + W / 2} ${bt - 2}`)}
+          {yesNo(x + W / 2 + 6, bt - 22, "No")}
+          <rect x={x + (W - BRANCH.w) / 2} y={bt} width={BRANCH.w} height={bh} rx={8} fill="var(--surface2)" stroke="var(--line-strong)" strokeDasharray="4 3" />
+          <text textAnchor="middle" fontSize={FONT} fontWeight={500} fill="var(--text2)">
             {branch.map((l, j) => (
-              <tspan key={j} x={x + W / 2} y={firstLine(cy + 118, branch.length, 16, 4.2) + j * 16}>
+              <tspan key={j} x={x + W / 2} y={firstLine(bt + bh / 2, branch.length, BRANCH.line) + j * BRANCH.line}>
                 {l}
               </tspan>
             ))}
@@ -278,7 +288,7 @@ export function FlowDiagram({
         </g>,
       );
     }
-    const next = steps[i + 1];
+    const next = drawn[i + 1];
     if (next) {
       const nr = Math.floor((i + 1) / per);
       if (nr === r) {
@@ -290,13 +300,15 @@ export function FlowDiagram({
         );
       } else {
         // The next row: out of the right side, down past this row, back to the next row's first step.
-        const ny = rowTop[nr] + 50 - (next.kind === "decision" ? 50 : 38);
+        const ny = rowTop[nr] + mid[nr] - next.h / 2;
         const nx = 10 + W / 2;
         body.push(<g key={`${s.id}-to`}>{arrow(`M${x + W + 2} ${cy} H${x + W + 12} V${rowTop[r] + rowH[r] + 18} H${nx} V${ny - 2}`)}</g>);
       }
     }
   });
-  return svg(across + (nRows > 1 ? 12 : 0), height, body, { width: "100%", maxWidth: across }, "block h-auto");
+  const vw = across + (nRows > 1 ? 12 : 0);
+  // One user unit a pixel, so 13 px text reads 13 px; the diagram scrolls in its own box if wider.
+  return <div className="max-w-full overflow-x-auto">{svg(vw, height, body, { width: vw, maxWidth: "none" }, "block h-auto")}</div>;
 }
 
 /** The mock-up's step marker: an accent disc, or for a decision a turned square. */
@@ -404,7 +416,7 @@ export function StoryCard({ s, n, big = false }: { s: FlowStep; n: number; big?:
     >
       <div className="flex items-center gap-1.5">
         <span className={`grid flex-none place-items-center bg-accent leading-none font-bold text-on-accent ${dec ? "rounded-[5px]" : "rounded-full"} ${big ? "h-7 w-7 text-[14px]" : "h-[22px] w-[22px] text-[12px]"}`}>{n}</span>
-        <span data-testid="story-who" className={`ml-auto font-semibold tracking-[.05em] text-text2 uppercase ${big ? "text-[12px] leading-4" : "text-[11px] leading-4"}`}>
+        <span data-testid="story-who" className={`ml-auto font-semibold text-text2 ${big ? "text-[14px] leading-5" : "text-[13px] leading-4"}`}>
           {who(s)}
         </span>
       </div>
@@ -437,7 +449,7 @@ export function ScreenCard({ flow, onOpen, big = false }: { flow: Flow; onOpen: 
     <li data-testid="story-card" aria-label="The screen" className={`flex flex-none flex-col gap-1.5 rounded-xl border border-line bg-surface2 ${big ? "w-full px-[18px] py-4 text-[17px] leading-[26px]" : "w-[181px] px-3 py-2.5 text-[14px] leading-5"}`}>
       <div className="flex items-center gap-1.5">
         <span className={`grid flex-none place-items-center rounded-[5px] bg-text leading-none font-bold text-surface ${big ? "h-7 w-7 text-[14px]" : "h-[22px] w-[22px] text-[12px]"}`}>S</span>
-        <span className={`ml-auto font-semibold tracking-[.05em] text-text2 uppercase ${big ? "text-[12px] leading-4" : "text-[11px] leading-4"}`}>Screen</span>
+        <span className={`ml-auto font-semibold text-text2 ${big ? "text-[14px] leading-5" : "text-[13px] leading-4"}`}>Screen</span>
       </div>
       <p className="font-[650] break-words">{flow.screen.title}</p>
       <ol className="flex flex-col gap-px text-[13px] leading-[18px] text-text2">

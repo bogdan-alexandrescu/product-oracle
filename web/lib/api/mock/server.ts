@@ -984,10 +984,11 @@ function seedSimplePlanScenario(): Db {
   }
   db.simple_one_pager = seedOnePager();
   db.simple_one_pager.slice = planSlice();
-  // The PRD itself, so Simple's One-pagers lists it (its one-pager is the seeded one).
+  // The PRD itself, so Simple's One-pagers lists it (its one-pager is the seeded one); its version 3
+  // is approved, as the one-pager reads (qa-simple-prd-9).
   const at = "2026-10-20T15:05:00Z";
   db.documents.push({
-    id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "draft", kind: "prd",
+    id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "approved", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
   return db;
