@@ -261,11 +261,11 @@ type Create = Schemas["MetricCreate"];
 
 /** The API's 422s for a metric's fields, or null. */
 function invalid(ctx: MetricsContext, db: MetricsDb, f: Partial<Create>, self: string | null): string | null {
-  if (!f.title?.trim()) return "title: give the metric a title";
+  if (!f.title?.trim()) return "Give the metric a title";
   if (db.metrics.some((m) => m.id !== self && m.status !== "archived" && m.title.toLowerCase() === f.title!.trim().toLowerCase())) return "A metric with this title exists";
   const d = f.description?.trim() ?? "";
   if (d.length < 3 || d.length > 200) return "What it counts is 3 to 200 characters";
-  if (!f.unit?.trim()) return "unit: give the metric a unit";
+  if (!f.unit?.trim()) return "Give the metric a unit";
   if (f.kind === "input" && !f.drives_metric_id) return "An input drives an output: pick the output it drives";
   if (f.kind === "output" && f.drives_metric_id) return "An output drives no other metric";
   if (f.drives_metric_id && !db.metrics.some((m) => m.id === f.drives_metric_id && m.kind === "output")) return "An input drives an output metric";
@@ -396,7 +396,7 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
       if (m === "PUT") {
         if (!isMonday(day) || day > week) return fail(422, "A week starts on a Monday and has ended");
         const input = await body<{ value: number; note?: string | null }>();
-        if (typeof input.value !== "number" || Number.isNaN(input.value)) return fail(422, "value: give a number");
+        if (typeof input.value !== "number" || Number.isNaN(input.value)) return fail(422, "Give a number");
         db.values = db.values.filter((y) => !(y.metric_id === x.id && y.week_start === day));
         const row: Value = { metric_id: x.id, week_start: day, value: input.value, source: x.source, definition_version: x.definition_version, note: input.note ?? null, recorded_by: ctx.me.id, recorded_at: now().toISOString() };
         db.values.push(row);
@@ -431,7 +431,7 @@ export async function routeMetrics(ctx: MetricsContext, db: MetricsDb, req: Requ
   if (input.lock_version != null && input.lock_version !== v.lock_version) return fail(409, "Someone answered this variance; reload to see it");
   if (p[3] === "noise") {
     if (!approver) return notApprover();
-    if (!input.reason?.trim()) return fail(422, "reason: say why it is noise");
+    if (!input.reason?.trim()) return fail(422, "Say why it is noise");
     Object.assign(v, { status: "noise", noise_reason: input.reason.trim(), explained_by: ctx.me.id });
   } else {
     if (!(approver || x.owner_id === ctx.me.id)) return fail(403, "Only the metric's owner or an approver explains its variances");

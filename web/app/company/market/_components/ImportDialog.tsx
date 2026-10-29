@@ -9,7 +9,28 @@ import { errorMessage } from "@/lib/use-query";
 
 import { Modal } from "./Modal";
 
-const COLUMNS = "result, account, segment, plan, annual_value, currency, decided_on, reason, reason_note, alternative, price_quoted";
+/**
+ * qa-company-40: the file's columns in plain words, each with an example and whether it is
+ * needed. The import reads these headers as they are (any case; a space for an underscore),
+ * and results and reasons as their labels.
+ */
+const SAMPLE: { column: string; example: string; needed: boolean }[] = [
+  { column: "Result", example: "Lost", needed: true },
+  { column: "Account", example: "Acme Ltd", needed: true },
+  { column: "Segment", example: "Mid-market", needed: false },
+  { column: "Plan", example: "Team", needed: false },
+  { column: "Annual value", example: "12000", needed: false },
+  { column: "Currency", example: "USD", needed: false },
+  { column: "Decided on", example: "2026-09-14", needed: true },
+  { column: "Reason", example: "Price", needed: true },
+  { column: "Reason note", example: "Wanted a smaller plan", needed: false },
+  { column: "Alternative", example: "Spreadsheets", needed: false },
+  { column: "Price quoted", example: "20 per seat", needed: false },
+];
+
+/** A sample file built in the browser: the header row and one example row. */
+const SAMPLE_CSV = `${SAMPLE.map((c) => c.column).join(",")}\n${SAMPLE.map((c) => c.example).join(",")}\n`;
+const SAMPLE_HREF = `data:text/csv;charset=utf-8,${encodeURIComponent(SAMPLE_CSV)}`;
 
 /** POST /v1/deal-outcomes/import with the file as text/csv. */
 function importCsv(text: string, dryRun: boolean): Promise<Schemas["ImportOut"]> {
@@ -72,8 +93,30 @@ export function ImportDialog({ onClose, onImported }: { onClose: () => void; onI
     <Modal id="import-deals-title" title="Import win and loss" testId="import-deals" onClose={onClose}>
       <div className="flex flex-col gap-4 px-5 py-4 max-[600px]:px-4">
         <p className="text-sm text-text2">
-          A CSV file with a header row naming the columns {COLUMNS}. Result, account, decided_on (YYYY-MM-DD) and reason are needed. At most 2,000 rows and 1 MB.
+          A CSV file whose first row names these columns, one deal per row after it. Result, Account, Decided on and Reason are needed; the
+          others may be left empty. Dates are written year-month-day. At most 2,000 rows and 1 MB.
         </p>
+        <table data-testid="import-sample" className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-line text-left text-text2">
+              <th className="py-1 pr-3 font-semibold">Column</th>
+              <th className="py-1 pr-3 font-semibold">Example</th>
+              <th className="py-1 font-semibold">Needed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SAMPLE.map((c) => (
+              <tr key={c.column} className="border-b border-line last:border-b-0">
+                <td className="py-1 pr-3 font-medium">{c.column}</td>
+                <td className="py-1 pr-3 tnum">{c.example}</td>
+                <td className="py-1 text-text2">{c.needed ? "Yes" : "No"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <a href={SAMPLE_HREF} download="win-and-loss-sample.csv" data-testid="import-sample-download" className="self-start text-sm font-medium text-accent-ink hover:underline">
+          Download a sample CSV
+        </a>
         <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
           CSV file
           <input type="file" accept=".csv,text/csv" data-autofocus="" onChange={(e) => void pick(e.target.files?.[0])} />

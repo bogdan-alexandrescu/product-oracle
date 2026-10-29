@@ -24,7 +24,14 @@ export function CompanyNav() {
   const { can } = useMe();
   return (
     <nav aria-label="Company" data-testid="company-nav" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
-      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1">
+      {/* qa-company-33: the strip's edge stops at the last whole tab: no 12 px fade over the
+          current tab when it ends at the edge, and no sliver of the next tab beside the
+          chevron (the chevrons say there is more). */}
+      <ScrollStrip
+        itemsName="tabs"
+        className="min-h-9"
+        stripClassName="items-center gap-1 [--fade-l0:var(--cut-l,0px)]! [--fade-l1:var(--cut-l,0px)]! [--fade-r0:var(--cut-r,0px)]! [--fade-r1:var(--cut-r,0px)]!"
+      >
         {visibleTabs(can).map((t) => {
           const on = pathname === t.href || pathname.startsWith(`${t.href}/`);
           return (

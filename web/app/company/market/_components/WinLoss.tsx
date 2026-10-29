@@ -49,6 +49,8 @@ export function WinLoss() {
   const from = period === "all" ? undefined : addDays(todayIn(zone), -Number(period));
   const query = { result: result || undefined, reason: reason || undefined, from, competitor_id: alternative || undefined };
   const q = useQuery(`deal-outcomes|${result}|${reason}|${from ?? ""}|${alternative}`, () => unwrap(api.GET("/v1/deal-outcomes", { params: { query } })), { keepPrevious: true });
+  // No records at all (no filter hides any): the empty state's own Add and Import show.
+  const noRecords = !!q.data && q.data.length === 0 && !result && !reason && !alternative && period === "all";
   const [editing, setEditing] = useState<Deal | "new" | null>(null);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -125,12 +127,13 @@ export function WinLoss() {
               One deal&apos;s result and its main reason: Won, Lost, No decision or Churned. Enter it here or import a CSV file. No contact details;
               Oracle never looks an account up. Pricing memos count these records. Owners and approvers see them.
             </InfoTip>
-            {mayAdd && (
+            {/* qa-company-20: with no records at all, the empty list shows these buttons instead. */}
+            {mayAdd && !noRecords && (
               <Button icon="plus" onClick={() => setEditing("new")}>
                 Add
               </Button>
             )}
-            {mayImport && <Button onClick={() => setImporting(true)}>Import CSV</Button>}
+            {mayImport && !noRecords && <Button onClick={() => setImporting(true)}>Import CSV</Button>}
           </div>
         }
       >

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 
-import { Chip, DataTable, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
 
-import { Explained } from "./Cards";
+import { CompanyEmpty } from "../../_empty";
 import { FindingRow } from "./DriftList";
 import { findingsAbout, plural, type Choice, type Finding, type Stack } from "./lib";
 
@@ -74,11 +74,20 @@ export function StackTable({
   rows,
   selected,
   onSelect,
+  confirmedGoals = null,
+  hasStrategy = false,
+  onNewStrategy,
 }: {
   stack: Stack | undefined;
   rows: StackRow[];
   selected: string | null;
   onSelect: (key: string) => void;
+  /** How many confirmed goals the company has (null: not known yet). */
+  confirmedGoals?: number | null;
+  /** A product strategy document exists (a draft, not approved yet). */
+  hasStrategy?: boolean;
+  /** An owner may start the product strategy here (none exists yet). */
+  onNewStrategy?: () => void;
 }) {
   const vision = stack?.vision;
   const columns: Column<StackRow>[] = [
@@ -132,13 +141,30 @@ export function StackTable({
     },
   ];
   // qa-company-36: an empty stack says what it holds and what fills it, not a header row
-  // over "No approved strategy yet".
+  // over "No approved strategy yet". qa-company-13: the confirmed goals Home shows are not
+  // lost; they line up here once a product strategy is approved, and an owner starts one.
   if (stack && rows.length === 0) {
+    const goals = confirmedGoals ? `The ${plural(confirmedGoals, "confirmed goal")}` : "The confirmed goals";
+    const next = hasStrategy
+      ? "Open the product strategy draft to review it; an owner approves it."
+      : onNewStrategy
+        ? "Start one to line them up."
+        : "An owner writes it.";
     return (
-      <Explained testId="stack-empty" title="Nothing in the stack yet">
-        Each goal shows here under the focus choice it follows from, with the roadmap items serving it. It fills in once a product
-        strategy is approved.
-      </Explained>
+      <CompanyEmpty
+        testId="stack-empty"
+        title="Waiting for an approved product strategy"
+        action={
+          onNewStrategy && !hasStrategy ? (
+            <Button variant="primary" icon="plus" onClick={onNewStrategy}>
+              New product strategy
+            </Button>
+          ) : undefined
+        }
+      >
+        {goals} show here under the focus choice each follows from, with the roadmap items serving it, once a product strategy is
+        approved. {next}
+      </CompanyEmpty>
     );
   }
   return (

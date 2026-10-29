@@ -18,6 +18,32 @@ import { useWebhookRows } from "./_webhooks";
 
 type Source = Schemas["SourceOut"];
 
+/** qa-company-42: what a row's action did, said in the banner (by the action's key). */
+const ACTED: [prefix: string, message: string][] = [
+  ["report-retry-", "Posting the report again"],
+  ["report-dismiss-", "Dismissed"],
+  ["ritual-retry-", "Preparing it again"],
+  ["open-answer-", ""],
+  ["open-", ""],
+  ["approve-", "Run approved: it starts now"],
+  ["resume-", "Run resumed"],
+  ["cancel-", "Run cancelled"],
+  ["retry-", "Trying again"],
+  ["lookup-", "Looking for the run again"],
+  ["import-", "Trying the import again"],
+  ["stop-", "Stopped cancelling"],
+  ["again-", "Cancelling again"],
+  ["dismiss-", "Dismissed"],
+  ["reaffirm-", "Reaffirmed for 90 more days"],
+  ["verify-", "Dates verified"],
+  ["undo-", "Undone"],
+  ["reopen-", "Reopened"],
+];
+
+function actedMessage(key: string): string | null {
+  return ACTED.find(([prefix]) => key.startsWith(prefix))?.[1] || null;
+}
+
 export default function InboxPage() {
   const q = useQuery("inbox", loadInbox);
   // Questions asked of me (I3): their own group, counted with the rest as the rail badge counts.
@@ -36,14 +62,19 @@ export default function InboxPage() {
   const inbox = q.data;
   // Answered in place (C2): the row shows its outcome until the tab changes, then Done.
   const asked = useQuestionRows(questionsQ.data ?? [], questionsQ.reload);
-  // A5: access requests, approved or declined in place until the tab changes.
-  const requests = useAccessRequestRows(inbox?.access_requests ?? [], q.reload);
+  // D14: a feedback row's own actions; what they did shows above the rows, Undo with it.
+  const { onActed, notice, say } = useActed(() => Promise.all([q.reload(), questionsQ.reload()]));
+  // A5: access requests; a decided one moves to Done or Declined at once, Undo in the banner (qa-company-7).
+  const requests = useAccessRequestRows(inbox?.access_requests ?? [], q.reload, onActed);
 
   async function act(key: string, call: () => Promise<unknown>) {
     setBusy(key);
     setError(null);
+    // qa-company-42: the last action's banner never stays over this one's.
+    say(null);
     try {
       await call();
+      say(actedMessage(key));
       invalidateWaiting();
       const reloads = Promise.all([q.reload(), questionsQ.reload()]);
       waitingChanged();
@@ -54,9 +85,6 @@ export default function InboxPage() {
       setBusy(null);
     }
   }
-
-  // D14: a feedback row's own actions; what they did shows above the rows, Undo with it.
-  const { onActed, notice } = useActed(() => Promise.all([q.reload(), questionsQ.reload()]));
 
   const seenBefore = arrived ? arrivalQ.data : inbox?.last_seen_at;
   // D9: the child rows I fixed on this visit stay, done with Undo.
@@ -83,12 +111,11 @@ export default function InboxPage() {
       {inbox && rows && (
         <InboxTabs rows={rows} waiting={waiting ?? 0} questionsError={questionsQ.error} notice={notice} onTabChange={() => {
             asked.moveSettled();
-            requests.moveSettled();
           }}
         />
       )}
       {asked.sheet}
-      {sourcesQ.data && <SourcesNeedingAttention sources={sourcesQ.data} />}
+      {sourcesQ.data && <SourcesNeedingAttention sources={sourcesQ.data} mayEdit={perms.can("update_source")} />}
     </Page>
   );
 }
@@ -97,8 +124,8 @@ export default function InboxPage() {
  * My sources that need an edit before they sync again: their own panel, outside "Needs you",
  * whose count is the rail badge's and Home's (lib/waiting), as is the header's.
  */
-function SourcesNeedingAttention({ sources }: { sources: Source[] }) {
-  const rows = sourceNeeds(sources);
+function SourcesNeedingAttention({ sources, mayEdit }: { sources: Source[]; mayEdit: boolean }) {
+  const rows = sourceNeeds(sources, mayEdit);
   if (rows.length === 0) return null;
   return (
     <div className="mt-3">
@@ -156,6 +183,19 @@ const GROUPS: { id: NeedGroup; title: string; heading?: ReactNode }[] = [
   { id: "revising", title: "Sent back by Oracle" },
   { id: "searches", title: "Looking for earlier submissions" },
   { id: "shipped", title: "Shipped", heading: "Shipped: what you asked for" },
+  // qa-company-4: items only another role acts on: shown, never counted as waiting on me.
+  {
+    id: "fyi",
+    title: "For your information",
+    heading: (
+      <>
+        For your information
+        <InfoTip label="for your information" align="start">
+          Someone with another role decides these. They are here so you know; they are not waiting on you.
+        </InfoTip>
+      </>
+    ),
+  },
 ];
 
 /**
@@ -181,6 +221,10 @@ function InboxTabs({
   // qa-company-2: the Inbox opens on the tab that holds what waits: New when it has items,
   // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
   const [tab, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));
+  const pick = (t: InboxState) => {
+    setTab(t);
+    onTabChange();
+  };
   const shown = rows.filter((r) => r.state === tab);
   const label = STATE_TABS.find((t) => t.id === tab)!.label;
   return (
@@ -195,10 +239,7 @@ function InboxTabs({
           size="sm"
           tabs={STATE_TABS.map((t) => ({ id: t.id, label: t.label, count: count(t.id) || null }))}
           value={tab}
-          onChange={(t) => {
-            setTab(t);
-            onTabChange();
-          }}
+          onChange={pick}
         />
       </div>
       {questionsError && (
@@ -209,8 +250,22 @@ function InboxTabs({
       {notice}
       <div role="tabpanel" aria-label={label} data-testid={`inbox-tab-${tab}`}>
         {shown.length === 0 ? (
-          <Empty>
-            Nothing {label.toLowerCase()}{" "}
+          <Empty testId="inbox-tab-empty">
+            {/* qa-company-43: New empties once seen; say where the waiting items went. */}
+            {tab === "new" ? (
+              count("open") > 0 ? (
+                <>
+                  Nothing new since your last visit · {count("open")} still waiting in{" "}
+                  <button type="button" className="font-semibold text-accent-ink underline" onClick={() => pick("open")}>
+                    Seen
+                  </button>{" "}
+                </>
+              ) : (
+                <>Nothing new </>
+              )
+            ) : (
+              <>Nothing {label.toLowerCase()} </>
+            )}
             {tab === "new" && (
               <InfoTip label="the inbox" align="start">
                 Checkpoints that need a decision, cost approvals, feedback to review, the questions asked of you and, for owners,

@@ -62,6 +62,7 @@ import {
   enlargeRuns,
   FEATURE_SET_RUN,
   fromRunCheckpoint,
+  BUILD_UNDER_WAY,
   lastBaselineBuild,
   lastBaselineRun,
   seedFinishedBaselineBuild,
@@ -2068,7 +2069,8 @@ function withInboxStates(
   const seen = db.inbox_seen[me.id] ?? null;
   if (markSeen) db.inbox_seen[me.id] = now();
   // Decisions not delivered yet show to the review's approver role and above, as the API.
-  if (!atLeast(me.role, "approver")) return { ...base, deliveries: [], last_seen_at: seen };
+  // Open feedback too, as the API (qa-company-4: approvers decide it).
+  if (!atLeast(me.role, "approver")) return { ...base, deliveries: [], feedback: [], last_seen_at: seen };
   const states = inboxStates(llm, seen);
   // Open feedback per document comes from ./runs.ts (staged items left out there); its
   // items carry their state here.
@@ -3620,12 +3622,17 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
   const people = db.members.filter((x) => x.status !== "disabled").length;
   const invites = db.invites.filter((i) => i.status === "open").length;
   const built = lastBaselineBuild(db.runs);
+  // qa-onboarding-10: the build under way, the first started (as the one-at-a-time rule names it).
+  const building = (db.runs?.runs ?? [])
+    .filter((r) => r.flow === "baseline" && BUILD_UNDER_WAY.includes(r.status))
+    .sort((a, b) => a.created_at.localeCompare(b.created_at))[0];
   const personal: Schemas["SetupStep"][] = [
     { key: "connect", done: facts.connections > 0, count: facts.connections, detail: null },
     { key: "sources", done: sources > 0, count: sources, detail: null },
   ];
   const owner: Schemas["SetupStep"][] = [
-    { key: "invite", done: people >= 2 || invites >= 1, count: people, detail: null },
+    // qa-onboarding-18: the open invites beside the people who joined.
+    { key: "invite", done: people >= 2 || invites >= 1, count: people, detail: null, invited: invites },
     {
       key: "domains",
       done: facts.domains.length > 0,
@@ -3635,7 +3642,7 @@ function setupOut(db: Db, me: MemberRow): Schemas["SetupOut"] {
     { key: "eng_lead", done: engineeringLeads(db).length > 0, count: engineeringLeads(db).length, detail: null },
     { key: "horizons", done: facts.horizons, count: null, detail: null },
     { key: "timezone", done: facts.timezone != null, count: null, detail: facts.timezone },
-    { key: "build_baseline", done: built != null, count: null, detail: built },
+    { key: "build_baseline", done: built != null, count: null, detail: built, run_id: building?.id ?? null },
   ];
   // The "setup-new-step" scenario: an API with a step this web build has no words for.
   if (localStorage.getItem(MOCK_SCENARIO_KEY) === "setup-new-step") {

@@ -434,18 +434,17 @@ async def get_ritual(db: AsyncSession, ritual_id: uuid.UUID, *, lock: bool = Fal
 
 
 async def _last_pre_read(
-    db: AsyncSession, ritual_id: uuid.UUID, now: datetime
+    db: AsyncSession, ritual_id: uuid.UUID, next_id: uuid.UUID | None
 ) -> OccurrenceSummary | None:
-    """The newest pre-read of a meeting whose time has come (qa-company-7: one prepared
-    early for a meeting still ahead is the next one's, not the last)."""
-    occ = await db.scalar(
-        select(RitualOccurrence)
-        .where(RitualOccurrence.ritual_id == ritual_id,
-               RitualOccurrence.pre_read_built_at.is_not(None),
-               RitualOccurrence.due_at <= now)
-        .order_by(RitualOccurrence.due_at.desc())
-        .limit(1)
-    )  # fmt: skip
+    """The newest pre-read other than the one Next links to (qa-company-7: one prepared
+    early for a meeting still ahead is the next one's, not the last; qa-company-2: on a
+    paused ritual, which has no Next, a pre-read prepared now is its Last)."""
+    query = select(RitualOccurrence).where(
+        RitualOccurrence.ritual_id == ritual_id, RitualOccurrence.pre_read_built_at.is_not(None)
+    )
+    if next_id is not None:
+        query = query.where(RitualOccurrence.id != next_id)
+    occ = await db.scalar(query.order_by(RitualOccurrence.due_at.desc()).limit(1))
     return _summary(occ) if occ is not None else None
 
 
@@ -467,21 +466,30 @@ async def ritual_out(db: AsyncSession, r: Ritual) -> RitualOut:
     stored one moves on once its occurrence is made (by the ticker or Prepare now), so a
     meeting made early and still ahead is the next one until its time (qa-company-7)."""
     from oracle.metrics.activate import replaced_by
+    from oracle.rituals import summaries
 
     now = clock.now()
     upcoming = await _upcoming(db, r.id, now)
     next_due = r.next_due_at
     if upcoming is not None and next_due is not None and upcoming.due_at < next_due:
         next_due = upcoming.due_at
-    ready = upcoming is not None and upcoming.status == "ready" and upcoming.due_at == next_due
+    # A paused ritual has no Next (Company › Rituals shows none): its pre-read is the Last.
+    ready = (
+        r.status == "active"
+        and upcoming is not None
+        and upcoming.status == "ready"
+        and upcoming.due_at == next_due
+    )
+    next_id = upcoming.id if ready and upcoming is not None else None
     return RitualOut(
         id=r.id, kind=r.kind, title=r.title, builtin=r.builtin, schedule=r.schedule,
         duration_min=r.duration_min, prep_hours=r.prep_hours, owner_id=r.owner_id,
         attendee_ids=list(r.attendee_ids), status=r.status,  # type: ignore[arg-type]
         next_due_at=next_due, lock_version=r.lock_version,
-        last_pre_read=await _last_pre_read(db, r.id, now),
+        last_pre_read=await _last_pre_read(db, r.id, next_id),
         next_pre_read=_summary(upcoming) if ready and upcoming is not None else None,
         replaced_by=await replaced_by(db, r),
+        prepare_usd=await summaries.prepare_usd(db, r.kind),
     )  # fmt: skip
 
 

@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useLayoutEffect } from "react";
 
-import { modeOf, saveMode, switchTarget, type Mode } from "@/lib/experience";
+import { DETAILED_HOME, modeOf, SIMPLE_HOME, saveMode, switchTarget, type Mode } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 
 const MODES: { value: Mode; label: string }[] = [
@@ -38,6 +38,11 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
   const { simpleMode } = useMe();
   if (!simpleMode) return null;
   const current = modeOf(pathname);
+  // qa-company-45: a Detailed page with no Simple match (Inbox, Company, Settings…) says so on
+  // the switch, so Simple opening Simple's Home, and the rail showing Detailed here after
+  // choosing Simple, do not look broken.
+  const detailedOnly = current === "detailed" && pathname !== DETAILED_HOME && switchTarget(pathname, "simple", documentHome) === SIMPLE_HOME;
+  const note = detailedOnly ? "This page is in Detailed only. Simple opens Simple's Home." : undefined;
 
   async function choose(mode: Mode) {
     if (mode === current) return;
@@ -51,6 +56,8 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
     <div
       role="radiogroup"
       aria-label="Mode"
+      title={note}
+      data-detailed-only={detailedOnly || undefined}
       data-testid={rail ? "mode-switch" : "mode-switch-sheet"}
       className={
         wide
@@ -68,6 +75,8 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
             type="button"
             role="radio"
             aria-checked={on}
+            aria-description={m.value === "simple" ? note : undefined}
+            title={m.value === "simple" ? note : undefined}
             data-testid={`mode-${m.value}${rail ? "" : "-sheet"}`}
             onClick={() => void choose(m.value)}
             className={

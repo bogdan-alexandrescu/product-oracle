@@ -935,6 +935,8 @@ class RunSummary(BaseModel):
     status: RunStatus
     document_id: uuid.UUID | None = None
     document_slug: str | None = None
+    # qa-company-17: the document's title, as its own page names it.
+    document_title: str | None = None
     # The kind of document the run writes (feedback loop: the document's kind).
     document_kind: DocumentKind | None = None
     # prd_to_roadmap: the approved PRD version it reads, and the roadmap's template and
@@ -1166,6 +1168,8 @@ class InboxCheckpoint(CheckpointOut):
     flow: Flow
     flow_title: str
     document_slug: str | None = None
+    # qa-company-17: the document's title, as its own page names it.
+    document_title: str | None = None
     segment_title: str | None = None
     # D9: what needs a decision and how much; None for a kind without a summary.
     summary: InboxSummary | None = None

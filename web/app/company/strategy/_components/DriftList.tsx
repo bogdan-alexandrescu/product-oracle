@@ -157,7 +157,16 @@ export function DriftList({
           <Loading />
         </div>
       ) : rows && rows.length === 0 ? (
-        <Empty testId="drift-empty">{state === "open" ? "No open findings" : state === "waived" ? "Nothing waived" : "Nothing resolved"}</Empty>
+        <Empty testId="drift-empty">
+          {state === "open" ? "No open findings" : state === "waived" ? "Nothing waived" : "Nothing resolved"}
+          {/* qa-company-13: an empty list still says what Drift looks for. */}
+          {state === "open" && (
+            <span data-testid="drift-what" className="mt-1 block text-sm">
+              Oracle checks every day that each goal follows from the product strategy and each roadmap item from a goal, and that the
+              vision and strategy are reviewed on time. What does not shows here.
+            </span>
+          )}
+        </Empty>
       ) : (
         <ul>
           {(rows ?? []).map((f) => (

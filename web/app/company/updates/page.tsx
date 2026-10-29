@@ -4,24 +4,24 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
-import { Button, Chip, DataTable, Empty, InfoTip, Panel, type Column } from "@/components/ds";
+import { Button, Chip, DataTable, Empty, InfoTip, LinkButton, Panel, type Column } from "@/components/ds";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
+import { CompanyEmpty } from "../_empty";
 import { CompanyHeader } from "../_nav";
 import { NewUpdateDialog } from "./_components/NewUpdateDialog";
-import { RowMenu, RowMenuItem } from "./_components/RowMenu";
 import { VisibilityDialog } from "./_components/VisibilityDialog";
 import { byNewestPeriod, formatPeriod, templateOf, VISIBILITY_LABEL, type Update } from "./_components/lib";
 
 /**
  * Company › Updates (H8; owner 2026-10-21, "Update view" and "New pages"): the board and
  * investor updates Oracle drafts and an owner approves, newest period first. Owners and
- * approvers see them; commenters and viewers have no tab, and this page answers them with
- * "Not found". Owners start one (New update) and choose who sees it (a row's ⋯).
+ * approvers see them; commenters and viewers have no tab, and this page tells them it is for
+ * owners and approvers, with the way back to Company. Owners start one (New update) and choose who sees it (a row's Share or Limit).
  */
 export default function UpdatesPage() {
   const { can, capsReady, capsError } = useMe();
@@ -31,8 +31,15 @@ export default function UpdatesPage() {
     return (
       <>
         <CompanyHeader />
+        {/* qa-company-19: say who the page is for and the way back, not a bare "Not found". */}
         <Panel>
-          <Empty testId="updates-not-found">Not found</Empty>
+          <CompanyEmpty
+            testId="updates-not-found"
+            title="Updates are for owners and approvers"
+            action={<LinkButton href="/company">Back to Company</LinkButton>}
+          >
+            The board and investor updates stay with owners and approvers until an owner shares one with the whole company.
+          </CompanyEmpty>
         </Panel>
       </>
     );
@@ -57,7 +64,8 @@ function Updates() {
       header: "Title",
       phone: "title",
       cell: (u) => (
-        <Link href={`/documents/${u.slug}`} className="truncate font-medium text-text hover:underline" data-testid="update-title">
+        // qa-company-15: the title is a link and looks like one.
+        <Link href={`/documents/${u.slug}`} className="truncate font-medium text-accent-ink hover:underline" data-testid="update-title" title={u.title}>
           {u.title}
         </Link>
       ),
@@ -88,7 +96,8 @@ function Updates() {
       phone: "meta",
       cell: (u) => (
         <span data-testid="update-visibility" className="inline-flex">
-          <Chip kind={u.visibility === "company" ? "line" : "acc"}>{VISIBILITY_LABEL[u.visibility]}</Chip>
+          {/* qa-company-41: who sees it is not a state: an outlined chip, never the blue of "In review". */}
+          <Chip kind="line">{VISIBILITY_LABEL[u.visibility]}</Chip>
         </span>
       ),
     },
@@ -104,22 +113,24 @@ function Updates() {
           {
             key: "actions",
             header: <span className="sr-only">Actions</span>,
-            width: "56px",
+            width: "104px",
             phone: "action" as const,
-            cell: (u: Update) => (
-              <RowMenu label={`Actions for ${u.title}`}>
-                {(close) => (
-                  <RowMenuItem
-                    onClick={() => {
-                      close();
-                      setChanging(u);
-                    }}
+            // qa-company-16: one action, so a labelled button, not a ⋯ menu holding it.
+            cell: (u: Update) => {
+              const opening = u.visibility === "approvers";
+              return (
+                <div className="flex justify-end">
+                  <Button
+                    data-testid="update-share"
+                    aria-label={opening ? `Share ${u.title} with the whole company` : `Limit ${u.title} to owners and approvers`}
+                    title={opening ? "Share with the whole company" : "Limit to owners and approvers"}
+                    onClick={() => setChanging(u)}
                   >
-                    {u.visibility === "approvers" ? "Share with the whole company…" : "Limit to owners and approvers…"}
-                  </RowMenuItem>
-                )}
-              </RowMenu>
-            ),
+                    {opening ? "Share…" : "Limit…"}
+                  </Button>
+                </div>
+              );
+            },
           },
         ]
       : []),

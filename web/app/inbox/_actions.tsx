@@ -197,13 +197,14 @@ export function InboxActions({
   }
 
   // D12: no section text to accept here: the item can go to the agents with the next draft.
-  const stage =
-    !compact &&
-    primary !== "Accept" &&
-    primary !== "Merge" &&
-    (f.suggestion_kind !== "section_text" || f.suggestion_status === "dismissed") && (
+  const canStage =
+    !compact && primary !== "Accept" && primary !== "Merge" && (f.suggestion_kind !== "section_text" || f.suggestion_status === "dismissed");
+  // qa-company-29: one rule on every row: the first action is the bordered one, the rest are
+  // text. With no suggestion to act on, Stage for agents leads, else Open; Decline never does.
+  const lead: "primary" | "stage" | "open" = primary ? "primary" : canStage ? "stage" : "open";
+  const stage = canStage && (
     <Button
-      variant="ghost"
+      variant={lead === "stage" ? "secondary" : "ghost"}
       disabled={busy}
       onClick={() =>
         void run(
@@ -217,8 +218,13 @@ export function InboxActions({
       Stage for agents
     </Button>
   );
+  const openLink = (
+    <LinkButton variant={lead === "open" ? "secondary" : "ghost"} href={href} aria-label={`Open ${f.summary}`} className={stack}>
+      Open
+    </LinkButton>
+  );
   const decline = primary !== "Merge" && (
-    <Button variant={primary ? "ghost" : "secondary"} disabled={busy} onClick={() => open("decline")} className={stack}>
+    <Button variant="ghost" disabled={busy} onClick={() => open("decline")} className={stack}>
       Decline
     </Button>
   );
@@ -232,11 +238,11 @@ export function InboxActions({
           {primary}
         </Button>
       )}
+      {lead === "stage" && stage}
+      {lead === "open" && openLink}
       {(!compact || !primary) && decline}
-      {stage}
-      <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`} className={stack}>
-        Open
-      </LinkButton>
+      {lead !== "stage" && stage}
+      {lead !== "open" && openLink}
       {errorLine}
     </span>
   );
@@ -322,6 +328,15 @@ export function useActed(reload: () => Promise<unknown>) {
     void refresh();
   };
 
+  /**
+   * qa-company-42: another action on the page (the caller reloads): the banner says what it
+   * did, replacing the last one's; with no message, the last one's simply goes.
+   */
+  const say = (message: string | null) => {
+    setActed(message ? { id: `said-${Date.now()}`, message } : null);
+    setError(null);
+  };
+
   async function undo() {
     if (!acted?.undo) return;
     setUndoing(true);
@@ -352,5 +367,5 @@ export function useActed(reload: () => Promise<unknown>) {
         )}
       </div>
     ) : null;
-  return { onActed, notice };
+  return { onActed, notice, say };
 }

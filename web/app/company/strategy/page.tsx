@@ -91,7 +91,15 @@ export default function StrategyPage() {
             </InfoTip>
           }
         >
-          <StackTable stack={stack} rows={rows} selected={selected?.key ?? null} onSelect={setPicked} />
+          <StackTable
+            stack={stack}
+            rows={rows}
+            selected={selected?.key ?? null}
+            onSelect={setPicked}
+            confirmedGoals={goalsQ.data ? goalsQ.data.filter((g) => g.status === "confirmed").length : null}
+            hasStrategy={!!docs?.strategy.length}
+            onNewStrategy={owner && docs ? () => setDrafting("strategy") : undefined}
+          />
         </Panel>
         <DriftList
           state={state}

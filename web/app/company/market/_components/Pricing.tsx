@@ -60,7 +60,7 @@ export function Pricing() {
       cell: (m) =>
         m.decision ? (
           <Link href={`/company/decisions?d=${m.decision.number}`} className="text-sm hover:underline" data-testid="memo-decision">
-            <span className="font-mono font-semibold">D-{m.decision.number}</span> {m.decision.title}
+            <span className="font-semibold">D-{m.decision.number}</span> {m.decision.title}
             {m.decision.chosen_label && <span className="text-text2"> · {m.decision.chosen_label}</span>}
           </Link>
         ) : (
@@ -82,7 +82,8 @@ export function Pricing() {
               A pricing memo sets out one pricing question, two to four options, the evidence and a research plan. It is input: the pricing owner
               decides the price in the decision log. Owners and approvers see memos.
             </InfoTip>
-            {mayCreate && (
+            {/* qa-company-20: an empty list shows its own button instead. */}
+            {mayCreate && !(q.data && q.data.length === 0) && (
               <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
                 New pricing memo
               </Button>

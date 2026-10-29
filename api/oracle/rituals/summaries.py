@@ -265,6 +265,21 @@ async def _oracle_acts(db: AsyncSession, flow: str = FLOW) -> bool:
     return cap is not None and per_summary_usd(flow) <= Decimal(str(cap))
 
 
+async def prepare_usd(db: AsyncSession, kind: str) -> float | None:
+    """What Prepare now on a ritual of ``kind`` would spend (qa-company-1), as
+    :func:`after_ready` decides: the baseline build's estimate unless Oracle only observes
+    it; one summary when summaries are on Every pre-read or Oracle writes them within its
+    limit; else None (building a pre-read reads the company's own data)."""
+    if kind == rebuild.KIND:
+        return None if await rebuild.blocked(db) is not None else float(rebuild.estimate_usd())
+    if not eligible(kind) or not await offered(db, kind):
+        return None
+    flow = flow_of(kind)
+    if await mode(db) != "always" and not await _oracle_acts(db, flow):
+        return None
+    return float(per_summary_usd(flow))
+
+
 async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID) -> None:
     """Start the summary of an occurrence that just became ready (covered kinds only,
     once) when summaries are on Every pre-read (the owner's choice), or when Run rituals
