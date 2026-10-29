@@ -325,6 +325,39 @@ for (const phone of [false, true]) {
         await expect(part).toContainText("Next · starts 30 Nov");
       });
 
+      /**
+       * Card prd-plan-lines-to-review (BGD 2026-10-28, the train Z review): protects = a PRD with a
+       * plan shows only its header, timeline and milestone card until there is something to
+       * review; once a working draft exists (here: a line changed in a review meeting) the
+       * one-pager's lines, the margin and the Working draft bar show under the milestone card
+       * outside the meeting too, so whoever Remind sends there can read and decide them;
+       * fails_when = the lines stay hidden while the bar says there are changes, or show with
+       * nothing to review; no_claim = Remind itself (simple-one-pager-remind.spec).
+       */
+      test(`with a plan, the lines come back while there is something to review (${where})`, async ({ page }) => {
+        await open(page, scheme);
+        await page.goto("/simple/prds/guided-setup");
+        await expect(page.getByTestId("milestone-part")).toBeVisible();
+        await expect(page.getByRole("article", { name: "One-pager" })).toHaveCount(0);
+        await page.getByRole("button", { name: "Start review", exact: true }).click();
+        await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
+        await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
+        await page.getByRole("button", { name: "Edit line 2" }).click();
+        await page.getByLabel("Line 2").fill("A setup checklist with the next two steps");
+        await page.getByRole("button", { name: "Save" }).click();
+        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+        await page.goto("/simple/prds/guided-setup");
+        await expect(page.getByTestId("milestone-part")).toBeVisible();
+        await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
+        const article = page.getByRole("article", { name: "One-pager" });
+        await expect(article).toBeVisible();
+        await expect(article).toContainText("A setup checklist with the next two steps");
+        await expect(article.getByRole("button", { name: "Edit line 2" })).toHaveCount(1);
+        // Below the milestone's card, never above it.
+        const [p, a] = [(await page.getByTestId("milestone-part").boundingBox())!, (await article.boundingBox())!];
+        expect(p.y + p.height).toBeLessThanOrEqual(a.y);
+      });
+
       test(`a line's Edit shows when it is pointed at or tapped, with no plan (${where})`, async ({ page }) => {
         // The mock's default company: Guided setup has no plan, so its one-pager's lines show.
         await page.emulateMedia({ colorScheme: scheme });
