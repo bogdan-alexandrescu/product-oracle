@@ -177,8 +177,8 @@ export default function SimpleHome() {
     return ids;
   }, [toDecide, broken]);
   const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems]);
-  // A new company (no goals yet) leads with its setup; otherwise it closes Home, so nothing above moves.
-  const setupCard = setup ? <SetupCard setup={setup} onHide={() => void hideSetup()} /> : null;
+  // A new company (no goals yet) leads with its setup; an established company's Simple Home keeps
+  // its picked design (Detailed Home keeps the checklist behind its Set up chip).
   const setupFirst = !!setup && tiles !== undefined && tiles.length === 0;
   // The plan this quarter: the PRD in play (the top PRD by priority when several) by month.
   const priorities = useQuery(k("priorities"), () => unwrap(api.GET("/v1/simple/priorities")), { keepPrevious: true });
@@ -221,6 +221,9 @@ export default function SimpleHome() {
       : brokenMine + decisionCount + (proposalRows === toDecide ? toDecide.length : 0) === 0
         ? proposable
         : `${waits} Also ${proposable}`;
+  // Nothing waits and no review is due (a new company): no walk to offer. Unknown until its reads answer.
+  const counted = [waiting, changes, roadmap, meeting].every((q) => q.data !== undefined || !!q.error);
+  const nothingToWalk = counted && decisionCount + toDecide.length + mine.length + broken.length === 0 && !meeting.data?.next;
   // The goal band's weights as their share of the score ("50% of the score").
   const weightSum = (tiles ?? []).reduce((n, g) => n + (g.weight != null && g.weight > 0 ? g.weight : 0), 0);
   const share = (w: number | null) => (w != null && w > 0 && weightSum > 0 ? Math.round((w / weightSum) * 100) : null);
@@ -340,15 +343,15 @@ export default function SimpleHome() {
           {greeting(hour)}
           {firstName ? `, ${firstName}` : ""}. <span data-testid="home-sentence">{sentence}</span>
         </p>
-        {!walking && capsReady && !reads && (
+        {!walking && capsReady && !reads && counted && !nothingToWalk && (
           <div>
             <button type="button" className="simple-button simple-button-primary" onClick={() => setWalking(true)}>
               Walk me through it
             </button>
           </div>
         )}
-        {/* While the role is unknown the walk's slot keeps its height; a reader known has no walk and no gap. */}
-        {!walking && !capsReady && (
+        {/* While the role or what waits is unknown the walk's slot keeps its height; a reader known has no walk and no gap. */}
+        {!walking && (!capsReady || (!reads && !counted)) && (
           <div aria-hidden data-testid="home-walk-slot" className="invisible">
             <span className="simple-button">Walk me through it</span>
           </div>
@@ -366,7 +369,7 @@ export default function SimpleHome() {
 
       {!walking && (
       <>
-      {setupFirst && setupCard}
+      {setupFirst && setup && <SetupCard setup={setup} onHide={() => void hideSetup()} />}
 
       <section aria-label="Goals" data-testid="home-goals">
         <Block q={{ ...goals, data: tiles }} testId="home-goals" skeleton={<GoalBandSkeleton />}>
@@ -379,14 +382,15 @@ export default function SimpleHome() {
               <ul className="simple-goal-band">
                 {rows.map((g) => (
                   <li key={g.id} data-testid="home-goal" className="simple-goal">
-                    <div className="flex items-center gap-2">
-                      <span className="simple-code">{g.code}</span>
+                    {/* With Ask open the cards narrow: the code and the share each keep one line, the share moving under. */}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="simple-code whitespace-nowrap">{g.code}</span>
                       {g.guardrail && <span className="simple-tag">guardrail</span>}
                       {share(g.weight) != null && (
                         <span
                           data-testid="home-goal-weight"
                           title="How much this goal counts in each feature's priority score"
-                          className="simple-small ml-auto tnum"
+                          className="simple-small ml-auto tnum whitespace-nowrap"
                         >
                           {share(g.weight)}% of the score
                         </span>
@@ -735,7 +739,6 @@ export default function SimpleHome() {
           </Block>
         </HomeCard>
       )}
-      {!setupFirst && setupCard}
       </>
       )}
     </SimplePage>

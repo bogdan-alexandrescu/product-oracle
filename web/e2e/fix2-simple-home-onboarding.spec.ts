@@ -131,18 +131,11 @@ test("qa-onboarding-48: a new company's owner switches to Simple, sees the setup
   await openStep(page, "Build the baseline", /\/baseline\?build=1$/);
 });
 
-test("qa-onboarding-4: once every step is done the setup card goes away", async ({ page }) => {
-  // fails_when: the card stays after setup is done, or is missing while a step is open
-  // The default company: its sources, members, domains and baseline are there already.
+test("qa-onboarding-4: an established company's Simple Home has no setup card", async ({ page }) => {
+  // fails_when: the card closes an established company's Simple Home (its picked design) while a step is open
+  // The default company: its goals are set, four setup steps still open.
   await login(page, ADMIN.email);
   await toSimple(page);
-  // This company's sources, members, domains and baseline are there already.
-  await expect(progress(page)).toHaveText("4 of 8 done");
-  await connectTools(page);
-  await nameLead(page);
-  await checkHorizons(page);
-  await expect(progress(page)).toHaveText("7 of 8 done");
-  await setZone(page);
   await expect(page.getByTestId("simple-page").getByTestId("home-goal").first()).toBeVisible();
   await expect(setupCard(page)).toHaveCount(0);
 });

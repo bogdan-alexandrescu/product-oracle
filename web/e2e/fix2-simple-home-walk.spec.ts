@@ -68,9 +68,9 @@ test("qa-onboarding-3: a new company's Simple Home has no plan, broken links or 
   await expect(page.getByTestId("home-meeting-next")).toHaveCount(0);
   await expect(page.getByTestId("simple-nav-meetings")).toBeVisible();
   await expect(page.getByTestId("simple-nav-meetings-count")).toHaveCount(0);
-  // Nothing to walk through either.
-  await page.getByRole("button", { name: "Walk me through it" }).click();
-  await expect(page.getByTestId("walk-empty")).toBeVisible();
+  // Nothing to walk through either: no walk offered.
+  await expect(page.getByTestId("home-sentence")).toHaveText("Nothing waits on you today.");
+  await expect(page.getByRole("button", { name: "Walk me through it" })).toHaveCount(0);
 });
 
 test("qa-simple-home-3: the walk steps through as many broken links as Home counts", async ({ page }) => {

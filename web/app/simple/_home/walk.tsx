@@ -34,14 +34,21 @@ const KIND_WORDS: Record<Step["kind"], string> = {
  * first, then the other judgement calls), then the next meeting's agenda and the proposals.
  * A decision on the agenda is one step, the agenda's.
  */
+/** A read's answer, or undefined when it failed. */
+const settle = <T,>(p: Promise<T>): Promise<T | undefined> => p.catch(() => undefined);
+
 async function loadSteps(): Promise<Step[]> {
-  const [w, waiting, inbox] = await Promise.all([walk(), unwrap(api.GET("/v1/simple/decisions/waiting")), loadInbox()]);
+  // The walk's own steps are the pass; a decisions read that fails leaves its steps out, never the whole walk.
+  const [w, waitingR, inboxR] = await Promise.all([walk(), settle(unwrap(api.GET("/v1/simple/decisions/waiting"))), settle(loadInbox())]);
+  const waiting = waitingR ?? { questions: [] as Question[] };
+  const inbox = inboxR ?? { decisions: [] as Awaited<ReturnType<typeof loadInbox>>["decisions"] };
   const agenda = new Set(w.steps.flatMap((s) => (s.kind === "agenda_decision" && s.decision ? [s.decision.id] : [])));
   const questions = [...waiting.questions.filter((q) => q.late), ...waiting.questions.filter((q) => !q.late)].filter((q) => !agenda.has(q.id));
   const asked = new Set(waiting.questions.map((q) => q.id));
   const rows = inbox.decisions.filter((d) => d.counts && d.reason === "needs_decision" && !agenda.has(d.id) && !asked.has(d.id));
   // As Home's card: Oracle's run approvals are never product decisions, nor a PRD's question read twice.
-  const others = (await Promise.all(rows.map((d) => unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } })))))
+  const others = (await Promise.all(rows.map((d) => settle(unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } }))))))
+    .filter((d): d is NonNullable<typeof d> => !!d)
     .filter((d) => d.class !== "checkpoint" && d.origin !== "checkpoint" && (d.origin as string) !== "prd");
   const decisions: DecisionStep[] = [
     ...questions.map((q) => ({
@@ -58,7 +65,8 @@ async function loadSteps(): Promise<Step[]> {
       title: d.title,
       why: d.question || "It waits for your decision.",
       question: null,
-      url: `/company/decisions?d=${d.number}`,
+      // Simple's Decisions page lists it under its number, as Home's "Decided lately" opens it.
+      url: `/simple/decisions#d-${d.number}`,
     })),
   ];
   const broken = w.steps.filter((s) => s.kind === "broken_link");

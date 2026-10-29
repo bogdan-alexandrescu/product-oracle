@@ -118,7 +118,8 @@ function GoalCounters({ items, suggestions, onGoal }: { items: Item[]; suggestio
   const empty = (suggestions.data?.goals ?? []).filter((g) => g.empty && !items.some((i) => i.goal?.id === g.goal.id));
   const goals = new Map<string, { title: string; metric: string | null; items: number; broken: number }>();
   for (const i of items) {
-    if (!i.goal) continue;
+    // As Home's goal tiles (goalTiles): a cut item is not one of the goal's items.
+    if (!i.goal || i.status === "cut") continue;
     const g = goals.get(i.goal.id) ?? { title: i.goal.title, metric: i.goal.metric ?? null, items: 0, broken: 0 };
     g.items += 1;
     if (broken(i).length) g.broken += 1;

@@ -38,8 +38,10 @@ function readStored(): string | null {
   return stored;
 }
 
-function openFor(who: string | null): boolean {
+/** Open for this person; while who they are is still being read, open as stored, so a restored panel is there at first paint. */
+function openFor(who: string | null, loading = false): boolean {
   const s = readStored();
+  if (loading) return !!s;
   return !!s && !!who && (s === "1" || s === who);
 }
 
@@ -77,7 +79,7 @@ export function usePanelOpen(): boolean {
     seen = who;
     if (was && was !== who && readStored()) setPanelOpen(false);
   }, [who, loading]);
-  return useSyncExternalStore(subscribe, () => openFor(who), () => false);
+  return useSyncExternalStore(subscribe, () => openFor(who, loading && !who), () => false);
 }
 
 /**
