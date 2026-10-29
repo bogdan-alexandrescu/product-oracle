@@ -133,6 +133,8 @@ async def test_sources_counts_the_callers_own_sources_with_items(client, tenant_
         "done": False,
         "count": 0,
         "detail": None,
+        "invited": None,
+        "run_id": None,
     }
     await _source_with_items(tenant_id, owner.id, "upload", "Notes", 2)
     await _source_with_items(tenant_id, owner.id, "github", "Repo", 1)

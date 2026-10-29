@@ -65,6 +65,8 @@ test.describe("desktop", () => {
     await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
     await open(page, "avery.lane@example.com");
     const btn = page.getByRole("button", { name: "Start review" });
+    // Read only once the start options have answered (train AB review): disabled while loading proves nothing.
+    await expect(btn).not.toHaveAttribute("aria-busy", "true");
     await expect(btn).toBeDisabled();
     await expect(page.getByTestId("start-review-reason")).toHaveText("Only an owner or the PRD's decider can start a review");
   });
@@ -73,6 +75,7 @@ test.describe("desktop", () => {
     test(`Start review is disabled with a reason for ${email.split("@")[0]}`, async ({ page }) => {
       await open(page, email);
       const btn = page.getByRole("button", { name: "Start review" });
+      await expect(btn).not.toHaveAttribute("aria-busy", "true");
       await expect(btn).toBeDisabled();
       expect(await btn.getAttribute("title")).toMatch(/owner|decider/i);
       // fix2 review, #13: the reason is on screen too, not only a hover title.

@@ -832,6 +832,8 @@ export function SimpleRoadmap() {
       </Button>
       <Button
         disabled={!mayStartReview}
+        // Busy until the start options say who may start (an owner's answer needs no wait).
+        aria-busy={!startOptions.data && !startOptions.error && !can("start_simple_meeting") ? true : undefined}
         title={mayStartReview ? undefined : START_REVIEW_REASON}
         aria-describedby={mayStartReview ? undefined : "start-review-reason"}
         onClick={() => setStarting(true)}

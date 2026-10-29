@@ -146,9 +146,13 @@ for (const scheme of ["light", "dark"] as const) {
         await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-lanes", group);
         if (group === "track") await expect(page.getByTestId("chart-group").first()).toContainText("Guided setup track");
         if (group === "prd") await expect(page.getByTestId("chart-group").first()).toContainText("Guided setup");
-        const [checklist, sample] = [await placeOf(page, "setup-checklist"), await placeOf(page, "setup-import")];
-        expect(checklist.lane, `${group}: one lane`).toBe(sample.lane);
-        expect(checklist.row, `${group}: two rows`).not.toBe(sample.row);
+        // The bars move to the new grouping's lanes after the switch: read them until they settle (train AB review).
+        await expect
+          .poll(async () => {
+            const [checklist, sample] = [await placeOf(page, "setup-checklist"), await placeOf(page, "setup-import")];
+            return checklist.lane === sample.lane && checklist.row !== sample.row ? "one lane, two rows" : `${checklist.lane}:${checklist.row} ${sample.lane}:${sample.row}`;
+          }, { message: `${group}: Setup checklist and Sample data import share one lane on two rows` })
+          .toBe("one lane, two rows");
         await expect(lane(page, "PM-owned")).toHaveCount(0);
       }
     });
