@@ -18,10 +18,10 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card plan-charts-buckets: protects = the header reads "Where each goal's work lands", the
  * plan's capacity, planned and spare weeks in one line, a legend entry per milestone (B: a
  * swatch, the code, its dates "Nov 2 – Nov 27" and how full it is, its name in the title), one
- * stacked bar per goal in B's strong milestone colours with a segment per milestone ("M1 4.0",
+ * stacked bar per goal in B's strong milestone colours with a segment per milestone ("M1 4",
  * blank when too narrow) and its total, B's footnote, every total equal to the plan's, goal
- * cards as B (the name, "n features this quarter", a row per feature: code, name, a chip per
- * milestone, its weeks or PM-owned) with "+ Suggest a feature" and "✦ Ask Oracle to suggest"
+ * cards as B (the name, "n features in the plan", a row per feature: code, name, a chip per
+ * milestone, its weeks or PM-owned) with one Suggestions button (QA pass 2)
  * under each list, and the page's quarter label the plan's span; no label is cut and every
  * label on a milestone colour reads at 4.5:1; roadmap items outside the plan still listed
  * under their goal; fails_when = a number differs from the plan, the old "Share of ..."
@@ -71,10 +71,10 @@ async function setUp(page: Page, scheme: "light" | "dark", scenario: string | nu
 }
 
 const GOALS = [
-  { goal: "Reliability", parts: ["M1 4.0", "M2 3.0", "M3 4.0"], total: "11.0 wk" },
-  { goal: "Growth", parts: ["M1 3.0", "M2 7.0", "M3 6.0"], total: "16.0 wk" },
-  { goal: "Activation", parts: ["M1 6.0", "M2 3.0", "M3 4.0"], total: "13.0 wk" },
-  { goal: "Revenue", parts: ["M2 2.0", "M3 9.0"], total: "11.0 wk" },
+  { goal: "Reliability", parts: ["M1 4", "M2 3", "M3 4"], total: "11 wk" },
+  { goal: "Growth", parts: ["M1 3", "M2 7", "M3 6"], total: "16 wk" },
+  { goal: "Activation", parts: ["M1 6", "M2 3", "M3 4"], total: "13 wk" },
+  { goal: "Revenue", parts: ["M2 2", "M3 9"], total: "11 wk" },
 ];
 
 /** The labels whose text reads under 4.5:1 on their own background (the nearest painted one). */
@@ -121,18 +121,18 @@ for (const v of VIEWS) {
     test("goal buckets: where each goal's work lands, by milestone, from the plan", async ({ page }) => {
       await setUp(page, v.scheme, "simple-plan");
       await page.goto("/simple/priorities");
-      await expect(page.getByTestId("prio-subtitle")).toContainText("2 Nov - 12 Feb");
+      await expect(page.getByTestId("prio-subtitle")).toContainText("This plan, Nov 2 – Feb 12");
       await page.getByRole("tab", { name: "Goal buckets" }).click();
       const head = page.getByTestId("buckets-head");
       await expect(head.getByRole("heading", { name: "Where each goal's work lands" })).toBeVisible();
       await expect(head.getByTestId("buckets-summary")).toHaveText(
-        "This quarter: 56.0 engineer-weeks over three milestones (51.0 planned + 5.0 spare). Bars are engineer-weeks.",
+        "This plan, Nov 2 – Feb 12: 56 engineer-weeks over three milestones (51 planned + 5 spare). Bars are engineer-weeks.",
       );
-      // B's legend: a swatch, the code in bold, its dates and how full ("M1 Oct 19 – Nov 13 · 14.0 of 14.0 wk").
+      // B's legend: a swatch, the code in bold, its dates and how full ("M1 Oct 19 – Nov 13 · 14 of 14 wk").
       await expect(head.getByTestId("milestone-chip")).toHaveText([
-        "M1 Nov 2 – Nov 27 · 13.0 of 16.0 wk",
-        "M2 Nov 30 – Dec 25 · 15.0 of 16.0 wk",
-        "M3 Dec 28 – Feb 12 · 23.0 of 24.0 wk",
+        "M1 Nov 2 – Nov 27 · 13 of 16 wk",
+        "M2 Nov 30 – Dec 25 · 15 of 16 wk",
+        "M3 Dec 28 – Feb 12 · 23 of 24 wk",
       ]);
       // The milestone's name is in its title (hover), not its words.
       await expect(head.getByTestId("milestone-chip").nth(1)).toHaveAttribute("title", "M2 Scale volume");
@@ -151,7 +151,7 @@ for (const v of VIEWS) {
         (await bars.nth(k).getByTestId("goal-bar-segment").evaluateAll((els) => els.reduce((n, e) => n + e.getBoundingClientRect().width, 0))) / (await width(k));
       expect((await fill(1)) / (await fill(0))).toBeCloseTo(16 / 11, 1);
       await expect(head.getByTestId("buckets-footnote")).toHaveText(
-        "Each feature counts once, under the goal it moves most (listed first in the PRD's Goals column). Engineer-weeks are the PRD's, per slice.",
+        "Each feature counts once, under the goal it moves most (the first goal the one-pager names for it). Engineer-weeks are the one-pager's, part by part.",
       );
       await expect(page.getByText(/Share of .* by engineer-weeks/)).toHaveCount(0);
       // B's strong milestone colours, not pale tints: each segment's text is --on-accent on it.
@@ -163,25 +163,25 @@ for (const v of VIEWS) {
       // Every label on a milestone colour reads at AA (4.5:1), light and dark.
       expect(await contrasts(head.getByTestId("goal-bar-label"))).toEqual([]);
 
-      // The goal cards, as B: the name, "n features this quarter", a row per feature (code, name,
+      // The goal cards, as B: the name, "n features in the plan", a row per feature (code, name,
       // a chip per milestone, its weeks or PM-owned).
       const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
       await expect(growth.getByRole("heading", { name: "Growth" })).toBeVisible();
-      await expect(growth.getByTestId("plan-goal-count")).toHaveText("5 features this quarter");
+      await expect(growth.getByTestId("plan-goal-count")).toHaveText("5 features in the plan");
       const invites = growth.locator('[data-testid="plan-feature"][data-code="F-05"]');
       await expect(invites).toContainText("F-05 Team invites");
       await expect(invites.getByTestId("plan-chip")).toHaveText(["M1", "M2"]);
-      await expect(invites.getByTestId("plan-chip").first()).toHaveAttribute("title", "M1 Prove it: 3.0 wk");
-      await expect(invites.getByTestId("plan-feature-total")).toHaveText("5.0 wk");
+      await expect(invites.getByTestId("plan-chip").first()).toHaveAttribute("title", "M1 Prove it: 3 wk");
+      await expect(invites.getByTestId("plan-feature-total")).toHaveText("5 wk");
       const launch = growth.locator('[data-testid="plan-feature"][data-code="F-10"]');
       await expect(launch.getByTestId("plan-chip")).toHaveText(["M2"]);
       await expect(launch.getByTestId("plan-feature-total")).toHaveText("PM-owned");
       await expect(page.getByTestId("plan-goal")).toHaveCount(4);
       await nothingCut(page.locator('[data-testid="plan-chip"]'));
       expect(await contrasts(page.locator('[data-testid="plan-chip"]'))).toEqual([]);
-      // B's two buttons under each goal's list, for who may suggest.
-      await expect(page.getByTestId("goal-suggest-feature")).toHaveCount(4);
-      await expect(page.getByTestId("goal-ask-oracle")).toHaveText(Array(4).fill("✦ Ask Oracle to suggest"));
+      // One Suggestions button under each goal's list (qa-simple-plan-20).
+      await expect(page.locator('[data-testid="plan-goal"] [data-testid="goal-suggestions-open"]')).toHaveCount(4);
+      await expect(page.getByTestId("goal-suggest-feature")).toHaveCount(0);
 
       // Roadmap items outside the plan (the alerts roadmap's) still show, under their goal.
       const outside = page.getByTestId("plan-outside");
@@ -206,10 +206,13 @@ for (const v of VIEWS) {
       await setUp(page, v.scheme, "simple-plan");
       await page.goto("/simple/priorities?tab=buckets");
       const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
-      await growth.getByTestId("goal-suggest-feature").click();
+      // One way in per goal (qa-simple-plan-20): the Suggestions button; the drawer holds the form and the ask.
+      await growth.getByTestId("goal-suggestions-open").click();
       const panel = page.getByTestId("goal-panel");
       await expect(panel).toBeVisible();
       await expect(panel.getByRole("heading", { name: "Suggestions · Growth" })).toBeVisible();
+      // The decider's form is folded to one line.
+      await panel.getByTestId("suggest-form-open").click();
       const form = panel.getByTestId("suggest-form");
       await expect(form).toBeVisible();
       await form.getByLabel("Feature name").fill("Invite from the dashboard");
@@ -222,14 +225,15 @@ for (const v of VIEWS) {
       await expect(panel).toHaveCount(0);
 
       const reliability = page.locator('[data-testid="plan-goal"][data-goal="Reliability"]');
-      await reliability.getByTestId("goal-ask-oracle").click();
-      await expect(page.getByText("Oracle is suggesting features for Reliability")).toBeVisible();
+      await reliability.getByTestId("goal-suggestions-open").click();
       await expect(panel.getByRole("heading", { name: "Suggestions · Reliability" })).toBeVisible();
-      await expect(panel.getByTestId("suggestions-tab-oracle")).toHaveAttribute("aria-selected", "true");
+      await panel.getByTestId("suggestions-tab-oracle").click();
+      await panel.getByRole("button", { name: "✦ Ask Oracle for more" }).click();
+      await expect(page.getByText("Oracle is suggesting features for Reliability")).toBeVisible();
       await expect(panel.locator('[data-testid="goal-suggestion"][data-title="Setup health check"]')).toBeVisible();
       await expect(panel.getByTestId("suggestions-tab-oracle")).toHaveText("✦ Oracle · 2");
       await panel.getByRole("button", { name: /^Close/ }).first().click();
-      await expect(reliability.getByTestId("goal-ask-oracle")).toHaveText("✦ Ask Oracle to suggest");
+      await expect(reliability.getByTestId("goal-suggestions-open")).toHaveText("Suggestions · 2");
     });
 
     test("value / effort: a log effort axis split at the medians, linked to the ranked list", async ({ page }) => {
@@ -246,8 +250,8 @@ for (const v of VIEWS) {
       const xs = await Promise.all([0, 1, 2, 3].map((k) => centreX(ticks.nth(k))));
       expect(xs[1] - xs[0]).toBeCloseTo(xs[2] - xs[1], 0);
       expect(xs[2] - xs[1]).toBeCloseTo(xs[3] - xs[2], 0);
-      // A 2-week mark sits on the 2 wk tick (alert-sso: value 3, effort 2).
-      expect(Math.abs((await centreX(mark(page, "alert-sso"))) - xs[2])).toBeLessThan(4);
+      // A 2-week mark is the median effort: it sits just off the 2 wk tick, inside the quadrant it counts in (qa-simple-plan-12).
+      expect(Math.abs(Math.abs((await centreX(mark(page, "alert-sso"))) - xs[2]) - 22)).toBeLessThan(4);
 
       // The quadrants at the medians, each with its name and count.
       await expect(page.getByTestId("vxe-quadrant")).toHaveText(["Quick wins · 2", "Big bets · 3", "Fill-ins · 3", "Later · 1"]);
@@ -284,7 +288,7 @@ for (const v of VIEWS) {
       for (const h of rowHeights) expect(h).toBeLessThanOrEqual(30);
       const misses = sideRow(page, "price-tiers").getByTestId("prio-misses");
       await expect(misses).toHaveText("Misses");
-      await expect(misses).toHaveAttribute("title", "Misses This quarter (Now)");
+      await expect(misses).toHaveAttribute("title", "Misses this quarter");
       await expect(sideRow(page, "price-tiers").getByTestId("prio-title")).toHaveAttribute("title", "New plan tiers");
 
       // Select a mark (a tap on a phone): its row lights up and comes into view.
@@ -336,32 +340,32 @@ test("value / effort: a sideways drag re-estimates effort on the log scale", asy
   await page.mouse.down();
   await page.mouse.move(at.x + at.width / 2 - octave, at.y + at.height / 2 + 3, { steps: 10 });
   await page.mouse.up();
-  await expect(page.getByText("Re-estimated setup-import: effort 1.5 wk")).toBeVisible();
-  await expect(page.getByRole("button", { name: /setup-import: goal value 6, effort 1\.5 weeks/ })).toBeVisible();
+  await expect(page.getByText("Re-estimated Sample data import (F-12): effort 1.5 wk")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Sample data import \(F-12\): goal value 6, effort 1\.5 weeks/ })).toBeVisible();
   // A drag is not a selection.
   await expect(page.locator('[data-testid="side-row"][data-selected="true"]')).toHaveCount(0);
 });
 
 /**
- * Card fid-prio-suggest-roles: protects = a commenter gets B's two buttons under each goal's
- * list; a viewer, who may not suggest, gets neither, only the goal's suggestions to read;
+ * Card fid-prio-suggest-roles: protects = every goal card has one Suggestions button (QA pass 2);
+ * a commenter gets the form in its drawer; a viewer, who may not suggest, only the suggestions to read;
  * fails_when = a viewer is offered a suggest button or a commenter is not; no_claim = the API's
  * refusal of a viewer's suggestion (pytest).
  */
 for (const who of ["commenter", "viewer"] as const) {
-  test(`goal buckets: who may suggest gets the two buttons, a viewer reads the suggestions (${who})`, async ({ page }) => {
+  test(`goal buckets: one Suggestions button; who may suggest gets the form, a viewer reads (${who})`, async ({ page }) => {
     await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
     await login(page, `${who}@example.com`);
     await page.goto("/simple/priorities?tab=buckets");
     await expect(page.getByTestId("buckets-head")).toBeVisible();
     const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
-    if (who === "commenter") {
-      await expect(growth.getByTestId("goal-suggest-feature")).toHaveText("+ Suggest a feature");
-      await expect(growth.getByTestId("goal-ask-oracle")).toHaveText("✦ Ask Oracle to suggest");
-    } else {
-      await expect(growth.getByTestId("goal-suggestions-open")).toBeVisible();
-      await expect(page.getByTestId("goal-suggest-feature")).toHaveCount(0);
-      await expect(page.getByTestId("goal-ask-oracle")).toHaveCount(0);
+    // One Suggestions button for everyone (qa-simple-plan-20); only who may suggest gets the form in the drawer.
+    await growth.getByTestId("goal-suggestions-open").click();
+    const panel = page.getByTestId("goal-panel");
+    if (who === "commenter") await expect(panel.getByTestId("suggest-form")).toBeVisible();
+    else {
+      await expect(panel.getByTestId("suggest-form")).toHaveCount(0);
+      await expect(panel.getByTestId("suggest-form-open")).toHaveCount(0);
     }
   });
 }

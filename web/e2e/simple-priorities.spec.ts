@@ -39,7 +39,8 @@ const row = (tab: Page, code: string): Locator => tab.locator(`[data-testid="pri
 
 /** Drags a row's handle onto the row now at `to` (0-based), as a person does with a mouse or a finger. */
 async function dragRow(tab: Page, code: string, to: number): Promise<void> {
-  const handle = tab.getByRole("button", { name: `Drag ${code} to reorder` });
+  // The handle is named by the feature's title and code (never its key).
+  const handle = row(tab, code).getByRole("button", { name: /^Drag .* to reorder$/ });
   // Both rows on screen (a phone's rail sits at the bottom).
   await handle.evaluate((e) => e.scrollIntoView({ block: "center" }));
   const from = await handle.boundingBox();
@@ -51,7 +52,7 @@ async function dragRow(tab: Page, code: string, to: number): Promise<void> {
 }
 
 async function giveReason(tab: Page, code: string, reason: string, button: "Move" | "Propose"): Promise<void> {
-  const dialog = tab.getByRole("dialog", { name: `Why move ${code}` });
+  const dialog = tab.getByRole("dialog", { name: /^Why move / });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel("Reason").fill(reason);
   await dialog.getByRole("button", { name: button, exact: true }).click();
@@ -62,7 +63,7 @@ test.describe("desktop", () => {
   /**
    * Card simple-priorities-ranked: protects = the ranked list is ordered by score in
    * dependency order with the subtitle saying so, a row whose score beats a row above says
-   * "After <code>, which it needs" from its real dependency, an owner's drag asks a one-line
+   * "After <title>, which it needs" from its real dependency, an owner's drag asks a one-line
    * reason, applies through the change engine, shows the override with the name and Oracle's
    * rank as a ghost, and Undo puts it back; Compare with Oracle shows Oracle's order beside
    * yours; fails_when = rows come in another order, the after line is missing or wrong, a
@@ -75,14 +76,14 @@ test.describe("desktop", () => {
     const admin = await as(page, "admin@example.com");
     await expect(admin.getByTestId("prio-subtitle")).toContainText("a feature never ranks above one it depends on");
     expect(await codes(admin)).toEqual(ORACLE);
-    await expect(row(admin, "alert-digest").getByTestId("prio-after")).toHaveText("After alert-rules, which it needs.");
-    await expect(row(admin, "alert-sso").getByTestId("prio-after")).toHaveText("After alert-export, which it needs.");
+    await expect(row(admin, "alert-digest").getByTestId("prio-after")).toHaveText("After Alert rules engine, which it needs.");
+    await expect(row(admin, "alert-sso").getByTestId("prio-after")).toHaveText("After Alert history export, which it needs.");
     await expect(row(admin, "setup-checklist").getByTestId("prio-after")).toHaveCount(0);
     await expect(admin.getByTestId("prio-ghost")).toHaveCount(0);
 
     await dragRow(admin, "alert-export", 0);
     await giveReason(admin, "alert-export", "Two large customers asked for it this month", "Move");
-    await expect(admin.getByText("Moved alert-export to rank 1")).toBeVisible();
+    await expect(admin.getByText("Moved Alert history export (AE) to rank 1")).toBeVisible();
     expect((await codes(admin))[0]).toBe("alert-export");
     await expect(row(admin, "alert-export").getByTestId("prio-ghost")).toHaveText("Oracle #6");
     await expect(row(admin, "alert-export").getByTestId("prio-override")).toHaveText("Moved by Admin: “Two large customers asked for it this month”");
@@ -114,19 +115,19 @@ test.describe("desktop", () => {
   test("a commenter proposes inline with its flow thumbnail; the owner accepts", async ({ page }) => {
     await dark(page.context());
     const cory = await as(page, "commenter@example.com");
-    await cory.getByRole("button", { name: "Drag alert-mobile to reorder" }).focus();
+    await row(cory, "alert-mobile").getByRole("button", { name: /^Drag / }).focus();
     await cory.keyboard.press("ArrowUp");
     await giveReason(cory, "alert-mobile", "Push is what the beta users asked for", "Propose");
-    await expect(cory.getByText("Proposed: waiting for the decider")).toBeVisible();
+    await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     expect(await codes(cory)).toEqual(ORACLE);
     // The pricing roadmap is for approvers and owners: its feature ranks, with no item to move.
-    await expect(cory.getByRole("button", { name: "Drag price-tiers to reorder" })).toHaveCount(0);
-    await expect(cory.getByRole("button", { name: "Drag alert-sso to reorder" })).toBeVisible();
+    await expect(row(cory, "price-tiers").getByRole("button", { name: /^Drag / })).toHaveCount(0);
+    await expect(row(cory, "alert-sso").getByRole("button", { name: /^Drag / })).toBeVisible();
     const card = row(cory, "alert-mobile").getByTestId("prio-proposal");
     await expect(card).toContainText("Commenter proposes rank 3: “Push is what the beta users asked for” · waiting for Admin");
     await expect(card.getByRole("button", { name: "Accept" })).toHaveCount(0);
     await expect(card).toHaveAttribute("data-wide", "false");
-    await card.getByRole("button", { name: "Open the flow for alert-mobile" }).click();
+    await card.getByRole("button", { name: "Open the flow for Mobile alert push" }).click();
     await expect(card).toHaveAttribute("data-wide", "true");
     await expect(card.getByTestId("flow-detail")).toContainText("User flow: Act on a pushed alert");
     // S10, drawn to the owner's flow pick A: the screen as a wireframe of its numbered regions.
@@ -137,7 +138,7 @@ test.describe("desktop", () => {
     await cory.getByRole("tab", { name: "Value / effort" }).click();
     await cory.locator('[data-testid="vxe-point"][data-code="setup-import"]').focus();
     await cory.keyboard.press("ArrowUp");
-    await expect(cory.getByText("Proposed: waiting for the decider")).toBeVisible();
+    await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     await cory.getByRole("tab", { name: "Ranked list" }).click();
     await expect(row(cory, "setup-import").getByTestId("prio-proposal")).toContainText("Commenter proposes goal value 6.5");
     await expect(row(cory, "setup-import").getByTestId("flow-none")).toHaveText("No flow yet");
@@ -146,7 +147,7 @@ test.describe("desktop", () => {
     const waiting = row(admin, "alert-mobile").getByTestId("prio-proposal");
     await expect(waiting).toContainText("waiting for Admin");
     await waiting.getByRole("button", { name: "Accept" }).click();
-    await expect(admin.getByText("Accepted alert-mobile's proposal")).toBeVisible();
+    await expect(admin.getByText("Accepted the proposal for Mobile alert push")).toBeVisible();
     await expect.poll(async () => (await codes(admin)).indexOf("alert-mobile")).toBe(2);
     await expect(row(admin, "alert-mobile").getByTestId("prio-override")).toContainText("“Push is what the beta users asked for”");
     await expect(row(admin, "alert-mobile").getByTestId("prio-ghost")).toHaveText("Oracle #4");
@@ -163,8 +164,8 @@ test.describe("desktop", () => {
   test("value / effort: a sideways drag re-estimates effort and the rank moves at once", async ({ page }) => {
     const admin = await as(page, "admin@example.com");
     await admin.getByRole("tab", { name: "Value / effort" }).click();
-    await expect(admin.getByRole("button", { name: "#7 alert-sso: goal value 3, effort 2 weeks, below the line" })).toBeVisible();
-    await expect(admin.getByRole("button", { name: "#5 setup-import: goal value 6, effort 3 weeks" })).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#7 Alert routing by team (AS): goal value 3, effort 2 weeks, below the line" })).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#5 Sample data import (F-12): goal value 6, effort 3 weeks" })).toBeVisible();
     expect(await codes(admin, "side-row")).toEqual(ORACLE);
     const point = admin.locator('[data-testid="vxe-point"][data-code="setup-import"]');
     const plot = (await admin.getByTestId("vxe-plot").boundingBox())!;
@@ -175,11 +176,11 @@ test.describe("desktop", () => {
     await admin.mouse.down();
     await admin.mouse.move(at.x + at.width / 2 - (plot.width * 0.92 * 2) / 5, at.y + at.height / 2 + 3, { steps: 10 });
     await admin.mouse.up();
-    await expect(admin.getByText("Re-estimated setup-import: effort 1 wk")).toBeVisible();
-    await expect(admin.getByRole("button", { name: "#2 setup-import: goal value 6, effort 1 weeks" })).toBeVisible();
+    await expect(admin.getByText("Re-estimated Sample data import (F-12): effort 1 wk")).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#2 Sample data import (F-12): goal value 6, effort 1 weeks" })).toBeVisible();
     expect((await codes(admin, "side-row"))[1]).toBe("setup-import");
     await admin.getByRole("button", { name: "Undo" }).click();
-    await expect(admin.getByRole("button", { name: "#5 setup-import: goal value 6, effort 3 weeks" })).toBeVisible();
+    await expect(admin.getByRole("button", { name: "#5 Sample data import (F-12): goal value 6, effort 3 weeks" })).toBeVisible();
   });
 
   /**
@@ -194,15 +195,15 @@ test.describe("desktop", () => {
     const drafts = admin.getByRole("region", { name: "Not ranked yet" });
     const draft = drafts.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
     await expect(draft).toContainText("Team invite nudges");
-    await draft.getByRole("button", { name: "Merge" }).click();
-    await draft.getByLabel("Merge into").selectOption({ label: "setup-checklist · Setup checklist" });
-    await draft.getByRole("button", { name: "Merge" }).last().click();
-    await expect(admin.getByText("Merged setup-ideas into setup-checklist")).toBeVisible();
+    await draft.getByRole("button", { name: "Merge into…" }).click();
+    await draft.getByLabel("Merge into").selectOption({ label: "Setup checklist" });
+    await draft.getByRole("button", { name: "Merge", exact: true }).click();
+    await expect(admin.getByText("Merged Team invite nudges into Setup checklist")).toBeVisible();
     await expect(drafts).toHaveCount(0);
     await admin.getByRole("button", { name: "Undo" }).click();
     await expect(draft).toBeVisible();
     await draft.getByRole("button", { name: "Confirm" }).click();
-    await expect(admin.getByText("Confirmed setup-ideas")).toBeVisible();
+    await expect(admin.getByText("Confirmed Team invite nudges")).toBeVisible();
     await expect(drafts).toHaveCount(0);
     await expect(row(admin, "setup-ideas")).toContainText("Team invite nudges");
   });
@@ -217,20 +218,20 @@ test.describe("desktop", () => {
     const cory = await as(page, "commenter@example.com");
     const draft = cory.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
     await draft.getByRole("button", { name: "Confirm" }).click();
-    await expect(cory.getByText("Proposed: waiting for the decider")).toBeVisible();
-    await draft.getByRole("button", { name: "Merge" }).click();
-    await draft.getByLabel("Merge into").selectOption({ label: "setup-checklist · Setup checklist" });
-    await draft.getByRole("button", { name: "Merge" }).last().click();
+    await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
+    await draft.getByRole("button", { name: "Merge into…" }).click();
+    await draft.getByLabel("Merge into").selectOption({ label: "Setup checklist" });
+    await draft.getByRole("button", { name: "Merge", exact: true }).click();
     const cards = draft.getByTestId("prio-proposal");
     await expect(cards).toHaveCount(2);
     await expect(cards.nth(0)).toContainText("Commenter proposes confirming it · waiting for Admin");
-    await expect(cards.nth(1)).toContainText("Commenter proposes merging it: “Merged into setup-checklist” · waiting for Admin");
+    await expect(cards.nth(1)).toContainText("Commenter proposes merging it: “Merged into Setup checklist” · waiting for Admin");
     await expect(cards.nth(0).getByRole("button", { name: "Accept" })).toHaveCount(0);
 
     const admin = await as(page, "admin@example.com");
     const theirs = admin.locator('[data-testid="prio-draft"][data-code="setup-ideas"]').getByTestId("prio-proposal");
     await theirs.nth(0).getByRole("button", { name: "Accept" }).click();
-    await expect(admin.getByText("Accepted setup-ideas's proposal")).toBeVisible();
+    await expect(admin.getByText("Accepted the proposal for Team invite nudges")).toBeVisible();
     await expect(row(admin, "setup-ideas")).toContainText("Team invite nudges");
   });
 
@@ -241,15 +242,15 @@ test.describe("desktop", () => {
    */
   test("accepting a proposal another tab already declined says why", async ({ page }) => {
     const cory = await as(page, "commenter@example.com");
-    await cory.getByRole("button", { name: "Drag alert-mobile to reorder" }).focus();
+    await row(cory, "alert-mobile").getByRole("button", { name: /^Drag / }).focus();
     await cory.keyboard.press("ArrowUp");
     await giveReason(cory, "alert-mobile", "Push is what the beta users asked for", "Propose");
-    await expect(cory.getByText("Proposed: waiting for the decider")).toBeVisible();
+    await expect(cory.getByText(/^Proposed: .* decides$/)).toBeVisible();
     const stale = await as(page, "admin@example.com");
     const fresh = await page.context().newPage();
     await fresh.goto("/simple/priorities");
     await row(fresh, "alert-mobile").getByTestId("prio-proposal").getByRole("button", { name: "Decline" }).click();
-    await expect(fresh.getByText("Declined alert-mobile's proposal")).toBeVisible();
+    await expect(fresh.getByText("Declined the proposal for Mobile alert push")).toBeVisible();
     await row(stale, "alert-mobile").getByTestId("prio-proposal").getByRole("button", { name: "Accept" }).click();
     await expect(stale.getByText("This change is declined already")).toBeVisible();
   });
@@ -277,18 +278,18 @@ test.describe("desktop", () => {
 
   /**
    * Card simple-priorities-buckets: protects = one bucket per goal sized by this quarter's
-   * engineer-weeks with its share, "No goal" flagged; fails_when = weeks or shares are wrong
-   * or No goal is not flagged; no_claim = capacity (the API serves effort, not headcount).
+   * engineer-weeks with its share, an empty "No goal" left out (it warns about nothing, qa-simple-plan-16);
+   * fails_when = weeks or shares are wrong or an empty No goal still warns; no_claim = capacity (the API serves effort, not headcount).
    */
-  test("goal buckets size each goal by this quarter's weeks and flag No goal", async ({ page }) => {
+  test("goal buckets size each goal by this quarter's weeks; an empty No goal is left out", async ({ page }) => {
     const admin = await as(page, "admin@example.com");
     await admin.getByRole("tab", { name: "Goal buckets" }).click();
     await expect(admin.getByTestId("bucket-bar")).toBeVisible();
     const b = (key: string) => admin.locator(`[data-testid="goal-bucket"][data-key="${key}"]`);
     await expect(b("grow-retention")).toContainText("9 wk · 64%");
     await expect(b("faster-activation")).toContainText("5 wk · 36%");
-    await expect(b("none")).toContainText("No goal");
-    await expect(b("none")).toContainText("Serves no confirmed goal");
+    // Nothing this quarter serves no goal: no warning card.
+    await expect(b("none")).toHaveCount(0);
   });
 });
 
@@ -318,7 +319,7 @@ test.describe("phone", () => {
 
     await admin.getByRole("tab", { name: "Goal buckets" }).click();
     await expect(admin.getByTestId("bucket-bar")).toBeHidden();
-    await expect(admin.getByTestId("goal-bucket")).toHaveCount(3);
+    await expect(admin.getByTestId("goal-bucket")).toHaveCount(2); // the two goals; the empty No goal is left out
   });
 
   /**
@@ -328,11 +329,11 @@ test.describe("phone", () => {
    */
   test("a proposal's flow opens a full-height sheet on a phone", async ({ page }) => {
     const cory = await as(page, "commenter@example.com");
-    await cory.getByRole("button", { name: "Drag alert-mobile to reorder" }).focus();
+    await row(cory, "alert-mobile").getByRole("button", { name: /^Drag / }).focus();
     await cory.keyboard.press("ArrowUp");
     await giveReason(cory, "alert-mobile", "Push first", "Propose");
     const card = row(cory, "alert-mobile").getByTestId("prio-proposal");
-    await card.getByRole("button", { name: "Open the flow for alert-mobile" }).click();
+    await card.getByRole("button", { name: "Open the flow for Mobile alert push" }).click();
     await expect(card).toHaveAttribute("data-wide", "false");
     await expect(cory.getByTestId("flow-sheet")).toContainText("Snooze and Assign buttons");
   });
@@ -346,7 +347,7 @@ test.describe("phone", () => {
     const viewer = await as(page, "viewer@example.com");
     await expect(viewer.getByRole("button", { name: /^Drag / })).toHaveCount(0);
     await expect(viewer.getByRole("button", { name: "Confirm" })).toHaveCount(0);
-    await expect(viewer.getByRole("button", { name: "Merge" })).toHaveCount(0);
+    await expect(viewer.getByRole("button", { name: /^Merge/ })).toHaveCount(0);
     expect(await codes(viewer)).toEqual(ORACLE);
   });
 });

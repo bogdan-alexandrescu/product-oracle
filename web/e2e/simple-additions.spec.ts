@@ -199,7 +199,7 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(quiet.getByTestId("suggestion-why")).toContainText("Most mutes happen at night");
       await expect(quiet.getByTestId("suggestion-evidence")).toContainText("12 requests for night-time silence");
       await expect(quiet.getByTestId("suggestion-evidence")).toContainText("high confidence");
-      await quiet.getByRole("button", { name: "Open the flow for Quiet hours for alerts" }).click();
+      await quiet.getByRole("button", { name: "Show the flow" }).click();
       await expect(quiet).toHaveAttribute("data-wide", "true");
       await expect(quiet.getByTestId("flow-detail")).toBeVisible();
       await quiet.getByRole("button", { name: "Accept" }).click();
@@ -318,10 +318,10 @@ for (const scheme of ["light", "dark"] as const) {
 
       await page.goto("/simple/priorities");
       const draft = page.locator('[data-testid="prio-draft"][data-code="setup-ideas"]');
-      await draft.getByRole("button", { name: "Merge" }).click();
-      await draft.getByLabel("Merge into").selectOption({ label: "setup-checklist · Setup checklist" });
-      await draft.getByRole("button", { name: "Merge" }).last().click();
-      await expect(toastWith(page, "Merged setup-ideas into setup-checklist")).toBeVisible();
+      await draft.getByRole("button", { name: "Merge into…" }).click();
+      await draft.getByLabel("Merge into").selectOption({ label: "Setup checklist" });
+      await draft.getByRole("button", { name: "Merge", exact: true }).click();
+      await expect(toastWith(page, "Merged Team invite nudges into Setup checklist")).toBeVisible();
       await page.goto(ROADMAP);
       await board(page);
       await expect(boardCard(page, "setup-ideas").getByTestId("item-merged")).toHaveText("Merged into setup-checklist");
@@ -378,7 +378,7 @@ for (const scheme of ["light", "dark"] as const) {
       const s = sheet.locator('[data-testid="goal-suggestion"][data-title="Quiet hours for alerts"]');
       await expect(s.getByRole("button", { name: "Reject" })).toHaveCount(0);
       await expect(s.getByRole("button", { name: "Accept" })).toHaveCount(0);
-      await s.getByRole("button", { name: "Open the flow for Quiet hours for alerts" }).click();
+      await s.getByRole("button", { name: "Show the flow" }).click();
       const flow = page.getByTestId("flow-sheet").getByRole("dialog");
       const box = (await flow.boundingBox())!;
       expect(Math.round(box.height)).toBeGreaterThanOrEqual(840);
