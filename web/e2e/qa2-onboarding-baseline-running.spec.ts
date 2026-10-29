@@ -29,7 +29,8 @@ async function startFromSetup(page: Page) {
   const sheet = page.getByRole("dialog", { name: "Build the baseline" });
   await sheet.getByRole("button", { name: "Start" }).click();
   await expect(sheet).toHaveCount(0);
-  await expect(page.getByText("Building the baseline. You'll get an Inbox item when it's ready to review.")).toBeVisible();
+  // The build banner says it, with the Inbox item to come (qa-onboarding-25: one line, not a toast too).
+  await expect(page.getByTestId("baseline-build-banner")).toContainText("You'll get an Inbox item when it's ready to review.");
   await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Home", exact: true }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(/\/home$/);
 }

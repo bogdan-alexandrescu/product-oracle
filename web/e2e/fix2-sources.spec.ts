@@ -76,7 +76,8 @@ test("Pick sources: an empty Uploads source does not tick it, the build sheet wa
   await expect(row(page, "sources").getByTestId("setup-status")).toHaveText("1 source");
 
   await row(page, "build_baseline").getByRole("link", { name: "Open" }).click();
-  await expect(sheet(page).getByTestId("build-estimate")).toContainText("Estimate");
+  // The estimate reads "$7.00 estimated · below the $50 approval line · starts at once" (qa-onboarding-27).
+  await expect(sheet(page).getByTestId("build-estimate")).toContainText("estimated");
   await expect(sheet(page).getByTestId("build-no-items")).toHaveCount(0);
 });
 

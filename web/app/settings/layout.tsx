@@ -10,7 +10,6 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   return (
     <Page>
       <PageTabsProvider
-        section="Settings"
         tabs={
           <Suspense fallback={<div className="h-12" />}>
             <SettingsNav />

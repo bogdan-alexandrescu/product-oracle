@@ -37,10 +37,10 @@ test("Fireflies picker: meeting days, times and From/To in the Company time zone
   await picker.getByRole("button", { name: "Choose" }).click();
   const meetings = picker.getByRole("group", { name: "Meetings" });
   await picker.getByLabel("Search meetings").fill("sprint planning #14");
-  // 14:00 UTC on Tue Oct 13 is 03:00 on Wed Oct 14 in Auckland.
+  // 14:00 UTC on Tue Oct 13 is 3:00 AM on Wed Oct 14 in Auckland (the app's 12-hour times, qa-shell).
   const day = meetings.getByRole("group", { name: "Wed, Oct 14" });
   await expect(day).toContainText("AI agents sprint planning #14");
-  await expect(day).toContainText("03:00");
+  await expect(day).toContainText("3:00 AM");
   await expect(meetings.getByRole("group", { name: "Tue, Oct 13" })).toHaveCount(0);
 
   // Oct 14 in Auckland: the sprint planning is in, the Oct 13 standup (22:00 there) is not.

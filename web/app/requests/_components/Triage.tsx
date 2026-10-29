@@ -174,7 +174,7 @@ export function TriageMenu({ triage, canChange, canStart }: { triage: Query<Stat
 
 /**
  * "Auto-sort new requests daily at 7:00 AM PT" (owner decision 2026-10-21: off by default).
- * Approvers and owners turn it on or off; commenters and viewers see its state only.
+ * An approver or owner turns it on or off; commenters and viewers see its state only.
  */
 export function DailyTriageSwitch({ triage, canChange }: { triage: Query<Status>; canChange: boolean }) {
   const [busy, setBusy] = useState(false);

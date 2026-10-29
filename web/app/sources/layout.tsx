@@ -8,7 +8,6 @@ import { SettingsNav } from "../settings/_nav";
 export default function SourcesLayout({ children }: { children: ReactNode }) {
   return (
     <PageTabsProvider
-      section="Settings"
       tabs={
         <Suspense fallback={<div className="h-12" />}>
           <SettingsNav />
