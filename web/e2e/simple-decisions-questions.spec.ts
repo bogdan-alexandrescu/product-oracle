@@ -299,7 +299,7 @@ for (const phone of [false, true]) {
         const card = page.getByTestId("home-decisions");
         await expect(card.getByTestId("home-question")).toHaveCount(phone ? 2 : 3);
         await expect(card.getByTestId("home-more")).toHaveText(/^\d+ more ->$/);
-        await expect(card.getByRole("link", { name: "All ->" })).toBeVisible();
+        await expect(card.getByRole("link", { name: "All decisions", exact: true })).toHaveText("All ->");
 
         await page.goto("/simple/prds/guided-setup");
         await page.getByRole("button", { name: "Start review" }).click();
