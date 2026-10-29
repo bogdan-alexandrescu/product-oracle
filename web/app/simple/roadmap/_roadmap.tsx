@@ -125,7 +125,7 @@ function GoalCounters({ data, byGoal, suggestions, onGoal }: { data: Roadmap; by
   const shown = (i: Item | undefined): i is Item => !!i && !closedItem(i) && !pmItem(i);
   const goals = new Map<string, { title: string; metric: string | null; items: number; broken: number }>();
   const add = (key: string, title: string, i: Item) => {
-    const g = goals.get(key) ?? { title, metric: i.goal?.metric ?? known(key)?.metric ?? null, items: 0, broken: 0 };
+    const g = goals.get(key) ?? { title, metric: i.goal?.metric ?? null, items: 0, broken: 0 };
     g.items += 1;
     if (broken(i).length) g.broken += 1;
     goals.set(key, g);
