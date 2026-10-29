@@ -101,7 +101,7 @@ for (const phone of [false, true]) {
           await page.getByTestId("board-tab-needs_input").click();
         } else {
           await expect(recommended).toContainText("Recommended 12");
-          await expect(decided).toContainText("Decided PRD questions 1");
+          await expect(decided).toContainText("Decided questions 1");
           await expect(needs).toBeVisible();
           await expect(recommended).toBeVisible();
           await expect(decided).toBeVisible();

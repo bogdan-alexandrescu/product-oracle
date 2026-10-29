@@ -62,7 +62,7 @@ for (const phone of [false, true]) {
         await expect(s.getByRole("checkbox", { name: "Approver" })).toBeChecked();
         await expect(s.getByRole("checkbox", { name: "Commenter" })).not.toBeChecked();
         await s.getByRole("checkbox", { name: "Commenter" }).check();
-        await s.getByRole("radio", { name: "Presenter plus named people" }).check();
+        await s.getByRole("radio", { name: "Presenter plus one or two people" }).check();
         await s.getByLabel("Who else changes things").getByRole("checkbox", { name: "Commenter" }).check();
         await expect(s.getByLabel("Length")).toHaveValue("60");
         await s.getByLabel("Length").selectOption("45");

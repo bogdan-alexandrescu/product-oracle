@@ -48,7 +48,7 @@ for (const phone of [false, true]) {
         if (phone) await page.getByTestId("board-tab-recommended").click();
         expect(await buttons(page, "Q6")).toEqual(list6);
         if (phone) await page.getByTestId("board-tab-decided").click();
-        await expect(page.getByTestId("board-decided")).toHaveAttribute("aria-label", "Decided PRD questions");
+        await expect(page.getByTestId("board-decided")).toHaveAttribute("aria-label", "Decided questions");
 
         if (phone) {
           await page.getByTestId("decisions-view-list").click();
@@ -105,7 +105,7 @@ test.describe("desktop · Decisions", () => {
     const q2 = row(page, "Q2");
     await q2.getByRole("button", { name: "Name a decider" }).click();
     const people = q2.getByTestId("question-people");
-    await expect(people).toContainText("Only approvers and owners decide.");
+    await expect(people).toContainText("Only the people who may decide are listed.");
     await expect(people.getByRole("button", { name: "Approver" })).toBeVisible();
     await expect(people.getByRole("button", { name: "Viewer" })).toHaveCount(0);
     await expect(q2.getByRole("button", { name: "Name a decider" })).toHaveCount(0);

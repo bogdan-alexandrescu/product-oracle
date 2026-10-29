@@ -87,14 +87,23 @@ for (const phone of [false, true]) {
         const s = sheet(page);
         await expect(s).toBeVisible();
         const bg = await page.getByTestId("start-sheet-scrim").evaluate((el) => getComputedStyle(el).backgroundColor);
-        expect(bg).toBe("rgba(0, 0, 0, 0.5)");
+        // The design system's scrim (the ds Dialog's), dark in both themes.
+        const token = await page.evaluate(() => {
+          const el = document.createElement("div");
+          el.className = "bg-hero/50";
+          document.body.append(el);
+          const c = getComputedStyle(el).backgroundColor;
+          el.remove();
+          return c;
+        });
+        expect(bg).toBe(token);
         const inside = () => page.evaluate(() => !!document.activeElement?.closest('[role="dialog"]'));
         expect(await inside()).toBe(true);
         for (let i = 0; i < 25; i++) {
           await page.keyboard.press("Tab");
           expect(await inside()).toBe(true);
         }
-        await expect(s.getByRole("radio", { name: "Presenter plus named people" })).toBeVisible();
+        await expect(s.getByRole("radio", { name: "Presenter plus one or two people" })).toBeVisible();
         await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
         for (const box of await s.getByRole("group", { name: "Attendees" }).getByRole("checkbox").all()) await box.uncheck();
         await expect(s.getByTestId("start-no-attendees")).toHaveText("Pick at least one attendee besides you.");
@@ -219,8 +228,8 @@ test.describe("desktop · the live meeting", () => {
     const delivery = page.getByRole("region", { name: "Delivery" });
     await expect(delivery.getByRole("link", { name: /Connect Slack|Pick a channel/ })).toBeVisible();
     await expect(delivery).not.toContainText("Not connected");
-    const from = page.getByRole("region", { name: "From the meeting" });
-    await expect(from.getByRole("link", { name: "Read the meeting chat" })).toHaveAttribute("href", /\/chat\?session=/);
+    // fix2-simple-decide review: no "From the meeting" section nobody asked for.
+    await expect(page.getByRole("region", { name: "From the meeting" })).toHaveCount(0);
     await delivery.getByRole("button", { name: "Send" }).click();
     await expect(delivery.getByRole("status", { name: "Sent" })).toBeVisible();
     await expect(delivery).not.toContainText("not chosen");
