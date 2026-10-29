@@ -77,7 +77,9 @@ for (const phone of [false, true]) {
         test("phone: the meeting scrolls as the page, with no inner scrolling layer", async ({ page }) => {
           await startReview(page);
           const screen = page.getByTestId("meeting-screen");
-          expect((await screen.boundingBox())!.y).toBe(0);
+          // It starts at the top of the page itself (not a fixed layer of its own).
+          expect(await screen.evaluate((el) => el.getBoundingClientRect().top + window.scrollY)).toBe(0);
+          expect(await screen.evaluate((el) => getComputedStyle(el).position)).not.toBe("fixed");
           await page.getByRole("region", { name: "All decisions" }).scrollIntoViewIfNeeded();
           expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
           expect(await screen.evaluate((el) => el.scrollTop)).toBe(0);

@@ -600,7 +600,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                       {m.attendees.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </SimpleSelect>
                     <input type="date" aria-label={`Due date of action item ${i + 1}`} value={a.due_date} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, due_date: e.target.value } : x)))} className="h-10 rounded-button border border-line-strong bg-surface px-2 text-text [color-scheme:light_dark]" />
-                    <button type="button" className={`simple-button ${PHONE_TAP} max-[600px]:min-w-11`} aria-label={`Remove action item ${i + 1}`} onClick={() => edit(setActions)(actions.filter((_, j) => j !== i))}>
+                    <button type="button" className="simple-button max-[600px]:!min-h-11 max-[600px]:!min-w-11" aria-label={`Remove action item ${i + 1}`} onClick={() => edit(setActions)(actions.filter((_, j) => j !== i))}>
                       ×
                     </button>
                   </div>
