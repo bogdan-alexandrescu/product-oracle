@@ -21,7 +21,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * stacked bar per goal in B's strong milestone colours with a segment per milestone ("M1 4",
  * blank when too narrow) and its total, B's footnote, every total equal to the plan's, goal
  * cards as B (the name, "n features in the plan", a row per feature: code, name, a chip per
- * milestone, its weeks or PM-owned) with one Suggestions button (QA pass 2)
+ * milestone, its weeks or PM-owned) with "+ Suggest a feature" and "✦ Ask Oracle to suggest"
  * under each list, and the page's quarter label the plan's span; no label is cut and every
  * label on a milestone colour reads at 4.5:1; roadmap items outside the plan still listed
  * under their goal; fails_when = a number differs from the plan, the old "Share of ..."
@@ -179,9 +179,9 @@ for (const v of VIEWS) {
       await expect(page.getByTestId("plan-goal")).toHaveCount(4);
       await nothingCut(page.locator('[data-testid="plan-chip"]'));
       expect(await contrasts(page.locator('[data-testid="plan-chip"]'))).toEqual([]);
-      // One Suggestions button under each goal's list (qa-simple-plan-20).
-      await expect(page.locator('[data-testid="plan-goal"] [data-testid="goal-suggestions-open"]')).toHaveCount(4);
-      await expect(page.getByTestId("goal-suggest-feature")).toHaveCount(0);
+      // B's two buttons under each goal's list, for who may suggest.
+      await expect(page.getByTestId("goal-suggest-feature")).toHaveCount(4);
+      await expect(page.getByTestId("goal-ask-oracle")).toHaveText(Array(4).fill("✦ Ask Oracle to suggest"));
 
       // Roadmap items outside the plan (the alerts roadmap's) still show, under their goal.
       const outside = page.getByTestId("plan-outside");
@@ -206,13 +206,10 @@ for (const v of VIEWS) {
       await setUp(page, v.scheme, "simple-plan");
       await page.goto("/simple/priorities?tab=buckets");
       const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
-      // One way in per goal (qa-simple-plan-20): the Suggestions button; the drawer holds the form and the ask.
-      await growth.getByTestId("goal-suggestions-open").click();
+      await growth.getByTestId("goal-suggest-feature").click();
       const panel = page.getByTestId("goal-panel");
       await expect(panel).toBeVisible();
       await expect(panel.getByRole("heading", { name: "Suggestions · Growth" })).toBeVisible();
-      // The decider's form is folded to one line.
-      await panel.getByTestId("suggest-form-open").click();
       const form = panel.getByTestId("suggest-form");
       await expect(form).toBeVisible();
       await form.getByLabel("Feature name").fill("Invite from the dashboard");
@@ -225,15 +222,14 @@ for (const v of VIEWS) {
       await expect(panel).toHaveCount(0);
 
       const reliability = page.locator('[data-testid="plan-goal"][data-goal="Reliability"]');
-      await reliability.getByTestId("goal-suggestions-open").click();
-      await expect(panel.getByRole("heading", { name: "Suggestions · Reliability" })).toBeVisible();
-      await panel.getByTestId("suggestions-tab-oracle").click();
-      await panel.getByRole("button", { name: "✦ Ask Oracle for more" }).click();
+      await reliability.getByTestId("goal-ask-oracle").click();
       await expect(page.getByText("Oracle is suggesting features for Reliability")).toBeVisible();
+      await expect(panel.getByRole("heading", { name: "Suggestions · Reliability" })).toBeVisible();
+      await expect(panel.getByTestId("suggestions-tab-oracle")).toHaveAttribute("aria-selected", "true");
       await expect(panel.locator('[data-testid="goal-suggestion"][data-title="Setup health check"]')).toBeVisible();
       await expect(panel.getByTestId("suggestions-tab-oracle")).toHaveText("✦ Oracle · 2");
       await panel.getByRole("button", { name: /^Close/ }).first().click();
-      await expect(reliability.getByTestId("goal-suggestions-open")).toHaveText("Suggestions · 2");
+      await expect(reliability.getByTestId("goal-ask-oracle")).toHaveText("✦ Ask Oracle to suggest");
     });
 
     test("value / effort: a log effort axis split at the medians, linked to the ranked list", async ({ page }) => {
@@ -347,25 +343,25 @@ test("value / effort: a sideways drag re-estimates effort on the log scale", asy
 });
 
 /**
- * Card fid-prio-suggest-roles: protects = every goal card has one Suggestions button (QA pass 2);
- * a commenter gets the form in its drawer; a viewer, who may not suggest, only the suggestions to read;
+ * Card fid-prio-suggest-roles: protects = a commenter gets B's two buttons under each goal's
+ * list; a viewer, who may not suggest, gets neither, only the goal's suggestions to read;
  * fails_when = a viewer is offered a suggest button or a commenter is not; no_claim = the API's
  * refusal of a viewer's suggestion (pytest).
  */
 for (const who of ["commenter", "viewer"] as const) {
-  test(`goal buckets: one Suggestions button; who may suggest gets the form, a viewer reads (${who})`, async ({ page }) => {
+  test(`goal buckets: who may suggest gets the two buttons, a viewer reads the suggestions (${who})`, async ({ page }) => {
     await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, "simple-plan"] as const);
     await login(page, `${who}@example.com`);
     await page.goto("/simple/priorities?tab=buckets");
     await expect(page.getByTestId("buckets-head")).toBeVisible();
     const growth = page.locator('[data-testid="plan-goal"][data-goal="Growth"]');
-    // One Suggestions button for everyone (qa-simple-plan-20); only who may suggest gets the form in the drawer.
-    await growth.getByTestId("goal-suggestions-open").click();
-    const panel = page.getByTestId("goal-panel");
-    if (who === "commenter") await expect(panel.getByTestId("suggest-form")).toBeVisible();
-    else {
-      await expect(panel.getByTestId("suggest-form")).toHaveCount(0);
-      await expect(panel.getByTestId("suggest-form-open")).toHaveCount(0);
+    if (who === "commenter") {
+      await expect(growth.getByTestId("goal-suggest-feature")).toHaveText("+ Suggest a feature");
+      await expect(growth.getByTestId("goal-ask-oracle")).toHaveText("✦ Ask Oracle to suggest");
+    } else {
+      await expect(growth.getByTestId("goal-suggestions-open")).toBeVisible();
+      await expect(page.getByTestId("goal-suggest-feature")).toHaveCount(0);
+      await expect(page.getByTestId("goal-ask-oracle")).toHaveCount(0);
     }
   });
 }

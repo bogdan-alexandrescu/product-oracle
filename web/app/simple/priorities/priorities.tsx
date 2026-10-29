@@ -1461,9 +1461,12 @@ function suggestionGoal(api: GoalSuggestionsApi, goal: string): Schemas["SimpleG
 
 /** plan-charts (the owner's pick B): the plan's header, then a card per goal listing each feature with its milestone chips. */
 function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["SimplePlanOut"]; suggestions: GoalSuggestionsApi }) {
+  const { can } = useMe();
   const goals = planGoals(plan);
   const noGoal = plan.slices.some((x) => !x.goal);
   const [panel, setPanel] = useState<{ goal: GoalBrief; start?: GoalPanelStart } | null>(null);
+  // Who may suggest (commenters and up) gets B's two buttons; anyone else, the suggestions to read.
+  const suggests = can("create_goal_suggestion");
   // A goal's code: its own ("G-A1 Account Safety"), else the code of the goal it names.
   const codeOf = (goal: string): string | null => {
     const own = goalLabel(goal).code;
@@ -1493,8 +1496,31 @@ function PlanBuckets({ data, plan, suggestions }: { data: Out; plan: Schemas["Si
                 </span>
               </div>
               <PlanFeatureList plan={plan} goal={g} />
-              {/* One way in per goal, as without a plan: the drawer holds the form and "Ask Oracle for more". */}
-              {state && (
+              {state && suggests && (
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-line pt-3">
+                  <button
+                    type="button"
+                    data-testid="goal-suggest-feature"
+                    onClick={() => setPanel({ goal: state.goal, start: "form" })}
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-[14px] font-[650] text-text hover:bg-surface2"
+                  >
+                    + Suggest a feature
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="goal-ask-oracle"
+                    disabled={state.pending}
+                    onClick={() => {
+                      setPanel({ goal: state.goal, start: "oracle" });
+                      void suggestions.suggest(state.goal);
+                    }}
+                    className="inline-flex h-8 items-center gap-1.5 whitespace-nowrap rounded-lg border border-transparent bg-accent-soft px-3 text-[14px] font-[650] text-accent-ink hover:bg-accent-mid disabled:cursor-default"
+                  >
+                    {state.pending ? "✦ Oracle is suggesting…" : "✦ Ask Oracle to suggest"}
+                  </button>
+                </div>
+              )}
+              {state && !suggests && (
                 <div className="mt-3 border-t border-line pt-3">
                   <SuggestionsButton goal={state.goal} api={suggestions} onOpen={(goal) => setPanel({ goal })} />
                 </div>

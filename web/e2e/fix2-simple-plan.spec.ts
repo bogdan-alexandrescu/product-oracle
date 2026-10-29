@@ -272,7 +272,10 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     }
   });
 
-  /* qa-simple-plan-5, -17, -18, -19, -20: with a dated plan the tabs agree, the span is the plan's, numbers drop ".0", plain words, one entry point. */
+  /*
+   * qa-simple-plan-5, -17, -18, -19: with a dated plan the tabs agree, the span is the plan's, numbers drop ".0", plain words.
+   * qa-simple-plan-20 (one entry point per goal) waits for the owner: each goal card keeps B's two buttons.
+   */
   test("with a dated plan: the plan's span, plain numbers and words, the tabs agree", async ({ page }) => {
     await setUp(page, { scheme: "dark", scenario: "simple-plan" });
     await open(page, "?tab=buckets");
@@ -283,10 +286,9 @@ test.describe("QA pass 2: simple-plan, Goal buckets", () => {
     await expect(page.getByTestId("prio-subtitle")).toContainText("Nov 2 – Feb 12");
     await expect(page.getByTestId("plan-goal-count").first()).toContainText("in the plan");
     for (const card of await page.locator('[data-testid="plan-goal"][data-goal]:not([data-goal=""])').all()) {
-      await expect(card.getByTestId("goal-suggest-feature")).toHaveCount(0);
-      await expect(card.getByTestId("goal-ask-oracle")).toHaveCount(0);
+      await expect(card.getByTestId("goal-suggest-feature")).toHaveCount(1);
+      await expect(card.getByTestId("goal-ask-oracle")).toHaveCount(1);
     }
-    await expect(page.getByTestId("goal-suggestions-open").first()).toBeVisible();
     const revenue = page.locator('[data-testid="plan-goal"]').filter({ has: page.getByRole("heading", { name: "Revenue" }) });
     const code = (await revenue.getByTestId("plan-feature").first().getAttribute("data-code"))!;
     await page.getByRole("tab", { name: "Ranked list" }).click();
