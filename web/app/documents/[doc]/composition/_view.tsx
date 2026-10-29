@@ -15,11 +15,11 @@ import { CatalogTab } from "./_catalog";
 import { ConfirmStep, EMPTY_INPUTS, PublishStep } from "./_confirm";
 import { HistoryTab } from "./_history";
 import {
-  DECIDED_BY,
+  decidedByInWords,
   FILTER_LABEL,
   NO_CHANGES,
   PACKS_SOURCE,
-  POLICY_SOURCE,
+  sectionsInWords,
   SELECTION_LABEL,
   diffLine,
   draftOrder,
@@ -92,7 +92,6 @@ export function CompositionView({ doc }: { doc: string }) {
   const mayConfirm = can("confirm_composition_revision");
   const mayPublish = can("publish_composition");
   const data = q.data;
-  const next = (data?.head_revision ?? 0) + 1;
 
   async function loadPreview() {
     setPreviewError(null);
@@ -209,27 +208,22 @@ export function CompositionView({ doc }: { doc: string }) {
       { key: "selection", header: "Selection", width: "110px", wrap: true, cell: (m) => SELECTION_LABEL[m.selection] },
       {
         key: "decided",
-        header: "Decided by",
-        width: "150px",
+        header: "Why",
+        width: "170px",
         wrap: true,
-        phoneLabel: "Decided by",
-        cell: (m) => (m.decided_by === "policy" ? POLICY_SOURCE[m.policy_source] : DECIDED_BY[m.decided_by]),
+        phoneLabel: "Why",
+        cell: (m) => decidedByInWords(m),
       },
       {
         key: "layout",
         header: "Sections",
-        width: "130px",
+        width: "150px",
         wrap: true,
         narrow: "hide",
         cell: (m) => {
-          const brief = m.layer_impact.brief_sections.length;
-          const full = m.layer_impact.full_sections.length;
-          if (!brief && !full) return <span className="text-text2">No sections</span>;
-          return (
-            <span className="text-sm">
-              {[brief ? `${brief} in brief` : null, full ? `${full} in full` : null].filter(Boolean).join(", ")}
-            </span>
-          );
+          const words = sectionsInWords(m);
+          if (!words) return <span className="text-text2">No sections</span>;
+          return <span className="text-sm">{words}</span>;
         },
       },
       {
@@ -341,7 +335,7 @@ export function CompositionView({ doc }: { doc: string }) {
                 </li>
               )}
             </ul>
-            <p className="mt-2 text-sm text-text2">Nothing is saved until you use Confirm revision {next} above.</p>
+            <p className="mt-2 text-sm text-text2">Nothing is saved until you choose Use these modules above.</p>
           </Panel>
         )}
         {data.working && (
@@ -398,6 +392,7 @@ export function CompositionView({ doc }: { doc: string }) {
               )}
               {packNames.length > 0 && (
                 <span className={META} data-testid="composition-pack">
+                  {packNames.length === 1 ? "Company pack: " : "Company packs: "}
                   {packNames.join(", ")}
                   {packsSource && PACKS_SOURCE[packsSource] ? ` · ${PACKS_SOURCE[packsSource]}` : ""}
                 </span>
@@ -411,8 +406,9 @@ export function CompositionView({ doc }: { doc: string }) {
               <Button onClick={loadPreview}>Preview recommendation</Button>
               {mayPublish && data.current?.status === "confirmed" && <Button onClick={() => setPublishing(true)}>Publish revision {data.current.number}</Button>}
               {mayConfirm && (
+                // qa-docs-30: the button says what it does; the dialog it opens names the revision.
                 <Button variant="primary" onClick={() => setConfirming(true)}>
-                  Confirm revision {next}
+                  Use these modules
                 </Button>
               )}
             </>

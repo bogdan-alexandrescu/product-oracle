@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type R
 import { confirmInPage } from "@/components/ds/ConfirmDialog";
 import { LIMITS, publicCall, type PublicInterview, type PublicMessage, type PublicProgress, type PublicTurn } from "@/lib/api/interviews";
 
-type Refusal = "used" | "expired" | "withdrawn" | "replaced" | "unreachable";
+type Refusal = "unknown" | "used" | "expired" | "withdrawn" | "replaced" | "unreachable";
 type Phase = { at: "loading" } | { at: "intro" } | { at: "chat" } | { at: "done" } | { at: "refused"; why: Refusal };
 
 const BUTTON =
@@ -15,9 +15,13 @@ const QUIET = `${BUTTON} border border-line-strong bg-surface text-text hover:bg
 /** The page's one column: the header, the conversation and the footer line up on it. */
 const COLUMN = "mx-auto w-full max-w-2xl min-w-0 px-4";
 
-/** The refusal of a public call's status and reason (404 reads as expired: a guess learns nothing). */
+/**
+ * The refusal of a public call's status and reason. qa-onboarding-33: the API answers an
+ * unknown (or mistyped) link 404 and a known one that ran out 410 "expired", so the page says
+ * which; the 404's body tells nothing more about the link.
+ */
 function refusalOf(status: number, reason: string | null): Refusal | null {
-  if (status === 404) return "expired";
+  if (status === 404) return "unknown";
   if (status !== 410) return null;
   return reason === "used" || reason === "withdrawn" || reason === "replaced" ? reason : "expired";
 }
@@ -26,8 +30,7 @@ function refusalOf(status: number, reason: string | null): Refusal | null {
  * The customer's side of an interview: the company's name and the disclosure, Hi and the
  * intro, Start; then the conversation, one approved question at a time, with one Send, Skip
  * this question and Finish interview (asks first: it ends the interview) at any time; then the
- * thank-you. A used, expired or withdrawn
- * link shows a one-line page. Phone first: the input is a sticky footer.
+ * thank-you. An unknown, used, expired or withdrawn link shows a one-line page. Phone first: the input is a sticky footer.
  */
 export function InterviewChat({ token }: { token: string }) {
   const [phase, setPhase] = useState<Phase>({ at: "loading" });
@@ -140,7 +143,9 @@ export function InterviewChat({ token }: { token: string }) {
             ? `This link was replaced by a newer one. ${company ? `Ask ${company} for the new link.` : "Ask the team that sent it for the new link."}`
             : phase.why === "expired"
               ? "This link has expired."
-              : "We could not open this link. Check your connection and reload the page.";
+              : phase.why === "unknown"
+                ? "This link isn't valid — ask for a new one."
+                : "We could not open this link. Check your connection and reload the page.";
     return (
       <Frame company={company}>
         <p data-testid="interview-refused" className="py-10 text-center text-lg font-semibold">

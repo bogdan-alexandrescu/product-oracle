@@ -130,7 +130,8 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
   const status = report && (
     <>
       {!can("act_on_staleness") && <ViewOnly />}
-      <Chip kind={report.preview ? "acc" : "line"}>{report.preview ? "Preview" : "Recorded"}</Chip>
+      {/* qa-docs-25: a preview says so in the line under the header, in words; no lone badge. */}
+      {!report.preview && <Chip kind="line">Recorded</Chip>}
       {counts!.potentially_stale > 0 && (
         <Chip kind="warn" dot>
           {counts!.potentially_stale} potentially stale

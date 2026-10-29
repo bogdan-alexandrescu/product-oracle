@@ -274,7 +274,16 @@ function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean })
           <Loading />
         </div>
       ) : specs.length === 0 ? (
-        <p className="px-4 py-3 text-text2">No engineering spec yet</p>
+        // qa-docs-17: what unlocks a spec, and who asks for one.
+        <p data-testid="engineering-specs-empty" className="px-4 py-3 text-text2">
+          {!approved
+            ? can("publish_version")
+              ? "No engineering spec yet. Approve a version to request a spec."
+              : "No engineering spec yet. A spec can be requested once a version is approved."
+            : may
+              ? "No engineering spec yet. Request one for an approved roadmap item."
+              : "No engineering spec yet. An approver or owner can request one."}
+        </p>
       ) : (
         <ul className="divide-y divide-line">
           {specs.map((s) => {
@@ -336,7 +345,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
           <>
             <PageHeader
               title={d.title}
-              suffix={d.latest_version != null ? `v${d.latest_version}` : undefined}
+              // qa-docs-6: the version the panel shows (the latest until another is picked).
+              suffix={selected ? `v${selected.number}` : d.latest_version != null ? `v${d.latest_version}` : undefined}
               status={
                 <>
                   <DocStatusChip status={d.status} />

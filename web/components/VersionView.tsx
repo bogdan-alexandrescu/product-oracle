@@ -263,6 +263,37 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
   const [scrollTarget, setScrollTarget] = useState<{ id: string; key: string } | null>(null);
   // Queries are scoped to this view: Next keeps recently visited routes mounted (hidden).
   const rootRef = useRef<HTMLDivElement>(null);
+  // qa-docs-8: on a phone the Sections / Review bar sits on the app's tab bar. The page's scroll
+  // padding at the bottom is set to both bars (the room from the bar's top to the screen's
+  // bottom), so a section's end or its Prev/Next scrolled into view stops clear of both.
+  const [phoneBar, setPhoneBar] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = phoneBar;
+    if (!el) return;
+    const root = document.documentElement;
+    const before = root.style.scrollPaddingBottom;
+    // What this bar set, so a hidden view (Next keeps visited routes mounted) only undoes its own.
+    let mine: string | null = null;
+    const release = () => {
+      if (mine !== null && root.style.scrollPaddingBottom === mine) root.style.scrollPaddingBottom = before;
+      mine = null;
+    };
+    const fit = () => {
+      const r = el.getBoundingClientRect();
+      if (r.height === 0) return release();
+      mine = `${Math.ceil(window.innerHeight - r.top)}px`;
+      root.style.scrollPaddingBottom = mine;
+    };
+    fit();
+    const watch = new ResizeObserver(fit);
+    watch.observe(el);
+    window.addEventListener("resize", fit);
+    return () => {
+      watch.disconnect();
+      window.removeEventListener("resize", fit);
+      release();
+    };
+  }, [phoneBar]);
   const panelRef = useRef<HTMLElement>(null);
 
   const version = verQ.data;
@@ -1169,6 +1200,16 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                     }}
                   />
                 ))}
+              {/* qa-docs-3: a reviewer who cannot approve still sees why the version cannot be
+                  approved (the marked dates); only the Approve button is the approver's. */}
+              {version && !version.approved_at && !canApprove && capsReady && approveBlocked && (
+                <span
+                  data-testid="approve-blocked-note"
+                  className="block max-w-[min(28rem,calc(100vw-2.5rem))] text-right text-sm font-medium break-words text-warn max-[600px]:text-left"
+                >
+                  {approveBlocked}
+                </span>
+              )}
             </>
           }
         />
@@ -1443,6 +1484,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
       {/* Phone: Sections and Review, each opening a sheet. */}
       {onDocument && version && (
         <div
+          ref={setPhoneBar}
           data-testid="phone-bar"
           className="fixed inset-x-0 bottom-0 z-30 hidden grid-cols-2 gap-2 border-t border-line bg-surface px-3 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] shadow-tip max-[639px]:grid max-[600px]:bottom-[68px] max-[600px]:pb-1.5"
         >

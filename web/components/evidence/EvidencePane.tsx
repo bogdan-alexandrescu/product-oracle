@@ -486,8 +486,10 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                         data-gap={gap ? "true" : undefined}
                         className={`w-[96px] min-w-[96px] px-1 py-2 text-center align-bottom text-[13px] leading-4 font-semibold ${gap ? "bg-crit-bg text-crit" : "text-text2"}`}
                       >
+                        {/* qa-docs-7: a red column needs no repeated word under its name; the
+                            note under the table says what red means (screen readers hear it). */}
                         <span className="block [overflow-wrap:anywhere]">{s.heading}</span>
-                        {gap && <span className="block">unsupported</span>}
+                        {gap && <span className="sr-only">, no links or citations</span>}
                       </th>
                     );
                   })}
@@ -515,8 +517,9 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
           </div>
         )}
         <p className="border-t border-line px-4 py-2 text-[13px] text-text2">
-          Per section: its section links and the draft&rsquo;s citations in it. A red column has neither, nor has any section under it. Rendered pages never show
-          these links; exports list them under &ldquo;Sources and data points&rdquo; (rejected and superseded items left out). {sourcesAsOf(data.snapshot)}
+          {/* qa-docs-7: one or two plain sentences. */}
+          A red column is a section with no links or citations. Readers never see these links on the page; exports list them under &ldquo;Sources and data
+          points&rdquo;. {sourcesAsOf(data.snapshot)}
         </p>
       </Panel>
       {!phone && !row && <p className="sr-only">Pick a cell to see every section that links its target.</p>}

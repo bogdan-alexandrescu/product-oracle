@@ -32,7 +32,8 @@ export function InfoTip({
   const shown = open || pinned;
   // Keep an open tip inside the viewport, or inside a scrolling panel that clips it (the
   // Inspector), with a 12 px margin: narrow it to the room there, then shift it in.
-  const [fit, setFit] = useState<{ shift: number; width?: number }>({ shift: 0 });
+  // qa-docs-19: `flip` puts it on the other side when the window has no room on its own.
+  const [fit, setFit] = useState<{ shift: number; width?: number; flip?: boolean }>({ shift: 0 });
 
   useLayoutEffect(() => {
     if (!shown || !tip.current) {
@@ -56,7 +57,11 @@ export function InfoTip({
     // Unshifted, the tip keeps the edge `align` names next to the (i).
     const left = align === "end" ? box.right - fit.shift - width : box.left - fit.shift;
     const shift = left < lo ? lo - left : left + width > hi ? hi - (left + width) : 0;
-    setFit({ shift, width: width < box.width ? width : undefined });
+    // Cut off by the window's top (bottom) edge, with more room on the other side of the (i).
+    const view = document.documentElement.clientHeight;
+    const at = root.current?.getBoundingClientRect();
+    const flip = !!at && (side === "top" ? box.top < 0 && view - at.bottom > at.top : box.bottom > view && at.top > view - at.bottom);
+    setFit({ shift, width: width < box.width ? width : undefined, flip });
     // Measured once per opening; fitting does not re-measure.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shown]);
@@ -117,13 +122,14 @@ export function InfoTip({
         ref={tip}
         id={id}
         role="tooltip"
+        data-side={(side === "top") !== !!fit.flip ? "top" : "bottom"}
         hidden={!shown}
         style={{
           ...(fit.shift ? { transform: `translateX(${fit.shift}px)` } : {}),
           ...(fit.width ? { maxWidth: fit.width } : {}),
         }}
         className={`absolute z-50 w-max max-w-[min(380px,calc(100vw-24px))] rounded-button bg-tip px-3.5 py-2.5 text-left text-sm leading-5 font-normal tracking-normal whitespace-normal text-tip-text not-italic shadow-tip ${
-          side === "top" ? "bottom-[calc(100%+10px)]" : "top-[calc(100%+10px)]"
+          (side === "top") !== !!fit.flip ? "bottom-[calc(100%+10px)]" : "top-[calc(100%+10px)]"
         } ${align === "end" ? "-right-3" : "-left-3"}`}
       >
         {children}

@@ -29,7 +29,9 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
   return (
     <div data-testid={testId} className="flex flex-col gap-1">
       <div className="grid grid-cols-[minmax(7.5rem,38%)_1fr] items-end gap-2 md:grid-cols-[minmax(10rem,32%)_1fr]">
-        <span className="simple-small truncate">{prd.title}</span>
+        <span className="simple-small line-clamp-2 [overflow-wrap:anywhere]" title={prd.title}>
+          {prd.title}
+        </span>
         <div className="relative h-6 text-[13px] text-text2">
           {plan.months.map((m) => (
             <span key={m} data-testid={`${testId}-month`} className="absolute top-0 truncate border-l border-line pl-1" style={{ left: `${pct(m)}%` }}>
@@ -57,7 +59,8 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
                 className="grid grid-cols-[minmax(7.5rem,38%)_1fr] items-center gap-2 rounded-md py-1 hover:bg-surface2 md:grid-cols-[minmax(10rem,32%)_1fr]"
               >
                 <span className="flex min-w-0 flex-col leading-tight">
-                  <span className="truncate font-semibold" data-testid={`${testId}-label`}>{`${r.name} · ${n}`}</span>
+                  {/* qa-docs-10: on a narrow screen the label wraps to two lines, never cutting off the count. */}
+                  <span className="line-clamp-2 font-semibold [overflow-wrap:anywhere]" title={`${r.name} · ${n}`} data-testid={`${testId}-label`}>{`${r.name} · ${n}`}</span>
                   {when && <span className="simple-small tnum">{when}{r.past_edge ? " →" : ""}</span>}
                 </span>
                 <span className="relative h-7">

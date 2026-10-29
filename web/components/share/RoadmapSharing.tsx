@@ -581,7 +581,19 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
         </span>
       ),
     },
-    { key: "last", header: "Last viewed", width: "150px", phone: "hide", cell: (l) => (l.last_viewed_at ? formatDateTime(l.last_viewed_at) : "Not yet") },
+    {
+      // qa-docs-15: the time wraps whole (its zone too), never cut off.
+      key: "last",
+      header: "Last viewed",
+      width: "150px",
+      phone: "hide",
+      wrap: true,
+      cell: (l) => (
+        <span data-testid="share-last-viewed" className="tnum">
+          {l.last_viewed_at ? formatDateTime(l.last_viewed_at) : "Not yet"}
+        </span>
+      ),
+    },
     {
       key: "state",
       header: "State",
@@ -650,7 +662,7 @@ function ShareLinks({ doc, reloadKey }: { doc: string; reloadKey: number }) {
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {!q.data && !q.error && <Loading />}
       {q.data && (
-        <DataTable label="Share links" testId="share-links" columns={columns} rows={links} rowKey={(l) => l.id} empty="No links yet. Share makes one." />
+        <DataTable label="Share links" testId="share-links" columns={columns} rows={links} rowKey={(l) => l.id} empty="No links yet. Use Share above to create one." />
       )}
       {dialog?.kind === "log" && <ViewLog link={dialog.link} onClose={() => close(false)} />}
       {dialog?.kind === "extend" && <Extend link={dialog.link} onClose={close} />}
