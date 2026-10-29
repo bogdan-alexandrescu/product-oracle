@@ -196,20 +196,25 @@ test.describe("Key dates", () => {
 test.describe("AppShell account panel", () => {
   test.use(DESKTOP);
 
-  test("qa-simple-roadmap-46: the truncated email keeps its full address (and name) as a tooltip", async ({ page }) => {
+  /** fix2 review (qa-simple-roadmap-46): the name and the whole email each on its own line,
+   * wrapped, nothing cut off (not only a hover title). */
+  test("qa-simple-roadmap-46: the account panel shows the name and the whole email, uncut", async ({ page }) => {
     await login(page);
     await page.getByTestId("user-menu").click();
     const panel = page.getByRole("dialog", { name: "Account" });
-    // Admin has a name on file: the line reads the name, and its title carries the full email too.
-    const admin = panel.getByText(/admin@example\.com/);
-    await expect(admin).toHaveAttribute("title", "Admin (admin@example.com)");
+    const email = panel.getByText("admin@example.com", { exact: true });
+    await expect(email).toBeVisible();
+    await expect(panel.getByText("Admin", { exact: true })).toBeVisible();
+    const cut = await email.evaluate((el) => el.scrollWidth > el.clientWidth + 1 || getComputedStyle(el).textOverflow === "ellipsis");
+    expect(cut).toBe(false);
   });
 
-  test("qa-simple-roadmap-46: a member with no name on file still gets the full email as a tooltip", async ({ page }) => {
+  test("qa-simple-roadmap-46: a member with no name on file sees the whole email, uncut", async ({ page }) => {
     await login(page, "viewer@example.com");
     await page.getByTestId("user-menu").click();
     const panel = page.getByRole("dialog", { name: "Account" });
-    const viewer = panel.getByText("viewer@example.com");
-    await expect(viewer).toHaveAttribute("title", "viewer@example.com");
+    const viewer = panel.getByText("viewer@example.com", { exact: true });
+    await expect(viewer).toBeVisible();
+    expect(await viewer.evaluate((el) => el.scrollWidth > el.clientWidth + 1)).toBe(false);
   });
 });

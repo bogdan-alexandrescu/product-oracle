@@ -64,6 +64,9 @@ test.describe("desktop", () => {
       const btn = page.getByRole("button", { name: "Start review" });
       await expect(btn).toBeDisabled();
       expect(await btn.getAttribute("title")).toMatch(/owner|decider/i);
+      // fix2 review, #13: the reason is on screen too, not only a hover title.
+      await expect(page.getByTestId("start-review-reason")).toBeVisible();
+      await expect(page.getByTestId("start-review-reason")).toHaveText("Only an owner or the PRD's decider can start a review");
     });
   }
 
@@ -149,6 +152,13 @@ test.describe("desktop", () => {
     await expect(btn).toContainText("Needs a decision");
     const title = await btn.getAttribute("title");
     expect(title).toMatch(/this roadmap/i);
+    // fix2 review: the same is said on screen (not only a hover title), with the button's count.
+    const n = (await btn.textContent())!.match(/(\d+)/)![1];
+    await btn.click();
+    const scope = page.getByTestId("tray-scope");
+    await expect(scope).toBeVisible();
+    await expect(scope).toContainText(`${n} on this roadmap view`);
+    await expect(scope).toContainText("side menu");
   });
 
   /**
