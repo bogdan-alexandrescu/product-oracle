@@ -236,7 +236,8 @@ test.describe("desktop", () => {
   test("settings: the tabs sit under the title; /sources lives under Settings › Sources", async ({ page }) => {
     await login(page);
     await page.goto("/settings/members");
-    const heading = page.getByRole("heading", { level: 1, name: "Settings" });
+    // qa-settings-40: a Settings page is headed by its own name, the Settings tabs under it.
+    const heading = page.getByRole("heading", { level: 1, name: "Members" });
     const nav = page.getByRole("navigation", { name: "Settings" });
     await expect(heading).toBeVisible();
     await expect(nav).toBeVisible();

@@ -36,8 +36,13 @@ async function openPrds(page: Page) {
 /** Deletes usage-alerts from its row on PRDs: the dialog lists what goes with it and asks once more. */
 async function deleteFamily(page: Page) {
   await openPrds(page);
-  await prdRow(page, PRD).getByRole("button", { name: `Actions for ${PRD}` }).click();
-  await page.getByRole("menuitem", { name: "Delete…" }).click();
+  // A scroll closes a row menu: on a phone the row ends at the tab bar, and the list may still
+  // settle (scroll anchoring) as the menu opens. Centre the row and open again until Delete… takes.
+  await expect(async () => {
+    await prdRow(page, PRD).evaluate((el) => el.scrollIntoView({ block: "center" }));
+    if (!(await page.getByRole("menuitem", { name: "Delete…" }).isVisible())) await prdRow(page, PRD).getByRole("button", { name: `Actions for ${PRD}` }).click();
+    await page.getByRole("menuitem", { name: "Delete…" }).click({ timeout: 2_000 });
+  }).toPass({ timeout: 20_000 });
   const dialog = page.getByRole("dialog", { name: `Delete ${PRD}` });
   const goes = dialog.getByTestId("delete-dependents");
   await expect(goes).toContainText(ROADMAP);
@@ -58,7 +63,8 @@ async function expectFamilyGone(page: Page) {
   await expect(page.getByTestId("roadmap-row").filter({ hasText: ROADMAP })).toHaveCount(0);
   await expect(page.getByTestId("approved-prd").filter({ hasText: PRD })).toHaveCount(0);
   await page.goto("/documents/checkout-redesign-early-shipping-cost-spec");
-  await expect(page.getByText(/not found/i).first()).toBeVisible();
+  // The page's own not-found words (the phone header holds a hidden copy, qa-shell-8).
+  await expect(page.getByText(/not found/i).filter({ visible: true }).first()).toBeVisible();
 }
 
 async function expectFamilyBack(page: Page) {

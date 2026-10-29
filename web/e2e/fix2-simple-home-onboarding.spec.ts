@@ -60,13 +60,16 @@ async function connectTools(page: Page) {
 
 async function checkHorizons(page: Page) {
   await openStep(page, "Check the planning horizons", /\/settings\/company\?from=setup#horizons$/);
-  await page.locator("#horizons").getByRole("button", { name: "Confirm" }).click();
+  // Settings' panels all say Save; unchanged defaults are confirmed by it (qa-settings-18).
+  await page.locator("#horizons").getByRole("button", { name: "Save" }).click();
   await expect(page.locator("#horizons").getByRole("button", { name: "Reset" })).toBeVisible();
   await toSimple(page);
 }
 
 async function setZone(page: Page) {
   await openStep(page, "Set the company time zone", /\/settings\/company\?from=setup#timezone$/);
+  // Save waits for a zone to be picked (fix2-settings: "Not set" never stores Los Angeles).
+  await page.getByLabel("Company time zone").selectOption("America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
   await toSimple(page);
