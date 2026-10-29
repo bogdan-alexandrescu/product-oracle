@@ -79,7 +79,7 @@ async function barContrasts(s: Locator): Promise<{ estimated: boolean; ratio: nu
       el = el.parentElement;
     }
     const lc = lum(rgba(card));
-    return [...root.querySelectorAll<HTMLElement>('[data-testid="plan-strip-bar"]')].map((bar) => {
+    return [...root.querySelectorAll<HTMLElement>('[data-testid="plan-strip-span"]')].map((bar) => {
       const estimated = bar.dataset.estimated === "true";
       const cs = getComputedStyle(bar);
       const lb = lum(rgba(estimated ? cs.borderTopColor : cs.backgroundColor));
@@ -274,7 +274,7 @@ test.describe("phone", () => {
     for (let k = 0; k < 4; k++) {
       const fit = await rows.nth(k).evaluate((row) => {
         const label = row.querySelector<HTMLElement>('[data-testid="plan-strip-label"]')!;
-        const bar = row.querySelector<HTMLElement>('[data-testid="plan-strip-bar"]')!;
+        const bar = row.querySelector<HTMLElement>('[data-testid="plan-strip-span"]')!;
         return { cut: label.scrollWidth > label.clientWidth + 1, labelBottom: label.getBoundingClientRect().bottom, barTop: bar.getBoundingClientRect().top };
       });
       expect(fit.cut, `row ${k + 1}'s label is whole`).toBe(false);

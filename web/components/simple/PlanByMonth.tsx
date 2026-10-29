@@ -84,7 +84,7 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
                   <span
                     aria-hidden
                     data-estimated={r.estimated ? "true" : undefined}
-                    data-testid={`${testId}-bar`}
+                    data-testid={`${testId}-span`}
                     className={`absolute top-2 h-3 rounded ${r.estimated ? "border border-dashed border-accent" : "bg-accent"}`}
                     style={{
                       left: `${left}%`,

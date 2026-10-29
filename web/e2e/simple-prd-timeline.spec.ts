@@ -354,7 +354,7 @@ for (const phone of [false, true]) {
         const article = page.getByRole("article", { name: "One-pager" });
         await expect(article).toBeVisible();
         await expect(article).toContainText("A setup checklist with the next two steps");
-        await expect(article.getByRole("button", { name: "Edit “A setup checklist that shows" })).toHaveCount(1);
+        await expect(article.getByRole("button", { name: "Edit “A setup checklist with the" })).toHaveCount(1);
         // Below the milestone's card, never above it.
         const [p, a] = [(await page.getByTestId("milestone-part").boundingBox())!, (await article.boundingBox())!];
         expect(p.y + p.height).toBeLessThanOrEqual(a.y);
@@ -373,7 +373,7 @@ for (const phone of [false, true]) {
         await expect(article.getByTestId("line-edit-word").first()).toHaveText("Edit");
         for (const word of await article.getByTestId("line-edit-word").allTextContents()) expect(word).toBe("Edit");
         const line = article.locator("li[data-line]").first();
-        const edit = line.getByRole("button", { name: /^Edit line/ });
+        const edit = line.getByRole("button", { name: /^Edit “/ });
         await expect(edit).toHaveCSS("opacity", "0");
         if (!phone) await line.hover();
         else {
