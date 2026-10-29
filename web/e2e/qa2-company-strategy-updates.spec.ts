@@ -61,7 +61,7 @@ test.describe("desktop", () => {
     await expect(drift.getByTestId("drift-empty")).toContainText("No open findings");
     await expect(drift.getByTestId("drift-what")).toContainText("Oracle checks every day that each goal follows from the product strategy");
 
-    await empty.getByRole("button", { name: "New product strategy" }).click();
+    await strategyPage(page).getByTestId("strategy-card").getByRole("button", { name: "New product strategy" }).click();
     const dialog = page.getByRole("dialog", { name: "New product strategy" });
     await expect(dialog.getByLabel("Anything Oracle should know")).toBeVisible();
     await expect(dialog.getByText("What changed since the last one")).toHaveCount(0);

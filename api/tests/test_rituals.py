@@ -417,6 +417,54 @@ async def test_prepare_now_on_a_paused_ritual_is_its_last_pre_read(client, ctx, 
     assert r["prepare_usd"] == 3.0
 
 
+async def test_a_pre_read_ahead_is_never_the_last_of_an_active_ritual(client, ctx, at):
+    """protects=review minor: with no Next pre-read (the stored next meeting moved before
+    the one prepared early), an active ritual's pre-read still ahead is not its Last;
+    fails_when=Last names a meeting not yet held; no_claim=the screen (Playwright)."""
+    from oracle.rituals.models import Ritual
+
+    await tick(ctx.tenant_id)
+    ritual = (await rituals_of(ctx.tenant_id))["goals_checkin"]
+    due = ritual.next_due_at
+    resp = await client.post(f"/v1/rituals/{ritual.id}/prepare", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    async with tenant_session(ctx.tenant_id) as db:
+        row = await db.get(Ritual, ritual.id)
+        row.next_due_at = due - timedelta(days=1)
+        await db.commit()
+    rows = (await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json()
+    r = next(r for r in rows if r["id"] == str(ritual.id))
+    assert r["next_pre_read"] is None
+    assert r["last_pre_read"] is None
+
+
+async def test_the_ritual_list_reads_the_summary_settings_once(client, ctx, at, monkeypatch):
+    """protects=review minor: GET /v1/rituals reads the summaries setting and the Run
+    rituals autonomy once for the list, not again for each ritual's prepare_usd;
+    fails_when=each ritual re-reads them; no_claim=the costs (the tests above)."""
+    from oracle import autonomy
+    from oracle.rituals import summaries
+
+    await tick(ctx.tenant_id)
+    calls = {"mode": 0, "allows": 0}
+    mode, allows = summaries.mode, autonomy.allows
+
+    async def counted_mode(db):
+        calls["mode"] += 1
+        return await mode(db)
+
+    async def counted_allows(db, *a, **k):
+        calls["allows"] += 1
+        return await allows(db, *a, **k)
+
+    monkeypatch.setattr(summaries, "mode", counted_mode)
+    monkeypatch.setattr(autonomy, "allows", counted_allows)
+    rows = (await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json()
+    assert len(rows) > 2
+    assert calls["mode"] == 1
+    assert calls["allows"] <= 2
+
+
 async def test_pre_read_and_record_notes_rows_in_the_inbox(client, ctx, at):
     """protects=criterion 6: an attendee has a counted pre_read row while ready and
     unread; reading it turns it done and lowers needs_me by 1; after the end the owner
