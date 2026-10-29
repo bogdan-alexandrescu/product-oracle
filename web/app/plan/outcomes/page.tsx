@@ -624,12 +624,13 @@ function AssessmentForm({
           onChange={(e) => setNote(e.target.value)}
         />
       </label>
+      {/* qa-plan-34: as every dialog: Cancel on the left, the primary action on the right. */}
       <div className="col-span-2 flex flex-wrap gap-2">
-        <Button type="submit" variant="primary" disabled={busy || !verdict}>
-          Record assessment
-        </Button>
         <Button type="button" variant="secondary" onClick={onCancel}>
           Cancel
+        </Button>
+        <Button type="submit" variant="primary" disabled={busy || !verdict}>
+          Record assessment
         </Button>
       </div>
     </form>

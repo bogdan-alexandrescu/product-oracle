@@ -681,7 +681,7 @@ export function ChangesPanel({
       )}
       {q.data && q.data.length === 0 && (
         <p data-testid="changes-empty" className="px-4 py-6 text-center text-text2">
-          {filter === "active" && canChange
+          {canChange
             ? "No changes yet. Use ▲ ▼ or More actions on a row to move or pin a feature, with a reason."
             : "No changes yet."}
         </p>

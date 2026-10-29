@@ -332,12 +332,13 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
             onKeyDown={(e) => e.key === "Escape" && setKeeping(false)}
             className="h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm"
           />
+          {/* qa-plan-34: as every dialog: Cancel on the left, the primary action on the right. */}
           <span className="flex flex-wrap gap-1.5">
-            <Button type="submit" disabled={busy}>
-              Keep watching
-            </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setKeeping(false)}>
               Cancel
+            </Button>
+            <Button type="submit" disabled={busy}>
+              Keep watching
             </Button>
           </span>
         </form>
