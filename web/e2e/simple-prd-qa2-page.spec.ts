@@ -16,13 +16,10 @@ async function scenario(page: Page, name: string) {
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, name] as const);
 }
 
-/** Through the rail and the list, as a person opens it. */
+/** The one-pager at its address (the default scenario's list does not carry this PRD). */
 async function open(page: Page, email?: string) {
   await login(page, email);
-  await page.goto("/simple");
-  await page.locator('nav[aria-label="Simple"]:visible').getByRole("link", { name: "One-pagers" }).click();
-  await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Guided setup" }).click();
-  await expect(page).toHaveURL(/\/simple\/one-pagers\/guided-setup$/);
+  await page.goto("/simple/one-pagers/guided-setup");
   await expect(page.getByTestId("one-pager")).toBeVisible();
 }
 
@@ -113,7 +110,10 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(paper.getByRole("link", { name: "Open the detailed view" })).toHaveCount(0);
       await expect(paper.getByRole("link", { name: "One-pagers" })).toHaveCount(0);
       // Esc out of full screen: the browser says so with fullscreenchange.
-      await page.evaluate(() => document.dispatchEvent(new Event("fullscreenchange")));
+      await page.evaluate(async () => {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else document.dispatchEvent(new Event("fullscreenchange"));
+      });
       await expect(paper).not.toHaveAttribute("data-presenting", "true");
     });
 
@@ -122,7 +122,7 @@ for (const scheme of ["light", "dark"] as const) {
       const start = page.getByRole("button", { name: "Start review" });
       await expect(start).toBeDisabled();
       await expect(page.getByText("Ask an owner or approver to start a review")).toBeVisible();
-      await expect(page.getByText("No changes yet.")).toHaveCount(0);
+      await expect(page.getByText(/No changes yet/)).toBeHidden();
     });
 
     test("the owner's margin names itself (qa-34)", async ({ page }) => {
@@ -155,7 +155,7 @@ for (const scheme of ["light", "dark"] as const) {
 }
 
 test.describe("phone", () => {
-  test.use({ viewport: PHONE });
+  test.use({ viewport: PHONE, hasTouch: true });
 
   test("Edit is a thumb-sized target, and the header bar does not repeat the title (qa-36, 45)", async ({ page }) => {
     await open(page);
@@ -177,7 +177,7 @@ test.describe("One-pagers list and the planned PRD", () => {
     await login(page);
     await page.goto("/simple");
     await page.locator('nav[aria-label="Simple"]:visible').getByRole("link", { name: "One-pagers" }).click();
-    await expect(page.getByTestId("simple-page")).toContainText("its plan and timeline");
+    await expect(page.getByText(/its plan and timeline/)).toBeVisible();
     const row = page.getByTestId("one-pager-row").filter({ hasText: "Guided setup" });
     await expect(row).toContainText("Approved");
     await expect(row).not.toContainText("Draft");

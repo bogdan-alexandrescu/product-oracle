@@ -48,7 +48,9 @@ async function open(page: Page, scheme: "light" | "dark" = "light") {
 }
 
 const strip = (page: Page) => page.getByLabel("Timeline strip").getByTestId("plan-strip");
-const bet = (page: Page, n: number) => page.getByRole("group", { name: `User flow of bet ${n}` }).getByTestId("flow-row");
+/** A bet's flow row, by the bet's place in the one-pager's lines (2: the first bet). */
+const BETS: Record<number, string> = { 2: "“A setup checklist that shows", 3: "“Invite suggestions from the admin's", 4: "“A sample project created on" };
+const bet = (page: Page, n: number) => page.getByRole("group", { name: `User flow of ${BETS[n]}` }).getByTestId("flow-row");
 
 /** The contrast of each bar against the card it sits on (a colour read through a canvas, so any CSS colour form works). */
 async function barContrasts(s: Locator): Promise<{ estimated: boolean; ratio: number }[]> {
@@ -242,7 +244,8 @@ test.describe("desktop: the opened flow's diagram (qa-23, qa-28)", () => {
     // The No branch's box holds its words.
     const no = await svg.getByTestId("flow-no").evaluate((g) => {
       const box = g.querySelector("rect")!.getBoundingClientRect();
-      const t = g.querySelector("text")!.getBoundingClientRect();
+      // The branch's words follow its box (the "No" label above it is a text of its own).
+      const t = g.querySelector("rect ~ text")!.getBoundingClientRect();
       return { inside: t.top >= box.top - 1 && t.bottom <= box.bottom + 1 && t.left >= box.left - 1 && t.right <= box.right + 1 };
     });
     expect(no.inside).toBe(true);
