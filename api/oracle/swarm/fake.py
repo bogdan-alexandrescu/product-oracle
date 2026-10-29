@@ -269,7 +269,7 @@ def _default_content(
             "---\n\n"
             "# Example product PRD {#title}\n\n"
             "## Problem {#problem}\n\n"
-            f"Sample draft {attempt}. Buyers drop off when the\n"
+            f"Draft {attempt}, a sample. Buyers drop off when the\n"
             "total changes late in the flow.\n\n"
             "## Goal trace {#goal-trace}\n\n"
             "Serves G1 (activation).\n\n"
@@ -289,7 +289,7 @@ def _default_content(
             "---\n\n"
             "# Example product roadmap {#roadmap}\n\n"
             "## Summary {#summary}\n\n"
-            f"Sample draft {attempt}.\n\n"
+            f"Draft {attempt}, a sample.\n\n"
             "## Items by horizon {#brief-items}\n\n"
             "| Horizon | Item | Outcome |\n|---|---|---|\n"
             "| [Now](#now) | [Show the price early](#now-price) | Fewer drop-offs |\n\n"
@@ -370,16 +370,12 @@ def _default_content(
         )
     if name == "requests_triage.yaml":
         # C1 (oracle.requests.triage): nothing classified, nothing found.
-        return (
-            f"# {segment} (sample, attempt {attempt})\n"
-            "version: 1\nrequests: []\nfound: []\n"
-        )
+        return f"# {segment} (sample, attempt {attempt})\nversion: 1\nrequests: []\nfound: []\n"
     if name == "priority.yaml":
         # The C8 format (oracle.priorities.run_order): the approved scope the prompt pastes,
         # in dependency order, else the default feature set's one feature.
         rows = "".join(
-            f"  - key: {key}\n    rank: {n}\n    score: 0\n"
-            "    explanation: A sample ranking\n"
+            f"  - key: {key}\n    rank: {n}\n    score: 0\n    explanation: A sample ranking\n"
             for n, key in enumerate(scope or ["price-early"], start=1)
         )
         return (

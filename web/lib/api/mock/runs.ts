@@ -1316,8 +1316,8 @@ function fileContent(name: string, segment: string, attempt: number, document?: 
   if (name === "eng_dates.yaml") return datesYaml({ ...LOCAL_DATES, prd: null, problems: [] }, attempt);
   if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
   if (name === "priority.yaml") return priorityYaml(LOCAL_ORDER, segment, attempt);
-  if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nSample draft ${attempt}.\n`;
-  if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nSample draft ${attempt}.\n`;
+  if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt}, a sample.\n`;
+  if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt}, a sample.\n`;
   if (name === "roadmap_items.yaml") {
     return `# ${segment} (sample, attempt ${attempt})\nversion: 1\nitems:\n  - id: price-early\n    title: Show the price early\n    outcome: Fewer buyers drop off at checkout\n    horizon: now\n    milestone: Beta\n    confidence: medium\n    prd_section: features\n`;
   }
