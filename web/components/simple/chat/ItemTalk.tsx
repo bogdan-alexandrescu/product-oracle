@@ -63,7 +63,7 @@ export function ItemTalk({ itemId, about, code, phone = false }: { itemId: strin
             {error}
           </p>
         )}
-        <ChatMessages messages={thread?.messages ?? []} onCardChanged={() => void load()} onThread={setThread} />
+        <ChatMessages messages={thread?.messages ?? []} onCardChanged={() => void load()} onThread={setThread} ask />
       </div>
       {/* Pick C's message box: the box and Send on one row (the chat's composer, laid out here). */}
       <div className="flex flex-none flex-col gap-1.5 border-t border-line px-4 pt-2.5 pb-3 [&>form]:flex-row [&>form]:flex-wrap [&>form]:items-end [&>form>p]:basis-full [&>form>textarea]:h-11 [&>form>textarea]:min-h-11 [&>form>textarea]:min-w-0 [&>form>textarea]:flex-1 [&>form>textarea]:basis-0 [&>form>textarea]:resize-none [&>form>textarea]:rounded-[10px] [&>form>textarea]:py-2.5 [&>form>textarea]:text-[15px] [&>form>textarea]:leading-[22px] [&>form>textarea]:placeholder:text-text-faint">

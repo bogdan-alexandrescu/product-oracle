@@ -255,10 +255,13 @@ export function ChatMessages({
   messages,
   onCardChanged,
   onThread,
+  ask,
 }: {
   messages: Thread["messages"];
   onCardChanged?: () => void;
   onThread?: (t: Thread) => void;
+  /** Lines drawn as the Ask panel's (author · time, Oracle's answer with its sources): the roadmap card's talk, pick C. */
+  ask?: boolean;
 }) {
   const corrected = useCorrections();
   return (
@@ -270,6 +273,7 @@ export function ChatMessages({
           onCardChanged={onCardChanged}
           onThread={onThread}
           corrected={corrected}
+          ask={ask}
         />
       ))}
     </ol>
