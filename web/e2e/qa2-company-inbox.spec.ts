@@ -189,3 +189,16 @@ test.describe("on a phone", () => {
     await expect(notice(page).getByRole("button", { name: "Undo" })).toBeVisible();
   });
 });
+
+test("qa-company-43: back on the Inbox from another page, it opens on Seen once New has emptied", async ({ page }) => {
+  await login(page);
+  await openInbox(page);
+  await expect(tab(page, "New")).toHaveAttribute("aria-selected", "true");
+  await page.getByTestId("nav-runs").click();
+  await expect(page).toHaveURL(/\/runs$/);
+  await page.getByTestId("nav-inbox").click();
+  await expect(page).toHaveURL(/\/inbox$/);
+  const tabs = page.getByTestId("inbox-state-tabs").filter({ visible: true });
+  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByTestId("inbox-tab-empty").filter({ visible: true })).toHaveCount(0);
+});
