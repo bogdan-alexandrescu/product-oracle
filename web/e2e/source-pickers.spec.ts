@@ -257,6 +257,14 @@ test("named picks: a source saved without names shows ids until it is saved agai
   await login(page);
   await page.goto("/settings/sources");
   const chat = page.getByRole("listitem", { name: "Product chat" });
+  // The seeded source keeps its channels' names; make it one saved before names were kept.
+  await expect(chat.getByTestId("source-picks")).toHaveText("#product, #customer-feedback");
+  await page.evaluate((key) => {
+    const db = JSON.parse(localStorage.getItem(key)!);
+    delete db.sources.find((s: { name: string }) => s.name === "Product chat").config.labels;
+    localStorage.setItem(key, JSON.stringify(db));
+  }, SOURCES_STORAGE_KEY);
+  await page.reload();
   await expect(chat.getByTestId("source-picks")).toHaveText("C0123PRODUCT, C0456FEEDBACK");
   await expect(chat.getByText("Channels", { exact: true })).toBeVisible();
 

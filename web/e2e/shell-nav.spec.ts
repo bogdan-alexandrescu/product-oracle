@@ -171,8 +171,9 @@ test.describe("phone", () => {
       ["/plan/dates", "Plan"],
       ["/plan", "Plan"],
       ["/roadmap/changelog", "Plan"],
-      ["/settings/members", "Settings"],
-      ["/settings/themes", "Settings"],
+      // qa-settings-40: Settings' pages name themselves.
+      ["/settings/members", "Members"],
+      ["/settings/themes", "Themes"],
       ["/company/decisions", "Company"],
     ] as const) {
       await page.goto(path);

@@ -62,7 +62,7 @@ async def test_slack_auth_test():
     async with http(handler) as c:
         identity = await PROVIDERS["slack"].identify(c, "good")
         assert identity.account_id == "T1:U1"
-        assert identity.label == "pat @ Example"
+        assert identity.label == "pat in Example"
         assert identity.scopes == ["channels:read"]
         with pytest.raises(CredentialRejected):
             await PROVIDERS["slack"].identify(c, "revoked")

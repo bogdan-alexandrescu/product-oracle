@@ -19,7 +19,7 @@ from oracle.db import get_engine
 from oracle.members.models import Invite
 from oracle.runs.models import Run
 from oracle.runtokens import SCOPES, mint_run_token
-from oracle.sources.models import Source
+from oracle.sources.models import Source, SourceItem
 from oracle.tenancy import tenant_session
 from tests.conftest import make_tenant
 from tests.connection_helpers import add_connection, make_person
@@ -95,18 +95,31 @@ async def test_connect_counts_only_the_callers_active_connections(client, tenant
     assert _step(await _setup(client, owner), "connect")["count"] == 1
 
 
-async def test_sources_counts_the_callers_own_sources(client, tenant_id, owner):
-    # protects=Pick sources reads sources the person owns; fails_when=another member's
-    # source makes it done; no_claim=the sources ever synced.
+async def _source_with_items(tenant_id, owner_id, kind, name, items):
+    async with tenant_session(tenant_id) as s:
+        source = Source(owner_user_id=owner_id, kind=kind, name=name)
+        s.add(source)
+        await s.flush()
+        for i in range(items):
+            s.add(SourceItem(source_id=source.id, external_id=f"{name}-{i}", kind="file"))
+        await s.commit()
+
+
+async def test_sources_counts_the_callers_own_sources_with_items(client, tenant_id, owner):
+    # protects=Pick sources reads sources the person owns that hold items;
+    # fails_when=another member's source, or an empty source of their own (an Uploads
+    # source with no files, qa-onboarding-11), makes it done; no_claim=the sources ever synced.
     other = await make_person(tenant_id, "commenter@example.com", "commenter")
-    async with tenant_session(tenant_id) as s:
-        s.add(Source(owner_user_id=other.id, kind="upload", name="Theirs"))
-        await s.commit()
-    assert _step(await _setup(client, owner), "sources")["done"] is False
-    async with tenant_session(tenant_id) as s:
-        s.add(Source(owner_user_id=owner.id, kind="upload", name="Notes"))
-        s.add(Source(owner_user_id=owner.id, kind="github", name="Repo"))
-        await s.commit()
+    await _source_with_items(tenant_id, other.id, "upload", "Theirs", 1)
+    await _source_with_items(tenant_id, owner.id, "upload", "Empty", 0)
+    assert _step(await _setup(client, owner), "sources") == {
+        "key": "sources",
+        "done": False,
+        "count": 0,
+        "detail": None,
+    }
+    await _source_with_items(tenant_id, owner.id, "upload", "Notes", 2)
+    await _source_with_items(tenant_id, owner.id, "github", "Repo", 1)
     assert _step(await _setup(client, owner), "sources") == {
         "key": "sources",
         "done": True,
@@ -247,8 +260,8 @@ async def test_a_second_company_sees_only_its_own_counts(client, tenant_id, owne
     # (from the environment, the same for every company here).
     await add_connection(tenant_id, owner.id, "github", account_id="1")
     await make_person(tenant_id, "approver@example.com", "approver")
+    await _source_with_items(tenant_id, owner.id, "upload", "Notes", 1)
     async with tenant_session(tenant_id) as s:
-        s.add(Source(owner_user_id=owner.id, kind="upload", name="Notes"))
         s.add(Invite(email="next@example.com", role="commenter"))
         await s.commit()
     put = await client.put(

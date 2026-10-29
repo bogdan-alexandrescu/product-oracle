@@ -212,8 +212,8 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   expect(box.height).toBe(44);
   await expect(bar).toHaveCSS("background-color", "rgb(11, 58, 122)");
   const title = bar.getByTestId("phone-title");
-  // qa-shell-23: a section's tab shows the section's name.
-  await expect(title).toHaveText("Settings");
+  // qa-settings-40: a Settings page shows its own name (Plan's and Company's tabs show the section's).
+  await expect(title).toHaveText("Members");
   await expect(title).toHaveCSS("color", "rgb(255, 255, 255)");
   await expect(title).toHaveCSS("font-weight", "600");
   // The page's H1 stays for screen readers but is not drawn a second time.

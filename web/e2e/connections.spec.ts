@@ -30,7 +30,7 @@ test("connections: paste a token, reconnect, and sign in with OAuth", async ({ p
   await slack.getByRole("button", { name: "Paste a token" }).click();
   await slack.getByLabel("Token", { exact: true }).fill("bad-token");
   await slack.getByRole("button", { name: "Connect", exact: true }).click();
-  await expect(slack.getByRole("alert")).toContainText("Slack rejected the token");
+  await expect(slack.getByRole("alert")).toContainText("Slack did not accept this token");
 
   await slack.getByLabel("Token", { exact: true }).fill("example-slack-1234");
   await slack.getByLabel("Label (optional)").fill("Team Slack");
@@ -44,7 +44,7 @@ test("connections: paste a token, reconnect, and sign in with OAuth", async ({ p
   await expect(page.getByRole("status")).toContainText("GitHub is connected.");
   const github = page.getByTestId("connection-card-github");
   await expect(github).toContainText("example-user");
-  await expect(github).toContainText("signed in");
+  await expect(github).toContainText("Connected by signing in");
   await expect(github).toContainText("Scopes: read:user, repo");
 });
 

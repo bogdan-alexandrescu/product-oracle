@@ -200,13 +200,13 @@ test("10f: an owner sets the Pricing owner on Settings › Company; after a relo
   // Admin; no_claim=the API's validation of a non-owner (tests/test_pricing_memo.py).
   await login(page);
   await page.goto("/settings/company");
-  const field = page.getByTestId("pricing-owner-panel").getByRole("combobox", { name: "Pricing owner" });
+  const field = page.getByTestId("pricing-owner-panel").getByRole("combobox", { name: "Decides prices" });
   await expect(field.locator("option:checked")).toHaveText("Admin");
   await field.selectOption({ label: "Riley Park" });
   await page.getByTestId("pricing-owner-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("pricing-owner-panel").getByRole("status")).toHaveText("Saved");
   await page.reload();
-  await expect(page.getByTestId("pricing-owner-panel").getByRole("combobox", { name: "Pricing owner" }).locator("option:checked")).toHaveText("Riley Park");
+  await expect(page.getByTestId("pricing-owner-panel").getByRole("combobox", { name: "Decides prices" }).locator("option:checked")).toHaveText("Riley Park");
 
   await openMemo(page, "Team plan pricing");
   await expect(page.getByTestId("pricing-waiting")).toHaveText("Waiting for Riley Park to decide");
