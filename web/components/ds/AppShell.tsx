@@ -186,13 +186,17 @@ export const badgedName = (label: string, n: number | null | undefined) => (n ? 
  */
 function Badge({ n, testId }: { n: number | null; testId?: string }) {
   if (!n) return null;
+  // Past 99 it says 99+ (the link's name keeps the count), so it fits the 88 px rail and the tab.
+  const text = n > 99 ? "99+" : String(n);
   return (
     <span
       data-testid={testId}
       aria-hidden
-      className="tnum absolute top-0.5 left-[calc(50%+14px)] h-4 min-w-4 rounded-lg bg-rail-badge px-1 text-center font-mono text-[13px] leading-4 font-semibold text-on-rail-badge ring-2 ring-rail"
+      className={`tnum absolute top-0.5 left-[calc(50%+14px)] h-4 min-w-4 rounded-lg bg-rail-badge text-center font-mono leading-4 font-semibold text-on-rail-badge ring-2 ring-rail ${
+        text.length > 2 ? "px-0.5 text-[11px] tracking-tighter" : "px-1 text-[13px]"
+      }`}
     >
-      {n}
+      {text}
     </span>
   );
 }
@@ -223,11 +227,18 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
     if (!open) return;
     root.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus();
     // The rail scrolls when the window is short (qa-shell-2): the menu is fixed beside it,
-    // its foot level with the avatar's, never clipped by the rail.
-    const r = button.current?.getBoundingClientRect();
-    // Beside the rail, Detailed's or Simple's: past the rail's right edge.
-    const nav = button.current?.closest("nav")?.getBoundingClientRect();
-    if (r) setAt({ bottom: Math.max(8, window.innerHeight - r.bottom), left: (nav?.right ?? r.right) + 12 });
+    // its foot level with the avatar's, never clipped by the rail. Placed again while open,
+    // when the window is resized or the rail scrolls, so it never drifts from the avatar.
+    const place = () => {
+      const r = button.current?.getBoundingClientRect();
+      // Beside the rail, Detailed's or Simple's: past the rail's right edge.
+      const nav = button.current?.closest("nav")?.getBoundingClientRect();
+      if (r) setAt({ bottom: Math.max(8, window.innerHeight - r.bottom), left: (nav?.right ?? r.right) + 12 });
+    };
+    place();
+    window.addEventListener("resize", place);
+    // Capture: the rail's own scroll does not bubble.
+    document.addEventListener("scroll", place, true);
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // Only this menu closes (not the Ask panel).
@@ -239,6 +250,8 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
     document.addEventListener("keydown", onKey);
     document.addEventListener("pointerdown", onDown);
     return () => {
+      window.removeEventListener("resize", place);
+      document.removeEventListener("scroll", place, true);
       document.removeEventListener("keydown", onKey);
       document.removeEventListener("pointerdown", onDown);
     };
@@ -444,7 +457,7 @@ function Navs() {
       <nav
         aria-label="Oracle"
         data-testid="app-nav"
-        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 overflow-y-auto overscroll-contain bg-rail py-3.5 [scrollbar-width:none] [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
+        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 overflow-x-hidden overflow-y-auto overscroll-contain bg-rail py-3.5 [scrollbar-width:none] [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
       >
         <Link href="/home" aria-label="Product Oracle" data-testid="nav-brand" className="mb-3 flex-none rounded-xl">
           <Mark size={44} tone="sky" className="block" />

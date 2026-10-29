@@ -55,7 +55,8 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
     <div
       role="radiogroup"
       aria-label="Mode"
-      onKeyDown={(e) => onRadioKeys(e, MODES.map((m) => m.value), current, choose)}
+      // A choice opens the other mode: the arrows move focus, Enter or Space opens it.
+      onKeyDown={(e) => onRadioKeys(e, MODES.map((m) => m.value), current, choose, { follow: false })}
       data-testid={rail ? "mode-switch" : "mode-switch-sheet"}
       className={
         wide

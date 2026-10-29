@@ -238,7 +238,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           tone: r && r.blocking.length > 0 ? "crit" : undefined,
           testId: "stat-blockers",
         },
-        { label: "Approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
+        { label: "Sections approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
         { label: "Open items", value: openItems ?? 0, testId: "stat-open" },
       ]}
     >
@@ -277,12 +277,11 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           tools={<Chip kind="crit">{blockers.filter((b) => b.hard).length || blockers.length} critical</Chip>}
         >
           {blockers.map((b) => (
-            <InspectorRow key={b.key}>
-              <span className="inline-flex min-w-0 items-center gap-2.5" title={b.title} data-testid="inspector-blocker">
-                <Icon name="alert" size={16} className="flex-none text-crit" />
-                <span className="truncate">{b.title}</span>
-              </span>
-            </InspectorRow>
+            // qa-shell-17: a blocker's words wrap, never cut mid-word (an InspectorRow cuts them).
+            <div key={b.key} className="flex min-h-8 items-start gap-2.5 py-1.5" data-testid="inspector-blocker">
+              <Icon name="alert" size={16} className="mt-0.5 flex-none text-crit" />
+              <span className="min-w-0 break-words">{b.title}</span>
+            </div>
           ))}
         </InspectorSection>
       )}

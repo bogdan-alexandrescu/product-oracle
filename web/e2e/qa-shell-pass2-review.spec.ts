@@ -47,7 +47,11 @@ for (const [name, size] of [
         hasText: "The address lookup service allows 100 requests",
       }),
     ).toHaveCount(1);
-    for (const row of await blockers.all()) expect(await cut(row.locator("span").last())).toBe(false);
+    for (const row of await blockers.all()) {
+      // Neither the row nor anything holding it cuts the words.
+      expect(await row.evaluate((el) => [el, el.parentElement!].some((e) => e.scrollWidth > e.clientWidth + 1))).toBe(false);
+      expect(await cut(row.locator("span").last())).toBe(false);
+    }
   });
 }
 

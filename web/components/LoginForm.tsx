@@ -11,6 +11,18 @@ import { MOCK_LOGIN } from "@/lib/api/mock/fixtures";
 import { loadLanding } from "@/lib/experience";
 import { safeNextPath } from "@/lib/safe-next";
 
+/** Sign-in runs in the browser: without JavaScript, the card says so instead of waiting. */
+export function NoScriptNote() {
+  return (
+    <noscript>
+      <span className="mt-2 block text-text">Signing in needs JavaScript. Turn it on in your browser&apos;s settings, then reload this page.</span>
+    </noscript>
+  );
+}
+
+/** How long the session check may take before the form shows anyway. */
+const CHECK_WAIT_MS = 10_000;
+
 export function LoginForm() {
   const router = useRouter();
   const next = useSearchParams().get("next");
@@ -33,6 +45,9 @@ export function LoginForm() {
   // sign-in that is not (yet) a member goes to /access, which says where it stands.
   useEffect(() => {
     let live = true;
+    // A check that never answers still gives the form (fix2-shell review): after 10 s the
+    // form shows; a later answer that someone is signed in still sends them on.
+    const giveUp = setTimeout(() => live && setChecking(false), CHECK_WAIT_MS);
     api
       .GET("/v1/auth/access")
       .then(({ data }) => {
@@ -62,6 +77,7 @@ export function LoginForm() {
       .catch(() => live && setChecking(false));
     return () => {
       live = false;
+      clearTimeout(giveUp);
     };
   }, [router, target]);
 
@@ -99,6 +115,7 @@ export function LoginForm() {
           className="py-6 text-center text-[15px] text-text2"
         >
           Checking your session…
+          <NoScriptNote />
         </p>
       ) : (
         <form onSubmit={onSubmit} className="flex flex-col gap-4">

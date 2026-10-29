@@ -29,7 +29,12 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
         </>
       }
     >
-      <p>This page couldn&apos;t be shown because of a problem on our side. Everything you saved is kept.</p>
+      {/* A digest means the server failed; without one, the page failed in this browser. */}
+      <p data-testid="app-error-text">
+        {error.digest
+          ? "This page couldn't be shown because of a problem on our side. Everything you saved is kept."
+          : "This page stopped working in your browser. Everything you saved is kept; try again, or reload the page."}
+      </p>
       {error.digest && (
         <p data-testid="app-error-reference" className="text-sm">
           If it happens again, tell support this reference: <span className="font-semibold text-text">{error.digest}</span>

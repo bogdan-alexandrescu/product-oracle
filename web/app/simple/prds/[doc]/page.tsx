@@ -1,22 +1,12 @@
-import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import { permanentRedirect } from "next/navigation";
 
-import { PageSkeleton } from "@/components/ds";
-import { OnePager } from "@/components/simple/OnePager";
 import type { RouteProps } from "@/lib/route-props";
-import { SIMPLE_MODE } from "@/lib/simple-mode";
 
-async function Body({ params }: { params: RouteProps<{ doc: string }>["params"] }) {
+/**
+ * An old link to a PRD's one-pager (qa-shell-4): the one-pager lives at /simple/one-pagers/<doc>,
+ * which the One-pagers list, Home and the mode switch open; this path only sends there.
+ */
+export default async function OldOnePagerPath({ params }: RouteProps<{ doc: string }>) {
   const { doc } = await params;
-  return <OnePager doc={doc} />;
-}
-
-/** Simple S5: a PRD's one-pager ("A · Paper"); the Detailed switch opens its PRD (qa-shell-4). */
-export default function OnePagerPage({ params }: RouteProps<{ doc: string }>) {
-  if (!SIMPLE_MODE) notFound();
-  return (
-    <Suspense fallback={<PageSkeleton />}>
-      <Body params={params} />
-    </Suspense>
-  );
+  permanentRedirect(`/simple/one-pagers/${encodeURIComponent(doc)}`);
 }
