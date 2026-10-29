@@ -129,8 +129,16 @@ test.describe("a short window", () => {
     const rail = page.getByTestId("app-nav");
     const scrolls = await rail.evaluate((el) => getComputedStyle(el).overflowY);
     expect(scrolls).toBe("auto");
-    await rail.getByTestId("nav-settings").scrollIntoViewIfNeeded();
-    await expect(rail.getByTestId("nav-settings")).toBeInViewport();
+    // The rail fills in after sign-in (the mode switch, the Inbox count): wait for it, then
+    // scroll it with the wheel as a person would, again if something drew late above Settings.
+    await expect(rail.getByTestId("mode-switch")).toBeVisible();
+    await expect(rail.getByTestId("nav-inbox-badge")).toBeVisible();
+    const box = (await rail.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await expect(async () => {
+      await page.mouse.wheel(0, 400);
+      await expect(rail.getByTestId("nav-settings")).toBeInViewport({ timeout: 500 });
+    }).toPass({ timeout: 10_000 });
     await page.getByTestId("user-menu").click();
     const menu = page.getByRole("dialog", { name: "Account" });
     await expect(menu).toBeInViewport({ ratio: 1 });
