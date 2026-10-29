@@ -217,7 +217,12 @@ for (const phone of [false, true]) {
         const panel = page.getByTestId("hop-panel").filter({ visible: true });
         await panel.getByTestId("ask-recent").click();
         await expect(panel.getByTestId("ask-recent-list")).toBeVisible();
-        if (phone) await page.keyboard.press("Escape");
+        if (phone) {
+          // Recent chats is a menu over the chat (ask-panel fidelity, pick C): Escape closes it first, then the sheet.
+          await page.keyboard.press("Escape");
+          await expect(panel.getByTestId("ask-recent-list")).toHaveCount(0);
+          await page.keyboard.press("Escape");
+        }
         drawer = await openDrawer(page);
         await drawer.getByRole("button", { name: "Suggest from the chat" }).click();
         await expect(page.getByTestId("hop-panel").filter({ visible: true }).getByTestId("ask-recent-list")).toHaveCount(0);

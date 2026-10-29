@@ -122,10 +122,13 @@ function ownChat(chat: ChatDb, ctx: ChatCtx, id: string | null | undefined): str
   return hit ? hit[0] : null;
 }
 
-function chatSummary(key: string, t: Thread) {
+function chatSummary(key: string, t: Thread, ctx?: ChatCtx) {
   const page = t.page ?? pageOf(key.split(":").slice(2).join(":").split("#")[0]);
   const general = t.general === true;
-  return { id: t.id, page, page_name: general ? "General" : pageName(page), last_at: t.messages.at(-1)?.at ?? t.started_at ?? now(), ask_id: t.ask_id ?? null, general };
+  // Its first question: the person's first line, else the first in the Oracle's Ask chat it handed it to.
+  const first = t.messages.find((m) => m.author_kind === "person")?.body ?? (t.ask_id ? (ctx?.askQuestion?.(t.ask_id) ?? null) : null);
+  const question = first ? first.split(/\s+/).filter(Boolean).join(" ").slice(0, 200) : null;
+  return { id: t.id, page, page_name: general ? "General" : pageName(page), last_at: t.messages.at(-1)?.at ?? t.started_at ?? now(), ask_id: t.ask_id ?? null, general, question };
 }
 
 interface Meeting {
@@ -187,6 +190,8 @@ export type ChatCtx = SimpleChangesCtx & {
   proposeTo?: (documentId: string | null) => { id: string; name: string } | null;
   /** ask-fresh: whether `id` is the caller's own private panel chat (PUT /v1/simple/chats/{id}/ask). */
   ownsDiscussion?: (id: string) => boolean;
+  /** Recent chats: the first line the caller asked in their Oracle's Ask chat `id` (oracle.simple.chat._questions). */
+  askQuestion?: (id: string) => string | null;
 };
 
 /** On Ask a commenter's decision is a proposal (the owner's pick, 2026-10-27): who it goes to, else null. */
@@ -1098,15 +1103,31 @@ function afterApplied(db: SimpleDb, c: StoredCard, result: Schemas["SimpleChange
  * question naming a roadmap item the asker may read is answered from the plan, its dates,
  * status and outcome; null when it names none (the canned reply).
  */
-export function planAnswer(db: SimpleDb, ctx: ChatCtx, question: string): string | null {
+export function planAnswer(db: SimpleDb, ctx: ChatCtx, question: string): { text: string; citations: Record<string, unknown>[] } | null {
   const q = question.toLowerCase();
   const [i] = itemsFor(db, ctx)
     .filter((x) => q.includes(x.title.toLowerCase()))
     .sort((a, b) => b.title.length - a.title.length);
   if (!i) return null;
-  const when = `${dayWords(i.start.date)} – ${dayWords(i.end.date, true)}${i.estimated ? " (estimated)" : ""}`;
-  const outcome = i.outcome ? ` Its outcome: ${i.outcome}.` : "";
-  return `From the plan: ${i.title} runs ${when}; it is ${i.status.replace("_", " ")} (${i.horizon}).${outcome}`;
+  // The shape the API's prompt asks for (oracle.discussions.plan.PLAN_FIRST): the name in bold,
+  // when it runs, then short labelled lists; the plan cited.
+  // "Nov 16 – Dec 11", as the pick's answer reads.
+  const us = (day: string) => new Date(msOf(day)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const when = `${us(i.start.date)} – ${us(i.end.date)}${i.estimated ? " (estimated)" : ""}`;
+  const status = i.status.replace("_", " ");
+  const sections: [string, string[]][] = [
+    ["Outcome", i.outcome ? [i.outcome] : []],
+    ["Goal", i.goal ? [i.goal.title] : []],
+    ["Milestone", i.milestone?.name ? [`${i.milestone.name}${i.milestone.date ? `, ${us(i.milestone.date)}` : ""}`] : []],
+  ];
+  const text = [
+    `**${i.title}** [c:1]`,
+    `Runs **${when}** · ${status} (${i.horizon})`,
+    ...sections.filter(([, lines]) => lines.length).map(([label, lines]) => `### ${label}\n${lines.map((l) => `- ${l}`).join("\n")}`),
+  ].join("\n\n");
+  const citations: Record<string, unknown>[] = [{ n: 1, kind: "roadmap_item", ref: i.id, title: `Roadmap item: ${i.title}`, url: "/simple/roadmap" }];
+  if (i.prd) citations.unshift({ n: 2, kind: "section", ref: i.prd.id, title: `${i.prd.title}: Roadmap`, url: `/documents/${i.prd.slug}` });
+  return { text: i.prd ? text.replace("[c:1]", "[c:1] [c:2]") : text, citations };
 }
 
 function itemsFor(db: SimpleDb, ctx: ChatCtx): Item[] {
@@ -1590,7 +1611,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
   if (p[2] === "chats" && !p[3] && m === "GET") {
     const items = Object.entries(chat.threads)
       .filter(([key, t]) => key.startsWith(`ask:${ctx.id}:`) && (t.messages.length > 0 || t.ask_id))
-      .map(([key, t]) => chatSummary(key, t))
+      .map(([key, t]) => chatSummary(key, t, ctx))
       .sort((a, b) => b.last_at.localeCompare(a.last_at))
       .slice(0, 10);
     return json(200, { items });
@@ -1600,7 +1621,7 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     const askId = String((await body()).ask_id ?? "");
     if (!own || !askId || !(ctx.ownsDiscussion?.(askId) ?? true)) return json(404, { detail: "No such chat" });
     chat.threads[own].ask_id = askId;
-    return json(200, chatSummary(own, chat.threads[own]));
+    return json(200, chatSummary(own, chat.threads[own], ctx));
   }
 
   if (p[2] === "meetings" && p[3] && p[4] === "chat") {

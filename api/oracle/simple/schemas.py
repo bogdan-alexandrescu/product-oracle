@@ -1368,6 +1368,9 @@ class ChatSummaryOut(BaseModel):
     ask_id: uuid.UUID | None = None
     # Started under "General": named so on Recent, and reopened as General.
     general: bool = False
+    # The chat's first question (the person's first line, in it or in the Oracle's Ask chat
+    # it handed it to): Recent chats names each chat by it (ask-panel fidelity, pick C).
+    question: str | None = None
 
 
 class ChatListOut(BaseModel):

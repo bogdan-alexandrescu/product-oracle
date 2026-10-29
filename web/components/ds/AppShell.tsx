@@ -492,7 +492,21 @@ function PhoneHeader() {
     setAsk(false);
   }
   if (pathname.startsWith("/i/") || pathname.startsWith("/s/")) return null;
+  // Simple's Ask sheet (the owner's pick C): the whole screen over the header and the tab bar,
+  // with the panel's own head (Ask Oracle, New chat, close). It sits outside the sticky header,
+  // whose stacking would put it under the tab bar.
+  const simple = pathname.startsWith("/simple");
+  const sheet = simple ? (
+    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} bare>
+      <HopPanel onClose={() => setAsk(false)} mark={false} />
+    </Sheet>
+  ) : (
+    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} full>
+      <HopPanel showHeader={false} />
+    </Sheet>
+  );
   return (
+    <>
     <header
       data-testid="phone-header"
       className="sticky top-0 z-30 hidden h-[var(--phone-top-bar)] items-center gap-2.5 bg-rail-top pt-[env(safe-area-inset-top)] pr-2.5 pl-3 [--focus-ring:var(--rail-bar)] max-[600px]:flex"
@@ -518,10 +532,10 @@ function PhoneHeader() {
         </button>
       )}
       {me && <UserMenu placement="header" />}
-      <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} full>
-        <HopPanel showHeader={false} />
-      </Sheet>
+      {!simple && sheet}
     </header>
+    {simple && sheet}
+    </>
   );
 }
 

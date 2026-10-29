@@ -4480,7 +4480,7 @@ function simplePlanReply(db: Db, me: MemberRow, d: DiscussionRow, question: stri
     names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
   };
   const answer = planAnswer((db.simple_roadmap ??= seedSimpleRoadmap()), ctx, question);
-  return answer ? { pieces: [answer], citations: [] } : null;
+  return answer ? { pieces: [answer.text], citations: answer.citations } : null;
 }
 
 async function route(db: Db, req: Request): Promise<Response> {
@@ -5372,6 +5372,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     };
     const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d),
       ownsDiscussion: (id: string) => !!(db.discussions ??= emptyDiscussions()).discussions.find((d) => d.id === id && d.origin === "panel" && d.started_by === me.id),
+      // Recent chats: a chat whose first line went to Oracle's Ask is named by that line, in its Ask chat.
+      askQuestion: (id: string) =>
+        (db.discussions ??= emptyDiscussions()).messages
+          .filter((x) => x.discussion_id === id && x.author_kind === "person" && !x.deleted_at)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at))[0]?.body ?? null,
     };
     const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, chatCtx, req, p, reviews);
     if (chatRes) return chatRes;
