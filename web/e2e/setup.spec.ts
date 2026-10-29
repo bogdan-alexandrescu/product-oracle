@@ -56,6 +56,8 @@ async function nameLeadFromSetup(page: Page) {
 async function setZoneFromSetup(page: Page) {
   await row(page, "timezone").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/company\?from=setup#timezone$/);
+  // Save waits for a pick: with none chosen the zone stays unset.
+  await page.getByTestId("timezone-panel").getByLabel("Company time zone").selectOption("America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
   await backToHome(page);
