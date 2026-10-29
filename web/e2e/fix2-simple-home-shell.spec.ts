@@ -61,8 +61,10 @@ test("qa-simple-home-1: on a phone the end of Home, Meetings and Priorities clea
             // Wait for the page to be longer than the screen (its content has loaded).
             if (root.scrollHeight <= window.innerHeight + 100) return "short";
             window.scrollTo(0, root.scrollHeight);
-            const last = document.querySelector(sel)!.lastElementChild!;
-            const bar = document.querySelector('[data-testid="simple-tab-bar"]')!;
+            // Mid-navigation the frame or the bar may not be there yet: poll again.
+            const last = document.querySelector(sel)?.lastElementChild;
+            const bar = document.querySelector('[data-testid="simple-tab-bar"]');
+            if (!last || !bar) return "loading";
             return last.getBoundingClientRect().bottom <= bar.getBoundingClientRect().top ? "clear" : "under the tab bar";
           }, frame),
         { message: path },

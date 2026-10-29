@@ -31,13 +31,16 @@ for (const [name, size] of [
   ["desktop", OWNER_WINDOW],
   ["phone", PHONE],
 ] as const) {
-  test(`qa-shell-17 (${name}): Home's inspector says Sections approved and its blockers whole`, async ({ page }) => {
+  test(`qa-shell-17 (${name}): Home's inspector's Approved stat and its blockers are not cut`, async ({ page }) => {
     await page.setViewportSize(size);
     await login(page);
+    // qa-company-32: on a phone the PRD panel opens on a tap of its In flight row.
+    if (name === "phone") await page.getByTestId("home-in-flight-table").getByTestId("flight-row").filter({ hasText: "Checkout redesign" }).first().click();
     const inspector = page.getByTestId("home-inspector");
     await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
     const label = inspector.getByTestId("stat-sections").locator("dt");
-    await expect(label).toHaveText("Sections approved");
+    // qa-company-26 names it "Approved" (the stat's room cut "Sections approved").
+    await expect(label).toHaveText("Approved");
     expect(await cut(label.locator("span").first())).toBe(false);
     const blockers = inspector.getByTestId("inspector-blocker");
     await expect(blockers.first()).toBeVisible();

@@ -245,7 +245,9 @@ test("qa-shell-10: a page that is still loading draws its skeleton, not a bare L
 test("qa-shell-19: the daily triage time is written as every other time is", async ({ page }) => {
   await login(page);
   await page.goto("/requests");
-  await expect(page.getByRole("switch", { name: /^Daily triage at 7:00 AM PDT/ })).toBeVisible();
+  // The work lane's Auto-sort panel (rirs-35) holds the daily switch; its time reads as a clock time with the zone.
+  await page.getByTestId("triage-menu").click();
+  await expect(page.getByRole("switch", { name: /^Auto-sort new requests daily at 7:00 AM PT/ })).toBeVisible();
   await expect(page.getByText("07:00 PT")).toHaveCount(0);
 });
 
