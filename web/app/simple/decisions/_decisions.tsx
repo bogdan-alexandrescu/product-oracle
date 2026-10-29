@@ -106,7 +106,9 @@ export function SimpleDecisions() {
               {filtered && <ClearFilters onClear={clear} />}
             </SimpleEmpty>
           )}
-          {d.meetings.map((g) => <MeetingGroup key={g.meeting.id} g={g} filtered={!!(prd || goal)} />)}
+          {d.meetings.map((g) => (
+            <MeetingGroup key={g.meeting.id} g={g} filtered={!!(prd || goal)} rowNumbers={new Set([...d.meetings.flatMap((x) => x.decisions), ...other].map((r) => r.number))} />
+          ))}
           {other.length > 0 && (
             <section className="simple-card" aria-label="Outside meetings">
               <h2 className="simple-h2">Outside meetings</h2>
@@ -282,7 +284,7 @@ function Filter({ label, value, options, onChange, all }: { label: string; value
   );
 }
 
-function MeetingGroup({ g, filtered }: { g: Group; filtered: boolean }) {
+function MeetingGroup({ g, filtered, rowNumbers }: { g: Group; filtered: boolean; rowNumbers: Set<number> }) {
   const zone = useCompanyZone();
   const m = g.meeting;
   const minutes = g.minutes;
@@ -304,7 +306,19 @@ function MeetingGroup({ g, filtered }: { g: Group; filtered: boolean }) {
       {minutes && minutes.open_questions.length > 0 && (
         <div>
           <h3 className="text-[18px] leading-[26px] font-[650]">Open questions</h3>
-          <ul className="list-disc pl-5">{minutes.open_questions.map((x) => <li key={x}>{x}</li>)}</ul>
+          <ul className="list-disc pl-5">
+            {minutes.open_questions.map((x) => {
+              // An open decision the minutes name ("D-3: ...") is listed here only (qa-simple-decide-20):
+              // it takes the decision's anchor, so the pre-read's D-3 link lands on it.
+              const n = /^D-(\d+):/.exec(x)?.[1];
+              const anchor = n && !rowNumbers.has(Number(n)) ? `d-${n}` : undefined;
+              return (
+                <li key={x} id={anchor} className={anchor ? "target:bg-[var(--simple-edited)]" : undefined}>
+                  {x}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
       {minutes && minutes.action_items.length > 0 && (

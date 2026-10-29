@@ -9,12 +9,23 @@ import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
 type Upcoming = Schemas["SimpleUpcomingMeeting"];
-type Row = Schemas["SimpleDecisionRow"];
+/** An open decision as the pre-read lists it: its number and title. */
+type Open = { key: string; number: number; title: string };
 
-/** The open decisions of Simple's Decisions page (GET /v1/simple/decisions), newest first. */
-export function openDecisions(d: Schemas["SimpleDecisionsOut"]): Row[] {
-  const rows = [...d.meetings.flatMap((g) => g.decisions), ...d.other].filter((r) => r.status === "proposed");
-  return [...new Map(rows.map((r) => [r.id, r])).values()].sort((a, b) => b.number - a.number);
+/**
+ * The open decisions of Simple's Decisions page (GET /v1/simple/decisions), newest first. An open
+ * decision a meeting's minutes name as an open question ("D-3: ...") is not listed again among
+ * the others (qa-simple-decide-20), so it is read from the minutes; one decided since is left out.
+ */
+export function openDecisions(d: Schemas["SimpleDecisionsOut"]): Open[] {
+  const rows = [...d.meetings.flatMap((g) => g.decisions), ...d.other];
+  const settled = new Set(rows.filter((r) => r.status !== "proposed").map((r) => r.number));
+  const open: Open[] = rows.filter((r) => r.status === "proposed").map((r) => ({ key: r.id, number: r.number, title: r.title }));
+  for (const q of d.meetings.flatMap((g) => g.minutes?.open_questions ?? [])) {
+    const m = /^D-(\d+):\s*(.+)$/.exec(q);
+    if (m && !settled.has(Number(m[1]))) open.push({ key: `d-${m[1]}`, number: Number(m[1]), title: m[2] });
+  }
+  return [...new Map(open.map((r) => [r.number, r])).values()].sort((a, b) => b.number - a.number);
 }
 
 /**
@@ -46,7 +57,7 @@ export function PreRead({ review }: { review: Upcoming }) {
       {q.data && q.data.length > 0 && (
         <ul className="mt-2 space-y-1" aria-label="Open decisions">
           {q.data.map((d) => (
-            <li key={d.id} data-testid="pre-read-decision" className="[overflow-wrap:anywhere]">
+            <li key={d.key} data-testid="pre-read-decision" className="[overflow-wrap:anywhere]">
               <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions#d-${d.number}`}>
                 D-{d.number}
               </Link>{" "}
