@@ -15,13 +15,11 @@ export const HORIZONS: { key: Horizon; label: string }[] = [
 /** qa-simple-roadmap-27: each end of a span shows its year only when it isn't this year's. */
 const boardSpanWords = (start: string, end: string, today: string): string => spanWords(start, end, today, true);
 
-/** qa-simple-roadmap-3: whether every item drawn in a column falls inside the column's
- * nominal window (a dragged card's horizon can move while its own dates stay put, so a
- * column may hold a card its header's range does not cover); the header's range is drawn
- * only when it is true of everything in the column, so it never claims a span that
- * contradicts a card inside it. */
-function windowFits(window: { start: string; end: string }, groups: { items: Item[] }[]): boolean {
-  return groups.every((g) => g.items.every((i) => i.start.date <= window.end && i.end.date >= window.start));
+/** qa-simple-roadmap-3: whether an item's own dates fall outside its column's window (a
+ * moved card's horizon changes while its own dates stay put); the column keeps its range
+ * and the card says its dates sit outside it. */
+function outsideWindow(i: Item, window: { start: string; end: string }): boolean {
+  return i.start.date > window.end || i.end.date < window.start;
 }
 
 const LONG_PRESS_MS = 450;
@@ -323,6 +321,11 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
               {boardSpanWords(item.start.date, item.end.date, data.today)}
               {kind === "estimated" && " · estimated"}
             </span>
+            {!closedItem(item) && data.windows[item.horizon] && outsideWindow(item, data.windows[item.horizon]) && (
+              <span className="rounded-full bg-warn-bg px-1.5 text-xs text-warn" data-testid="outside-column">
+                Dates outside {HORIZONS.find((h) => h.key === item.horizon)?.label ?? item.horizon}
+              </span>
+            )}
             {kind === "draft" && (
               <span className="rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">
                 Draft
@@ -375,11 +378,9 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
         >
           <header className="flex items-baseline gap-2 px-1 pb-2">
             <h2 className="text-lg font-semibold">{c.label}</h2>
-            {windowFits(c.window, c.groups) && (
-              <span className="text-sm text-text2" data-testid="column-window">
-                {boardSpanWords(c.window.start, c.window.end, data.today)}
-              </span>
-            )}
+            <span className="text-sm text-text2" data-testid="column-window">
+              {boardSpanWords(c.window.start, c.window.end, data.today)}
+            </span>
             <span className="tnum ml-auto text-sm text-text2" data-testid="column-count">
               {c.groups.reduce((n, g) => n + g.items.length, 0)}
             </span>

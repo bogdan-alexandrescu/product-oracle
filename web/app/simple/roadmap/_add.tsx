@@ -209,6 +209,12 @@ export function QuickAdd({
         <Icon name="grip" size={16} />
         <span className="truncate">{title.trim() || "New item"}</span>
       </span>
+      {/* qa-simple-roadmap-10: where Enter puts it, said before it is pressed. */}
+      {ready && options[0] && (
+        <span data-testid="quick-add-enter-hint" className="text-sm text-text2">
+          Enter adds it to {options[0].label}
+        </span>
+      )}
     </section>
   );
 }

@@ -1101,7 +1101,15 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
   const dated = item.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : 1));
   const feature = dated[0]?.feature_code ?? item.code ?? item.key;
   // finding 11: a slice is never a sub-24px blob, even a one-day slice at a zoomed-out scale.
-  const box = (x: (typeof dated)[number]) => ({ x: sc.x(x.start_date!), w: Math.max(MIN_BAR_W, sc.x(x.end_date!) - sc.x(x.start_date!) + sc.px) });
+  // fix2 review: widened only as far as the next slice starts (as the lanes' Pill), so two
+  // short slices side by side never overlap.
+  const box = (x: (typeof dated)[number]) => {
+    const at = sc.x(x.start_date!);
+    const own = sc.x(x.end_date!) - at + sc.px;
+    const next = dated.find((o) => o.start_date! > x.start_date!);
+    const room = next ? sc.x(next.start_date!) - at : Infinity;
+    return { x: at, w: Math.max(own, Math.min(MIN_BAR_W, room)) };
+  };
   const size = compact ? 10.5 : 11;
   return (
     <g>
