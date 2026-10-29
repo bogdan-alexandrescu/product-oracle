@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useRef, useState } from "react";
 
 import { Button, Dialog } from "@/components/ds";
@@ -15,20 +16,31 @@ type Request = Schemas["RequestOut"];
 
 /**
  * New request (#329): the button on the Requests header and in its empty state. #370: a role
- * that cannot file a request (a viewer) is not shown it.
+ * that cannot file a request (a viewer) is not shown it. The header's opens at once at
+ * ?compose=request (where /requests/new leads); closing it drops that from the address.
  */
 export function NewRequestButton({
   onFiled,
   variant = "primary",
   className,
+  fromAddress = false,
 }: {
   onFiled: (request: Request) => void;
+  /** Opens at once when the address asks for a new request (?compose=request). */
+  fromAddress?: boolean;
   /** The header's is the page's primary action; the empty state's is secondary. */
   variant?: "primary" | "secondary";
   className?: string;
 }) {
   const { can } = useMe();
-  const [open, setOpen] = useState(false);
+  const router = useRouter();
+  const pathname = usePathname();
+  const asked = useSearchParams().get("compose") === "request";
+  const [open, setOpen] = useState(() => fromAddress && asked);
+  const close = () => {
+    setOpen(false);
+    if (fromAddress && asked) router.replace(pathname);
+  };
   // create_request's handler wants an owner only to name someone else as the requester.
   if (!can("create_request", true)) return null;
   return (
@@ -38,9 +50,9 @@ export function NewRequestButton({
       </Button>
       {open && (
         <NewRequestDialog
-          onClose={() => setOpen(false)}
+          onClose={close}
           onFiled={(request) => {
-            setOpen(false);
+            close();
             onFiled(request);
           }}
         />
