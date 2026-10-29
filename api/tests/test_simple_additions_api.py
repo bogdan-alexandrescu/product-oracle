@@ -33,9 +33,10 @@ Test cards (protects / fails_when / no_claim):
   its undo brings it back; merging with a feature links the draft to it; fails_when=a
   match is missed or keep_both does not stick; no_claim=fuzzy matching beyond titles.
 - test_goal_suggestions_accept_reject_per_role: protects=accepting a suggestion is an
-  add_item on its goal (applied for owners, a proposal for approvers and commenters), the
-  suggestion becomes accepted, undoing the add reopens it; approvers and owners reject
-  with an optional reason, commenters and viewers may not; viewers accept nothing;
+  add_item on its goal, applied at once (with Undo) by those who decide the goal's
+  suggestions (an owner, the goal roadmap's decider); the suggestion becomes accepted,
+  undoing the add reopens it; the decider rejects with an optional reason; approvers,
+  commenters and viewers neither accept nor reject (403);
   fails_when=a role does what it may not or a suggestion state is wrong; no_claim=the web.
 - test_empty_goal_suggests_once: protects=the tick queues Oracle's suggestions for a goal
   with no items exactly once, never again for that goal even when it empties again; the
@@ -43,6 +44,20 @@ Test cards (protects / fails_when / no_claim):
   features" queues a job each time (pending while it waits); viewers may not ask;
   fails_when=the trigger fires twice, a rejected suggestion comes back or a viewer asks;
   no_claim=the scheduled ticker's lock.
+- test_people_suggest_per_role: protects=owners, the decider, approvers and commenters
+  file a suggestion on a goal (origin person, its proposer's name, open, no evidence),
+  viewers get 403; an empty title or outcome is 422; a title like an open or rejected one
+  of the goal is 409; the listing names each goal's decider and lets only an owner and
+  the decider accept or reject; with no decider the roadmap's approving owners decide;
+  fails_when=a viewer suggests, a duplicate files or a non-decider may accept;
+  no_claim=the web's People column.
+- test_chat_suggest_feature_card: protects="Suggest a feature for <goal>: <text>" restates
+  and gives one suggest_feature card (title the text's first clause, outcome the text, the
+  look-alike features with a plain why, said in the reply); nothing is filed before Apply;
+  a viewer may not apply; a commenter's Apply files a person suggestion as them; Undo
+  removes it while open, and is refused once the decider accepted it; an unknown goal
+  gets a question naming the goals; fails_when=the card writes before Apply, a viewer
+  files or Undo leaves it; no_claim=Oracle's reader (the LLM path).
 """
 
 import uuid
@@ -52,10 +67,11 @@ import pytest
 from sqlalchemy import select
 
 from oracle import company_time
+from oracle.baseline.models import Entity
 from oracle.jobs.models import LlmJob
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import RoadmapItem
-from oracle.simple import additions, drafts
+from oracle.simple import additions, chat_actions, drafts
 from oracle.simple.models import RoadmapDateSuggestion, SimpleGoalSuggestion
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import make_people
@@ -318,12 +334,13 @@ async def test_reconcile_and_keep_both(client):
     c = (await w.add(client, "owner", "Bulk import"))["change"]
     draft = c["target"]["item_id"]
     item = (await w.items(client))[draft]
+    # An item with no code reads by its name alone, never its key (suggest review).
     assert item["looks_like"][0] == {"kind": "item", "id": w.ids["import-a"],
-                                     "code": "import-a", "title": "Bulk import"}  # fmt: skip
+                                     "code": "", "title": "Bulk import"}  # fmt: skip
     c2 = (await w.add(client, "owner", "Audit log"))["change"]
     d2 = c2["target"]["item_id"]
     assert (await w.items(client))[d2]["looks_like"][0]["kind"] == "feature"
-    assert (await w.items(client))[d2]["looks_like"][0]["code"] == "audit-log"
+    assert (await w.items(client))[d2]["looks_like"][0]["code"] == ""
     r = await client.post(CHANGES, headers=w.as_("owner"), json={
         "op": "keep_both", "target": {"item_id": draft}, "before": {"kept_both": False},
         "after": {}})  # fmt: skip
@@ -390,13 +407,15 @@ async def test_goal_suggestions_accept_reject_per_role(client):
     r = await client.get(SUGGESTIONS, headers=w.as_("owner"), params={"goal_id": w.goals["quiet"]})
     assert ids[0] in [x["id"] for x in r.json()["suggestions"]]
     for who in ("approver", "commenter"):
-        r = await client.post(f"{SUGGESTIONS}/{ids[1 if who == 'approver' else 2]}/accept",
-                              headers=w.as_(who), json={})  # fmt: skip
-        assert r.status_code == 200 and r.json()["change"]["status"] == "proposed", r.text
-    r = await client.post(f"{SUGGESTIONS}/{ids[3]}/reject", headers=w.as_("commenter"),
-                          json={"reason": "no"})  # fmt: skip
-    assert r.status_code == 403
-    r = await client.post(f"{SUGGESTIONS}/{ids[3]}/reject", headers=w.as_("approver"),
+        # Only the decider (or an owner) accepts or rejects.
+        for act in ("accept", "reject"):
+            r = await client.post(f"{SUGGESTIONS}/{ids[1]}/{act}", headers=w.as_(who), json={})
+            assert r.status_code == 403, (who, act, r.text)
+            assert r.json()["detail"] == "Only the decider accepts or rejects suggestions"
+    r = await client.post(f"{SUGGESTIONS}/{ids[1]}/accept", headers=w.as_("decider"), json={})
+    assert r.status_code == 200 and r.json()["change"]["status"] == "applied", r.text
+    assert r.json()["change"]["can_undo"]
+    r = await client.post(f"{SUGGESTIONS}/{ids[3]}/reject", headers=w.as_("decider"),
                           json={"reason": "Not this year"})  # fmt: skip
     assert r.status_code == 200, r.text
     assert r.json()["status"] == "rejected" and r.json()["reason"] == "Not this year"
@@ -544,3 +563,174 @@ async def test_date_suggestion_survives_publishing_an_added_item(client):
             select(RoadmapDateSuggestion).where(RoadmapDateSuggestion.item_id == copy.id)
         )
         assert sug is not None and sug.status == "open" and sug.basis == "Two sprints"
+
+
+GOALS = "/v1/simple/goals"
+ROLES = ("owner", "decider", "approver", "commenter", "viewer")
+
+
+async def _suggest(client, w: World, who: str, title: str, outcome="Fewer alerts at night",
+                   goal="quiet", status=201) -> dict:  # fmt: skip
+    r = await client.post(f"{GOALS}/{w.goals[goal]}/suggestions", headers=w.as_(who),
+                          json={"title": title, "outcome": outcome})  # fmt: skip
+    assert r.status_code == status, (who, r.text)
+    return r.json()
+
+
+async def test_people_suggest_per_role(client):
+    w = await World().build()
+    for who in ("owner", "decider", "approver", "commenter"):
+        out = await _suggest(client, w, who, f"  Quiet   hours {who} ")
+        assert out["title"] == f"Quiet hours {who}" and out["origin"] == "person"
+        assert out["status"] == "open" and out["evidence"] == [] and out["why"] == ""
+        assert out["outcome"] == "Fewer alerts at night"
+        assert out["goal"]["id"] == w.goals["quiet"]
+    names = {"owner": "Owner", "decider": "Dee Cider", "approver": "Approver",
+             "commenter": "Commenter"}  # fmt: skip
+    out = await _suggest(client, w, "viewer", "Viewer idea", status=403)
+    assert out["detail"] == "Viewers read; commenters and up suggest"
+    await _suggest(client, w, "commenter", "   ", status=422)
+    await _suggest(client, w, "commenter", "Fine title", outcome="  ", status=422)
+    await _suggest(client, w, "commenter", "x" * 300, status=422)
+    # A title like an open one of the goal is refused (another goal may have it).
+    await _suggest(client, w, "approver", "quiet hours, commenter!", status=409)
+    await _suggest(client, w, "approver", "Quiet hours commenter", goal="grow")
+    r = await client.get(SUGGESTIONS, headers=w.as_("owner"), params={"goal_id": w.goals["quiet"]})
+    rows = {x["title"]: x for x in r.json()["suggestions"]}
+    assert r.json()["goals"][0]["decider_name"] == "Dee Cider"
+    for who, name in names.items():
+        assert rows[f"Quiet hours {who}"]["proposed_by_name"] == name
+    for who in ROLES:
+        r = await client.get(SUGGESTIONS, headers=w.as_(who),
+                             params={"goal_id": w.goals["quiet"]})  # fmt: skip
+        mine = who in ("owner", "decider")
+        assert r.json()["goals"][0]["can_decide"] is mine, who
+        assert all(x["can_accept"] is mine and x["can_reject"] is mine
+                   for x in r.json()["suggestions"]), who  # fmt: skip
+    # A rejected title stays refused.
+    sid = rows["Quiet hours owner"]["id"]
+    r = await client.post(f"{SUGGESTIONS}/{sid}/reject", headers=w.as_("decider"), json={})
+    assert r.status_code == 200, r.text
+    assert r.json()["proposed_by_name"] == "Owner"
+    await _suggest(client, w, "commenter", "Quiet hours owner", status=409)
+    # The decider accepts a commenter's suggestion: applied at once, on the goal.
+    sid = rows["Quiet hours commenter"]["id"]
+    r = await client.post(f"{SUGGESTIONS}/{sid}/accept", headers=w.as_("decider"), json={})
+    assert r.status_code == 200 and r.json()["change"]["status"] == "applied", r.text
+    item = (await w.items(client, "decider"))[r.json()["change"]["target"]["item_id"]]
+    assert item["goal"]["id"] == w.goals["quiet"] and item["title"] == "Quiet hours commenter"
+
+
+async def test_no_decider_the_approving_owners_decide(client):
+    w = await World().build(decider=False)
+    out = await _suggest(client, w, "commenter", "Snooze")
+    r = await client.get(SUGGESTIONS, headers=w.as_("commenter"),
+                         params={"goal_id": w.goals["quiet"]})  # fmt: skip
+    assert r.json()["goals"][0]["decider_name"] == "Owner"
+    for who in ROLES:
+        r = await client.get(SUGGESTIONS, headers=w.as_(who),
+                             params={"goal_id": w.goals["quiet"]})  # fmt: skip
+        [x] = r.json()["suggestions"]
+        assert x["can_accept"] is (who == "owner"), who
+        assert r.json()["goals"][0]["can_decide"] is (who == "owner"), who
+    r = await client.post(f"{SUGGESTIONS}/{out['id']}/accept", headers=w.as_("decider"), json={})
+    assert r.status_code == 403
+
+
+ASK = "/v1/simple/chat/messages"
+CARDS = "/v1/simple/chat/cards"
+
+
+async def _say(client, w: World, who: str, text: str) -> dict:
+    r = await client.post(ASK, json={"text": text}, headers=w.as_(who))
+    assert r.status_code == 200, r.text
+    return r.json()["messages"][-1]
+
+
+async def _people_rows(client, w: World, status="open") -> list[dict]:
+    r = await client.get(SUGGESTIONS, headers=w.as_("owner"), params={"status": status})
+    return [x for x in r.json()["suggestions"] if x["origin"] == "person"]
+
+
+def test_lookalike_code_is_a_display_code_never_a_key():
+    """protects=a look-alike feature reads by its display code ("F-09 Invite links") when its
+    key is a code, and by its name alone otherwise; fails_when=the code is a key slug
+    ("audit-log"), which reads like an id in the chat's reply and the drawer; no_claim=the
+    title matching itself (test_reconcile_and_keep_both)."""
+    coded = Entity(id=uuid.uuid4(), type="feature", key="f-09", title="Invite links")
+    slug = Entity(id=uuid.uuid4(), type="feature", key="audit-log", title="Audit log")
+    [m] = additions.reconcile("Invite links", [], [coded, slug])
+    assert (m.code, m.title) == ("F-09", "Invite links")
+    [m] = additions.reconcile("Audit log", [], [coded, slug])
+    assert (m.code, m.title) == ("", "Audit log")
+
+
+def test_suggestion_title_is_the_first_clause():
+    t = chat_actions.suggestion_title
+    assert t("audit log export, so admins can review changes") == "Audit log export"
+    assert t("let teams invite people with a link to onboard faster") == (
+        "Let teams invite people with a link"
+    )
+    assert t("night mode so on-call sleeps") == "Night mode"
+    assert t("dark mode. For everyone") == "Dark mode"
+    long = t("a very long feature name that keeps going and going without any stop at all")
+    assert long == "A very long feature name that keeps going and going without"
+
+
+async def test_chat_suggest_feature_card(client):
+    w = await World().build()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        f = await s.get(Entity, uuid.UUID(w.features["audit-log"]))
+        f.attrs = {"description": "Lets admins see who changed what."}
+        await s.commit()
+    line = "Suggest a feature for Quiet: audit log export, so admins can review changes"
+    m = await _say(client, w, "commenter", line)
+    assert m["kind"] == "cards", m["body"]
+    assert m["body"].startswith(chat_actions.UNDERSTOOD)
+    assert "Audit log export" in m["body"] and "Quiet" in m["body"]
+    assert "It looks like Audit Log, which already lets admins see who changed what" in (m["body"])
+    [c] = m["cards"]
+    assert c["op"] == "suggest_feature" and c["status"] == "open" and c["may"] == "apply"
+    assert c["summary"] == "Suggest Audit log export for Quiet"
+    assert c["preview"] == {
+        "kind": "suggestion", "goal_id": w.goals["quiet"], "goal_title": "Quiet",
+        "title": "Audit log export",
+        "outcome": "audit log export, so admins can review changes",
+        "looks_like": [{"code": "", "title": "Audit Log",
+                        "why": "which already lets admins see who changed what"}],
+    }  # fmt: skip
+    assert await _people_rows(client, w) == []  # nothing until Apply
+    # A viewer's card is not theirs to apply.
+    v = (await _say(client, w, "viewer", line))["cards"][0]
+    assert v["may"] is None and v["why_not"]
+    assert (
+        await client.post(f"{CARDS}/{v['id']}/apply", headers=w.as_("viewer"))
+    ).status_code == 403
+    r = await client.post(f"{CARDS}/{c['id']}/apply", headers=w.as_("commenter"))
+    assert r.status_code == 200, r.text
+    assert r.json()["card"]["status"] == "applied"
+    [row] = await _people_rows(client, w)
+    assert row["title"] == "Audit log export" and row["proposed_by_name"] == "Commenter"
+    assert row["outcome"] == "audit log export, so admins can review changes"
+    assert row["goal"]["id"] == w.goals["quiet"]
+    r = await client.post(f"{CARDS}/{c['id']}/undo", headers=w.as_("commenter"))
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "undone"
+    assert await _people_rows(client, w) == []
+    # Once the decider accepted it, Undo is refused.
+    c = (await _say(client, w, "commenter", "suggest a feature for grow: Faster imports"))["cards"][
+        0
+    ]
+    assert c["preview"]["goal_title"] == "Grow" and c["preview"]["looks_like"] == []
+    assert (
+        await client.post(f"{CARDS}/{c['id']}/apply", headers=w.as_("commenter"))
+    ).status_code == 200
+    [row] = await _people_rows(client, w)
+    r = await client.post(f"{SUGGESTIONS}/{row['id']}/accept", headers=w.as_("decider"), json={})
+    assert r.status_code == 200, r.text
+    r = await client.post(f"{CARDS}/{c['id']}/undo", headers=w.as_("commenter"))
+    assert r.status_code == 409
+    # An unknown goal: a question naming the goals.
+    m = await _say(client, w, "commenter", "Suggest a feature for Nowhere: something")
+    assert m["kind"] == "question" and "Grow" in m["body"] and "Quiet" in m["body"]
+    assert not m["cards"]

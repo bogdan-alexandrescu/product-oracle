@@ -25,10 +25,13 @@ quarter it was dropped on. It reads ``draft`` until an owner or the decider conf
 features that could serve a goal, with their outcome, why and evidence links (each with
 its confidence), suggested AUTOMATICALLY ONCE when a goal has no roadmap items
 (:func:`suggest_for_empty_goals`, from the tick; ``simple_goal_autos`` remembers it) and
-ON DEMAND ("Suggest features", commenter and up). Accepting one is an ``add_item`` on its
-goal (commenter and up: applied or proposed by the roadmap's rule); undoing or declining
-that change reopens it. Rejecting one (approver and up, an optional reason) is final: its
-title is never suggested again for the goal.
+ON DEMAND ("Suggest features", commenter and up). PEOPLE file their own next to Oracle's
+(:func:`file_suggestion`, commenter and up: origin ``person``, ``proposed_by``; a title
+like an open or rejected one of the goal is refused). Only who decides the goal's
+suggestions accepts or rejects one (:func:`deciding`: an owner, the decider of the goal's
+roadmap, with none its owners who are approvers): accepting is an ``add_item`` on its
+goal, applied at once (with Undo); undoing that change reopens it. Rejecting one (an
+optional reason) is final: its title is never suggested again for the goal.
 
 **Reconcile**: every draft item not kept both, and every open suggestion, lists the items
 and baseline features whose titles look like its own (``looks_like``: Merge with
@@ -55,6 +58,7 @@ from oracle.authz import has_role
 from oracle.baseline.models import Edge, Entity, Evidence
 from oracle.docs.models import Document, DocumentVersion
 from oracle.jobs.models import LlmJob
+from oracle.members.names import display_name
 from oracle.roadmap.models import HORIZONS, ProductTrack, RoadmapItem
 from oracle.simple import changes, drafts, service
 from oracle.simple.models import (
@@ -298,6 +302,21 @@ async def _plan(db: AsyncSession, principal: Any, body: SimpleChangeIn, read_: s
     }
     if span is not None:
         after["quarter"] = {"start": span[0].isoformat(), "end": span[1].isoformat()}
+    # roadmap-talk: an item added from the talk may come with its dates and milestone.
+    start = changes._day(body.after.get("start_date"), "after.start_date")
+    end = changes._day(body.after.get("end_date"), "after.end_date")
+    if (start is None) != (end is None) or (start and end and end < start):
+        raise ChangeError(422, "after.start_date and after.end_date: both, the end not first")
+    if start is not None and end is not None:
+        after["start_date"], after["end_date"] = start.isoformat(), end.isoformat()
+    m = body.after.get("milestone")
+    if m is not None:
+        name = " ".join(str(m.get("name") or "").split()) if isinstance(m, dict) else ""
+        if not name or len(name) > changes.TITLE_MAX:
+            raise ChangeError(422, f"after.milestone.name: 1 to {changes.TITLE_MAX} characters")
+        day = changes._day(m.get("date"), "after.milestone.date")
+        after["milestone"] = {"name": name, "date": changes._iso(day),
+                              "date_source": "typed" if day else None}  # fmt: skip
     return doc, target, after
 
 
@@ -354,6 +373,10 @@ async def _place(
         prd_document_id=track.prd_document_id if track is not None else None,
         prd_version_id=track.current_version_id if track is not None else None,
         note="added in Simple",
+        start_date=date.fromisoformat(c.after["start_date"]) if c.after.get("start_date") else None,
+        end_date=date.fromisoformat(c.after["end_date"]) if c.after.get("end_date") else None,
+        date_source="typed" if c.after.get("start_date") else None,
+        milestone=c.after.get("milestone"),
     )
     db.add(row)
     await db.flush()
@@ -535,6 +558,8 @@ def reconcile(
     roadmap: uuid.UUID | None = None,
 ) -> list[SimpleMatch]:
     """The items (first) and baseline features whose titles look like ``title``."""
+    from oracle.simple.priorities import prd_code
+
     items: list[tuple[float, SimpleMatch]] = []
     with_item = set()
     for e in entries:
@@ -546,7 +571,8 @@ def reconcile(
             continue
         score = _like(title, e.row.title)
         if score >= LOOKS_LIKE:
-            code = e.code or e.row.item_key
+            # Its display code (F-06) or none, never its key: the name says the rest.
+            code = e.code or ""
             items.append((score, SimpleMatch(kind="item", id=str(e.row.id), code=code,
                                              title=e.row.title)))  # fmt: skip
     feats: list[tuple[float, SimpleMatch]] = []
@@ -555,7 +581,8 @@ def reconcile(
             continue
         score = _like(title, f.title)
         if score >= LOOKS_LIKE:
-            feats.append((score, SimpleMatch(kind="feature", id=str(f.id), code=f.key,
+            code = prd_code(f.key) or ""
+            feats.append((score, SimpleMatch(kind="feature", id=str(f.id), code=code,
                                              title=f.title)))  # fmt: skip
     ranked = sorted(items, key=lambda t: -t[0]) + sorted(feats, key=lambda t: -t[0])
     return [m for _, m in ranked][:MAX_MATCHES]
@@ -777,10 +804,12 @@ async def run_goal_suggestions(s: AsyncSession, job: LlmJob, ask) -> dict[str, A
 # --------------------------------------------------------------------------- suggestions
 
 
-async def _job_document(db: AsyncSession, goal: Entity) -> Document | None:
-    """The roadmap a goal's suggestions job is filed under: one holding its items, else the
-    company's first roadmap."""
-    read_ = await service.load(db)
+async def _job_document(
+    db: AsyncSession, goal: Entity, read_: service.Read | None = None
+) -> Document | None:
+    """The roadmap a goal's suggestions job is filed under (and whose decider decides its
+    suggestions): one holding its items, else the company's first roadmap."""
+    read_ = read_ or await service.load(db)
     for e in read_.entries:
         if e.goal is not None and e.goal.id == goal.id:
             return e.roadmap
@@ -893,8 +922,10 @@ async def listing(
     )
     features = await _features(db) if any(r.status == "open" for r in rows) else []
     names = await changes._names(db, {r.decided_by for r in rows if r.decided_by})
-    may_accept = has_role(principal.role, "commenter") and principal.user_id is not None
-    may_reject = has_role(principal.role, "approver") and principal.user_id is not None
+    rule = await deciding(db, principal, goals, read_)
+    people = await _display_names(
+        db, {r.proposed_by for r in rows if r.proposed_by} | {d for _, d in rule.values() if d}
+    )
     out = []
     for r in rows:
         out.append(
@@ -917,14 +948,19 @@ async def listing(
                 if r.status == "open"
                 else [],
                 flow=await _flow(db, "suggestion", r.id),
-                can_accept=may_accept and r.status == "open",
-                can_reject=may_reject and r.status == "open",
+                can_accept=rule[r.goal_id][0] and r.status == "open",
+                can_reject=rule[r.goal_id][0] and r.status == "open",
+                proposed_by_name=people.get(r.proposed_by) if r.proposed_by else None,
             )  # fmt: skip
         )
     return SimpleGoalSuggestionsOut(
         goals=[
             SimpleGoalSuggestionGoal(
-                goal=_brief(g), pending=str(g.id) in pending, empty=g.id not in live
+                goal=_brief(g),
+                pending=str(g.id) in pending,
+                empty=g.id not in live,
+                decider_name=people.get(rule[g.id][1]) if rule[g.id][1] else None,
+                can_decide=rule[g.id][0],
             )  # fmt: skip
             for g in goals
         ],
@@ -939,14 +975,15 @@ async def accept(
     roadmap_id: uuid.UUID | None,
     session_id: uuid.UUID | None,
 ) -> SimpleChangeResult:
-    """Accept a suggestion: an add_item on its goal, applied or proposed by the roadmap's rule."""
+    """Accept a suggestion (who decides the goal's suggestions): an add_item on its goal,
+    applied at once on the goal's roadmap (with Undo)."""
     s = await db.get(SimpleGoalSuggestion, suggestion_id)
     if s is None:
         raise ChangeError(404, "No such suggestion")
-    if not has_role(principal.role, "commenter"):
-        raise ChangeError(403, "Commenters and up accept suggestions")
+    doc = await _decide(db, principal, s)
     if s.status != "open":
         raise ChangeError(409, f"This suggestion is {s.status} already")
+    roadmap_id = roadmap_id or (doc.id if doc is not None else None)
     body = SimpleChangeIn(
         session_id=session_id,
         op="add_item",
@@ -967,8 +1004,7 @@ async def reject(
     s = await db.get(SimpleGoalSuggestion, suggestion_id, with_for_update=True)
     if s is None:
         raise ChangeError(404, "No such suggestion")
-    if not has_role(principal.role, "approver") or getattr(principal, "user_id", None) is None:
-        raise ChangeError(403, "Approvers and owners reject suggestions")
+    await _decide(db, principal, s)
     if s.status != "open":
         raise ChangeError(409, f"This suggestion is {s.status} already")
     s.status, s.reason = "rejected", (reason or "").strip() or None
@@ -978,3 +1014,100 @@ async def reject(
                        s.id, data={"reason": s.reason})  # fmt: skip
     out = await listing(db, principal, s.goal_id, None)
     return next(x for x in out.suggestions if x.id == str(s.id))
+
+
+# --------------------------------------------------------------------------- people's
+
+
+DECIDER_ONLY = "Only the decider accepts or rejects suggestions"
+
+
+async def _display_names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
+    ids = {i for i in ids if i is not None}
+    if not ids:
+        return {}
+    users = await db.scalars(select(User).where(User.id.in_(ids)))
+    return {u.id: display_name(u.email, u.name) for u in users}
+
+
+async def deciding(
+    db: AsyncSession, principal: Any, goals: list[Entity], read_: service.Read
+) -> dict[uuid.UUID, tuple[bool, uuid.UUID | None]]:
+    """Per goal: whether the caller decides its suggestions (drafts.can_edit on the goal's
+    roadmap: an owner, its decider, with none its owners who are approvers) and who decides
+    them (the first of _route: the decider, else its approving owners, else the company's
+    owners)."""
+    docs = {g.id: await _job_document(db, g, read_) for g in goals}
+    w = await drafts.who(db, {d.id for d in docs.values() if d is not None})
+    routes: dict[uuid.UUID, uuid.UUID | None] = {}
+    out: dict[uuid.UUID, tuple[bool, uuid.UUID | None]] = {}
+    for g in goals:
+        d = docs[g.id]
+        if d is None:
+            out[g.id] = (has_role(principal.role, "owner") and _me_or_none(principal) is not None,
+                         None)  # fmt: skip
+            continue
+        if d.id not in routes:
+            routes[d.id] = next(iter(await _route(db, d.id, w)), None)
+        out[g.id] = (drafts.can_edit(principal, d.id, w), routes[d.id])
+    return out
+
+
+def _me_or_none(principal: Any) -> uuid.UUID | None:
+    return getattr(principal, "user_id", None)
+
+
+async def _decide(db: AsyncSession, principal: Any, s: SimpleGoalSuggestion) -> Document | None:
+    """The goal's roadmap, when the caller decides its suggestions (else 403)."""
+    goal = await db.get(Entity, s.goal_id)
+    if goal is None:
+        raise ChangeError(404, "No such suggestion")
+    read_ = await service.load(db, await drafts.overlays_for(db, principal))
+    if not (await deciding(db, principal, [goal], read_))[goal.id][0]:
+        raise ChangeError(403, DECIDER_ONLY)
+    return await _job_document(db, goal, read_)
+
+
+async def file_suggestion(
+    db: AsyncSession, principal: Any, goal_id: Any, title: str, outcome: str
+) -> SimpleGoalSuggestion:
+    """A person's suggestion on a goal (commenter and up): open, origin ``person``, filed
+    as them; a title like an open or rejected one of the goal is refused (the caller
+    commits)."""
+    me = _me_or_none(principal)
+    if not has_role(principal.role, "commenter") or me is None:
+        raise ChangeError(403, "Viewers read; commenters and up suggest")
+    goal = await _goal(db, goal_id)
+    if goal.status != "confirmed":
+        raise ChangeError(422, "No such goal")
+    title = " ".join((title or "").split())
+    outcome = " ".join((outcome or "").split())
+    if not title or len(title) > changes.TITLE_MAX:
+        raise ChangeError(422, f"title: 1 to {changes.TITLE_MAX} characters")
+    if not outcome or len(outcome) > TEXT_MAX:
+        raise ChangeError(422, f"outcome: 1 to {TEXT_MAX} characters")
+    taken = await db.scalars(
+        select(SimpleGoalSuggestion.title).where(
+            SimpleGoalSuggestion.goal_id == goal.id,
+            SimpleGoalSuggestion.status.in_(("open", "rejected")),
+        )
+    )
+    if _norm(title) in {_norm(t) for t in taken}:
+        raise ChangeError(409, "This goal has that suggestion already")
+    row = SimpleGoalSuggestion(goal_id=goal.id, title=title, outcome=outcome, why=None,
+                               evidence=[], origin="person", proposed_by=me)  # fmt: skip
+    db.add(row)
+    await db.flush()
+    await audit.record(db, principal, "simple_goal_suggestion.suggested", "simple_goal_suggestion",
+                       row.id, data={"goal_id": str(goal.id), "title": title})  # fmt: skip
+    await _request_visual(db, principal, "suggestion", row.id, title)
+    return row
+
+
+async def create_suggestion(
+    db: AsyncSession, principal: Any, goal_id: uuid.UUID, title: str, outcome: str
+) -> SuggestionOut:
+    row = await file_suggestion(db, principal, goal_id, title, outcome)
+    await db.commit()
+    out = await listing(db, principal, row.goal_id, None)
+    return next(x for x in out.suggestions if x.id == str(row.id))

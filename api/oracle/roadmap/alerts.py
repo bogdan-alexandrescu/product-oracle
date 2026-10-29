@@ -190,8 +190,8 @@ async def situations(db: AsyncSession, track: ProductTrack, found: "TrackRead") 
                         {"blocker_id": str(b.id), "blocker_status": b.blocker_status},
                     )
                 )  # fmt: skip
-        if item.freshness in ("potentially_stale", "under_review"):
-            why = staleness.stale_why(item.stale_reasons, "Its PRD trace changed")
+        if staleness.is_stale(item):
+            why = staleness.stale_why(staleness.own_reasons(item), "Its PRD trace changed")
             out.append(
                 Situation(
                     item.item_key, "stale", str(item.caused_by_change_id or ""), why,

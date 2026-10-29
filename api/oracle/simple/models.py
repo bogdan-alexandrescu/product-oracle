@@ -41,9 +41,11 @@ class RoadmapDateSuggestion(TenantScoped, Base):
     __table_args__ = (
         CheckConstraint(_in("status", SUGGESTION_STATUSES), name="status"),
         CheckConstraint("end_date >= start_date", name="span"),
+        # plan-model: one open suggestion per item and slice (null: the whole item).
         Index(
             "uq_roadmap_date_suggestions_open",
             "item_id",
+            text("coalesce(slice_code, '')"),
             unique=True,
             postgresql_where=text("status = 'open'"),
         ),
@@ -59,6 +61,40 @@ class RoadmapDateSuggestion(TenantScoped, Base):
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")
     decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # plan-model: the slice of the item's feature it dates (F-05a), inside its milestone.
+    slice_code: Mapped[str | None] = mapped_column(Text)
+
+
+PLAN_STATUSES = ("ready", "reading", "failed", "none")
+PLAN_SOURCES = ("prd", "oracle")
+
+
+class SimplePrdPlan(TenantScoped, Base):
+    """plan-model: a PRD's plan as read from its approved version (oracle.simple.plan): its
+    milestones, features (with milestone, effort, goals, order words), goals and holidays.
+    One row per PRD, replaced when a newer approved version is read or an owner reads it
+    again. ``source``: ``prd`` (its tables, read deterministically) or ``oracle`` (the
+    ``prd_plan`` job's reading of a PRD without tables)."""
+
+    __tablename__ = "simple_prd_plans"
+    __table_args__ = (
+        CheckConstraint(_in("status", PLAN_STATUSES), name="status"),
+        CheckConstraint("source IS NULL OR " + _in("source", PLAN_SOURCES), name="source"),
+        UniqueConstraint("document_id"),
+    )
+
+    document_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    )
+    version_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("document_versions.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="none")
+    source: Mapped[str | None] = mapped_column(Text)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default="{}")
+    job_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    error: Mapped[str | None] = mapped_column(Text)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class SimpleSession(TenantScoped, Base):
@@ -314,11 +350,12 @@ class RoadmapKeyDate(TenantScoped, Base):
 # --------------------------------------------------------------------------- S7
 
 GOAL_SUGGESTION_STATUSES = ("open", "accepted", "rejected")
-GOAL_SUGGESTION_ORIGINS = ("auto", "on_demand")
+GOAL_SUGGESTION_ORIGINS = ("auto", "on_demand", "person")
 
 
 class SimpleGoalSuggestion(TenantScoped, Base):
-    """Simple S7 (oracle.simple.additions): a feature Oracle suggests for a goal. ``open``
+    """Simple S7 (oracle.simple.additions): a feature Oracle (or a person, origin
+    ``person``, ``proposed_by``) suggests for a goal. ``open``
     until a person accepts it (an ``add_item`` change on the goal: ``change_id``,
     ``item_id``; undoing or declining that change reopens it) or rejects it (with an
     optional ``reason``; a rejected title is never suggested again for the goal).
@@ -354,6 +391,8 @@ class SimpleGoalSuggestion(TenantScoped, Base):
     item_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A person's suggestion (origin "person"): who filed it.
+    proposed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
 
 
 class SimpleGoalAuto(TenantScoped, Base):

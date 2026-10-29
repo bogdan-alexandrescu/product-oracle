@@ -42,7 +42,7 @@ from oracle.roadmap.models import (
     TrackerRecord,
     TrackMilestone,
 )
-from oracle.simple import constraints, dates
+from oracle.simple import constraints, dates, plan_strip
 from oracle.simple.models import RoadmapDateSuggestion
 from oracle.simple.schemas import (
     DateSuggestionOut,
@@ -86,6 +86,9 @@ class Entry:
     needed_by: list[uuid.UUID] = field(default_factory=list)
     blockers: list[constraints.Blocker] = field(default_factory=list)
     suggestion: RoadmapDateSuggestion | None = None
+    # plan-model review: the span of all the item's open slice suggestions (what Accept
+    # applies), shown as the item's suggestion; None: the suggestion's own dates.
+    suggestion_span: tuple[date, date] | None = None
     flags: list[constraints.Flag] = field(default_factory=list)
     # The track owner's role now (None: no owner, or a disabled one): D-a.
     owner_role: str | None = None
@@ -94,6 +97,8 @@ class Entry:
     # The heading of the PRD section the item was imported from (the walk: "F-06 Loop
     # and blast-radius guards" in the card's reasons).
     prd_heading: str | None = None
+    # The number of the PRD draft (version) the item was imported from: "(draft 5)".
+    prd_draft: int | None = None
     # The item's code as every reader reads it (its feature's code, F-12 or the PRD's
     # F-06; else its own PRD section's): Home, the card's "Looks like" and "Merged into".
     code: str | None = None
@@ -282,12 +287,19 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
     }
     blockers = await _blockers(db, {b for r in rows for b in r.blocker_ids or []})
     cut = await _cut(db, roadmap_ids)
-    suggestions = {
-        s.item_id: s
-        for s in await db.scalars(
-            select(RoadmapDateSuggestion).where(RoadmapDateSuggestion.status == "open")
-        )
-    }
+    # The item's first open suggestion (plan-model: its first slice's, shown with the span
+    # of all its open slices, the dates Accept applies).
+    suggestions: dict[uuid.UUID, RoadmapDateSuggestion] = {}
+    spans: dict[uuid.UUID, tuple[date, date]] = {}
+    for s in await db.scalars(
+        select(RoadmapDateSuggestion)
+        .where(RoadmapDateSuggestion.status == "open")
+        .order_by(RoadmapDateSuggestion.start_date)
+    ):
+        first = suggestions.setdefault(s.item_id, s)
+        if s.slice_code is not None and first.slice_code is not None:
+            a, b = spans.get(s.item_id, (s.start_date, s.end_date))
+            spans[s.item_id] = (min(a, s.start_date), max(b, s.end_date))
     deciders = {
         p.document_id: p.decider_id
         for p in await db.scalars(
@@ -329,6 +341,7 @@ async def load(db: AsyncSession, overlays: dict[uuid.UUID, dict[str, Any]] | Non
                 milestone=milestone,
                 blockers=[blockers[b] for b in row.blocker_ids or [] if b in blockers],
                 suggestion=suggestions.get(row.id),
+                suggestion_span=spans.get(row.id),
                 owner_role=owner_roles.get(track.id) if track is not None else None,
                 owner_name=people[row.owner_id][1]
                 if row.owner_id in people
@@ -510,27 +523,47 @@ def _date(d: dates.Dated) -> SimpleDate:
     return SimpleDate(date=d.date, source=d.source, estimated=d.estimated)
 
 
-def suggestion_out(s: RoadmapDateSuggestion, row: RoadmapItem, may: bool) -> DateSuggestionOut:
+def suggestion_out(
+    s: RoadmapDateSuggestion,
+    row: RoadmapItem,
+    may: bool,
+    span: tuple[date, date] | None = None,
+) -> DateSuggestionOut:
+    start, end = span or (s.start_date, s.end_date)
     return DateSuggestionOut(
         id=s.id,
         item_id=s.item_id,
         item_key=row.item_key,
         item_title=row.title,
-        start_date=s.start_date,
-        end_date=s.end_date,
+        start_date=start,
+        end_date=end,
         basis=s.basis,
         status=s.status,  # type: ignore[arg-type]
         created_at=s.created_at,
         decided_by=s.decided_by,
         decided_at=s.decided_at,
+        slice_code=s.slice_code,
         can_decide=may,
     )
 
 
 async def _prd_headings(db: AsyncSession, entries: list[Entry]) -> None:
-    """Each entry's PRD section heading, in one statement."""
-    from oracle.docs.models import Section
+    """Each entry's PRD section heading and PRD draft number, in two statements."""
+    from oracle.docs.models import DocumentVersion, Section
 
+    drafts_of = {e.row.prd_version_id for e in entries if e.row.prd_version_id}
+    if drafts_of:
+        numbers = dict(
+            (
+                await db.execute(
+                    select(DocumentVersion.id, DocumentVersion.number).where(
+                        DocumentVersion.id.in_(drafts_of)
+                    )
+                )
+            ).all()
+        )
+        for e in entries:
+            e.prd_draft = numbers.get(e.row.prd_version_id)
     wanted = {
         (e.row.prd_version_id, e.row.prd_section_key)
         for e in entries
@@ -575,19 +608,32 @@ async def item_codes(db: AsyncSession, entries: list[Entry]) -> None:
         e.code = e.code or _prd_code(e.row.prd_section_key)
 
 
-def prd_section_label(section_key: str, heading: str | None) -> str:
+def prd_section_label(section_key: str, heading: str | None, name: str = "") -> str:
     """How the card names the PRD section an item came from: the PRD's code and the
-    section's heading ("F-06 Loop and blast-radius guards"); "section <key>" when the
-    key is no code and the heading is unknown."""
+    section's heading ("F-06 Loop and blast-radius guards"); with no heading, the code and
+    ``name`` (the item's feature name); never the section's key (an anchor, "f-06")."""
     from oracle.simple.priorities import prd_code
 
     code = prd_code(section_key)
-    words = (heading or "").strip()
+    words = (heading or "").strip() or name.strip()
     if code and words.upper().startswith(code):
         words = words[len(code) :].lstrip(" :.-·–—")
-    if code:
-        return f"{code} {words}".strip()
-    return words or f"section {section_key}"
+    return f"{code or ''} {words}".strip()
+
+
+def prd_provenance(e: Entry) -> str | None:
+    """The card's "Why" line naming where the item came from: "From <PRD> (draft 5):
+    F-01 Sign-up flow." (the PRD, its draft, the code with the feature's name). The code is
+    the PRD section's, else the item's own; no section anchor is ever shown."""
+    if e.prd is None or not e.row.prd_section_key:
+        return None
+    label = prd_section_label(e.row.prd_section_key, e.prd_heading, e.row.title or "")
+    if e.code and not _prd_code(e.row.prd_section_key) and not label.startswith(e.code):
+        label = f"{e.code} {label}".strip()
+    if not label:
+        return None
+    draft = f" (draft {e.prd_draft})" if e.prd_draft else ""
+    return f"From {e.prd.title}{draft}: {label}."
 
 
 def _reasons(e: Entry) -> list[str]:
@@ -599,9 +645,8 @@ def _reasons(e: Entry) -> list[str]:
         out.append(why.strip().splitlines()[0])
     if e.goal is not None:
         out.append(f"Serves the goal {e.goal.title}.")
-    if e.prd is not None and e.row.prd_section_key:
-        label = prd_section_label(e.row.prd_section_key, e.prd_heading)
-        out.append(f"From {e.prd.title}, {label}.")
+    if (where := prd_provenance(e)) is not None:
+        out.append(where)
     return out[:3]
 
 
@@ -665,7 +710,9 @@ def item_out(
         end=_date(r.end),
         source=r.source,
         estimated=r.estimated,
-        suggestion=suggestion_out(e.suggestion, row, may) if e.suggestion is not None else None,
+        suggestion=suggestion_out(e.suggestion, row, may, e.suggestion_span)
+        if e.suggestion is not None
+        else None,
         milestone=e.milestone,
         phases=[
             SimplePhase(key=p.key, start=p.start, end=p.end, estimated=p.estimated)  # type: ignore[arg-type]
@@ -725,6 +772,28 @@ async def _decided(db: AsyncSession, shown: list[Entry]) -> dict[uuid.UUID, list
                 out[target].append(d)
     for lst in out.values():
         lst.sort(key=lambda d: -d.number)
+    return out
+
+
+def _milestone_out(m: TrackMilestone, keyed: dict, ids: set, view: Any) -> SimpleMilestone:
+    """A track milestone, with start, end, engineer-weeks, done when and targets from its
+    PRD's plan (the plan's milestone of the same code) when the plan has it."""
+    out = SimpleMilestone(
+        id=m.id,
+        track_id=m.track_id,
+        name=m.name,
+        date=m.target_date,
+        horizon=m.horizon,  # type: ignore[arg-type]
+        status=m.status,  # type: ignore[arg-type]
+        item_ids=[
+            keyed[(m.track_id, k)] for k in m.item_keys or [] if keyed.get((m.track_id, k)) in ids
+        ],
+    )
+    pm = view.milestone(plan_strip.milestone_of(m.name)[0]) if view is not None else None
+    if pm is not None:
+        out.start_date, out.end_date = pm.start_date, pm.end_date or m.target_date
+        out.effort_weeks, out.done_when, out.targets = pm.effort_weeks, pm.done_when, pm.targets
+        out.date = out.date or pm.end_date
     return out
 
 
@@ -837,6 +906,26 @@ async def build(
     for it in items:
         # A draft's own visual (S7) first, else its feature's (S10).
         it.flow = it.flow or flows.get(it.id)
+    # plan-model: each item's slices and milestones from its PRD's plan; the track
+    # milestones dated by the plan of their track's PRD.
+    from oracle.simple import plan as plans
+
+    track_prd = {e.track.id: e.track.prd_document_id for e in read.entries if e.track}
+    views = await plans.views(db, {e.prd.id for e in shown if e.prd} | set(track_prd.values()))
+    for it in items:
+        view = views.get(it.prd.id) if it.prd else None
+        if view is None:
+            continue
+        it.slices = view.slices_of(it.code)
+        it.milestones = list(dict.fromkeys(x.milestone for x in it.slices))
+        if it.milestone is not None:
+            named = it.milestone.record_name or it.milestone.name
+            pm = view.milestone(plan_strip.milestone_of(named)[0])
+            if pm is not None and pm.end_date is not None:
+                it.milestone.start_date = pm.start_date
+                it.milestone.date = it.milestone.date or pm.end_date
+    shown_prds = {e.prd.id for e in shown if e.prd}
+    span = plans.current_span([v for p, v in views.items() if p in shown_prds], read.today)
     return SimpleRoadmapOut(
         today=read.today,
         group=group,  # type: ignore[arg-type]
@@ -846,21 +935,10 @@ async def build(
         groups=[SimpleGroup(key=k, title=t, item_ids=i) for k, (_, t, i) in ordered],
         items=items,
         milestones=[
-            SimpleMilestone(
-                id=m.id,
-                track_id=m.track_id,
-                name=m.name,
-                date=m.target_date,
-                horizon=m.horizon,  # type: ignore[arg-type]
-                status=m.status,  # type: ignore[arg-type]
-                item_ids=[
-                    keyed[(m.track_id, k)]
-                    for k in m.item_keys or []
-                    if keyed.get((m.track_id, k)) in ids
-                ],
-            )
+            _milestone_out(m, keyed, ids, views.get(track_prd.get(m.track_id)))  # type: ignore[arg-type]
             for m in read.milestones
         ],
+        span=span,
         changes_in_review=seen.changes_in_review,
         drafts=seen.visible,
         key_dates=kds,

@@ -496,7 +496,7 @@ async def test_reader_prompt_is_a_new_version(client):
     from oracle.jobs import prompting
 
     name, text = prompting.current("chat_reader")
-    assert name == "chat_reader.v2"
+    assert name == "chat_reader.v3"
     assert "under_discussion" in text and "open_decisions" in text
 
 

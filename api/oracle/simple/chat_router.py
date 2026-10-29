@@ -1,10 +1,14 @@
 """Simple S9 (#723, D22): change by chat (oracle.simple.chat). For people: a run's token is
 refused (the ``simple`` area is in no run-token scope, oracle.mcp.scopes).
 
-- ``GET /v1/simple/chat?page=``: viewer and up; the caller's own Ask-panel thread on that
-  Simple page (one thread per person and page; Home without a page).
+- ``GET /v1/simple/chat?page=&chat=``: viewer and up; the caller's own Ask chat ``chat``,
+  else their first Ask-panel thread on that Simple page (Home without a page).
+- ``GET /v1/simple/chats``: viewer and up; Recent chats, the caller's last Ask chats from
+  any page (never a meeting's). ``PUT /v1/simple/chats/{id}/ask``: links the Oracle's Ask
+  chat the panel handed a question to (ask-fresh).
 - ``POST /v1/simple/chat/messages``: viewer and up; the line and Oracle's reply (cards,
-  one question, an answer or a note). Nothing is written to the plan.
+  one question, an answer or a note), in a new chat (``new_chat``) or ``chat_id``.
+  Nothing is written to the plan.
 - ``GET|POST /v1/simple/meetings/{id}/chat[/messages]``: the meeting's attendees; 404
   without the meeting (S8).
 - ``PUT /v1/simple/meetings/{id}/chat/mode``: the presenter: who may apply (D22a).
@@ -25,11 +29,14 @@ from oracle.simple.schemas import (
     ChatApplyAllOut,
     ChatApplyIn,
     ChatApplyOut,
+    ChatAskIn,
     ChatCardOut,
     ChatChooseIn,
     ChatIn,
+    ChatListOut,
     ChatModeIn,
     ChatRulesOut,
+    ChatSummaryOut,
     ChatThreadOut,
     WalkOut,
 )
@@ -47,11 +54,31 @@ async def _run(db, coro):
 
 @router.get("/chat", response_model=ChatThreadOut, name="get_simple_chat")
 async def get_simple_chat(
-    principal: Reader, db: TenantDB, page: str | None = Query(default=None, max_length=300)
+    principal: Reader,
+    db: TenantDB,
+    page: str | None = Query(default=None, max_length=300),
+    chat_id: uuid.UUID | None = Query(default=None, alias="chat"),
 ) -> ChatThreadOut:
-    """The caller's Ask-panel thread on ``page`` (the Simple page the panel was opened
-    from; Home without one): their requests, Oracle's replies and cards."""
-    return await _run(db, chat.thread(db, principal, page=page))
+    """The caller's Ask chat ``chat`` (ask-fresh: one of theirs, 404 for anyone else's or a
+    meeting's); without it, their first Ask-panel thread on ``page`` (Home without one):
+    their requests, Oracle's replies and cards."""
+    return await _run(db, chat.thread(db, principal, page=page, chat_id=chat_id))
+
+
+@router.get("/chats", response_model=ChatListOut, name="list_simple_chats")
+async def list_simple_chats(principal: Reader, db: TenantDB) -> ChatListOut:
+    """Recent chats (ask-fresh): the caller's last ten Ask chats from any Simple page,
+    newest first, each named by its page; meeting chats stay in their meeting."""
+    return ChatListOut(items=await _run(db, chat.recent(db, principal)))
+
+
+@router.put("/chats/{chat_id}/ask", response_model=ChatSummaryOut, name="link_simple_chat_ask")
+async def link_simple_chat_ask(
+    chat_id: uuid.UUID, body: ChatAskIn, principal: Reader, db: TenantDB
+) -> ChatSummaryOut:
+    """Link the caller's own Oracle's Ask chat to their Ask chat ``chat_id`` (the panel
+    handed it a question), so the chat reopened from Recent shows both."""
+    return await _run(db, chat.link_ask(db, principal, chat_id, body.ask_id))
 
 
 @router.post("/chat/messages", response_model=ChatThreadOut, name="post_simple_chat")
@@ -60,7 +87,16 @@ async def post_simple_chat(body: ChatIn, principal: Reader, db: TenantDB) -> Cha
     until Apply), an ambiguous one a question, a question about the plan an answer."""
     return await _run(
         db,
-        chat.post(db, principal, body.text, only_understood=body.only_understood, page=body.page),
+        chat.post(
+            db,
+            principal,
+            body.text,
+            only_understood=body.only_understood,
+            page=body.page,
+            chat_id=body.chat_id,
+            new_chat=body.new_chat,
+            general=body.general,
+        ),  # fmt: skip
     )
 
 
@@ -106,7 +142,14 @@ async def apply_simple_chat_card(
     neither."""
     async with _one_commit(db):
         card, result = await _run(
-            db, chat.apply(db, principal, card_id, body.fix if body is not None else None)
+            db,
+            chat.apply(
+                db,
+                principal,
+                card_id,
+                body.fix if body is not None else None,
+                body.values if body is not None else None,
+            ),
         )
     return ChatApplyOut(card=card, result=result)
 

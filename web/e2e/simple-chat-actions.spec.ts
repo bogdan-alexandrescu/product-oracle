@@ -224,8 +224,9 @@ for (const [phone, dark] of [
       await signIn(page, EMAILS.owner, "/simple/roadmap");
       const panel = await openAsk(page, phone);
       await sayIn(panel, "Which team owns billing?");
-      await expect(panel.getByTestId("discussion-thread")).toBeVisible();
-      await expect(panel.getByTestId("discussion-thread")).toContainText("Which team owns billing?");
+      await expect(panel.getByTestId("ask-answer").last()).toBeVisible();
+      await expect(panel.getByTestId("ask-chat-thread")).toContainText("Which team owns billing?");
+      await expect(panel.getByTestId("discussion-thread")).toHaveCount(0);
       await expect(page.getByText("Name a person of the company")).toHaveCount(0);
       await expect(page.getByText("on the roadmap. Which item")).toHaveCount(0);
       await expect(panel.getByTestId("chat-card")).toHaveCount(0);

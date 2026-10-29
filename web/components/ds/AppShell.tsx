@@ -6,7 +6,7 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternal
 
 import { HopPanel } from "@/components/hop/HopPanel";
 import { SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
-import { setPanelOpen, usePanelOpen } from "@/components/hop/open-state";
+import { setPanelOpen, useAskDraft, usePanelOpen } from "@/components/hop/open-state";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { homeOf, modeOf } from "@/lib/experience";
 import { resetMockData } from "@/lib/api/mock/server";
@@ -479,19 +479,41 @@ function PhoneHeader() {
   const { me } = useMe();
   const title = usePageTitle(pathname);
   const [ask, setAsk] = useState(false);
+  // A goal's "Suggest from the chat" opens the Ask sheet with its words typed in.
+  const typedIn = useAskDraft();
+  useEffect(() => {
+    // The words arrive from outside React (the drawer's link); a phone opens its sheet for them.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (typedIn && window.matchMedia("(max-width: 600px)").matches) setAsk(true);
+  }, [typedIn]);
   const [askPath, setAskPath] = useState(pathname);
   if (askPath !== pathname) {
     setAskPath(pathname);
     setAsk(false);
   }
   if (pathname.startsWith("/i/") || pathname.startsWith("/s/")) return null;
+  // Simple's Ask sheet (the owner's pick C): the whole screen over the header and the tab bar,
+  // with the panel's own head (Ask Oracle, New chat, close). It sits outside the sticky header,
+  // whose stacking would put it under the tab bar.
+  const simple = pathname.startsWith("/simple");
+  const sheet = simple ? (
+    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} bare>
+      <HopPanel onClose={() => setAsk(false)} mark={false} />
+    </Sheet>
+  ) : (
+    <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} full>
+      <HopPanel showHeader={false} />
+    </Sheet>
+  );
   return (
+    <>
     <header
       data-testid="phone-header"
       className="sticky top-0 z-30 hidden h-[var(--phone-top-bar)] items-center gap-2.5 bg-rail-top pt-[env(safe-area-inset-top)] pr-2.5 pl-3 [--focus-ring:var(--rail-bar)] max-[600px]:flex"
     >
       <Link href={homeOf(modeOf(pathname))} aria-label="Product Oracle" data-testid="phone-brand" className="flex-none rounded-md">
-        <Mark size={22} tone="sky" className="block" />
+        {/* ask-fresh: Simple's light header draws the mark in the accent ink, as its rail does; Detailed's navy keeps the sky mark. */}
+        {pathname.startsWith("/simple") ? <Mark size={22} tone="current" className="block text-accent-ink" /> : <Mark size={22} tone="sky" className="block" />}
       </Link>
       <p data-testid="phone-title" className="min-w-0 flex-1 truncate font-display text-[17px] leading-6 font-semibold text-rail-active-text">
         {title}
@@ -510,10 +532,10 @@ function PhoneHeader() {
         </button>
       )}
       {me && <UserMenu placement="header" />}
-      <Sheet open={ask} title="Ask Oracle" onClose={() => setAsk(false)} testId="phone-ask-sheet" scroll={false} full>
-        <HopPanel showHeader={false} />
-      </Sheet>
+      {!simple && sheet}
     </header>
+    {simple && sheet}
+    </>
   );
 }
 

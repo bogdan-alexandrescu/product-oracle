@@ -74,7 +74,9 @@ export function OccurrenceDetail({ id }: { id: string }) {
   const blocks = occ.pre_read.blocks as unknown as Block[];
   const isOwner = me?.user_id === occ.owner_id;
   const ended = q.data!.at >= Date.parse(occ.ends_at);
-  const recordable = isOwner && ended && (occ.status === "ready" || occ.status === "missed");
+  // Held when its Simple review meeting ended, with nothing recorded yet: the owner still records it.
+  const heldByMeeting = occ.status === "held" && !occ.notes && occ.decision_ids.length === 0;
+  const recordable = isOwner && ((ended && (occ.status === "ready" || occ.status === "missed")) || heldByMeeting);
 
   return (
     <>
@@ -125,7 +127,7 @@ export function OccurrenceDetail({ id }: { id: string }) {
             )}
           </div>
         )}
-        {(occ.status === "held" || occ.status === "skipped") && <Recorded occ={occ} />}
+        {(occ.status === "held" || occ.status === "skipped") && !recordable && <Recorded occ={occ} />}
         {recordable && <RecordForm occ={occ} onChanged={reload} />}
       </div>
     </>
@@ -376,7 +378,7 @@ function Recorded({ occ }: { occ: Occurrence }) {
   );
 }
 
-/** After the meeting, the owner: notes, Record decision, Mark held or Skip (with a reason). */
+/** After the meeting, the owner: notes, Record decision, Mark held or Skip (with a reason); no Skip once held. */
 function RecordForm({ occ, onChanged }: { occ: Occurrence; onChanged: () => Promise<void> }) {
   const [notes, setNotes] = useState(occ.notes ?? "");
   const [skipping, setSkipping] = useState(false);
@@ -418,7 +420,7 @@ function RecordForm({ occ, onChanged }: { occ: Occurrence; onChanged: () => Prom
         >
           Mark held
         </Button>
-        {skipping ? (
+        {occ.status === "held" ? null : skipping ? (
           <Button
             disabled={busy || !reason.trim()}
             onClick={() => record(() => unwrap(api.POST("/v1/ritual-occurrences/{occurrence_id}/skip", { ...path, body: { reason: reason.trim() } })))}

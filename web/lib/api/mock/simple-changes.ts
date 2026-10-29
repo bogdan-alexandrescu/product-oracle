@@ -25,6 +25,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
+import { changeSentence } from "./simple-change-words";
 import { priorityAfter, priorityBefore, prioritiesOut } from "./simple-priorities";
 import {
   canDecideItem,
@@ -38,6 +39,7 @@ import {
   itemOwnerId,
   lookalikes,
   ownDates,
+  prdCode,
   ROADMAP_SLUGS,
   readsRoadmap,
   roadmapId,
@@ -253,7 +255,15 @@ function view(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): Change {
     undone,
     can_decide: c.status === "proposed" && decidesChange(db, ctx, c),
     can_undo: c.status === "applied" && c.by === ctx.id && !undone && !!s && !s.closed_at && !idle(s),
+    words: changeSentence(c, c.by_name, itemLabel(db, c.target.item_id), undone),
   };
+}
+
+/** The walk (H2): "F-08 Billing page", the item's code and name as the change's words name it. */
+function itemLabel(db: SimpleDb, id: unknown): string | null {
+  const key = id ? keyOf(db, id) : undefined;
+  const s = key ? db.items.find((x) => x.key === key) : undefined;
+  return s ? `${prdCode(s.section) ?? ""} ${s.title}`.trim() : null;
 }
 
 function sees(db: SimpleDb, ctx: SimpleChangesCtx, c: Change): boolean {
@@ -436,8 +446,13 @@ function apply(db: SimpleDb, c: Change, values: Values, undo = false): void {
   else write(db, keyOf(db, c.target.item_id)!, values, c.target);
   if (c.op === "accept_date_suggestion") {
     const s = db.suggestions.find((x) => x.id === c.target.suggestion_id);
-    if (s && !undo && s.status === "open") Object.assign(s, { status: c.target.edited ? "edited" : "accepted", decided_at: iso(mockNowMs()) });
-    if (s && undo && (s.status === "accepted" || s.status === "edited")) Object.assign(s, { status: "open", decided_by: null, decided_at: null });
+    // plan-model: a slice's suggestion is decided with the item's other open slices (and undone with them).
+    const others = (status: string) => (s?.slice_code != null ? db.suggestions.filter((x) => x !== s && x.item_id === s.item_id && x.status === status && (status === "open" || x.decided_at === s.decided_at)) : []);
+    if (s && !undo && s.status === "open") {
+      const decided = { status: c.target.edited ? "edited" : "accepted", decided_at: iso(mockNowMs()) } as const;
+      for (const o of [s, ...others("open")]) Object.assign(o, decided);
+    }
+    if (s && undo && (s.status === "accepted" || s.status === "edited")) for (const o of [...others(s.status), s]) Object.assign(o, { status: "open", decided_by: null, decided_at: null });
   }
 }
 
@@ -579,7 +594,14 @@ async function create(db: SimpleDb, ctx: SimpleChangesCtx, body: Schemas["Simple
       const s = db.suggestions.find((x) => x.id === target.suggestion_id && x.item_id === target.item_id);
       if (!s) return json(404, { detail: "No such date suggestion on this item" });
       if (s.status !== "open") return json(409, { detail: `This suggestion is ${s.status} already` });
-      after = { start_date: s.start_date, end_date: s.end_date, date_source: "accepted" };
+      let [start, end] = [s.start_date, s.end_date];
+      if (s.slice_code != null)
+        // plan-model: a slice's dates: the item takes the span of all its open slices.
+        for (const o of db.suggestions.filter((x) => x.item_id === s.item_id && x.status === "open")) {
+          if (o.start_date < start) start = o.start_date;
+          if (o.end_date > end) end = o.end_date;
+        }
+      after = { start_date: start, end_date: end, date_source: "accepted" };
       if (a.start_date != null || a.end_date != null) {
         // The edit variant (D-b): the person's dates.
         if (!a.start_date || !a.end_date || String(a.end_date) < String(a.start_date)) return json(422, { detail: "after: start_date and end_date, the end not before the start" });

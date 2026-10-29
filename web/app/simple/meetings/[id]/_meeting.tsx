@@ -6,10 +6,11 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ds";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
 import { OnePager } from "@/components/simple/OnePager";
+import { QuestionRow, sourceName, useQuestionActions } from "@/components/simple/questions/Questions";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { MeetingAgenda, MeetingNote } from "@/lib/api/simple-chat";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -365,17 +366,20 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
   return (
     <div className="space-y-4">
       {error && <ErrorNote>{error}</ErrorNote>}
-      <section aria-label="Open decisions" className="simple-card">
-        <h2 className="simple-h2">Open decisions</h2>
-        {m.open_decisions.length === 0 && <p className="simple-small">None open.</p>}
-        <ul className="mt-2 space-y-1">
-          {m.open_decisions.map((d) => (
-            <li key={d.id}>
-              <Link className="font-semibold text-accent-ink hover:underline" href={`/company/decisions?d=${d.id}`}>D-{d.number}</Link> {d.title}
-            </li>
-          ))}
-        </ul>
-      </section>
+      <DecisionsDue m={m} reload={reload} />
+      {/* prd-decisions A3: the agenda above holds the PRD's questions; other open decisions only when there are some. */}
+      {m.open_decisions.length > 0 && (
+        <section aria-label="Open decisions" className="simple-card">
+          <h2 className="simple-h2">Open decisions</h2>
+          <ul className="mt-2 space-y-1">
+            {m.open_decisions.map((d) => (
+              <li key={d.id}>
+                <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions#d-${d.number}`}>D-{d.number}</Link> {d.title}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section aria-label="Pending proposals" className="simple-card">
         <h2 className="simple-h2">Pending proposals</h2>
         {m.pending_proposals.length === 0 && <p className="simple-small">No proposal waits.</p>}
@@ -606,5 +610,57 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
         </div>
       </div>
     </div>
+  );
+}
+
+/** The agenda shows this many questions before "N more: <codes>". */
+const AGENDA_FIRST = 4;
+
+/** A calendar day ("2026-11-13") as "Fri Nov 13". */
+const dayWords = (day: string) => `${calendarDay(day, { weekday: "short" })} ${calendarDay(day)}`;
+
+/**
+ * prd-questions, kept to the owner's pick A (frame A3): the Decisions step's "On the agenda":
+ * the PRD's open questions due by the end of the milestone the soonest one blocks, whoever
+ * decides them, soonest first ("Due by Fri Nov 13 · 8 decisions · from <PRD> draft 3"), the
+ * first four and "N more: <codes>". Decide passes the meeting's session_id so the decision
+ * lands in its minutes; a question decided here stays on the list with Undo.
+ */
+function DecisionsDue({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
+  const actions = useQuestionActions(reload, m.session_id);
+  const [all, setAll] = useState(false);
+  const due = m.decisions_due ?? [];
+  const source = sourceName(due);
+  const by = due
+    .map((q) => q.due_on)
+    .filter((d): d is string => !!d)
+    .sort()
+    .at(-1);
+  const rest = due.slice(AGENDA_FIRST);
+  return (
+    <section aria-label="On the agenda" data-testid="decisions-due" className="simple-card">
+      <header className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <h2 className="simple-h2 min-w-0 flex-1">On the agenda</h2>
+        {due.length > 0 && (
+          <span className="simple-meta" data-testid="decisions-due-summary">
+            {[by && `Due by ${dayWords(by)}`, `${due.length} ${due.length === 1 ? "decision" : "decisions"}`, source && `from ${source}`].filter(Boolean).join(" · ")}
+          </span>
+        )}
+      </header>
+      {due.length === 0 ? (
+        <p className="simple-meta">No decision is due.</p>
+      ) : (
+        <ul>
+          {(all ? due : due.slice(0, AGENDA_FIRST)).map((q) => (
+            <QuestionRow key={q.id} q={q} mode="due" actions={actions} />
+          ))}
+        </ul>
+      )}
+      {!all && rest.length > 0 && (
+        <button type="button" className="simple-more" onClick={() => setAll(true)}>
+          {rest.length} more: {rest.map((q) => q.code).join(", ")}
+        </button>
+      )}
+    </section>
   );
 }

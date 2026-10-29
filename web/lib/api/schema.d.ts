@@ -12138,6 +12138,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/prds/{prd}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Prd Plan
+         * @description The PRD's plan as its latest approved version has it.
+         */
+        get: operations["get_simple_prd_plan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/prds/{prd}/plan/read-again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read Simple Prd Plan Again
+         * @description Read the plan again from the approved version (its tables, else Oracle's job).
+         */
+        post: operations["read_simple_prd_plan_again"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/sessions": {
         parameters: {
             query?: never;
@@ -12521,6 +12561,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/simple/goals/{goal_id}/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Goal Suggestion
+         * @description People's suggestions: file one on a goal, next to Oracle's.
+         */
+        post: operations["create_goal_suggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/simple/goal-suggestions/{suggestion_id}/accept": {
         parameters: {
             query?: never;
@@ -12570,11 +12630,54 @@ export interface paths {
         };
         /**
          * Get Simple Chat
-         * @description The caller's Ask-panel thread on ``page`` (the Simple page the panel was opened
-         *     from; Home without one): their requests, Oracle's replies and cards.
+         * @description The caller's Ask chat ``chat`` (ask-fresh: one of theirs, 404 for anyone else's or a
+         *     meeting's); without it, their first Ask-panel thread on ``page`` (Home without one):
+         *     their requests, Oracle's replies and cards.
          */
         get: operations["get_simple_chat"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Simple Chats
+         * @description Recent chats (ask-fresh): the caller's last ten Ask chats from any Simple page,
+         *     newest first, each named by its page; meeting chats stay in their meeting.
+         */
+        get: operations["list_simple_chats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/chats/{chat_id}/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Link Simple Chat Ask
+         * @description Link the caller's own Oracle's Ask chat to their Ask chat ``chat_id`` (the panel
+         *     handed it a question), so the chat reopened from Recent shows both.
+         */
+        put: operations["link_simple_chat_ask"];
         post?: never;
         delete?: never;
         options?: never;
@@ -13040,6 +13143,27 @@ export interface paths {
          *     minutes), then those taken outside meetings; filter by PRD, goal or meeting.
          */
         get: operations["get_simple_decisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/simple/decisions/waiting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Simple Decisions Waiting
+         * @description prd-questions: the product decisions waiting for this person (Home's card, the rail's
+         *     count, the review's "Decisions due"); Oracle's run approvals only counted, for Detailed.
+         */
+        get: operations["get_simple_decisions_waiting"];
         put?: never;
         post?: never;
         delete?: never;
@@ -17540,11 +17664,23 @@ export interface components {
         ChatApplyIn: {
             /** Fix */
             fix?: number | null;
+            /** Values */
+            values?: {
+                [key: string]: string | null;
+            } | null;
         };
         /** ChatApplyOut */
         ChatApplyOut: {
             card: components["schemas"]["ChatCardOut"];
             result?: components["schemas"]["SimpleChangeResult"] | null;
+        };
+        /** ChatAskIn */
+        ChatAskIn: {
+            /**
+             * Ask Id
+             * Format: uuid
+             */
+            ask_id: string;
         };
         /** ChatCardOut */
         ChatCardOut: {
@@ -17556,7 +17692,7 @@ export interface components {
             /** Message Id */
             message_id: string | null;
             /** Op */
-            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip");
+            op: ("move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider") | ("record_decision" | "minutes_note" | "open_question" | "agenda_next" | "agenda_skip" | "suggest_feature");
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -17601,6 +17737,14 @@ export interface components {
             decided_at: string | null;
             /** Decision Id */
             decision_id: string | null;
+            /** Change Words */
+            change_words?: {
+                [key: string]: string | null;
+            } | null;
+            /** Correct */
+            correct?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** ChatChoiceOut */
         ChatChoiceOut: {
@@ -17625,7 +17769,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -17650,6 +17794,23 @@ export interface components {
              * @default false
              */
             only_understood: boolean;
+            /** Chat Id */
+            chat_id?: string | null;
+            /**
+             * New Chat
+             * @default false
+             */
+            new_chat: boolean;
+            /**
+             * General
+             * @default false
+             */
+            general: boolean;
+        };
+        /** ChatListOut */
+        ChatListOut: {
+            /** Items */
+            items: components["schemas"]["ChatSummaryOut"][];
         };
         /** ChatMessageOut */
         ChatMessageOut: {
@@ -17692,6 +17853,8 @@ export interface components {
              * @default false
              */
             retry: boolean;
+            /** Source */
+            source?: string | null;
         };
         /** ChatModeIn */
         ChatModeIn: {
@@ -17734,6 +17897,35 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * ChatSummaryOut
+         * @description ask-fresh: one of the person's Ask chats on Recent chats, named by its page.
+         */
+        ChatSummaryOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Page */
+            page: string;
+            /** Page Name */
+            page_name: string;
+            /**
+             * Last At
+             * Format: date-time
+             */
+            last_at: string;
+            /** Ask Id */
+            ask_id?: string | null;
+            /**
+             * General
+             * @default false
+             */
+            general: boolean;
+            /** Question */
+            question?: string | null;
+        };
         /** ChatThreadOut */
         ChatThreadOut: {
             /** Id */
@@ -17748,6 +17940,8 @@ export interface components {
              * @default true
              */
             understood: boolean;
+            /** Ask Id */
+            ask_id?: string | null;
         };
         /** CheckOut */
         CheckOut: {
@@ -19514,6 +19708,8 @@ export interface components {
             decided_by?: string | null;
             /** Decided At */
             decided_at?: string | null;
+            /** Slice Code */
+            slice_code?: string | null;
             /**
              * Can Decide
              * @default false
@@ -25340,7 +25536,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
             /**
              * Status
              * @enum {string}
@@ -30809,6 +31005,7 @@ export interface components {
          *     ``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).
          *     ``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);
          *     unset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all.
+         *     ``simple_decisions_view``: Simple's Decisions as List, Board or By meeting; unset, List.
          */
         Preferences: {
             /**
@@ -30844,6 +31041,8 @@ export interface components {
             /** Simple Roadmap */
             simple_roadmap?: string | null;
             simple_filters?: components["schemas"]["SimpleFilters"] | null;
+            /** Simple Decisions View */
+            simple_decisions_view?: ("list" | "board" | "meetings") | null;
         };
         /** PreferencesUpdate */
         PreferencesUpdate: {
@@ -30861,6 +31060,8 @@ export interface components {
             /** Simple Roadmap */
             simple_roadmap?: string | null;
             simple_filters?: components["schemas"]["SimpleFilters"] | null;
+            /** Simple Decisions View */
+            simple_decisions_view?: ("list" | "board" | "meetings") | null;
         };
         /**
          * PreviousAttempt
@@ -37040,7 +37241,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -37076,7 +37277,7 @@ export interface components {
              * Op
              * @enum {string}
              */
-            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider";
+            op: "move_dates" | "change_horizon" | "reorder" | "cut" | "restore" | "edit_title" | "edit_outcome" | "accept_date_suggestion" | "accept_risk" | "shift_dependents" | "move_dependency" | "override_priority" | "add_item_task" | "edit_item_task" | "set_item_task_status" | "add_action_item" | "edit_action_item" | "set_action_item_status" | "add_launch_task" | "set_launch_task_status" | "estimate_feature" | "confirm_item" | "edit_line" | "add_key_date" | "edit_key_date" | "remove_key_date" | "add_item" | "merge_item" | "keep_both" | "set_milestone" | "add_feature_ask" | "set_owner" | "set_decider" | "decide_question" | "name_decider";
             /** Target */
             target: {
                 [key: string]: unknown;
@@ -37133,6 +37334,8 @@ export interface components {
              * @default false
              */
             can_undo: boolean;
+            /** Words */
+            words?: string | null;
         };
         /** SimpleChangeResult */
         SimpleChangeResult: {
@@ -37210,11 +37413,17 @@ export interface components {
                 [key: string]: unknown;
             }[];
             flow?: components["schemas"]["SimpleDecidedFlow"] | null;
+            /** Code */
+            code?: string | null;
+            /** Chosen */
+            chosen?: string | null;
         };
         /**
          * SimpleDecisionsOut
          * @description Simple's Decisions (direction B "By meeting"): the meetings' decisions grouped under
-         *     them, newest first, then the decisions taken outside meetings.
+         *     them, newest first, then the decisions taken outside meetings. prd-questions: the
+         *     PRDs' open questions as decisions (List and Board), the person's remembered view and
+         *     how many of Oracle's run approvals Simple leaves to Detailed.
          */
         SimpleDecisionsOut: {
             /** Meetings */
@@ -37227,6 +37436,61 @@ export interface components {
             goals: components["schemas"]["SimpleFilterOption"][];
             /** Meeting Options */
             meeting_options: components["schemas"]["SimpleFilterOption"][];
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["SimpleQuestion"][];
+            /**
+             * Waiting Count
+             * @default 0
+             */
+            waiting_count: number;
+            /**
+             * Late Count
+             * @default 0
+             */
+            late_count: number;
+            /**
+             * Approvals Waiting
+             * @default 0
+             */
+            approvals_waiting: number;
+            /** Approvals Example */
+            approvals_example?: string | null;
+            /**
+             * View
+             * @default list
+             * @enum {string}
+             */
+            view: "list" | "board" | "meetings";
+        };
+        /**
+         * SimpleDecisionsWaitingOut
+         * @description prd-questions: the one list Home's "Decisions waiting for you", the rail's count and
+         *     the review meeting's "Decisions due" read: product decisions waiting for this person
+         *     (the PRDs' open questions and other judgement calls), never Oracle's run approvals.
+         */
+        SimpleDecisionsWaitingOut: {
+            /** Count */
+            count: number;
+            /** Late */
+            late: number;
+            /**
+             * Questions
+             * @default []
+             */
+            questions: components["schemas"]["SimpleQuestion"][];
+            /**
+             * Others
+             * @default 0
+             */
+            others: number;
+            /**
+             * Approvals Waiting
+             * @default 0
+             */
+            approvals_waiting: number;
         };
         /** SimpleDelivery */
         SimpleDelivery: {
@@ -37551,6 +37815,12 @@ export interface components {
             change: "new" | "changed" | "same";
             /** Section Key */
             section_key?: string | null;
+            /** Actor */
+            actor?: string | null;
+            /** Yes */
+            yes?: string | null;
+            /** No */
+            no?: string | null;
         };
         /** SimpleGoalBrief */
         SimpleGoalBrief: {
@@ -37617,7 +37887,7 @@ export interface components {
              * Origin
              * @enum {string}
              */
-            origin: "auto" | "on_demand";
+            origin: "auto" | "on_demand" | "person";
             /**
              * Created At
              * Format: date-time
@@ -37638,6 +37908,8 @@ export interface components {
             can_accept: boolean;
             /** Can Reject */
             can_reject: boolean;
+            /** Proposed By Name */
+            proposed_by_name?: string | null;
         };
         /** SimpleGoalSuggestionGoal */
         SimpleGoalSuggestionGoal: {
@@ -37646,6 +37918,23 @@ export interface components {
             pending: boolean;
             /** Empty */
             empty: boolean;
+            /** Decider Name */
+            decider_name?: string | null;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
+        };
+        /**
+         * SimpleGoalSuggestionIn
+         * @description A person's goal suggestion: its title and what it does, and for whom.
+         */
+        SimpleGoalSuggestionIn: {
+            /** Title */
+            title: string;
+            /** Outcome */
+            outcome: string;
         };
         /** SimpleGoalSuggestionsOut */
         SimpleGoalSuggestionsOut: {
@@ -37653,6 +37942,19 @@ export interface components {
             goals: components["schemas"]["SimpleGoalSuggestionGoal"][];
             /** Suggestions */
             suggestions: components["schemas"]["SimpleGoalSuggestion"][];
+        };
+        /**
+         * SimpleGoalWeeks
+         * @description Engineer-weeks per goal per milestone: each slice once, under its feature's first
+         *     goal.
+         */
+        SimpleGoalWeeks: {
+            /** Goal */
+            goal: string;
+            /** Milestone */
+            milestone: string;
+            /** Weeks */
+            weeks: number;
         };
         /** SimpleGroup */
         SimpleGroup: {
@@ -37662,6 +37964,21 @@ export interface components {
             title: string;
             /** Item Ids */
             item_ids: string[];
+        };
+        /** SimpleHoliday */
+        SimpleHoliday: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Label */
+            label?: string | null;
         };
         /** SimpleItemFlags */
         SimpleItemFlags: {
@@ -37688,6 +38005,8 @@ export interface components {
             record_id?: string | null;
             /** Record Name */
             record_name?: string | null;
+            /** Start Date */
+            start_date?: string | null;
         };
         /**
          * SimpleKeyDate
@@ -37996,6 +38315,11 @@ export interface components {
              */
             open_decisions: components["schemas"]["SimpleOpenDecision"][];
             /**
+             * Decisions Due
+             * @default []
+             */
+            decisions_due: components["schemas"]["SimpleQuestion"][];
+            /**
              * Pending Proposals
              * @default []
              */
@@ -38090,6 +38414,32 @@ export interface components {
             status: "planned" | "done" | "dropped";
             /** Item Ids */
             item_ids: string[];
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Effort Weeks */
+            effort_weeks?: number | null;
+            /**
+             * Done When
+             * @default []
+             */
+            done_when: string[];
+            /**
+             * Targets
+             * @default []
+             */
+            targets: components["schemas"]["SimpleMilestoneTarget"][];
+        };
+        /**
+         * SimpleMilestoneTarget
+         * @description plan-model: one goal's target at a milestone, in words with its unit.
+         */
+        SimpleMilestoneTarget: {
+            /** Goal */
+            goal: string;
+            /** Target */
+            target: string;
         };
         /** SimpleMinutes */
         SimpleMinutes: {
@@ -38202,6 +38552,170 @@ export interface components {
             estimated: boolean;
         };
         /**
+         * SimplePlanDecision
+         * @description prd-timeline: an open decision a milestone waits on ("Q7 Legal input"), with the
+         *     PRD's recommendation and its due day (the PRD's, else the PRD question's as Oracle reads
+         *     it; null: no day yet).
+         */
+        SimplePlanDecision: {
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            /** Recommendation */
+            recommendation?: string | null;
+            /** Due On */
+            due_on?: string | null;
+        };
+        /** SimplePlanGoal */
+        SimplePlanGoal: {
+            /** Name */
+            name: string;
+            /**
+             * Targets
+             * @default []
+             */
+            targets: components["schemas"]["SimplePlanGoalTarget"][];
+            /** Measured */
+            measured?: string | null;
+            /** On Track */
+            on_track?: boolean | null;
+        };
+        /** SimplePlanGoalTarget */
+        SimplePlanGoalTarget: {
+            /** Milestone */
+            milestone: string;
+            /** Target */
+            target: string;
+        };
+        /** SimplePlanMilestone */
+        SimplePlanMilestone: {
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Effort Weeks */
+            effort_weeks?: number | null;
+            /**
+             * Planned Weeks
+             * @default 0
+             */
+            planned_weeks: number;
+            /**
+             * Done When
+             * @default []
+             */
+            done_when: string[];
+            /**
+             * Targets
+             * @default []
+             */
+            targets: components["schemas"]["SimpleMilestoneTarget"][];
+            /**
+             * Feature Codes
+             * @default []
+             */
+            feature_codes: string[];
+            /**
+             * Source
+             * @default prd
+             * @enum {string}
+             */
+            source: "prd" | "oracle";
+            /**
+             * Decisions
+             * @default []
+             */
+            decisions: components["schemas"]["SimplePlanDecision"][];
+            /**
+             * Risks
+             * @default []
+             */
+            risks: components["schemas"]["SimplePlanRisk"][];
+            /** Why */
+            why?: string | null;
+        };
+        /** SimplePlanOut */
+        SimplePlanOut: {
+            prd: components["schemas"]["SimpleDocRef"];
+            /** Version */
+            version?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "reading" | "failed" | "none";
+            /** Source */
+            source?: ("prd" | "oracle") | null;
+            /**
+             * Dated
+             * @default false
+             */
+            dated: boolean;
+            /** Message */
+            message?: string | null;
+            /**
+             * Milestones
+             * @default []
+             */
+            milestones: components["schemas"]["SimplePlanMilestone"][];
+            /**
+             * Slices
+             * @default []
+             */
+            slices: components["schemas"]["SimpleSlice"][];
+            /**
+             * Goals
+             * @default []
+             */
+            goals: components["schemas"]["SimplePlanGoal"][];
+            /**
+             * Goal Weeks
+             * @default []
+             */
+            goal_weeks: components["schemas"]["SimpleGoalWeeks"][];
+            span?: components["schemas"]["SimplePlanSpan"] | null;
+            /**
+             * Holidays
+             * @default []
+             */
+            holidays: components["schemas"]["SimpleHoliday"][];
+            /**
+             * Can Read Again
+             * @default false
+             */
+            can_read_again: boolean;
+            /** Read At */
+            read_at?: string | null;
+            /**
+             * Summary
+             * @default []
+             */
+            summary: string[];
+        };
+        /**
+         * SimplePlanRisk
+         * @description fidelity prd: a risk a milestone carries, as the PRD's risks table states it: its
+         *     code ("R-3"), the risk in one sentence, how likely and how big (the PRD's words, "medium",
+         *     "high") and what we do about it.
+         */
+        SimplePlanRisk: {
+            /** Code */
+            code?: string | null;
+            /** Title */
+            title: string;
+            /** Likelihood */
+            likelihood?: string | null;
+            /** Impact */
+            impact?: string | null;
+            /** What We Do */
+            what_we_do?: string | null;
+        };
+        /**
          * SimplePlanRow
          * @description One row of the plan strip: a milestone (its name, date and how many of the PRD's
          *     items carry it), or the items with no milestone summed in one row.
@@ -38232,6 +38746,24 @@ export interface components {
              * @default false
              */
             past_edge: boolean;
+        };
+        /**
+         * SimplePlanSpan
+         * @description plan-model: first milestone start to last milestone end, "2 Nov - 12 Feb".
+         */
+        SimplePlanSpan: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * End
+             * Format: date
+             */
+            end: string;
+            /** Label */
+            label: string;
         };
         /**
          * SimplePlanStrip
@@ -38291,6 +38823,7 @@ export interface components {
              * @default []
              */
             lines: components["schemas"]["SimpleLine"][];
+            plan?: components["schemas"]["SimplePlanOut"] | null;
         };
         /**
          * SimplePriorityAfter
@@ -38462,6 +38995,11 @@ export interface components {
              */
             no_goal: boolean;
             /**
+             * In Plan
+             * @default false
+             */
+            in_plan: boolean;
+            /**
              * Can Reorder
              * @default false
              */
@@ -38490,6 +39028,150 @@ export interface components {
             end: string;
             /** Label */
             label: string;
+        };
+        /**
+         * SimpleQuestion
+         * @description prd-questions: one of a PRD's open questions, read in as a decision (origin
+         *     ``prd``): the PRD's code (Q7), its recommendation and alternatives, what it blocks,
+         *     its due day and decider.
+         */
+        SimpleQuestion: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Number */
+            number: number;
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /**
+             * Column
+             * @enum {string}
+             */
+            column: "needs_input" | "recommended" | "decided";
+            prd: components["schemas"]["SimpleDocRef"];
+            decider?: components["schemas"]["SimplePersonRef"] | null;
+            /** Missing */
+            missing?: ("decider" | "recommendation") | null;
+            /** Due On */
+            due_on?: string | null;
+            /** Due Label */
+            due_label?: string | null;
+            /**
+             * Late
+             * @default false
+             */
+            late: boolean;
+            blocks?: components["schemas"]["SimpleQuestionBlocks"] | null;
+            /** Recommendation */
+            recommendation?: string | null;
+            /**
+             * Alternatives
+             * @default []
+             */
+            alternatives: components["schemas"]["SimpleQuestionOption"][];
+            /** Chosen */
+            chosen?: string | null;
+            /** Decided At */
+            decided_at?: string | null;
+            decided_by?: components["schemas"]["SimplePersonRef"] | null;
+            /** Decided Label */
+            decided_label?: string | null;
+            /**
+             * Waiting For Me
+             * @default false
+             */
+            waiting_for_me: boolean;
+            pending?: components["schemas"]["SimpleQuestionPending"] | null;
+            /**
+             * @default {
+             *       "decide": false,
+             *       "propose": false,
+             *       "name_decider": false
+             *     }
+             */
+            can: components["schemas"]["SimpleQuestionCan"];
+            source?: components["schemas"]["SimpleQuestionSource"] | null;
+            /** Undo Id */
+            undo_id?: string | null;
+        };
+        /**
+         * SimpleQuestionBlocks
+         * @description What the question blocks: a milestone of the PRD's plan and its features.
+         */
+        SimpleQuestionBlocks: {
+            /** Milestone */
+            milestone?: string | null;
+            /** Milestone Name */
+            milestone_name?: string | null;
+            /**
+             * Features
+             * @default []
+             */
+            features: components["schemas"]["SimpleQuestionFeature"][];
+            /** Label */
+            label: string;
+        };
+        /** SimpleQuestionCan */
+        SimpleQuestionCan: {
+            /**
+             * Decide
+             * @default false
+             */
+            decide: boolean;
+            /**
+             * Propose
+             * @default false
+             */
+            propose: boolean;
+            /**
+             * Name Decider
+             * @default false
+             */
+            name_decider: boolean;
+        };
+        /** SimpleQuestionFeature */
+        SimpleQuestionFeature: {
+            /** Code */
+            code: string;
+            /** Title */
+            title: string;
+        };
+        /** SimpleQuestionOption */
+        SimpleQuestionOption: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * SimpleQuestionPending
+         * @description A proposed answer waiting for the decider (a change through the engine).
+         */
+        SimpleQuestionPending: {
+            /**
+             * Change Id
+             * Format: uuid
+             */
+            change_id: string;
+            by: components["schemas"]["SimplePersonRef"];
+            /** Answer */
+            answer: string;
+        };
+        /**
+         * SimpleQuestionSource
+         * @description Where Oracle read the question: the PRD's approved version, and when.
+         */
+        SimpleQuestionSource: {
+            /** Version */
+            version?: number | null;
+            /** Read At */
+            read_at?: string | null;
         };
         /** SimpleResumeOut */
         SimpleResumeOut: {
@@ -38597,6 +39279,16 @@ export interface components {
              * @default []
              */
             decided_in: components["schemas"]["SimpleOpenDecision"][];
+            /**
+             * Slices
+             * @default []
+             */
+            slices: components["schemas"]["SimpleSlice"][];
+            /**
+             * Milestones
+             * @default []
+             */
+            milestones: string[];
         };
         /** SimpleRoadmapOut */
         SimpleRoadmapOut: {
@@ -38643,6 +39335,7 @@ export interface components {
              */
             roadmaps: components["schemas"]["SimpleKeyDateRoadmap"][];
             roadmap?: components["schemas"]["SimpleDocRef"] | null;
+            span?: components["schemas"]["SimplePlanSpan"] | null;
         };
         /** SimpleSendIn */
         SimpleSendIn: {
@@ -38699,6 +39392,55 @@ export interface components {
             connected: boolean;
             /** Channel */
             channel?: string | null;
+        };
+        /**
+         * SimpleSlice
+         * @description plan-model: the part of a roadmap item's feature one milestone builds (F-05a / F-05b;
+         *     an item in one milestone has one slice, F-05). Its dates are Oracle's placement inside
+         *     the milestone by the PRD's order words (``estimated``).
+         */
+        SimpleSlice: {
+            /** Code */
+            code: string;
+            /** Feature Code */
+            feature_code: string;
+            /** Name */
+            name: string;
+            /** Milestone */
+            milestone: string;
+            /** Milestone Name */
+            milestone_name: string;
+            /** Milestone Start */
+            milestone_start?: string | null;
+            /** Milestone End */
+            milestone_end?: string | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /**
+             * Estimated
+             * @default true
+             */
+            estimated: boolean;
+            /** Effort Weeks */
+            effort_weeks?: number | null;
+            /** Goal */
+            goal?: string | null;
+            /**
+             * Pm Owned
+             * @default false
+             */
+            pm_owned: boolean;
+            /** Kind */
+            kind?: string | null;
+            /** What */
+            what?: string | null;
+            /**
+             * Flow Steps
+             * @default []
+             */
+            flow_steps: string[];
         };
         /** SimpleStartOptions */
         SimpleStartOptions: {
@@ -38852,6 +39594,15 @@ export interface components {
             failed: boolean;
             /** Failure */
             failure?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * Stage
+             * @default 0
+             */
+            stage: number;
+            /** Subject Name */
+            subject_name?: string | null;
             /** Can Comment */
             can_comment: boolean;
             /** Can Revise */
@@ -67898,6 +68649,68 @@ export interface operations {
             };
         };
     };
+    get_simple_prd_plan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimplePlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    read_simple_prd_plan_again: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                prd: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimplePlanOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_simple_session: {
         parameters: {
             query?: never;
@@ -68512,6 +69325,41 @@ export interface operations {
             };
         };
     };
+    create_goal_suggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                goal_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimpleGoalSuggestionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleGoalSuggestion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     accept_goal_suggestion: {
         parameters: {
             query?: never;
@@ -68586,6 +69434,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: string | null;
+                chat?: string | null;
             };
             header?: never;
             path?: never;
@@ -68600,6 +69449,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatThreadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_simple_chats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatListOut"];
+                };
+            };
+        };
+    };
+    link_simple_chat_ask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChatAskIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatSummaryOut"];
                 };
             };
             /** @description Validation Error */
@@ -69392,6 +70296,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_simple_decisions_waiting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimpleDecisionsWaitingOut"];
                 };
             };
         };

@@ -21,7 +21,8 @@ import { mockNowMs } from "./clock";
 import { companyDayIso } from "./connections";
 import { stableUuid } from "./ids";
 import { routeSimpleChanges, type SimpleChangesCtx } from "./simple-changes";
-import { itemDeciderId, itemOwnerId, roadmapOut, storedDates, type SimpleDb } from "./simple-roadmap";
+import { GOALS, goalId, itemDeciderId, itemOwnerId, knowTalkGoals, lookalikes, prdCode, roadmapOut, simpleWindows, storedDates, type SimpleDb } from "./simple-roadmap";
+import { fileSuggestion, unfileSuggestion } from "./simple-suggestions";
 
 type Values = Record<string, unknown>;
 type Item = Schemas["SimpleRoadmapItem"];
@@ -36,6 +37,7 @@ type Preview =
   | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page"; proposed_to?: string; not_to?: string }
   | { kind: "note" | "question"; text: string }
   | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string }
+  | { kind: "suggestion"; goal_id: string; goal_title: string; title: string; outcome: string; looks_like: { code: string; title: string; why: string }[] }
   | null;
 type Fix = { label: string; op: string; target: Values; before: Values; after: Values };
 type Mode = "everyone" | "presenter" | "named";
@@ -64,6 +66,9 @@ interface StoredCard {
   decision_id: string | null;
   /** Chat actions: what Undo restores (the agenda before, the decision made). */
   undo?: Values;
+  /** roadmap-talk: the change in plain words, and the fields Correct opens (null: none). */
+  change_words?: { before: string; after: string } | null;
+  correct?: { fields: string[]; values: Record<string, string | null> } | null;
 }
 
 interface StoredMessage {
@@ -83,6 +88,8 @@ interface StoredMessage {
   retry: boolean;
   /** Private: each choice's card (Neither: null). */
   choice_drafts?: (Draft | null)[];
+  /** roadmap-talk: where Oracle's answer comes from ("From the PRD · F-16 Adaptive pacing"). */
+  source?: string | null;
   /** Private: the reader's job for a pending (or failed) line. */
   reading?: { text: string; role: Role; meeting_id: string | null; attempts: number; ask: boolean; document_id?: string | null };
 }
@@ -92,6 +99,36 @@ interface Thread {
   meeting_id: string | null;
   owner_id: string | null;
   messages: StoredMessage[];
+  /** ask-fresh: an Ask chat's page and the Oracle's Ask chat it handed its questions to. */
+  page?: string;
+  ask_id?: string | null;
+  started_at?: string;
+  /** Started under "General": Recent names it so (oracle.simple.chat._summary). */
+  general?: boolean;
+}
+
+/** Simple's page names as the panel says them (oracle.discussions.context.page_name): never a route. */
+const PAGE_NAMES: Record<string, string> = { "": "Home", "one-pagers": "One-pager", roadmap: "Roadmap", priorities: "Priorities", meetings: "Meetings", decisions: "Decisions", prds: "One-pager" };
+export function pageName(page: string | null | undefined): string {
+  const parts = pageOf(page).split("/").filter(Boolean).slice(1);
+  const name = PAGE_NAMES[parts[0] ?? ""] ?? "Home";
+  return name === "One-pager" && parts.length < 2 ? "One-pagers" : name;
+}
+
+/** The caller's own Ask chat `id` (ask-fresh): its key, or null for anyone else's or a meeting's. */
+function ownChat(chat: ChatDb, ctx: ChatCtx, id: string | null | undefined): string | null {
+  if (!id) return null;
+  const hit = Object.entries(chat.threads).find(([key, t]) => t.id === id && key.startsWith(`ask:${ctx.id}:`));
+  return hit ? hit[0] : null;
+}
+
+function chatSummary(key: string, t: Thread, ctx?: ChatCtx) {
+  const page = t.page ?? pageOf(key.split(":").slice(2).join(":").split("#")[0]);
+  const general = t.general === true;
+  // Its first question: the person's first line, else the first in the Oracle's Ask chat it handed it to.
+  const first = t.messages.find((m) => m.author_kind === "person")?.body ?? (t.ask_id ? (ctx?.askQuestion?.(t.ask_id) ?? null) : null);
+  const question = first ? first.split(/\s+/).filter(Boolean).join(" ").slice(0, 200) : null;
+  return { id: t.id, page, page_name: general ? "General" : pageName(page), last_at: t.messages.at(-1)?.at ?? t.started_at ?? now(), ask_id: t.ask_id ?? null, general, question };
 }
 
 interface Meeting {
@@ -151,6 +188,10 @@ export type ChatCtx = SimpleChangesCtx & {
   proposeDecision?: (b: Schemas["DecisionCreate"]) => Promise<string | null>;
   /** Who confirms it (ChatMeetings.proposeTo). */
   proposeTo?: (documentId: string | null) => { id: string; name: string } | null;
+  /** ask-fresh: whether `id` is the caller's own private panel chat (PUT /v1/simple/chats/{id}/ask). */
+  ownsDiscussion?: (id: string) => boolean;
+  /** Recent chats: the first line the caller asked in their Oracle's Ask chat `id` (oracle.simple.chat._questions). */
+  askQuestion?: (id: string) => string | null;
 };
 
 /** On Ask a commenter's decision is a proposal (the owner's pick, 2026-10-27): who it goes to, else null. */
@@ -252,7 +293,7 @@ const EXAMPLES = "Try “move Weekly alert digest to Q2”, “rename Setup chec
 
 type Draft = Omit<StoredCard, "id" | "message_id" | "thread" | "meeting_id" | "status" | "change_id" | "decided_by_name" | "decided_at" | "decision_id">;
 /** `understood: false`: a line the plan reader does not know (the Ask panel's one box sends it to Oracle's Ask); `missing`: no item has that name. */
-type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[]; understood?: boolean; missing?: boolean; hits?: Item[]; choices?: { label: string; draft: Draft | null }[] };
+type Reply = { kind: StoredMessage["kind"]; body: string; cards: Draft[]; source?: string | null; understood?: boolean; missing?: boolean; hits?: Item[]; choices?: { label: string; draft: Draft | null }[] };
 
 /** An ambiguous item's question gains one choice per item (its card) and "Neither". */
 function withChoices(r: Reply, build: (i: Item) => Reply): Reply {
@@ -490,12 +531,37 @@ function decisionDraft(meeting: Meeting | null, documentId: string | null, who: 
     : { kind: "decision" as const, text: t, decider_name: who.name, where: meeting ? ("meeting" as const) : ("page" as const) };
   return actionDraft(`Record the decision: ${t}`, "record_decision", null, target, {}, { text: t, decider_id: proposedTo ? null : who.id }, preview);
 }
+/** A suggestion's name: the words' first clause, capitalised, at most 60 characters (never cut mid-word). */
+function suggestionTitle(text: string): string {
+  let t = text.split(/[.,;]| so | to /i)[0].trim();
+  if (t.length > 60) t = t.slice(0, 61).replace(/\s+\S*$/, "");
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
+/** "Suggest a feature for <goal>: <words>" (chat_actions.suggest_feature): the card, Oracle's restating and the look-alikes. */
+function suggestDraft(db: SimpleDb, goalWords: string, what: string): Reply {
+  const w = goalWords.trim().toLowerCase();
+  const goal = Object.keys(GOALS).find((k) => k === w || GOALS[k].toLowerCase() === w);
+  if (!goal) return { kind: "question", body: `Which goal: ${Object.values(GOALS).join(", ")}?`, cards: [] };
+  const outcome = what.trim().replace(/\s+/g, " ");
+  const title = suggestionTitle(outcome);
+  const looks = lookalikes(db, title, null)
+    .map((k) => db.items.find((x) => x.key === k)!)
+    // As chat_actions.build_suggest_feature: the display code (none: the name alone) and what the item does (its outcome).
+    .map((x) => ({ code: prdCode(x.section) ?? "", title: x.title, why: x.outcome ? `which already ${x.outcome.charAt(0).toLowerCase()}${x.outcome.slice(1).replace(/\.$/, "")}` : "which has a similar name" }));
+  const said = looks.map((l, n) => ` ${n ? "It also looks like" : "It looks like"} ${`${l.code} ${l.title}`.trim()}, ${l.why}.`).join("");
+  const draft = actionDraft(`Suggest ${title} for ${GOALS[goal]}`, "suggest_feature", null, { goal_id: goalId(goal) }, {}, { title, outcome }, {
+    kind: "suggestion", goal_id: goalId(goal), goal_title: GOALS[goal], title, outcome, looks_like: looks,
+  });
+  return { kind: "cards", body: `${ONE_CHANGE} suggest ${title} for ${GOALS[goal]}.${said}`, cards: [draft] };
+}
+
 /** Chat actions' cards: "I understood one change:" (the contract's reply line). */
 const ONE_CHANGE = "I understood one change:";
 /** The meeting-only phrases' answer outside a meeting (no card). */
 export const MEETING_ONLY = "Minutes notes, open questions and agenda changes belong to a meeting.";
 /** Ops applied here, not through the change engine: a decision, the minutes' notes and the agenda. */
-const LOCAL_OPS = new Set(["record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip"]);
+const LOCAL_OPS = new Set(["record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip", "suggest_feature"]);
 
 /**
  * The chat actions' phrases (the contract's): "<person> owns <item>", "<person> decides
@@ -540,6 +606,10 @@ function chatActionReply(db: SimpleDb, ctx: ChatCtx, t: string, meeting: Meeting
       if (!isPerson(who)) return who;
       return one(decisionDraft(meeting, documentId, who, what, askProposal(ctx, meeting, documentId), by ? who : null));
     });
+  }
+  if ((m = /^suggest a feature for (.+?):\s*(.+)$/i.exec(t))) {
+    const [, g, what] = m;
+    return change(() => suggestDraft(db, g, what));
   }
   if (!asks && (m = /^(.+?) (owns|decides) (.+)$/i.exec(t)) && !/^who$/i.test(m[1])) {
     const [, x, verb, y] = m;
@@ -612,6 +682,19 @@ export const mockReaderOps: Record<string, (a: ReaderArgs) => ReaderOut> = {
       : item.status === "cut"
       ? { refusal: `${item.title} is cut already.` }
       : { card: { op: "cut", target: { item_id: item.id }, before: { cut: false }, after: { cut: true }, summary: `Cut ${item.title}`, item_id: item.id, item_title: item.title, preview: { kind: "cut", item_id: item.id }, flow: null, fixes: [] } },
+  // roadmap-talk: start after another item ends, and a new item in a milestone under a goal.
+  move_after: ({ db, ctx, item, rest }) => {
+    if (!item) return { refusal: "Which item?" };
+    const [other] = named(itemsFor(db, ctx), rest ?? "");
+    if (!other) return { refusal: `I could not find “${unquote(rest ?? "")}” on the roadmap.` };
+    const len = Math.round((msOf(item.end.date) - msOf(item.start.date)) / DAY);
+    const start = addDays(other.end.date, 1);
+    return { card: talkMove(db, item, start, addDays(start, len), `after ${other.title}`) };
+  },
+  add_item: ({ db, ctx, rest }) => {
+    const [title, m, goal] = (rest ?? "").split("|");
+    return addItemDraft(db, ctx, title, m, goal);
+  },
   // chat-join: chat-actions' ops, built by the same drafts as its phrases.
   set_owner: (a) => who(a, "owner"),
   set_decider: (a) => who(a, "decider"),
@@ -633,7 +716,7 @@ function who({ db, ctx, item, rest }: ReaderArgs, word: "owner" | "decider"): Re
 }
 
 /** The ops about no item: their clause carries only its words (`rest`). */
-const ITEMLESS = new Set(["record_decision", "minutes_note", "open_question"]);
+const ITEMLESS = new Set(["record_decision", "minutes_note", "open_question", "add_item"]);
 
 type Clause = { op: string; x: string; months?: number; period?: [string, string]; rest?: string };
 
@@ -641,8 +724,17 @@ type Clause = { op: string; x: string; months?: number; period?: [string, string
 function clauses(text: string): Clause[] {
   const t = text.trim().replace(/\s+/g, " ").replace(/[?.!]+$/, "");
   const out: Clause[] = [];
-  for (const part of t.split(/,?\s+and\s+(?:then\s+)?(?=(?:push|move|shift|slip|cut|drop|make|let'?s|skip|note|we decided)\b)/i)) {
+  for (const part of t.split(/,?\s+and\s+(?:then\s+)?(?=(?:push|move|shift|slip|cut|drop|make|let'?s|skip|note|we decided|add)\b)/i)) {
     let m: RegExpExecArray | null;
+    // roadmap-talk: "push X after Y" (start the day after Y ends), "add a(n) X item to M2 under Growth".
+    if ((m = /^(?:push|move|shift|slip)\s+(.+?)\s+(?:to\s+start\s+)?after\s+(.+)$/i.exec(part))) {
+      out.push({ op: "move_after", x: m[1], rest: m[2] });
+      continue;
+    }
+    if ((m = /^add\s+(?:an?\s+)?(.+?)\s+item\s+to\s+(M\d)\b(?:\s+under\s+(.+))?$/i.exec(part))) {
+      out.push({ op: "add_item", x: "", rest: [m[1], m[2], m[3] ?? ""].join("|") });
+      continue;
+    }
     // chat-join: chat-actions' ops in free words.
     if ((m = /^(?:ok(?:ay)?,?\s+)?(?:so\s+)?we(?:'ve| have)?\s+decided\s+(?:to\s+|that\s+)?(.+)$/i.exec(part))) {
       out.push({ op: "record_decision", x: "", rest: m[1] });
@@ -765,21 +857,277 @@ function resolvePending(db: SimpleDb, chat: ChatDb, key: string, ctx: ChatCtx): 
   }
 }
 
+// --------------------------------------------------------------------------- roadmap-talk
+
+/** An item's own talk: the Ask thread of page /simple/roadmap/items/<id> (one per item and person). */
+const TALK_KEY = /:\/simple\/roadmap\/items\/([^/]+)$/;
+
+/** "Nov 30" (the talk's day words, as the roadmap's). */
+// roadmap-talk: the API's company-day words ("30 Nov – 11 Dec").
+const usDay = (day: string) => dayWords(day);
+const usSpan = (a: string, b: string) => `${usDay(a)} – ${usDay(b)}`;
+
+/** The "roadmap-talk" scenario's milestones: name and days from this quarter's start. */
+export const TALK_MILESTONES: { name: string; day: number }[] = [
+  { name: "M1 Launch prep", day: 57 },
+  { name: "M2 Scale volume", day: 78 },
+  { name: "M3 Wider rollout", day: 90 },
+];
+
+function milestoneDays(): { name: string; date: string; from: string }[] {
+  const q = simpleWindows(isoDay(mockNowMs())).now[0];
+  return TALK_MILESTONES.map((m, n) => ({ name: m.name, date: addDays(q, m.day), from: n ? addDays(q, TALK_MILESTONES[n - 1].day + 1) : q }));
+}
+
+/** The milestone a name means ("M2", "m2 scale volume"), or null. */
+function milestoneNamed(x: string) {
+  const q = x.trim().toLowerCase();
+  if (!q) return null;
+  return milestoneDays().find((m) => m.name.toLowerCase() === q || m.name.toLowerCase().startsWith(`${q} `)) ?? null;
+}
+
+/** The goal a name means (its key or title, "Growth"), or null. */
+function goalNamed(x: string): string | null {
+  const q = x.trim().toLowerCase();
+  return Object.keys(GOALS).find((k) => k === q || GOALS[k].toLowerCase() === q) ?? null;
+}
+
+const about = (i: Item) => (i.code ? `${i.code} ${i.title}` : i.title);
+
+/**
+ * The "roadmap-talk" scenario's invented items (on "simple-chat"): F-16 Adaptive pacing ending
+ * on M1 Launch prep, F-17 Sign-up work and F-18 Reliability work, and the goals Reliability,
+ * Growth, Activation and Revenue.
+ */
+export function seedTalkItems(db: SimpleDb): void {
+  const add: SimpleDb["items"] = [
+    { key: "adaptive-pacing", title: "Adaptive pacing", horizon: "now", roadmap: "alerts-roadmap", goal: "growth", track: "alerts", confidence: "medium", start: 46, end: 57, source: "typed", milestone: { name: "M1 Launch prep", day: 57 }, section: "f-16", heading: "F-16 Adaptive pacing", outcome: "Alerts slow down when a team is flooded", why: "Teams muted alerts during bursts." },
+    { key: "signup-work", title: "Sign-up work", horizon: "now", roadmap: "onboarding-roadmap", goal: "activation", track: "onboarding", confidence: "high", start: 20, end: 40, source: "typed", section: "f-17", heading: "F-17 Sign-up work" },
+    { key: "reliability-work", title: "Reliability work", horizon: "now", roadmap: "alerts-roadmap", goal: "reliability", track: "alerts", confidence: "medium", start: 30, end: 50, source: "typed", section: "f-18", heading: "F-18 Reliability work" },
+  ];
+  for (const s of add) {
+    if (db.items.some((x) => x.key === s.key)) continue;
+    db.items.push(s);
+    db.ids[s.key] = stableUuid(`simple-item/${s.key}`);
+  }
+  knowTalkGoals(db);
+}
+
+/** A move restated ("Move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11, 2026"), its words and Correct. */
+function talkMove(db: SimpleDb, i: Item, start: string, end: string, how = ""): Draft {
+  const d = moveDraft(db, i, start, end);
+  return {
+    ...d,
+    summary: `Move ${about(i)}${how ? ` ${how},` : ""} to ${usSpan(start, end)}`,
+    change_words: { before: usSpan(i.start.date, i.end.date), after: usSpan(start, end) },
+    correct: { fields: ["start_date", "end_date"], values: { start_date: start, end_date: end } },
+  };
+}
+
+/** An add_item card: the title, its goal, milestone and dates: the API's rule, the milestone's last two weeks, never before today. */
+function addItemDraft(db: SimpleDb, ctx: ChatCtx, rawTitle: string, m: string, g: string): ReaderOut {
+  const title = unquote(rawTitle).replace(/^./, (c) => c.toUpperCase());
+  if (!title) return { refusal: "What should the new item be called?" };
+  const ms = milestoneNamed(m);
+  if (!ms) return { refusal: `I could not find the milestone “${m}”.` };
+  const goal = g ? goalNamed(g) : null;
+  if (g && !goal) return { refusal: `I could not find the goal “${g}”.` };
+  const end = ms.date;
+  const start = addDays(end, -13) > today() ? addDays(end, -13) : today();
+  return { card: buildAdd(title, goal, ms.name, start, end) };
+}
+
+function buildAdd(title: string, goal: string | null, milestone: string | null, start: string, end: string): Draft {
+  return {
+    op: "add_item", target: { where: { kind: goal ? "goal" : "horizon", value: goal ?? "now" } }, before: {},
+    after: { title, start_date: start, end_date: end, milestone, goal },
+    summary: `Add ${title}${goal ? ` under ${GOALS[goal]}` : ""}${milestone ? ` to ${milestone}` : ""}, ${usSpan(start, end)}`,
+    item_id: null, item_title: null, preview: null, flow: null, fixes: [],
+    change_words: null,
+    correct: { fields: ["title", "goal", "milestone", "start_date", "end_date"], values: { title, goal: goal ? GOALS[goal] : null, milestone, start_date: start, end_date: end } },
+  };
+}
+
+const NUMBERS: Record<string, number> = { a: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
+const countOf = (x: string) => NUMBERS[x.toLowerCase()] ?? Number(x);
+
+/** Oracle in an item's own talk: "it" and "this" mean the item (deterministic, the demo's sentences). */
+function itemTalk(db: SimpleDb, ctx: ChatCtx, items: Item[], itemId: string, text: string): Reply {
+  const i = items.find((x) => x.id === itemId);
+  if (!i) return { kind: "note", body: "I can't find this item on the roadmap any more.", cards: [] };
+  const t = text.trim().replace(/\s+/g, " ").replace(/[.!]+$/, "");
+  const it = "(?:it|this|this item)";
+  if (QUESTION.test(t) || t.endsWith("?")) {
+    // As the API: its own read of when / who is the roadmap's; the reader's answers cite the PRD when the item has one.
+    const source = i.code && !/\b(when|who)\b/i.test(t) ? `From the PRD · ${about(i)}` : `From the roadmap · ${about(i)}`;
+    if (/\bwho\b.*\bown/i.test(t)) return { kind: "answer", body: i.owner ? `${i.owner.name} owns ${i.title}.` : `${i.title} has no owner yet.`, cards: [], source };
+    const why = i.reasons[0] ? ` ${i.reasons[0]}` : "";
+    const outcome = i.outcome ? ` Its outcome: ${i.outcome}.` : "";
+    return { kind: "answer", body: `${i.title} runs ${usSpan(i.start.date, i.end.date)}; it is ${i.status.replace("_", " ")}.${outcome}${why}`, cards: [], source };
+  }
+  if (ctx.role === "viewer") return { kind: "note", body: "Viewers ask questions here; changes need a commenter or above.", cards: [] };
+  const one = (d: Draft): Reply => ({ kind: "cards", body: `I understood: ${d.summary.replace(/^./, (c) => c.toLowerCase())}.`, cards: [d] });
+  let m: RegExpExecArray | null;
+  if ((m = new RegExp(`^(?:move|push|shift|slip) ${it}(?: by)? (a|one|two|three|four|five|six|\\d+) weeks? (later|earlier|out|back|sooner)$`, "i").exec(t))) {
+    const n = countOf(m[1]) * 7 * (/later|out/i.test(m[2]) ? 1 : -1);
+    const words = `${m[1].toLowerCase() === "a" ? "one" : m[1].toLowerCase()} week${countOf(m[1]) === 1 ? "" : "s"} ${n > 0 ? "later" : "earlier"}`;
+    return one(talkMove(db, i, addDays(i.start.date, n), addDays(i.end.date, n), words));
+  }
+  if ((m = new RegExp(`^(?:move|put) ${it} (?:in|into|to|under) (M\\d)\\b.*$`, "i").exec(t))) {
+    const ms = milestoneNamed(m[1]);
+    if (!ms) return { kind: "note", body: `I could not find the milestone “${m[1]}”.`, cards: [] };
+    return one({
+      op: "set_milestone", target: { item_id: i.id }, before: { milestone: i.milestone ? { name: i.milestone.name, date: i.milestone.date } : null }, after: { milestone: { name: ms.name, date: ms.date, date_source: "typed" } },
+      summary: `Move ${about(i)} to ${ms.name} (${usDay(ms.date)})`, item_id: i.id, item_title: i.title, preview: { kind: "milestone", item_id: i.id, name: ms.name, date: ms.date }, flow: null, fixes: [],
+      change_words: { before: i.milestone?.name ?? "No milestone", after: ms.name },
+      correct: { fields: ["milestone"], values: { milestone: ms.name } },
+    });
+  }
+  if ((m = new RegExp(`^rename ${it} (?:to )?(.+)$`, "i").exec(t))) {
+    const title = unquote(m[1]);
+    return one({
+      op: "edit_title", target: { item_id: i.id }, before: { title: i.title }, after: { title }, summary: `Rename ${about(i)} to “${title}”`, item_id: i.id, item_title: i.title,
+      preview: { kind: "title", item_id: i.id, title }, flow: null, fixes: [], change_words: { before: i.title, after: title }, correct: { fields: ["title"], values: { title } },
+    });
+  }
+  if ((m = new RegExp(`^(?:make (.+?) (?:the )?owner(?: of ${it})?|(.+?) (?:should )?owns? ${it}|give ${it} to (.+))$`, "i").exec(t))) {
+    const p = personNamed(ctx, m[1] ?? m[2] ?? m[3] ?? "");
+    if (!p) return { kind: "note", body: `Who is “${unquote(m[1] ?? m[2] ?? m[3] ?? "")}”? Name a person of the company.`, cards: [] };
+    const d = whoDraft(db, ctx, p, i, "owner");
+    return one({ ...d, summary: `Make ${p.name} the owner of ${about(i)}`, change_words: { before: i.owner?.name ?? "No owner", after: p.name }, correct: { fields: ["owner"], values: { owner: p.name } } });
+  }
+  if (new RegExp(`^(?:cut|drop) ${it}$`, "i").test(t)) {
+    if (i.status === "cut") return { kind: "note", body: `${i.title} is cut already.`, cards: [] };
+    return one({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: { cut: true }, summary: `Cut ${about(i)}`, item_id: i.id, item_title: i.title, preview: { kind: "cut", item_id: i.id }, flow: null, fixes: [], change_words: null, correct: { fields: [], values: {} } });
+  }
+  if ((m = new RegExp(`^split ${it} (?:into|in) (two|three|four|\\d) (?:slices|parts|pieces)$`, "i").exec(t))) {
+    const n = Math.min(4, Math.max(2, countOf(m[1])));
+    const len = Math.round((msOf(i.end.date) - msOf(i.start.date)) / DAY) + 1;
+    const each = Math.max(1, Math.floor(len / n));
+    const cards: Draft[] = [talkMove(db, i, i.start.date, addDays(i.start.date, each - 1), "to its first slice")];
+    for (let k = 1; k < n; k++) {
+      const a = addDays(i.start.date, each * k);
+      const b = k === n - 1 ? i.end.date : addDays(a, each - 1);
+      const goal = i.goal ? (goalNamed(i.goal.key) ?? null) : null;
+      cards.push(buildAdd(`${i.title}: slice ${k + 1}`, goal, i.milestone?.name ?? null, a, b));
+    }
+    return { kind: "cards", body: `I understood: split ${about(i)} into ${n} slices.`, cards };
+  }
+  const add = /^add (?:an? )?(.+?) item(?: to (M\d))?(?: under (.+))?$/i.exec(t);
+  if (add) {
+    const o = addItemDraft(db, ctx, add[1], add[2] ?? i.milestone?.name ?? "M1", add[3] ?? (i.goal ? i.goal.title : ""));
+    return "card" in o ? one(o.card) : { kind: "note", body: o.refusal, cards: [] };
+  }
+  return { kind: "note", body: `I could not tell what to change. Try “move it two weeks later”, “move it to M2”, “rename it to …” or ask a question about ${i.title}.`, cards: [] };
+}
+
+/** Apply with `values` (Correct): the card rebuilt from the corrected values; Correct's values win. A refusal's words, else null. */
+function correctCard(db: SimpleDb, ctx: ChatCtx, c: StoredCard, values: Record<string, unknown>): string | null {
+  const allowed = new Set(c.correct?.fields ?? []);
+  const v: Record<string, string | null> = { ...(c.correct?.values ?? {}) };
+  for (const [k, x] of Object.entries(values)) if (allowed.has(k)) v[k] = x == null || x === "" ? null : String(x);
+  const day = (x: string | null) => (x && /^\d{4}-\d{2}-\d{2}$/.test(x) ? x : null);
+  const item = c.item_id ? itemsFor(db, ctx).find((x) => x.id === c.item_id) : undefined;
+  if (c.op === "move_dates" && item) {
+    const [a, b] = [day(v.start_date), day(v.end_date)];
+    if (!a || !b || b < a) return "Start and End: two days, the end on or after the start";
+    // Corrected dates: the restatement names the new dates only (a "two weeks later" no longer holds).
+    const d = talkMove(db, item, a, b);
+    Object.assign(c, { after: d.after, summary: d.summary, preview: d.preview, change_words: { before: c.change_words?.before ?? d.change_words!.before, after: d.change_words!.after }, correct: { ...c.correct!, values: { start_date: a, end_date: b } } });
+    return null;
+  }
+  if (c.op === "set_milestone" && item) {
+    const ms = milestoneNamed(v.milestone ?? "");
+    if (!ms) return `Milestone: one of ${milestoneDays().map((m) => m.name).join(", ")}`;
+    Object.assign(c, { after: { milestone: { name: ms.name, date: ms.date, date_source: "typed" } }, summary: `Move ${about(item)} to ${ms.name} (${usDay(ms.date)})`, preview: { kind: "milestone", item_id: item.id, name: ms.name, date: ms.date }, change_words: { before: c.change_words?.before ?? "No milestone", after: ms.name }, correct: { ...c.correct!, values: { milestone: ms.name } } });
+    return null;
+  }
+  if (c.op === "edit_title" && item) {
+    const title = (v.title ?? "").trim();
+    if (!title) return "Title: write the item's name";
+    Object.assign(c, { after: { title }, summary: `Rename ${about(item)} to “${title}”`, preview: { kind: "title", item_id: item.id, title }, change_words: { before: item.title, after: title }, correct: { ...c.correct!, values: { title } } });
+    return null;
+  }
+  if (c.op === "set_owner" && item) {
+    const p = personNamed(ctx, v.owner ?? "");
+    if (!p) return `Owner: name a person of the company`;
+    const d = whoDraft(db, ctx, p, item, "owner");
+    Object.assign(c, { after: d.after, preview: d.preview, summary: `Make ${p.name} the owner of ${about(item)}`, change_words: { before: item.owner?.name ?? "No owner", after: p.name }, correct: { ...c.correct!, values: { owner: p.name } } });
+    return null;
+  }
+  if (c.op === "add_item") {
+    const title = (v.title ?? "").trim();
+    if (!title) return "Title: write the new item's name";
+    const goal = v.goal ? goalNamed(v.goal) : null;
+    if (v.goal && !goal) return `Goal: one of ${Object.values(GOALS).join(", ")}`;
+    const ms = v.milestone ? milestoneNamed(v.milestone) : null;
+    if (v.milestone && !ms) return `Milestone: one of ${milestoneDays().map((m) => m.name).join(", ")}`;
+    const [a, b] = [day(v.start_date), day(v.end_date)];
+    if (!a || !b || b < a) return "Start and End: two days, the end on or after the start";
+    const d = buildAdd(title, goal, ms?.name ?? null, a, b);
+    Object.assign(c, { target: d.target, after: d.after, summary: d.summary, correct: { ...c.correct!, values: d.correct!.values } });
+    return null;
+  }
+  return null;
+}
+
+/** After the engine applied it: what the mock's engine does not store itself (the new item's dates and milestone, a milestone moved). */
+function afterApplied(db: SimpleDb, c: StoredCard, result: Schemas["SimpleChangeResult"]): void {
+  const q = simpleWindows(isoDay(mockNowMs())).now[0];
+  const dayOf = (date: string) => Math.round((msOf(date) - msOf(q)) / DAY);
+  if (c.op === "add_item" && result.change.status === "applied") {
+    const id = String(result.change.target.item_id ?? "");
+    const key = Object.keys(db.ids).find((k) => db.ids[k] === id);
+    const s = db.items.find((x) => x.key === key);
+    if (!s || !key) return;
+    const a = c.after;
+    if (a.start_date && a.end_date) db.own[key] = { start: String(a.start_date), end: String(a.end_date), source: "typed" };
+    s.horizon = "now";
+    s.drafting_until = undefined;
+    const ms = typeof a.milestone === "string" ? milestoneNamed(a.milestone) : null;
+    if (ms) s.milestone = { name: ms.name, day: dayOf(ms.date) };
+    c.item_id = id;
+    c.item_title = s.title;
+  }
+  if (c.op === "set_milestone" && c.item_id && result.change.status === "applied" && c.correct) {
+    const key = Object.keys(db.ids).find((k) => db.ids[k] === c.item_id);
+    const s = db.items.find((x) => x.key === key);
+    const m = c.after.milestone as { name: string; date: string } | undefined;
+    if (s && m) s.milestone = { name: m.name, day: dayOf(m.date) };
+  }
+}
+
 /** The roadmap as the reader reads it (and as an owner, for the constraint check). */
 /**
  * Oracle's Ask on a Simple page reads the company's plan first (oracle.discussions.plan): a
  * question naming a roadmap item the asker may read is answered from the plan, its dates,
  * status and outcome; null when it names none (the canned reply).
  */
-export function planAnswer(db: SimpleDb, ctx: ChatCtx, question: string): string | null {
+export function planAnswer(db: SimpleDb, ctx: ChatCtx, question: string): { text: string; citations: Record<string, unknown>[] } | null {
   const q = question.toLowerCase();
   const [i] = itemsFor(db, ctx)
     .filter((x) => q.includes(x.title.toLowerCase()))
     .sort((a, b) => b.title.length - a.title.length);
   if (!i) return null;
-  const when = `${dayWords(i.start.date)} – ${dayWords(i.end.date, true)}${i.estimated ? " (estimated)" : ""}`;
-  const outcome = i.outcome ? ` Its outcome: ${i.outcome}.` : "";
-  return `From the plan: ${i.title} runs ${when}; it is ${i.status.replace("_", " ")} (${i.horizon}).${outcome}`;
+  // The shape the API's prompt asks for (oracle.discussions.plan.PLAN_FIRST): the name in bold,
+  // when it runs, then short labelled lists; the plan cited.
+  // "Nov 16 – Dec 11", as the pick's answer reads.
+  const us = (day: string) => new Date(msOf(day)).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+  const when = `${us(i.start.date)} – ${us(i.end.date)}${i.estimated ? " (estimated)" : ""}`;
+  const status = i.status.replace("_", " ");
+  const sections: [string, string[]][] = [
+    ["Outcome", i.outcome ? [i.outcome] : []],
+    ["Goal", i.goal ? [i.goal.title] : []],
+    ["Milestone", i.milestone?.name ? [`${i.milestone.name}${i.milestone.date ? `, ${us(i.milestone.date)}` : ""}`] : []],
+  ];
+  const text = [
+    `**${i.title}** [c:1]`,
+    `Runs **${when}** · ${status} (${i.horizon})`,
+    ...sections.filter(([, lines]) => lines.length).map(([label, lines]) => `### ${label}\n${lines.map((l) => `- ${l}`).join("\n")}`),
+  ].join("\n\n");
+  const citations: Record<string, unknown>[] = [{ n: 1, kind: "roadmap_item", ref: i.id, title: `Roadmap item: ${i.title}`, url: "/simple/roadmap" }];
+  if (i.prd) citations.unshift({ n: 2, kind: "section", ref: i.prd.id, title: `${i.prd.title}: Roadmap`, url: `/documents/${i.prd.slug}` });
+  return { text: i.prd ? text.replace("[c:1]", "[c:1] [c:2]") : text, citations };
 }
 
 function itemsFor(db: SimpleDb, ctx: ChatCtx): Item[] {
@@ -864,7 +1212,7 @@ function cardOut(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx) {
   void _flag;
   void _thread;
   void _meeting;
-  return { ...rest, ...mayOf(db, chat, c, ctx), flags: check.flags };
+  return { change_words: null, correct: null, ...rest, ...mayOf(db, chat, c, ctx), flags: check.flags };
 }
 
 function rulesOut(m: Meeting, ctx: ChatCtx) {
@@ -883,15 +1231,35 @@ function threadOut(db: SimpleDb, chat: ChatDb, t: Thread | null, ctx: ChatCtx, m
     messages: (t?.messages ?? []).map(({ card_ids, choice_drafts: _drafts, reading: _reading, ...msg }) => {
       void _drafts;
       void _reading;
-      return { ...msg, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
+      return { source: null, ...msg, cards: card_ids.map((id) => cardOut(db, chat, chat.cards[id], ctx)) };
     }),
     rules: meeting ? rulesOut(meeting, ctx) : null,
+    ask_id: t?.ask_id ?? null,
   };
 }
 
 /** The new cards of Oracle's line `messageId`. */
+/** roadmap-talk: as the API, every open card on the roadmap's pages may be corrected (its fields, Oracle's reading). */
+function roadmapCorrect(d: Draft): Draft {
+  if (d.correct !== undefined && d.correct !== null) return d;
+  const a = d.after as Record<string, unknown>;
+  const b = d.before as Record<string, unknown>;
+  const p = (d.preview ?? {}) as Record<string, unknown>;
+  if (d.op === "move_dates" && typeof a.start_date === "string" && typeof a.end_date === "string") {
+    const words = typeof b.start_date === "string" && typeof b.end_date === "string" ? { before: usSpan(b.start_date, b.end_date), after: usSpan(a.start_date, a.end_date) } : null;
+    return { ...d, change_words: d.change_words ?? words, correct: { fields: ["start_date", "end_date"], values: { start_date: a.start_date, end_date: a.end_date } } };
+  }
+  if (d.op === "edit_title" && typeof a.title === "string") return { ...d, change_words: d.change_words ?? { before: String(b.title ?? ""), after: a.title }, correct: { fields: ["title"], values: { title: a.title } } };
+  // A cut has nothing to correct; it is still a roadmap card (Reject, not Discard).
+  if (d.op === "cut") return { ...d, correct: { fields: [], values: {} } };
+  if (d.op === "set_owner" && typeof p.person_name === "string") return { ...d, change_words: d.change_words ?? { before: typeof p.before_name === "string" ? p.before_name : "No owner", after: p.person_name }, correct: { fields: ["owner"], values: { owner: p.person_name } } };
+  return d;
+}
+
 function storeCards(db: SimpleDb, chat: ChatDb, drafts: Draft[], messageId: string, key: string, meeting: Meeting | null): string[] {
-  return drafts.map((d) => {
+  // As the API (roadmap_talk.on_roadmap: the thread's page starts /simple/roadmap); a new chat's key ends "#<id>".
+  const onRoadmap = !meeting && /:\/simple\/roadmap(\/|#|$)/.test(key);
+  return (onRoadmap ? drafts.map(roadmapCorrect) : drafts).map((d) => {
     const c: StoredCard = { ...d, id: crypto.randomUUID(), message_id: messageId, thread: key, meeting_id: meeting?.id ?? null, status: "open", change_id: null, decided_by_name: null, decided_at: null, decision_id: null };
     c.fixes = asIf(db, c).fixes;
     chat.cards[c.id] = c;
@@ -909,7 +1277,8 @@ const line = (ctx: ChatCtx, body: string, at: string): StoredMessage => ({
  * box): a question the reader finds comes back kind "ask", for the panel to hand to Ask.
  */
 function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, ctx: ChatCtx, text: string, onlyUnderstood = false, documentId: string | null = null): boolean {
-  const reply = parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names), documentId);
+  const talk = TALK_KEY.exec(key);
+  const reply = talk ? itemTalk(db, ctx, itemsFor(db, ctx), talk[1], text) : parse(db, ctx, text, meeting, itemsFor(db, ctx), Object.values(ctx.names), documentId);
   // A question about something not on the roadmap is Ask's (the one box writes nothing); a
   // change phrase naming no item is read by the reader in context, as the API does.
   const asksElsewhere = reply.understood === false && !!reply.missing;
@@ -926,7 +1295,7 @@ function say(db: SimpleDb, chat: ChatDb, key: string, meeting: Meeting | null, c
     return true;
   }
   t.messages.push({
-    ...base, body: reply.body, kind: reply.kind, card_ids: storeCards(db, chat, reply.cards, id, key, meeting),
+    ...base, body: reply.body, kind: reply.kind, source: reply.source ?? null, card_ids: storeCards(db, chat, reply.cards, id, key, meeting),
     choices: (reply.choices ?? []).map((c, index) => ({ index, label: c.label })), choice_drafts: (reply.choices ?? []).map((c) => c.draft),
   });
   return true;
@@ -938,7 +1307,8 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
     const msg = t.messages.find((x) => x.id === id);
     if (!msg) continue;
     const meeting = t.meeting_id ? (chat.meetings[t.meeting_id] ?? null) : null;
-    if (meeting ? !meeting.attendee_ids.includes(ctx.id) : key !== `ask:${ctx.id}`) return null;
+    // The person's own Ask threads (one per page: "ask:<id>:<page>"), as the API.
+    if (meeting ? !meeting.attendee_ids.includes(ctx.id) : key !== `ask:${ctx.id}` && !key.startsWith(`ask:${ctx.id}:`)) return null;
     return { key, meeting, msg };
   }
   return null;
@@ -947,6 +1317,15 @@ function findMessage(chat: ChatDb, ctx: ChatCtx, id: string): { key: string; mee
 /** One card through the change engine (or its fix n): the card out and the result, or the engine's refusal. */
 async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx, n: number | null, s8?: ChatMeetings): Promise<Response | { card: unknown; result: Schemas["SimpleChangeResult"] }> {
   const use = n == null ? c : c.fixes[n];
+  if (c.op === "suggest_feature") {
+    // Filed as the person's own suggestion (origin "person"): it lands under People.
+    const goal = Object.keys(GOALS).find((k) => goalId(k) === c.target.goal_id) ?? "";
+    const r = fileSuggestion(db, ctx, goal, String(c.after.title ?? ""), String(c.after.outcome ?? ""));
+    if ("detail" in r) return json(r.status, { detail: r.detail });
+    c.target = { ...c.target, suggestion_id: r.id };
+    const result = applyLocal(c, null, ctx, s8);
+    return { card: cardOut(db, chat, c, ctx), result };
+  }
   if (LOCAL_OPS.has(c.op)) {
     const meeting = meetingOf(chat, c);
     if (!meeting && c.op === "record_decision" && ctx.role === "commenter") {
@@ -965,6 +1344,7 @@ async function applyOne(db: SimpleDb, chat: ChatDb, c: StoredCard, ctx: ChatCtx,
   const res = await engine(db, ctx, "POST", "/v1/simple/changes", { op: use.op, target: use.target, before: use.before, after: use.after });
   if (!res.ok) return res;
   const result = (await res.json()) as Schemas["SimpleChangeResult"];
+  afterApplied(db, c, result);
   Object.assign(c, {
     status: result.change.status === "applied" ? "applied" : "proposed", change_id: result.change.id,
     decided_by_name: ctx.names[ctx.id] ?? "someone", decided_at: now(),
@@ -1150,7 +1530,10 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
 
   // The walk: one Ask thread per person AND page (chat.page_of; Home without a page).
   if (p[2] === "chat" && !p[3] && m === "GET") {
-    const key = `ask:${ctx.id}:${pageOf(new URL(req.url).searchParams.get("page"))}`;
+    const q = new URL(req.url).searchParams;
+    const own = q.get("chat") ? ownChat(chat, ctx, q.get("chat")) : null;
+    if (q.get("chat") && !own) return json(404, { detail: "No such chat" });
+    const key = own ?? `ask:${ctx.id}:${pageOf(q.get("page"))}`;
     resolvePending(db, chat, key, ctx);
     return json(200, threadOut(db, chat, chat.threads[key] ?? null, ctx, null));
   }
@@ -1210,9 +1593,35 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     const b = await body();
     const text = String(b.text ?? "").trim();
     if (!text || text.length > 2000) return json(422, { detail: "text: 1 to 2000 characters" });
-    const key = `ask:${ctx.id}:${pageOf(typeof b.page === "string" ? b.page : null)}`;
-    const understood = say(db, chat, key, null, ctx, text, b.only_understood === true, typeof b.page === "string" ? (s8?.documentOf(b.page) ?? null) : null);
+    // ask-fresh: continue the caller's own chat `chat_id`; `new_chat` starts a new one about the page.
+    const own = typeof b.chat_id === "string" ? ownChat(chat, ctx, b.chat_id) : null;
+    if (typeof b.chat_id === "string" && !own) return json(404, { detail: "No such chat" });
+    const page = own ? (chat.threads[own].page ?? "/simple") : pageOf(typeof b.page === "string" ? b.page : null);
+    const key = own ?? `ask:${ctx.id}:${page}${b.new_chat === true ? `#${crypto.randomUUID()}` : ""}`;
+    const started = !!chat.threads[key];
+    const understood = say(db, chat, key, null, ctx, text, b.only_understood === true, s8?.documentOf(page) ?? null);
+    // A new chat's first line handed to Ask: the chat exists (empty), for the panel to link its Ask chat.
+    if (!understood && b.new_chat === true && !own) chat.threads[key] ??= { id: crypto.randomUUID(), meeting_id: null, owner_id: ctx.id, messages: [] };
+    if (chat.threads[key]) Object.assign(chat.threads[key], { page, started_at: chat.threads[key].started_at ?? now() });
+    // A chat started under "General" stays General.
+    if (chat.threads[key] && !started && b.general === true) chat.threads[key].general = true;
     return json(200, { ...threadOut(db, chat, chat.threads[key] ?? null, ctx, null), understood });
+  }
+  // Recent chats (ask-fresh): the caller's last ten Ask chats from any page; never a meeting's.
+  if (p[2] === "chats" && !p[3] && m === "GET") {
+    const items = Object.entries(chat.threads)
+      .filter(([key, t]) => key.startsWith(`ask:${ctx.id}:`) && (t.messages.length > 0 || t.ask_id))
+      .map(([key, t]) => chatSummary(key, t, ctx))
+      .sort((a, b) => b.last_at.localeCompare(a.last_at))
+      .slice(0, 10);
+    return json(200, { items });
+  }
+  if (p[2] === "chats" && p[3] && p[4] === "ask" && m === "PUT") {
+    const own = ownChat(chat, ctx, p[3]);
+    const askId = String((await body()).ask_id ?? "");
+    if (!own || !askId || !(ctx.ownsDiscussion?.(askId) ?? true)) return json(404, { detail: "No such chat" });
+    chat.threads[own].ask_id = askId;
+    return json(200, chatSummary(own, chat.threads[own], ctx));
   }
 
   if (p[2] === "meetings" && p[3] && p[4] === "chat") {
@@ -1260,7 +1669,9 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
     if (p[5] === "undo") {
       if (c.status !== "applied" || !c.change_id) return json(409, { detail: `Only an applied card undoes; this one is ${c.status}` });
       const meeting = meetingOf(chat, c);
-      if (LOCAL_OPS.has(c.op)) {
+      if (c.op === "suggest_feature") {
+        if (!unfileSuggestion(db, String(c.target.suggestion_id ?? ""))) return json(409, { detail: "The decider has decided this suggestion already" });
+      } else if (LOCAL_OPS.has(c.op)) {
         if (meeting?.ended) return json(409, { detail: "The meeting has ended" });
         unapplyLocal(c, meeting, s8);
       } else {
@@ -1279,6 +1690,16 @@ export async function routeSimpleChat(db: SimpleDb, chat: ChatDb, ctx: ChatCtx, 
       const b = await body();
       const n = b.fix == null ? null : Number(b.fix);
       if (n != null && !c.fixes[n]) return json(422, { detail: "fix: one of the card's fixes" });
+      // roadmap-talk: Correct's values rebuild the card (summary, after) before it applies.
+      if (n == null && b.values && typeof b.values === "object") {
+        if (!c.correct) return json(422, { detail: "This change has nothing to correct" });
+        const refused = correctCard(db, ctx, c, b.values as Record<string, unknown>);
+        if (refused) return json(422, { detail: refused });
+        // An item talk's one-card line ("I understood: …") says the corrected card, as the API.
+        const said = chat.threads[c.thread]?.messages.find((x) => x.id === c.message_id);
+        if (said && said.card_ids.length === 1 && said.body.startsWith("I understood: ")) said.body = `I understood: ${c.summary.replace(/^./, (x) => x.toLowerCase())}.`;
+        c.fixes = asIf(db, c).fixes;
+      }
       const out = await applyOne(db, chat, c, ctx, n, s8);
       return out instanceof Response ? out : json(200, out);
     }

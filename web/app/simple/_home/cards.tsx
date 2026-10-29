@@ -18,12 +18,15 @@ export function HomeCard({
   title,
   count,
   all,
+  extra,
   children,
 }: {
   id: string;
   icon: IconName;
   title: string;
   count?: number | null;
+  /** Beside the count ("1 late"). */
+  extra?: ReactNode;
   all?: string;
   children: ReactNode;
 }) {
@@ -39,8 +42,9 @@ export function HomeCard({
             {count}
           </span>
         )}
+        {extra}
         {all && (
-          <Link href={all} className="simple-small font-semibold whitespace-nowrap text-accent-ink hover:underline">
+          <Link href={all} className="simple-link whitespace-nowrap">
             All -&gt;
           </Link>
         )}
@@ -219,7 +223,7 @@ export function Top<T>({ rows, max = 3, more, children }: { rows: T[]; max?: num
     <>
       <ul className="flex flex-col">{rows.slice(0, max).map(children)}</ul>
       {left > 0 && (
-        <Link href={more} data-testid="home-more" className="simple-small font-semibold text-accent-ink hover:underline">
+        <Link href={more} data-testid="home-more" className="simple-more">
           {left} more -&gt;
         </Link>
       )}

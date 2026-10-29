@@ -36,7 +36,7 @@ import json
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from html import escape
 from typing import Any
 
@@ -51,6 +51,7 @@ from oracle.docs.models import Document, DocumentVersion, Section
 from oracle.review.models import DocumentReviewPolicy
 from oracle.roadmap.models import ProductTrack
 from oracle.simple import drafts, plan_strip
+from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
 from oracle.simple.models import SimpleChange, SimpleDraft, SimpleOnePager, SimpleSession
 from oracle.simple.schemas import (
@@ -363,19 +364,37 @@ def _own_fact(text: str, sources: list[Section]) -> str | None:
 def plan_items(items: list[Any]) -> list[plan_strip.PlanItem]:
     """The plan strip's reading of a PRD's roadmap items (uncut), each with the milestone
     record that links it, when any."""
-    return [
-        plan_strip.PlanItem(
-            i.start.date,
-            i.end.date,
-            i.estimated,
-            (i.milestone.name or "Milestone") if i.milestone else None,
-            i.milestone.date if i.milestone else None,
-            str(i.milestone.record_id) if i.milestone and i.milestone.record_id else None,
-            i.milestone.record_name if i.milestone else None,
+    out = []
+    for i in items:
+        if i.status == "cut":
+            continue
+        # plan-model: one input per slice, each in its milestone as the PRD's plan dates it.
+        for sl in getattr(i, "slices", None) or []:
+            out.append(
+                plan_strip.PlanItem(
+                    sl.start_date or i.start.date,
+                    sl.end_date or i.end.date,
+                    not (sl.milestone_start and sl.milestone_end),
+                    f"{sl.milestone} · {sl.milestone_name}",
+                    sl.milestone_end,
+                    milestone_start=sl.milestone_start,
+                )
+            )
+        if getattr(i, "slices", None):
+            continue
+        out.append(
+            plan_strip.PlanItem(
+                i.start.date,
+                i.end.date,
+                i.estimated,
+                (i.milestone.name or "Milestone") if i.milestone else None,
+                i.milestone.date if i.milestone else None,
+                str(i.milestone.record_id) if i.milestone and i.milestone.record_id else None,
+                i.milestone.record_name if i.milestone else None,
+                i.milestone.start_date if i.milestone else None,
+            )
         )
-        for i in items
-        if i.status != "cut"
-    ]
+    return out
 
 
 def _cells(row: str) -> list[str]:
@@ -774,6 +793,42 @@ async def _person_of(db: AsyncSession, imported_by: uuid.UUID | None) -> uuid.UU
     return await db.scalar(select(ApiToken.user_id).where(ApiToken.id == imported_by))
 
 
+async def document_owner(
+    db: AsyncSession, document: Document, version: DocumentVersion, w: Who
+) -> uuid.UUID | None:
+    """The PRD's owner (the owner's walk, P4): its track owner; else the person who brought
+    the document in (its first version's importer: a user, or the user its API token acts
+    for), else the one who imported or approved the version read. None only when no person
+    is any of those (a PRD a service token imported and nobody approved yet)."""
+    if w.track_owners:
+        return next(iter(w.track_owners))
+    first = await db.scalar(
+        select(DocumentVersion.imported_by)
+        .where(DocumentVersion.document_id == document.id)
+        .order_by(DocumentVersion.number)
+        .limit(1)
+    )
+    for who in (first, version.imported_by, version.approved_by):
+        person = await _person_of(db, who)
+        if person is not None and await db.scalar(
+            select(User.id).where(User.id == person, User.disabled_at.is_(None))
+        ):
+            return person
+    return None
+
+
+def milestone_span(items: list[plan_strip.PlanItem]) -> tuple[date, date] | None:
+    """The PRD's span in the header (P4): from the earliest start of its items that carry a
+    dated milestone (or that milestone's date, when earlier) to its latest milestone date.
+    None with no dated milestone: never the estimated windows' year."""
+    dated = [i for i in items if i.milestone_date is not None]
+    if not dated:
+        return None
+    end = max(i.milestone_date for i in dated)  # type: ignore[type-var]
+    start = min(min(i.start, i.milestone_date) for i in dated)  # type: ignore[type-var]
+    return min(start, end), end
+
+
 def _me(principal: Any) -> uuid.UUID | None:
     if principal is None or getattr(principal, "run_id", None) is not None:
         return None
@@ -1004,7 +1059,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     ids = {c.by for c in live + shown} | ({w.decider} if w.decider else set()) | set(w.track_owners)
     if d is not None:
         ids |= set(d.waiting_on or [])
-    owner_id = next(iter(w.track_owners), None) or await _person_of(db, b.version.imported_by)
+    owner_id = await document_owner(db, document, b.version, w)
     if owner_id:
         ids.add(owner_id)
     names = {
@@ -1118,6 +1173,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         if i.status != "cut"
     ]
     plan = plan_strip.strip(plan_items(slice_.items), slice_.today)
+    span = milestone_span(plan_items(slice_.items))
     timeline = OnePagerBlock(
         key=TIMELINE.key, title=TIMELINE.title, rules=TIMELINE.rules, kind="timeline", lines=[]
     )
@@ -1159,8 +1215,8 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         published_at=b.version.approved_at,
         owner=person(owner_id) if owner_id in names else None,
         decider=person(w.decider) if w.decider in names else None,
-        span_start=min((i.start for i in items), default=None),
-        span_end=max((i.end for i in items), default=None),
+        span_start=span[0] if span else None,
+        span_end=span[1] if span else None,
         built_by=b.row.built_by,
         built_at=b.row.built_at,  # type: ignore[arg-type]
         blocks=[*blocks, timeline.model_copy(update={"lines": []})],
@@ -1543,7 +1599,47 @@ ul { margin: 0; padding-left: 16px; } li { margin: 1px 0; }
   background: #1c1f24; transform: rotate(45deg); }
 .plan .now { position: absolute; top: 0; bottom: 0; border-left: 1.5px solid #c0392b; }
 .plan .more { color: #5b6270; margin-top: 3px; }
+.tl { font-size: 8pt; }
+.tl .r { display: flex; border-bottom: 1px solid #e3e5e9; }
+.tl .n { width: 30%; padding: 3px 6px 3px 0; }
+.tl .n b { display: block; font-size: 8.5pt; }
+.tl .t { position: relative; flex: 1; }
+.tl .ax { height: 30px; }
+.tl .f { position: absolute; top: 0; transform: translateX(-100%); white-space: nowrap;
+  padding: 0 3px; font-weight: 600; border-right: 2px solid; }
+.tl .mo { position: absolute; bottom: 0; color: #5b6270; border-left: 1px solid #e3e5e9;
+  padding-left: 2px; }
+.tl .bar { position: absolute; height: 13px; border: 1px solid; border-radius: 7px;
+  padding: 0 4px; white-space: nowrap; font-weight: 600; font-size: 7pt; overflow: hidden; }
+.tl .bar.pm { border-style: dashed; }
+.tl .off { position: absolute; top: 0; bottom: 0;
+  background: repeating-linear-gradient(135deg, #d9d5cc 0 2px, transparent 2px 5px); }
+.tl .end { position: absolute; top: 0; bottom: 0; border-left: 1px dashed; }
+.tl .now { position: absolute; top: 0; bottom: 0; border-left: 1.5px solid #c0392b; }
+.part { page-break-before: always; }
+.part h3 { font-size: 9.5pt; margin: 6px 0 2px; }
+.part .what { color: #5b6270; }
 """
+
+# prd-timeline: each milestone's colour in the PDF (M1 blue, M2 violet, M3 amber): fill, edge, ink.
+TONES = [("#dce8ff", "#3b6fd8", "#173d8a"), ("#ece3ff", "#7a4fd6", "#432088"),
+         ("#fdeccb", "#c27c0e", "#6b4300")]  # fmt: skip
+PM_LANE = "PM-owned · no engineering"
+# prd-timeline review: the lanes' width on the page (70% of A4's 178 mm between margins, in
+# CSS px) and a 7pt bold character's, to fit a bar's codes as the web's fitCodes does.
+TL_PX = 0.70 * 178 / 25.4 * 96
+TL_CH = 5.2
+
+
+def fit_codes(codes: list[str], px: float) -> str:
+    """As many whole codes as fit the bar, then "+N"; never a code cut mid-way (a bar too
+    narrow for even its first code and "+N" shows its first code, as wide as the bar is)."""
+    for k in range(len(codes), 0, -1):
+        text = " · ".join(codes[:k]) + (f" +{len(codes) - k}" if k < len(codes) else "")
+        if len(text) * TL_CH + 10 <= px:
+            return text
+    return codes[0] if codes else ""
+
 
 # The plan strip shows this many rows; the rest are "+N more on the roadmap".
 PLAN_ROWS = 8
@@ -1591,6 +1687,141 @@ def _plan_html(plan: Any) -> str:
     return "".join(out) + "</div>"
 
 
+def _pieces(slices: list[Any]) -> list[tuple[str, list[Any], Any, Any, int]]:
+    """A lane's pieces (as the web's PrdTimeline): a run of one milestone's slices (a gap of
+    more than two weeks starts another), stacked into rows where they run within a week."""
+    out: list[list[Any]] = []
+    by: dict[str, list[Any]] = {}
+    for sl in slices:
+        if sl.start_date and sl.end_date:
+            by.setdefault(sl.milestone, []).append(sl)
+    for code, of in by.items():
+        cur: list[Any] | None = None
+        for sl in sorted(of, key=lambda x: x.start_date):
+            if cur and (sl.start_date - cur[3]).days <= 14:
+                cur[1].append(sl)
+                cur[3] = max(cur[3], sl.end_date)
+            else:
+                cur = [code, [sl], sl.start_date, sl.end_date, 0]
+                out.append(cur)
+    out.sort(key=lambda p: p[2])
+    rows: list[Any] = []
+    for p in out:
+        r = next((i for i, end in enumerate(rows) if (p[2] - end).days >= 7), len(rows))
+        if r == len(rows):
+            rows.append(p[3])
+        rows[r] = p[3]
+        p[4] = r
+    return [tuple(p) for p in out]  # type: ignore[misc]
+
+
+def _timeline_html(view: Any, today: Any) -> str:
+    """prd-timeline: the plan's timeline for the PDF's first page: milestone flags, months,
+    one lane per goal (its targets and what is measured now) and the PM-owned lane."""
+    tone = {m.code: TONES[i % 3] for i, m in enumerate(view.milestones)}
+    first = min(view.span.start, today)
+    start = first - timedelta(days=first.weekday())
+    last = max(view.span.end, today)
+    end = last + timedelta(days=7 - last.weekday())
+    days = (end - start).days
+
+    def pct(d: Any, end_of_day: bool = False) -> str:
+        return f"{((d - start).days + (1 if end_of_day else 0)) / days * 100:.2f}%"
+
+    def px(a: Any, b: Any) -> float:
+        return ((b - a).days + 1) / days * TL_PX
+
+    out = ["<div class='tl'><div class='r'><div class='n'></div><div class='t ax'>"]
+    for m in view.milestones:
+        fill, edge, ink = tone[m.code]
+        out.append(f"<span class='f' style='left:{pct(m.end_date, True)};background:{fill};"
+                   f"color:{ink};border-color:{edge}'>{escape(m.code)} ends "
+                   f"{plan_model._day(m.end_date)}</span>")  # fmt: skip
+    mo = start.replace(day=1)
+    while mo < end:
+        at = max(mo, start)
+        out.append(f"<span class='mo' style='left:{pct(at)}'>{at.strftime('%b')}</span>")
+        mo = (mo.replace(day=28) + timedelta(days=4)).replace(day=1)
+    out.append("</div></div>")
+    names = [g.name for g in view.goals]
+    for sl in view.slices:
+        if not sl.pm_owned and sl.goal and sl.goal not in names:
+            names.append(sl.goal)
+    lanes = [
+        (n, next((g for g in view.goals if g.name == n), None),
+         [x for x in view.slices if not x.pm_owned and x.goal == n])
+        for n in names
+    ]  # fmt: skip
+    pm = [x for x in view.slices if x.pm_owned]
+    if pm:
+        lanes.append((PM_LANE, None, pm))
+    for name, goal, slices in lanes:
+        pieces = _pieces(slices)
+        rows = max([p[4] + 1 for p in pieces] or [1])
+        label = f"<b>{escape(name)}</b>"
+        if goal is not None:
+            steps = " → ".join(f"{t.milestone} {t.target}" for t in goal.targets)
+            now = f"Now {goal.measured}" if goal.measured else "Not counted yet"
+            if goal.measured and goal.on_track is not None:
+                now += " · on track" if goal.on_track else " · behind"
+            label += f"{escape(steps)}<br>{escape(now)}"
+        out.append(f"<div class='r'><div class='n'>{label}</div>"
+                   f"<div class='t' style='min-height:{rows * 17 + 4}px'>")  # fmt: skip
+        for h in view.holidays:
+            out.append(f"<span class='off' style='left:{pct(h.start)};width:calc("
+                       f"{pct(h.end, True)} - {pct(h.start)})'></span>")  # fmt: skip
+        for m in view.milestones:
+            out.append(f"<span class='end' style='left:{pct(m.end_date, True)};"
+                       f"border-color:{tone[m.code][1]}'></span>")  # fmt: skip
+        out.append(f"<span class='now' style='left:{pct(today)}'></span>")
+        for code, of, a, b, row in pieces:
+            fill, edge, ink = tone.get(code, TONES[0])
+            pm_cls = " pm" if of[0].pm_owned else ""
+            out.append(f"<span class='bar{pm_cls}' style='left:{pct(a)};width:calc({pct(b, True)}"
+                       f" - {pct(a)});top:{2 + row * 17}px;background:{fill};border-color:{edge};"
+                       f"color:{ink};min-width:{len(of[0].code) * TL_CH + 10:.0f}px'>"
+                       f"{escape(fit_codes([x.code for x in of], px(a, b)))}</span>")  # fmt: skip
+        out.append("</div></div>")
+    return "".join(out) + "</div>"
+
+
+def _part_html(view: Any, m: Any) -> str:
+    """prd-timeline: one milestone's page: name and dates, Done when, targets, what it
+    builds by kind, its open decisions and risks."""
+    day = plan_model._day
+    out = [f"<section class='part'><h1>{escape(m.code)} {escape(m.name)}</h1>"
+           f"<div class='meta'>{day(m.start_date)} – {day(m.end_date)}"]  # fmt: skip
+    if m.effort_weeks is not None:
+        out.append(f" · {m.planned_weeks:g} of {m.effort_weeks:g} engineer-weeks planned")
+    out.append("</div><h2>Done when</h2><ul>")
+    out += [f"<li>☐ {escape(d)}</li>" for d in m.done_when] or [f"<li>{NOT_WRITTEN}</li>"]
+    out.append("</ul><h2>Targets</h2><ul>")
+    out += [f"<li>{escape(t.goal)}: {escape(t.target)}</li>" for t in m.targets] or [
+        "<li>No targets yet</li>"
+    ]
+    out.append("</ul><h2>What it builds</h2>")
+    groups: dict[str, list[Any]] = {}
+    for sl in view.slices:
+        if sl.milestone == m.code:
+            groups.setdefault("PM-owned" if sl.pm_owned else sl.kind or "Other work", []).append(sl)
+    for kind in sorted(groups, key=lambda k: k == "PM-owned"):
+        out.append(f"<h3>{escape(kind)}</h3><ul>")
+        for sl in groups[kind]:
+            what = f" <span class='what'>{escape(sl.what)}</span>" if sl.what else ""
+            out.append(f"<li><b>{escape(sl.code)} {escape(sl.name)}</b>{what}</li>")
+        out.append("</ul>")
+    if not groups:
+        out.append("<p>Nothing planned in it yet</p>")
+    out.append("<h2>Open decisions</h2><ul>")
+    out += [f"<li>{escape(d.code)} {escape(d.title)}</li>" for d in m.decisions] or [
+        "<li>No open decisions</li>"
+    ]
+    out.append("</ul><h2>Risks</h2><ul>")
+    out += [f"<li>{escape(r.title)}</li>" for r in m.risks] or ["<li>No risks written yet</li>"]
+    out.append("</ul></section>")
+    return "".join(out)
+
+
 async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str]:
     """The one-pager's branded page (the published lines: a PDF is shared), and a file
     stem."""
@@ -1598,9 +1829,14 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
 
     out = await read(db, principal, doc)
     brand = await load_brand(db)
+    # prd-timeline: a PRD with a dated plan prints its timeline page, then a page per milestone.
+    view = (await plan_model.views(db, {out.document.id})).get(out.document.id)
+    if view is not None:
+        view = await plan_model.enrich(db, out.document.id, view)
+    timeline = view if view is not None and view.dated and view.span else None
     parts = [
         "<!doctype html><html><head><meta charset='utf-8'>",
-        '<meta name="oracle-page-fit" content="one_page">',
+        "" if timeline else '<meta name="oracle-page-fit" content="one_page">',
         f"<title>{escape(out.document.title)}</title><style>{PAGE_CSS}{BRAND_CSS}"
         f"{accent_css(brand)}</style></head><body>",
         str(render_brand_header(brand)),
@@ -1620,7 +1856,11 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     for blk in out.blocks:
         parts.append(f"<h2>{escape(blk.title)}</h2>")
         if blk.kind == "timeline":
-            parts.append(_plan_html(out.plan))
+            if timeline is not None:
+                today = await company_time.company_today(db)
+                parts.append(_timeline_html(timeline, today))
+            else:
+                parts.append(_plan_html(out.plan))
             continue
         items = []
         for line in blk.lines:
@@ -1637,6 +1877,8 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
                 text = f"<span class='metric'>{escape(m.name)}: <b>{span}</b></span>"
             items.append(f"<li>{text}</li>")
         parts.append(f"<ul>{''.join(items)}</ul>" if items else f"<p>{NOT_WRITTEN}</p>")
+    if timeline is not None:
+        parts += [_part_html(timeline, m) for m in timeline.milestones]
     parts.append("</body></html>")
     return "".join(parts), f"{out.document.slug}-v{out.version}-one-pager"
 

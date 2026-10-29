@@ -89,7 +89,7 @@ async def test_card_fields_owner_reasons_and_decisions(client):
     assert i["reasons"] == [
         "Most asked for by admins.",
         "Serves the goal Activation.",
-        "From Alerts Prd, section bets.",
+        "From Alerts Prd (draft 1): Digest.",
     ]
     assert [d["title"] for d in i["open_decisions"]] == ["Ship the digest weekly or daily?"]
     assert i["open_decisions"][0]["number"] == 1

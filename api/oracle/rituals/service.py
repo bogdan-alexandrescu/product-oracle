@@ -754,18 +754,29 @@ def _recordable(occ: RitualOccurrence) -> None:
         raise RitualError(409, f"This occurrence is {occ.status}")
 
 
+def _by_a_meeting(occ: RitualOccurrence) -> bool:
+    """Held when its Simple review meeting ended (oracle.simple.meetings.end), with nothing
+    recorded on it yet: the owner still records the notes and decisions."""
+    return occ.status == "held" and not occ.notes and not occ.decision_ids
+
+
 async def hold(db: AsyncSession, principal: Principal, occ_id: uuid.UUID, body: HeldIn):
     occ, ritual = await get_occurrence(db, occ_id, lock=True)
     _owner_only(principal, ritual)
-    _recordable(occ)
+    held_by_meeting = _by_a_meeting(occ)
+    if not held_by_meeting:
+        _recordable(occ)
     decisions = await _decisions_of(db, occ, body.decision_ids)
     unknown = set(body.decision_ids) - {d.id for d in decisions}
     if unknown:
         raise RitualError(422, f"decision_ids: no such decision: {', '.join(map(str, unknown))}")
     occ.status, occ.notes = "held", body.notes or None
     occ.decision_ids = [d.id for d in decisions]
-    occ.held_by, occ.held_at = principal.id, clock.now()
-    await audit.record(db, principal, "ritual.held", "ritual_occurrence", occ.id)
+    if held_by_meeting:
+        await audit.record(db, principal, "ritual.recorded", "ritual_occurrence", occ.id)
+    else:
+        occ.held_by, occ.held_at = principal.id, clock.now()
+        await audit.record(db, principal, "ritual.held", "ritual_occurrence", occ.id)
     await db.commit()
     return occ, ritual
 

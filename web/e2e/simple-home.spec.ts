@@ -89,7 +89,7 @@ for (const phone of [false, true]) {
         const retention = goals.filter({ hasText: "Grow retention" });
         await expect(retention).toContainText("G-R");
         await expect(retention).toContainText("weight 3");
-        await expect(retention.getByTestId("home-goal-path")).toHaveText("50 -> 100 -> 200");
+        await expect(retention.getByTestId("home-goal-path")).toHaveText("From 50 teams · now 100 teams · target 200 teams with weekly alerts on");
         await expect(retention.getByTestId("home-goal-status")).toHaveText("At risk");
         await expect(retention.getByTestId("home-goal-need")).toContainText("need you");
         await expect(goals.filter({ hasText: "Faster activation" }).getByTestId("home-goal-status")).toHaveText("Not measured yet");
@@ -134,7 +134,7 @@ for (const phone of [false, true]) {
         await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" })).toHaveCount(0);
         await expect(page.getByTestId("home-draft")).toContainText("Your working draft of Alerts roadmap has 2 changes");
         await expect(page.getByTestId("home-draft").getByRole("link", { name: "Open draft" })).toBeVisible();
-        await expect(card(page, "since").getByTestId("home-since-row").filter({ hasText: "Dependents moved after" })).toBeVisible();
+        await expect(card(page, "since").getByTestId("home-since-row").filter({ hasText: "Weekly alert digest and its dependents after what it depends on" })).toBeVisible();
         await page.getByRole("button", { name: "Undo" }).click();
         await expect(card(page, "plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" })).toBeVisible();
 

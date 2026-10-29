@@ -11,6 +11,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { mockNowMs } from "./clock";
+import { PLAN_PRD_SLUG, planOut, planSlices } from "./simple-plan";
 import { closed, roadmapOut, type SimpleDb } from "./simple-roadmap";
 import { flowFor } from "./simple-visuals";
 
@@ -42,6 +43,16 @@ const FEATURES: Record<string, { value: number; effort: number; code?: string }>
   "setup-video": { value: 0, effort: 1 },
   "price-tiers": { value: 0, effort: 3 },
 };
+/**
+ * The "simple-plan" scenario's items (plan-f-07 ...): their effort is the plan's engineer-weeks
+ * across their slices (PM-owned work: half a week), their goal value invented from the code.
+ */
+function planFeature(key: string): { value: number; effort: number } | null {
+  const m = /^plan-f-(\d+)$/.exec(key);
+  if (!m) return null;
+  const weeks = planSlices().filter((x) => x.feature_code === `F-${m[1]}`).reduce((n, x) => n + (x.effort_weeks ?? 0), 0);
+  return { value: ((Number(m[1]) * 5) % 7) + 1, effort: weeks || 0.5 };
+}
 const CONFIDENCE: Record<string, number> = { high: 0.8, medium: 0.5, low: 0.3 };
 
 const round = (n: number): number => Math.round(n * 1000) / 1000;
@@ -97,7 +108,7 @@ function stored(db: SimpleDb, itemId: string): Values {
 
 /** A person's estimates, else the feature's: [goal value, effort, whether the value is a person's]. */
 export function estimates(db: SimpleDb, key: string, itemId: string): { value: number; effort: number; valueEstimated: boolean } {
-  const f = FEATURES[key] ?? { value: 0, effort: 1 };
+  const f = FEATURES[key] ?? planFeature(key) ?? { value: 0, effort: 1 };
   const s = stored(db, itemId);
   return {
     value: typeof s.goal_value === "number" ? s.goal_value : f.value,
@@ -274,6 +285,7 @@ export function prioritiesOut(
       end_date: mine ? readItems.get(i.id)!.end.date : null,
       end_estimated: mine && readItems.get(i.id)!.end.estimated,
       no_goal: !i.goal,
+      in_plan: false,
       can_reorder: can && mine,
       applies: mine && decides(i.id),
       before_override: (stored(db, i.id).override as Record<string, unknown> | undefined) ?? null,
@@ -324,9 +336,25 @@ export function prioritiesOut(
   buckets.sort((a, b) => Number(a.no_goal) - Number(b.no_goal));
   const total = round(buckets.reduce((s, b) => s + b.weeks, 0));
   for (const b of buckets) b.share = total ? round(b.weeks / total) : 0;
+  // plan-charts: with a plan, its PRD's items are in it (Goal buckets lists the rest outside it).
+  const plan = planOf(db, read, ctx.role);
+  if (plan) {
+    const prdOf = new Map(read.items.map((i) => [i.id, i.prd?.slug]));
+    yours.forEach((i, n) => (rows[n].in_plan = prdOf.get(i.id) === PLAN_PRD_SLUG));
+  }
   return {
-    today, quarter: quarter(today), method: "goal_weighted",
+    // The plan-model lane: with a plan, its span ("2 Nov - 12 Feb"), else the calendar quarter.
+    today, quarter: read.span ?? quarter(today), method: "goal_weighted",
     formula: "score = Σ(goal weight × contribution) × confidence × track record ÷ effort",
     rows, proposals, drafts, buckets, weeks_total: total, can_change: can, line, lines,
+    // plan-charts: the plan this quarter is, when the reader sees its PRD's items.
+    plan,
   };
+}
+
+/** priorities.plan_in_play: the plan PRD's plan as the API's priorities carry it (no version, no re-read). */
+function planOf(db: SimpleDb, read: Schemas["SimpleRoadmapOut"], role: Role): Schemas["SimplePlanOut"] | null {
+  const prd = read.items.find((i) => i.prd?.slug === PLAN_PRD_SLUG)?.prd;
+  if (!db.plan || !prd) return null;
+  return { ...planOut(db.plan, { id: prd.id, slug: prd.slug, title: prd.title }, role), version: null, can_read_again: false, read_at: null };
 }

@@ -82,6 +82,7 @@ from oracle.simple.additions_router import router as simple_additions_router
 from oracle.simple.changes_router import router as simple_changes_router
 from oracle.simple.chat_router import router as simple_chat_router
 from oracle.simple.meetings_router import router as simple_meetings_router
+from oracle.simple.plan_router import router as simple_plan_router
 from oracle.simple.priorities import router as simple_priorities_router
 from oracle.simple.router import router as simple_router
 from oracle.simple.visuals_router import router as simple_visuals_router
@@ -302,6 +303,7 @@ def create_app() -> FastAPI:
     # F1 Plan screen: one read of the PRDs in play and the roadmap rows.
     app.include_router(plan_router)
     app.include_router(simple_router)
+    app.include_router(simple_plan_router)
     app.include_router(simple_changes_router)
     app.include_router(simple_additions_router)
     app.include_router(simple_chat_router)

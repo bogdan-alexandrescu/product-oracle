@@ -19,6 +19,7 @@
  */
 import type { Schemas } from "@/lib/api/client";
 import { planByMonth } from "@/lib/simple-home";
+import { planSlices } from "./simple-plan";
 import { mockNowMs } from "./clock";
 import { stableUuid } from "./ids";
 import { betSubject, flowFor, onePagerFlow, requestVisual, type VisualsDb } from "./simple-visuals";
@@ -37,6 +38,8 @@ export interface OnePagerCtx {
   reviewers: string[];
   /** Writes one Inbox notification, as oracle.review.collab.notify. */
   notify: (userId: string, kind: "review_reminder", title: string, data: Record<string, unknown>, version: number) => void;
+  /** prd-timeline: the PRD's dated plan's milestones ("M1 Prove it"): the PDF prints the timeline, then one page each. */
+  planPages?: string[];
 }
 
 const REMIND_EVERY_MS = 24 * 60 * 60 * 1000;
@@ -72,6 +75,11 @@ export interface OnePagerDb {
   decisions?: Record<string, { id: string; number: number; title: string }[]>;
   /** Imported by a service token: the PRD has no owner yet. */
   ownerless?: boolean;
+  /**
+   * The document's owner (one_pager.document_owner, P4): the member who brought the PRD in;
+   * unset, the company's first owner (who imported the seeded PRD).
+   */
+  owner?: string;
   /** The PRD's roadmap slice, when not the default invented one (SLICE). */
   slice?: SliceItem[];
   /** S8: the decider approved the draft in a meeting: its title and who it still waits on. */
@@ -135,7 +143,22 @@ type SliceItem = {
   milestone: [string, string] | null;
   /** The track milestone record naming the item, when any (the strip's row). */
   record?: { id: string; name: string };
+  /** The day its milestone starts when the PRD's plan dates it (the strip's row spans it). */
+  milestoneStart?: string;
 };
+
+/** The plan-model lane ("simple-plan"): the slice as the PRD's dated plan has it, one item per slice. */
+export function planSlice(): SliceItem[] {
+  return planSlices().map((x) => ({
+    title: x.name,
+    horizon: "now" as const,
+    start: x.start_date!,
+    end: x.end_date!,
+    estimated: !(x.milestone_start && x.milestone_end),
+    milestone: [`${x.milestone} · ${x.milestone_name}`, x.milestone_end!] as [string, string],
+    milestoneStart: x.milestone_start!,
+  }));
+}
 const BETA_LAUNCH = { id: stableUuid("op-milestone/beta-launch"), name: "Beta launch" };
 const SLICE: SliceItem[] = [
   ...Array.from({ length: 12 }, (_, i) => ({ title: `Setup step ${i + 1}`, horizon: "now" as const, start: "2026-10-05", end: "2026-11-20", estimated: false, milestone: ["M1", "2026-11-20"] as [string, string] })),
@@ -163,7 +186,7 @@ const NOTED_SLICE: SliceItem[] = [
   { title: "Setup help center", horizon: "now", start: "2026-10-12", end: "2026-12-11", estimated: false, milestone: null },
 ];
 export const WALK_PROBLEM =
-  "New workspace admins stall during setup because the checklist hides the invite step, and the queue of half-set-up teams grows every week a cohort lands; teams with more than ten people wait the longest, and the promise we make is a first teammate invited within a 48-hour window that we miss for most new teams after a weekend signup";
+  "New workspace admins stall during setup because the checklist hides the invite step. The queue of half-set-up teams grows every week a cohort lands; teams with more than ten people wait the longest, and the promise we make is a first teammate invited within a 48-hour window that we miss for most new teams after a weekend signup.";
 
 export function seedWalkOnePager(): OnePagerDb {
   const db = seedOnePager();
@@ -193,6 +216,18 @@ export function seedSkeletonOnePager(doc: OnePagerDb["doc"]): OnePagerDb {
   db.sections = db.sections.map((x) => ({ ...x, body: "<!-- Write this section. -->\n- <Milestone>: <Feature>\n- →" }));
   db.blocks = db.blocks.map((b) => ({ ...b, lines: b.kind === "timeline" ? [] : [{ id: `${b.key}-1`, text: guide[b.key] ?? "→", keys: [db.sections[0].key] }] }));
   return db;
+}
+
+/**
+ * As one_pager.milestone_span (P4): from the earliest start of the items under dated milestones
+ * (or that date, when earlier) to the latest milestone date; null with no dated milestone.
+ */
+function milestoneSpan(items: SliceItem[]): [string, string] | null {
+  const dated = items.filter((i) => i.milestone?.[1]);
+  if (!dated.length) return null;
+  const end = dated.map((i) => i.milestone![1]).sort().pop()!;
+  const start = dated.flatMap((i) => [i.start, i.milestone![1]]).sort()[0];
+  return [start < end ? start : end, end];
 }
 
 /** The API's one_pager.template_only: only a template's comments, placeholders or arrows. */
@@ -337,15 +372,16 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
   const notes = [...live.map((c) => note(c, "change")), ...shown.map((c) => note(c, "proposal"))];
   const proposed = new Set(notes.filter((n) => n.kind === "proposal").map((n) => n.line_id));
   const hiddenDraft = !sees && db.draft ? Object.keys(db.draft.lines).length : 0;
-  const owner = db.ownerless ? undefined : ctx.owners[0];
+  const owner = db.ownerless ? undefined : db.owner ?? ctx.owners[0];
+  const span = milestoneSpan(db.slice ?? SLICE);
   return {
     document: db.doc,
     version: db.version,
     published_at: "2026-10-20T15:00:00Z",
     owner: owner ? { id: owner, name: ctx.names[owner] ?? "Owner" } : null,
     decider: null,
-    span_start: "2026-10-05",
-    span_end: "2027-03-12",
+    span_start: span?.[0] ?? null,
+    span_end: span?.[1] ?? null,
     built_by: "oracle",
     built_at: "2026-10-20T15:05:00Z",
     blocks: db.blocks.map((b) => ({
@@ -364,7 +400,7 @@ function onePager(db: OnePagerDb, ctx: OnePagerCtx): Schemas["OnePagerOut"] {
     })),
     timeline: (db.slice ?? SLICE).map((x, i) => ({ id: stableUuid(`op-item-${i + 1}`), title: x.title, horizon: x.horizon, start: x.start, end: x.end, estimated: x.estimated })),
     plan: planByMonth(
-      (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, record: x.record ?? null })),
+      (db.slice ?? SLICE).map((x) => ({ start: x.start, end: x.end, estimated: x.estimated, milestone: x.milestone?.[0] ?? null, milestoneDate: x.milestone?.[1] ?? null, milestoneStart: x.milestoneStart ?? null, record: x.record ?? null })),
       new Date(mockNowMs()).toISOString().slice(0, 10),
     ),
     sections: db.sections.map((s) => ({ key: s.key, heading: s.heading, body: sectionNow(db, s.key, sees) })),
@@ -393,7 +429,8 @@ export async function routeOnePager(db: OnePagerDb, ctx: OnePagerCtx, req: Reque
   if (p[2] === "one-pagers" && m === "GET") {
     if (p[3] !== db.doc.slug && p[3] !== db.doc.id) return json(404, { detail: "No such PRD" });
     if (p[4] === "pdf") {
-      return new Response("%PDF-1.7\n% one page\n", {
+      const pages = ctx.planPages?.length ? ["The timeline", ...ctx.planPages] : ["One page"];
+      return new Response(`%PDF-1.7\n${pages.map((t, i) => `% page ${i + 1}: ${t}\n`).join("")}`, {
         status: 200,
         headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${db.doc.slug}-v${db.version}-one-pager.pdf"` },
       });

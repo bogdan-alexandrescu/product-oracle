@@ -55,6 +55,8 @@ SWITCH_LABELS = {
     "simple_visual": "Draw visuals",
     "meeting_minutes": "Meeting minutes",
     "chat_reader": "Read chat requests",
+    "prd_plan": "Read the PRD's plan",
+    "prd_questions": "Read the PRD's open questions",
 }
 #: Kinds that share another kind's per-document switch: the next-draft batch is
 #: refinement, so turning refinement off turns it off too.

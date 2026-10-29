@@ -26,6 +26,7 @@ from oracle.market import blocks as market_blocks
 from oracle.priorities.models import PrioritySnapshot
 from oracle.quality.models import OutcomeRecord
 from oracle.rituals import rebuild
+from oracle.roadmap import staleness
 from oracle.roadmap.models import ProductTrack, RoadmapItem, TrackerRecord, TrackMilestone
 from oracle.runs import flows
 from oracle.runs.models import Checkpoint, Run
@@ -365,6 +366,7 @@ async def stale_items(db: AsyncSession, ctx: BlockCtx) -> list[dict[str, Any]]:
             select(RoadmapItem).where(RoadmapItem.freshness == "potentially_stale")
             .order_by(RoadmapItem.title)
         )
+        if staleness.is_stale(i)  # stale by its own rule only (P11)
     ]  # fmt: skip
 
 

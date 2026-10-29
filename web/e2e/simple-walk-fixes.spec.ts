@@ -16,7 +16,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * job's queueing and the drawing's lines (api/tests/test_simple_walk_fixes_api.py).
  *
  * Card walk-flow-failed: protects = a drawing job that ends without a drawing turns the
- * card's drawing state into "Oracle could not draw the flow" with Retry, and Retry draws
+ * card's drawing state into "Oracle could not draw this flow" with Retry, and Retry draws
  * version 1; fails_when = a failed job leaves "Oracle is drawing…" forever or offers no
  * Retry; no_claim = why the model's drawing failed (the job's tests).
  *
@@ -72,27 +72,23 @@ for (const phone of [false, true]) {
         await bar(page, "alert-digest").click();
         const card = page.getByTestId("floating-card");
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
-        await tap(card.getByRole("button", { name: "Open the item's flow" }));
         await tap(card.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(card.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
-        await expect(card.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await expect(card.getByTestId("flow-svg")).toBeVisible();
-        await tap(card.getByRole("button", { name: "Close the flow" }));
+        await expect(card.getByTestId("flow-drawn")).toContainText("Version 1");
         await expect(card.getByTestId("card-flow")).not.toContainText("No flow yet");
+        await tap(card.getByRole("button", { name: "Open the flow", exact: true }));
+        await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
       });
 
       test(`a one-pager bet's thumbnail shows its drawn flow without a reload (${where})`, async ({ page }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        const thumb = page.getByRole("button", { name: "Flow for bet 3" });
-        await expect(thumb).toContainText("No flow yet");
-        await tap(thumb);
         const wide = page.getByRole("group", { name: "User flow of bet 3" });
+        await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await tap(wide.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the user flow");
-        await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await tap(wide.getByRole("button", { name: "Close the flow" }));
-        await expect(thumb).not.toContainText("No flow yet");
+        await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
+        await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
+        await expect(wide.getByRole("button", { name: "Flow for bet 3" })).toBeVisible();
+        await expect(wide).not.toContainText("No flow yet");
       });
 
       test(`a drawing that fails says so and Retry draws it (${where})`, async ({ page }) => {
@@ -101,13 +97,13 @@ for (const phone of [false, true]) {
         await expect(bar(page, "alert-export")).toBeVisible();
         await bar(page, "alert-export").click();
         const card = page.getByTestId("floating-card");
-        await tap(card.getByRole("button", { name: "Open the item's flow" }));
         await tap(card.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(card.getByTestId("flow-empty")).toContainText("Oracle could not draw the flow");
+        await expect(card.getByTestId("flow-empty")).toContainText("Oracle could not draw this flow");
         await expect(card.getByTestId("flow-empty")).not.toContainText("Oracle is drawing");
         await tap(card.getByRole("button", { name: "Retry" }));
-        await expect(card.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await expect(card.getByTestId("flow-svg")).toBeVisible();
+        await expect(card.getByTestId("flow-drawn")).toContainText("Version 1");
+        await tap(card.getByRole("button", { name: "Open the flow", exact: true }));
+        await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
       });
 
       test(`a failed redraw with no open comment still offers Retry (${where})`, async ({ page }) => {
@@ -116,13 +112,19 @@ for (const phone of [false, true]) {
         await expect(bar(page, "alert-mobile")).toBeVisible();
         await bar(page, "alert-mobile").click();
         const card = page.getByTestId("floating-card");
-        await tap(card.getByRole("button", { name: "Open the item's flow" }));
-        const failed = card.getByTestId("flow-failed");
+        // The flow pick's row says so under the drawing, with Retry.
+        const failed = card.getByTestId("flow-row").getByTestId("flow-failed");
         await expect(failed).toContainText("Oracle could not draw the next version.");
-        await expect(card.getByText("No comments yet.")).toBeVisible();
         await tap(failed.getByRole("button", { name: "Retry" }));
-        await expect(card.getByTestId("flow-version")).toHaveText("Version 2 of 2");
+        await expect(card.getByTestId("flow-drawn")).toContainText("Version 2");
         await expect(card.getByTestId("flow-failed")).toHaveCount(0);
+        // The viewer's comments: version 2 of 2, no comments.
+        await tap(card.getByRole("button", { name: "Open the flow", exact: true }));
+        await tap(page.getByTestId("flow-detail").getByRole("button", { name: "Full screen" }));
+        const full = page.getByTestId("flow-fullscreen");
+        await tap(full.getByRole("button", { name: "Comment" }));
+        await expect(full.getByTestId("flow-version")).toHaveText("Version 2 of 2");
+        await expect(full.getByText("No comments yet.")).toBeVisible();
       });
 
       test(`the item card names the PRD's F-code, not the section key (${where})`, async ({ page }) => {
@@ -136,13 +138,13 @@ for (const phone of [false, true]) {
       });
 
       for (const email of ["admin@example.com", "commenter@example.com", "viewer@example.com"]) {
-        test(`${email.split("@")[0]}: the Ask thread belongs to the page, its chip names the page (${where})`, async ({ context, page }) => {
+        test(`${email.split("@")[0]}: the Ask chat is about its page, named by the page (ask-fresh: a clean chat each time) (${where})`, async ({ context, page }) => {
           await context.addInitScript((key) => localStorage.setItem(key, "simple-chat"), MOCK_SCENARIO_KEY);
           await login(page, email);
           await page.goto("/simple/roadmap");
           let panel = await openAsk(page, phone);
-          await expect(panel.getByText("About: Roadmap")).toBeVisible();
-          await expect(panel.getByText("About: /simple/roadmap")).toHaveCount(0);
+          await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Roadmap");
+          await expect(panel.getByText("/simple/roadmap")).toHaveCount(0);
           await panel.getByRole("textbox", { name: "Message Oracle" }).fill("who owns Weekly alert digest?");
           await tap(panel.getByRole("button", { name: "Send" }));
           const thread = panel.getByTestId("ask-chat-thread");
@@ -150,18 +152,21 @@ for (const phone of [false, true]) {
 
           await page.goto("/simple/priorities");
           panel = await openAsk(page, phone);
-          await expect(panel.getByText("About: Priorities")).toBeVisible();
+          await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Priorities");
           await expect(panel.getByText("who owns Weekly alert digest?")).toHaveCount(0);
 
           await page.goto("/simple");
           panel = await openAsk(page, phone);
-          await expect(panel.getByText("About: Home")).toBeVisible();
+          await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Home");
           await expect(panel.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about Home/);
           await expect(panel.getByText("who owns Weekly alert digest?")).toHaveCount(0);
 
           await page.goto("/simple/roadmap");
           panel = await openAsk(page, phone);
-          await expect(panel.getByTestId("ask-chat-thread").getByTestId("chat-message").filter({ hasText: "who owns Weekly alert digest?" })).toHaveCount(1);
+          // ask-fresh: back on the Roadmap the panel starts clean; the earlier chat is in Recent chats.
+          await expect(panel.getByTestId("ask-chat-thread").getByTestId("chat-message")).toHaveCount(0);
+          await tap(panel.getByRole("button", { name: "Recent chats" }));
+          await expect(panel.getByTestId("ask-recent-row").first()).toContainText("Roadmap · Today");
         });
       }
 

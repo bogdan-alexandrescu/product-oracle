@@ -95,7 +95,7 @@ def test_horizon_windows_at_a_quarter_boundary():
     dec31 = dates.windows(HORIZONS, date(2026, 12, 31))
     assert dec31["now"] == (date(2026, 10, 1), date(2026, 12, 31))
     assert dec31["next"] == (date(2027, 1, 1), date(2027, 6, 30))
-    assert dec31["later"] == (date(2027, 12, 31), date(2028, 12, 31))
+    assert dec31["later"] == (date(2027, 7, 1), date(2028, 12, 31))
     jan1 = dates.windows(HORIZONS, date(2027, 1, 1))
     assert jan1["now"] == (date(2027, 1, 1), date(2027, 3, 31))
     assert jan1["next"] == (date(2027, 4, 1), date(2027, 9, 30))

@@ -8,7 +8,7 @@ import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { isHidden, type DiscussionRow, type DiscussionSummary } from "@/components/discuss/DiscussionList";
 import { Button, Icon, InfoTip, Mark, Notice, SegmentedControl } from "@/components/ds";
 import { InlineError, TEXTAREA } from "@/components/review/parts";
-import { AskChat, askInChat } from "@/components/simple/chat/AskChat";
+import { SimpleAskPanel } from "@/components/simple/chat/SimpleAsk";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { GENERAL, subjectKey, useCurrentScreenSubject, type ScreenSubject } from "@/lib/screen-subject";
@@ -227,7 +227,13 @@ function useDiscussion(id: string | null, tick: number) {
  * as discussion. Panel chats are private: just the reader and Oracle. The thread carries
  * G3's changes card and its actions (Stage, Suggest, Edit, Dismiss…) as anywhere else.
  */
-export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = true }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean }) {
+export function HopPanel({ mark, ...props }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean; mark?: boolean }) {
+  // ask-fresh: Simple's pages get Simple's own Ask panel (a clean chat each time it opens); Detailed is unchanged.
+  const pathname = usePathname() ?? "";
+  return pathname.startsWith("/simple") ? <SimpleAskPanel {...props} mark={mark} /> : <DetailedPanel {...props} />;
+}
+
+function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = true }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean }) {
   const { can } = useMe();
   const page = useCurrentScreenSubject();
   const [general, setGeneral] = useState(false);
@@ -240,9 +246,6 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
   const d = useDiscussion(threadId, tick);
   const writes = can("create_discussion");
   const isPanelChat = d?.origin === "panel";
-  // S9: on Simple's pages the panel's one box also changes the plan by chat (Detailed is unchanged).
-  const pathname = usePathname() ?? "";
-  const simple = pathname.startsWith("/simple");
   const started = (id: string) => {
     setView({ kind: "thread", id });
     setTick((t) => t + 1);
@@ -301,12 +304,8 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
         {view.kind === "list" && (
           <>
-            {simple ? (
-              <AskChat about={subject.label} ask={writes ? async (text) => started(await startChat(subject, text)) : undefined} />
-            ) : writes ? (
-              <NewChat subject={subject} onStarted={started} />
-            ) : null}
-            {here !== null && here.length === 0 && recent !== null && (simple || recent.length === 0) && (
+            {writes && <NewChat subject={subject} onStarted={started} />}
+            {here !== null && here.length === 0 && recent !== null && recent.length === 0 && (
               <p className="text-[15px] text-text2" data-testid="hop-empty">
                 Ask why something is ranked, what to cut, or what is missing.
               </p>
@@ -317,8 +316,7 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
                 <ul className="flex flex-col">{here.map((row) => <ChatRow key={row.id} row={row} onOpen={(id) => setView({ kind: "thread", id })} />)}</ul>
               </section>
             )}
-            {/* The walk: on Simple's pages the panel shows this page's chats only, never another page's. */}
-            {!simple && !!recent?.length && (
+            {!!recent?.length && (
               <section aria-label="Recent" className="flex flex-col gap-1">
                 <h3 className="text-[13px] font-semibold tracking-wide text-text2 uppercase">Recent</h3>
                 <ul className="flex flex-col">{recent.map((row) => <ChatRow key={row.id} row={row} onOpen={(id) => setView({ kind: "thread", id })} />)}</ul>
@@ -339,7 +337,6 @@ export function HopPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader 
                 setTick((t) => t + 1);
               }}
               onChanged={() => setTick((t) => t + 1)}
-              say={simple && isPanelChat ? (text, handOff) => askInChat(text, pathname, handOff) : undefined}
             />
             {isPanelChat && d.me.can_manage && writes && (
               <div>

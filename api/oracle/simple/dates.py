@@ -11,7 +11,8 @@ suggestion. Pure functions: the caller (oracle.simple.service) gathers the candi
 3. tracker dates: the ``target_date`` of a tracker record matched to the item. An end
    date only;
 4. else estimated: the item's horizon window from the company's planning horizons on the
-   company's day (now = short, next = medium, later = long).
+   company's day (now = short, next = medium, later = from the day after Next ends
+   to the end of long).
 
 An item's own dates stored with ``date_source`` ``engineering`` or ``tracker`` rank with that
 source. Ties within a source: the most recently updated candidate wins. A start that no
@@ -110,9 +111,13 @@ class Suggestion:
 
 
 def windows(horizons: dict[str, int], today: date) -> dict[str, tuple[date, date]]:
-    """Each roadmap horizon's window on the company's day ``today``."""
+    """Each roadmap horizon's window on the company's day ``today``. Later starts the day
+    after Next ends (no gap between them, no "today plus a year" start) and ends where the
+    long horizon ends (``today`` plus ``long_to_months``, always after Next ends)."""
     spans = horizon_windows(horizons, today)
-    return {h: spans[w] for h, w in HORIZON_WINDOW.items()}
+    out = {h: spans[w] for h, w in HORIZON_WINDOW.items()}
+    out["later"] = (out["next"][1] + DAY, out["later"][1])
+    return out
 
 
 def _stamp(c: Candidate) -> float:

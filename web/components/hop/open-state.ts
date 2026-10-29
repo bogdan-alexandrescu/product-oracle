@@ -10,6 +10,8 @@ export const OPEN_KEY = "oracle.hop-panel.open";
 
 let open: boolean | null = null;
 const listeners = new Set<() => void>();
+let draft = "";
+const draftListeners = new Set<() => void>();
 
 function read(): boolean {
   if (open === null) {
@@ -24,6 +26,11 @@ function read(): boolean {
 
 export function setPanelOpen(next: boolean) {
   open = next;
+  // Words no box took while it was open are dropped, never shown typed in later.
+  if (!next && draft) {
+    draft = "";
+    draftListeners.forEach((l) => l());
+  }
   try {
     window.localStorage.setItem(OPEN_KEY, next ? "1" : "0");
   } catch {
@@ -41,4 +48,36 @@ function subscribe(l: () => void) {
 
 export function usePanelOpen(): boolean {
   return useSyncExternalStore(subscribe, read, () => false);
+}
+
+/**
+ * Words typed into the Ask panel's box for the reader ("Suggest from the chat": a goal's
+ * drawer opens Ask with "Suggest a feature for <goal>: " typed in). The box takes them once;
+ * the panel shows its box for them (./HopPanel.tsx) and closing it drops them.
+ */
+
+export function askWith(text: string) {
+  draft = text;
+  draftListeners.forEach((l) => l());
+  setPanelOpen(true);
+}
+
+/** Takes the typed-in words (they are cleared). */
+export function takeAskDraft(): string {
+  const t = draft;
+  draft = "";
+  return t;
+}
+
+export function useAskDraft(): string {
+  return useSyncExternalStore(
+    (l) => {
+      draftListeners.add(l);
+      return () => {
+        draftListeners.delete(l);
+      };
+    },
+    () => draft,
+    () => "",
+  );
 }

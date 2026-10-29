@@ -779,10 +779,17 @@ def email_available() -> bool:
     return mailer.get_mailer() is not None
 
 
+# The walk (M1): Simple reads product decisions only: a run's stop (a checkpoint decision,
+# Oracle's run approval) is Detailed's, never a meeting's pre-read or the Decisions page's.
+PRODUCT = Decision.origin != "checkpoint"
+
+
 async def _open_decisions(db: AsyncSession, document: Document, item_ids: set[uuid.UUID]):
+    """The PRD's open product decisions, never a run's approval (PRODUCT) nor a PRD's own
+    question (the agenda's "On the agenda" lists those)."""
     rows = await db.scalars(
         select(Decision)
-        .where(Decision.status == "proposed")
+        .where(Decision.status == "proposed", PRODUCT, Decision.origin != "prd")
         .where(
             or_(
                 Decision.subjects.contains([{"kind": "document", "id": str(document.id)}]),
@@ -811,7 +818,7 @@ async def _prd_items(db: AsyncSession, document: Document) -> tuple[set, set]:
 
 async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
               not_approved: list | None = None) -> SimpleMeetingOut:  # fmt: skip
-    from oracle.simple import changes
+    from oracle.simple import changes, questions
 
     m, document = await _get(db, principal, meeting_id)
     w = await prd_who(db, document)
@@ -871,6 +878,9 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
             for link, d in links
         ],
         open_decisions=await _open_decisions(db, document, item_ids),
+        decisions_due=await questions.due_for(
+            db, principal, document.id, m.id, m.session_id if m.status == "live" else None
+        ),
         pending_proposals=[await changes.one_out(db, principal, c) for c in seen],
         drafts=await _draft_outs(db, principal, ds),
         waiting_people=[_ref(i, waiting_names) for i in waiting],
@@ -1040,8 +1050,15 @@ async def _upcoming(
     if only is not None:
         q = q.where(RitualOccurrence.id == only)
     else:
+        # Not one whose review was held (a meeting started from it has ended): the ritual's
+        # following occurrence is the next one.
+        held_here = select(SimpleMeeting.occurrence_id).where(
+            SimpleMeeting.occurrence_id.is_not(None), SimpleMeeting.status == "ended"
+        )
         q = q.where(
-            RitualOccurrence.status.in_(("scheduled", "ready")), RitualOccurrence.ends_at >= now
+            RitualOccurrence.status.in_(("scheduled", "ready")),
+            RitualOccurrence.ends_at >= now,
+            RitualOccurrence.id.not_in(held_here),
         )
     rows: list[tuple[Any, Any]] = list(
         (await db.execute(q.order_by(RitualOccurrence.due_at).limit(UPCOMING_MAX))).all()
@@ -1225,6 +1242,14 @@ async def end(db: AsyncSession, principal: Any, meeting_id: uuid.UUID) -> Simple
         raise MeetingError(409, "This meeting has ended already")
     now = company_time.now()
     m.status, m.ended_at, m.ended_by = "ended", now, _me(principal)
+    if m.occurrence_id is not None:
+        # The ritual's occurrence is held: Upcoming and Home's next review move to its next.
+        from oracle.rituals.models import RitualOccurrence
+
+        occ = await db.get(RitualOccurrence, m.occurrence_id, with_for_update=True)
+        if occ is not None and occ.status in ("scheduled", "ready", "missed"):
+            occ.status, occ.held_by, occ.held_at = "held", _me(principal), now
+            await audit.record(db, principal, "ritual.held", "ritual_occurrence", occ.id)
     session = await db.get(SimpleSession, m.session_id, with_for_update=True)
     if session is not None and session.closed_at is None:
         session.closed_at = now
@@ -1697,10 +1722,15 @@ async def decided_flows(db: AsyncSession, links: list) -> dict[uuid.UUID, Simple
 
 
 def _row(d: Decision, names: dict) -> SimpleDecisionRow:
+    chosen = next(
+        (o.get("label") for o in d.options or [] if o.get("key") == d.chosen_option), None
+    )
     return SimpleDecisionRow(
         id=d.id, number=d.number, title=d.title, origin=d.origin, status=d.status,
         approver=_ref(d.approver_id, names) if d.approver_id else None,
         decided_at=d.decided_at, created_at=d.created_at, subjects=list(d.subjects or []),
+        code=(d.prd_question or {}).get("code") if d.origin == "prd" else None,
+        chosen=chosen,
     )  # fmt: skip
 
 
@@ -1722,6 +1752,11 @@ async def decisions_page(
     readable = {i for i, d in docs.items() if await _readable(db, principal, d)}
     ms = [m for m in ms if m.prd_document_id in readable]
     await _settle(db, ms)
+    from oracle.simple import questions as prd_questions
+
+    # The PRDs' questions read first: a decided one belongs with the decisions below.
+    for i in readable:
+        await prd_questions.ensure(db, docs[i])
     read = await service.load(db)
     goals = {e.goal.id: e.goal for e in read.entries if e.goal is not None}
     prd_doc = None
@@ -1764,7 +1799,9 @@ async def decisions_page(
         shown_ms = [m for m in shown_ms if any(keep(d) for _, d in links[m.id])]
     others: list[Decision] = []
     if meeting is None:
-        q = select(Decision).where(Decision.origin != "meeting")
+        # A PRD's open question is listed as a question (Waiting for you), not here.
+        q = select(Decision).where(Decision.origin != "meeting", PRODUCT, or_(
+            Decision.origin != "prd", Decision.status == "decided"))  # fmt: skip
         if in_meetings:
             q = q.where(Decision.id.not_in(in_meetings))
         if match is not None:
@@ -1786,7 +1823,19 @@ async def decisions_page(
             decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
         ))  # fmt: skip
+    from oracle.simple import questions
+
+    # The questions follow the filters too: the PRD's, the goal's PRDs', the meeting's.
+    qdocs = {prd_doc.id} if prd_doc is not None else set(readable)
+    if goal_ent is not None:
+        qdocs &= {
+            e.prd.id
+            for e in read.entries
+            if e.prd is not None and e.goal is not None and e.goal.id == goal_ent.id
+        }
+    only = {d.id for _, d in links.get(meeting, [])} if meeting is not None else None
     return SimpleDecisionsOut(
+        **await questions.page_fields(db, principal, qdocs, only),
         meetings=groups,
         other=[_row(d, names) for d in others],
         prds=[SimpleFilterOption(id=d.slug, title=d.title)

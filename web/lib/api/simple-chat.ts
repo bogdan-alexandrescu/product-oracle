@@ -21,12 +21,13 @@ export type ActionPreview =
   | { kind: "owner" | "decider"; item_id: string; person_id: string; person_name: string; before_name: string | null }
   | { kind: "decision"; text: string; decider_name: string; where: "meeting" | "page"; proposed_to?: string | null; not_to?: string | null }
   | { kind: "note" | "question"; text: string }
-  | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string };
+  | { kind: "agenda"; item_id: string; move: "next" | "skip"; item_title: string }
+  | { kind: "suggestion"; goal_id: string; goal_title: string; title: string; outcome: string; looks_like: { code: string; title: string; why: string }[] };
 
 /** A card's preview: a roadmap ghost (ChatPreview) or a chat action's description. */
 export type CardPreview = ChatPreview | ActionPreview;
 
-const ACTION_KINDS = new Set(["owner", "decider", "decision", "note", "question", "agenda"]);
+const ACTION_KINDS = new Set(["owner", "decider", "decision", "note", "question", "agenda", "suggestion"]);
 export const isActionPreview = (p: CardPreview): p is ActionPreview => !!p && ACTION_KINDS.has(p.kind);
 
 /** A meeting's live notes and open questions typed in its chat (SimpleMeetingOut.notes). */
@@ -57,7 +58,17 @@ export type ChatCard = {
   decided_by_name: string | null;
   decided_at: string | null;
   decision_id: string | null;
+  /** roadmap-talk: the change in plain words ("Nov 16 – Nov 27" → "Nov 30 – Dec 11"); null when none. */
+  change_words?: ChangeWords | null;
+  /** roadmap-talk: the fields Correct opens, prefilled with Oracle's reading; null: no Correct. */
+  correct?: CardCorrect | null;
 };
+
+export type ChangeWords = { before: string; after: string };
+/** The fields a card's Correct opens, in this order when present. */
+export const CORRECT_FIELDS = ["title", "goal", "milestone", "start_date", "end_date", "owner"] as const;
+export type CorrectField = (typeof CORRECT_FIELDS)[number];
+export type CardCorrect = { fields: string[]; values: Record<string, string | null> };
 
 export type ChatMessage = {
   id: string;
@@ -77,6 +88,8 @@ export type ChatMessage = {
   picked: number | null;
   /** A failed line: Retry reads it again. */
   retry: boolean;
+  /** roadmap-talk: where Oracle's answer comes from ("From the PRD · F-06 Adaptive pacing"); null otherwise. */
+  source?: string | null;
 };
 
 export type ChatChoice = { index: number; label: string };
@@ -102,7 +115,9 @@ export type ChatRules = {
 };
 
 /** `understood`: false when Oracle's plan reader did not know the last line (with only_understood, nothing was written). */
-export type ChatThread = { id: string | null; meeting_id: string | null; messages: ChatMessage[]; rules: ChatRules | null; understood?: boolean };
+export type ChatThread = { id: string | null; meeting_id: string | null; messages: ChatMessage[]; rules: ChatRules | null; understood?: boolean; ask_id?: string | null };
+/** ask-fresh: one of the person's Ask chats on Recent chats, named by its page. */
+export type ChatSummary = Schemas["ChatSummaryOut"];
 // chat-actions: null for the direct ops (minutes notes, agenda, decisions).
 export type ChatApply = { card: ChatCard; result: Schemas["SimpleChangeResult"] | null };
 
@@ -129,19 +144,40 @@ type Call = (path: string, init?: Init) => Promise<{ data?: unknown; error?: unk
 const loose = api as unknown as { GET: Call; POST: Call; PUT: Call };
 
 /** GET /v1/simple/chat?page=: the reader's own Ask thread on that Simple page (one per page; Home without one). */
-export function askThread(page?: string): Promise<ChatThread> {
-  return unwrap(loose.GET("/v1/simple/chat", page ? { params: { query: { page } } } : undefined)) as Promise<ChatThread>;
+export function askThread(page?: string, chat?: string | null): Promise<ChatThread> {
+  const query = { ...(page ? { page } : {}), ...(chat ? { chat } : {}) };
+  return unwrap(loose.GET("/v1/simple/chat", page || chat ? { params: { query } } : undefined)) as Promise<ChatThread>;
 }
+
+/** ask-fresh: which Ask chat a line goes to: `chatId` continues one; `newChat` starts one about the page. */
+export type ChatTo = { chatId?: string | null; newChat?: boolean; general?: boolean };
 
 /**
  * POST /v1/simple/chat/messages: the person's line and Oracle's reply. `onlyUnderstood` (the
  * Ask panel's one box): a line the plan reader does not know writes nothing and comes back
  * `understood: false`, for the panel to ask Oracle's Ask instead.
  */
-export function askSay(text: string, page?: string, onlyUnderstood = false): Promise<ChatThread> {
+export function askSay(text: string, page?: string, onlyUnderstood = false, to: ChatTo = {}): Promise<ChatThread> {
   return unwrap(
-    loose.POST("/v1/simple/chat/messages", { body: { text, ...(page ? { page } : {}), ...(onlyUnderstood ? { only_understood: true } : {}) } }),
+    loose.POST("/v1/simple/chat/messages", {
+      body: {
+        text,
+        ...(page ? { page } : {}),
+        ...(onlyUnderstood ? { only_understood: true } : {}),
+        ...(to.chatId ? { chat_id: to.chatId } : to.newChat ? { new_chat: true, ...(to.general ? { general: true } : {}) } : {}),
+      },
+    }),
   ) as Promise<ChatThread>;
+}
+
+/** GET /v1/simple/chats (ask-fresh): Recent chats, the reader's last Ask chats from any page; never a meeting's. */
+export async function recentChats(): Promise<ChatSummary[]> {
+  return ((await unwrap(loose.GET("/v1/simple/chats"))) as { items: ChatSummary[] }).items;
+}
+
+/** PUT /v1/simple/chats/{chat_id}/ask: the Oracle's Ask chat the Ask chat handed a question to. */
+export function linkAsk(chatId: string, askId: string): Promise<ChatSummary> {
+  return unwrap(loose.PUT("/v1/simple/chats/{chat_id}/ask", { params: { path: { chat_id: chatId } }, body: { ask_id: askId } })) as Promise<ChatSummary>;
 }
 
 /** GET /v1/simple/meetings/{meeting_id}/chat. */
@@ -162,8 +198,29 @@ export function setChatMode(meetingId: string, change_mode: ChangeMode, change_p
 }
 
 /** POST /v1/simple/chat/cards/{card_id}/apply: the card (or its fix n) through the change engine. */
-export function applyCard(cardId: string, fix: number | null = null): Promise<ChatApply> {
-  return unwrap(loose.POST("/v1/simple/chat/cards/{card_id}/apply", { params: { path: { card_id: cardId } }, body: { fix } })) as Promise<ChatApply>;
+export function applyCard(cardId: string, fix: number | null = null, values?: Record<string, string | null>): Promise<ChatApply> {
+  return unwrap(
+    loose.POST("/v1/simple/chat/cards/{card_id}/apply", { params: { path: { card_id: cardId } }, body: values ? { fix, values } : { fix } }),
+  ) as Promise<ChatApply>;
+}
+
+/** roadmap-talk: an item's own talk with Oracle (one thread per item and person). */
+export const itemTalkPage = (itemId: string): string => `/simple/roadmap/items/${itemId}`;
+
+/** roadmap-talk: an applied card's item flashes its bar on the timeline. */
+export const APPLIED_EVENT = "simple:applied";
+export type AppliedDetail = { item_id: string };
+
+/** roadmap-talk: a chat card was applied, proposed, rejected or undone (the roadmap reads again). */
+export const CARD_CHANGED_EVENT = "simple:card-changed";
+
+export function sendCardChanged(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CARD_CHANGED_EVENT));
+}
+
+export function sendApplied(itemId: string): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent<AppliedDetail>(APPLIED_EVENT, { detail: { item_id: itemId } }));
 }
 
 /** POST /v1/simple/chat/cards/{card_id}/discard. */

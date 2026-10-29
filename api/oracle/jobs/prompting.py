@@ -45,9 +45,11 @@ CURRENT = {
     "one_pager": "one_pager.v1",
     "item_draft": "item_draft.v1",
     "goal_suggestions": "goal_suggestions.v1",
-    "simple_visual": "simple_visual.v1",
+    "simple_visual": "simple_visual.v2",
     "meeting_minutes": "meeting_minutes.v2",
-    "chat_reader": "chat_reader.v2",
+    "chat_reader": "chat_reader.v3",
+    "prd_plan": "prd_plan.v3",
+    "prd_questions": "prd_questions.v1",
     "discussion_reply": "discussion_reply.v2",
     # B6: appended to discussion_reply's for a discussion on a goal.
     "discussion_reply_goal": "discussion_reply_goal.v2",

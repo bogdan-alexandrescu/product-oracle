@@ -11,16 +11,13 @@ import { expect, test } from "./test";
  * lists the edited ones (the API's rituals.attendees_edited_at), not the past attendees;
  * fails_when = the past attendees stay listed after the edit, or the edit is not what
  * decides (the API read updated_at, which the scheduler moves); no_claim = the scheduler's
- * tick itself (api tests: test_simple_walk_fixes_review2_api).
+ * tick itself (api tests: test_simple_walk_fixes_review2_api). Walk fixes 3 (M2) un-fixed it:
+ * the held review leaves Upcoming and the next one reads the ritual's live attendees.
  */
 
 test.use({ viewport: { width: 1366, height: 820 } });
 
-// Train Y (CLD, 2026-10-28): fixme. The API test (test_simple_walk_fixes_review2_api) proves the rule; through
-// the mock, Home's next review after the held one still reads the held occurrence's own attendee list
-// (meetings-mock occurrence vs the rituals store), so this spec never passed (both re-reviews saw it fail).
-// Follow-up: make the mock's held occurrence leave Upcoming and read the ritual's live attendees, then unfix.
-test.fixme("the next review lists who was present until the ritual's attendees are edited", async ({ page }) => {
+test("the next review lists who was present until the ritual's attendees are edited", async ({ page }) => {
   await login(page);
   // Detailed's rituals first (the mock seeds them on first read).
   await page.goto("/company/rituals");
@@ -44,13 +41,15 @@ test.fixme("the next review lists who was present until the ritual's attendees a
   // An owner edits the ritual's attendees after the review: its list is the list.
   await page.goto("/company/rituals");
   const ritualRow = page.getByTestId("ritual-row").filter({ hasText: title });
-  const before = await ritualRow.innerText();
+  // The row's Attendees count (its whole text also changes when the owner's name loads, which proved nothing).
+  const count = ritualRow.getByRole("gridcell").nth(3);
+  const before = Number(await count.innerText());
   await ritualRow.click();
   const panel = page.getByTestId("ritual-inspector").filter({ visible: true });
   await panel.getByRole("checkbox", { name: "viewer@example.com" }).check();
   await panel.getByRole("button", { name: "Save" }).click();
   // The save has landed when the ritual's row counts one more attendee (the ticked box proves nothing).
-  await expect.poll(() => ritualRow.innerText()).not.toBe(before);
+  await expect(count).toHaveText(String(before + 1));
 
   await page.goto("/simple");
   await expect(page.getByTestId("home-meeting-next")).toContainText("Viewer");

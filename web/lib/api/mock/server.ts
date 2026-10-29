@@ -153,11 +153,13 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
-import { chatMeetings, ensureMeetings, meetingInboxRows, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
-import { routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { chatMeetings, ensureMeetings, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
+import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
+import { mockNowMs } from "./clock";
 import { routeSimpleVisuals, seedVisuals, type VisualsDb } from "./simple-visuals";
-import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, takeReaderWrote, type ChatDb } from "./simple-chat";
-import { routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, type SimpleDb } from "./simple-roadmap";
+import { planAnswer, routeSimpleChat, seedReaderItems, seedSimpleChat, seedTalkItems, takeReaderWrote, type ChatDb } from "./simple-chat";
+import { itemSubjectName, routeSimpleRoadmap, seedSimpleDeciders, seedSimpleMany, seedSimpleRoadmap, simpleWindows, type SimpleDb } from "./simple-roadmap";
 import { canSee, draftSections, isUpdateTemplate, periodMonth, templateSections, updateDateMarks, updateFrontMatter, type UpdatePeriod } from "./updates";
 import { emptyTrash, routeTrash, type TrashDb } from "./trash";
 import { captureRunChanges, runMarks, seedWebhooks, tokenRevoked, webhooksRoute, type WebhooksContext, type WebhooksDb } from "./webhooks";
@@ -538,6 +540,8 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * (AC1: it changes nothing, the name included);
  * "simple-deciders" as the default company plus a decider of Simple's pricing roadmap and
  * owners of its tracks as an approver, a commenter and a viewer (#734 review, D-a);
+ * "simple-suggest-deciders" as "simple-home" plus the "simple-deciders" people, Avery Lane (an
+ * approver owning the alerts track) deciding Grow retention's suggestions (suggest review);
  * "simple-home-deciders" as "simple-deciders" plus a commenter's proposal waiting on the
  * pricing roadmap's decider (#723 S1 Home review).
  * "simple-500" as the default company with 500 invented items on Simple's roadmap (S4).
@@ -930,8 +934,76 @@ function seedSimpleWalkScenario(): Db {
     rm.ids[key] = stableUuid(`simple-item/${key}`);
   }
   db.simple_one_pager = seedWalkOnePager();
+  // P4: Guided setup was brought in by the Approver, not the company's owner: its owner.
+  db.simple_one_pager.owner = db.members.find((m) => m.email === "approver@example.com")?.id;
   const skeleton = db.documents.find((d) => d.kind === "prd" && d.slug === "checkout-redesign");
   if (skeleton) db.simple_one_pagers = { [skeleton.id]: seedSkeletonOnePager({ id: skeleton.id, slug: skeleton.slug, title: skeleton.title }) };
+  return db;
+}
+
+/**
+ * The plan-model lane, the "simple-plan" scenario: "simple-home-one-prd" whose PRD in play
+ * (Guided setup) has a dated plan (./simple-plan.ts): three milestones (M1 Prove it, M2 Scale
+ * volume, M3 Open to all), twenty features F-01..F-20 on the onboarding roadmap (the setup
+ * checklist and the sample data import are F-01 and F-02), each with its slices, the plan's
+ * span on Home and the priorities, its one-pager's Timeline drawn from the same slices.
+ * Team invites (F-05, in M1 and M2) is left undated, so its slices' date suggestions wait in
+ * the roadmap tray's "Dates to confirm". Invented data.
+ */
+const UNDATED_PLAN_FEATURE = "F-11";
+
+function seedSimplePlanScenario(): Db {
+  const db = seedSimpleHomeOnePrdScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = seedPlan();
+  const w = simpleWindows(new Date(mockNowMs()).toISOString().slice(0, 10));
+  const days = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+  const byFeature = new Map<string, ReturnType<typeof planSlices>>();
+  for (const x of planSlices()) byFeature.set(x.feature_code, [...(byFeature.get(x.feature_code) ?? []), x]);
+  const existing: Record<string, string> = { "F-01": "setup-checklist", "F-02": "setup-import" };
+  for (const [code, of] of byFeature) {
+    const section = code.toLowerCase();
+    const key = existing[code];
+    if (key) {
+      const s = rm.items.find((x) => x.key === key);
+      if (s) s.section = section;
+      continue;
+    }
+    const start = of.map((x) => x.start_date!).sort()[0];
+    const end = of.map((x) => x.end_date!).sort().at(-1)!;
+    const horizon = start <= w.now[1] ? "now" : "next";
+    const from = w[horizon][0];
+    const k = `plan-${section}`;
+    const name = planFeatureName(code) ?? of[0].name;
+    // Team invites (F-05, a slice in M1 and one in M2) and Self-serve checkout (F-11, roadmap-gantt) have no dates of their own:
+    // Oracle's date suggestions for them, in the tray's "Dates to confirm", are their slices'.
+    const dated = code === "F-05" || code === UNDATED_PLAN_FEATURE ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
+    rm.items.push({ key: k, title: name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", ...dated, section, heading: `${code} ${name}` });
+    rm.ids[k] = stableUuid(`simple-item/${k}`);
+  }
+  db.simple_one_pager = seedOnePager();
+  db.simple_one_pager.slice = planSlice();
+  // The PRD itself, so Simple's One-pagers lists it (its one-pager is the seeded one).
+  const at = "2026-10-20T15:05:00Z";
+  db.documents.push({
+    id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "draft", kind: "prd",
+    template: null, template_version: null, theme: null, created_at: at, updated_at: at,
+  });
+  return db;
+}
+
+/**
+ * roadmap-gantt, the "simple-plan-two" scenario: "simple-plan" with a second planned PRD (Usage
+ * alerts: its Weekly alert digest, F-06, is in the same plan's M1) whose plan this reader
+ * cannot open, and Public signup (F-13) under a goal of its own named Growth, the goal the
+ * plan's other Growth features move. Invented data.
+ */
+function seedSimplePlanTwoScenario(): Db {
+  const db = seedSimplePlanScenario();
+  const rm = db.simple_roadmap!;
+  rm.plan = { ...rm.plan!, prds: ["usage-alerts"], hidden: ["usage-alerts"] };
+  const signup = rm.items.find((x) => x.key === "plan-f-13");
+  if (signup) signup.goal = "growth";
   return db;
 }
 
@@ -958,6 +1030,34 @@ function seedSimpleHomeScenario(): Db {
   seedSimpleProposal(db.simple_roadmap, who, "edit_title", "alert-export", { title: "Alert history export" }, { title: "Alert history as CSV" }, "2026-10-26T15:00:00Z", "Says what people get");
   seedSimpleProposal(db.simple_roadmap, who, "change_horizon", "setup-ideas", { horizon: "next" }, { horizon: "now" }, "2026-10-26T16:30:00Z");
   seedSimpleProposal(db.simple_roadmap, who, "add_item_task", "alert-digest", {}, { title: "Digest email for team leads" }, "2026-10-26T17:00:00Z", "A new step in the digest flow");
+  return db;
+}
+
+/**
+ * Suggest review: "simple-home" plus the "simple-deciders" people, so Grow retention's
+ * suggestions (the alerts roadmap, no named decider) are decided by Avery Lane, an approver
+ * who owns the alerts track, and not by the company's owner alone; Keep alerts quiet's metric
+ * has no unit. Invented data.
+ */
+function seedSimpleSuggestDecidersScenario(): Db {
+  const db = seedSimpleHomeScenario();
+  const join = (email: string, name: string, role: "approver" | "commenter", i: number) => {
+    const m = {
+      email, name, role, engineering_lead: false, created_at: `2026-09-${String(10 + i).padStart(2, "0")}T09:00:00Z`,
+      id: uuid(), disabled_at: null, disabled_by: null, status: "active" as const, open_tokens: 0,
+    };
+    db.members.push(m);
+    return m.id;
+  };
+  const decider = join("dana.decider@example.com", "Dana Decider", "approver", 0);
+  const approver = join("avery.lane@example.com", "Avery Lane", "approver", 1);
+  const quiet = db.baseline.entities.find((e) => e.key === "quiet-alerts")!;
+  const attrs = { ...(quiet.attrs as Record<string, unknown>) };
+  delete attrs.unit;
+  quiet.attrs = attrs;
+  db.simple_roadmap!.deciders = { "pricing-roadmap": decider };
+  db.simple_roadmap!.track_owners = { alerts: approver };
+  db.simple_roadmap!.people = Object.fromEntries(db.members.map((m) => [m.id, m.name ?? m.email]));
   return db;
 }
 
@@ -2630,18 +2730,47 @@ function load(): Db {
                 ? seedSimpleHomeScenario
               : scenario === "simple-home-deciders"
                 ? seedSimpleHomeDecidersScenario
+              : scenario === "simple-suggest-deciders"
+                ? seedSimpleSuggestDecidersScenario
               : scenario === "simple-home-milestones"
                 ? seedSimpleHomeMilestonesScenario
               : scenario === "simple-home-one-prd"
                 ? seedSimpleHomeOnePrdScenario
               : scenario === "simple-walk"
                 ? seedSimpleWalkScenario
-              : scenario === "simple-chat"
+              : scenario === "simple-plan"
+                ? seedSimplePlanScenario
+              : scenario === "simple-plan-two"
+                ? seedSimplePlanTwoScenario
+              : scenario === "simple-plan-undated"
+                ? () => {
+                    // prd-timeline: Guided setup's plan whose milestones have no dates.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.plan!.undated = true;
+                    return db;
+                  }
+              : scenario === "simple-plan-partly-dated"
+                ? () => {
+                    // fidelity prd (pick D, frame D3): only M1 has dates; M2 and M3 have none yet.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.plan!.partly_dated = true;
+                    return db;
+                  }
+              : scenario === "simple-plan-goalless"
+                ? () => {
+                    // prd-timeline review: Guided setup's plan with work that names no goal.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.plan!.goalless = true;
+                    return db;
+                  }
+              : scenario === "simple-chat" || scenario === "roadmap-talk"
                 ? () => {
                     const db = seedSimpleHomeScenario();
                     db.simple_chat = seedSimpleChat(db.members);
                     // chat-reader: the two "Delivery …" items its rules talk about.
                     if (db.simple_roadmap) seedReaderItems(db.simple_roadmap);
+                    // roadmap-talk: F-16 Adaptive pacing, F-17 Sign-up work, F-18 Reliability work and the M1–M3 milestones.
+                    if (scenario === "roadmap-talk" && db.simple_roadmap) seedTalkItems(db.simple_roadmap);
                     return db;
                   }
               : scenario === "simple-500"
@@ -4351,7 +4480,7 @@ function simplePlanReply(db: Db, me: MemberRow, d: DiscussionRow, question: stri
     names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
   };
   const answer = planAnswer((db.simple_roadmap ??= seedSimpleRoadmap()), ctx, question);
-  return answer ? { pieces: [answer], citations: [] } : null;
+  return answer ? { pieces: [answer.text], citations: answer.citations } : null;
 }
 
 async function route(db: Db, req: Request): Promise<Response> {
@@ -4497,6 +4626,11 @@ async function route(db: Db, req: Request): Promise<Response> {
         if (Object.keys(picks).some((k) => !["prd", "goal", "track"].includes(k)) || Object.values(picks).some((v) => typeof v !== "string" || !/^[A-Za-z0-9_.-]{0,200}$/.test(v))) return json(422, { detail: "simple_filters" });
         mine.simple_filters = { prd: picks.prd ?? "", goal: picks.goal ?? "", track: picks.track ?? "" } as Schemas["SimpleFilters"];
       }
+      if (patch.simple_decisions_view != null) {
+        // prd-questions: how Simple's Decisions opens (preferences.DecisionsView).
+        if (!["list", "board", "meetings"].includes(patch.simple_decisions_view)) return json(422, { detail: "simple_decisions_view" });
+        mine.simple_decisions_view = patch.simple_decisions_view;
+      }
       if (typeof patch.setup_hidden === "boolean") mine.setup_hidden = patch.setup_hidden;
       if (typeof patch.welcome_dismissed === "boolean") mine.welcome_dismissed = patch.welcome_dismissed;
       for (const [k, v] of Object.entries(pings)) if (typeof v === "boolean") mine.slack_pings[k as keyof typeof SLACK_PINGS] = v;
@@ -4507,6 +4641,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     mine.priorities_line ??= null; // this quarter until they pick a line (roadmap-plus)
     mine.simple_roadmap ??= null; // all roadmaps until they pick one
     mine.simple_filters ??= null; // every PRD, goal and track until they pick some
+    mine.simple_decisions_view ??= null; // List until they pick a view (prd-questions)
     if ((mine.experience as string) === "studio") mine.experience = "detailed"; // its name before #723's rename, as the API reads it
     return json(200, mine);
   }
@@ -5119,14 +5254,16 @@ async function route(db: Db, req: Request): Promise<Response> {
   // Simple S10: the visuals the one-pager, the roadmap and the priorities show.
   db.simple_visuals ??= seedVisuals();
   db.simple_one_pager.visuals = db.simple_visuals;
+  db.simple_roadmap ??= seedSimpleRoadmap();
+  const roadmapItems = db.simple_roadmap;
   const visualsRes = await routeSimpleVisuals(
     db.simple_visuals,
-    { id: me.id, role: me.role, names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])) },
+    // As the API: an item is named with its code, or its title (subject_name).
+    { id: me.id, role: me.role, names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])), itemName: (id) => itemSubjectName(roadmapItems, id) },
     req,
     p,
   );
   if (visualsRes) return visualsRes;
-  db.simple_roadmap ??= seedSimpleRoadmap();
   db.simple_roadmap.visuals = db.simple_visuals;
   const simpleRoles = Object.fromEntries(db.members.filter((x) => x.status !== "disabled").map((x) => [x.id, x.role]));
   const simpleOwners = db.members.filter((x) => x.role === "owner" && x.status !== "disabled").map((x) => x.id);
@@ -5149,11 +5286,27 @@ async function route(db: Db, req: Request): Promise<Response> {
             id: uuid(), user_id, kind, title, document_id: onePagerDb.doc.id, version_number: version, section_key: null,
             comment_id: null, campaign_id: null, actor: `user:${me.id}`, data, read_at: null, created_at: now(),
           }),
+        planPages: onePagerDb.doc.slug === PLAN_PRD_SLUG && db.simple_roadmap?.plan && !db.simple_roadmap.plan.undated
+          ? planMilestones().map((m) => `${m.code} ${m.name}`)
+          : undefined,
       },
       r,
       p,
     );
     if (onePagerRes) return onePagerRes;
+    // The plan-model lane: a PRD's plan (GET .../plan, owners' POST .../plan/read-again).
+    const planRes = routeSimplePlan(
+      db.simple_roadmap!.plan,
+      me.role,
+      (ref) => {
+        if (ref === PLAN_PRD_SLUG || ref === db.simple_one_pager!.doc.id || ref === stableUuid("simple-prd/onboarding-roadmap")) return { ...db.simple_one_pager!.doc };
+        const d = db.documents.find((x) => x.kind === "prd" && (x.slug === ref || x.id === ref));
+        return d ? { id: d.id, slug: d.slug, title: d.title } : null;
+      },
+      r,
+      p,
+    );
+    if (planRes) return planRes;
     const simpleRes = await routeSimpleRoadmap(db.simple_roadmap!, { id: me.id, role: me.role, roles: simpleRoles, owners: simpleOwners, names: simpleNames }, r, p, q);
     if (simpleRes) return simpleRes;
     return routeSimpleChanges(db.simple_roadmap!, { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles }, r, p, q);
@@ -5173,14 +5326,24 @@ async function route(db: Db, req: Request): Promise<Response> {
           .filter((t) => t.meeting_id === id)
           .flatMap((t) => t.messages.filter((x) => x.author_kind === "person").map((x) => x.body)),
     };
+    // prd-questions: the remembered Decisions view and the judgement calls waiting for me.
+    meetingsCtx.view = () => db.preferences?.[me.email]?.simple_decisions_view ?? null;
+    meetingsCtx.othersWaiting = () => {
+      db.runs ??= seeded("runs", () => seedRuns(runsContext(db)));
+      const ctx = decisionsContext(db, me);
+      ensureDecisions(db, ctx);
+      return decisionInbox(ctx, db.decisions!, null).filter((d) => d.counts && d.reason === "needs_decision").length;
+    };
     const meetingsDb = ensureMeetings(db, meetingsCtx);
-    const meetingsRes = (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
+    const meetingsRes =
+      (await routeMeetingQuestions(meetingsDb, meetingsCtx, req, p)) ??
+      (await routeSimpleMeetings(meetingsDb, meetingsCtx, req, p, q)) ?? (await withMeeting(meetingsDb, meetingsCtx, req, p, simpleRoute));
     if (meetingsRes) return meetingsRes;
   }
   const simpleRes = await simpleRoute(req);
   if (simpleRes) return simpleRes;
   // Simple S9: change by chat and "Walk me through it", through the change engine above.
-  if (p[1] === "simple" && ["chat", "meetings", "walk"].includes(p[2] ?? "")) {
+  if (p[1] === "simple" && ["chat", "chats", "meetings", "walk"].includes(p[2] ?? "")) {
     db.simple_chat ??= seedSimpleChat(db.members);
     // S8's review meetings host the chat too (their notes, agenda and decisions), read and seeded on first use.
     const roadmapDb = db.simple_roadmap;
@@ -5207,7 +5370,14 @@ async function route(db: Db, req: Request): Promise<Response> {
       reviews.propose(b.title, b.approver_id, doc, id);
       return id;
     };
-    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d) };
+    const chatCtx = { id: me.id, role: me.role, owners: simpleOwners, names: simpleNames, roles: simpleRoles, proposeDecision, proposeTo: (d: string | null) => reviews.proposeTo(d),
+      ownsDiscussion: (id: string) => !!(db.discussions ??= emptyDiscussions()).discussions.find((d) => d.id === id && d.origin === "panel" && d.started_by === me.id),
+      // Recent chats: a chat whose first line went to Oracle's Ask is named by that line, in its Ask chat.
+      askQuestion: (id: string) =>
+        (db.discussions ??= emptyDiscussions()).messages
+          .filter((x) => x.discussion_id === id && x.author_kind === "person" && !x.deleted_at)
+          .sort((a, b) => a.created_at.localeCompare(b.created_at))[0]?.body ?? null,
+    };
     const chatRes = await routeSimpleChat(db.simple_roadmap, db.simple_chat, chatCtx, req, p, reviews);
     if (chatRes) return chatRes;
   }

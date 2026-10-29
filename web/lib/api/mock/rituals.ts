@@ -754,7 +754,9 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
   }
   if (p.length === 4 && m === "POST" && (p[3] === "held" || p[3] === "skip")) {
     if (ctx.me.id !== r.owner_id) return fail(403, "Only the ritual's owner records it");
-    if (o.status !== "ready" && o.status !== "missed") return fail(409, `This occurrence is ${o.status}`);
+    // As the API (rituals.service.hold): held when its Simple review ended, nothing recorded yet, the owner records it.
+    const heldByMeeting = p[3] === "held" && o.status === "held" && !o.notes && !(o.decision_ids ?? []).length;
+    if (o.status !== "ready" && o.status !== "missed" && !heldByMeeting) return fail(409, `This occurrence is ${o.status}`);
     if (p[3] === "held") {
       const input = await body<Schemas["HeldIn"]>();
       if ((input.notes ?? "").length > 10_000) return fail(422, "notes: at most 10,000 characters");

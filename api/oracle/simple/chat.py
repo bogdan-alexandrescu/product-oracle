@@ -36,8 +36,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from oracle import audit, company_time
 from oracle.auth.models import User
@@ -55,6 +56,7 @@ from oracle.simple.schemas import (
     ChatMessageOut,
     ChatRulesOut,
     ChatStopOut,
+    ChatSummaryOut,
     ChatThreadOut,
     SimpleChangeIn,
     SimpleChangeResult,
@@ -172,14 +174,19 @@ def quarter(n: int, today: date, year: int | None = None) -> tuple[date, date]:
     return _months(year, 3 * (n - 1) + 1, 3)
 
 
-def parse_period(text: str, today: date) -> tuple[date, date] | None:
-    """A period in words, from ``today`` (the company's day): "this quarter", "next
+def parse_period(
+    text: str, today: date, plan_span: tuple[date, date] | None = None
+) -> tuple[date, date] | None:
+    """A period in words, from ``today`` (the company's day): "this quarter" (the plan's
+    span when there is one, plan-model), "next
     quarter", "the quarter after [next]", "next month", "<month> [year]" (the next one on
     or after this month), "Qn [year]" and "Hn [year]" (the next on or after today's)."""
     t = " ".join(text.lower().split()).removeprefix("the ")
     q = (today.month - 1) // 3  # this quarter, from 0
     steps = {"this quarter": 0, "current quarter": 0, "next quarter": 1,
              "quarter after": 2, "quarter after next": 2}  # fmt: skip
+    if t in steps and steps[t] == 0 and plan_span is not None:
+        return plan_span
     if t in steps:
         return _months(today.year, 3 * (q + steps[t]) + 1, 3)
     if t == "this month":
@@ -224,6 +231,8 @@ class Reply:
         # The people an unknown or ambiguous name may mean (build turns them into choices).
         self.people: list[str] = []
         self.person_text: str | None = None
+        # roadmap-talk: where an item talk's answer comes from (the message's citations).
+        self.citations: list[dict[str, Any]] = []
 
 
 class Ctx:
@@ -242,6 +251,14 @@ class Ctx:
         self.ask_decider: User | None = None
         # Only a line that may build a decision card resolves it (False: the line is not one).
         self.wants_decider = True
+        # suggest_feature: the confirmed goals and the baseline features (look-alikes).
+        self.goals: list[Any] = []
+        self.features: list[Any] = []
+        # plan-model: "this quarter" is the span of the plan running today (else the next).
+        self.plan_span: tuple[date, date] | None = None
+        # roadmap-talk: the item whose talk this is ("it"), the company's goals.
+        self.item: service.Entry | None = None
+        self.talk_goals: list[Any] = []
 
     async def load(self) -> "Ctx":
         from oracle.simple import chat_actions
@@ -249,8 +266,15 @@ class Ctx:
         self.page_document = await chat_actions.page_document(self.db, self.page)
         self.overlays = await drafts.overlays_for(self.db, self.principal)
         self.read = await service.load(self.db, self.overlays)
+        from oracle.simple import plan
+
+        views = await plan.views(self.db, {e.prd.id for e in self.read.entries if e.prd})
+        span = plan.current_span(list(views.values()), self.read.today)
+        self.plan_span = (span.start, span.end) if span is not None else None
         self.people = list(await self.db.scalars(select(User).where(User.disabled_at.is_(None))))
+        await _talk().load(self)
         self.meeting_decider_name = await chat_actions.meeting_decider_name(self.db, self)
+        self.goals, self.features = await chat_actions.suggest_context(self.db)
         if self.meeting is None and self.wants_decider and chat_actions.proposes(self.principal):
             self.ask_decider = await chat_actions.ask_decider(self.db, self.page_document)
         return self
@@ -266,6 +290,8 @@ class Ctx:
 
     def find(self, text: str) -> service.Entry | Reply:
         x = _unquote(text).lower()
+        if self.item is not None and x in _talk().IT:
+            return self.item
         es = self.entries()
         by_id = [e for e in es if str(e.row.id) == x or (e.row.item_key or "").lower() == x]
         if len(by_id) == 1:
@@ -427,7 +453,7 @@ def _b_horizon(c: Ctx, a: dict[str, Any]) -> Built:
 
 def _b_move(c: Ctx, a: dict[str, Any]) -> Built:
     when, shift = _arg(a, "when"), _arg(a, "shift")
-    period = parse_period(when, c.today) if when else None
+    period = parse_period(when, c.today, c.plan_span) if when else None
     day = None
     if when and period is None:
         day = parse_day(when, c.today) if re.fullmatch(DAY, when, re.I) else None
@@ -684,7 +710,7 @@ def parse(c: Ctx, text: str) -> Reply:
             return e
         return Reply("answer", f"{e.row.title} is {e.status.replace('_', ' ')} ({e.row.horizon}).")
 
-    asks = _phrase(c, t) or _actions().phrase(t)
+    asks = _phrase(c, t) or _actions().phrase(t) or _talk().phrase(c, t)
     if asks is None:
         return Reply("question", f"I did not understand that. {EXAMPLES}", understood=False,
                      reader=True)  # fmt: skip
@@ -720,7 +746,7 @@ def _phrase(c: Ctx, t: str) -> tuple[str, dict[str, Any]] | None:
         # The item's name may hold " to ": try each split, the shortest time first.
         for at in reversed([x.start() for x in re.finditer(r" to ", t, re.I)]):
             what, when = t[5:at], re.sub(r"\.$", "", t[at + 4 :])
-            if parse_period(when, c.today) or (
+            if parse_period(when, c.today, c.plan_span) or (
                 re.fullmatch(DAY, when, re.I) and parse_day(when, c.today)
             ):
                 return "move_dates", {"item": what, "when": when}
@@ -853,24 +879,53 @@ def page_of_thread(d: Discussion | None) -> str | None:
     return rest[rest.find("/") :] if "/" in rest else None
 
 
+def _own_chat(d: Discussion | None, me: uuid.UUID) -> bool:
+    """Whether ``d`` is one of the person's own Ask chats on a Simple page (never a
+    meeting's chat, never the old per-person thread)."""
+    return d is not None and d.origin == "panel" and page_of_thread(d) is not None and (
+        ((d.subject or {}).get("path") or "").startswith(f"/simple/ask/{me}/"))  # fmt: skip
+
+
+async def own_chat(db: AsyncSession, principal: Any, chat_id: uuid.UUID) -> Discussion:
+    """ask-fresh: the caller's own Ask chat ``chat_id``; 404 for anyone else's or a meeting's."""
+    d = await db.get(Discussion, chat_id)
+    if not _own_chat(d, _me(principal)):
+        raise ChatError(404, "No such chat")
+    assert d is not None
+    return d
+
+
 async def _thread(
     db: AsyncSession,
     principal: Any,
     meeting_id: uuid.UUID | None,
     create: bool,
     page: str | None = None,
+    chat_id: uuid.UUID | None = None,
+    new_chat: bool = False,
+    general: bool = False,
 ) -> Discussion | None:
+    """A meeting's thread; else the caller's Ask chat ``chat_id``; else, with ``new_chat``
+    (ask-fresh: every time the Ask panel opens in Simple), a new chat about the page (none
+    until its first line); else the page's first chat (the older one-thread-per-page). A
+    new chat started under "General" stays General (Recent names it so)."""
     me = _me(principal)
     path, key = _key(meeting_id, me, page)
-    d = await db.scalar(
-        select(Discussion)
-        .where(Discussion.subject_key == key, Discussion.origin == "panel")
-        .order_by(Discussion.created_at)
-        .limit(1)
-    )
+    if meeting_id is None and chat_id is not None:
+        d: Discussion | None = await own_chat(db, principal, chat_id)
+    elif meeting_id is None and new_chat:
+        d = None
+    else:
+        d = await db.scalar(
+            select(Discussion)
+            .where(Discussion.subject_key == key, Discussion.origin == "panel")
+            .order_by(Discussion.created_at)
+            .limit(1)
+        )
     if d is None and create:
         title = "Meeting chat" if meeting_id else "Ask Oracle: changes"
-        d = Discussion(subject_kind="screen", subject={"path": path}, subject_key=key,
+        subject = {"path": path, **({"general": True} if general and meeting_id is None else {})}
+        d = Discussion(subject_kind="screen", subject=subject, subject_key=key,
                        title=title, visibility="private", author_only=meeting_id is None,
                        origin="panel", started_by=me)  # fmt: skip
         db.add(d)
@@ -887,14 +942,20 @@ async def _thread(
 
 
 async def thread(
-    db: AsyncSession, principal: Any, meeting_id: uuid.UUID | None = None, page: str | None = None
+    db: AsyncSession,
+    principal: Any,
+    meeting_id: uuid.UUID | None = None,
+    page: str | None = None,
+    chat_id: uuid.UUID | None = None,
+    new_chat: bool = False,
 ) -> ChatThreadOut:
     rules = None
     if meeting_id is not None:
         rules = await rules_of(db, meeting_id)
         if not _attends(principal, rules):
             raise ChatError(403, "Only the meeting's attendees use its chat")
-    d = await _thread(db, principal, meeting_id, create=False, page=page)
+    d = await _thread(db, principal, meeting_id, create=False, page=page, chat_id=chat_id,
+                      new_chat=new_chat)  # fmt: skip
     messages: list[ChatMessageOut] = []
     if d is not None:
         msgs = list(
@@ -933,13 +994,110 @@ async def thread(
                 body=body, at=m.created_at, kind=kind,  # type: ignore[arg-type]
                 cards=by_msg.get(m.id, []), reply_to=m.reply_to, choices=choices,
                 picked=r.picked if r is not None else None, retry=kind == "failed",
+                source=_talk().source_label(m.citations),
             ))  # fmt: skip
     return ChatThreadOut(
         id=d.id if d is not None else None,
         meeting_id=meeting_id,
         messages=messages,
         rules=await rules_out(db, principal, rules) if rules is not None else None,
+        ask_id=_ask_of(d),
     )
+
+
+def _ask_of(d: Discussion | None) -> uuid.UUID | None:
+    """The Oracle's Ask chat a Simple Ask chat handed its questions to (ask-fresh)."""
+    ask = ((d.subject or {}) if d is not None else {}).get("ask")
+    return uuid.UUID(ask) if ask else None
+
+
+def _summary(d: Discussion, question: str | None = None) -> ChatSummaryOut:
+    """A chat on Recent chats: named by its page, or "General" for one started under General,
+    and by its first question."""
+    page = page_of_thread(d) or "/simple"
+    general = bool((d.subject or {}).get("general"))
+    return ChatSummaryOut(id=d.id, page=page, page_name="General" if general else page_name(page),
+                          last_at=d.last_message_at or d.created_at, ask_id=_ask_of(d),
+                          general=general, question=question)  # fmt: skip
+
+
+QUESTION_CHARS = 200
+
+
+async def _questions(db: AsyncSession, chats: list[Discussion]) -> dict[uuid.UUID, str]:
+    """Each chat's first question: the person's first line in it, else in the Oracle's Ask
+    chat it handed it to (a chat whose first line went to Ask holds none of its own)."""
+    asks = {d.id: a for d in chats if (a := _ask_of(d)) is not None}
+    ids = [d.id for d in chats] + list(asks.values())
+    if not ids:
+        return {}
+    M = aliased(DiscussionMessage)
+    at = (
+        select(func.min(DiscussionMessage.created_at))
+        .where(
+            DiscussionMessage.discussion_id == M.discussion_id,
+            DiscussionMessage.author_kind == "person",
+            DiscussionMessage.deleted_at.is_(None),
+        )
+        .scalar_subquery()
+    )
+    rows = await db.execute(
+        select(M.discussion_id, M.body).where(
+            M.discussion_id.in_(ids),
+            M.author_kind == "person",
+            M.deleted_at.is_(None),
+            M.created_at == at,
+        )
+    )
+    first = {i: " ".join(b.split())[:QUESTION_CHARS] for i, b in rows.all()}
+    out: dict[uuid.UUID, str] = {}
+    for d in chats:
+        ask = asks.get(d.id)
+        q = first.get(d.id) or (first.get(ask) if ask is not None else None)
+        if q:
+            out[d.id] = q
+    return out
+
+
+def page_name(page: str | None) -> str:
+    """A Simple page's name as the panel says it (never its route): Home, Roadmap..."""
+    from oracle.discussions.context import page_name as named
+
+    return named(page_of(page))
+
+
+async def recent(db: AsyncSession, principal: Any, limit: int = 10) -> list[ChatSummaryOut]:
+    """ask-fresh: the caller's last Ask chats from any Simple page, newest first; meeting
+    chats stay in their meeting (never listed)."""
+    me = _me(principal)
+    rows = await db.scalars(
+        select(Discussion)
+        .where(
+            Discussion.origin == "panel",
+            Discussion.started_by == me,
+            Discussion.subject_key.startswith(f"screen:/simple/ask/{me}/"),
+        )
+        .order_by(Discussion.last_message_at.desc().nulls_last(), Discussion.created_at.desc())
+        .limit(limit)
+    )
+    chats = [d for d in rows if _own_chat(d, me)]
+    questions = await _questions(db, chats)
+    return [_summary(d, questions.get(d.id)) for d in chats]
+
+
+async def link_ask(
+    db: AsyncSession, principal: Any, chat_id: uuid.UUID, ask_id: uuid.UUID
+) -> ChatSummaryOut:
+    """ask-fresh: the Oracle's Ask chat (the caller's own private panel chat) this Ask chat
+    handed its questions to, so the chat reopened from Recent shows both."""
+    d = await own_chat(db, principal, chat_id)
+    ask = await db.get(Discussion, ask_id)
+    if (ask is None or ask.origin != "panel" or ask.visibility != "private"
+            or ask.started_by != _me(principal)):  # fmt: skip
+        raise ChatError(404, "No such chat")
+    d.subject = {**(d.subject or {}), "ask": str(ask_id)}
+    await db.commit()
+    return _summary(d, (await _questions(db, [d])).get(d.id))
 
 
 async def post(
@@ -949,6 +1107,9 @@ async def post(
     meeting_id: uuid.UUID | None = None,
     only_understood: bool = False,
     page: str | None = None,
+    chat_id: uuid.UUID | None = None,
+    new_chat: bool = False,
+    general: bool = False,
 ) -> ChatThreadOut:
     """The person's line and Oracle's reply. parse() answers the lines it knows at once;
     any other line is for Oracle's reader: Oracle's line reads "Reading that…" while the
@@ -960,18 +1121,32 @@ async def post(
         rules = await rules_of(db, meeting_id)
         if not _attends(principal, rules):
             raise ChatError(403, "Only the meeting's attendees use its chat")
+    elif chat_id is not None:
+        page = page_of_thread(await own_chat(db, principal, chat_id))
     ctx = Ctx(db, principal, rules)
     ctx.page = page
     ctx.wants_decider = _decision_line(text)
     await ctx.load()
-    reply = parse(ctx, text)
+    reply = _talk().restate(ctx, parse(ctx, text))
+    if ctx.item is not None and reply.kind == "answer":
+        reply.citations = _talk().source_of(ctx, "roadmap")
     if only_understood and not reply.understood and not reply.reader:
-        out = await thread(db, principal, meeting_id, page)
+        if meeting_id is None and chat_id is None and new_chat:
+            # A new chat's first line goes to Oracle's Ask: the chat exists (empty) so the
+            # panel links its Ask chat to it and Recent lists it (ask-fresh).
+            d = await _thread(db, principal, None, create=True, page=page, new_chat=True,
+                              general=general)  # fmt: skip
+            assert d is not None
+            d.last_message_at = datetime.now(UTC)
+            await db.commit()
+            chat_id, new_chat = d.id, False
+        out = await thread(db, principal, meeting_id, page, chat_id, new_chat)
         out.understood = False
         return out
     if reply.reader:
         reply = Reply("pending", READING)
-    asked, answer = await _write(db, principal, meeting_id, text.strip(), reply, page=page)
+    asked, answer = await _write(db, principal, meeting_id, text.strip(), reply, page=page,
+                                 chat_id=chat_id, new_chat=new_chat, general=general)  # fmt: skip
     if reply.kind == "pending":
         read = SimpleChatRead(discussion_id=answer.discussion_id, message_id=answer.id,
                               ask_id=asked.id, meeting_id=meeting_id, by=_me(principal),
@@ -980,7 +1155,21 @@ async def post(
         await db.flush()
         await _enqueue_read(db, principal, read)
     await db.commit()
-    return await thread(db, principal, meeting_id, page)
+    return await _out(db, principal, meeting_id, page, answer.discussion_id)
+
+
+async def _out(
+    db: AsyncSession,
+    principal: Any,
+    meeting_id: uuid.UUID | None,
+    page: str | None,
+    discussion_id: uuid.UUID,
+) -> ChatThreadOut:
+    """The thread a line was written to: a meeting's, else that Ask chat (ask-fresh: one of
+    the person's chats, not only the page's first)."""
+    if meeting_id is not None:
+        return await thread(db, principal, meeting_id, page)
+    return await thread(db, principal, None, page, chat_id=discussion_id)
 
 
 async def _write(
@@ -990,11 +1179,15 @@ async def _write(
     line: str,
     reply: Reply,
     page: str | None = None,
+    chat_id: uuid.UUID | None = None,
+    new_chat: bool = False,
+    general: bool = False,
 ) -> tuple[DiscussionMessage, DiscussionMessage]:
     """The person's line and Oracle's reply with its cards (and choices); the caller
     commits."""
     me = _me(principal)
-    d = await _thread(db, principal, meeting_id, create=True, page=page)
+    d = await _thread(db, principal, meeting_id, create=True, page=page, chat_id=chat_id,
+                      new_chat=new_chat, general=general)  # fmt: skip
     assert d is not None
     # Real time orders the lines (the company clock may stand still in tests).
     at = datetime.now(UTC)
@@ -1003,6 +1196,7 @@ async def _write(
     answer = DiscussionMessage(discussion_id=d.id, author_kind="oracle", body=reply.body,
                                status="pending" if reply.kind == "pending" else "complete",
                                reply_to=None, model=ENGINE, prompt=reply.kind,
+                               citations=reply.citations,
                                created_at=at + timedelta(microseconds=1))  # fmt: skip
     db.add_all([asked, answer])
     d.last_message_at = at
@@ -1122,12 +1316,15 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
             )
     else:
         context["page"] = read.page
+        if c.item is not None:
+            # roadmap-talk: the item's own talk ("it" is this item).
+            context["item"] = _talk().item_context(c)
     items = []
     for e in c.entries()[:200]:
         r_ = e.resolved
         deciders = service.decider_ids(e, c.read.deciders)
         items.append({
-            "id": str(e.row.id), "key": e.row.item_key, "title": e.row.title,
+            "id": str(e.row.id), "key": e.row.item_key, "code": e.code, "title": e.row.title,
             "start": r_.start.date.isoformat(), "end": r_.end.date.isoformat(),
             "estimated": r_.undated, "milestone": (e.milestone.name if e.milestone else None),
             "owner": e.owner_name, "decider": _or([names[i] for i in deciders if i in names])
@@ -1146,6 +1343,8 @@ async def _payload(c: Ctx, read: SimpleChatRead) -> dict[str, Any]:
         "context": context,
         "items": items,
         "people": [{"name": display_name(u.email, u.name), "email": u.email} for u in c.people],
+        "goals": [g.title for g in c.talk_goals],
+        "milestones": [n for n, _ in _talk().milestones(c).values()],
         "today": c.today.isoformat(),
         "ops": [{"op": o.op, "describe": o.describe, "args": o.args} for o in OPS.values()],
     }
@@ -1157,6 +1356,14 @@ def _grounded(c: Ctx, said: str) -> bool:
     t = said.lower()
     names = [e.row.title for e in c.entries()] + [e.row.item_key or "" for e in c.entries()]
     names += [display_name(u.email, u.name) for u in c.people]
+    if c.item is not None:
+        # roadmap-talk: in an item's talk ("it") the answer may name its milestone, goal or PRD.
+        e = c.item
+        names += [x for x in (getattr(e, "code", None), e.milestone.name if e.milestone else None,
+                              e.goal.title if e.goal is not None else None,
+                              e.prd.title if e.prd is not None else None) if x]  # fmt: skip
+        if e.milestone is not None and e.milestone.name:
+            names.append(e.milestone.name.split()[0])
     return any(len(n) >= 3 and n.lower() in t for n in names)
 
 
@@ -1246,10 +1453,14 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     principal = await drafts.principal_for(s, job.tenant_id, read.by)
     visibility.bind(s, principal)
     rules = await rules_of(s, read.meeting_id) if read.meeting_id is not None else None
-    c = await Ctx(s, principal, rules).load()
+    c = Ctx(s, principal, rules)
+    c.page = read.page
+    await c.load()
     answer = await ask(READER_JOB, await _payload(c, read))
-    reply = interpret(c, answer, read.ask_box)
+    reply = _talk().restate(c, interpret(c, answer, read.ask_box))
     msg.body, msg.prompt, msg.status = reply.body, reply.kind, "complete"
+    if reply.kind == "answer" and isinstance(answer, dict):
+        msg.citations = _talk().source_of(c, answer.get("source"))
     read.choices = _jsonable(reply.choices)
     await _attach(s, principal, msg, read.meeting_id, reply)
     await s.flush()
@@ -1285,7 +1496,7 @@ async def retry(db: AsyncSession, principal: Any, message_id: uuid.UUID) -> Chat
     msg.body = READING
     await _enqueue_read(db, principal, read)
     await db.commit()
-    return await thread(db, principal, read.meeting_id, read.page)
+    return await _out(db, principal, read.meeting_id, read.page, read.discussion_id)
 
 
 async def choose(
@@ -1312,9 +1523,11 @@ async def choose(
             reply = build(c, ch["op"], ch.get("args") or {}, _count(1))
             if reply.kind != "cards":
                 reply = Reply("note", reply.body)
-    await _write(db, principal, read.meeting_id, ch["label"], reply, page=read.page)
+    chat_id = read.discussion_id if read.meeting_id is None else None
+    await _write(db, principal, read.meeting_id, ch["label"], reply, page=read.page,
+                 chat_id=chat_id)  # fmt: skip
     await db.commit()
-    return await thread(db, principal, read.meeting_id, read.page)
+    return await _out(db, principal, read.meeting_id, read.page, read.discussion_id)
 
 
 async def apply_all(
@@ -1328,6 +1541,7 @@ async def apply_all(
         raise ChatError(404, "No such line")
     # The Ask thread's page (a thread per person and page), read before the rollback below.
     page = page_of_thread(await db.get(Discussion, msg.discussion_id))
+    discussion_id = msg.discussion_id
     cards = list(
         await db.scalars(
             select(SimpleChatCard)
@@ -1352,7 +1566,7 @@ async def apply_all(
             stopped = ChatStopOut(card_id=card_id, summary=summary, reason=str(e.detail))
             break
         applied.append(card_id)
-    return await thread(db, principal, meeting_id, page), applied, stopped
+    return await _out(db, principal, meeting_id, page, discussion_id), applied, stopped
 
 
 # --------------------------------------------------------------------------- cards
@@ -1384,6 +1598,30 @@ def _decides(principal: Any, card: SimpleChatCard, read_: service.Read) -> bool:
         return has_role(principal.role, "owner")
     e = read_.by_id().get(card.item_id)
     return e is not None and service.can_decide(principal, e, read_.deciders)
+
+
+async def _adds_directly(
+    db: AsyncSession, principal: Any, card: SimpleChatCard, read_: service.Read
+) -> bool:
+    """roadmap-talk: whether an add_item card applies (else proposes): the engine's own rule
+    (additions.create) on the roadmap the new item goes to."""
+    from oracle.simple import additions
+
+    where = (card.target or {}).get("where") or {}
+    try:
+        goal = (await additions._goal(db, where.get("value"))
+                if where.get("kind") == "goal" else None)  # fmt: skip
+        doc = await additions._roadmap_for(db, principal, card.target.get("roadmap_id"), goal,
+                                           read_)  # fmt: skip
+    except ChangeError:
+        return has_role(principal.role, "owner")
+    return drafts.can_edit(principal, doc.id, await drafts.who(db, {doc.id}))
+
+
+def _talk() -> Any:
+    from oracle.simple import roadmap_talk
+
+    return roadmap_talk
 
 
 def _actions() -> Any:
@@ -1487,12 +1725,15 @@ async def cards_out(
                 ]
                 fixes = [x for i in (ae.row.id, *ae.needed_by) if i in by_id
                          for x in _fixes(by_id[i], by_id)]  # fmt: skip
+        change_words, correct = _talk().correct_out(c)
         may: str | None = None
         bar = None
         if c.status == "open":
             bar = _card_bar(principal, c, rules)
             if bar is None:
-                may = "apply" if _decides(principal, c, read_) else "propose"
+                decides = (await _adds_directly(db, principal, c, read_) if c.op == "add_item"
+                           else _decides(principal, c, read_))  # fmt: skip
+                may = "apply" if decides else "propose"
         outs.append(ChatCardOut(
             id=c.id, message_id=c.message_id, op=c.op, target=c.target,  # type: ignore[arg-type]
             before=c.before, after=c.after, summary=c.summary, item_id=c.item_id,
@@ -1500,7 +1741,8 @@ async def cards_out(
             may=may, why_not=bar, flags=flags, fixes=fixes, preview=c.preview,  # type: ignore[arg-type]
             flow=await _flow(db, c), change_id=c.change_id,
             decided_by_name=names.get(c.decided_by) if c.decided_by else None,  # type: ignore[arg-type]
-            decided_at=c.decided_at, decision_id=c.decision_id,
+            decided_at=c.decided_at, decision_id=c.decision_id, change_words=change_words,
+            correct=correct if c.status == "open" else None,
         ))  # fmt: skip
     return outs
 
@@ -1524,15 +1766,25 @@ async def one(db: AsyncSession, principal: Any, card: SimpleChatCard, rules: Any
 
 
 async def apply(
-    db: AsyncSession, principal: Any, card_id: uuid.UUID, fix: int | None = None
+    db: AsyncSession,
+    principal: Any,
+    card_id: uuid.UUID,
+    fix: int | None = None,
+    values: dict[str, Any] | None = None,
 ) -> tuple[ChatCardOut, SimpleChangeResult]:
     """Apply a card (or one of its fixes) through the change engine with the caller's own
-    rights; in a meeting an applied card is a meeting decision."""
+    rights; in a meeting an applied card is a meeting decision. ``values`` (roadmap-talk's
+    Correct): the card is rebuilt from them first, so the corrected values apply."""
     me = _me(principal)
     card, rules = await _get(db, principal, card_id)
     bar = _card_bar(principal, card, rules)
     if bar is not None:
         raise ChatError(403, bar)
+    if values:
+        if fix is not None:
+            raise ChatError(422, "A fix takes no corrections")
+        await _talk().correct(db, principal, card, values)
+        await db.flush()
     if card.op in _actions().DIRECT_OPS:
         return await _apply_direct(db, principal, card_id, rules, fix)
     if fix is not None:
@@ -1576,6 +1828,10 @@ async def apply(
     if fix is None:
         card.status = "applied" if status == "applied" else "proposed"
         card.change_id, card.decided_by, card.decided_at = result.change.id, me, company_time.now()
+        if card.op == "add_item" and status == "applied" and card.item_id is None:
+            # roadmap-talk: the new item, so its bar flashes on the timeline.
+            new = (result.change.target or {}).get("item_id")
+            card.item_id = uuid.UUID(str(new)) if new else None
     if rules is not None and status == "applied":
         meetings = _module(MEETINGS)
         if meetings is not None:
@@ -1758,3 +2014,4 @@ async def walk(db: AsyncSession, principal: Any) -> WalkOut:
 
 
 import oracle.simple.chat_actions  # noqa: E402, F401  (chat-join: registers its ACTIONS)
+import oracle.simple.roadmap_talk  # noqa: E402, F401  (roadmap-talk: registers its actions)

@@ -6,8 +6,10 @@ import { useMemo, useState } from "react";
 import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRows, Top } from "@/app/simple/_home/cards";
 import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
-import { GoalPanel, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
+import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
+import { usePhone } from "@/components/simple/FlowViews";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
+import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
@@ -21,7 +23,7 @@ import {
   NEW_FLOW_OPS,
   OP_WORDS,
   planByMonth,
-  planInput,
+  planInputs,
   prdInPlay,
   waitSentence,
   type BrokenLink,
@@ -67,14 +69,22 @@ export default function SimpleHome() {
   const goals = useQuery(k("goals"), () => unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal" } } })), { keepPrevious: true });
   const changes = useQuery(k("changes"), () => unwrap(api.GET("/v1/simple/changes")), { keepPrevious: true });
   const drafts = useQuery(k("drafts"), () => unwrap(api.GET("/v1/simple/drafts")), { keepPrevious: true });
+  // prd-questions: the one list of product decisions waiting for me (GET /v1/simple/decisions/waiting):
+  // its count, its late count and the PRDs' questions; then the other judgement calls from the
+  // Inbox, never Oracle's run approvals (class checkpoint) nor a PRD's question read twice.
+  const waiting = useQuery(k("waiting"), () => unwrap(api.GET("/v1/simple/decisions/waiting")), { keepPrevious: true });
   const decisions = useQuery(
     k("decisions"),
     async (): Promise<Decision[]> => {
       const rows = (await loadInbox()).decisions.filter((d) => d.counts && d.reason === "needs_decision");
-      return Promise.all(rows.map((d) => unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } }))));
+      const all = await Promise.all(rows.map((d) => unwrap(api.GET("/v1/decisions/{decision}", { params: { path: { decision: String(d.number) } } }))));
+      return all.filter((d) => d.class !== "checkpoint" && d.origin !== "checkpoint" && (d.origin as string) !== "prd");
     },
     { keepPrevious: true },
   );
+  const questionActions = useQuestionActions(reloadAll);
+  // A4: a phone's Home shows the soonest two decisions, a desktop's three.
+  const phone = usePhone();
   // The one list of scheduled reviews (Meetings > Upcoming): its first row is the next.
   const meeting = useQuery(k("meeting"), async () => {
     const list = await unwrap(api.GET("/v1/simple/meetings"));
@@ -124,7 +134,7 @@ export default function SimpleHome() {
     [ranked, roadmap.data, priorities.data],
   );
   const plan = useMemo(
-    () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").map(planInput), roadmap.data.today) : null),
+    () => (roadmap.data && planPrd ? planByMonth(roadmap.data.items.filter((i) => i.prd?.id === planPrd.id && i.status !== "cut").flatMap(planInputs), roadmap.data.today) : null),
     [roadmap.data, planPrd],
   );
   const draft = (drafts.data ?? []).find((d) => d.status === "working" && d.changes > 0 && (d.created_by === myId || d.participant_ids.includes(myId)));
@@ -137,7 +147,7 @@ export default function SimpleHome() {
   const now = new Date();
   const hour = Number(formatInZone(now.toISOString(), zone, { hour: "numeric", hourCycle: "h23" }).replace(/\D.*$/, "")) || 9;
   const firstName = (me?.name ?? me?.email ?? "").split(/[\s@]/)[0];
-  const decisionCount = decisions.data?.length ?? 0;
+  const decisionCount = waiting.data?.count ?? 0;
   const sentence = reads
     ? "Here is where the plan stands."
     : waitSentence([
@@ -317,17 +327,7 @@ export default function SimpleHome() {
                         </span>
                       )}
                     </div>
-                    {(() => {
-                      const known = suggestions.data?.goals.find((x) => x.goal.id === g.id);
-                      if (!known) return null;
-                      const n = (suggestions.data?.suggestions ?? []).filter((x) => x.goal.id === g.id).length;
-                      return (
-                        <button type="button" data-testid="home-goal-suggestions" onClick={() => setGoalPanel(known.goal)} className="simple-small self-start font-semibold text-accent-ink hover:underline">
-                          {n ? `✦ ${n} suggested ${n === 1 ? "feature" : "features"}` : proposes ? "✦ Suggest features" : "✦ No suggested features"}
-                          {known.pending && " · Oracle is suggesting…"}
-                        </button>
-                      );
-                    })()}
+                    <SuggestionsButton goal={{ id: g.id, key: g.id, title: g.name }} api={suggestions} onOpen={setGoalPanel} className="self-start" />
                   </li>
                 ))}
               </ul>
@@ -340,7 +340,7 @@ export default function SimpleHome() {
         <section aria-label="Summary" data-testid="home-summary" className="simple-card">
           <ul className="grid grid-cols-3 gap-3 max-[600px]:grid-cols-1">
             {[
-              ["decisions", decisions.data ? decisionCount : null, "decisions waiting for you"],
+              ["decisions", waiting.data ? decisionCount : null, "decisions waiting for you"],
               ["proposals", changes.data ? proposalRows.length : null, proposalRows === toDecide ? "proposals on your items" : "of your proposals waiting"],
               ["broken-links", roadmap.data ? broken.length : null, "broken links"],
             ].map(([id, n, label]) => (
@@ -371,16 +371,28 @@ export default function SimpleHome() {
       )}
 
       {!reads && (
-        <HomeCard id="decisions" icon="flag" title="Decisions waiting for you" count={decisions.data?.length} all="/simple/decisions">
-          <Block q={decisions} testId="home-decisions">
+        <HomeCard
+          id="decisions"
+          icon="flag"
+          title="Decisions waiting for you"
+          count={waiting.data?.count}
+          all="/simple/decisions"
+        >
+          <Block q={{ ...decisions, error: waiting.error ?? decisions.error, data: waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined }} testId="home-decisions">
             {(rows) =>
               rows.length === 0 ? (
                 <p className="simple-small" data-testid="home-decisions-empty">
                   No decision waits on you.
                 </p>
               ) : (
-                <Top rows={rows} more="/simple/decisions">
-                  {(d) => <DecisionRow key={d.id} d={d} onDecide={decide} />}
+                <Top rows={rows} max={phone ? 2 : 3} more="/simple/decisions">
+                  {(d) =>
+                    "code" in d ? (
+                      <QuestionRow key={d.id} q={d} mode="list" testId="home-question" actions={questionActions} />
+                    ) : (
+                      <DecisionRow key={d.id} d={d} onDecide={decide} />
+                    )
+                  }
                 </Top>
               )
             }
@@ -450,7 +462,7 @@ export default function SimpleHome() {
                           .join(", ")}`}
                       <br />
                       {next.pre_read_ready && next.occurrence_id ? (
-                        <Link className="underline" href={`/company/rituals/${next.occurrence_id}`}>
+                        <Link className="underline" href={`/simple/meetings?pre_read=${next.occurrence_id}`}>
                           Open pre-read
                         </Link>
                       ) : (
@@ -480,6 +492,12 @@ export default function SimpleHome() {
         <Block q={roadmap} testId="home-plan">
           {(r) => (
             <>
+              {/* The plan's span, when the PRD's plan dates it ("2 Nov - 12 Feb"). */}
+              {r.span && (
+                <p className="simple-small" data-testid="home-plan-span">
+                  {r.span.label}
+                </p>
+              )}
               {/* In the plan's card, filled with it: above the goal band it pushed everything down. */}
               {r.changes_in_review > 0 && (
                 <p role="status" data-testid="home-in-review" className="rounded-xl bg-warn-bg px-4 py-3 text-warn">
@@ -564,10 +582,14 @@ export default function SimpleHome() {
           <Block q={{ ...changes, error: changes.error ?? inbox.error, data: inbox.data && changes.data }} testId="home-since">
             {(rows) => {
               const seen = inbox.data?.last_seen_at ?? null;
+              const fresh = rows.filter((c) => c.status !== "proposed" && (!seen || (c.decided_at ?? c.at) > seen));
+              const shown = new Set(fresh.map((c) => c.id));
               const recent = [
-                ...rows
-                  .filter((c) => c.status !== "proposed" && (!seen || (c.decided_at ?? c.at) > seen))
-                  .map((c) => ({ key: c.id, at: c.decided_at ?? c.at, icon: "roadmap" as const, title: changeWords(c, roadmap.data?.items.find((i) => i.id === c.target.item_id)), who: c.by_name, status: c.status })),
+                ...fresh
+                  // An undo says itself on the change it undid ("· undone") when that one is shown; an
+                  // undo of a change from before the last visit is a row of its own.
+                  .filter((c) => !c.undoes_id || !shown.has(c.undoes_id))
+                  .map((c) => ({ key: c.id, at: c.decided_at ?? c.at, icon: "roadmap" as const, title: c.words || `${c.by_name}: ${changeWords(c, roadmap.data?.items.find((i) => i.id === c.target.item_id))}`, who: null, status: null })),
                 ...(inbox.data?.decisions ?? [])
                   .filter((d) => (d.reason === "oracle_decided" || d.reason === "informed") && (!seen || d.since > seen))
                   .map((d) => ({ key: d.id, at: d.since, icon: "flag" as const, title: d.title, who: "Decision", status: "decided" })),
@@ -584,7 +606,7 @@ export default function SimpleHome() {
                       testId="home-since-row"
                       lead={<RowIcon name={r.icon} />}
                       title={r.title}
-                      meta={`${r.who} · ${r.status} · ${formatInZone(r.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
+                      meta={`${r.who && r.status ? `${r.who} · ${r.status} · ` : ""}${formatInZone(r.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`}
                     />
                   )}
                 </Top>
@@ -603,6 +625,11 @@ export default function SimpleHome() {
 function stored(i: Schemas["SimpleRoadmapItem"]) {
   const own = (d: Schemas["SimpleDate"]) => (d.source === "typed" || d.source === "accepted" ? d.date : null);
   return { start_date: own(i.start), end_date: own(i.end) };
+}
+
+/** Home's decision rows: the late questions first, then the other judgement calls, then the rest of the questions (soonest first). */
+function homeDecisionRows(questions: Question[], others: Decision[]): (Question | Decision)[] {
+  return [...questions.filter((q) => q.late), ...others, ...questions.filter((q) => !q.late)];
 }
 
 /** A decision waiting for me: Decide with the proposed option, or choose another. */

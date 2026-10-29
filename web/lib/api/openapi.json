@@ -42092,6 +42092,110 @@
         "x-per-item": "owner"
       }
     },
+    "/v1/simple/prds/{prd}/plan": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Prd Plan",
+        "description": "The PRD's plan as its latest approved version has it.",
+        "operationId": "get_simple_prd_plan",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimplePlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/prds/{prd}/plan/read-again": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Read Simple Prd Plan Again",
+        "description": "Read the plan again from the approved version (its tables, else Oracle's job).",
+        "operationId": "read_simple_prd_plan_again",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "prd",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Prd"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimplePlanOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "owner"
+      }
+    },
     "/v1/simple/sessions": {
       "post": {
         "tags": [
@@ -43227,6 +43331,70 @@
         "x-per-item": "commenter"
       }
     },
+    "/v1/simple/goals/{goal_id}/suggestions": {
+      "post": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Create Goal Suggestion",
+        "description": "People's suggestions: file one on a goal, next to Oracle's.",
+        "operationId": "create_goal_suggestion",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Goal Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimpleGoalSuggestionIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleGoalSuggestion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer",
+        "x-per-item": "commenter"
+      }
+    },
     "/v1/simple/goal-suggestions/{suggestion_id}/accept": {
       "post": {
         "tags": [
@@ -43295,7 +43463,7 @@
           }
         },
         "x-min-role": "viewer",
-        "x-per-item": "commenter"
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/goal-suggestions/{suggestion_id}/reject": {
@@ -43366,7 +43534,7 @@
           }
         },
         "x-min-role": "viewer",
-        "x-per-item": "approver"
+        "x-per-item": "owner"
       }
     },
     "/v1/simple/chat": {
@@ -43375,7 +43543,7 @@
           "simple"
         ],
         "summary": "Get Simple Chat",
-        "description": "The caller's Ask-panel thread on ``page`` (the Simple page the panel was opened\nfrom; Home without one): their requests, Oracle's replies and cards.",
+        "description": "The caller's Ask chat ``chat`` (ask-fresh: one of theirs, 404 for anyone else's or a\nmeeting's); without it, their first Ask-panel thread on ``page`` (Home without one):\ntheir requests, Oracle's replies and cards.",
         "operationId": "get_simple_chat",
         "security": [
           {
@@ -43401,6 +43569,23 @@
                 }
               ],
               "title": "Page"
+            }
+          },
+          {
+            "name": "chat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Chat"
             }
           }
         ],
@@ -43428,6 +43613,100 @@
         },
         "x-min-role": "viewer",
         "x-per-item": "viewer"
+      }
+    },
+    "/v1/simple/chats": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "List Simple Chats",
+        "description": "Recent chats (ask-fresh): the caller's last ten Ask chats from any Simple page,\nnewest first, each named by its page; meeting chats stay in their meeting.",
+        "operationId": "list_simple_chats",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatListOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/chats/{chat_id}/ask": {
+      "put": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Link Simple Chat Ask",
+        "description": "Link the caller's own Oracle's Ask chat to their Ask chat ``chat_id`` (the panel\nhanded it a question), so the chat reopened from Recent shows both.",
+        "operationId": "link_simple_chat_ask",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Chat Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatAskIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChatSummaryOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "viewer"
       }
     },
     "/v1/simple/chat/messages": {
@@ -44842,6 +45121,37 @@
             }
           }
         },
+        "x-min-role": "viewer"
+      }
+    },
+    "/v1/simple/decisions/waiting": {
+      "get": {
+        "tags": [
+          "simple"
+        ],
+        "summary": "Get Simple Decisions Waiting",
+        "description": "prd-questions: the product decisions waiting for this person (Home's card, the rail's\ncount, the review's \"Decisions due\"); Oracle's run approvals only counted, for Detailed.",
+        "operationId": "get_simple_decisions_waiting",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimpleDecisionsWaitingOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
         "x-min-role": "viewer"
       }
     },
@@ -58197,6 +58507,27 @@
               }
             ],
             "title": "Fix"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Values"
           }
         },
         "type": "object",
@@ -58223,6 +58554,20 @@
           "card"
         ],
         "title": "ChatApplyOut"
+      },
+      "ChatAskIn": {
+        "properties": {
+          "ask_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ask Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ask_id"
+        ],
+        "title": "ChatAskIn"
       },
       "ChatCardOut": {
         "properties": {
@@ -58280,7 +58625,9 @@
                   "set_milestone",
                   "add_feature_ask",
                   "set_owner",
-                  "set_decider"
+                  "set_decider",
+                  "decide_question",
+                  "name_decider"
                 ]
               },
               {
@@ -58290,7 +58637,8 @@
                   "minutes_note",
                   "open_question",
                   "agenda_next",
-                  "agenda_skip"
+                  "agenda_skip",
+                  "suggest_feature"
                 ]
               }
             ],
@@ -58457,6 +58805,39 @@
               }
             ],
             "title": "Decision Id"
+          },
+          "change_words": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Change Words"
+          },
+          "correct": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correct"
           }
         },
         "type": "object",
@@ -58558,7 +58939,9 @@
               "set_milestone",
               "add_feature_ask",
               "set_owner",
-              "set_decider"
+              "set_decider",
+              "decide_question",
+              "name_decider"
             ],
             "title": "Op"
           },
@@ -58612,6 +58995,28 @@
             "type": "boolean",
             "title": "Only Understood",
             "default": false
+          },
+          "chat_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chat Id"
+          },
+          "new_chat": {
+            "type": "boolean",
+            "title": "New Chat",
+            "default": false
+          },
+          "general": {
+            "type": "boolean",
+            "title": "General",
+            "default": false
           }
         },
         "type": "object",
@@ -58619,6 +59024,22 @@
           "text"
         ],
         "title": "ChatIn"
+      },
+      "ChatListOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChatSummaryOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ChatListOut"
       },
       "ChatMessageOut": {
         "properties": {
@@ -58715,6 +59136,17 @@
             "type": "boolean",
             "title": "Retry",
             "default": false
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
           }
         },
         "type": "object",
@@ -58831,6 +59263,65 @@
         ],
         "title": "ChatStopOut"
       },
+      "ChatSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "page": {
+            "type": "string",
+            "title": "Page"
+          },
+          "page_name": {
+            "type": "string",
+            "title": "Page Name"
+          },
+          "last_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last At"
+          },
+          "ask_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ask Id"
+          },
+          "general": {
+            "type": "boolean",
+            "title": "General",
+            "default": false
+          },
+          "question": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "page",
+          "page_name",
+          "last_at"
+        ],
+        "title": "ChatSummaryOut",
+        "description": "ask-fresh: one of the person's Ask chats on Recent chats, named by its page."
+      },
       "ChatThreadOut": {
         "properties": {
           "id": {
@@ -58878,6 +59369,18 @@
             "type": "boolean",
             "title": "Understood",
             "default": true
+          },
+          "ask_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ask Id"
           }
         },
         "type": "object",
@@ -63465,6 +63968,17 @@
               }
             ],
             "title": "Decided At"
+          },
+          "slice_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slice Code"
           },
           "can_decide": {
             "type": "boolean",
@@ -79280,7 +79794,9 @@
               "set_milestone",
               "add_feature_ask",
               "set_owner",
-              "set_decider"
+              "set_decider",
+              "decide_question",
+              "name_decider"
             ],
             "title": "Op"
           },
@@ -94409,11 +94925,27 @@
                 "type": "null"
               }
             ]
+          },
+          "simple_decisions_view": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "list",
+                  "board",
+                  "meetings"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simple Decisions View"
           }
         },
         "type": "object",
         "title": "Preferences",
-        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).\n``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);\nunset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all."
+        "description": "What the signed-in user (or API token) chose. ``document_view``: the layer\ndocuments open on; brief unless they switched to the full document. ``setup_hidden``:\nthey hid Home's Set up checklist (A1); a header chip shows it again.\n``welcome_dismissed``: they dismissed Home's welcome for invited members (A1).\n``slack_pings``: the Slack pings they get (My account). ``experience``: the mode they\nlast switched to (#723); unset, they land by role (viewers and commenters in Simple).\n``priorities_line``: where Simple's priorities draw the line; unset, this quarter (``now``).\n``simple_roadmap``: the Simple roadmap's Roadmap filter (``all`` or a roadmap's id);\nunset, all roadmaps. ``simple_filters``: its PRD, Goal and Track picks; unset, all.\n``simple_decisions_view``: Simple's Decisions as List, Board or By meeting; unset, List."
       },
       "PreferencesUpdate": {
         "properties": {
@@ -94512,6 +95044,22 @@
                 "type": "null"
               }
             ]
+          },
+          "simple_decisions_view": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "list",
+                  "board",
+                  "meetings"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Simple Decisions View"
           }
         },
         "type": "object",
@@ -112065,7 +112613,9 @@
               "set_milestone",
               "add_feature_ask",
               "set_owner",
-              "set_decider"
+              "set_decider",
+              "decide_question",
+              "name_decider"
             ],
             "title": "Op"
           },
@@ -112180,7 +112730,9 @@
               "set_milestone",
               "add_feature_ask",
               "set_owner",
-              "set_decider"
+              "set_decider",
+              "decide_question",
+              "name_decider"
             ],
             "title": "Op"
           },
@@ -112304,6 +112856,17 @@
             "type": "boolean",
             "title": "Can Undo",
             "default": false
+          },
+          "words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Words"
           }
         },
         "type": "object",
@@ -112512,6 +113075,28 @@
                 "type": "null"
               }
             ]
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "chosen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen"
           }
         },
         "type": "object",
@@ -112563,6 +113148,50 @@
             },
             "type": "array",
             "title": "Meeting Options"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestion"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          },
+          "waiting_count": {
+            "type": "integer",
+            "title": "Waiting Count",
+            "default": 0
+          },
+          "late_count": {
+            "type": "integer",
+            "title": "Late Count",
+            "default": 0
+          },
+          "approvals_waiting": {
+            "type": "integer",
+            "title": "Approvals Waiting",
+            "default": 0
+          },
+          "approvals_example": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approvals Example"
+          },
+          "view": {
+            "type": "string",
+            "enum": [
+              "list",
+              "board",
+              "meetings"
+            ],
+            "title": "View",
+            "default": "list"
           }
         },
         "type": "object",
@@ -112574,7 +113203,44 @@
           "meeting_options"
         ],
         "title": "SimpleDecisionsOut",
-        "description": "Simple's Decisions (direction B \"By meeting\"): the meetings' decisions grouped under\nthem, newest first, then the decisions taken outside meetings."
+        "description": "Simple's Decisions (direction B \"By meeting\"): the meetings' decisions grouped under\nthem, newest first, then the decisions taken outside meetings. prd-questions: the\nPRDs' open questions as decisions (List and Board), the person's remembered view and\nhow many of Oracle's run approvals Simple leaves to Detailed."
+      },
+      "SimpleDecisionsWaitingOut": {
+        "properties": {
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          },
+          "late": {
+            "type": "integer",
+            "title": "Late"
+          },
+          "questions": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestion"
+            },
+            "type": "array",
+            "title": "Questions",
+            "default": []
+          },
+          "others": {
+            "type": "integer",
+            "title": "Others",
+            "default": 0
+          },
+          "approvals_waiting": {
+            "type": "integer",
+            "title": "Approvals Waiting",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "late"
+        ],
+        "title": "SimpleDecisionsWaitingOut",
+        "description": "prd-questions: the one list Home's \"Decisions waiting for you\", the rail's count and\nthe review meeting's \"Decisions due\" read: product decisions waiting for this person\n(the PRDs' open questions and other judgement calls), never Oracle's run approvals."
       },
       "SimpleDelivery": {
         "properties": {
@@ -113342,6 +114008,39 @@
               }
             ],
             "title": "Section Key"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "yes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Yes"
+          },
+          "no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No"
           }
         },
         "type": "object",
@@ -113503,7 +114202,8 @@
             "type": "string",
             "enum": [
               "auto",
-              "on_demand"
+              "on_demand",
+              "person"
             ],
             "title": "Origin"
           },
@@ -113581,6 +114281,17 @@
           "can_reject": {
             "type": "boolean",
             "title": "Can Reject"
+          },
+          "proposed_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed By Name"
           }
         },
         "type": "object",
@@ -113618,6 +114329,22 @@
           "empty": {
             "type": "boolean",
             "title": "Empty"
+          },
+          "decider_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decider Name"
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
           }
         },
         "type": "object",
@@ -113627,6 +114354,29 @@
           "empty"
         ],
         "title": "SimpleGoalSuggestionGoal"
+      },
+      "SimpleGoalSuggestionIn": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "outcome": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Outcome"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "outcome"
+        ],
+        "title": "SimpleGoalSuggestionIn",
+        "description": "A person's goal suggestion: its title and what it does, and for whom."
       },
       "SimpleGoalSuggestionsOut": {
         "properties": {
@@ -113651,6 +114401,30 @@
           "suggestions"
         ],
         "title": "SimpleGoalSuggestionsOut"
+      },
+      "SimpleGoalWeeks": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "weeks": {
+            "type": "number",
+            "title": "Weeks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal",
+          "milestone",
+          "weeks"
+        ],
+        "title": "SimpleGoalWeeks",
+        "description": "Engineer-weeks per goal per milestone: each slice once, under its feature's first\ngoal."
       },
       "SimpleGroup": {
         "properties": {
@@ -113678,6 +114452,37 @@
           "item_ids"
         ],
         "title": "SimpleGroup"
+      },
+      "SimpleHoliday": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "SimpleHoliday"
       },
       "SimpleItemFlags": {
         "properties": {
@@ -113756,6 +114561,18 @@
               }
             ],
             "title": "Record Name"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
           }
         },
         "type": "object",
@@ -114473,6 +115290,14 @@
             "title": "Open Decisions",
             "default": []
           },
+          "decisions_due": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestion"
+            },
+            "type": "array",
+            "title": "Decisions Due",
+            "default": []
+          },
           "pending_proposals": {
             "items": {
               "$ref": "#/components/schemas/SimpleChangeOut"
@@ -114748,6 +115573,57 @@
             },
             "type": "array",
             "title": "Item Ids"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "effort_weeks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort Weeks"
+          },
+          "done_when": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Done When",
+            "default": []
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMilestoneTarget"
+            },
+            "type": "array",
+            "title": "Targets",
+            "default": []
           }
         },
         "type": "object",
@@ -114760,6 +115636,25 @@
           "item_ids"
         ],
         "title": "SimpleMilestone"
+      },
+      "SimpleMilestoneTarget": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "goal",
+          "target"
+        ],
+        "title": "SimpleMilestoneTarget",
+        "description": "plan-model: one goal's target at a milestone, in words with its unit."
       },
       "SimpleMinutes": {
         "properties": {
@@ -114957,6 +115852,425 @@
         ],
         "title": "SimplePhase"
       },
+      "SimplePlanDecision": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "title"
+        ],
+        "title": "SimplePlanDecision",
+        "description": "prd-timeline: an open decision a milestone waits on (\"Q7 Legal input\"), with the\nPRD's recommendation and its due day (the PRD's, else the PRD question's as Oracle reads\nit; null: no day yet)."
+      },
+      "SimplePlanGoal": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanGoalTarget"
+            },
+            "type": "array",
+            "title": "Targets",
+            "default": []
+          },
+          "measured": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measured"
+          },
+          "on_track": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Track"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "SimplePlanGoal"
+      },
+      "SimplePlanGoalTarget": {
+        "properties": {
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          }
+        },
+        "type": "object",
+        "required": [
+          "milestone",
+          "target"
+        ],
+        "title": "SimplePlanGoalTarget"
+      },
+      "SimplePlanMilestone": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "effort_weeks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort Weeks"
+          },
+          "planned_weeks": {
+            "type": "number",
+            "title": "Planned Weeks",
+            "default": 0
+          },
+          "done_when": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Done When",
+            "default": []
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleMilestoneTarget"
+            },
+            "type": "array",
+            "title": "Targets",
+            "default": []
+          },
+          "feature_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Feature Codes",
+            "default": []
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "prd",
+              "oracle"
+            ],
+            "title": "Source",
+            "default": "prd"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanDecision"
+            },
+            "type": "array",
+            "title": "Decisions",
+            "default": []
+          },
+          "risks": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanRisk"
+            },
+            "type": "array",
+            "title": "Risks",
+            "default": []
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "SimplePlanMilestone"
+      },
+      "SimplePlanOut": {
+        "properties": {
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "reading",
+              "failed",
+              "none"
+            ],
+            "title": "Status"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "prd",
+                  "oracle"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "dated": {
+            "type": "boolean",
+            "title": "Dated",
+            "default": false
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "milestones": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanMilestone"
+            },
+            "type": "array",
+            "title": "Milestones",
+            "default": []
+          },
+          "slices": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleSlice"
+            },
+            "type": "array",
+            "title": "Slices",
+            "default": []
+          },
+          "goals": {
+            "items": {
+              "$ref": "#/components/schemas/SimplePlanGoal"
+            },
+            "type": "array",
+            "title": "Goals",
+            "default": []
+          },
+          "goal_weeks": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleGoalWeeks"
+            },
+            "type": "array",
+            "title": "Goal Weeks",
+            "default": []
+          },
+          "span": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePlanSpan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holidays": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleHoliday"
+            },
+            "type": "array",
+            "title": "Holidays",
+            "default": []
+          },
+          "can_read_again": {
+            "type": "boolean",
+            "title": "Can Read Again",
+            "default": false
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          },
+          "summary": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Summary",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "prd",
+          "status"
+        ],
+        "title": "SimplePlanOut"
+      },
+      "SimplePlanRisk": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "likelihood": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Likelihood"
+          },
+          "impact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impact"
+          },
+          "what_we_do": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What We Do"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SimplePlanRisk",
+        "description": "fidelity prd: a risk a milestone carries, as the PRD's risks table states it: its\ncode (\"R-3\"), the risk in one sentence, how likely and how big (the PRD's words, \"medium\",\n\"high\") and what we do about it."
+      },
       "SimplePlanRow": {
         "properties": {
           "name": {
@@ -115014,6 +116328,32 @@
         ],
         "title": "SimplePlanRow",
         "description": "One row of the plan strip: a milestone (its name, date and how many of the PRD's\nitems carry it), or the items with no milestone summed in one row."
+      },
+      "SimplePlanSpan": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "end": {
+            "type": "string",
+            "format": "date",
+            "title": "End"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "end",
+          "label"
+        ],
+        "title": "SimplePlanSpan",
+        "description": "plan-model: first milestone start to last milestone end, \"2 Nov - 12 Feb\"."
       },
       "SimplePlanStrip": {
         "properties": {
@@ -115141,6 +116481,16 @@
             "type": "array",
             "title": "Lines",
             "default": []
+          },
+          "plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePlanOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -115581,6 +116931,11 @@
             "title": "No Goal",
             "default": false
           },
+          "in_plan": {
+            "type": "boolean",
+            "title": "In Plan",
+            "default": false
+          },
           "can_reorder": {
             "type": "boolean",
             "title": "Can Reorder",
@@ -115637,6 +116992,381 @@
           "label"
         ],
         "title": "SimpleQuarter"
+      },
+      "SimpleQuestion": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "number": {
+            "type": "integer",
+            "title": "Number"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "column": {
+            "type": "string",
+            "enum": [
+              "needs_input",
+              "recommended",
+              "decided"
+            ],
+            "title": "Column"
+          },
+          "prd": {
+            "$ref": "#/components/schemas/SimpleDocRef"
+          },
+          "decider": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "missing": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "decider",
+                  "recommendation"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
+          },
+          "due_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Label"
+          },
+          "late": {
+            "type": "boolean",
+            "title": "Late",
+            "default": false
+          },
+          "blocks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleQuestionBlocks"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          },
+          "alternatives": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestionOption"
+            },
+            "type": "array",
+            "title": "Alternatives",
+            "default": []
+          },
+          "chosen": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chosen"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePersonRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided Label"
+          },
+          "waiting_for_me": {
+            "type": "boolean",
+            "title": "Waiting For Me",
+            "default": false
+          },
+          "pending": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleQuestionPending"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can": {
+            "$ref": "#/components/schemas/SimpleQuestionCan",
+            "default": {
+              "decide": false,
+              "propose": false,
+              "name_decider": false
+            }
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimpleQuestionSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "undo_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Undo Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "code",
+          "title",
+          "status",
+          "column",
+          "prd"
+        ],
+        "title": "SimpleQuestion",
+        "description": "prd-questions: one of a PRD's open questions, read in as a decision (origin\n``prd``): the PRD's code (Q7), its recommendation and alternatives, what it blocks,\nits due day and decider."
+      },
+      "SimpleQuestionBlocks": {
+        "properties": {
+          "milestone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone"
+          },
+          "milestone_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Name"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleQuestionFeature"
+            },
+            "type": "array",
+            "title": "Features",
+            "default": []
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "label"
+        ],
+        "title": "SimpleQuestionBlocks",
+        "description": "What the question blocks: a milestone of the PRD's plan and its features."
+      },
+      "SimpleQuestionCan": {
+        "properties": {
+          "decide": {
+            "type": "boolean",
+            "title": "Decide",
+            "default": false
+          },
+          "propose": {
+            "type": "boolean",
+            "title": "Propose",
+            "default": false
+          },
+          "name_decider": {
+            "type": "boolean",
+            "title": "Name Decider",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SimpleQuestionCan"
+      },
+      "SimpleQuestionFeature": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "title"
+        ],
+        "title": "SimpleQuestionFeature"
+      },
+      "SimpleQuestionOption": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "label"
+        ],
+        "title": "SimpleQuestionOption"
+      },
+      "SimpleQuestionPending": {
+        "properties": {
+          "change_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Change Id"
+          },
+          "by": {
+            "$ref": "#/components/schemas/SimplePersonRef"
+          },
+          "answer": {
+            "type": "string",
+            "title": "Answer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "change_id",
+          "by",
+          "answer"
+        ],
+        "title": "SimpleQuestionPending",
+        "description": "A proposed answer waiting for the decider (a change through the engine)."
+      },
+      "SimpleQuestionSource": {
+        "properties": {
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
+          "read_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Read At"
+          }
+        },
+        "type": "object",
+        "title": "SimpleQuestionSource",
+        "description": "Where Oracle read the question: the PRD's approved version, and when."
       },
       "SimpleResumeOut": {
         "properties": {
@@ -115922,6 +117652,22 @@
             "type": "array",
             "title": "Decided In",
             "default": []
+          },
+          "slices": {
+            "items": {
+              "$ref": "#/components/schemas/SimpleSlice"
+            },
+            "type": "array",
+            "title": "Slices",
+            "default": []
+          },
+          "milestones": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Milestones",
+            "default": []
           }
         },
         "type": "object",
@@ -116024,6 +117770,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SimpleDocRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "span": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimplePlanSpan"
               },
               {
                 "type": "null"
@@ -116157,6 +117913,150 @@
           "connected"
         ],
         "title": "SimpleSlackState"
+      },
+      "SimpleSlice": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "feature_code": {
+            "type": "string",
+            "title": "Feature Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "milestone": {
+            "type": "string",
+            "title": "Milestone"
+          },
+          "milestone_name": {
+            "type": "string",
+            "title": "Milestone Name"
+          },
+          "milestone_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone Start"
+          },
+          "milestone_end": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Milestone End"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "estimated": {
+            "type": "boolean",
+            "title": "Estimated",
+            "default": true
+          },
+          "effort_weeks": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effort Weeks"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "pm_owned": {
+            "type": "boolean",
+            "title": "Pm Owned",
+            "default": false
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "what": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What"
+          },
+          "flow_steps": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Flow Steps",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "feature_code",
+          "name",
+          "milestone",
+          "milestone_name"
+        ],
+        "title": "SimpleSlice",
+        "description": "plan-model: the part of a roadmap item's feature one milestone builds (F-05a / F-05b;\nan item in one milestone has one slice, F-05). Its dates are Oracle's placement inside\nthe milestone by the PRD's order words (``estimated``)."
       },
       "SimpleStartOptions": {
         "properties": {
@@ -116562,6 +118462,34 @@
               }
             ],
             "title": "Failure"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "stage": {
+            "type": "integer",
+            "title": "Stage",
+            "default": 0
+          },
+          "subject_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subject Name"
           },
           "can_comment": {
             "type": "boolean",

@@ -117,7 +117,7 @@ def test_every_action_is_a_registered_op():
         assert chat.APPLIERS[a["op"]] is a["apply"]
     assert {a["op"] for a in chat_actions.ACTIONS} == {
         "set_owner", "set_decider", "record_decision", "minutes_note", "open_question",
-        "agenda_next", "agenda_skip"}  # fmt: skip
+        "agenda_next", "agenda_skip", "suggest_feature"}  # fmt: skip
 
 
 async def test_reader_two_changes_owner_and_dates(client):

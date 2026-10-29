@@ -20,9 +20,10 @@ import { expect, test, type Page } from "./test";
  * fails_when = five noted milestone texts draw five rows; no_claim = the PDF's drawing (the
  * API's plan_strip cases, api/tests/test_simple_one_pager_review.py).
  *
- * Card walk-problem-line: protects = a long "Problem and who has it" line ends at a whole word
- * with "…", "Show all" expands it in place to the whole text and "Show less" folds it back;
- * fails_when = the line is cut mid-word with no ellipsis, or the whole text cannot be read;
+ * Card walk-problem-line: protects = a long "Problem and who has it" line folds at a sentence
+ * end (the owner's P5, prd-timeline), "Show all" expands it in place to the whole text and
+ * "Show less" folds it back; fails_when = the line is cut mid-sentence, or the whole text
+ * cannot be read;
  * no_claim = where the API cuts (its pytest).
  *
  * Card walk-skeleton: protects = a PRD started from an empty skeleton shows no template
@@ -89,17 +90,17 @@ for (const phone of [false, true]) {
 
           const problem = page.getByRole("region", { name: "Problem and who has it" });
           const line = problem.getByTestId("one-pager-line-text");
-          await expect(line).toHaveText(/a 48-hour window that we miss for…$/);
+          await expect(line).toHaveText(/hides the invite step\.$/);
           await expect(line).not.toContainText("weekend signup");
           await problem.getByRole("button", { name: "Show all of line 1" }).click();
-          await expect(line).toHaveText(/after a weekend signup$/);
+          await expect(line).toHaveText(/after a weekend signup\.$/);
           await expect(line).not.toContainText("…");
           await problem.getByRole("button", { name: "Show less of line 1" }).click();
-          await expect(line).toHaveText(/miss for…$/);
+          await expect(line).toHaveText(/invite step\.$/);
           if (role === "owner") {
             // The editor starts from the whole line, not its "…" text.
             await problem.getByRole("button", { name: "Edit line 1" }).click();
-            await expect(problem.getByLabel("Line 1")).toHaveValue(/after a weekend signup$/);
+            await expect(problem.getByLabel("Line 1")).toHaveValue(/after a weekend signup\.$/);
             await problem.getByRole("button", { name: "Cancel" }).click();
           }
           if (!phone) expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1366);

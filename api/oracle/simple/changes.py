@@ -534,6 +534,15 @@ async def _plan(
             # Engineering or tracker dates arrived after the suggestion was made.
             raise await _conflict(db, current, {str(row.id)}, lead)
         start, end = s.start_date, s.end_date
+        if s.slice_code is not None:
+            # plan-model: a slice's dates: the item takes the span of all its slices.
+            for o in await db.scalars(
+                select(RoadmapDateSuggestion).where(
+                    RoadmapDateSuggestion.item_id == row.id,
+                    RoadmapDateSuggestion.status == "open",
+                )
+            ):
+                start, end = min(start, o.start_date), max(end, o.end_date)
         if a.get("start_date") is not None or a.get("end_date") is not None:
             # The edit variant (D-b): the person's dates instead of the suggestion's.
             start, end = (
@@ -683,6 +692,16 @@ async def _apply(
         if s is not None and not undo and s.status == "open":
             s.status = "edited" if c.target.get("edited") else "accepted"
             s.decided_by, s.decided_at = _me(principal), company_time.now()
+            if s.slice_code is not None:
+                # plan-model: the item's other slices are dated with it.
+                for o in await db.scalars(
+                    select(RoadmapDateSuggestion).where(
+                        RoadmapDateSuggestion.item_id == s.item_id,
+                        RoadmapDateSuggestion.status == "open",
+                        RoadmapDateSuggestion.id != s.id,
+                    )
+                ):
+                    o.status, o.decided_by, o.decided_at = s.status, s.decided_by, s.decided_at
         elif s is not None and undo and s.status in ("accepted", "edited"):
             other = await db.scalar(
                 select(RoadmapDateSuggestion.id).where(
@@ -691,6 +710,16 @@ async def _apply(
                 )
             )
             if other is None:
+                if s.slice_code is not None:
+                    for o in await db.scalars(
+                        select(RoadmapDateSuggestion).where(
+                            RoadmapDateSuggestion.item_id == s.item_id,
+                            RoadmapDateSuggestion.status == s.status,
+                            RoadmapDateSuggestion.decided_at == s.decided_at,
+                            RoadmapDateSuggestion.id != s.id,
+                        )
+                    ):
+                        o.status, o.decided_by, o.decided_at = "open", None, None
                 s.status, s.decided_by, s.decided_at = "open", None, None
     await db.flush()
 
@@ -758,8 +787,10 @@ async def _flags(
 
 
 async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> SimpleChangeResult:
-    from oracle.simple import additions, key_dates, one_pager, targets
+    from oracle.simple import additions, key_dates, one_pager, questions, targets
 
+    if body.op in questions.OPS:
+        return await questions.create(db, principal, body)
     if body.op in key_dates.OPS:
         return await key_dates.create(db, principal, body)
     if body.op in additions.OPS:
@@ -852,10 +883,12 @@ async def decide(
     session_id: uuid.UUID | None = None,
 ) -> SimpleChangeResult:
     """Accept (apply the proposal, unless outdated) or decline it."""
-    from oracle.simple import additions, key_dates, one_pager, targets
+    from oracle.simple import additions, key_dates, one_pager, questions, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in questions.OPS:
+        return await questions.decide(db, principal, c, action, reason, session_id)
     if c.op in key_dates.OPS:
         return await key_dates.decide(db, principal, c, action, reason)
     if c.op in additions.OPS:
@@ -895,10 +928,12 @@ async def decide(
 
 
 async def undo(db: AsyncSession, principal: Any, change_id: uuid.UUID) -> SimpleChangeResult:
-    from oracle.simple import additions, key_dates, one_pager, targets
+    from oracle.simple import additions, key_dates, one_pager, questions, targets
 
     me, now = _me(principal), company_time.now()
     c = await _get(db, change_id)
+    if c.op in questions.OPS:
+        return await questions.undo(db, principal, c)
     if c.op in key_dates.OPS:
         return await key_dates.undo(db, principal, c)
     if c.op in additions.OPS:
@@ -975,6 +1010,8 @@ class _View:
         self.owners: dict[uuid.UUID, set[uuid.UUID]] = (people or {}).get("owners", {})
         self.company_owners = company_owners or []
         self.now = company_time.now()
+        # prd-questions: the questions its changes are on, by id.
+        self.questions: dict[str, Any] = {}
 
     def route(self, c: SimpleChange) -> list[uuid.UUID]:
         return current_route(c, self.by_id, self.deciders, self.company_owners)
@@ -986,8 +1023,10 @@ class _View:
             return None
 
     def may_decide(self, c: SimpleChange) -> bool:
-        from oracle.simple import additions, key_dates, one_pager, targets
+        from oracle.simple import additions, key_dates, one_pager, questions, targets
 
+        if c.op in questions.OPS:
+            return questions.may_decide_change(self.principal, c, self.questions)
         if c.op in key_dates.OPS:
             return key_dates.may_decide(self.principal, c, self)
         if c.op in additions.OPS:
@@ -1003,7 +1042,8 @@ class _View:
         """Working changes and proposals: their people, the session's, the document's
         owners, decider and reviewers (#723 owner answer)."""
         # S5: a one-pager line's change is on a PRD, not a roadmap of this read.
-        if c.document_id is not None and c.document_id not in self.docs and c.op != "edit_line":
+        if (c.document_id is not None and c.document_id not in self.docs
+                and c.op not in ("edit_line", "decide_question", "name_decider")):  # fmt: skip
             return False
         if self.me is None:
             return False
@@ -1041,7 +1081,20 @@ def _out(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> SimpleChange
         decided_at=c.decided_at, reason=c.reason, decision_reason=c.decision_reason,
         routed_to=v.route(c), undoes_id=c.undoes_id, undone=c.id in v.undone,
         can_decide=c.status == "proposed" and v.may_decide(c), can_undo=v.can_undo(c),
+        words=_words(c, v, names),
     )  # fmt: skip
+
+
+def _words(c: SimpleChange, v: _View, names: dict[uuid.UUID, str]) -> str:
+    """The change in plain words (oracle.simple.change_words): who, what, the item's code
+    and name as this reader reads it, "· undone" once undone."""
+    from oracle.simple import change_words
+
+    e = v.entry(c) if c.target.get("item_id") else None
+    item = f"{e.code or ''} {e.row.title}".strip() if e is not None else None
+    return change_words.sentence(c.op, c.target, c.before, c.after,
+                                 who=names.get(c.by, "someone"), item=item,
+                                 status=c.status, undone=c.id in v.undone)  # fmt: skip
 
 
 async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -> _View:
@@ -1073,7 +1126,18 @@ async def _view(db: AsyncSession, principal: Any, changes: list[SimpleChange]) -
     owners = (await drafts.who(db, {c.document_id for c in changes if c.document_id})).owners
     people = {"drafts": participants, "owners": owners}
     company = await _company_owners(db) if any(c.status == "proposed" for c in changes) else []
-    return _View(principal, read_, await _reviewers(db), sessions, undone, people, company)
+    v = _View(principal, read_, await _reviewers(db), sessions, undone, people, company)
+    qids = {
+        c.target.get("decision_id") for c in changes if c.op in ("decide_question", "name_decider")
+    }
+    if qids:
+        from oracle.decisions.models import Decision
+
+        ids = [uuid.UUID(i) for i in qids if i]
+        v.questions = {
+            str(d.id): d for d in await db.scalars(select(Decision).where(Decision.id.in_(ids)))
+        }
+    return v
 
 
 async def one_out(db: AsyncSession, principal: Any, c: SimpleChange) -> SimpleChangeOut:

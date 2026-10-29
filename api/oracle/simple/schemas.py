@@ -5,7 +5,7 @@ import datetime as dt
 import uuid
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 DateSource = Literal["typed", "accepted", "engineering", "tracker", "estimated"]
 RoadmapGroup = Literal["goal", "track", "prd"]
@@ -87,11 +87,151 @@ class SimpleItemMilestone(BaseModel):
     # from: the plan strip groups its items by it, whatever their own texts say.
     record_id: uuid.UUID | None = None
     record_name: str | None = None
+    # plan-model: the milestone's start when the PRD's plan dates it (``date`` its end).
+    start_date: dt.date | None = None
 
 
 class SimpleOwnerRef(BaseModel):
     id: uuid.UUID
     name: str
+
+
+class SimpleMilestoneTarget(BaseModel):
+    """plan-model: one goal's target at a milestone, in words with its unit."""
+
+    goal: str
+    target: str
+
+
+class SimpleSlice(BaseModel):
+    """plan-model: the part of a roadmap item's feature one milestone builds (F-05a / F-05b;
+    an item in one milestone has one slice, F-05). Its dates are Oracle's placement inside
+    the milestone by the PRD's order words (``estimated``)."""
+
+    code: str
+    feature_code: str
+    name: str
+    milestone: str
+    milestone_name: str
+    milestone_start: dt.date | None = None
+    milestone_end: dt.date | None = None
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    estimated: bool = True
+    # Null for PM-owned work (no engineering).
+    effort_weeks: float | None = None
+    # The goal it moves most: the first in the PRD's goals column for it.
+    goal: str | None = None
+    pm_owned: bool = False
+    # prd-timeline: what kind of work it is ("New for people", "Behind the scenes"), a plain
+    # one-line "what it does" and its flow's step names, when the PRD's features list says.
+    kind: str | None = None
+    what: str | None = None
+    flow_steps: list[str] = []
+
+
+class SimplePlanSpan(BaseModel):
+    """plan-model: first milestone start to last milestone end, "2 Nov - 12 Feb"."""
+
+    start: dt.date
+    end: dt.date
+    label: str
+
+
+class SimplePlanMilestone(BaseModel):
+    code: str
+    name: str
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    # Its capacity, as the PRD gives it.
+    effort_weeks: float | None = None
+    # The slices' engineer-weeks in it.
+    planned_weeks: float = 0
+    done_when: list[str] = []
+    targets: list[SimpleMilestoneTarget] = []
+    feature_codes: list[str] = []
+    # prd: the PRD's own tables; oracle: Oracle's reading of its text.
+    source: Literal["prd", "oracle"] = "prd"
+    # prd-timeline: its open decisions and its risks in plain words, as the PRD states them.
+    decisions: list["SimplePlanDecision"] = []
+    risks: list["SimplePlanRisk"] = []
+    # fidelity prd (the owner's pick D, 2026-10-28): why this milestone comes now, in the
+    # PRD's words (null: the PRD does not say).
+    why: str | None = None
+
+
+class SimplePlanDecision(BaseModel):
+    """prd-timeline: an open decision a milestone waits on ("Q7 Legal input"), with the
+    PRD's recommendation and its due day (the PRD's, else the PRD question's as Oracle reads
+    it; null: no day yet)."""
+
+    code: str
+    title: str
+    recommendation: str | None = None
+    due_on: dt.date | None = None
+
+
+class SimplePlanRisk(BaseModel):
+    """fidelity prd: a risk a milestone carries, as the PRD's risks table states it: its
+    code ("R-3"), the risk in one sentence, how likely and how big (the PRD's words, "medium",
+    "high") and what we do about it."""
+
+    code: str | None = None
+    title: str
+    likelihood: str | None = None
+    impact: str | None = None
+    what_we_do: str | None = None
+
+
+class SimplePlanGoalTarget(BaseModel):
+    milestone: str
+    target: str
+
+
+class SimplePlanGoal(BaseModel):
+    name: str
+    targets: list[SimplePlanGoalTarget] = []
+    # prd-timeline: what is measured now (null: nothing measures it yet) and whether that is
+    # on track for the current milestone's target.
+    measured: str | None = None
+    on_track: bool | None = None
+
+
+class SimpleGoalWeeks(BaseModel):
+    """Engineer-weeks per goal per milestone: each slice once, under its feature's first
+    goal."""
+
+    goal: str
+    milestone: str
+    weeks: float
+
+
+class SimpleHoliday(BaseModel):
+    start: dt.date
+    end: dt.date
+    label: str | None = None
+
+
+class SimplePlanOut(BaseModel):
+    prd: "SimpleDocRef"
+    # The approved version the plan is read from.
+    version: int | None = None
+    # none: no approved version or no plan in it; reading: Oracle's job is reading it.
+    status: Literal["ready", "reading", "failed", "none"]
+    source: Literal["prd", "oracle"] | None = None
+    dated: bool = False
+    message: str | None = None
+    milestones: list[SimplePlanMilestone] = []
+    slices: list[SimpleSlice] = []
+    goals: list[SimplePlanGoal] = []
+    goal_weeks: list[SimpleGoalWeeks] = []
+    span: SimplePlanSpan | None = None
+    holidays: list[SimpleHoliday] = []
+    can_read_again: bool = False
+    read_at: dt.datetime | None = None
+    # fidelity prd (the owner's pick B, the When strip): the PRD's summary lines (its
+    # Summary section's bullets, "**Goal: ...** ..."), shown above the timeline.
+    summary: list[str] = []
 
 
 class SimpleOpenDecision(BaseModel):
@@ -115,6 +255,8 @@ class DateSuggestionOut(BaseModel):
     created_at: dt.datetime
     decided_by: uuid.UUID | None = None
     decided_at: dt.datetime | None = None
+    # plan-model: the slice it dates (F-05a), inside the slice's milestone; null: the item.
+    slice_code: str | None = None
     # The caller may accept, edit or dismiss it: an owner, the roadmap's decider, or with
     # no decider the roadmap's track owner.
     can_decide: bool = False
@@ -175,11 +317,16 @@ class SimpleRoadmapItem(BaseModel):
 
     # S8: the decided decisions that changed the item (newest first; the Decisions page).
     decided_in: list[SimpleOpenDecision] = []
+    # plan-model: one slice per milestone its feature spans in the PRD's plan, and those
+    # milestones' codes.
+    slices: list["SimpleSlice"] = []
+    milestones: list[str] = []
 
 
 class SimpleMatch(BaseModel):
     kind: Literal["item", "feature"]
     id: str
+    # Its display code ("F-06"), "" when it has none (never its key).
     code: str
     title: str
 
@@ -205,6 +352,12 @@ class SimpleMilestone(BaseModel):
     horizon: Literal["now", "next", "later"]
     status: Literal["planned", "done", "dropped"]
     item_ids: list[uuid.UUID]
+    # plan-model: from the PRD's plan, the milestone of the same code (M1, M2, ...).
+    start_date: dt.date | None = None
+    end_date: dt.date | None = None
+    effort_weeks: float | None = None
+    done_when: list[str] = []
+    targets: list["SimpleMilestoneTarget"] = []
 
 
 class SimpleKeyDate(BaseModel):
@@ -249,6 +402,8 @@ class SimpleRoadmapOut(BaseModel):
     # there), and the one the read is narrowed to (``roadmap``), if any.
     roadmaps: list[SimpleKeyDateRoadmap] = []
     roadmap: "SimpleDocRef | None" = None
+    # plan-model: the shown PRDs' plan span ("this quarter"); null with no plan.
+    span: "SimplePlanSpan | None" = None
 
 
 class DateSuggestionEdit(BaseModel):
@@ -313,11 +468,20 @@ ChangeOp = Literal[
     # chat-actions: the item's own owner and decider (into the working draft).
     "set_owner",
     "set_decider",
+    # prd-questions: a PRD's open question (a decision) answered, or its decider named
+    # (oracle.simple.questions).
+    "decide_question",
+    "name_decider",
 ]
 # chat-actions: chat cards applied through the meetings module or Oracle's decisions, not
 # the change engine (oracle.simple.chat_actions).
 ChatActionOp = Literal[
-    "record_decision", "minutes_note", "open_question", "agenda_next", "agenda_skip"
+    "record_decision",
+    "minutes_note",
+    "open_question",
+    "agenda_next",
+    "agenda_skip",
+    "suggest_feature",
 ]
 ChangeStatus = Literal["applied", "proposed", "accepted", "declined", "undone"]
 SessionKind = Literal["editing", "meeting"]
@@ -390,6 +554,9 @@ class SimpleChangeOut(BaseModel):
     # The caller may accept or decline this proposal / undo this change now.
     can_decide: bool = False
     can_undo: bool = False
+    # The walk (H2): the change in plain words, as Home's "Since your last visit" says it:
+    # "Ana changed the estimate of F-08 Billing page · undone" (oracle.simple.change_words).
+    words: str | None = None
 
 
 class SimpleItemFlags(BaseModel):
@@ -591,6 +758,9 @@ class SimplePriorityRow(BaseModel):
     end_estimated: bool = False
     # Serves no confirmed goal.
     no_goal: bool = False
+    # plan-charts: the item is the PRD's whose plan "this quarter" is (Goal buckets lists the
+    # rest outside the plan).
+    in_plan: bool = False
     can_reorder: bool = False
     # The caller's change applies (else it is proposed).
     applies: bool = False
@@ -613,6 +783,11 @@ class SimpleFlowStep(BaseModel):
     feature: str | None = None
     change: Literal["new", "changed", "same"] = "same"
     section_key: str | None = None
+    # Who does it ("User", "App", "Admin"...); null on drawings made before it was asked.
+    actor: str | None = None
+    # A decision: what its Yes and its No lead to, in words.
+    yes: str | None = None
+    no: str | None = None
 
 
 class SimpleFlowNote(BaseModel):
@@ -682,6 +857,12 @@ class SimpleVisualOut(BaseModel):
     # not check out): the panel says so and offers Retry. ``failure``: why, in words.
     failed: bool = False
     failure: str | None = None
+    # While Oracle draws: when the job was asked for and how far it got, 0 reading the
+    # subject (queued), 1 drawing (running); the subject named with its code, for "Read
+    # F-06 Adaptive pacing".
+    started_at: dt.datetime | None = None
+    stage: int = 0
+    subject_name: str | None = None
     # Commenters and up comment on a drawn visual; who changes the subject directly asks
     # for a drawing and revises.
     can_comment: bool
@@ -744,7 +925,8 @@ class SimpleGoalBucket(BaseModel):
     # The goal's key, or "none".
     key: str
     title: str
-    # This quarter's engineer-weeks: the effort of the goal's rows with horizon now.
+    # This quarter's engineer-weeks: the effort of the goal's rows the plan places in its
+    # span (plan-model), else (no dated plan) of its rows with horizon now.
     weeks: float
     share: float
     codes: list[str]
@@ -778,6 +960,9 @@ class SimplePrioritiesOut(BaseModel):
     # Roadmap-plus: the line drawn, and the lines offered (Pick a date aside).
     line: SimpleLine | None = None
     lines: list[SimpleLine] = []
+    # plan-charts: the plan "this quarter" is (Goal buckets by milestone); none with no
+    # dated plan.
+    plan: SimplePlanOut | None = None
 
 
 SimpleRoadmapItem.model_rebuild()
@@ -999,7 +1184,7 @@ class SimpleGoalSuggestion(BaseModel):
     evidence: list[SimpleEvidence]
     status: Literal["open", "accepted", "rejected"]
     reason: str | None
-    origin: Literal["auto", "on_demand"]
+    origin: Literal["auto", "on_demand", "person"]
     created_at: dt.datetime
     decided_by_name: str | None
     decided_at: dt.datetime | None
@@ -1009,12 +1194,34 @@ class SimpleGoalSuggestion(BaseModel):
     flow: SimpleFlow | None
     can_accept: bool
     can_reject: bool
+    # A person's suggestion (origin "person"): their display name.
+    proposed_by_name: str | None = None
 
 
 class SimpleGoalSuggestionGoal(BaseModel):
     goal: SimpleGoalBrief
     pending: bool
     empty: bool
+    # Who decides the goal's suggestions (its roadmap's decider, else its approving owners).
+    decider_name: str | None = None
+    # Whether the caller decides them (the drawer folds its form for the decider).
+    can_decide: bool = False
+
+
+# oracle.simple.changes.TITLE_MAX (changes imports this module).
+SUGGESTION_TITLE_MAX = 200
+
+
+class SimpleGoalSuggestionIn(BaseModel):
+    """A person's goal suggestion: its title and what it does, and for whom."""
+
+    title: str = Field(min_length=1, max_length=SUGGESTION_TITLE_MAX)
+    outcome: str = Field(min_length=1, max_length=1000)
+
+    @field_validator("title", "outcome", mode="before")
+    @classmethod
+    def _collapse(cls, v: Any) -> Any:
+        return " ".join(v.split()) if isinstance(v, str) else v
 
 
 class SimpleGoalSuggestionsOut(BaseModel):
@@ -1054,6 +1261,12 @@ class ChatIn(BaseModel):
     # The Ask panel's one box: write nothing when Oracle's reader does not know the line
     # (the answer says understood=false and the panel asks Oracle's Ask instead).
     only_understood: bool = False
+    # ask-fresh: continue the caller's own Ask chat ``chat_id``; else ``new_chat`` starts a
+    # new one about ``page`` (the Ask panel opened again); else the page's first chat.
+    chat_id: uuid.UUID | None = None
+    new_chat: bool = False
+    # ask-fresh: the new chat is about General, not the page (Recent names it "General").
+    general: bool = False
 
 
 class ChatFix(BaseModel):
@@ -1093,6 +1306,10 @@ class ChatCardOut(BaseModel):
     decided_at: dt.datetime | None
     # The meeting decision an applied card became.
     decision_id: uuid.UUID | None
+    # roadmap-talk: the change in words ({before, after}) and, while open, what Correct
+    # opens ({fields, values}: Oracle's reading, prefilled); None off the roadmap.
+    change_words: dict[str, str | None] | None = None
+    correct: dict[str, Any] | None = None
 
 
 class ChatChoiceOut(BaseModel):
@@ -1116,6 +1333,8 @@ class ChatMessageOut(BaseModel):
     choices: list[ChatChoiceOut] = Field(default_factory=list)
     picked: int | None = None
     retry: bool = False
+    # roadmap-talk: where an item talk's answer comes from ("From the PRD · F-06 …").
+    source: str | None = None
 
 
 class ChatRulesOut(BaseModel):
@@ -1135,6 +1354,31 @@ class ChatThreadOut(BaseModel):
     rules: ChatRulesOut | None
     # False when Oracle's reader did not know the last line (the Ask panel's one box).
     understood: bool = True
+    # ask-fresh: the Oracle's Ask chat this Ask chat handed its questions to, if any.
+    ask_id: uuid.UUID | None = None
+
+
+class ChatSummaryOut(BaseModel):
+    """ask-fresh: one of the person's Ask chats on Recent chats, named by its page."""
+
+    id: uuid.UUID
+    page: str
+    page_name: str
+    last_at: dt.datetime
+    ask_id: uuid.UUID | None = None
+    # Started under "General": named so on Recent, and reopened as General.
+    general: bool = False
+    # The chat's first question (the person's first line, in it or in the Oracle's Ask chat
+    # it handed it to): Recent chats names each chat by it (ask-panel fidelity, pick C).
+    question: str | None = None
+
+
+class ChatListOut(BaseModel):
+    items: list[ChatSummaryOut]
+
+
+class ChatAskIn(BaseModel):
+    ask_id: uuid.UUID
 
 
 class ChatChooseIn(BaseModel):
@@ -1162,6 +1406,9 @@ class ChatModeIn(BaseModel):
 class ChatApplyIn(BaseModel):
     # Apply the card's fixes[fix] instead of its own op.
     fix: int | None = Field(default=None, ge=0)
+    # roadmap-talk's Correct: the card's fields as the person corrected them (its
+    # ``correct.fields``: title, goal, milestone, start_date, end_date, owner).
+    values: dict[str, str | None] | None = None
 
 
 class ChatApplyOut(BaseModel):
@@ -1345,6 +1592,9 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     roadmap_ids: list[uuid.UUID] = []
     meeting_decisions: list[SimpleMeetingDecision] = []
     open_decisions: list[SimpleOpenDecision] = []
+    # prd-questions: the agenda's "Decisions due": the PRD's open questions that block the
+    # milestone the soonest one blocks, soonest first, with those decided in this meeting.
+    decisions_due: "list[SimpleQuestion]" = []
     pending_proposals: list[SimpleChangeOut] = []
     drafts: list[SimpleDraftOut] = []
     # Everyone its drafts wait on, named (#723 review: an absent section reviewer need not
@@ -1447,6 +1697,9 @@ class SimpleDecisionRow(BaseModel):
     subjects: list[dict[str, Any]] = []
     # A meeting decision on a new flow or feature: that flow.
     flow: SimpleDecidedFlow | None = None
+    # prd-questions: a PRD's question keeps its code ("Q10"); a decided one, its answer.
+    code: str | None = None
+    chosen: str | None = None
 
 
 class SimpleMeetingGroup(BaseModel):
@@ -1460,15 +1713,124 @@ class SimpleFilterOption(BaseModel):
     title: str
 
 
+QuestionColumn = Literal["needs_input", "recommended", "decided"]
+DecisionsView = Literal["list", "board", "meetings"]
+
+
+class SimpleQuestionOption(BaseModel):
+    key: str
+    label: str
+
+
+class SimpleQuestionFeature(BaseModel):
+    code: str
+    title: str
+
+
+class SimpleQuestionBlocks(BaseModel):
+    """What the question blocks: a milestone of the PRD's plan and its features."""
+
+    milestone: str | None = None
+    milestone_name: str | None = None
+    features: list[SimpleQuestionFeature] = []
+    # "Blocks M1: F-03 Health log" (the owner's words).
+    label: str
+
+
+class SimpleQuestionPending(BaseModel):
+    """A proposed answer waiting for the decider (a change through the engine)."""
+
+    change_id: uuid.UUID
+    by: SimplePersonRef
+    answer: str
+
+
+class SimpleQuestionCan(BaseModel):
+    # Applies at once (owners and the decider, with Undo).
+    decide: bool = False
+    # Proposes to the decider (approvers and commenters).
+    propose: bool = False
+    # Names the decider (owners and the decider; others propose).
+    name_decider: bool = False
+
+
+class SimpleQuestionSource(BaseModel):
+    """Where Oracle read the question: the PRD's approved version, and when."""
+
+    version: int | None = None
+    read_at: dt.datetime | None = None
+
+
+class SimpleQuestion(BaseModel):
+    """prd-questions: one of a PRD's open questions, read in as a decision (origin
+    ``prd``): the PRD's code (Q7), its recommendation and alternatives, what it blocks,
+    its due day and decider."""
+
+    id: uuid.UUID
+    number: int
+    code: str
+    title: str
+    status: str
+    column: QuestionColumn
+    prd: SimpleDocRef
+    decider: SimplePersonRef | None = None
+    # What is missing for a "Needs input" question: "decider" or "recommendation".
+    missing: Literal["decider", "recommendation"] | None = None
+    due_on: dt.date | None = None
+    # "Late · due Fri Nov 6" or "Due Fri Nov 27" (company days); None when decided.
+    due_label: str | None = None
+    late: bool = False
+    blocks: SimpleQuestionBlocks | None = None
+    recommendation: str | None = None
+    alternatives: list[SimpleQuestionOption] = []
+    chosen: str | None = None
+    decided_at: dt.datetime | None = None
+    decided_by: SimplePersonRef | None = None
+    # "Decided on Fri Oct 23 by Ana Lee" or "Decided in the PRD on Fri Oct 23 by Ana Lee".
+    decided_label: str | None = None
+    waiting_for_me: bool = False
+    pending: SimpleQuestionPending | None = None
+    can: SimpleQuestionCan = SimpleQuestionCan()
+    # "From Guided setup draft 3 · read Oct 22": the version it was read from.
+    source: SimpleQuestionSource | None = None
+    # A live review meeting's agenda: the change that decided it in this meeting, for its
+    # Undo (only who made it, while the meeting runs).
+    undo_id: uuid.UUID | None = None
+
+
 class SimpleDecisionsOut(BaseModel):
     """Simple's Decisions (direction B "By meeting"): the meetings' decisions grouped under
-    them, newest first, then the decisions taken outside meetings."""
+    them, newest first, then the decisions taken outside meetings. prd-questions: the
+    PRDs' open questions as decisions (List and Board), the person's remembered view and
+    how many of Oracle's run approvals Simple leaves to Detailed."""
 
     meetings: list[SimpleMeetingGroup]
     other: list[SimpleDecisionRow]
     prds: list[SimpleFilterOption]
     goals: list[SimpleFilterOption]
     meeting_options: list[SimpleFilterOption]
+    # Open first, soonest due first; decided after, newest first.
+    questions: list[SimpleQuestion] = []
+    waiting_count: int = 0
+    late_count: int = 0
+    # Oracle's own run approvals waiting for this person (shown in Detailed only).
+    approvals_waiting: int = 0
+    # One of them, for the page's foot ("D-12 Approve Baseline confirm").
+    approvals_example: str | None = None
+    view: DecisionsView = "list"
+
+
+class SimpleDecisionsWaitingOut(BaseModel):
+    """prd-questions: the one list Home's "Decisions waiting for you", the rail's count and
+    the review meeting's "Decisions due" read: product decisions waiting for this person
+    (the PRDs' open questions and other judgement calls), never Oracle's run approvals."""
+
+    count: int
+    late: int
+    questions: list[SimpleQuestion] = []
+    # Other product decisions (not a PRD's question) waiting for this person.
+    others: int = 0
+    approvals_waiting: int = 0
 
 
 class InboxSimpleMinutes(BaseModel):
@@ -1483,3 +1845,6 @@ class InboxSimpleMinutes(BaseModel):
 
 SimpleRoadmapItem.model_rebuild()
 OnePagerOut.model_rebuild()
+
+
+SimpleMeetingOut.model_rebuild()

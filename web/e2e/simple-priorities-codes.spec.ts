@@ -43,7 +43,8 @@ async function dragLeft(tab: Page, code: string, weeks: number): Promise<void> {
   await mark.evaluate((e) => e.scrollIntoView({ block: "center" }));
   const plot = (await tab.getByTestId("vxe-plot").boundingBox())!;
   const at = (await mark.boundingBox())!;
-  // maxE is 5 weeks across the plot's inner 92%.
+  // The log effort axis spans 3.8 doublings across the plot's inner 92%: `weeks` 2 from 3
+  // is 1.52 doublings, 3 weeks to 1.
   await tab.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
   await tab.mouse.down();
   await tab.mouse.move(

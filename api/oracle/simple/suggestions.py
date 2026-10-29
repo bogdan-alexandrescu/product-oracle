@@ -83,33 +83,53 @@ async def regenerate(db: AsyncSession) -> int:
         ):
             existing[s.item_id].append(s)
     now = company_time.now()
+    # plan-model: the items of a planned PRD are dated by their slices, inside their
+    # milestones; an item the plan does not place stays inside the plan's span.
+    from oracle.simple import plan
+
+    await service.item_codes(db, entries)
+    views = await plan.views(db, {e.prd.id for e in entries if e.prd})
     count = 0
     for e in entries:
         rows = existing.get(e.row.id, [])
-        current = next((s for s in rows if s.status == "open"), None)
         if not e.resolved.undated or e.status in ("cut", "done"):
+            for r in rows:
+                if r.status == "open":
+                    await db.delete(r)
+            continue
+        view = views.get(e.prd.id) if e.prd else None
+        wanted = _planned(e, view)
+        if wanted is None:
+            deps = [(by_id[d].row.title, by_id[d].resolved.end.date) for d in e.depends_on]
+            s = dates.suggest(e.window, deps, durations.get(e.row.confidence, []),
+                              e.row.confidence, e.row.horizon)  # fmt: skip
+            wanted = [(None, _inside(s, view))]
+        codes = {c for c, _ in wanted}
+        for r in rows:
+            if r.status == "open" and r.slice_code not in codes:
+                await db.delete(r)
+        for code, s in wanted:
+            mine = [r for r in rows if r.slice_code == code]
+            current = next((r for r in mine if r.status == "open"), None)
+            if any(
+                r.status == "dismissed"
+                and ((r.start_date, r.end_date) == (s.start, s.end) or _recent(r, now))
+                for r in mine
+            ):
+                if current is not None:
+                    await db.delete(current)
+                continue
+            count += 1
             if current is not None:
-                await db.delete(current)
-            continue
-        deps = [(by_id[d].row.title, by_id[d].resolved.end.date) for d in e.depends_on]
-        s = dates.suggest(e.window, deps, durations.get(e.row.confidence, []),
-                          e.row.confidence, e.row.horizon)  # fmt: skip
-        if any(
-            r.status == "dismissed"
-            and ((r.start_date, r.end_date) == (s.start, s.end) or _recent(r, now))
-            for r in rows
-        ):
-            if current is not None:
-                await db.delete(current)
-            continue
-        count += 1
-        if current is not None:
-            if (current.start_date, current.end_date, current.basis) != (s.start, s.end, s.basis):
-                current.start_date, current.end_date, current.basis = s.start, s.end, s.basis
-                current.created_at = now
-            continue
-        db.add(RoadmapDateSuggestion(item_id=e.row.id, start_date=s.start, end_date=s.end,
-                                     basis=s.basis, status="open", created_at=now))  # fmt: skip
+                if (current.start_date, current.end_date, current.basis) != (
+                    s.start, s.end, s.basis,
+                ):  # fmt: skip
+                    current.start_date, current.end_date = s.start, s.end
+                    current.basis, current.created_at = s.basis, now
+                continue
+            db.add(RoadmapDateSuggestion(item_id=e.row.id, start_date=s.start, end_date=s.end,
+                                         basis=s.basis, status="open", created_at=now,
+                                         slice_code=code))  # fmt: skip
     await db.flush()
     return count
 
@@ -215,9 +235,21 @@ async def decide(
     if action != "dismiss":
         raise SuggestionError(422, "Accept and edit go through the change engine")
     item = entry.row
-    s.status = "dismissed"
-    s.decided_by = getattr(principal, "user_id", None) or getattr(principal, "id", None)
-    s.decided_at = company_time.now()
+    by = getattr(principal, "user_id", None) or getattr(principal, "id", None)
+    now = company_time.now()
+    s.status, s.decided_by, s.decided_at = "dismissed", by, now
+    if s.slice_code is not None:
+        # The tray shows one row per item (BGD, 2026-10-28): dismissing it dismisses every
+        # open slice of the item, so the next slice's dates never take the row's place.
+        for other in await db.scalars(
+            select(RoadmapDateSuggestion).where(
+                RoadmapDateSuggestion.item_id == s.item_id,
+                RoadmapDateSuggestion.status == "open",
+                RoadmapDateSuggestion.slice_code.is_not(None),
+                RoadmapDateSuggestion.id != s.id,
+            )
+        ):
+            other.status, other.decided_by, other.decided_at = "dismissed", by, now
     await audit.record(
         db, principal, "roadmap_date_suggestion.dismiss", "roadmap_date_suggestion", s.id,
         data={"item_id": str(item.id), "start_date": _iso(s.start_date),
@@ -226,6 +258,41 @@ async def decide(
     await db.commit()
     await db.refresh(s)
     return s, item, True
+
+
+def _planned(e: service.Entry, view: Any) -> list[tuple[str, dates.Suggestion]] | None:
+    """One suggestion per dated slice of the item's feature in its PRD's plan; None when
+    the plan does not place the item."""
+    if view is None:
+        return None
+    out = []
+    for sl in view.slices_of(e.code):
+        if sl.start_date is None or sl.end_date is None:
+            continue
+        basis = (
+            f"Placed inside {sl.milestone} {sl.milestone_name} by the PRD's order "
+            f"({plan_label(sl.milestone_start, sl.milestone_end)})."
+        )
+        out.append((sl.code, dates.Suggestion(sl.start_date, sl.end_date, basis)))
+    return out or None
+
+
+def plan_label(start: Any, end: Any) -> str:
+    from oracle.simple import plan
+
+    return plan.span_label(start, end) if start and end else "no dates"
+
+
+def _inside(s: dates.Suggestion, view: Any) -> dates.Suggestion:
+    """A suggestion held inside the plan's span, when the PRD has a dated plan."""
+    if view is None or view.span is None:
+        return s
+    lo, hi = view.span.start, view.span.end
+    start = min(max(s.start, lo), hi)
+    end = min(max(s.end, start), hi)
+    if (start, end) == (s.start, s.end):
+        return s
+    return dates.Suggestion(start, end, f"{s.basis} Held inside the plan ({view.span.label}).")
 
 
 def _recent(s: RoadmapDateSuggestion, now: datetime) -> bool:

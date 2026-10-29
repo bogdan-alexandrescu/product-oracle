@@ -72,6 +72,7 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         SimpleDraft,
         SimpleMeeting,
         SimpleOnePager,
+        SimplePrdPlan,
         SimpleSessionDraft,
         SimpleVisual,
     )
@@ -136,6 +137,9 @@ def _children() -> dict[type, list[tuple[str, Table]]]:
         RoadmapKeyDate: [("roadmap_document_id", docs)],
         SimpleVisual: [("document_id", docs)],
         SimpleMeeting: [("prd_document_id", docs)],
+        # The PRD's plan (plan-model): a trashed PRD's milestones and slices leave the
+        # roadmap, the priorities and the PRD timeline with it.
+        SimplePrdPlan: [("document_id", docs)],
     }
 
 

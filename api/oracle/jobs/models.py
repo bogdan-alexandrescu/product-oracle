@@ -51,6 +51,10 @@ JOB_KINDS = (
     "item_draft",
     "goal_suggestions",
     "meeting_minutes",
+    # plan-model (oracle.simple.plan): a PRD version's plan read from its text.
+    "prd_plan",
+    # prd-questions (oracle.simple.questions): a PRD version's open questions read.
+    "prd_questions",
 )
 # Jobs on a product intake (CR-03, migration 0014_intake): light extraction from a brief
 # and its pinned sources. They have no document; ``intake_id`` says whose they are.

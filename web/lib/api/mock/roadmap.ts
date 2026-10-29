@@ -107,6 +107,13 @@ export const DATE_BASES_SCENARIO = "date-bases";
 export const VERSION_WARNINGS_SCENARIO = "version-warnings";
 /** The mock scenario whose usage-alerts-roadmap v2 moved, added and dropped one item each since the approved v1 (E3). */
 export const DIFF_SCENARIO = "roadmap-diff";
+/**
+ * The owner's walk (P11): usage-alerts-roadmap was approved a week ago and the PRD has had a
+ * new version since; an earlier rule marked every item with no PRD section of its own stale
+ * for that ("the PRD has a new version (2)"), and one item's own section changed. Only that one
+ * is stale (oracle.roadmap.staleness.is_stale).
+ */
+export const PLAN_STALE_SCENARIO = "plan-stale";
 /** The mock scenario whose usage-alerts v2 draft moved and added one item against the approved usage-alerts-roadmap v1 (E3b). */
 export const APPROVED_PLAN_SCENARIO = "approved-plan";
 
@@ -191,7 +198,8 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
   const withItems = scenario === ITEMS_SCENARIO;
   const withDiff = scenario === DIFF_SCENARIO;
   const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO;
-  const key = withItems || withDiff || noGaBasis ? `roadmap:${scenario}` : "roadmap";
+  const planStale = scenario === PLAN_STALE_SCENARIO;
+  const key = withItems || withDiff || noGaBasis || planStale ? `roadmap:${scenario}` : "roadmap";
   return seeded(key, () => {
     const db: RoadmapDb = { items: {}, tracks: [], milestones: [], bases: [], records: [], changes: [] };
     const prd = ctx.documents.find((d) => d.slug === "usage-alerts");
@@ -244,6 +252,17 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     // F7: acme/app#418 is already linked to "Spend forecast for the month" (the move flow).
     db.records.push(issueRecord(SYNCED_ISSUES[1], prd.id, "spend-forecast", ctx.userId));
     if (withItems && rv) db.items[rv.id] = db.items[rv.id].map((i) => fromFixture(db, i));
+    if (planStale && rv) {
+      const week = new Date(Date.parse(AT) + 7 * 86_400_000).toISOString();
+      db.items[rv.id].forEach((i, n) => {
+        const section = i.prd.section_key ?? i.item_key.replace(/^item-/, "");
+        Object.assign(i, {
+          freshness: "potentially_stale",
+          stale_since: week,
+          stale_reasons: [n === 0 ? `PRD section ${section} changed in version 2` : "the PRD has a new version (2)"],
+        });
+      });
+    }
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
     if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO || scenario === TRACK_ALERTS_HISTORY_SCENARIO)
       seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO);
@@ -496,6 +515,35 @@ function staleWhy(reasons: readonly string[], fallback: string): string {
   return out.join("; ") || fallback;
 }
 
+/** As oracle.roadmap.staleness.own_reasons: without "the PRD has a new version (N)" (P11). */
+const WHOLE_PRD = /^the PRD has a new version \(\d+\)$/;
+const ownReasons = (i: { stale_reasons?: readonly string[] | null }) => (i.stale_reasons ?? []).filter((r) => !WHOLE_PRD.test(r));
+
+/**
+ * As oracle.roadmap.staleness.is_stale, the per-item rule every read counts (P11): potentially
+ * stale or under review for a reason of the item's own; an item marked only because the PRD got
+ * a new version is not stale.
+ */
+function isStale(i: { freshness?: string | null; stale_reasons?: readonly string[] | null }): boolean {
+  if (i.freshness !== "potentially_stale" && i.freshness !== "under_review") return false;
+  return !(i.stale_reasons ?? []).length || ownReasons(i).length > 0;
+}
+
+/** As oracle.roadmap.views._headline: one plain sentence, naming only what means something. */
+function trackHeadline(health: Schemas["TrackOverview"]["health"], counts: Record<string, number>, when: string, movedTo: number | null): string {
+  if (health === "closed") return "Closed.";
+  if (health === "paused") return "Paused.";
+  if (health === "no_roadmap") return "No roadmap items yet: derive the roadmap from the PRD.";
+  const moved = movedTo ? ` The PRD has a newer approved version (v${movedTo}).` : "";
+  const n = counts.items;
+  if (health === "on_track") return `On track: ${n} ${n === 1 ? "item" : "items"}.${when}`;
+  const word = health === "off_track" ? "Off track" : "At risk";
+  if (!counts.at_risk) return moved ? `${word}:${moved}${when}` : `${word}.${when}`;
+  const parts = ([["blocked", "blocked"], ["stale", "may be out of date"], ["slipping", "slipping"]] as const).filter(([k]) => counts[k]).map(([k, label]) => `${counts[k]} ${label}`);
+  const attention = n > 1 ? `${counts.at_risk} of ${n} items need attention` : "the item needs attention";
+  return `${word}: ${attention}${parts.length ? ` (${parts.join(", ")}).` : "."}${when}${moved}`;
+}
+
 function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackOverview"] {
   const prd = ctx.documents.find((d) => d.id === t.prd_id)!;
   const roadmap = t.roadmap_id ? ctx.documents.find((d) => d.id === t.roadmap_id) : undefined;
@@ -508,7 +556,7 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   for (const i of items) {
     counts[i.horizon] += 1;
     const reasons: Record<string, string>[] = [];
-    if (i.freshness === "potentially_stale" || i.freshness === "under_review") reasons.push({ kind: "stale", detail: staleWhy(i.stale_reasons, "its PRD trace changed") });
+    if (isStale(i)) reasons.push({ kind: "stale", detail: staleWhy(ownReasons(i), "its PRD trace changed") });
     const d = drift(db, i);
     allDrift.push(...d);
     for (const e of d) if (e.kind !== "ahead") reasons.push({ kind: "slipping", detail: e.detail });
@@ -528,8 +576,7 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   const health: Schemas["TrackOverview"]["health"] =
     t.status !== "active" ? t.status : !items.length ? "no_roadmap" : slippingNext ? "off_track" : atRisk.length || prdMoved ? "at_risk" : "on_track";
   const when = next ? ` Next: ${next.name}${next.target_date ? ` (${next.target_date})` : ""}.` : "";
-  const headline =
-    health === "closed" ? "Closed." : health === "paused" ? "Paused." : health === "no_roadmap" ? "No roadmap items yet: derive the roadmap from the PRD." : health === "on_track" ? `On track: ${items.length} items.${when}` : `${health === "off_track" ? "Off track" : "At risk"}: ${atRisk.length} of ${items.length} items need attention.${when}`;
+  const headline = trackHeadline(health, counts, when, prdMoved ? latestApproved : null);
   return {
     id: t.id, title: t.title, status: t.status, owner_id: t.owner_id, prd: docRef(prd), started_version: t.started_version,
     current_version: t.current_version, latest_approved_version: latestApproved,

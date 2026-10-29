@@ -44,8 +44,10 @@ from oracle.simple import changes, drafts, key_dates, service, targets
 from oracle.simple.models import SimpleChange
 from oracle.simple.router import Reader
 from oracle.simple.schemas import (
+    SimpleDocRef,
     SimpleGoalBucket,
     SimpleLine,
+    SimplePlanOut,
     SimplePrioritiesOut,
     SimplePriorityAfter,
     SimplePriorityDraft,
@@ -74,6 +76,58 @@ def quarter(today: date) -> SimpleQuarter:
     end = date(today.year + 1, 1, 1) if q == 3 else date(today.year, 3 * q + 4, 1)
     return SimpleQuarter(start=start, end=date.fromordinal(end.toordinal() - 1),
                          label=f"Q{q + 1} {today.year}")  # fmt: skip
+
+
+async def plan_quarter(
+    db: AsyncSession, read_: service.Read
+) -> tuple[SimpleQuarter, set[uuid.UUID] | None]:
+    """plan-model: "this quarter" is the plan's span (the plan running today, else the next
+    to start) of the PRDs on the roadmap; the calendar quarter only with no dated plan.
+    With the plan's span, also the items it places in that span (a slice overlapping it);
+    None: the calendar quarter, whose items are the Now horizon's."""
+    from oracle.simple import plan
+
+    views = await plan.views(db, {e.prd.id for e in read_.entries if e.prd})
+    span = plan.current_span(list(views.values()), read_.today)
+    if span is None:
+        return quarter(read_.today), None
+    inside = {
+        e.row.id
+        for e in read_.entries
+        if e.prd is not None
+        and e.prd.id in views
+        and any(
+            x.start_date is not None
+            and x.end_date is not None
+            and x.start_date <= span.end
+            and x.end_date >= span.start
+            for x in views[e.prd.id].slices_of(service._prd_code(e.row.prd_section_key))
+        )
+    }
+    return SimpleQuarter(start=span.start, end=span.end, label=span.label), inside
+
+
+async def plan_in_play(
+    db: AsyncSession, read_: service.Read
+) -> tuple[SimpleQuarter, SimplePlanOut | None]:
+    """The quarter and plan-charts' plan: the plan "this quarter" is (its PRD on the roadmap
+    the reader sees, its milestones, slices and engineer-weeks per goal per milestone)."""
+    from oracle.simple import plan
+
+    prds = {e.prd.id: e.prd for e in read_.entries if e.prd}
+    picked = plan.current(await plan.views(db, set(prds)), read_.today)
+    if picked is None or picked[1].span is None:
+        return quarter(read_.today), None
+    pid, view = picked
+    span = view.span
+    doc = prds[pid]
+    return SimpleQuarter(start=span.start, end=span.end, label=span.label), SimplePlanOut(
+        prd=SimpleDocRef(id=doc.id, slug=doc.slug, title=doc.title),
+        status="ready", source=view.milestones[0].source if view.milestones else None,
+        dated=view.dated, message=view.message, milestones=view.milestones,
+        slices=view.slices, goals=view.goals, goal_weeks=view.goal_weeks, span=span,
+        holidays=view.holidays,
+    )  # fmt: skip
 
 
 def _items(read_: service.Read) -> dict[str, service.Entry]:
@@ -298,7 +352,11 @@ async def _short_codes(db: AsyncSession) -> dict[str, str]:
     return dict(zip(keys, short_codes(keys, prd), strict=True))
 
 
-def _buckets(rows: list[SimplePriorityRow]) -> tuple[list[SimpleGoalBucket], float]:
+def _buckets(
+    rows: list[SimplePriorityRow], inside: set[uuid.UUID] | None = None
+) -> tuple[list[SimpleGoalBucket], float]:
+    """Engineer-weeks per goal this quarter: the plan's items in its span (``inside``), else
+    the Now horizon's."""
     goals: dict[str, SimpleGoalBucket] = {}
     none: SimpleGoalBucket | None = None
     for r in rows:
@@ -313,7 +371,7 @@ def _buckets(rows: list[SimplePriorityRow]) -> tuple[list[SimpleGoalBucket], flo
                     key=r.goal.key, title=r.goal.title, weeks=0, share=0, codes=[]
                 )
             b = goals[r.goal.key]
-        if r.horizon == "now":
+        if (r.item_id in inside) if inside is not None else r.horizon == "now":
             b.weeks += r.effort or 0
             b.codes.append(r.code)
     out = [goals[k] for k in sorted(goals)] + ([none] if none is not None else [])
@@ -395,10 +453,12 @@ async def build(
     id_of = {f.key: f.entity_id for f in ranking.features}
     rows: list[SimplePriorityRow] = []
     deps: dict[str, list[str]] = {}
+    prd_of: list[str | None] = []
     for f in ranking.features:
         e = items.get(f.entity_id)
         deps[f.entity_id] = [id_of[d] for d in f.depends_on if d in id_of]
         gv = f.explanation.inputs.get("goal_value")
+        prd_of.append(str(e.prd.id) if e is not None and e.prd is not None else None)
         o = active.get(f.override.id) if f.override is not None else None
         rows.append(
             SimplePriorityRow(
@@ -436,10 +496,16 @@ async def build(
     for f, r in zip(ranking.features, rows, strict=True):
         r.short_code = short.get(f.key, f.key)
     _after(rows, deps)
-    buckets, total = _buckets(rows)
+    this_quarter, inside = await plan_quarter(db, read_)
+    buckets, total = _buckets(rows, inside)
+    _, plan_out = await plan_in_play(db, read_)
+    if plan_out is not None:
+        for r, pid in zip(rows, prd_of, strict=True):
+            r.in_plan = pid == str(plan_out.prd.id)
     return SimplePrioritiesOut(
         today=read_.today,
-        quarter=quarter(read_.today),
+        quarter=this_quarter,
+        plan=plan_out,
         method=METHOD,
         formula=ranking.formula,
         rows=rows,

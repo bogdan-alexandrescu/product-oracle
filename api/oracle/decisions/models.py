@@ -48,6 +48,8 @@ ORIGINS = (
     "pricing",
     # Simple S8: a decision taken in a review meeting (oracle.simple.meetings).
     "meeting",
+    # prd-questions: a PRD's open question read in (oracle.simple.questions).
+    "prd",
 )
 # Origins Oracle records on its own: decided as they are captured.
 CAPTURED_ORIGINS = (
@@ -155,6 +157,10 @@ class Decision(TenantScoped, Base):
     decided_actor: Mapped[str | None] = mapped_column(Text)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    # prd-questions: a PRD's open question: {code, document_id, version_id, recommendation,
+    # milestone, features, due_from_prd, decider_named}; ``due_on`` its due day.
+    prd_question: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    due_on: Mapped[date | None] = mapped_column(Date)
     lock_version: Mapped[int] = _lock_version()
     __mapper_args__ = {"version_id_col": lock_version}
 
