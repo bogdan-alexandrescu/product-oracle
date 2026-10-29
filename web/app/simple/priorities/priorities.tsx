@@ -113,14 +113,16 @@ export function Priorities() {
   // The item just moved (dragged, re-estimated or moved with the keys) and its rank before, kept
   // until the next move or leaving the page: highlighted with "moved #a → #b".
   const [moved, setMoved] = useState<Moved | null>(null);
-  // A proposal's toast names who decides, once the read that lists it is back.
+  // A proposal's toast names who decides, once the read that lists it is back; a read that
+  // fails still says it was proposed.
   const proposed = useRef<string | null>(null);
+  const readError = q.error;
   useEffect(() => {
-    if (!proposed.current || !data) return;
-    const p = data.proposals.find((x) => x.change_id === proposed.current);
+    if (!proposed.current || (!data && !readError)) return;
+    const p = data?.proposals.find((x) => x.change_id === proposed.current);
     proposed.current = null;
     toast({ message: p?.waiting_for.length ? `Proposed: ${p.waiting_for.join(", ")} ${p.waiting_for.length === 1 ? "decides" : "decide"}` : "Proposed: it waits for a decision" });
-  }, [data]);
+  }, [data, readError]);
 
   // An applied change is the next move: `row` is the item it moved (highlighted), none clears
   // the highlight; `moves` false (a decline) leaves it.
@@ -304,14 +306,20 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const maxValue = Math.max(1, ...rows.map((r) => r.goal_value ?? 0));
 
-  function targetIndex(y: number): number {
+  // A dated plan lists what makes the line first, so a row's neighbour on screen is not its
+  // neighbour by rank: the keys move by rank (data.rows), a drag stays on its side of the line.
+  const split = lineSplit(rows);
+  const apart = split >= 0 && regrouped(data.rows);
+
+  function targetIndex(y: number, from: number): number {
     let to = 0;
     refs.current.forEach((el, i) => {
       if (!el) return;
       const box = el.getBoundingClientRect();
       if (y > box.top + box.height / 2) to = i;
     });
-    return to;
+    if (!apart) return to;
+    return from < split ? Math.min(to, split - 1) : Math.max(to, split);
   }
 
   function start(e: ReactPointerEvent, from: number) {
@@ -322,25 +330,23 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
 
   function end(e: ReactPointerEvent) {
     if (!drag) return;
-    const to = targetIndex(e.clientY);
+    const to = targetIndex(e.clientY, drag.from);
     setDrag(null);
     if (to !== drag.from) onMove(rows[drag.from], rows[to].rank);
   }
 
   function key(e: KeyboardEvent, i: number) {
-    if (e.key === "ArrowUp" && i > 0) {
+    const at = data.rows.indexOf(rows[i]);
+    if (e.key === "ArrowUp" && at > 0) {
       e.preventDefault();
-      onMove(rows[i], rows[i - 1].rank);
-    } else if (e.key === "ArrowDown" && i < rows.length - 1) {
+      onMove(rows[i], data.rows[at - 1].rank);
+    } else if (e.key === "ArrowDown" && at < data.rows.length - 1) {
       e.preventDefault();
-      onMove(rows[i], rows[i + 1].rank);
+      onMove(rows[i], data.rows[at + 1].rank);
     }
   }
 
-  const split = lineSplit(rows);
-  // A row the item does not give a goal, but the plan does (each feature under the goal it moves most): the plan's goal, as Goal buckets shows it.
-  const planGoal = new Map((data.plan?.slices ?? []).filter((x) => x.goal).map((x) => [x.feature_code, goalLabel(x.goal!).name]));
-  const goalOf = (r: Row): string | null => r.goal?.title ?? planGoal.get(r.short_code) ?? null;
+  const goalOf = goalOfRow(data);
   return (
     <>
     <LineCaption data={data} />
@@ -373,7 +379,7 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
                   title="Drag to reorder (or use the arrow keys)"
                   className="cursor-grab touch-none rounded-md px-1 text-[length:var(--simple-h2)] leading-none text-text2 hover:bg-surface2"
                   onPointerDown={(e) => start(e, i)}
-                  onPointerMove={(e) => drag && setDrag({ ...drag, to: targetIndex(e.clientY) })}
+                  onPointerMove={(e) => drag && setDrag({ ...drag, to: targetIndex(e.clientY, drag.from) })}
                   onPointerUp={end}
                   onPointerCancel={() => setDrag(null)}
                   onKeyDown={(e) => key(e, i)}
@@ -925,6 +931,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   const quadrant = (r: Row) => (byValue.firstHalf.has(r.feature_id) ? (byEffort.firstHalf.has(r.feature_id) ? 0 : 1) : byEffort.firstHalf.has(r.feature_id) ? 2 : 3);
   const counts = [0, 1, 2, 3].map((q) => rows.filter((r) => quadrant(r) === q).length);
   const shapeOf = (r: Row): Shape => (r.goal ? (shapes.get(r.goal.key) ?? "circle") : "none");
+  const goalOf = goalOfRow(data);
   const sideRefs = useRef(new Map<string, HTMLLIElement>());
   const markRefs = useRef(new Map<string, HTMLButtonElement>());
 
@@ -1108,7 +1115,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   data-moved={isMoved ? "true" : undefined}
                   data-shape={shapeOf(r)}
                   aria-pressed={isSelected}
-                  aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}${r.goal ? "" : ", no goal"}`}
+                  aria-label={`#${r.rank} ${nameOf(r)}: goal value ${fmt(r.goal_value)}, effort ${fmt(r.effort)} weeks${r.above_line ? "" : ", below the line"}${goalOf(r) ? "" : ", no goal"}`}
                   title={`#${r.rank} ${r.short_code || r.code} · ${r.title}`}
                   className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${isSelected ? "z-20 ring-[3px] ring-accent ring-offset-2 ring-offset-surface" : isMoved ? "z-10 ring-2 ring-accent ring-offset-2 ring-offset-surface" : ""} ${mayChange && r.can_reorder ? "cursor-grab" : "cursor-pointer"}`}
                   style={{ left, top }}
@@ -1295,6 +1302,15 @@ const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now"
  * decide what makes the line, so what makes it comes first and what misses it after (each
  * part by rank, every row keeping its #), and the line is drawn once between them.
  */
+/**
+ * A row's goal: the item's, else the plan's (a row the item does not give a goal, but the plan
+ * does, each feature under the goal it moves most), as Goal buckets shows it.
+ */
+function goalOfRow(data: Out): (r: Row) => string | null {
+  const planGoal = new Map((data.plan?.slices ?? []).filter((x) => x.goal).map((x) => [x.feature_code, goalLabel(x.goal!).name]));
+  return (r) => r.goal?.title ?? planGoal.get(r.short_code) ?? null;
+}
+
 function byLine(data: Out): Row[] {
   const rows = data.rows;
   if (!data.plan?.span) return rows;

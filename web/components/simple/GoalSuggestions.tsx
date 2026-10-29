@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button, Sheet, toast } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -524,8 +524,47 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
 }
 
 /** A goal's suggestions drawer: a side panel on a desktop, a bottom sheet on a phone. */
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/**
+ * The desktop drawer is modal: focus moves into it, Tab and Shift+Tab stay inside it (a dialog
+ * opened from it, portalled outside, keeps its own keys), and on close focus goes back.
+ */
+function useDrawerFocus(open: boolean) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const p = ref.current;
+    if (p && !p.contains(document.activeElement)) (p.querySelector<HTMLElement>("[autofocus], [data-autofocus]") ?? p).focus();
+    const onKey = (e: KeyboardEvent) => {
+      const at = document.activeElement;
+      if (e.key !== "Tab" || !p) return;
+      if (at && at !== document.body && !p.contains(at) && at.closest('[role="dialog"], [role="alertdialog"]')) return;
+      const els = [...p.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.checkVisibility());
+      if (els.length === 0) return;
+      const first = els[0];
+      const last = els[els.length - 1];
+      if (e.shiftKey && (at === first || !p.contains(at) || at === p)) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (at === last || !p.contains(at))) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      if (opener?.isConnected) opener.focus();
+    };
+  }, [open]);
+  return ref;
+}
+
 export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; api: GoalSuggestionsApi; onClose: () => void; start?: GoalPanelStart }) {
   const phone = usePhone();
+  const drawer = useDrawerFocus(!phone);
   const title = `Suggestions · ${goal.title}`;
   if (phone)
     return (
@@ -539,7 +578,7 @@ export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; a
     <>
     {/* The page behind dims, as under the move dialog; a click on it closes the drawer. */}
     <div data-testid="goal-panel-backdrop" aria-hidden className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
-    <aside role="dialog" aria-modal="true" aria-label={title} data-testid="goal-panel" className="fixed top-0 right-0 bottom-0 z-50 w-[480px] max-w-full overflow-y-auto border-l border-line bg-surface p-4 text-text shadow-tip">
+    <aside ref={drawer} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} data-testid="goal-panel" className="fixed top-0 right-0 focus:outline-none bottom-0 z-50 w-[480px] max-w-full overflow-y-auto border-l border-line bg-surface p-4 text-text shadow-tip">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="flex-1 text-lg font-semibold">{title}</h2>
         <button type="button" aria-label="Close" onClick={onClose} className="h-8 w-8 rounded text-text2 hover:bg-surface2">
