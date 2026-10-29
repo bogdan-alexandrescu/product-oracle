@@ -138,13 +138,12 @@ test.describe("desktop", () => {
     await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\/present$/);
     const present = page.getByTestId("present-mode");
     await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
-    // The slides' own headings sit in their shadow roots; the page heading is the deck's.
-    // Level-one headings on the page, the slides' shadow roots included.
+    // Level-one headings shown on the page, the slides' shadow roots included (Next keeps visited pages, hidden).
     const h1s = () =>
       page.evaluate(() => {
         const out: string[] = [];
         const walk = (root: Document | ShadowRoot) => {
-          root.querySelectorAll("h1").forEach((h) => out.push(h.textContent ?? ""));
+          root.querySelectorAll("h1").forEach((h) => h.checkVisibility() && out.push(h.textContent ?? ""));
           root.querySelectorAll("*").forEach((el) => el.shadowRoot && walk(el.shadowRoot));
         };
         walk(document);
@@ -152,7 +151,7 @@ test.describe("desktop", () => {
       });
     const heading = present.getByTestId("present-heading");
     // The title slide has its own h1: no second one is added beside it.
-    await expect(present.getByTestId("current-slide")).toBeVisible();
+    await expect(present.getByTestId("current-slide-box")).toBeVisible();
     await expect.poll(async () => (await h1s()).length).toBe(1);
     await expect(heading).toHaveCount(0);
     await page.keyboard.press("ArrowRight");
