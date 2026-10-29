@@ -140,6 +140,12 @@ test.describe("phone", () => {
       const nav = page.getByRole("navigation", { name: label }).filter({ visible: true });
       await expect(nav.getByRole("link").first()).toBeVisible();
       await page.waitForTimeout(300);
+      if ((await nav.locator("[data-wrap]").count()) > 0) {
+        // A wrapping strip (the Plan's, qa-plan-4): no chevrons, every tab whole on screen.
+        await expect(nav.getByRole("button", { name: /^Scroll tabs/ })).toHaveCount(0);
+        for (const link of await nav.getByRole("link").all()) await expect(link).toBeInViewport({ ratio: 1 });
+        return;
+      }
       await settle(page, nav);
       await expect(scroller(nav)).toHaveCSS("scrollbar-width", "none");
       expect((await cutTabs(nav)).cut).toEqual([]);
