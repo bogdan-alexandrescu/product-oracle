@@ -1128,11 +1128,12 @@ export function SimpleRoadmap() {
             <span key={p.key} className="inline-flex items-center gap-1.5" data-testid="phase-key">
               {/* #41: a hatch in the phase's own colour (not one pale stripe for every
                * phase), so an estimated segment still reads as which phase it is. */}
-              <span
-                aria-hidden
-                className="inline-block h-3 w-5 rounded-sm"
-                style={{ background: `repeating-linear-gradient(45deg, ${p.soft} 0, ${p.soft} 3px, ${p.ink} 3px, ${p.ink} 4px)` }}
-              />
+              {/* qa-simple-roadmap-23/41: the key draws what a bar does, its solid ink beside its
+               * hatch (the pattern's own soft and ink, as wide as the bar's stripes). */}
+              <span aria-hidden className="inline-flex h-3 w-7 overflow-hidden rounded-sm" data-ink={p.ink}>
+                <span className="h-full w-1/2" style={{ background: p.ink }} />
+                <span className="h-full w-1/2" style={{ background: `repeating-linear-gradient(45deg, ${p.soft} 0, ${p.soft} 2.6px, ${p.ink} 2.6px, ${p.ink} 5.6px)` }} />
+              </span>
               {p.label}
             </span>
           ))}

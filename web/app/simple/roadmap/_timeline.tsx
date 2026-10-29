@@ -165,7 +165,9 @@ export const msFill = (code: string): string => `color-mix(in srgb, ${msEdge(cod
 /** The waterfall's phases in order, each with its colour (solid: a milestone or gate dates
  * it; hatched: estimated from the bar's split). */
 export const PHASES: { key: Item["phases"][number]["key"]; label: string; ink: string; soft: string }[] = [
-  { key: "discover", label: "Discover", ink: "var(--na)", soft: "var(--na-bg)" },
+  // qa-simple-roadmap-23: Discover gets a hue of its own (the violet milestone edge), not the
+  // grey that means "not in a milestone" or cut elsewhere on the Roadmap.
+  { key: "discover", label: "Discover", ink: "var(--simple-m2-edge)", soft: "color-mix(in srgb, var(--simple-m2-edge) 16%, var(--surface))" },
   { key: "build", label: "Build", ink: "var(--accent)", soft: "var(--accent-soft)" },
   { key: "beta", label: "Beta", ink: "var(--warn)", soft: "var(--warn-bg)" },
   { key: "launch", label: "Launch", ink: "var(--pass)", soft: "var(--pass-bg)" },
@@ -587,10 +589,15 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                   #{r.place}
                 </span>
               )}
-              {/* findings 15/16: every row shows its name, in full width; a code (F-01) sits only
-                  in the tooltip, and only when it is this row's alone (some rows have none, and
-                  the mock has repeated one by mistake). The name always gets the row's space
+              {/* findings 15/16: design D's code first (F-01), when it is this row's alone (codes
+                  are per PRD, so two PRDs on one view can both have an F-06; a repeated code
+                  would read as the same thing twice). The name always gets the row's space
                   first; the chips after it shrink instead of squeezing it to nothing (finding 7). */}
+              {r.item.code && codeCounts.get(r.item.code) === 1 && (
+                <span className={`flex-none font-mono text-text2 ${compact ? "text-[11px]" : "text-xs"}`} data-testid="label-code">
+                  {r.item.code}
+                </span>
+              )}
               <span
                 data-testid="label-title"
                 title={r.item.code && codeCounts.get(r.item.code) === 1 ? `${r.item.code} ${r.item.title}` : r.item.title}
@@ -642,7 +649,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 PHASES.map((p) => (
                   <pattern key={p.key} id={`simple-hatch-${p.key}`} width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
                     <rect width="8" height="8" fill={p.soft} />
-                    <line x1="0" y1="0" x2="0" y2="8" stroke={p.ink} strokeWidth="2.5" opacity="0.7" />
+                    {/* qa-simple-roadmap-41: the phase's own ink at full strength, as its key draws it. */}
+                    <line x1="0" y1="0" x2="0" y2="8" stroke={p.ink} strokeWidth="3" />
                   </pattern>
                 ))}
               {/* D: pulled in, pending a decision (amber hatch). */}
