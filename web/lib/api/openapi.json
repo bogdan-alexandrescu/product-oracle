@@ -100984,6 +100984,17 @@
           "prd_moved": {
             "type": "boolean",
             "title": "Prd Moved"
+          },
+          "prd_moved_to": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prd Moved To"
           }
         },
         "type": "object",

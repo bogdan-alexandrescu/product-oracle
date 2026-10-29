@@ -133,7 +133,7 @@ test.describe("distance to go, met and direction", () => {
     ["Growth", "double it", "12", undefined, ""],
     ["Growth", "45%", "rising", undefined, ""],
     // No current value.
-    ["Growth", "45%", null, undefined, "No current value"],
+    ["Growth", "45%", null, undefined, "No current value yet"],
   ];
   for (const [title, target, current, history, want] of cases) {
     test(`${title}: ${current ?? "–"} against "${target}"${history ? ` from ${history[0].value}` : ""}`, () => {
@@ -190,7 +190,7 @@ test.describe("typed goals: comparison gives the direction, typed beats text", (
     ["at least $4M", { unit: "USD", comparison: "at_least", target: 4_000_000, current: 3_100_000, ...asOf }, "$900k to go"],
     // The title says "Raise" and the text says "at least 50%": the typed comparison wins.
     ["typed beats text", { unit: "%", comparison: "at_most", target: 45, current: 40, target_text: "at least 50%", ...asOf }, "Target met"],
-    ["no current yet", { unit: "%", comparison: "at_least", target: 45 }, "No current value"],
+    ["no current yet", { unit: "%", comparison: "at_least", target: 45 }, "No current value yet"],
     // Still on text: the fallback reads *_text as it read the old free text.
     ["text fallback", { target_text: "below 8%", current_text: "11%" }, "3 pts to go"],
   ];
@@ -210,11 +210,12 @@ test.describe("typed goals: comparison gives the direction, typed beats text", (
   });
 
   // Decided 2026-10-21, B5 "Vague goals": a confirmed goal with no typed target says No target.
-  test("a confirmed goal without a typed target and no current value shows No target", () => {
+  // qa-plan-14: but never "No target" beside a target written in words: it lacks the current value.
+  test("a confirmed goal without a typed target and no current value shows No current value yet beside its written target", () => {
     const [g] = goalViews([{ ...goal({ target_text: "below 8%" }), goal_check: { measurable: false, missing: ["unit", "comparison", "target"], warnings: [], problems: [] } } as EntityOut]);
     const p = assess(g);
     expect(p.state).toBe("notarget");
-    expect(p.text).toBe("No target");
+    expect(p.text).toBe("No current value yet");
     expect(g.missing).toEqual(["unit", "comparison", "target"]);
   });
 });

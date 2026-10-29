@@ -113,8 +113,8 @@ const FEATURES: [string, string][] = [
   ["F-8", "Scheduled exports"],
 ];
 
-/** The Score column's number style (formatScore), worked out here from the shown figures. */
-const scoreStyle = (n: number) => n.toLocaleString("en-US", { maximumFractionDigits: n !== 0 && Math.abs(n) < 1 ? 2 : 1 });
+/** The Score column's number style (scoreText: two decimals), worked out here from the shown figures. */
+const scoreStyle = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 /** A step's shown arithmetic, as a person would key it into a calculator: "6,000 × 1 × 90% ÷ 1". */
 const worked = (expr: string) => {
   const js = expr.replace(/,/g, "").replace(/(\d+(?:\.\d+)?)%/g, "($1/100)").replace(/×/g, "*").replace(/÷/g, "/");
@@ -169,13 +169,13 @@ test("priorities: a score step's arithmetic is true, confidence a percent in eve
   await expect(page.locator('tr[data-testid^="priority-row-"]').first()).toBeVisible();
 
   const f2 = (m: string) => pickMethod(page, m).then(() => stepsOf(page, "F-2", "Shipping cost shown in the cart"));
-  expect(await f2("RICE")).toEqual(["Score = 6,000 × 1 × 90% ÷ 1 = 5,400"]);
-  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400");
+  expect(await f2("RICE")).toEqual(["Score = 6,000 × 1 × 90% ÷ 1 = 5,400.00"]);
+  await expect(page.getByTestId("priority-row-F-2").getByTestId("score")).toHaveText("5,400.00");
   expect(await f2("Goal-weighted")).toEqual([
     "Goal value = 3×3 (Raise activation) = 9",
-    "Score = 9 × 90% ÷ 1 = 8.1",
+    "Score = 9 × 90% ÷ 1 = 8.10",
   ]);
-  expect(await f2("WSJF")).toEqual(["Cost of delay = 5 + 8 + 2 = 15", "Score = 15 ÷ 2 = 7.5"]);
+  expect(await f2("WSJF")).toEqual(["Cost of delay = 5 + 8 + 2 = 15", "Score = 15 ÷ 2 = 7.50"]);
   expect(await f2("MoSCoW")).toEqual(["Should have = 3; ties broken by goal value 9"]);
 
   await stepsAddUp(page);
@@ -190,11 +190,11 @@ test("priorities: with a track record, the confidence step and the formula read 
   await pickMethod(page, "Goal-weighted");
   const steps = await stepsOf(page, "F-1", "Saved addresses at checkout");
   expect(steps).toContain("Confidence = 75% × track record 0.77 = 57.8%");
-  expect(steps).toContain("Score = 6 × 57.8% ÷ 2 = 1.7");
+  expect(steps).toContain("Score = 6 × 57.8% ÷ 2 = 1.73");
   await pickMethod(page, "RICE");
   expect(await stepsOf(page, "F-1", "Saved addresses at checkout")).toEqual([
     "Confidence = 75% × track record 0.77 = 57.8%",
-    "Score = 4,000 × 2 × 57.8% ÷ 2 = 2,312",
+    "Score = 4,000 × 2 × 57.8% ÷ 2 = 2,312.00",
   ]);
 
   await stepsAddUp(page);

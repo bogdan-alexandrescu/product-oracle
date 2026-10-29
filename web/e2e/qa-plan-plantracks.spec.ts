@@ -79,7 +79,7 @@ test("closing a track asks first and says what it does", async ({ page }) => {
   await expect(dialog).toContainText("stops checking this track");
   await expect(dialog).toContainText("weekly alignment report leaves it out");
   await dialog.getByRole("button", { name: "Back" }).click();
-  await expect(t.getByTestId("track-health")).toHaveText("On track");
+  await expect(t.getByTestId("track-health")).toHaveText("At risk");
 
   await status.getByRole("button", { name: "Closed" }).click();
   await page.getByRole("alertdialog").getByRole("button", { name: "Close track" }).click();

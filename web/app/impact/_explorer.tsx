@@ -122,16 +122,20 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
     source.kind === "version" ? (
       <DocCrumb doc={docQ.data ?? undefined} withTitle />
     ) : backTo ? (
-      <Link href={backTo.href} data-testid="impact-back" className="hover:underline">
-        ← {backTo.label}
+      <Link href={backTo.href} data-testid="impact-back" className="inline-flex min-h-6 items-center rounded-sm hover:text-text hover:underline">
+        ‹ {backTo.label}
       </Link>
     ) : undefined;
   const counts = report ? countFreshness(report.affected) : null;
   const status = report && (
     <>
       {!can("act_on_staleness") && <ViewOnly />}
-      {/* qa-docs-25: a preview says so in the line under the header, in words; no lone badge. */}
-      {!report.preview && <Chip kind="line">Recorded</Chip>}
+      {/* qa-docs-25, qa-plan-52: a preview says so in the line under the header, in words; no lone badge. */}
+      {!report.preview && (
+        <Chip kind="line" data-testid="impact-mode" title="A recorded change: these outputs were marked as it says.">
+          Recorded
+        </Chip>
+      )}
       {counts!.potentially_stale > 0 && (
         <Chip kind="warn" dot>
           {counts!.potentially_stale} potentially stale
@@ -149,6 +153,9 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
       <PageHeader
         title={title}
         back={back}
+        // qa-plan-11: Baseline's and a change's back link (‹, like the Plan crumb) sit on the
+        // title row, so the title does not move down; a version's crumb keeps its own line.
+        backInline={source.kind !== "version"}
         status={status}
         action={
           report && report.affected.length > 0 ? (

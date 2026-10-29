@@ -124,9 +124,12 @@ export function Dialog({
   return createPortal(
     // A portal still bubbles React events to the opener's row: keep clicks and keys (bar
     // Escape and Tab, which the dialog handles) from selecting or moving rows underneath.
+    // qa-plan-36: z-[45] puts the backdrop over the phone tab bar and the rail (z-40) whatever
+    // the DOM order, so a tap there cannot leave the page and drop a draft; a ConfirmDialog or
+    // a Sheet (z-50) still sits above it.
     <div
       data-testid="dialog-backdrop"
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
+      className="fixed inset-0 z-[45] flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.key !== "Escape" && e.key !== "Tab" && e.stopPropagation()}
       onMouseDown={(e) => {

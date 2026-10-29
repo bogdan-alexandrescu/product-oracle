@@ -280,11 +280,15 @@ async def _track_content(
     slug = prd.slug if prd else str(track.prd_document_id)
     counts = {"aligned": 0, "drift": 0, "untracked": 0, "done": 0}
     untracked_now = 0
+    # Every roadmap item's name as the Plan shows it (qa-plan-41), for drift on items that
+    # are not at risk too.
+    titles: dict[str, str] = {}
     if track.roadmap_document_id:
         roadmap = await db.get(Document, track.roadmap_document_id)
         if roadmap is not None:
             report = await views.alignment(db, roadmap, await views.items_version(db, roadmap))
             counts = {k: report.counts.get(k, 0) for k in counts}
+            titles = {i.item_key: i.title for i in report.items}
             untracked_now = sum(
                 1 for i in report.items if i.alignment == "untracked" and i.horizon == "now"
             )
@@ -302,7 +306,7 @@ async def _track_content(
         for item in o.at_risk
         for reason in item.reasons
     ]
-    titles = {i.item_key: i.title for i in o.at_risk}
+    titles |= {i.item_key: i.title for i in o.at_risk}
     drift = [
         {
             "kind": d.kind,
@@ -336,6 +340,8 @@ async def _track_content(
         "slips": slips_in(needs),
         "dates": dates,
         "prd_moved": o.prd_moved,
+        # qa-plan-43: which version is approved, so the report can say "v2 is approved".
+        "prd_moved_to": o.latest_approved_version if o.prd_moved else None,
     }
     return content, untracked_now
 
@@ -414,6 +420,13 @@ def slips_in(needs: list[dict[str, Any]]) -> int:
     return sum(1 for n in needs if n.get("kind") == "slipping")
 
 
+def prd_moved_text(track: dict[str, Any]) -> str:
+    """qa-plan-43: "v2 of the PRD is approved": which newer version the roadmap is behind
+    (a report made before the version was kept says only that a newer one is)."""
+    n = track.get("prd_moved_to")
+    return f"v{n} of the PRD is approved" if n else "A newer version of the PRD is approved"
+
+
 def _link_text(text: str | None) -> str:
     """A link's text: brackets (and backslashes) escaped so a "]" does not end it early."""
     return _line(text).replace("\\", "\\\\").replace("[", "\\[").replace("]", "\\]")
@@ -455,7 +468,7 @@ def markdown(content: dict[str, Any]) -> str:
             f"{a['untracked']} untracked, {a['done']} done"
         )
         if t.get("prd_moved"):
-            lines.append("- The PRD has a newer approved version.")
+            lines.append(f"- {prd_moved_text(t)} · [Update the roadmap]({t['link']})")
         if t["needs_attention"]:
             lines += ["", f"### Needs attention ({when})", ""]
             lines += [

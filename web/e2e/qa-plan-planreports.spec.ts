@@ -31,10 +31,10 @@ test("qa-plan-9, qa-plan-57: report sentences name days as 'Nov 30', horizons as
   const first = page.getByTestId("report-track").filter({ visible: true }).first();
   await expect(first).toContainText("Next milestone: First release, Nov 30.");
   const attention = first.getByTestId("needs-attention");
-  await expect(attention).toContainText("Threshold alerts · Now: ENG-405 targets Dec 9, after the milestone date Nov 30.");
+  await expect(attention).toContainText("Daily alert digest email · Now: ENG-405 targets Dec 9, after the milestone date Nov 30.");
   await expect(attention).not.toContainText("(now)");
   await expect(first).toContainText("Verified: ENG-412 supports Nov 30");
-  await expect(first).toContainText("Withdrawn: ENG-413 (Dec 15): Estimate replaced");
+  await expect(first).toContainText("Withdrawn: ENG-413 (Dec 15): The team re-estimated");
   for (const t of await page.getByTestId("report-track").filter({ visible: true }).all()) {
     expect(await t.innerText()).not.toMatch(ISO_DAY);
     await expect(t.locator(".font-mono")).toHaveCount(0);

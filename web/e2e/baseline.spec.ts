@@ -28,8 +28,9 @@ test("baseline: goals with weight, metric, target and horizon", async ({ page })
   await expect(activation.locator('[data-attr="horizon"]')).toHaveText("Short · Dec 31");
   await expect(activation).toContainText("Confirmed");
   // Confidence is a ring, 0-100.
-  await expect(activation.getByTestId("confidence")).toHaveText("78");
-  await expect(activation.getByTestId("confidence")).toHaveAttribute("data-tone", "green");
+  // qa-plan-8: a goal with no evidence of its own shows no score.
+  await expect(activation.getByTestId("confidence")).toHaveText("–");
+  await expect(activation.getByTestId("confidence")).toHaveAttribute("title", "Not scored: no evidence yet");
 
   const paid = page.getByTestId("goal-g.paid-conversion");
   await expect(paid.locator('[data-attr="target"]')).toHaveText("≥ 12%");

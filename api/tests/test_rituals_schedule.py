@@ -105,7 +105,7 @@ def test_invalid_schedules_are_refused(bad):
         ({"target_text": "45%", "current": 38, "unit": "%"}, "7 pts to go"),
         ({"target": 45, "unit": "%", "comparison": "at_least", "current": 46}, "Target met"),
         ({"target": "below 200ms", "current": "260 ms"}, "60 ms to go"),
-        ({"target": "45%"}, "No current value"),
+        ({"target": "45%"}, "No current value yet"),
         ({"target": "$4M", "current": "$3.1M"}, "$900k to go"),
     ],
 )

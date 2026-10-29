@@ -75,12 +75,12 @@ async function churnWithSubgoal(page: Page) {
 test("add a subgoal, set its target, link a feature, see the parent roll up, pick it in New PRD", async ({ page }) => {
   await openBaseline(page);
   const row = await churnWithSubgoal(page);
-  await expect(row.locator('[data-attr="progress"]')).toHaveText("60% of target");
+  await expect(row.locator('[data-attr="progress"]')).toHaveText("60% of the way from 10%");
   const churn = page.getByTestId("goal-g.early-churn");
   await expect(churn.locator('[data-attr="progress"]')).toHaveText("60% from subgoals");
   await expect(churn.locator('[data-attr="progress"]')).toHaveAttribute("data-source", "subgoals");
   // A goal with its own value says so.
-  await expect(page.getByTestId("goal-g.activation").locator('[data-attr="progress"]')).toHaveText("50% of target");
+  await expect(page.getByTestId("goal-g.activation").locator('[data-attr="progress"]')).toHaveText("50% of the way from 31%");
 
   // The tree folds.
   await churn.getByRole("button", { name: "Hide subgoals of Cut early churn" }).click();

@@ -70,7 +70,7 @@ test("qa-plan-59: a recorded change leads back to its version, with PRDs highlig
   await expect(nav.getByTestId("nav-prds")).toHaveAttribute("aria-current", "page");
   // The what-if page it was opened from may still be mounted, hidden; the shown header is the change's.
   const back = page.getByTestId("impact-back").filter({ visible: true });
-  await expect(back).toHaveText("← Checkout redesign PRD v2");
+  await expect(back).toHaveText("‹ Checkout redesign PRD v2");
   await expect(back).toBeVisible();
   await back.click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign\/v\/2$/);

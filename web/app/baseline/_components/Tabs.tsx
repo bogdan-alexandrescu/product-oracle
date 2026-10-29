@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { ScrollStrip, type ChipKind } from "@/components/ds";
 
@@ -11,6 +11,21 @@ const COUNT: Partial<Record<ChipKind, string>> = {
   warn: "bg-warn-bg text-warn",
   acc: "bg-accent-soft text-accent-ink",
 };
+
+const PHONE = "(max-width: 600px)";
+
+/** True at phone width (600 px and under). */
+function usePhoneWidth(): boolean {
+  const [phone, setPhone] = useState(false);
+  useEffect(() => {
+    const q = window.matchMedia(PHONE);
+    const on = () => setPhone(q.matches);
+    on();
+    q.addEventListener("change", on);
+    return () => q.removeEventListener("change", on);
+  }, []);
+  return phone;
+}
 
 /**
  * The kit's SegmentedControl look with tab semantics (role tablist/tab, aria-selected,
@@ -41,11 +56,27 @@ export function Tabs<V extends string>({
     onChange(items[next]!.id);
     ref.current?.querySelectorAll<HTMLElement>('[role="tab"]')[next]?.focus();
   };
-  // One line that scrolls sideways when the tabs do not fit (a phone), as the Plan's strip
-  // does: never an uneven wrapped grid (qa-plan-50).
+  // A wide screen: one line that scrolls sideways if it must. A phone: the tabs wrap onto a
+  // second line, each a whole pill, so none is cut mid-word or covered by a scroll arrow (qa-plan-25).
+  const phone = usePhoneWidth();
   return (
-    <div className="flex max-w-full min-w-0 flex-none self-start overflow-hidden rounded-button border border-line-strong bg-surface max-[600px]:self-stretch">
-      <ScrollStrip ref={ref} role="tablist" aria-label={label} onKeyDown={onKey} className="min-w-0 flex-1" stripClassName="items-stretch" data-testid="baseline-tabs">
+    <div
+      className={
+        phone
+          ? "flex max-w-full min-w-0 flex-none self-stretch"
+          : "flex max-w-full min-w-0 flex-none self-start overflow-hidden rounded-button border border-line-strong bg-surface"
+      }
+    >
+      <ScrollStrip
+        ref={ref}
+        role="tablist"
+        aria-label={label}
+        onKeyDown={onKey}
+        wrap={phone}
+        className="min-w-0 flex-1"
+        stripClassName={phone ? "items-stretch gap-1.5" : "items-stretch"}
+        data-testid="baseline-tabs"
+      >
         {items.map((t) => {
           const on = t.id === value;
           const pill = t.count != null && t.count > 0 && !on ? (COUNT[t.kind ?? "acc"] ?? COUNT.acc) : on ? "bg-surface text-accent-ink" : "bg-surface2 text-text2";
@@ -59,7 +90,9 @@ export function Tabs<V extends string>({
               aria-controls={`panel-${t.id}`}
               tabIndex={on ? 0 : -1}
               onClick={() => onChange(t.id)}
-              className={`flex h-9 flex-none items-center justify-center gap-2 border-r border-line px-3.5 text-[15px] font-medium whitespace-nowrap last:border-r-0 max-[600px]:gap-1.5 max-[600px]:px-3 max-[600px]:text-sm ${
+              className={`flex h-9 flex-none items-center justify-center gap-2 px-3.5 text-[15px] font-medium whitespace-nowrap max-[600px]:gap-1.5 max-[600px]:px-3 max-[600px]:text-sm ${
+                phone ? `rounded-button border ${on ? "border-accent" : "border-line-strong bg-surface"}` : "border-r border-line last:border-r-0"
+              } ${
                 on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
               }`}
             >

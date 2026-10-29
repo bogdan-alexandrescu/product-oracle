@@ -7,7 +7,7 @@ import { login } from "./helpers";
  * qa-shell-28, qa-shell-29, qa-settings-9), on the mock API.
  *
  * Card: protects=the (i) tips and goal chips are at least 24 x 24 px on desktop and on a
- * 390 px phone; Alignment reports, Changelog and Launches lead back with a "‹ Plan" link to
+ * 390 px phone; Changelog and Launches lead back with a "‹ Plan" link to
  * /plan, 24 px tall; the Not reviewed mark reads at 4.5:1 in light and dark; /design says it
  * is a developer page; fails_when=a target is under 24 px, the crumb says Roadmap, is plain
  * text or goes elsewhere, or the mark is a faint line colour; no_claim=every small control.
@@ -61,9 +61,9 @@ test.describe("phone", () => {
   });
 });
 
-test("Alignment reports, Changelog and Launches lead back with a ‹ Plan link to /plan", async ({ page }) => {
+test("Changelog and Launches lead back with a ‹ Plan link to /plan", async ({ page }) => {
   await login(page);
-  for (const path of ["/plan/reports", "/roadmap/changelog", "/roadmap/launches"]) {
+  for (const path of ["/roadmap/changelog", "/roadmap/launches"]) {
     await page.goto(path);
     const header = page.locator("header[data-page-header]").filter({ visible: true });
     const crumb = header.getByRole("link", { name: "Back to Plan" });

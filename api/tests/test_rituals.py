@@ -338,7 +338,7 @@ async def test_the_goals_block_shows_homes_distance(client, ctx, at):
     by_title = {r["title"]: r for r in goals["rows"]}
     assert set(by_title) == {"Raise activation", "Lift NPS"}
     assert by_title["Raise activation"]["distance"] == "7 pts to go"
-    assert by_title["Lift NPS"]["distance"] == "No current value"
+    assert by_title["Lift NPS"]["distance"] == "No current value yet"
 
 
 async def test_the_goals_block_writes_values_as_home_does(client, ctx, at):

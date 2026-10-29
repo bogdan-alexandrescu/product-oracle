@@ -36,7 +36,8 @@ async function insetBy(page: Page, inner: string, outer: string, gap: number) {
 test("qa-plan-6: roadmap and PRD names show in full, not cut", async ({ page }) => {
   await start(page);
   await openTab(page, "documents");
-  const names = page.getByTestId("roadmaps-table").getByTestId("roadmap-name");
+  // qa-plan-49: the roadmaps and the approved PRDs each have their own table.
+  const names = page.locator('[data-testid="roadmaps-table"], [data-testid="approved-prds-table"]').getByTestId("roadmap-name");
   await expect(names).toHaveText(["Usage alerts roadmap", "Usage alerts PRD"]);
   for (const name of await names.all()) {
     const fits = await name.evaluate((el) => {
@@ -78,7 +79,8 @@ test("qa-plan-17: a roadmap never approved says so", async ({ page }) => {
   const row = page.getByTestId("roadmap-row").first();
   await expect(row).toContainText("In review");
   await expect(row.getByTestId("roadmap-approved-version")).toHaveCount(0);
-  await expect(page.getByTestId("roadmap-inspector")).toContainText("Not yet");
+  // qa-plan-50: as a status chip, not a big figure.
+  await expect(page.getByTestId("roadmap-inspector").getByTestId("roadmap-not-approved")).toHaveText("Not approved yet");
 });
 
 test("qa-plan-54: Build roadmap template descriptions wrap, not cut", async ({ page }) => {

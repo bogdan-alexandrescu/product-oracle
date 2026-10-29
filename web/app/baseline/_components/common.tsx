@@ -74,21 +74,37 @@ export function ConfidenceRing({
   low = DEFAULT_LOW,
   size = 34,
   what = "Confidence",
+  evidence,
 }: {
   value: number | null | undefined;
   low?: number;
   size?: number;
   /** What the ring scores, in its name and tooltip ("Link confidence 50%"). */
   what?: string;
+  /**
+   * The item's evidence count, when known: a score is built on its evidence, so with none the
+   * ring shows no score (qa-plan-8), and with some its tooltip says where the score comes from.
+   */
+  evidence?: number;
 }) {
-  const tone = value == null ? undefined : confidenceTone(value, low);
+  const scored = evidence === 0 ? null : value;
+  const tone = scored == null ? undefined : confidenceTone(scored, low);
   // The ring's number is a percentage: its name and tooltip say so (prod-7).
-  const words = value == null ? "Not scored yet" : `${what} ${formatPercent(value)}`;
+  const words =
+    evidence === 0
+      ? "Not scored: no evidence yet"
+      : scored == null
+        ? "Not scored yet"
+        : `${what} ${formatPercent(scored)}`;
+  const tip =
+    scored != null && evidence != null && evidence > 0
+      ? `${words}, from ${evidence} evidence ${evidence === 1 ? "item" : "items"}`
+      : words;
   return (
-    <span data-testid="confidence" data-tone={tone} className="inline-flex align-middle" title={words}>
+    <span data-testid="confidence" data-tone={tone} className="inline-flex align-middle" title={tip}>
       <Ring
         label={words}
-        value={value == null ? null : value * 100}
+        value={scored == null ? null : scored * 100}
         size={size}
         stroke={size >= 40 ? 5 : 4}
         tone={tone ? RING_TONE[tone] : "accent"}
@@ -295,4 +311,6 @@ export function ContributionPips({ value, proposed = false }: { value: number; p
  * its labels (KpiStrip sets its columns inline, hence the important overrides).
  */
 export const KPI_PHONE =
-  "max-[600px]:[&>dl]:grid-cols-2! max-[600px]:[&>dl>div:nth-child(2n)]:border-r-0 max-[600px]:[&>dl>div:nth-child(n+3)]:border-t";
+  "max-[600px]:[&>dl]:grid-cols-2! max-[600px]:[&>dl>div:nth-child(2n)]:border-r-0 max-[600px]:[&>dl>div:nth-child(n+3)]:border-t " +
+  // A label and its (i) wrap to their full height, never clipped by the label's line (qa-plan-27).
+  "max-[600px]:[&>dl>div>dt]:flex-wrap max-[600px]:[&>dl>div>dt]:overflow-visible max-[600px]:[&>dl>div>dt]:whitespace-normal";

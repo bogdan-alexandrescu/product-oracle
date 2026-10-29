@@ -54,6 +54,8 @@ const CHANNELS: { value: Channel; label: string }[] = [
   { value: "other", label: "Other" },
 ];
 const PHONE = "(max-width: 600px)";
+/** qa-plan-38: a secondary button in the header row is the primary's 40 px height. */
+const HEADER_BUTTON = "h-10! rounded-button! px-4! text-[15px]!";
 
 function subscribePhone(onChange: () => void) {
   const mq = window.matchMedia(PHONE);
@@ -117,6 +119,8 @@ function Launches() {
   const current: Filter = filter ?? (count("ready") > 0 ? "ready" : "all");
   const shown = current === "all" ? rows : rows.filter((l) => l.state === current);
   const active = shown.find((l) => l.id === selected) ?? rows.find((l) => l.id === selected) ?? shown[0];
+  // Loaded, and nothing at all (not a filter that matches nothing).
+  const none = q.data != null && rows.length === 0;
 
   const columns: Column<Summary>[] = [
     {
@@ -183,6 +187,8 @@ function Launches() {
           </InfoTip>
         }
         back={<PlanCrumb />}
+        // qa-plan-11: the crumb sits on the title row, so the title is where the Plan tabs have theirs.
+        backInline
         status={
           q.data && (
             <>
@@ -192,7 +198,7 @@ function Launches() {
         }
         action={
           <div className="flex flex-wrap gap-2">
-            <LinkButton href="/roadmap/changelog" icon="doc" data-testid="changelog-link">
+            <LinkButton href="/roadmap/changelog" icon="doc" className={HEADER_BUTTON} data-testid="changelog-link">
               Changelog
             </LinkButton>
             {can("create_launch") && (
@@ -206,38 +212,59 @@ function Launches() {
       <div className="flex flex-col gap-3">
         {q.error && <Notice tone="error">{q.error}</Notice>}
         <Split inspector={phone ? undefined : inspector}>
+          {/* qa-plan-39: the card is named after the filter, not "Launches" again under the page title. */}
           <Panel
-            title="Launches"
+            title={none ? undefined : FILTER_TITLE[current]}
             tools={
-              <FilterChips
-                label="Launches by state"
-                testId="launch-filters"
-                value={current}
-                onChange={(v) => setFilter(v)}
-                items={[
-                  { value: "ready", label: "Ready", count: count("ready") },
-                  { value: "planned", label: "Planned", count: count("planned") },
-                  { value: "launched", label: "Launched", count: count("launched") },
-                  { value: "all", label: "All", count: rows.length },
-                ]}
-              />
+              // qa-plan-48: with no launch at all, no filters (each would read 0) and no table
+              // headers: only the empty state and its action.
+              !none && (
+                <FilterChips
+                  label="Launches by state"
+                  testId="launch-filters"
+                  value={current}
+                  onChange={(v) => setFilter(v)}
+                  items={[
+                    { value: "ready", label: "Ready", count: count("ready") },
+                    { value: "planned", label: "Planned", count: count("planned") },
+                    { value: "launched", label: "Launched", count: count("launched") },
+                    { value: "all", label: "All", count: rows.length },
+                  ]}
+                />
+              )
             }
           >
-            <DataTable<Summary>
-              label="Launches"
-              testId="launches-table"
-              columns={columns}
-              rows={q.loading && !q.data ? undefined : shown}
-              rowKey={(l) => l.id}
-              selected={active?.id ?? null}
-              onSelect={(k) => {
-                setSelected(k);
-                if (phone) setSheet(true);
-              }}
-              loading={q.loading && !q.data}
-              empty={emptyText(current, rows.length, can("create_launch"))}
-              rowProps={(l) => ({ "data-testid": "launch-row", "data-state": l.state })}
-            />
+            {none ? (
+              <div data-testid="launches-empty" className="flex flex-col items-center gap-3 px-4 py-10 text-center text-[15px] text-text2">
+                <p className="font-display text-lg font-bold text-text">No launches yet</p>
+                <p data-testid="launches-empty-text">
+                  {can("create_launch")
+                    ? "Use New launch to plan the first, or approve a roadmap: its Now items get a launch each."
+                    : "They are planned when a roadmap is approved."}
+                </p>
+                {can("create_launch") && (
+                  <Button variant="primary" icon="plus" onClick={() => setCreating(true)} data-testid="launches-empty-new">
+                    New launch
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <DataTable<Summary>
+                label="Launches"
+                testId="launches-table"
+                columns={columns}
+                rows={q.loading && !q.data ? undefined : shown}
+                rowKey={(l) => l.id}
+                selected={active?.id ?? null}
+                onSelect={(k) => {
+                  setSelected(k);
+                  if (phone) setSheet(true);
+                }}
+                loading={q.loading && !q.data}
+                empty={emptyText(current, rows.length, can("create_launch"))}
+                rowProps={(l) => ({ "data-testid": "launch-row", "data-state": l.state })}
+              />
+            )}
           </Panel>
         </Split>
       </div>
@@ -266,6 +293,7 @@ function Launches() {
 }
 
 const FILTER_WORD: Record<Exclude<Filter, "all">, string> = { ready: "ready", planned: "planned", launched: "launched" };
+const FILTER_TITLE: Record<Filter, string> = { ready: "Ready launches", planned: "Planned launches", launched: "Launched", all: "All launches" };
 
 /** What the table says with no row: why, and the next step where this role can take it. */
 function emptyText(filter: Filter, total: number, canCreate: boolean): string {

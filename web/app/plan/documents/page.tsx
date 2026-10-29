@@ -31,11 +31,16 @@ import { useQuery } from "@/lib/use-query";
 import { versionHref } from "@/lib/version-href";
 
 type Doc = Schemas["DocumentSummary"];
-/** One table: the roadmaps, then the approved PRDs that can each build one (B1's "In flight" group). */
+/**
+ * A row of either table: the roadmaps, and below them the approved PRDs that can each build
+ * one. qa-plan-49: each in its own table under its own headers, so a PRD's "v1 approved" is
+ * never under a roadmap's Template.
+ */
 type Row = { kind: "roadmap"; d: Doc } | { kind: "prd"; d: Doc; built: Doc[] };
 
 const STATUS_KIND: Record<Doc["status"], ChipKind> = { draft: "na", in_review: "acc", approved: "pass" };
-const GROUP = { roadmap: "Roadmaps", prd: "Approved PRDs" } as const;
+/** qa-plan-51: a link in a row is a tap target of at least 24 x 24 px. */
+const TAP = "inline-block min-h-6 py-px";
 
 /** A template's or theme's key in words, until the list names it: "roadmap-board" is "Roadmap board". */
 function keyWords(key: string): string {
@@ -61,7 +66,7 @@ function ApprovedValue({ d }: { d: Doc }) {
   const versions = useQuery(`versions|${d.slug}`, () =>
     unwrap(api.GET("/v1/documents/{doc}/versions", { params: { path: { doc: d.slug } } })),
   );
-  if (d.approved_version == null) return <>Not yet</>;
+  if (d.approved_version == null) return null;
   const at = versions.data?.find((v) => v.number === d.approved_version)?.approved_at;
   return (
     <span data-testid="roadmap-approved">
@@ -121,7 +126,19 @@ function RoadmapInspector({ d, names }: { d: Doc; names: StyleNames }) {
       }
       stats={[
         { label: "Latest", value: d.latest_version != null ? `v${d.latest_version}` : "—" },
-        { label: "Approved", value: <ApprovedValue d={d} /> },
+        // qa-plan-50: not approved is a status, shown as a chip, not as a big figure.
+        d.approved_version == null
+          ? {
+              label: "Approved",
+              figure: (
+                <span className="mt-1.5 block">
+                  <Chip kind="na" data-testid="roadmap-not-approved">
+                    Not approved yet
+                  </Chip>
+                </span>
+              ),
+            }
+          : { label: "Approved", value: <ApprovedValue d={d} /> },
       ]}
     >
       <InspectorSection label="Source PRD">
@@ -162,7 +179,7 @@ function PrdInspector({ d, built }: { d: Doc; built: Doc[] }) {
         ) : (
           built.map((r) => (
             <InspectorRow key={r.id} value={<StatusChip status={r.status} />}>
-              <Link href={`/documents/${r.slug}`} className="underline-offset-2 hover:underline">
+              <Link href={`/documents/${r.slug}`} className={`${TAP} underline-offset-2 hover:underline`}>
                 {docLabel({ title: r.title, kind: "roadmap" })}
               </Link>
             </InspectorRow>
@@ -210,16 +227,11 @@ export default function RoadmapDocumentsPage() {
       header: "Roadmap",
       // The name in full: it wraps rather than being cut.
       wrap: true,
-      cell: (r) =>
-        r.kind === "roadmap" ? (
-          <Link href={`/documents/${r.d.slug}`} data-testid="roadmap-name" className="font-semibold hover:underline">
-            {docLabel({ title: r.d.title, kind: "roadmap" })}
-          </Link>
-        ) : (
-          <Link href={`/documents/${r.d.slug}/v/${r.d.approved_version}`} data-testid="roadmap-name" className="font-semibold hover:underline">
-            {docLabel({ title: r.d.title, kind: "prd" })}
-          </Link>
-        ),
+      cell: (r) => (
+        <Link href={`/documents/${r.d.slug}`} data-testid="roadmap-name" className={`${TAP} font-semibold hover:underline`}>
+          {docLabel({ title: r.d.title, kind: "roadmap" })}
+        </Link>
+      ),
     },
     {
       key: "template",
@@ -229,43 +241,38 @@ export default function RoadmapDocumentsPage() {
       // A narrow table drops it: the inspector names the template too.
       narrow: "hide",
       wrap: true,
-      // The template by name alone (the theme is in the inspector). An approved PRD has no
-      // template or source of its own; the roadmaps it built are in its inspector.
-      cell: (r) =>
-        r.kind === "roadmap" ? (
-          <span className="text-sm text-text2" data-testid="roadmap-template">
-            {names.template(r.d.template) ?? "—"}
-          </span>
-        ) : null,
+      // The template by name alone (the theme is in the inspector).
+      cell: (r) => (
+        <span className="text-sm text-text2" data-testid="roadmap-template">
+          {names.template(r.d.template) ?? "—"}
+        </span>
+      ),
     },
     {
       key: "state",
       header: "State",
-      width: "150px",
-      cell: (r) =>
-        r.kind === "roadmap" ? (
-          <span className="flex flex-col gap-0.5">
-            <span className="flex items-center gap-2">
-              <StatusChip status={r.d.status} />
-              {r.d.latest_version != null && (
-                <Link
-                  href={versionHref(r.d.slug, "roadmap", r.d.latest_version)}
-                  className="tnum font-medium text-accent-ink hover:underline"
-                >
-                  v{r.d.latest_version}
-                </Link>
-              )}
-            </span>
-            {/* An earlier version may be approved while a later one is in review. */}
-            {r.d.approved_version != null && r.d.status !== "approved" && (
-              <span className="tnum text-[13px] leading-4 text-text2" data-testid="roadmap-approved-version">
-                v{r.d.approved_version} approved
-              </span>
+      width: "128px",
+      cell: (r) => (
+        <span className="flex flex-col gap-0.5">
+          <span className="flex items-center gap-2">
+            <StatusChip status={r.d.status} />
+            {r.d.latest_version != null && (
+              <Link
+                href={versionHref(r.d.slug, "roadmap", r.d.latest_version)}
+                className="tnum inline-block min-h-6 min-w-6 text-center leading-6 font-medium text-accent-ink hover:underline"
+              >
+                v{r.d.latest_version}
+              </Link>
             )}
           </span>
-        ) : (
-          <Chip kind="pass">v{r.d.approved_version} approved</Chip>
-        ),
+          {/* An earlier version may be approved while a later one is in review. */}
+          {r.d.approved_version != null && r.d.status !== "approved" && (
+            <span className="tnum text-[13px] leading-4 text-text2" data-testid="roadmap-approved-version">
+              v{r.d.approved_version} approved
+            </span>
+          )}
+        </span>
+      ),
     },
     ...(can("list_share_links")
       ? [
@@ -274,31 +281,30 @@ export default function RoadmapDocumentsPage() {
             header: "Shared",
             width: "96px",
             hideOnPhone: true,
-            cell: (r: Row) => (r.kind === "roadmap" ? <SharedCell slug={r.d.slug} /> : null),
+            cell: (r: Row) => <SharedCell slug={r.d.slug} />,
           },
         ]
       : []),
     {
       key: "source",
       header: "Source PRD",
-      width: "180px",
+      // Narrow enough to leave the roadmap's name room beside the open panel (it wraps).
+      width: "150px",
       hideOnPhone: true,
       wrap: true,
       // The header says where it came from; the cell is the PRD's name alone.
       cell: (r) =>
-        r.kind === "roadmap" ? (
-          r.d.source ? (
-            <Link
-              href={`/documents/${r.d.source.slug}/v/${r.d.source.version}`}
-              data-testid="roadmap-source"
-              className="font-medium underline-offset-2 hover:underline"
-            >
-              {docLabel({ title: r.d.source.title, kind: "prd" })} v{r.d.source.version}
-            </Link>
-          ) : (
-            <span className="text-text2">—</span>
-          )
-        ) : null,
+        r.d.source ? (
+          <Link
+            href={`/documents/${r.d.source.slug}/v/${r.d.source.version}`}
+            data-testid="roadmap-source"
+            className={`${TAP} font-medium underline-offset-2 hover:underline`}
+          >
+            {docLabel({ title: r.d.source.title, kind: "prd" })} v{r.d.source.version}
+          </Link>
+        ) : (
+          <span className="text-text2">—</span>
+        ),
     },
     {
       // The row's action, kept on a phone (right of the title).
@@ -308,16 +314,60 @@ export default function RoadmapDocumentsPage() {
       align: "right",
       phone: "action",
       className: "overflow-visible",
-      cell: (r) =>
-        r.kind === "prd" ? (
-          <span className="flex justify-end">
-            <BuildRoadmapButton prd={r.d} size="sm" />
-          </span>
-        ) : (
-          <ArtifactMenu doc={{ ...r.d, kind: "roadmap" }} />
-        ),
+      cell: (r) => <ArtifactMenu doc={{ ...r.d, kind: "roadmap" }} />,
     },
   ];
+
+  /** qa-plan-49: the approved PRDs' own table, under headers that fit them. */
+  const prdColumns: Column<Row>[] = [
+    {
+      key: "name",
+      header: "Approved PRD",
+      wrap: true,
+      cell: (r) => (
+        <Link
+          href={`/documents/${r.d.slug}/v/${r.d.approved_version}`}
+          data-testid="roadmap-name"
+          className={`${TAP} font-semibold hover:underline`}
+        >
+          {docLabel({ title: r.d.title, kind: "prd" })}
+        </Link>
+      ),
+    },
+    {
+      key: "approved",
+      header: "Approved",
+      width: "150px",
+      cell: (r) => <Chip kind="pass">v{r.d.approved_version} approved</Chip>,
+    },
+    {
+      key: "built",
+      header: "Roadmaps built",
+      width: "150px",
+      hideOnPhone: true,
+      // How many; the roadmaps by name are in its inspector.
+      cell: (r) => (
+        <span className="tnum text-sm text-text2" data-testid="prd-built">
+          {r.kind === "prd" && r.built.length > 0 ? plural(r.built.length, "roadmap") : "None yet"}
+        </span>
+      ),
+    },
+    {
+      key: "action",
+      header: <span className="sr-only">Action</span>,
+      width: "176px",
+      align: "right",
+      phone: "action",
+      className: "overflow-visible",
+      cell: (r) => (
+        <span className="flex justify-end">
+          <BuildRoadmapButton prd={r.d} size="sm" />
+        </span>
+      ),
+    },
+  ];
+  const roadmapRows = rows.filter((r) => r.kind === "roadmap");
+  const prdRows = rows.filter((r) => r.kind === "prd");
 
   return (
     <Page>
@@ -339,21 +389,11 @@ export default function RoadmapDocumentsPage() {
           )
         }
         action={
-          <span className="flex flex-wrap items-center gap-2">
-            {/* F6: the latest weekly alignment report (the Plan's header button until F1). */}
-            <LinkButton href="/plan/reports/latest">
-              Alignment report
-            </LinkButton>
-            <LinkButton href="/roadmap/launches" data-testid="roadmap-launches-link">
-              Launches
-            </LinkButton>
-            <LinkButton href="/roadmap/changelog" data-testid="roadmap-changelog-link">
-              Changelog
-            </LinkButton>
-            <LinkButton variant="primary" icon="plus" href="/documents/new?kind=roadmap">
-              New roadmap
-            </LinkButton>
-          </span>
+          // qa-plan-12: Alignment report, Launches and Changelog are the Plan's page-wide links,
+          // at the end of the tab strip on every tab; the header keeps this tab's own action.
+          <LinkButton variant="primary" icon="plus" href="/documents/new?kind=roadmap">
+            New roadmap
+          </LinkButton>
         }
       />
       <div className="flex flex-col gap-3">
@@ -369,27 +409,36 @@ export default function RoadmapDocumentsPage() {
             ))
           }
         >
-          <Panel>
-            <DataTable<Row>
-              label="Roadmaps"
-              testId="roadmaps-table"
-              columns={columns}
-              rows={loading ? undefined : rows}
-              rowKey={keyOf}
-              selected={current ? keyOf(current) : null}
-              onSelect={(k) => setSelected(k)}
-              loading={loading}
-              group={(r) => GROUP[r.kind]}
-              empty="No roadmaps yet"
-              rowProps={(r) => ({ "data-testid": r.kind === "roadmap" ? "roadmap-row" : "approved-prd" })}
-            />
-            {!loading && (approved.length === 0 || (rows.length > 0 && roadmaps.length === 0)) && (
-              <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2.5 text-sm text-text2 max-[600px]:px-3">
-                {rows.length > 0 && roadmaps.length === 0 && <Chip kind="na">No roadmaps yet</Chip>}
-                {approved.length === 0 && <Chip kind="na">No approved PRDs</Chip>}
-              </div>
-            )}
-          </Panel>
+          <div className="flex min-w-0 flex-col gap-3">
+            <Panel title="Roadmaps" testId="roadmaps-panel">
+              <DataTable<Row>
+                label="Roadmaps"
+                testId="roadmaps-table"
+                columns={columns}
+                rows={loading ? undefined : roadmapRows}
+                rowKey={keyOf}
+                selected={current ? keyOf(current) : null}
+                onSelect={(k) => setSelected(k)}
+                loading={loading}
+                empty="No roadmaps yet. Build one from an approved PRD."
+                rowProps={() => ({ "data-testid": "roadmap-row" })}
+              />
+            </Panel>
+            <Panel title="Approved PRDs" testId="approved-prds-panel">
+              <DataTable<Row>
+                label="Approved PRDs"
+                testId="approved-prds-table"
+                columns={prdColumns}
+                rows={loading ? undefined : prdRows}
+                rowKey={keyOf}
+                selected={current ? keyOf(current) : null}
+                onSelect={(k) => setSelected(k)}
+                loading={loading}
+                empty="No approved PRDs yet. A roadmap is built from an approved PRD."
+                rowProps={() => ({ "data-testid": "approved-prd" })}
+              />
+            </Panel>
+          </div>
         </Split>
       </div>
     </Page>

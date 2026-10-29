@@ -48,12 +48,13 @@ export function WaiveForm({ finding, onWaived, onCancel }: { finding: Pick<Findi
         placeholder="The reason stays with the finding."
       />
       {error && <ErrorNote>{error}</ErrorNote>}
+      {/* qa-plan-34: as every dialog: Cancel on the left, the primary action on the right. */}
       <div className="flex flex-wrap gap-2">
-        <Button variant="primary" disabled={busy || !reason.trim()} onClick={waive}>
-          {busy ? "Waiving…" : "Waive finding"}
-        </Button>
         <Button variant="ghost" onClick={onCancel} disabled={busy}>
           Cancel
+        </Button>
+        <Button variant="primary" disabled={busy || !reason.trim()} onClick={waive}>
+          {busy ? "Waiving…" : "Waive finding"}
         </Button>
       </div>
     </div>

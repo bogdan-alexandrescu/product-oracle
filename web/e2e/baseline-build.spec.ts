@@ -22,7 +22,7 @@ async function openBaseline(page: Page) {
 async function openSheet(page: Page) {
   await page.getByRole("button", { name: "Build baseline" }).click();
   await expect(sheet(page)).toBeVisible();
-  await expect(sheet(page).getByTestId("build-estimate")).toHaveText("Estimate $7.00");
+  await expect(sheet(page).getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
 }
 
 async function startBuild(page: Page) {
@@ -48,14 +48,16 @@ test("approver starts a build: depth, review toggle and estimate, then the banne
   await expect(depth.getByRole("button", { name: "Deep" })).toHaveAttribute("title", "Looks for contradicting evidence on every claim");
   await expect(s.getByRole("checkbox", { name: "Stop for my review" })).toBeChecked();
   await depth.getByRole("button", { name: "Deep" }).click();
-  await expect(s.getByTestId("build-estimate")).toHaveText("Estimate $14.00");
+  await expect(s.getByTestId("build-estimate")).toHaveText("$14.00 estimated · below the $50 approval line · starts at once");
   await depth.getByRole("button", { name: "Standard" }).click();
-  await expect(s.getByTestId("build-estimate")).toHaveText("Estimate $7.00");
+  await expect(s.getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
 
   await s.getByRole("button", { name: "Start" }).click();
   await expect(s).toHaveCount(0);
-  await expect(page.getByText("Building the baseline. You'll get an Inbox item when it's ready to review.")).toBeVisible();
+  // One line says it (qa-onboarding-25): the banner, not a second notice above it.
   await expect(banner(page)).toContainText("Baseline being built");
+  await expect(banner(page)).toContainText("You'll get an Inbox item when it's ready to review.");
+  await expect(page.getByText("Building the baseline. You'll get an Inbox item when it's ready to review.")).toHaveCount(0);
   await expect(banner(page)).toContainText("started");
   // While a build is under way the header shows its state, not the button.
   await expect(page.getByRole("button", { name: "Build baseline" })).toHaveCount(0);
@@ -104,7 +106,7 @@ test("a second Start while the first build is under way shows the 409 and links 
   // The same person in a second tab opens the sheet too, then the first tab starts.
   const other = await context.newPage();
   await other.goto("/baseline?build=1");
-  await expect(sheet(other).getByTestId("build-estimate")).toHaveText("Estimate $7.00");
+  await expect(sheet(other).getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
   await sheet(page).getByRole("button", { name: "Start" }).click();
   await expect(banner(page)).toContainText("Baseline being built");
   const firstRun = await banner(page).getByRole("link", { name: "Open run" }).getAttribute("href");
@@ -131,7 +133,7 @@ test("Home with no goals offers Build the baseline and opens the sheet", async (
   await empty.getByRole("link", { name: "Build the baseline" }).click();
   await expect(page).toHaveURL(/\/baseline\?build=1$/);
   await expect(sheet(page)).toBeVisible();
-  await expect(sheet(page).getByTestId("build-estimate")).toHaveText("Estimate $7.00");
+  await expect(sheet(page).getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
 });
 
 test("the New run dialog does not offer Build the baseline and points at the Baseline page", async ({ page }) => {
@@ -171,7 +173,7 @@ test("on a phone the sheet fits with no sideways scroll and Start is visible", a
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await page.goto("/baseline?build=1");
-  await expect(sheet(page).getByTestId("build-estimate")).toHaveText("Estimate $7.00");
+  await expect(sheet(page).getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
   await expect(sheet(page).getByRole("button", { name: "Start" })).toBeInViewport();
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);

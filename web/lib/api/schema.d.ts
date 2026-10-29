@@ -33185,6 +33185,8 @@ export interface components {
             dates: components["schemas"]["ReportDates"];
             /** Prd Moved */
             prd_moved: boolean;
+            /** Prd Moved To */
+            prd_moved_to?: number | null;
         };
         /** ReportUnreadableTrack */
         ReportUnreadableTrack: {

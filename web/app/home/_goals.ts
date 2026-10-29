@@ -245,7 +245,7 @@ export type Progress = {
    * none (no current value); notarget (a confirmed goal with no typed target to measure against, B5).
    */
   state: "met" | "togo" | "short" | "raw" | "none" | "notarget";
-  /** What Home shows under the goal: "5 pts to go", "Target met", "Not below", "" or "No current value". */
+  /** What Home shows under the goal: "5 pts to go", "Target met", "Not below", "" or "No current value yet". */
   text: string;
   /** The distance in the target's unit, when there is one. */
   distance?: number;
@@ -276,10 +276,12 @@ export function amount(n: number, compact: boolean): string {
  */
 export function assess(g: GoalView, history?: Point[]): Progress {
   // Decided 2026-10-21, B5 "Vague goals": confirmed, but nothing to measure it against.
+  // qa-plan-14: a target written in words ("below 8%") is shown, so the goal never says "No
+  // target" beside it: what is missing to the reader is the current value.
   if (!g.proposed && !g.typed && g.missing?.includes("target") && (!g.currentText || !g.targetText)) {
-    return { state: "notarget", text: "No target" };
+    return { state: "notarget", text: g.targetText ? "No current value yet" : "No target" };
   }
-  if (!g.currentText) return { state: "none", text: "No current value" };
+  if (!g.currentText) return { state: "none", text: "No current value yet" };
   const c = g.current;
   const t = g.target;
   if (!c || !t || c.range || !sameUnit(c, t)) return { state: "raw", text: "" };

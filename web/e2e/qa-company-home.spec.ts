@@ -65,7 +65,7 @@ test("goals: the confidence ring is named and hidden without a current value; th
 
   // Cut early churn has no current value: no ring, no number beside the "–".
   const g3 = page.getByTestId("home-goal-G3");
-  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value");
+  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
   await expect(g3.getByTestId("goal-confidence")).toHaveCount(0);
   await expect(g3.getByRole("img", { name: /^Confidence/ })).toHaveCount(0);
 

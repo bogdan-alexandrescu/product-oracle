@@ -160,7 +160,8 @@ export default function BaselinePage() {
   };
   const started = () => {
     closeBuild();
-    setNotice("Building the baseline. You'll get an Inbox item when it's ready to review.");
+    // The build banner says it (and that an Inbox item follows): one line, not two (qa-onboarding-25).
+    setNotice(null);
     void runs.reload();
   };
 

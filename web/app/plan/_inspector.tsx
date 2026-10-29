@@ -332,12 +332,13 @@ function AlertCard({ a, item, links, onChanged }: { a: TrackAlertOut; item: Plan
             onKeyDown={(e) => e.key === "Escape" && setKeeping(false)}
             className="h-8 w-full min-w-0 rounded-lg border border-line-strong bg-surface px-2 text-sm"
           />
+          {/* qa-plan-34: as every dialog: Cancel on the left, the primary action on the right. */}
           <span className="flex flex-wrap gap-1.5">
-            <Button type="submit" disabled={busy}>
-              Keep watching
-            </Button>
             <Button variant="ghost" disabled={busy} onClick={() => setKeeping(false)}>
               Cancel
+            </Button>
+            <Button type="submit" disabled={busy}>
+              Keep watching
             </Button>
           </span>
         </form>
@@ -449,7 +450,7 @@ function DriftCards({ item, onChanged }: { item: PlanItem; onChanged?: () => Pro
         ))}
         <p className="text-sm text-text2">
           Drift is advisory: nothing waits on it.{" "}
-          <Link href="/company/strategy" className="font-semibold text-accent-ink underline-offset-2 hover:underline">
+          <Link href="/company/strategy" className="inline-flex min-h-6 items-center font-semibold text-accent-ink underline-offset-2 hover:underline">
             Open the strategy
           </Link>
         </p>
@@ -466,10 +467,10 @@ function RecordDecision({ item }: { item: PlanItem }) {
   return (
     <InspectorSection label="Decisions" testId="plan-decisions">
       <p className="flex flex-wrap gap-3 text-[15px]">
-        <Link href={`/company/decisions?subject=${subject}&ref=${encodeURIComponent(item.title)}&propose=1`} className="font-medium text-accent-ink hover:underline">
+        <Link href={`/company/decisions?subject=${subject}&ref=${encodeURIComponent(item.title)}&propose=1`} className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline">
           Record a decision
         </Link>
-        <Link href={`/company/decisions?subject=${subject}&class=all`} className="font-medium text-accent-ink hover:underline">
+        <Link href={`/company/decisions?subject=${subject}&class=all`} className="inline-flex min-h-6 items-center font-medium text-accent-ink hover:underline">
           Decisions about this item
         </Link>
       </p>
@@ -586,6 +587,8 @@ export function PlanInspector({
       title={item.title}
       label={`Item ${item.title}`}
       testId="plan-inspector"
+      // qa-plan-33: the head on the card surface, like every other panel on the page.
+      tone="card"
       chips={
         <>
           <Chip hero kind={item.horizon === "now" ? "now" : "na"}>
