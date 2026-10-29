@@ -141,7 +141,8 @@ for (const phone of [false, true]) {
         await expect(minutesRegion(page).getByRole("button", { name: "Draft again" })).toHaveCount(0);
         await delivery(page).getByRole("button", { name: "Send" }).click();
         await expect(delivery(page).getByRole("status", { name: "Sent" })).toBeVisible();
-        await expect(page.getByTestId("minutes-summary")).toContainText("1 decision in Review: Guided setup");
+        // qa-simple-decide-32: the summary does not repeat the title and count.
+        await expect(page.getByTestId("minutes-summary")).toContainText("Moved Setup checklist.");
       });
 
       test("Upcoming lists what Home shows; the rail counts what the page lists; Home's Start opens the sheet", async ({ page }) => {
@@ -172,15 +173,18 @@ for (const phone of [false, true]) {
         await page.goto("/simple/meetings");
         const live = page.getByRole("region", { name: "Live" });
         await expect(live).toContainText(`${ritual}: Guided setup`);
-        await expect(upcoming.getByTestId("meetings-upcoming-row").filter({ hasText: ritual }).first().getByRole("link", { name: "Open" })).toBeVisible();
+        // qa-simple-decide-34: a live review is listed under Live only.
+        await expect(upcoming.getByRole("link", { name: "Open" })).toHaveCount(0);
         const after = await upcoming.getByRole("button", { name: "Start review" }).count();
         if (!phone) await expect(page.getByTestId("simple-nav-meetings-count")).toHaveText(String(after + 1));
         // A viewer reads the same list, and Home's next is its first row.
         await switchTo(page, "viewer@example.com");
         await page.goto("/simple/meetings");
-        const firstRow = (await upcoming.getByTestId("meetings-upcoming-row").first().locator("strong").innerText()).trim();
+        // qa-simple-decide-34: the live review is under Live, not Upcoming; Home's next opens it.
+        await expect(page.getByRole("region", { name: "Live" })).toContainText(`${ritual}: Guided setup`);
         await page.goto("/simple");
-        await expect(page.getByTestId("home-meeting-next")).toContainText(firstRow);
+        await expect(page.getByTestId("home-meeting-next")).toContainText(ritual);
+        await expect(page.getByTestId("home-meeting-next").getByRole("link", { name: "Open meeting" })).toBeVisible();
       });
 
       test("Approve and Undo in a meeting: the one-pager reads its new version, no stale draft bar", async ({ page }) => {

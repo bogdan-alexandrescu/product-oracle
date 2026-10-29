@@ -52,6 +52,8 @@ async function startWithAnEdit(page: Page, absent?: string) {
   await login(page);
   await page.goto("/simple/prds/guided-setup");
   await page.getByRole("button", { name: "Start review" }).click();
+  // qa-simple-decide-35: a review needs one attendee besides the presenter.
+  await page.getByRole("dialog", { name: "Start a review" }).getByRole("checkbox", { name: "Commenter" }).check();
   await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   if (absent) {

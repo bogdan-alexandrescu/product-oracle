@@ -87,6 +87,8 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Start review" }).click();
         await expect(sheet(page).getByRole("region", { name: "What is reviewed" })).toContainText("Guided setup");
         await expect(sheet(page).getByLabel("PRD")).toHaveCount(0);
+        // qa-simple-decide-35: a review needs one attendee besides the presenter.
+        await sheet(page).getByRole("checkbox", { name: "Commenter" }).check();
         await sheet(page).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.goto("/simple/roadmap");
@@ -94,6 +96,7 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Start review" }).click();
         await expect(sheet(page).getByLabel("PRD")).toBeVisible();
         await sheet(page).getByLabel("PRD").selectOption({ label: "Usage alerts" });
+        await sheet(page).getByRole("checkbox", { name: "Commenter" }).check();
         await sheet(page).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Usage alerts" })).toBeVisible();
       });
@@ -154,7 +157,8 @@ test.describe("the PRD's decider", () => {
       await sheet(page).getByRole("button", { name: "Start", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
       await expect(page.getByLabel("Attendees")).toContainText("decider");
-      await expect(page.getByRole("button", { name: /^Approve one-pager edits/ })).toBeVisible();
+      // qa-simple-decide-2: Approve shows once the meeting has one-pager edits to approve.
+      await expect(page.getByRole("button", { name: /^Approve one-pager edits/ })).toHaveCount(0);
       await expect(page.getByRole("button", { name: "End meeting" })).toBeVisible();
     });
   }
