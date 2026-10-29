@@ -42,15 +42,16 @@ test.describe("desktop", () => {
   test.use(DESKTOP);
 
   for (const format of ["gantt", "waterfall"] as const) {
-    test(`${format}: no row ever shows a bare code prefix (findings 15, 16)`, async ({ page }) => {
+    test(`${format}: a row shows its own code first, never a repeated one (findings 15, 16)`, async ({ page }) => {
       await open(page, "simple-plan");
       await page.getByTestId(`format-${format}`).click();
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
-      // The chart never draws a visible code chip in front of a name any more: it would read
-      // "F-06" on two different items, with no way to tell them apart.
-      await expect(page.getByTestId("label-code")).toHaveCount(0);
-      // A unique code still reaches a reader, as the row's tooltip.
+      // fix2 review: design D's "F-05 Team invites", the code first, when it is the row's alone.
+      await expect(row(page, "Team invites").getByTestId("label-code")).toHaveText("F-05");
       await expect(row(page, "Team invites").getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
+      // A code two rows share (two PRDs' F-06) is never drawn: it would read as one item twice.
+      const codes = await page.getByTestId("label-code").allTextContents();
+      expect(new Set(codes).size).toBe(codes.length);
     });
   }
 

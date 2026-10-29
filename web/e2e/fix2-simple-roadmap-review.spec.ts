@@ -61,5 +61,33 @@ test.describe("desktop", () => {
       expect(overlaps).toEqual([]);
     });
   }
+
+  /**
+   * qa-simple-roadmap-23, -41: on the Waterfall, Discover is drawn in a colour of its own
+   * (not the grey of "not in a milestone"), each phase's key shows the same ink as its bars,
+   * and an estimated segment's hatch is the phase's own ink at full strength, not a pale stripe.
+   */
+  for (const scheme of ["light", "dark"] as const) {
+    test(`Waterfall phases match their keys (${scheme})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await open(page);
+      await page.getByTestId("format-waterfall").click();
+      const discover = page.locator('rect[data-testid="phase"][data-phase="discover"]').first();
+      await expect(discover).toBeAttached();
+      expect(await page.locator('rect[data-testid="phase"][fill="var(--na)"]').count()).toBe(0);
+      const keys = page.getByTestId("phase-key");
+      await expect(keys.filter({ hasText: "Discover" })).toHaveCount(1);
+      for (const phase of ["discover", "build", "beta", "launch"]) {
+        const solid = page.locator(`rect[data-testid="phase"][data-phase="${phase}"][data-estimated="false"]`).first();
+        if (!(await solid.count())) continue;
+        const ink = await solid.getAttribute("fill");
+        const label = phase[0].toUpperCase() + phase.slice(1);
+        await expect(keys.filter({ hasText: label }).locator("[data-ink]")).toHaveAttribute("data-ink", ink!);
+      }
+      const stripe = page.locator("pattern#simple-hatch-build line");
+      await expect(stripe).toHaveAttribute("stroke-width", "3");
+      expect(await stripe.getAttribute("opacity")).toBeNull();
+    });
+  }
 });
 

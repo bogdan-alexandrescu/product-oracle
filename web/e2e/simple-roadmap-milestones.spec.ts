@@ -78,11 +78,10 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
         await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
 
-        // fix2-simple-roadmap-gantt finding 15/16: the row's name is all that shows; its code
-        // (unique here) is only in the tooltip, so a reader never sees a bare code like "F-06"
-        // on two different items.
+        // fix2-simple-roadmap-gantt finding 15/16 (review): design D's code first when it is
+        // the row's alone (unique here), and in the tooltip with the name.
         const invites = row(page, "Team invites");
-        await expect(invites.getByTestId("label-code")).toHaveCount(0);
+        await expect(invites.getByTestId("label-code")).toHaveText("F-05");
         await expect(invites.getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
 
         await slice(page, "F-05a").scrollIntoViewIfNeeded();
