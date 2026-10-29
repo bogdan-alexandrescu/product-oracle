@@ -150,6 +150,9 @@ for (const [phone, dark] of [
       await expect(panel.getByTestId("ask-about")).toHaveText("New chat about General");
       await say(panel, "who owns Weekly alert digest?");
       await tap(panel.getByRole("button", { name: "New chat" }));
+      // New chat keeps the scope the reader chose (qa-simple-home-18): back to the page by hand.
+      await expect(panel.getByRole("button", { name: "General", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await tap(panel.getByRole("button", { name: "This page", exact: true }));
       await say(panel, "when is Alert rules engine?");
       await tap(panel.getByRole("button", { name: "Recent chats" }));
       const rows = panel.getByTestId("ask-recent-row");
