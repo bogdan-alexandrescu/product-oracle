@@ -109,9 +109,9 @@ for (const phone of [false, true]) {
         const q2 = needs.locator('[data-code="Q2"]');
         const q3 = needs.locator('[data-code="Q3"]');
         await q3.getByRole("button", { name: "Ask someone to answer" }).click();
-        await q3.getByRole("group", { name: "Who answers Q3" }).getByRole("button", { name: "Admin", exact: true }).click();
-        await expect(page.getByText("Admin decides Q3")).toBeVisible();
-        await expect(needs.locator('[data-code="Q3"]')).toContainText("Admin decides");
+        await q3.getByRole("group", { name: "Who answers Q3" }).getByRole("button", { name: "Approver", exact: true }).click();
+        await expect(page.getByText("Approver decides Q3")).toBeVisible();
+        await expect(needs.locator('[data-code="Q3"]')).toContainText("Approver decides");
         await q2.getByRole("button", { name: "Name a decider" }).click();
         await q2.getByRole("group", { name: "Who decides Q2" }).getByRole("button", { name: "Approver" }).click();
         await expect(page.getByText("Approver decides Q2")).toBeVisible();
