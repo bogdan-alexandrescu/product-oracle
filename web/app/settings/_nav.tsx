@@ -33,9 +33,13 @@ export function SettingsNav() {
       className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
       <div className="hidden flex-wrap items-center gap-2 max-[600px]:flex">
-        <label className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="flex-none text-[13px] font-semibold text-text2">Settings page</span>
+        {/* The label does not wrap the select: its options' words would join its name. */}
+        <div className="flex min-w-0 flex-1 items-center gap-2">
+          <label htmlFor="settings-nav-select" className="flex-none text-[13px] font-semibold text-text2">
+            Settings page
+          </label>
           <select
+            id="settings-nav-select"
             data-testid="settings-nav-select"
             value={current?.href ?? ""}
             onChange={(e) => e.target.value && router.push(e.target.value)}
@@ -48,7 +52,7 @@ export function SettingsNav() {
               </option>
             ))}
           </select>
-        </label>
+        </div>
         {fromSetup && (
           <LinkButton href="/home" variant="ghost" icon="home" className="flex-none">
             Back to Home

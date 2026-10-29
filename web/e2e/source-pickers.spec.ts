@@ -131,7 +131,9 @@ test("github picker: search, pick repos, add, edit", async ({ page }) => {
   await form.getByLabel("Name").fill("Billing code");
   await form.getByRole("button", { name: "Add source" }).click();
   const row = page.getByRole("listitem", { name: "Billing code" });
-  await expect(row).toContainText("example-org/billing-api, partner-org/webhooks");
+  // Each repo once, on its code-map line (qa-settings-25).
+  await expect(row).toContainText("example-org/billing-api");
+  await expect(row).toContainText("partner-org/webhooks");
 
   const repo = page.getByRole("listitem", { name: "Example repo" });
   await repo.getByRole("button", { name: "More actions for Example repo" }).click();
@@ -140,7 +142,8 @@ test("github picker: search, pick repos, add, edit", async ({ page }) => {
   await expect(edit.getByRole("checkbox", { name: "example-org/example-app" })).toBeChecked();
   await edit.getByRole("checkbox", { name: "example-org/docs" }).check();
   await repo.getByRole("button", { name: "Save repositories" }).click();
-  await expect(repo).toContainText("example-org/example-app, example-org/docs");
+  await expect(repo).toContainText("example-org/example-app");
+  await expect(repo).toContainText("example-org/docs");
 });
 
 test("slack picker: a date range, since and until", async ({ page }) => {
