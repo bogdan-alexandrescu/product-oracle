@@ -158,6 +158,8 @@ function flags(): string[] {
     return [];
   }
 }
+/** The "track-owner" flag: the approver owns Guided setup's track (a decider-less PRD's editor, not its starter). */
+export const mockApproverOwnsTrack = (): boolean => flags().includes("track-owner");
 const slackState = (): Schemas["SimpleSlackState"] => (flags().includes("slack") ? { connected: true, channel: "#product-reviews" } : { connected: false, channel: null });
 const emailAvailable = () => !flags().includes("no-email");
 

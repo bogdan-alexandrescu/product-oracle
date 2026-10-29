@@ -2,9 +2,10 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ds";
-import { ErrorNote, Loading } from "@/components/ui";
+import { ErrorNote, INPUT_INLINE, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -14,6 +15,12 @@ type Mode = Schemas["SimpleMeetingIn"]["change_mode"] & string;
 type Origin = Schemas["SimpleMeetingIn"]["origin"] & string;
 
 const LENGTHS = [15, 30, 45, 60, 90, 120];
+
+/** The design system's form controls (qa-simple-prd-46): a box or dot in the accent at 18 px,
+ * and the app's select (INPUT_INLINE), never the browser's bare ones. */
+const CHECK = "size-[18px] flex-none cursor-pointer rounded accent-[var(--accent)] disabled:cursor-not-allowed";
+const CHOICE = "flex min-h-8 cursor-pointer items-center gap-2.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:text-text2";
+const SELECT = `${INPUT_INLINE} h-10 cursor-pointer`;
 
 /**
  * Simple S8 (#723): the start sheet. Opened from the Meetings page, a one-pager, the
@@ -46,9 +53,11 @@ export function StartSheet({
     window.addEventListener("keydown", on);
     return () => window.removeEventListener("keydown", on);
   }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+  if (!open || typeof document === "undefined") return null;
+  // On document.body (qa-simple-prd-46): inside the page the rail and the tab bar stacked above
+  // the backdrop, so the page behind was dimmed unevenly; the app's Dialog backdrop colour.
+  return createPortal(
+    <div data-testid="start-backdrop" className="fixed inset-0 z-50 flex items-end justify-center bg-hero/50 sm:items-center" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -60,23 +69,24 @@ export function StartSheet({
           <h2 className="simple-h2">Start a review</h2>
           <Button variant="ghost" onClick={onClose}>Close</Button>
         </div>
-        <Body prd={prd} occurrence={occurrence} ritual={ritual} origin={origin} />
+        <Body prd={prd} occurrence={occurrence} ritual={ritual} origin={origin} onClose={onClose} />
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
-function Body({ prd, occurrence, ritual, origin }: { prd?: string; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin }) {
+function Body({ prd, occurrence, ritual, origin, onClose }: { prd?: string; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; onClose: () => void }) {
   const q = useQuery(`simple-meeting-options|${prd ?? ""}|${occurrence ?? ""}`, () =>
     unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: prd || undefined, occurrence: occurrence || undefined } } })),
   );
   const live = useQuery("simple-meetings", () => unwrap(api.GET("/v1/simple/meetings")));
   if (q.loading && !q.data) return <Loading />;
   if (q.error || !q.data) return <ErrorNote>{q.error ?? "Not found"}</ErrorNote>;
-  return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} ritual={ritual} origin={origin} live={live.data?.live ?? []} />;
+  return <Form key={q.data.prds.map((p) => p.document.slug).join()} options={q.data} fixed={!!prd} occurrence={occurrence} ritual={ritual} origin={origin} live={live.data?.live ?? []} onClose={onClose} />;
 }
 
-function Form({ options, fixed, occurrence, ritual, origin, live }: { options: Options; fixed: boolean; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; live: Schemas["SimpleMeetingBrief"][] }) {
+function Form({ options, fixed, occurrence, ritual, origin, live, onClose }: { options: Options; fixed: boolean; occurrence?: string; ritual?: Schemas["SimpleUpcomingMeeting"]; origin: Origin; live: Schemas["SimpleMeetingBrief"][]; onClose: () => void }) {
   const router = useRouter();
   const zone = useCompanyZone();
   const [slug, setSlug] = useState(options.prds[0]?.document.slug ?? "");
@@ -138,7 +148,7 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
         ) : (
           <label className="mt-1 flex flex-col gap-1">
             <span className="simple-small">PRD</span>
-            <select className="rounded border border-border bg-transparent p-2" value={slug} onChange={(e) => pick(e.target.value)}>
+            <select className={SELECT} value={slug} onChange={(e) => pick(e.target.value)}>
               {options.prds.map((p) => <option key={p.document.slug} value={p.document.slug}>{p.document.title}</option>)}
             </select>
           </label>
@@ -156,8 +166,8 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
             <legend className="font-semibold">Attendees</legend>
             <div className="mt-1 grid gap-1 sm:grid-cols-2">
               {options.members.map((m) => (
-                <label key={m.id} className="flex items-center gap-2">
-                  <input type="checkbox" checked={people.includes(m.id)} onChange={() => toggle(m.id)} />
+                <label key={m.id} className={CHOICE}>
+                  <input type="checkbox" className={CHECK} checked={people.includes(m.id)} onChange={() => toggle(m.id)} />
                   {m.name}
                 </label>
               ))}
@@ -166,16 +176,16 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
           <fieldset>
             <legend className="font-semibold">Who changes things in the chat</legend>
             {([["everyone", "Everyone"], ["presenter", "Only the presenter"], ["named", "Presenter plus one or two people"]] as const).map(([v, label]) => (
-              <label key={v} className="flex items-center gap-2">
-                <input type="radio" name="change-mode" checked={mode === v} onChange={() => setMode(v)} />
+              <label key={v} className={CHOICE}>
+                <input type="radio" className={CHECK} name="change-mode" checked={mode === v} onChange={() => setMode(v)} />
                 {label}
               </label>
             ))}
             {mode === "named" && (
               <div className="ml-6 mt-1" aria-label="Who else changes things">
                 {people.map((id) => (
-                  <label key={id} className="flex items-center gap-2">
-                    <input type="checkbox" checked={named.includes(id)} disabled={!named.includes(id) && named.length >= 2} onChange={() => toggleNamed(id)} />
+                  <label key={id} className={CHOICE}>
+                    <input type="checkbox" className={CHECK} checked={named.includes(id)} disabled={!named.includes(id) && named.length >= 2} onChange={() => toggleNamed(id)} />
                     {name(id)}
                   </label>
                 ))}
@@ -184,12 +194,15 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
           </fieldset>
           <label className="flex items-center gap-2">
             <span className="font-semibold">Length</span>
-            <select className="rounded border border-border bg-transparent p-2" value={length} onChange={(e) => setLength(Number(e.target.value))}>
+            <select className={SELECT} value={length} onChange={(e) => setLength(Number(e.target.value))}>
               {[...new Set([...LENGTHS, options.length_min])].sort((a, b) => a - b).map((n) => <option key={n} value={n}>{n} min</option>)}
             </select>
           </label>
           {error && <ErrorNote>{error}</ErrorNote>}
-          <Button variant="primary" disabled={busy || (mode === "named" && named.length === 0)} onClick={start}>Start</Button>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line pt-4">
+            <Button variant="secondary" className="h-10 px-4" onClick={onClose} disabled={busy}>Cancel</Button>
+            <Button variant="primary" disabled={busy || (mode === "named" && named.length === 0)} onClick={start}>Start</Button>
+          </div>
         </>
       )}
     </div>

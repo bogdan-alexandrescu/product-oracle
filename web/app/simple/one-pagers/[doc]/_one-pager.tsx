@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { OnePager as Paper } from "@/components/simple/OnePager";
 import { SimplePage } from "@/components/simple/SimplePage";
-import { ErrorNote, Loading } from "@/components/ui";
+import { Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
 
@@ -16,11 +16,12 @@ import { useQuery } from "@/lib/use-query";
 export function OnePager({ slug }: { slug: string }) {
   const q = useQuery(`simple|one-pager|${slug}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: slug } } })));
   const notPrd = !!q.data && q.data.kind !== "prd";
-  if (q.data && !notPrd) return <Paper doc={slug} />;
+  // The one-pager's own read is the authority when the document's is refused or missing: it
+  // shows the page, or says itself why not (qa-simple-prd-12: this is the one address).
+  if ((q.data && !notPrd) || q.error) return <Paper doc={slug} />;
   const title = notPrd ? "One-pager" : (q.data?.title ?? "One-pager");
   return (
     <SimplePage title={title}>
-      {q.error && <ErrorNote>{q.error}</ErrorNote>}
       {!q.data && !q.error && <Loading />}
       {notPrd && (
         <div className="simple-card" data-testid="one-pager-not-found">

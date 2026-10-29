@@ -110,7 +110,7 @@ for (const phone of [false, true]) {
         await expect(meta).toContainText(phone ? "v3 · 20 Oct 2026" : "Version 3 · 20 Oct 2026");
         await expect(meta).toContainText("Owner Admin");
         await expect(meta).toContainText("2 Nov 2026 → 12 Feb 2027");
-        await expect(meta).toContainText("56.0 EW");
+        await expect(meta).toContainText("56 engineer-weeks");
         for (const name of ["Present", "Export PDF", "Start review"]) await expect(page.getByRole("button", { name, exact: true })).toBeVisible();
         await expect(page.getByRole("link", { name: "Open the detailed view" })).toBeVisible();
         const tl = page.getByRole("region", { name: "Timeline" });
@@ -164,21 +164,22 @@ for (const phone of [false, true]) {
           await expect(axis.getByText("Today", { exact: true })).toBeVisible();
           await expect(tl.getByTestId("timeline-no-work")).toHaveCount(1);
           await expect(tl.getByTestId("timeline-lane")).toHaveCount(5);
-          await expect(tl.getByTestId("timeline-lane").last()).toContainText("PM-owned");
+          await expect(tl.getByTestId("timeline-lane").last()).toContainText("Product manager's work");
           for (const f of ["M1 ends 27 Nov", "M2 ends 25 Dec", "M3 ends 12 Feb"]) await expect(tl.getByRole("button", { name: f })).toBeVisible();
           // Growth: F-05a (M1) and F-05b's M2 run back to back, so they stack in two rows.
           const lane = tl.getByTestId("timeline-lane").filter({ hasText: "Growth" });
           const m1 = lane.locator('[data-testid="timeline-bar"][data-milestone="M1"]');
           const m2 = lane.locator('[data-testid="timeline-bar"][data-milestone="M2"]');
           await expect(m1).toHaveCount(1);
-          await expect(m1).toHaveText("F-05a");
+          // A bar names its work, not only its code.
+          await expect(m1).toHaveText(/^(F-05a Team invites, part 1 of 2|Team invites, part 1 of 2|F-05a)$/);
           await expect(m2).toHaveCount(1);
           const [a, b] = [(await m1.boundingBox())!, (await m2.boundingBox())!];
           expect(Math.abs(a.y - b.y)).toBeGreaterThan(a.height / 2);
           expect(a.x + a.width).toBeLessThan(b.x + 4);
           // Each bar names what it builds; a bar too narrow for its codes ends with "+N".
           await expect(m2).toHaveAttribute("aria-label", /F-05b Team invites, part 2 of 2/);
-          await expect(m2).toHaveText(/^(F-05b( · F-08)*( · F-12a)?( \+\d)?|\d items)$/);
+          await expect(m2).toHaveText(/^(F-05b Team invites|Team invites, part 2 of 2 \+\d|F-05b \+\d|\d features)/);
           // The owner's rule: two pieces in one lane stack only when they overlap or are less
           // than a week apart. F-11a ends 25 Dec and F-11b starts 4 Jan, past the year-end
           // break (10 days): one row.
@@ -203,7 +204,7 @@ for (const phone of [false, true]) {
           await expect(pm.first()).toHaveAttribute("data-pm", "true");
           // B1's slim strip: the bars are 22 px; a one-row lane at most 34 px, a goal's at most 64.
           expect((await pm.first().boundingBox())!.height).toBeLessThanOrEqual(23);
-          const pmLane = (await tl.getByText("PM-owned", { exact: true }).boundingBox())!;
+          const pmLane = (await tl.getByText("Product manager's work", { exact: true }).boundingBox())!;
           expect(pmLane.height).toBeLessThanOrEqual(34);
           for (const g of await goals.all()) expect((await g.boundingBox())!.height).toBeLessThanOrEqual(64);
         } else {
@@ -213,8 +214,9 @@ for (const phone of [false, true]) {
           await expect(down.getByTestId("timeline-step")).toHaveCount(3);
           const m1 = down.getByTestId("timeline-step").first();
           await expect(m1).toContainText("M1 Prove it");
-          await expect(m1).toContainText("to 27 Nov · 4 weeks · 16.0 EW");
-          await expect(m1.getByTestId("part-done-when").getByRole("listitem")).toHaveText(["Ten pilot teams finish setup in a day", "Setup errors are alerted within five minutes"]);
+          await expect(m1).toContainText("to 27 Nov · 4 weeks · 16 engineer-weeks");
+          // A compact summary: the milestone's part (Done when, targets) follows the timeline once.
+          await expect(m1.getByTestId("part-done-when")).toHaveCount(0);
           await expect(m1.getByRole("link", { name: "6 features, 2 flows · 1 decision ›" })).toBeVisible();
           await expect(down.getByTestId("timeline-decision")).toHaveText([/Q3 Which sample data to ship\s*was due 20 Oct/, /Q8 The bulk import row limit\s*at the M1 review/, /Q7 Legal input on invite emails\s*before M2 starts/]);
           const order = await down.locator(':scope > [data-testid], :scope > div').allTextContents();
@@ -239,7 +241,7 @@ for (const phone of [false, true]) {
           await expect(decisions).toHaveText([/Q3 Which sample data to ship\s*was due 20 Oct/, /Q8 The bulk import row limit\s*at the M1 review, 27 Nov/, /Q7 Legal input on invite emails\s*before M2 starts, 30 Nov/]);
           await expect(tl).toContainText("1 more decision has no date yet; it is listed under its milestone.");
           const legend = tl.getByTestId("timeline-legend");
-          for (const w of ["M1", "M2", "M3", "PM-owned, no engineering", "Today 22 Oct", "Holidays 28 Dec – 1 Jan", "milestone end"]) await expect(legend).toContainText(w);
+          for (const w of ["M1", "M2", "M3", "Product manager's work, no engineering", "Today 22 Oct", "Holidays 28 Dec – 1 Jan", "milestone end"]) await expect(legend).toContainText(w);
           await expect(tl.getByRole("heading", { name: "Milestones: done when" })).toBeVisible();
           await expect(tl.getByRole("group", { name: "Milestones" }).getByRole("button")).toHaveText(["M1 Prove it", "M2 Scale volume", "M3 Open to all"]);
           // The decisions' row sits under the lanes, inside the strip.
@@ -267,7 +269,7 @@ for (const phone of [false, true]) {
         await tl.getByRole("button", { name: /^M2 Scale volume/ }).click();
         await expect(tl.getByRole("button", { name: /^M2 Scale volume/ })).toHaveAttribute(phone ? "aria-expanded" : "aria-pressed", "true");
         await expect(part.getByRole("heading", { level: 2 })).toHaveText("M2 Scale volume");
-        await expect(part.getByTestId("part-dates")).toHaveText("30 Nov → 25 Dec 2026 · 4 weeks · 16.0 EW, 1.0 of it buffer");
+        await expect(part.getByTestId("part-dates")).toHaveText("30 Nov → 25 Dec 2026 · 4 weeks · 16 engineer-weeks, 1 of it buffer");
         await expect(part).toContainText("Later · starts 30 Nov");
         await expect(part.getByTestId("part-why")).toContainText("Now bring in whole teams at once");
         await expect(part.getByTestId("part-done-when").getByRole("listitem")).toHaveText(["Bulk import handles 10,000 rows", "Invites come back from 40% of new admins"]);
@@ -276,7 +278,7 @@ for (const phone of [false, true]) {
         await expect(tiles).toContainText("$5,000monthly recurring revenue");
         const builds = part.getByTestId("part-builds");
         await expect(builds).toContainText("What we build · 7 features, by kind");
-        await expect(builds.getByRole("heading", { level: 4 })).toHaveText([/^New for people · \d$/, /^Behind the scenes · \d$/, /^PM-owned, no new engineering · 1$/]);
+        await expect(builds.getByRole("heading", { level: 4 })).toHaveText([/^New for people · \d$/, /^Behind the scenes · \d$/, /^Product manager's work, no new engineering · 1$/]);
         const bulk = builds.getByRole("listitem").filter({ hasText: "F-07" });
         await expect(bulk).toContainText("Bulk import · flow below");
         await expect(bulk).toContainText("Imports people and projects from a spreadsheet");
@@ -288,13 +290,13 @@ for (const phone of [false, true]) {
         const q7 = decisions.getByRole("listitem").filter({ hasText: "Legal input on invite emails" });
         await expect(q7).toContainText("Q7");
         await expect(q7).toContainText("Recommended: Legal reads the invite email once, before it goes out.");
-        await expect(q7).toContainText("before M2 starts · 30 Nov");
-        await expect(decisions.getByRole("listitem").filter({ hasText: "The bulk import row limit" })).toContainText("M1 exit · 27 Nov");
+        await expect(q7).toContainText("before M2 starts, 30 Nov");
+        await expect(decisions.getByRole("listitem").filter({ hasText: "The bulk import row limit" })).toContainText("at the M1 review, 27 Nov");
         const risks = part.getByTestId("part-risks");
         const r2 = risks.getByRole("listitem").filter({ hasText: "Large imports could slow setup for everyone" });
         await expect(r2).toContainText("R-2");
         await expect(r2).toContainText("What we do: F-09 moves big imports to a queue.");
-        await expect(r2).toContainText("medium · medium impact");
+        await expect(r2).toContainText("Likelihood: Medium · Impact: Medium");
 
         if (!phone) {
           // A flag picks its milestone; so does a bar.
@@ -342,8 +344,8 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Start review", exact: true }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await page.getByRole("button", { name: "Edit line 2" }).click();
-        await page.getByLabel("Line 2").fill("A setup checklist with the next two steps");
+        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+        await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
         await page.goto("/simple/prds/guided-setup");
@@ -352,7 +354,7 @@ for (const phone of [false, true]) {
         const article = page.getByRole("article", { name: "One-pager" });
         await expect(article).toBeVisible();
         await expect(article).toContainText("A setup checklist with the next two steps");
-        await expect(article.getByRole("button", { name: "Edit line 2" })).toHaveCount(1);
+        await expect(article.getByRole("button", { name: "Edit “A setup checklist with the" })).toHaveCount(1);
         // Below the milestone's card, never above it.
         const [p, a] = [(await page.getByTestId("milestone-part").boundingBox())!, (await article.boundingBox())!];
         expect(p.y + p.height).toBeLessThanOrEqual(a.y);
@@ -371,7 +373,7 @@ for (const phone of [false, true]) {
         await expect(article.getByTestId("line-edit-word").first()).toHaveText("Edit");
         for (const word of await article.getByTestId("line-edit-word").allTextContents()) expect(word).toBe("Edit");
         const line = article.locator("li[data-line]").first();
-        const edit = line.getByRole("button", { name: /^Edit line/ });
+        const edit = line.getByRole("button", { name: /^Edit “/ });
         await expect(edit).toHaveCSS("opacity", "0");
         if (!phone) await line.hover();
         else {

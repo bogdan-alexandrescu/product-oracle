@@ -60,8 +60,8 @@ async function startWithAnEdit(page: Page, absent?: string) {
     await expect(here).toHaveAttribute("aria-pressed", "false");
   }
   await expect(page.getByTestId("meeting-screen").getByTestId("one-pager")).toContainText("Version 3");
-  await page.getByRole("button", { name: "Edit line 2" }).click();
-  await page.getByLabel("Line 2").fill("A checklist that names the next step");
+  await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+  await page.getByLabel("New wording for").fill("A checklist that names the next step");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
   await page.getByRole("button", { name: "Approve", exact: true }).click();

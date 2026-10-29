@@ -65,8 +65,15 @@ const RANK: Record<string, number> = { viewer: 0, commenter: 1, approver: 2, own
 const at = "2026-10-26T15:00:00Z";
 const esc = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+/** Each bet subject's words, as the one-pager named them (the API's bet_line finds them). */
+const BET_WORDS = new Map<string, string>();
+
 /** A one-pager bet's subject id (the API's is a uuid5 of the PRD and the bet's words). */
-export const betSubject = (text: string): string => stableUuid(`simple-visual/bet/${text.trim().toLowerCase()}`);
+export const betSubject = (text: string): string => {
+  const id = stableUuid(`simple-visual/bet/${text.trim().toLowerCase()}`);
+  BET_WORDS.set(id, text.split(/\s+/).filter(Boolean).join(" "));
+  return id;
+};
 
 function drawSvg(title: string, steps: Step[]): string {
   const w = 150;
@@ -314,8 +321,9 @@ export async function routeSimpleVisuals(db: VisualsDb, ctx: Ctx, req: Request, 
     if (kind === "one_pager_line") {
       const doc = b.document_id ? String(b.document_id) : null;
       if (!doc) return json(422, { detail: "A one-pager line's visual is asked for with its PRD" });
-      // Queued once: a visual with no drawing (its job drew nothing) is drawn again.
-      const cur = v ?? add(db, kind, id, String(b.brief ?? "") || "A bet of the one-pager");
+      // Queued once: a visual with no drawing (its job drew nothing) is drawn again. As the
+      // API's ask_for: the bet's own words are the brief (qa-simple-prd-21), whatever was sent.
+      const cur = v ?? add(db, kind, id, BET_WORDS.get(id) || String(b.brief ?? "").trim() || "A bet of the one-pager");
       if (!cur.versions.length) [cur.pending, cur.queued_at] = [true, Date.now()];
       return json(202, out(db.visuals[key], kind, id, ctx, doc, nameOf(db, ctx, kind, id)));
     }

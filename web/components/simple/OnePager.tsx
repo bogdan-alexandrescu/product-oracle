@@ -4,21 +4,47 @@ import Link from "next/link";
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ds";
-import { FlowPanel } from "@/components/simple/FlowVisual";
+import { clock, FlowPanel } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { dmy, ew, PrdPlan, usePhone } from "@/components/simple/PrdTimeline";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
+import { quoteLine } from "@/components/simple/quote-line";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
+import { useCompanyZone } from "@/lib/dates";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 type View = Schemas["OnePagerOut"];
 type Line = Schemas["OnePagerLine"];
 type Note = Schemas["OnePagerNote"];
 
-function day(d: string | null | undefined): string {
-  return d ? calendarDay(d.slice(0, 10), { month: "short", day: "numeric", year: "numeric" }) : "";
+export { quoteLine };
+
+/** A section's Markdown as plain lines: no "- " bullets, "#" heads or "**" marks (qa-simple-prd-16/17). */
+export function plainLines(md: string): { text: string; bullet: boolean }[] {
+  return md
+    .split("\n")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .map((x) => {
+      const bullet = /^([-*+]|\d+[.)])\s+/.test(x);
+      return { text: x.replace(/^([-*+]|\d+[.)]|#+)\s+/, "").replace(/\*\*|__|`/g, ""), bullet };
+    });
+}
+
+/** The words of `before` and `after` with only the changed ones marked (qa-simple-prd-17). */
+function wordDiff(before: string, after: string): { a: ReactNode[]; b: ReactNode[] } {
+  const x = before.split(/(\s+)/);
+  const y = after.split(/(\s+)/);
+  let head = 0;
+  while (head < x.length && head < y.length && x[head] === y[head]) head++;
+  let tail = 0;
+  while (tail < x.length - head && tail < y.length - head && x[x.length - 1 - tail] === y[y.length - 1 - tail]) tail++;
+  const part = (w: string[], mark: "del" | "ins") => {
+    const mid = w.slice(head, w.length - tail).join("");
+    return [w.slice(0, head).join(""), mid ? (mark === "del" ? <del key="m">{mid}</del> : <ins key="m">{mid}</ins>) : null, w.slice(w.length - tail).join("")];
+  };
+  return { a: part(x, "del"), b: part(y, "ins") };
 }
 
 /** What holds a decider-approved draft back, in the meeting banner's words ("Waiting on Rae's approval · Sections Scope need a reviewer"). */
@@ -99,7 +125,30 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   // Lines shortened with "…" shown whole, in place (CLD's production walk, 2026-10-27).
   const [whole, setWhole] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
-  const [saved, setSaved] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+  // qa-simple-prd-25: "PDF downloaded" shows a few seconds, then goes.
+  useEffect(() => {
+    if (!saved) return;
+    const t = window.setTimeout(() => setSaved(false), 4000);
+    return () => window.clearTimeout(t);
+  }, [saved]);
+  // qa-simple-prd-24: leaving full screen (Esc) ends presenting too.
+  useEffect(() => {
+    const on = () => {
+      if (!document.fullscreenElement) setPresenting(false);
+    };
+    document.addEventListener("fullscreenchange", on);
+    return () => document.removeEventListener("fullscreenchange", on);
+  }, []);
+  // qa-simple-prd-16: Escape closes a line's sources, unless a dialog over them takes it.
+  useEffect(() => {
+    if (!open) return;
+    const on = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !document.querySelector('[role="dialog"], dialog[open]')) setOpen(null);
+    };
+    document.addEventListener("keydown", on);
+    return () => document.removeEventListener("keydown", on);
+  }, [open]);
   const [starting, setStarting] = useState(false);
   // Desktop margin: each note sits beside its line (placeNotes).
   const margin = useRef<HTMLElement>(null);
@@ -112,10 +161,24 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const phone = usePhone();
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
-  if (q.error || !q.data) return <div className="px-6 py-8"><ErrorNote>{q.error ?? "Not found"}</ErrorNote></div>;
+  if (q.error || !q.data) {
+    // A missing PRD's address says so in words, under the page's title.
+    const missing = !q.error || /not found|no such/i.test(q.error);
+    return (
+      <div className="mx-auto flex max-w-[1180px] flex-col items-start gap-3 px-12 pt-[26px] pb-12 max-[767px]:px-4 max-[767px]:pt-3.5">
+        <BackLink />
+        <h1 className="simple-h1">One-pager</h1>
+        <ErrorNote>{missing ? "No PRD at this address. It may have been deleted, or the link is old." : q.error}</ErrorNote>
+      </div>
+    );
+  }
   const v: View = q.data;
   const numbers = new Map<string, number>();
-  v.blocks.flatMap((b) => b.lines).forEach((l, i) => numbers.set(l.id, i + 1));
+  const words = new Map<string, string>();
+  v.blocks.flatMap((b) => b.lines).forEach((l, i) => {
+    numbers.set(l.id, i + 1);
+    words.set(l.id, quoteLine(l.metric ? l.metric.name : l.text));
+  });
 
   async function act(run: () => Promise<unknown>) {
     setBusy(true);
@@ -152,14 +215,14 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     setError(null);
     try {
       const blob = await unwrap(api.GET("/v1/simple/one-pagers/{doc}/pdf", { params: { path: { doc } }, parseAs: "blob" })) as Blob;
-      const name = `${v.document.slug}-v${v.version}-one-pager.pdf`;
+      const name = `${v.document.title.replace(/[\\/:*?"<>|]+/g, " ").trim()} v${v.version} one-pager.pdf`;
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = name;
       document.body.appendChild(a);
       a.click();
       a.remove();
-      setSaved(name);
+      setSaved(true);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -177,21 +240,51 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const notesFor = (id: string) => v.notes.filter((n) => n.line_id === id);
   const plan = planNow ?? planQ.data ?? null;
   const planShown = !!plan && plan.status !== "none" && plan.milestones.length > 0;
+  // qa-simple-prd-14: one date style on every one-pager ("Version 3 · 20 Oct 2026").
   const meta = [
-    `Version ${v.version}`,
-    v.published_at ? `published ${day(v.published_at)}` : null,
+    `Version ${v.version}${v.published_at ? ` · ${dmy(v.published_at.slice(0, 10))}` : ""}`,
     v.owner ? `Owner ${v.owner.name}` : "No owner yet",
     v.decider ? `Decider ${v.decider.name}` : null,
-    plan?.span ? plan.span.label : v.span_start && v.span_end ? `${day(v.span_start)} – ${day(v.span_end)}` : null,
+    v.span_start && v.span_end ? `${dmy(v.span_start)} → ${dmy(v.span_end)}` : null,
   ].filter(Boolean);
+  // qa-simple-prd-18: a draft whose changes were all undone shows no banner.
+  const draftShown = !!v.draft && (v.draft.changes > 0 || v.draft.status === "submitted");
+  // qa-simple-prd-10: who may start a review is the start API's rule (can_start: an owner or the
+  // PRD's decider); everyone else reads who can, on a disabled button.
+  const startWhy = v.decider ? `Ask ${v.decider.name} or an owner to start a review` : "Ask an owner to start a review";
+  const actions = presenting ? (
+    <button type="button" className={btn(phone)} onClick={stopPresenting}>Stop presenting</button>
+  ) : (
+    <>
+      <button type="button" className={btn(phone)} onClick={present}>{!phone && <Glyph d={PRESENT} />}Present</button>
+      <button type="button" className={btn(phone)} onClick={exportPdf}>{!phone && <Glyph d={PDF} />}Export PDF</button>
+      {!sessionId && (
+        <button
+          type="button"
+          className={`${btn(phone)} disabled:cursor-not-allowed disabled:opacity-60`}
+          disabled={!v.can_start}
+          title={v.can_start ? undefined : startWhy}
+          aria-describedby={v.can_start ? undefined : "start-review-why"}
+          onClick={() => setStarting(true)}
+        >
+          {!phone && <Glyph d={REVIEW} />}Start review
+        </button>
+      )}
+      {!sessionId && !v.can_start && <span id="start-review-why" className="text-[14px] text-text2">{startWhy}</span>}
+      <Link className={`font-semibold whitespace-nowrap text-accent underline underline-offset-[3px] ${phone ? "text-[14px]" : "text-[15px]"}`} href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
+    </>
+  );
+  const toast = saved && (
+    <p role="status" className="simple-noprint fixed right-4 bottom-4 z-50 rounded-[10px] border border-line-strong bg-surface px-4 py-2 text-[15px] font-semibold shadow-md">PDF downloaded</p>
+  );
 
   return (
     <div
-      className={`min-h-screen bg-[var(--simple-desk)] text-[length:var(--simple-body)] text-text ${presenting ? "fixed inset-0 z-50 overflow-auto" : ""}`}
+      className={`min-h-screen ${presenting ? "bg-[var(--simple-desk)]" : ""} text-[length:var(--simple-body)] text-text ${presenting ? "fixed inset-0 z-50 overflow-auto" : ""}`}
       data-testid="one-pager"
       data-presenting={presenting ? "true" : undefined}
     >
-      {v.draft && (
+      {draftShown && v.draft && !presenting && (
         <div role="status" aria-label="Working draft" className="simple-noprint flex flex-wrap items-center gap-3 border-b border-[var(--simple-rule)] bg-[var(--simple-edited)] px-4 py-2 text-base">
           <strong>Working draft</strong>
           <span>· {v.draft.changes} {v.draft.changes === 1 ? "change" : "changes"}</span>
@@ -217,7 +310,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           )}
         </div>
       )}
-      {!v.draft && v.changes_in_review > 0 && (
+      {!draftShown && v.changes_in_review > 0 && !presenting && (
         <div role="status" className="simple-noprint border-b border-[var(--simple-rule)] px-4 py-2 text-base text-text-faint">
           {v.changes_in_review} {v.changes_in_review === 1 ? "change" : "changes"} in review · you read the published version
         </div>
@@ -229,32 +322,23 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
             v={v}
             plan={plan!}
             phone={phone}
-            actions={
-              <>
-                {presenting ? <button type="button" className={btn(phone)} onClick={stopPresenting}>Stop presenting</button> : <button type="button" className={btn(phone)} onClick={present}>{!phone && <Glyph d={PRESENT} />}Present</button>}
-                <button type="button" className={btn(phone)} onClick={exportPdf}>{!phone && <Glyph d={PDF} />}Export PDF</button>
-                {!sessionId && <button type="button" className={btn(phone)} onClick={() => setStarting(true)}>{!phone && <Glyph d={REVIEW} />}Start review</button>}
-                <Link className={`font-semibold whitespace-nowrap text-accent underline underline-offset-[3px] ${phone ? "text-[14px]" : "text-[15px]"}`} href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
-              </>
-            }
+            presenting={presenting}
+            draft={draftShown || v.changes_in_review > 0}
+            actions={actions}
           />
-          {saved && <p role="status" className="simple-noprint text-right text-base">Saved {saved}</p>}
+          {toast}
           {error && <ErrorNote>{error}</ErrorNote>}
           <PrdPlan plan={plan!} title={v.document.title} onPlan={setPlanNow} />
         </div>
       ) : (
         <>
-          <div className="simple-noprint mx-auto flex max-w-[1180px] flex-wrap items-center justify-end gap-2 px-4 pt-4">
-            {presenting ? (
-              <Button onClick={stopPresenting}>Stop presenting</Button>
-            ) : (
-              <Button onClick={present}>Present</Button>
-            )}
-            <Button onClick={exportPdf}>Export PDF</Button>
-            {!sessionId && <Button onClick={() => setStarting(true)}>Start review</Button>}
-            <Link className="underline" href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
+          {/* qa-simple-prd-14/44: the same header row and toolbar as a PRD with a plan. */}
+          <div className="simple-noprint mx-auto flex max-w-[1180px] flex-wrap items-center gap-2.5 px-12 pt-[26px] max-[767px]:px-4 max-[767px]:pt-3.5">
+            {!phone && !presenting && <BackLink />}
+            <span className="flex-1" />
+            {actions}
           </div>
-          {saved && <p role="status" className="simple-noprint mx-auto max-w-[1180px] px-4 text-right text-base">Saved {saved}</p>}
+          {toast}
           {error && <div className="mx-auto max-w-[1180px] px-4"><ErrorNote>{error}</ErrorNote></div>}
         </>
       )}
@@ -267,7 +351,12 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
         <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
           {!planShown && (
             <header className="mb-4 border-b border-[var(--simple-rule)] pb-3">
-              <h1 className="text-3xl font-semibold">{v.document.title}</h1>
+              {/* qa-simple-prd-45: a phone's header bar names the page (One-pagers), not the title again. */}
+              {phone ? (
+                <div role="heading" aria-level={1} className="text-3xl font-semibold">{v.document.title}</div>
+              ) : (
+                <h1 className="text-3xl font-semibold">{v.document.title}</h1>
+              )}
               <p className="mt-1 text-base text-text-faint" data-testid="one-pager-meta">{meta.join(" · ")}</p>
             </header>
           )}
@@ -285,16 +374,22 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                       <div className={`rounded px-2 py-1 ${TINT[l.state]}`}>
                         {editing === l.id ? (
                           <form onSubmit={(e) => { e.preventDefault(); void save(l); }} className="space-y-2">
-                            <label className="sr-only" htmlFor={`edit-${l.id}`}>Line {numbers.get(l.id)}</label>
+                            <label className="sr-only" htmlFor={`edit-${l.id}`}>New wording for {words.get(l.id)}</label>
                             <textarea id={`edit-${l.id}`} value={draftText} onChange={(e) => setDraftText(e.target.value)} rows={2} className="w-full rounded border border-[var(--simple-rule)] bg-transparent p-2" />
+                            {l.flow && draftText.trim() !== (l.full ?? l.text).trim() && (
+                              // qa-simple-prd-1: a bet's flow belongs to its words; say so before saving.
+                              <p role="note" data-testid="flow-detach-warning" className="text-sm text-text2">
+                                New words make this a new bet: its drawn flow stays with the old words and is no longer shown here. Undo brings it back.
+                              </p>
+                            )}
                             <div className="flex gap-2">
                               <Button type="submit" variant="primary" disabled={busy || !draftText.trim()}>{v.can_edit ? "Save" : "Propose"}</Button>
                               <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
                             </div>
                           </form>
                         ) : (
-                          <div className="flex items-start gap-2">
-                            <span className="flex-1">
+                          <div className="relative flex items-start gap-2">
+                            <span className="min-w-0 flex-1">
                               <button type="button" className="text-left" aria-expanded={open === l.id} onClick={() => { if (!firstTap.current) setOpen(open === l.id ? null : l.id); }} data-testid="one-pager-line-text">
                                 {b.kind === "lines" || b.kind === "metrics" ? "• " : ""}
                                 {l.metric ? (<><span>{l.metric.name}: </span><strong className="tabular-nums">{l.metric.from || "—"} → {l.metric.to}</strong></>) : l.full ? (whole.has(l.id) ? l.full : foldAtSentence(l.full, l.text)) : l.text}
@@ -304,22 +399,23 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                                   type="button"
                                   className="simple-noprint ml-2 text-sm underline"
                                   aria-expanded={whole.has(l.id)}
-                                  aria-label={`${whole.has(l.id) ? "Show less of" : "Show all of"} line ${numbers.get(l.id)}`}
+                                  aria-label={`${whole.has(l.id) ? "Show less of" : "Show all of"} ${words.get(l.id)}`}
                                   onClick={() => setWhole((w) => { const n = new Set(w); if (n.has(l.id)) n.delete(l.id); else n.add(l.id); return n; })}
                                 >
                                   {whole.has(l.id) ? "Show less" : "Show all"}
                                 </button>
                               )}
                             </span>
-                            {(v.can_edit || v.can_propose) && (
+                            {(v.can_edit || v.can_propose) && !presenting && (
                               // The owner's P6: "Edit" shows when the line is pointed at or tapped, not on every line.
                               <button
                                 type="button"
-                                className={`simple-noprint text-sm underline group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 ${tapped === l.id ? "opacity-100" : "opacity-0"}`}
+                                // qa-simple-prd-37: hidden, it takes no width (it overlays the line's end); qa-simple-prd-36: 44 px on a phone.
+                                className={`simple-noprint flex-none text-sm underline group-hover:static group-hover:opacity-100 group-focus-within:static group-focus-within:opacity-100 focus:opacity-100 max-md:min-h-11 max-md:min-w-11 max-md:px-3 ${tapped === l.id ? "static opacity-100" : "absolute top-0 right-0 opacity-0"}`}
                                 onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}
                               >
                                 <span aria-hidden data-testid="line-edit-word">{v.can_edit ? "Edit" : "Propose wording"}</span>
-                                <span className="sr-only">{v.can_edit ? `Edit line ${numbers.get(l.id)}` : `Propose wording for line ${numbers.get(l.id)}`}</span>
+                                <span className="sr-only">{v.can_edit ? `Edit ${words.get(l.id)}` : `Propose wording for ${words.get(l.id)}`}</span>
                               </button>
                             )}
                           </div>
@@ -327,8 +423,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                         {l.flow_subject && (
                           // The flows review: a bet's flow is the same row as a roadmap card's
                           // (the live thumbnail and its states), opened in place.
-                          <div className="simple-noprint" aria-label={`User flow of bet ${numbers.get(l.id)}`} role="group">
-                            <FlowPanel row subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} openLabel={`Flow for bet ${numbers.get(l.id)}`} />
+                          <div className="simple-noprint" aria-label={`User flow of ${words.get(l.id)}`} role="group">
+                            <FlowPanel row subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} openLabel={`Flow for ${words.get(l.id)}`} />
                           </div>
                         )}
                         {l.decisions.length > 0 && (
@@ -342,22 +438,30 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                           </p>
                         )}
                         {open === l.id && (
-                          <div role="dialog" aria-label={`Sources of line ${numbers.get(l.id)}`} className="simple-noprint mt-2 rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-3 text-base shadow-md">
+                          // qa-simple-prd-16: an inline expansion in the page's own type (Escape closes it).
+                          <div role="region" aria-label={`Sources of ${words.get(l.id)}`} className="simple-noprint mt-2 rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] p-3 text-base">
                             {l.source_keys.map((k) => {
                               const sec = v.sections.find((x) => x.key === k);
+                              if (!sec) return null;
+                              const rows = plainLines(sec.body);
                               return (
                                 <div key={k} className="mb-2">
-                                  <p className="text-sm font-semibold">{sec?.heading ?? k}</p>
-                                  {sec && <p className="whitespace-pre-wrap text-sm text-text-faint">{sec.body}</p>}
+                                  <p className="text-sm font-semibold">{sec.heading}</p>
+                                  {rows.some((x) => x.bullet) ? (
+                                    <ul className="list-disc space-y-0.5 pl-5 text-sm text-text2">{rows.map((x, i) => <li key={i}>{x.text}</li>)}</ul>
+                                  ) : (
+                                    rows.map((x, i) => <p key={i} className="text-sm text-text2">{x.text}</p>)
+                                  )}
                                 </div>
                               );
                             })}
                             <Link className="underline" href={`/documents/${v.document.slug}#${l.source_keys[0]}`}>Open the detailed view</Link>
+                            <button type="button" className="ml-3 text-sm underline" onClick={() => setOpen(null)}>Close</button>
                           </div>
                         )}
                       </div>
                       {/* Phone: the margin notes move under their line. */}
-                      <div className="md:hidden">{notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, no: numbers.get(l.id)!, busy, diff, setDiff, wide, setWide, undo, decide }} />)}</div>
+                      <div className="md:hidden">{!presenting && notesFor(l.id).map((n) => <MarginNote key={n.change_id} {...{ n, quote: words.get(l.id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide }} />)}</div>
                     </li>
                   ))}
                   {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">Not written yet</li>}
@@ -366,13 +470,15 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
             </section>
           ))}
         </article>
-        <aside ref={margin} aria-label="Margin" className="simple-noprint relative hidden md:block">
+        <aside ref={margin} aria-label="Changes and proposals" className={`simple-noprint relative hidden min-w-0 ${presenting || (!v.notes.length && !v.can_edit && !v.can_propose) ? "" : "md:block"}`}>
+          {/* qa-simple-prd-34: the margin says what it is for; readers who change nothing see none when empty. */}
+          {v.notes.length === 0 && <p className="text-sm font-semibold uppercase tracking-wide text-text-faint">Changes and proposals</p>}
           {[...v.notes].sort((a, b) => (numbers.get(a.line_id) ?? 0) - (numbers.get(b.line_id) ?? 0)).map((n) => (
             <div key={n.change_id} data-note-for={n.line_id} data-change={n.change_id} className="absolute inset-x-0">
-              <MarginNote {...{ n, no: numbers.get(n.line_id) ?? 0, busy, diff, setDiff, wide, setWide, undo, decide }} />
+              <MarginNote {...{ n, quote: words.get(n.line_id) ?? "", busy, diff, setDiff, wide, setWide, undo, decide }} />
             </div>
           ))}
-          {v.notes.length === 0 && <p className="text-base text-text-faint">No changes yet.</p>}
+          {v.notes.length === 0 && <p className="mt-1 text-base text-text2">No changes yet. An edit or a proposed wording shows here beside its line.</p>}
         </aside>
       </div>
       )}
@@ -400,22 +506,19 @@ function Glyph({ d }: { d: string }) {
  * A phone (D2) keeps the title, the facts and the actions, smaller; its header bar names
  * the page (One-pagers), so the title there is a level-1 heading that is not an H1.
  */
-function PrdHeader({ v, plan, phone, actions }: { v: View; plan: Schemas["SimplePlanOut"]; phone: boolean; actions: ReactNode }) {
-  const span = plan.span ? { start: plan.span.start, end: plan.span.end } : v.span_start && v.span_end ? { start: v.span_start, end: v.span_end } : null;
+function PrdHeader({ v, plan, phone, presenting, draft, actions }: { v: View; plan: Schemas["SimplePlanOut"]; phone: boolean; presenting: boolean; draft: boolean; actions: ReactNode }) {
+  // qa-simple-prd-3: the plan's own span only; with no dated milestone the header says so.
+  const span = plan.span ? { start: plan.span.start, end: plan.span.end } : null;
   const caps = plan.milestones.map((m) => m.effort_weeks).filter((x): x is number => x != null);
   const total = caps.length ? caps.reduce((a, b) => a + b, 0) : null;
   const published = v.published_at ? dmy(v.published_at.slice(0, 10)) : null;
-  const sep = phone ? null : <span className="text-line-strong">·</span>;
+  // qa-simple-prd-47: separators at the meta line's own 4.5:1 colour.
+  const sep = phone ? null : <span aria-hidden className="text-text2">·</span>;
   return (
     <div className="flex flex-col gap-2.5">
       {!phone && (
         <div className="flex items-center gap-2.5">
-          <Link href="/simple/one-pagers" className="inline-flex items-center gap-1 text-[15px] font-semibold text-accent">
-            <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
-              <path d="M15 6l-6 6 6 6" />
-            </svg>
-            One-pagers
-          </Link>
+          {!presenting && <BackLink />}
           <span className="flex-1" />
           {actions}
         </div>
@@ -434,27 +537,35 @@ function PrdHeader({ v, plan, phone, actions }: { v: View; plan: Schemas["Simple
             Approved
           </span>
         )}
+        {/* qa-simple-prd-9: the same state the One-pagers list names. */}
+        {published && draft && <span data-testid="one-pager-draft-chip" className="text-[14px] font-semibold text-text">draft in progress</span>}
         <span>{phone ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
         {sep}
         {v.owner ? <span>Owner <b className="font-[650] text-text">{v.owner.name}</b></span> : <span>No owner yet</span>}
-        {span && (
-          <>
-            {sep}
-            <b className="font-[650] text-text">{dmy(span.start)} → {dmy(span.end)}</b>
-          </>
-        )}
+        {sep}
+        {span ? <b className="font-[650] text-text">{dmy(span.start)} → {dmy(span.end)}</b> : <span data-testid="one-pager-no-dates">No dates yet</span>}
         {total != null && (
           <>
             {sep}
             <span>
               <b className="font-[650] text-text">{ew(total)}</b>
-              {!phone && " (engineer-weeks)"}
             </span>
           </>
         )}
       </div>
       {phone && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
+  );
+}
+
+function BackLink() {
+  return (
+    <Link href="/simple/one-pagers" className="inline-flex items-center gap-1 text-[15px] font-semibold text-accent">
+      <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M15 6l-6 6 6 6" />
+      </svg>
+      One-pagers
+    </Link>
   );
 }
 
@@ -473,10 +584,10 @@ function placeNotes(el: HTMLElement | null) {
 }
 
 function MarginNote({
-  n, no, busy, diff, setDiff, wide, setWide, undo, decide,
+  n, quote: line, busy, diff, setDiff, wide, setWide, undo, decide,
 }: {
   n: Note;
-  no: number;
+  quote: string;
   busy: boolean;
   diff: string | null;
   setDiff: (id: string | null) => void;
@@ -486,47 +597,73 @@ function MarginNote({
   decide: (n: Note, a: "accept" | "decline") => void;
 }) {
   const zone = useCompanyZone();
+  // The note names its line by the words it had (they stay put while the line changes).
+  const quote = quoteLine(n.before) || line;
   const widened = wide === n.change_id;
+  const shown = diff === n.change_id;
+  const words = wordDiff(n.before, n.after);
+  // Escape closes the note's flow dialog, as the page's other dialogs.
+  useEffect(() => {
+    if (!widened) return;
+    const on = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setWide(null);
+    };
+    document.addEventListener("keydown", on);
+    return () => document.removeEventListener("keydown", on);
+  }, [widened, setWide]);
   return (
     <div
       role="note"
-      aria-label={n.kind === "change" ? `Change to line ${no}` : `Proposal for line ${no}`}
+      aria-label={n.kind === "change" ? `Change to ${quote}` : `Proposal for ${quote}`}
       data-widened={widened ? "true" : undefined}
-      className={`rounded-md border border-[var(--simple-rule)] p-3 text-base ${n.kind === "change" ? "bg-[var(--simple-edited)]" : "bg-[var(--simple-proposal)]"} ${widened ? "fixed inset-x-0 bottom-0 top-0 z-40 overflow-auto md:static md:w-[min(640px,90vw)]" : ""}`}
+      className={`min-w-0 rounded-md border border-[var(--simple-rule)] p-3 text-base [overflow-wrap:anywhere] ${n.kind === "change" ? "bg-[var(--simple-edited)]" : "bg-[var(--simple-proposal)]"}`}
     >
       <p>
         {n.kind === "change"
-          ? `${n.can_undo ? "You" : n.by_name} changed line ${no} · ${formatInZone(n.at, zone, { hour: "numeric", minute: "2-digit" })}${n.meeting_title ? `, in ${n.meeting_title}` : n.in_meeting ? ", in the meeting" : ""}`
-          : `${n.by_name} proposes new wording for line ${no}`}
+          ? `${n.can_undo ? "You" : n.by_name} changed ${quote} · ${clock(n.at, zone)}${n.meeting_title ? `, in ${n.meeting_title}` : n.in_meeting ? ", in the meeting" : ""}`
+          : `${n.by_name} proposes new wording for ${quote} · ${clock(n.at, zone)}`}
       </p>
+      {/* qa-simple-prd-35: a proposal shows its words at once. */}
+      {n.kind === "proposal" && <p className="mt-1 text-[15px]" data-testid="proposal-words">“{n.after}”</p>}
       <div className="mt-2 flex flex-wrap gap-2">
         {n.can_undo && <Button disabled={busy} onClick={() => undo(n)}>Undo</Button>}
         {n.can_decide && <Button variant="primary" disabled={busy} onClick={() => decide(n, "accept")}>Accept</Button>}
         {n.can_decide && <Button disabled={busy} onClick={() => decide(n, "decline")}>Decline</Button>}
-        <button type="button" className="text-sm underline" aria-expanded={diff === n.change_id} onClick={() => setDiff(diff === n.change_id ? null : n.change_id)}>See before/after</button>
+        <button type="button" className="text-sm underline" aria-expanded={shown} onClick={() => setDiff(shown ? null : n.change_id)}>See before/after</button>
         {n.adds_feature && (
-          <button type="button" aria-label={`Flow for line ${no}`} className="h-8 w-12 rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] text-xs" onClick={() => setWide(widened ? null : n.change_id)}>
+          <button type="button" aria-label={`Flow for ${quote}`} className="h-8 w-12 rounded border border-[var(--simple-rule)] bg-[var(--simple-paper)] text-xs" onClick={() => setWide(widened ? null : n.change_id)}>
             {n.flow ? "Flow" : "⋯"}
           </button>
         )}
       </div>
-      {diff === n.change_id && (
-        <div className="mt-2 space-y-2 text-sm" aria-label="Before and after">
-          <p><span className="font-semibold">Line before:</span> <del>{n.before}</del></p>
-          <p><span className="font-semibold">Line after:</span> <ins>{n.after}</ins></p>
-          {n.sections.map((s) => (
-            <div key={s.key} className="rounded border border-[var(--simple-rule)] p-2">
-              <p className="font-semibold">Section “{s.heading}”</p>
-              <pre className="whitespace-pre-wrap"><del>{s.before}</del></pre>
-              <pre className="whitespace-pre-wrap"><ins>{s.after}</ins></pre>
-            </div>
-          ))}
+      {shown && (
+        // qa-simple-prd-17: only the changed words are marked, in the page's type.
+        <div className="mt-2 space-y-2 text-sm" aria-label="Before and after" data-testid="note-diff">
+          <p><span className="font-semibold">Before:</span> {words.a}</p>
+          <p><span className="font-semibold">After:</span> {words.b}</p>
+          {n.sections.map((s) => {
+            const was = plainLines(s.before).map((x) => x.text);
+            const now = plainLines(s.after).map((x) => x.text);
+            const gone = was.filter((x) => !now.includes(x));
+            const added = now.filter((x) => !was.includes(x));
+            return (
+              <div key={s.key} className="rounded border border-[var(--simple-rule)] p-2">
+                <p className="font-semibold">In “{s.heading}”</p>
+                {gone.map((x, i) => <p key={`g${i}`}><del>{x}</del></p>)}
+                {added.map((x, i) => <p key={`a${i}`}><ins>{x}</ins></p>)}
+                {!gone.length && !added.length && <p>No other change</p>}
+              </div>
+            );
+          })}
         </div>
       )}
       {widened && (
-        <div className="mt-3" aria-label="User flow">
-          <FlowPanel subject={{ kind: n.flow?.subject_kind ?? "change", id: n.flow?.subject_id ?? n.change_id }} />
-          <Button className="mt-2" onClick={() => setWide(null)}>Close</Button>
+        // qa-simple-prd-2: the flow opens in a dialog wide enough for it, over a dimmed page.
+        <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/50 md:pt-16" onClick={(e) => { if (e.target === e.currentTarget) setWide(null); }}>
+          <div role="dialog" aria-modal="true" aria-label="User flow" className="h-full w-full overflow-auto bg-[var(--simple-paper)] p-4 md:h-auto md:max-h-[80vh] md:w-[min(640px,90vw)] md:rounded-md">
+            <FlowPanel subject={{ kind: n.flow?.subject_kind ?? "change", id: n.flow?.subject_id ?? n.change_id }} />
+            <Button className="mt-2" onClick={() => setWide(null)}>Close</Button>
+          </div>
         </div>
       )}
     </div>

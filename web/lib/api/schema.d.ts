@@ -29934,6 +29934,8 @@ export interface components {
             can_edit: boolean;
             /** Can Propose */
             can_propose: boolean;
+            /** Can Start */
+            can_start: boolean;
         };
         /**
          * OnePagerRemindOut

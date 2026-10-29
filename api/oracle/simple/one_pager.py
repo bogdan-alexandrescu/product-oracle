@@ -848,6 +848,13 @@ def decides(principal: Any, w: Who) -> bool:
     return me in w.track_owners and has_role(principal.role, "approver")
 
 
+def starts(principal: Any, w: Who) -> bool:
+    """Start review: the start API's rule (meetings.may_start), not who edits lines."""
+    from oracle.simple import meetings
+
+    return meetings.may_start(principal, meetings.PrdWho(w.decider, [], []))
+
+
 def may_remind(principal: Any, w: Who) -> bool:
     """Remind: the PRD's owners (a company owner, its track owners) and its decider."""
     me = _me(principal)
@@ -1230,6 +1237,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         can_propose=not decides(principal, w)
         and _me(principal) is not None
         and has_role(principal.role, "commenter"),
+        can_start=starts(principal, w),
     )
 
 
@@ -1681,7 +1689,7 @@ def _plan_html(plan: Any) -> str:
         extra.append(f"+{len(plan.rows) - PLAN_ROWS} more on the roadmap")
     if plan.past_edge:
         word = "commitment ends" if plan.past_edge == 1 else "commitments end"
-        extra.append(f"{plan.past_edge} {word} past {plan.end.strftime('%b')} →")
+        extra.append(f"{plan.past_edge} {word} after {plan.end.strftime('%b')}")
     if extra:
         out.append(f"<div class='more'>{' · '.join(extra)}</div>")
     return "".join(out) + "</div>"

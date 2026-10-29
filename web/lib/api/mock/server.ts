@@ -153,7 +153,7 @@ import {
   type PricingDb,
 } from "./pricing";
 import { routeSimpleChanges, seedSimpleProposal, simpleInboxRows } from "./simple-changes";
-import { chatMeetings, ensureMeetings, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
+import { chatMeetings, ensureMeetings, mockApproverOwnsTrack, meetingInboxRows, routeMeetingQuestions, routeSimpleMeetings, withMeeting, type MeetingsCtx, type MeetingsDb } from "./simple-meetings";
 import { planSlice, routeOnePager, seedOnePager, seedSkeletonOnePager, seedWalkOnePager, type OnePagerDb } from "./simple-one-pager";
 import { PLAN_PRD_SLUG, planFeatureName, planMilestones, planSlices, routeSimplePlan, seedPlan } from "./simple-plan";
 import { mockNowMs } from "./clock";
@@ -984,10 +984,11 @@ function seedSimplePlanScenario(): Db {
   }
   db.simple_one_pager = seedOnePager();
   db.simple_one_pager.slice = planSlice();
-  // The PRD itself, so Simple's One-pagers lists it (its one-pager is the seeded one).
+  // The PRD itself, so Simple's One-pagers lists it (its one-pager is the seeded one); its version 3
+  // is approved, as the one-pager reads (qa-simple-prd-9).
   const at = "2026-10-20T15:05:00Z";
   db.documents.push({
-    id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "draft", kind: "prd",
+    id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "approved", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
   return db;
@@ -5297,6 +5298,9 @@ async function route(db: Db, req: Request): Promise<Response> {
         names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])),
         // The PRD's required reviewer: the seeded approver.
         reviewers: db.members.filter((x) => x.email === "approver@example.com" && x.status !== "disabled").map((x) => x.id),
+        // Its decider and track owners, as the meetings mock's Guided setup (simple-meetings prds).
+        decider: onePagerDb.doc.slug === "guided-setup" ? (db.members.find((x) => x.email === "dana.decider@example.com")?.id ?? null) : null,
+        trackOwners: onePagerDb.doc.slug === "guided-setup" && mockApproverOwnsTrack() ? db.members.filter((x) => x.email === "approver@example.com").map((x) => x.id) : [],
         notify: (user_id, kind, title, data, version) =>
           ensureReviewV2(db).notifications.push({
             id: uuid(), user_id, kind, title, document_id: onePagerDb.doc.id, version_number: version, section_key: null,

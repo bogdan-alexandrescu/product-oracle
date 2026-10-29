@@ -79,8 +79,8 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Start review" }).click();
         await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await page.getByRole("button", { name: "Edit line 4" }).click();
-        await page.getByLabel("Line 4").fill("A sample project on day one");
+        await page.getByRole("button", { name: "Edit “A sample project created on" }).click();
+        await page.getByLabel("New wording for").fill("A sample project on day one");
         await page.getByRole("button", { name: "Save" }).click();
         const decisions = page.getByRole("region", { name: "All decisions" });
         await expect(decisions).toContainText("New wording for a line of Guided setup");

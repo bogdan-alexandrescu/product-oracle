@@ -1156,6 +1156,8 @@ class OnePagerOut(BaseModel):
     # propose; viewers read.
     can_edit: bool
     can_propose: bool
+    # Start review: the start API's own rule (meetings.may_start: an owner or the decider).
+    can_start: bool
 
 
 # --------------------------------------------------------------------------- S7
