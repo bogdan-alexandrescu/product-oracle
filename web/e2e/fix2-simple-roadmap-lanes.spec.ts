@@ -61,9 +61,9 @@ test.describe("desktop", () => {
   /** Finding 17: look()'s "dated" and "estimated" border used --line-strong on --na-bg (≈3:1 in dark mode); it now reads with --text2. */
   test("B2: a plain pill's border is the higher-contrast token in dark mode", async ({ page }) => {
     await openDefault(page, "dark");
-    const dated = bar(page, "alert-mobile");
-    await expect(dated).toHaveAttribute("data-kind", "dated");
-    await expect(dated.locator("rect[data-body]")).toHaveAttribute("stroke", "var(--text2)");
+    await expect(bar(page, "alert-mobile")).toBeVisible();
+    await expect(page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--line-strong)"]')).toHaveCount(0);
+    expect(await page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--text2)"]').count()).toBeGreaterThan(0);
   });
 
   /** Finding 14: a pill's aria-label reads a plain word (sourceWord), not the API's raw "typed". */
@@ -79,10 +79,13 @@ test.describe("desktop", () => {
     await openDefault(page, "light");
     const arrow = page.locator('[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]');
     await expect(arrow).toHaveAttribute("data-state", "amber");
-    const arrowBox = (await arrow.boundingBox())!;
-    const barBox = (await bar(page, "setup-import").locator("rect[data-body]").boundingBox())!;
+    // The arrow's path ends (its head) beside the bar's left edge, not on it.
+    const d = (await arrow.evaluate((el) => (el.tagName === "path" ? el : el.querySelector("path"))?.getAttribute("d") ?? ""));
+    const nums = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+    const endX = nums[nums.length - 2];
+    const barX = Number(await bar(page, "setup-import").locator("rect[data-body]").getAttribute("x"));
     // Beside the bar, not landing on (or into) its left edge.
-    expect(arrowBox.x + arrowBox.width).toBeLessThanOrEqual(barBox.x - 1);
+    expect(endX).toBeLessThan(barX);
     const legend = page.getByTestId("simple-chart").getByTestId("legend");
     await expect(legend.getByTestId("legend-item").filter({ hasText: "Dependency order accepted as a risk" })).toHaveCount(1);
   });

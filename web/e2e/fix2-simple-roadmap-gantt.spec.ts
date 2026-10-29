@@ -81,9 +81,12 @@ test.describe("desktop", () => {
     await page.getByTestId("format-gantt").click();
     const arrow = page.locator('[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]');
     await expect(arrow).toBeVisible();
-    const arrowBox = (await arrow.boundingBox())!;
-    const barBox = (await bar(page, "setup-import").locator("rect[data-body]").boundingBox())!;
-    expect(arrowBox.x + arrowBox.width, "the arrow's head stops at or before the bar's left edge").toBeLessThanOrEqual(barBox.x + 1);
+    // The arrow's path ends (its head) beside the bar's left edge, not on it.
+    const d = (await arrow.evaluate((el) => (el.tagName === "path" ? el : el.querySelector("path"))?.getAttribute("d") ?? ""));
+    const nums = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+    const endX = nums[nums.length - 2];
+    const barX = Number(await bar(page, "setup-import").locator("rect[data-body]").getAttribute("x"));
+    expect(endX, "the arrow's head stops before the bar's left edge").toBeLessThan(barX);
   });
 
   for (const format of ["gantt", "waterfall"] as const) {
@@ -116,8 +119,10 @@ test.describe("desktop", () => {
   test("dark: an undated bar's outline keeps contrast, like a dated bar's (finding 17)", async ({ page }) => {
     await open(page, "simple-plan", "dark");
     await page.getByTestId("format-gantt").click();
-    const draftBody = bar(page, "setup-ideas").locator("rect[data-body]");
-    await expect(draftBody).toHaveAttribute("stroke", "var(--line-strong)");
+    await expect(bar(page, "setup-ideas")).toBeVisible();
+    // No bar body is outlined in the dark accent any more; undated ones use the line token.
+    await expect(page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--accent)"]')).toHaveCount(0);
+    expect(await page.locator('g[data-testid="bar"] rect[data-body][stroke="var(--line-strong)"]').count()).toBeGreaterThan(0);
   });
 });
 

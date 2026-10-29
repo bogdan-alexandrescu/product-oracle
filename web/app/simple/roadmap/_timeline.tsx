@@ -594,18 +594,18 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               <span
                 data-testid="label-title"
                 title={r.item.code && codeCounts.get(r.item.code) === 1 ? `${r.item.code} ${r.item.title}` : r.item.title}
-                className={`min-w-0 flex-1 truncate ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
+                className={`min-w-[45%] flex-1 truncate ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
               >
                 {r.item.title}
               </span>
               {r.item.draft && !closedItem(r.item) && (
-                <span className="max-w-[48px] flex-none truncate rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
+                <span className="max-w-[48px] min-w-0 shrink truncate rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
                   Draft
                 </span>
               )}
               {gantt && pulled?.has(r.item.id) && (
                 <span
-                  className="flex h-5 max-w-[104px] flex-none items-center truncate rounded-full bg-warn-bg px-2 text-xs font-semibold text-warn"
+                  className="flex h-5 max-w-[104px] min-w-0 shrink items-center truncate rounded-full bg-warn-bg px-2 text-xs font-semibold text-warn"
                   data-testid="pending-tag"
                   title="Pending decision"
                 >
@@ -955,7 +955,8 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
   // can run past the chart's span); a small arrow says it continues past the edge.
   const sx = sc.x(s?.start_date ?? start);
   const sRawW = s ? Math.max(MIN_BAR_W, sc.x(s.end_date) - sx + sc.px) : 0;
-  const sClampedW = Math.max(MIN_BAR_W, Math.min(sRawW, width - sx));
+  const sClampedW = Math.min(width, Math.max(MIN_BAR_W, Math.min(sRawW, width - sx - 1)));
+  const sxDraw = Math.max(0, Math.min(sx, width - sClampedW - 1));
   const sOverflows = s != null && sx + sRawW > width + 0.5;
   return (
     <g>
@@ -1045,7 +1046,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
             data-testid="suggestion-outline"
             data-item={item.key}
             data-clamped={sOverflows ? "true" : undefined}
-            x={sx}
+            x={sxDraw}
             y={y + pad - 3}
             width={sClampedW}
             height={h - 2 * pad + 6}
@@ -1060,7 +1061,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
           {sOverflows && (
             <path
               data-testid="suggestion-continues"
-              d={`M${sx + sClampedW - 7},${y + h / 2 - 5} l7,5 l-7,5`}
+              d={`M${sxDraw + sClampedW - 7},${y + h / 2 - 5} l7,5 l-7,5`}
               fill="none"
               stroke="var(--accent-ink)"
               strokeWidth={1.5}

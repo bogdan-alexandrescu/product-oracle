@@ -70,6 +70,8 @@ for (const [where, use] of [
      * card dated months later, a false range the card's own dates contradict.
      */
     test("a column's header drops a date range its own cards contradict", async ({ page }) => {
+      // A phone's Timeline (goal lanes) has no suggestion marker to accept from; the desktop run covers it.
+      test.skip(where === "phone", "the phone Timeline has no suggestion marker");
       await openBoard(page);
       await acceptSuggestion(page, "alert-sso");
       await page.getByTestId("format-board").click();
