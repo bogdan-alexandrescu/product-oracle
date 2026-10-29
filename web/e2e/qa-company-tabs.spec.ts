@@ -38,7 +38,8 @@ test.describe("desktop", () => {
   test("qa-company-39: Add metric explains Output and Input and the query in plain words", async ({ page }) => {
     await login(page);
     await openTab(page, "metrics");
-    await page.getByRole("button", { name: "Add metric", exact: true }).click();
+    // No metrics yet: the empty state's button is the one Add (qa-company-20).
+    await page.getByTestId("metrics-empty").filter({ visible: true }).getByRole("button", { name: "Add your first metric" }).click();
     const dialog = page.getByRole("dialog", { name: "Add metric" });
     const kindHelp = dialog.getByTestId("metric-kind-help");
     await expect(kindHelp).toContainText("An output is a result the company wants");
@@ -59,9 +60,7 @@ test.describe("desktop", () => {
     // "Sept" as a short month, not inside "September" (a title).
     await expect(page.getByTestId("updates-table")).not.toContainText(/\bSept\b/);
     await expect(page.getByTestId("updates-table")).not.toContainText(" - ");
-    await investor.getByRole("button", { name: "Actions for Investor update · September 2026" }).click();
-    await expect(page.getByRole("menuitem")).toHaveText(["Share with the whole company…"]);
-    await page.getByRole("menuitem", { name: "Share with the whole company…" }).click();
+    await investor.getByRole("button", { name: "Share Investor update · September 2026 with the whole company" }).click();
     const dialog = page.getByRole("dialog", { name: "Share with the whole company" });
     await expect(dialog.getByRole("button", { name: "Share", exact: true })).toBeVisible();
   });
@@ -75,7 +74,7 @@ test.describe("desktop", () => {
       await expect(header.getByRole("button", { name: "About Company" })).toHaveCount(1);
       tops.push((await nav(page).boundingBox())!.y);
     }
-    // Strategy has no header button; Decisions (Propose decision), Updates, Metrics and Market (Add alternative) do.
+    // Strategy, and the empty Metrics and Market (their empty states hold the Add), have no header button; Decisions and Updates do.
     for (const y of tops) expect(Math.abs(y - tops[0])).toBeLessThanOrEqual(0.5);
   });
 
@@ -143,7 +142,7 @@ test.describe("phone", () => {
     await login(page);
     for (const [key, name] of [
       ["decisions", "Propose decision"],
-      ["metrics", "Add metric"],
+      // Metrics has no header button here: with no metrics yet its empty state holds the Add (qa-company-20).
       ["updates", "New update"],
     ] as const) {
       await openTab(page, key);

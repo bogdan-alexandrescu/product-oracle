@@ -389,6 +389,34 @@ async def test_prepare_now_keeps_the_meeting_next_until_it_is_held(client, ctx, 
     assert rituals.parse_time(r["next_due_at"]) - due >= timedelta(days=6, hours=23)
 
 
+async def test_prepare_now_on_a_paused_ritual_is_its_last_pre_read(client, ctx, at):
+    """protects=qa-company-2: Prepare now on a paused ritual (no Next) makes the new
+    pre-read its Last pre-read; and qa-company-1: prepare_usd says what Prepare now would
+    spend (a summary once summaries are on Every pre-read); fails_when=Last stays empty
+    while the occurrence is ready, or no cost is given; no_claim=the screen (Playwright)."""
+    await tick(ctx.tenant_id)
+    ritual = (await rituals_of(ctx.tenant_id))["goals_checkin"]
+    resp = await client.post(f"/v1/rituals/{ritual.id}/pause", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    resp = await client.post(f"/v1/rituals/{ritual.id}/prepare", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    occ = resp.json()
+
+    def listed(rows):
+        return next(r for r in rows if r["id"] == str(ritual.id))
+
+    r = listed((await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json())
+    assert r["next_pre_read"] is None
+    assert r["last_pre_read"]["id"] == occ["id"]
+    assert r["prepare_usd"] is None
+    resp = await client.put(
+        "/v1/rituals/summaries", json={"mode": "always"}, headers=ctx.as_("owner")
+    )
+    assert resp.status_code == 200, resp.text
+    r = listed((await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json())
+    assert r["prepare_usd"] == 3.0
+
+
 async def test_pre_read_and_record_notes_rows_in_the_inbox(client, ctx, at):
     """protects=criterion 6: an attendee has a counted pre_read row while ready and
     unread; reading it turns it done and lowers needs_me by 1; after the end the owner

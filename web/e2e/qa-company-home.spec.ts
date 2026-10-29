@@ -100,7 +100,7 @@ test("in flight: the PRD's step and its sections approved are labelled apart", a
   await expect(checkout.getByTestId("row-journey")).toContainText("Step 8/9");
   const inspector = page.getByTestId("home-inspector");
   await expect(inspector.getByTestId("inspector-journey")).toContainText("step 8 of 9");
-  await expect(inspector.getByTestId("stat-sections")).toContainText("Sections approved");
+  await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
   await expect(inspector.getByTestId("stat-sections")).not.toContainText("Sections done");
 });
 

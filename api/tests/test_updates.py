@@ -408,3 +408,21 @@ async def test_another_companys_update_is_404_everywhere(client, ctx):
     assert (await client.get("/v1/documents?kind=update", headers=them)).json() == []
     resp = await client.post(f"/v1/documents/{slug}/versions/1/approve", headers=them)
     assert resp.status_code == 404
+
+
+async def test_runs_and_inbox_name_the_update_by_its_own_title(client, ctx, runtime):
+    """protects=qa-company-17: a new update's update_draft run carries the document's own
+    title ("Investor update · October 2026") in the runs list and on its Inbox checkpoint,
+    so Home and the Inbox name it as the update's page does; fails_when=document_title is
+    missing or differs (the web then shows the slug in words, "Investor update october
+    2026"); no_claim=the web's wording around it."""
+    slug = await started(client, ctx)
+    run = await drafted_by_run(client, ctx, runtime, slug, investor_md(slug))
+    owner = ctx.as_("owner")
+    runs = (await client.get("/v1/runs", headers=owner)).json()
+    row = next(r for r in runs if r["id"] == run["id"])
+    assert row["document_slug"] == slug
+    assert row["document_title"] == "Investor update · October 2026"
+    inbox = (await client.get("/v1/inbox", headers=owner)).json()
+    cps = [c for c in inbox["checkpoints"] if c["run_id"] == run["id"]]
+    assert cps and all(c["document_title"] == "Investor update · October 2026" for c in cps)

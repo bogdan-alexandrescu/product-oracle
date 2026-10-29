@@ -113,8 +113,8 @@ test("setup: Connect tools opens Connections and Back to Home shows it done", as
   await expect(panel(page).getByTestId("panel-count")).toHaveText("3 of 8");
   await expect(row(page, "connect")).toHaveAttribute("data-done", "true");
   await expect(row(page, "connect").getByTestId("setup-status")).toHaveText("1 connected");
-  // Another settings tab drops the way back.
-  await row(page, "connect").getByRole("link", { name: "Open" }).click();
+  // Another settings tab drops the way back. A done step's button says Change (qa-onboarding-37).
+  await row(page, "connect").getByRole("link", { name: "Change" }).click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-members").click();
   await expect(page).toHaveURL(/\/settings\/members$/);
   await expect(page.getByRole("link", { name: "Back to Home" })).toHaveCount(0);
@@ -148,7 +148,7 @@ test("setup: a change shows Save, a bad span shows the error, Reset reopens the 
   await newCompany(page);
   await login(page);
   await confirmHorizonsFromSetup(page);
-  await row(page, "horizons").getByRole("link", { name: "Open" }).click();
+  await row(page, "horizons").getByRole("link", { name: "Change" }).click();
   const horizons = page.locator("#horizons");
   await expect(horizons.getByRole("button", { name: "Save" })).toHaveCount(0);
   await horizons.getByLabel("From").fill("6");
@@ -260,7 +260,8 @@ test("setup: on a phone each row keeps one line and nothing scrolls sideways", a
   await newCompany(page);
   await login(page);
   await expect(panel(page)).toBeVisible();
-  const opens = panel(page).getByRole("link", { name: "Open" });
+  // Open on the six steps to do, Change on the two done (qa-onboarding-37).
+  const opens = panel(page).getByTestId("setup-action");
   await expect(opens).toHaveCount(8);
   for (const link of await opens.all()) {
     await link.scrollIntoViewIfNeeded();
