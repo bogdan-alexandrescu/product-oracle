@@ -622,7 +622,8 @@ code .date-mark {
   --simple-card-pad: 24px;
   --simple-card-radius: 18px;
   --simple-card-bg: var(--surface);
-  --simple-card-border: 0 solid transparent;
+  /* The simple-v3 mock-ups (2026-10-28 picks) draw every card with a 1 px line. */
+  --simple-card-border: 1px solid var(--line);
   --simple-card-shadow: var(--shadow);
   --simple-rail-border: 1px solid var(--line);
   /* S1 restyle (the owner's picks, 2026-10-26): the light 232 px rail, its 18 px labels and the
@@ -781,6 +782,7 @@ code .date-mark {
 }
 .simple-row:first-child {
   border-top: 0;
+  padding-top: 0;
 }
 .simple-row:not(:has(.simple-actions)) {
   grid-template-columns: auto minmax(0, 1fr);
@@ -797,6 +799,183 @@ code .date-mark {
   }
   .simple-actions {
     grid-column: 1 / -1;
+  }
+}
+/*
+ * prd-decisions (the owner's pick A "Imported as decisions", kept to the mock-up): a question
+ * row's round icon, its "PRD recommends" line and answer chips, the quiet Ask Oracle button,
+ * the "Show N more" line, the compact List | Board | By meeting switch, the filters' boxes and
+ * the run-approvals note at the page's foot. A narrow column (the Board) puts the buttons under
+ * the row, as a phone does.
+ */
+.simple-ico {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.simple-ico-done {
+  background: var(--pass-bg);
+  color: var(--pass);
+}
+.simple-rb {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.simple-meta {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text2);
+}
+.simple-meta .simple-status {
+  display: inline-block;
+  padding: 1px 10px;
+  line-height: 20px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.simple-rec {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+}
+.simple-rec-label {
+  /* With the space after it, the mock-up's 6 px. */
+  margin-right: 2px;
+  font-weight: 650;
+  color: var(--accent-ink);
+}
+.simple-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.simple-chip {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: var(--surface);
+  color: var(--accent-ink);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.simple-chip:hover {
+  background: var(--accent-soft);
+}
+.simple-chip-dashed {
+  border-style: dashed;
+  border-color: var(--line-strong);
+  color: var(--text2);
+}
+.simple-button-quiet {
+  gap: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-ink);
+}
+.simple-button-quiet:hover {
+  background: var(--accent-soft);
+}
+.simple-button[aria-pressed="true"] {
+  background: var(--surface2);
+}
+.simple-link {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 650;
+  color: var(--accent-ink);
+}
+.simple-link:hover {
+  text-decoration: underline;
+}
+.simple-more {
+  align-self: flex-start;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 650;
+  color: var(--accent-ink);
+}
+.simple-more:hover {
+  text-decoration: underline;
+}
+.simple-seg {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  padding: 4px;
+}
+.simple-seg button {
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--text2);
+  white-space: nowrap;
+}
+.simple-seg button:hover {
+  background: var(--surface2);
+}
+.simple-seg button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 650;
+}
+.simple-select {
+  min-width: 200px;
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 6px 38px 6px 10px;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--text);
+}
+.simple-plumb {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-top: 1px dashed var(--line);
+  padding-top: 14px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text2);
+}
+.simple-narrow .simple-row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.simple-narrow .simple-actions {
+  grid-column: 1 / -1;
+}
+@media (max-width: 600px) {
+  .simple-select {
+    width: 100%;
+    min-width: 0;
+  }
+  .simple-seg {
+    display: flex;
+    width: 100%;
+  }
+  .simple-seg button {
+    flex: auto;
+    padding: 6px 8px;
+    font-size: 14px;
+    text-align: center;
   }
 }
 .simple-goal-band {

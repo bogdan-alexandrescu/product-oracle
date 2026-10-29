@@ -37411,6 +37411,10 @@ export interface components {
                 [key: string]: unknown;
             }[];
             flow?: components["schemas"]["SimpleDecidedFlow"] | null;
+            /** Code */
+            code?: string | null;
+            /** Chosen */
+            chosen?: string | null;
         };
         /**
          * SimpleDecisionsOut
@@ -37450,6 +37454,8 @@ export interface components {
              * @default 0
              */
             approvals_waiting: number;
+            /** Approvals Example */
+            approvals_example?: string | null;
             /**
              * View
              * @default list
@@ -39057,6 +39063,9 @@ export interface components {
              *     }
              */
             can: components["schemas"]["SimpleQuestionCan"];
+            source?: components["schemas"]["SimpleQuestionSource"] | null;
+            /** Undo Id */
+            undo_id?: string | null;
         };
         /**
          * SimpleQuestionBlocks
@@ -39120,6 +39129,16 @@ export interface components {
             by: components["schemas"]["SimplePersonRef"];
             /** Answer */
             answer: string;
+        };
+        /**
+         * SimpleQuestionSource
+         * @description Where Oracle read the question: the PRD's approved version, and when.
+         */
+        SimpleQuestionSource: {
+            /** Version */
+            version?: number | null;
+            /** Read At */
+            read_at?: string | null;
         };
         /** SimpleResumeOut */
         SimpleResumeOut: {

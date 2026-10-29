@@ -35,7 +35,7 @@
  * meeting (409 naming it).
  */
 import type { Schemas } from "@/lib/api/client";
-import { questionsCounts, questionsOfMeeting, questionsOut, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
+import { agendaOut, decidedOutsideRows, questionsCounts, questionsOfMeeting, questionsOut, routeQuestionChanges, seedQuestions, waitingOut, type QuestionsDb } from "./simple-questions";
 import { plainFlow } from "./simple-visuals";
 import { seedSimpleProposal } from "./simple-changes";
 import { mockNowMs } from "./clock";
@@ -375,8 +375,9 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
       flow: decidedFlow(ctx, d),
     })),
     open_decisions: openDecisions(ctx, db, p),
-    // The meeting PRD's open questions, whoever decides them (questions.due_for).
-    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id).filter((q) => q.status === "proposed"),
+    // The meeting PRD's agenda (questions.due_for): the open questions blocking the soonest
+    // one's milestone, whoever decides them, and those decided in this meeting (with Undo).
+    decisions_due: questionsOut(ctx, qdb(ctx, db), p.id).length ? agendaOut(ctx, qdb(ctx, db), { id: m.id, session_id: m.session_id, live: m.status === "live" }) : [],
     pending_proposals: proposals(ctx, p),
     drafts: meetingDrafts(ctx, db, m, p),
     waiting_people: [...new Set(meetingDrafts(ctx, db, m, p).flatMap((d) => d.waiting_on))].map((i) => ref(ctx, i)),
@@ -751,13 +752,14 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
       const whole = !!prd && !goal && m.prd === prd.slug;
       return { meeting: brief(ctx, db, m), minutes: m.minutes, decisions: of(m).filter((d) => whole || keep(d)).map((d) => row(ctx, d)) };
     }),
-    other: others.map((d) => row(ctx, d)),
+    // A decided question taken outside meetings is listed here with its code and answer (open ones wait above).
+    other: [...(meetingQ ? [] : decidedOutsideRows(ctx, qd, qs)), ...others.map((d) => row(ctx, d))],
     prds: [...ps].sort((a, b) => a.title.localeCompare(b.title)).map((x) => ({ id: x.slug, title: x.title })),
     goals: [...goals.values()].sort((a, b) => a.key.localeCompare(b.key)).map((g) => ({ id: g.key, title: g.title })),
     meeting_options: ms.map((m) => ({ id: m.id, title: m.title })),
     // prd-questions: the PRD's open questions (List and Board), counts and the remembered view.
     questions: qs,
-    ...(({ waiting_count, late_count, approvals_waiting }) => ({ waiting_count, late_count, approvals_waiting }))(questionsCounts(ctx, qd, qs)),
+    ...(({ waiting_count, late_count, approvals_waiting, approvals_example }) => ({ waiting_count, late_count, approvals_waiting, approvals_example }))(questionsCounts(ctx, qd, qs)),
     view: ctx.view?.() ?? "list",
   };
   return json(200, out);

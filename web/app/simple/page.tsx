@@ -7,8 +7,9 @@ import { Avatar, Block, GoalBandSkeleton, HomeCard, HomeRow, RowIcon, SkeletonRo
 import { Walk } from "@/app/simple/_home/walk";
 import { toast } from "@/components/ds/Toast";
 import { GoalPanel, SuggestionsButton, useGoalSuggestions, type GoalBrief } from "@/components/simple/GoalSuggestions";
+import { usePhone } from "@/components/simple/FlowViews";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
-import { DueLabel, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
+import { QuestionRow, useQuestionActions, type Question } from "@/components/simple/questions/Questions";
 import { SimplePage } from "@/components/simple/SimplePage";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
@@ -82,6 +83,8 @@ export default function SimpleHome() {
     { keepPrevious: true },
   );
   const questionActions = useQuestionActions(reloadAll);
+  // A4: a phone's Home shows the soonest two decisions, a desktop's three.
+  const phone = usePhone();
   // The one list of scheduled reviews (Meetings > Upcoming): its first row is the next.
   const meeting = useQuery(k("meeting"), async () => {
     const list = await unwrap(api.GET("/v1/simple/meetings"));
@@ -373,13 +376,6 @@ export default function SimpleHome() {
           icon="flag"
           title="Decisions waiting for you"
           count={waiting.data?.count}
-          extra={
-            waiting.data && waiting.data.late > 0 ? (
-              <span data-testid="home-decisions-late" className="simple-status simple-status-risk tnum">
-                {waiting.data.late} late
-              </span>
-            ) : null
-          }
           all="/simple/decisions"
         >
           <Block q={{ ...decisions, error: waiting.error ?? decisions.error, data: waiting.data && decisions.data ? homeDecisionRows(waiting.data.questions, decisions.data) : undefined }} testId="home-decisions">
@@ -389,10 +385,10 @@ export default function SimpleHome() {
                   No decision waits on you.
                 </p>
               ) : (
-                <Top rows={rows} more="/simple/decisions">
+                <Top rows={rows} max={phone ? 2 : 3} more="/simple/decisions">
                   {(d) =>
                     "code" in d ? (
-                      <QuestionHomeRow key={d.id} q={d} actions={questionActions} />
+                      <QuestionRow key={d.id} q={d} mode="list" testId="home-question" actions={questionActions} />
                     ) : (
                       <DecisionRow key={d.id} d={d} onDecide={decide} />
                     )
@@ -634,36 +630,6 @@ function stored(i: Schemas["SimpleRoadmapItem"]) {
 /** Home's decision rows: the late questions first, then the other judgement calls, then the rest of the questions (soonest first). */
 function homeDecisionRows(questions: Question[], others: Decision[]): (Question | Decision)[] {
   return [...questions.filter((q) => q.late), ...others, ...questions.filter((q) => !q.late)];
-}
-
-/** prd-questions: a PRD's question waiting for me: its code and title, due label and what it blocks; Decide as recommended when I may. */
-function QuestionHomeRow({ q, actions }: { q: Question; actions: ReturnType<typeof useQuestionActions> }) {
-  const writes = q.can.decide || q.can.propose;
-  return (
-    <HomeRow
-      testId="home-question"
-      lead={<RowIcon name="flag" />}
-      title={`${q.code} ${q.title}`}
-      meta={
-        <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <DueLabel q={q} />
-          {q.blocks && <span>{q.blocks.label}</span>}
-          {q.recommendation && <span>PRD recommends: {q.recommendation}</span>}
-        </span>
-      }
-      actions={
-        writes && q.recommendation ? (
-          <button type="button" disabled={actions.busy} className="simple-button simple-button-primary" onClick={() => void actions.decide(q, { option: "recommended" })}>
-            {q.can.decide ? "Decide as recommended" : "Propose as recommended"}
-          </button>
-        ) : (
-          <Link href="/simple/decisions" className="simple-button">
-            Open
-          </Link>
-        )
-      }
-    />
-  );
 }
 
 /** A decision waiting for me: Decide with the proposed option, or choose another. */
