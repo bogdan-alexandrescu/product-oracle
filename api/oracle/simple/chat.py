@@ -236,6 +236,9 @@ class Reply:
         self.person_text: str | None = None
         # roadmap-talk: where an item talk's answer comes from (the message's citations).
         self.citations: list[dict[str, Any]] = []
+        # The reader saw nothing to change in the line (no action, no clarify): in a
+        # meeting a line ending in "?" is then kept for the minutes (MEETING_ASK).
+        self.no_change = False
 
 
 class Ctx:
@@ -1437,7 +1440,9 @@ def interpret(c: Ctx, answer: Any, ask_box: bool = False) -> Reply:
         return Reply("answer", said.strip()[:1500])
     if ask_box:
         return Reply("ask", "Asking Oracle…")
-    return Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
+    reply = Reply("note", f"I could not tell what to change. {SAY_AGAIN}")
+    reply.no_change = True
+    return reply
 
 
 async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
@@ -1461,12 +1466,9 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     await c.load()
     answer = await ask(READER_JOB, await _payload(c, read))
     reply = _talk().restate(c, interpret(c, answer, read.ask_box))
-    if (
-        read.meeting_id is not None
-        and reply.kind == "note"
-        and read.line.rstrip().endswith("?")
-        and reply.body == f"I could not tell what to change. {SAY_AGAIN}"
-    ):
+    if read.meeting_id is not None and reply.no_change and read.line.rstrip().endswith("?"):
+        # As the mock's question branch: only a line the reader saw nothing to change in;
+        # a change it could not build keeps its own reply.
         reply = Reply("note", MEETING_ASK)
     msg.body, msg.prompt, msg.status = reply.body, reply.kind, "complete"
     if reply.kind == "answer" and isinstance(answer, dict):

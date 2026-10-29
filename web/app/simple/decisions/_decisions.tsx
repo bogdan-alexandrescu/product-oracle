@@ -5,7 +5,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
-import { closeTransientPanel } from "@/components/hop/open-state";
 import { toast } from "@/components/ds/Toast";
 import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@/components/simple/questions/Questions";
 import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
@@ -79,15 +78,12 @@ export function SimpleDecisions() {
   };
   const actions = useQuestionActions(() => q.reload());
   const questions = d?.questions ?? [];
-  // qa-simple-decide-10: the Ask panel a row's Ask Oracle opened closes when the page is left.
-  useEffect(() => () => closeTransientPanel(), []);
   const filtered = !!(prd || goal || meeting);
   const clear = () => {
     window.history.replaceState(null, "", pathname);
   };
-  // qa-simple-decide-20: a decision listed as a meeting's open question shows there, not again under Outside meetings.
-  const inMeetings = new Set((d?.meetings ?? []).flatMap((g) => (g.minutes?.open_questions ?? []).map((x) => /^D-(\d+):/.exec(x)?.[1]).filter(Boolean)));
-  const other = (d?.other ?? []).filter((r) => !inMeetings.has(String(r.number)));
+  // qa-simple-decide-20: the API leaves out an open decision a shown meeting lists as its open question.
+  const other = d?.other ?? [];
   return (
     <SimplePage title="Decisions" lead="What waits for you, soonest first. Then every decision, beside the meeting that took it.">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -124,9 +120,9 @@ export function SimpleDecisions() {
           <Icon name="flag" size={16} stroke={1.7} />
           {/* qa-simple-decide-29: plain words, no internal terms. */}
           <span>
-            {d.approvals_waiting === 1 ? "1 approval for Oracle's own work waits" : `${d.approvals_waiting} approvals for Oracle's own work wait`} in your Inbox.{" "}
+            {d.approvals_waiting === 1 ? "1 approval for Oracle's own work waits" : `${d.approvals_waiting} approvals for Oracle's own work wait`} in your Inbox. They are not product decisions, so they are not listed or counted here.{" "}
             <Link href="/inbox" className="font-[650] text-accent-ink hover:underline">
-              Open the Inbox
+              Open the Inbox (it leaves Simple)
             </Link>
           </span>
         </p>
@@ -230,7 +226,7 @@ const COLUMNS: { key: Question["column"]; title: string }[] = [
   { key: "needs_input", title: "Needs input" },
   { key: "recommended", title: "Recommended" },
   // qa-simple-decide-21: the Board holds the PRDs' questions; decisions taken elsewhere are under By meeting.
-  { key: "decided", title: "Decided PRD questions" },
+  { key: "decided", title: "Decided questions" },
 ];
 
 /** Board: three columns by `column`, soonest first (the API's order); on a phone, one column at a time behind tabs. */

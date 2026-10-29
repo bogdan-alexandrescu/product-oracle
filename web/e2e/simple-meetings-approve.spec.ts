@@ -48,12 +48,13 @@ async function flags(context: BrowserContext, value: string) {
   await context.addInitScript(([key, v]) => localStorage.setItem(key, v), [MOCK_MEETINGS_KEY, value] as const);
 }
 
-async function startWithAnEdit(page: Page, absent?: string) {
+/** `attendee`: the one ticked besides the presenter (qa-simple-decide-35); never the reviewer a test needs absent. */
+async function startWithAnEdit(page: Page, absent?: string, attendee = "Commenter") {
   await login(page);
   await page.goto("/simple/prds/guided-setup");
   await page.getByRole("button", { name: "Start review" }).click();
   // qa-simple-decide-35: a review needs one attendee besides the presenter.
-  await page.getByRole("dialog", { name: "Start a review" }).getByRole("checkbox", { name: "Commenter" }).check();
+  await page.getByRole("dialog", { name: "Start a review" }).getByRole("checkbox", { name: attendee }).check();
   await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
   if (absent) {
@@ -127,7 +128,8 @@ for (const phone of [false, true]) {
 
       test("Approve with a required section's reviewer absent waits on that person", async ({ page, context }) => {
         await flags(context, "section-reviewer");
-        await startWithAnEdit(page);
+        // Commenter, the section's reviewer, is not in the meeting; Approver (the PRD's reviewer) is.
+        await startWithAnEdit(page, undefined, "Approver");
         await expect(page.getByTestId("approved-banner")).toHaveText(
           "Approved in Review: Guided setup · not yet published: Waiting on Commenter's approval",
         );

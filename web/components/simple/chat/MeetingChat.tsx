@@ -10,7 +10,7 @@ import { ChatThreadView, usePendingPoll } from "./ChatThread";
 
 const POLL_MS = 2000;
 // qa-simple-decide-7: the same words as the start sheet and the meeting's header.
-const MODE_WORDS: Record<ChangeMode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter plus named people" };
+const MODE_WORDS: Record<ChangeMode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter plus one or two people" };
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 
 function rulesLine(r: ChatRules): string {

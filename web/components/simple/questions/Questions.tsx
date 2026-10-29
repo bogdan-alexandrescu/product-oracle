@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { Icon } from "@/components/ds/Icon";
 import { askWith } from "@/components/hop/open-state";
@@ -166,6 +166,9 @@ export function AnotherAnswer({ q, busy, onPick }: { q: Question; busy: boolean;
   );
 }
 
+/** GET /v1/people's page size for the decider picker. */
+const DECIDERS_PAGE = 200;
+
 /** Pick a person (the members Simple's meetings list) to name as the question's decider. */
 export function PersonPicker({
   q,
@@ -181,16 +184,22 @@ export function PersonPicker({
   /** "answers": the person named gives the answer the PRD does not recommend yet (and decides it). */
   verb?: "decides" | "answers";
 }) {
-  // qa-simple-decide-9: only people whose role decides (approvers and owners) can be named.
-  const members = useQuery("simple-question-deciders", () =>
-    unwrap(api.GET("/v1/people", { params: { query: {} } })).then((rows) =>
-      rows.filter((p) => p.role === "approver" || p.role === "owner").map((p) => ({ id: p.user_id, name: p.name })),
-    ),
-  );
+  // qa-simple-decide-9: the API lists the people who may decide, page by page, however many the company has.
+  const members = useQuery("simple-question-deciders", async () => {
+    const out: { id: string; name: string }[] = [];
+    for (;;) {
+      const rows = await unwrap(api.GET("/v1/people", { params: { query: { decides: true, limit: DECIDERS_PAGE, offset: out.length } } }));
+      out.push(...rows.map((p) => ({ id: p.user_id, name: p.name })));
+      if (rows.length < DECIDERS_PAGE) return out;
+    }
+  });
+  // The picker replaces the button that opened it (qa-simple-decide-30): the focus moves into it.
+  const group = useRef<HTMLDivElement>(null);
+  useEffect(() => group.current?.focus(), []);
   return (
-    <div role="group" aria-label={`Who ${verb} ${q.code}`} data-testid="question-people" className="mt-1.5 flex flex-col">
+    <div ref={group} tabIndex={-1} role="group" aria-label={`Who ${verb} ${q.code}`} data-testid="question-people" className="mt-1.5 flex flex-col outline-none">
       <span className="simple-meta">
-        Who {verb} {q.code}? Only approvers and owners decide.
+        Who {verb} {q.code}? Only the people who may decide are listed.
       </span>
       {members.error && <span className="simple-meta text-crit">{members.error}</span>}
       {!members.data && !members.error && <span className="simple-meta">Loading people…</span>}
@@ -237,6 +246,15 @@ export function QuestionRow({
   const writes = q.can.decide || q.can.propose;
   const verb = q.can.decide ? "Decide" : "Propose";
   const toggle = (what: "answers" | "people" | "answerer") => setOpen((o) => (o === what ? null : what));
+  // Cancel in a picker gives the focus back to the button it replaced.
+  const nameRef = useRef<HTMLButtonElement>(null);
+  const askRef = useRef<HTMLButtonElement>(null);
+  const refocus = useRef<"people" | "answerer" | null>(null);
+  useEffect(() => {
+    if (!refocus.current || open) return;
+    (refocus.current === "people" ? nameRef : askRef).current?.focus();
+    refocus.current = null;
+  }, [open]);
   const done = q.column === "decided" || mode === "decided";
   const recommended = !!q.recommendation && writes && !done;
   const at = q.decided_at ? formatInZone(q.decided_at, zone, { hour: "numeric", minute: "2-digit" }) : null;
@@ -270,12 +288,12 @@ export function QuestionRow({
         )}
         {writes && another("Another answer")}
         {nameIt && open !== "people" && (
-          <button type="button" aria-expanded={false} className={`simple-button ${primary || open === "answers" ? "" : "simple-button-primary"}`} onClick={() => toggle("people")}>
+          <button type="button" ref={nameRef} className={`simple-button ${primary || open === "answers" ? "" : "simple-button-primary"}`} onClick={() => toggle("people")}>
             Name a decider
           </button>
         )}
         {askSomeone && open !== "answerer" && (
-          <button type="button" aria-expanded={false} className={`simple-button ${primary || open === "answers" ? "" : "simple-button-primary"}`} onClick={() => toggle("answerer")}>
+          <button type="button" ref={askRef} className={`simple-button ${primary || open === "answers" ? "" : "simple-button-primary"}`} onClick={() => toggle("answerer")}>
             Ask someone to answer
           </button>
         )}
@@ -342,7 +360,10 @@ export function QuestionRow({
             q={q}
             busy={busy}
             verb={open === "answerer" ? "answers" : "decides"}
-            onClose={() => setOpen(null)}
+            onClose={() => {
+              refocus.current = open === "answerer" ? "answerer" : "people";
+              setOpen(null);
+            }}
             onPick={(p) => {
               setOpen(null);
               void nameDecider(q, p);

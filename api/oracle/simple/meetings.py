@@ -39,6 +39,7 @@ Visibility: a meeting is seen by whoever reads its PRD (oracle.docs.visibility).
 """
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -1749,6 +1750,9 @@ def _row(d: Decision, names: dict) -> SimpleDecisionRow:
     )  # fmt: skip
 
 
+_OPEN_DECISION = re.compile(r"^D-(\d+):")
+
+
 async def decisions_page(
     db: AsyncSession,
     principal: Any,
@@ -1838,6 +1842,12 @@ async def decisions_page(
             decisions=[_row(d, names).model_copy(update={"flow": flows.get(d.id)})
                        for _, d in links[m.id] if whole or keep(d)],
         ))  # fmt: skip
+    # An open decision a shown meeting's minutes name as an open question ("D-12: ...")
+    # is listed there, not again outside meetings; once decided it is listed here.
+    named = {int(g.group(1)) for m in shown_ms
+             for q in (m.minutes or {}).get("open_questions") or []
+             if (g := _OPEN_DECISION.match(str(q)))}  # fmt: skip
+    others = [d for d in others if d.status == "decided" or d.number not in named]
     from oracle.simple import questions
 
     # The questions follow the filters too: the PRD's, the goal's PRDs', the meeting's.

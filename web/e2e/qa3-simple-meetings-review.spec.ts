@@ -74,6 +74,15 @@ for (const phone of [false, true]) {
       });
 
       if (phone) {
+        test("phone: the meeting scrolls as the page, with no inner scrolling layer", async ({ page }) => {
+          await startReview(page);
+          const screen = page.getByTestId("meeting-screen");
+          expect((await screen.boundingBox())!.y).toBe(0);
+          await page.getByRole("region", { name: "All decisions" }).scrollIntoViewIfNeeded();
+          expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+          expect(await screen.evaluate((el) => el.scrollTop)).toBe(0);
+        });
+
         test("phone: the meeting's buttons and chips are 44 px tall", async ({ page }) => {
           await startReview(page);
           expect(await height(page.getByRole("button", { name: "End meeting" }))).toBeGreaterThanOrEqual(44);

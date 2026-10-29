@@ -6,7 +6,7 @@ import { Suspense, useEffect, useLayoutEffect, useRef, useState, useSyncExternal
 
 import { HopPanel } from "@/components/hop/HopPanel";
 import { SIMPLE_DESTINATIONS, SimpleNavs } from "@/components/simple/SimpleShell";
-import { setPanelOpen, takeAskFocus, useAskDraft, usePanelOpen } from "@/components/hop/open-state";
+import { closeTransientPanel, setPanelOpen, takeAskFocus, useAskDraft, usePanelOpen } from "@/components/hop/open-state";
 import { api, MOCK_MODE } from "@/lib/api/client";
 import { homeOf, modeOf } from "@/lib/experience";
 import { resetMockData } from "@/lib/api/mock/server";
@@ -699,6 +699,13 @@ function HopDock() {
   const strip = useRef<HTMLButtonElement>(null);
   const drawer = useRef<HTMLDivElement>(null);
   const wasOpen = useRef(open);
+  // qa-simple-decide-10: a panel opened for one question closes when its page is left, whichever page opened it.
+  const shownOn = useRef(pathname);
+  useEffect(() => {
+    if (shownOn.current === pathname) return;
+    shownOn.current = pathname;
+    closeTransientPanel();
+  }, [pathname]);
   useEffect(() => {
     if (!shown) return;
     const onKey = (e: KeyboardEvent) => {
@@ -742,7 +749,9 @@ function HopDock() {
   // the page below 1600 px) above anything in the page that sets its own z-index.
   // The strip is 44 px and the dock's left border 1 px more: a 44 px dock would push the
   // strip 1 px past the right edge (sideways scroll).
-  const width = simple ? "w-0 min-[1600px]:w-[400px] min-[1600px]:border-l" : open ? "w-[45px] border-l min-[1600px]:w-[400px]" : "w-[45px] border-l";
+  // qa-simple-decide-10: on Simple's pages the open panel pushes the page aside at every desktop
+  // width (never over a row's buttons); elsewhere it overlays below 1600 px, beside its strip.
+  const width = simple ? "w-[400px] border-l" : open ? "w-[45px] border-l min-[1600px]:w-[400px]" : "w-[45px] border-l";
   return (
     <aside
       aria-label="Ask Oracle"
@@ -769,9 +778,11 @@ function HopDock() {
         <div
           ref={drawer}
           data-testid="hop-drawer"
-          className={`fixed inset-y-0 z-40 w-[400px] border-l border-line shadow-tip min-[1600px]:static min-[1600px]:h-full min-[1600px]:w-full min-[1600px]:max-w-none min-[1600px]:border-l-0 min-[1600px]:shadow-none ${
-            simple ? "right-0 max-w-[100vw]" : "right-11 max-w-[calc(100vw-44px)]"
-          }`}
+          className={
+            simple
+              ? "h-full w-full"
+              : "fixed inset-y-0 right-11 z-40 w-[400px] max-w-[calc(100vw-44px)] border-l border-line shadow-tip min-[1600px]:static min-[1600px]:h-full min-[1600px]:w-full min-[1600px]:max-w-none min-[1600px]:border-l-0 min-[1600px]:shadow-none"
+          }
         >
           <HopPanel onClose={() => setPanelOpen(false)} />
         </div>

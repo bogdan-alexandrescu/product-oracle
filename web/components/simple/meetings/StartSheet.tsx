@@ -50,7 +50,7 @@ export function StartSheet({
   if (!open) return null;
   return (
     // qa-simple-decide-5: a dark scrim in both themes (bg-black is the text colour, light in dark mode).
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgb(0_0_0/0.5)] sm:items-center" data-testid="start-sheet-scrim" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-hero/50 sm:items-center" data-testid="start-sheet-scrim" onClick={onClose}>
       <div
         ref={ref}
         tabIndex={-1}
@@ -161,7 +161,7 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
           {/* qa-simple-decide-14: never "Only <me> can start": the person's role is why. */}
           <p>
             {chosen.starters.some((s) => s.id === me?.user_id) || !chosen.starters.length
-              ? "Your role can't start a review: owners, and a PRD's decider who can comment, start them."
+              ? "You can't start a review of this PRD. Ask its decider to start it."
               : `Only ${chosen.starters.map((s) => s.name).join(", ")} can start this review.`}
           </p>
           {liveOne && <Button variant="primary" onClick={() => router.push(`/simple/meetings/${liveOne.id}`)}>Join</Button>}
@@ -188,7 +188,7 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
           </fieldset>
           <fieldset>
             <legend className="font-semibold">Who changes things in the chat</legend>
-            {([["everyone", "Everyone"], ["presenter", "Only the presenter"], ["named", "Presenter plus named people"]] as const).map(([v, label]) => (
+            {([["everyone", "Everyone"], ["presenter", "Only the presenter"], ["named", "Presenter plus one or two people"]] as const).map(([v, label]) => (
               <label key={v} className="flex items-center gap-2">
                 <input type="radio" className={CHECK} name="change-mode" checked={mode === v} onChange={() => setMode(v)} />
                 {label}

@@ -65,10 +65,11 @@ export function usePanelOpen(): boolean {
 export function askWith(text: string) {
   draft = text;
   draftListeners.forEach((l) => l());
-  setPanelOpen(true, false);
+  // A panel the person had open on purpose stays remembered; one opened only for these words is not.
+  setPanelOpen(true, read() && !transient);
 }
 
-/** Leaving the page that opened the panel for one question (Simple's Ask Oracle) closes it. */
+/** Leaving the page that opened the panel for one question (Simple's Ask Oracle, a goal's Suggest) closes it (the shell, on every page change). */
 export function closeTransientPanel() {
   if (transient && read()) setPanelOpen(false);
 }

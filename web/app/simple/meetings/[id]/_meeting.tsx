@@ -24,8 +24,10 @@ type Mode = Meeting["change_mode"];
 
 const STEPS = ["One-pager", "Roadmap", "Decisions"] as const;
 // qa-simple-decide-7: one wording everywhere (the start sheet, this header, the chat's rules line).
-const MODE_WORDS: Record<Mode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter plus named people" };
-const cap = (h: string) => h[0]!.toUpperCase() + h.slice(1);
+const MODE_WORDS: Record<Mode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter plus one or two people" };
+/** qa-simple-decide-48: a 44 px target on a phone. */
+const PHONE_TAP = "max-[600px]:min-h-11";
+const cap = (h: string) => (h ? h[0]!.toUpperCase() + h.slice(1) : h);
 /** qa-simple-decide-17: a calendar day ("2026-11-05") as "Thu Nov 5". */
 const dayWords = (day: string) => `${calendarDay(day, { weekday: "short" })} ${calendarDay(day)}`;
 
@@ -65,7 +67,8 @@ export function MeetingScreen({ id }: { id: string }) {
   if (q.error || !q.data) return <div className="px-6 py-8"><ErrorNote>{q.error ?? "Not found"}</ErrorNote></div>;
   return (
     // qa-simple-decide-40: a stable gutter, so the header does not shift when a step is taller than the screen.
-    <div className="fixed inset-0 z-40 overflow-auto bg-bg text-[length:var(--simple-body)] text-text [scrollbar-gutter:stable]" data-testid="meeting-screen">
+    // qa-simple-decide-48: on a phone the page itself scrolls (no inner scrolling layer), still over the shell.
+    <div className="fixed inset-0 z-40 overflow-auto max-[600px]:absolute max-[600px]:bottom-auto max-[600px]:z-50 max-[600px]:min-h-dvh max-[600px]:overflow-visible bg-bg text-[length:var(--simple-body)] text-text [scrollbar-gutter:stable]" data-testid="meeting-screen">
       {q.data.status === "ended" ? <EndScreen m={q.data} reload={q.reload} /> : <LiveScreen m={q.data} reload={q.reload} />}
     </div>
   );
@@ -113,10 +116,13 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const { me, can } = useMe();
   const joined = m.attendees.some((a) => a.id === me?.user_id);
   // qa-simple-decide-2: Approve says what it approves (the one-pager's edits in this meeting); none: no button.
-  const edits = m.drafts.filter((d) => !d.decider_approved).reduce((n, d) => n + d.changes, 0);
+  // Approve approves every draft the meeting worked on: the label names them all.
+  const toApprove = m.drafts.filter((d) => !d.decider_approved && d.changes > 0);
+  const edits = toApprove.reduce((n, d) => n + d.changes, 0);
+  const approveLabel = toApprove.every((d) => d.document.id === m.prd.id) ? `Approve one-pager edits (${edits})` : `Approve edits to ${toApprove.map((d) => d.document.title).join(", ")} (${edits})`;
   // qa-simple-decide-1: ending closes the meeting for everyone: ask first.
   const end = async () => {
-    const yes = await confirmInPage({ action: "End meeting", message: "End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more." });
+    const yes = await confirmInPage({ action: "End meeting", message: "End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more.", destructive: true });
     if (yes) await act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/end", path)));
   };
   // qa-simple-decide-42: a change applied in the chat shows at once in the stage and All decisions (read now and once the chat has settled).
@@ -147,10 +153,11 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           {clock(now - Date.parse(m.started_at))} / {m.length_min}:00
         </span>
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          {!joined && can("join_simple_meeting") && <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/join", path)))}>Join</Button>}
+          {!joined && can("join_simple_meeting") && <Button variant="primary" className={PHONE_TAP} disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/join", path)))}>Join</Button>}
           {m.can.approve && edits > 0 && (
             <Button
               variant="primary"
+              className={PHONE_TAP}
               disabled={busy}
               onClick={() =>
                 act(async () => {
@@ -159,10 +166,10 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                 })
               }
             >
-              Approve one-pager edits ({edits})
+              {approveLabel}
             </Button>
           )}
-          {m.can.end && <Button className="!h-10 !rounded-button !px-4 !text-[15px]" disabled={busy} onClick={() => void end()}>End meeting</Button>}
+          {m.can.end && <Button className={PHONE_TAP} disabled={busy} onClick={() => void end()}>End meeting</Button>}
         </div>
       </header>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border px-4 py-2 text-base">
@@ -176,6 +183,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                   aria-pressed={a.present}
                   disabled={busy}
                   aria-label={`${a.name} is here`}
+                  className="flex items-center max-[600px]:min-h-11"
                   title={a.present ? "Here: press to mark absent" : "Absent: press to mark here"}
                   onClick={() => rules({ absent_ids: a.present ? [...absent, a.id] : absent.filter((x) => x !== a.id) })}
                 >
@@ -367,16 +375,16 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
             </span>
             {/* qa-simple-decide-45: a cut item comes back with Restore. */}
             {m.can.change && i.status === "cut" && (
-              <Button disabled={busy} aria-label={`Restore ${i.title}`} onClick={() => change({ op: "restore", target: { item_id: i.id }, before: { cut: true }, after: {} })}>Restore</Button>
+              <Button className={PHONE_TAP} disabled={busy} aria-label={`Restore ${i.title}`} onClick={() => change({ op: "restore", target: { item_id: i.id }, before: { cut: true }, after: {} })}>Restore</Button>
             )}
             {m.can.change && i.status !== "cut" && (
               <span className="flex flex-wrap gap-2">
                 {HORIZONS.filter((h) => h !== i.horizon).map((h) => (
-                  <Button key={h} disabled={busy} aria-label={`Move ${i.title} to ${h[0].toUpperCase() + h.slice(1)}`} onClick={() => change({ op: "change_horizon", target: { item_id: i.id }, before: { horizon: i.horizon }, after: { horizon: h } })}>
+                  <Button key={h} className={PHONE_TAP} disabled={busy} aria-label={`Move ${i.title} to ${h[0].toUpperCase() + h.slice(1)}`} onClick={() => change({ op: "change_horizon", target: { item_id: i.id }, before: { horizon: i.horizon }, after: { horizon: h } })}>
                     Move to {h[0].toUpperCase() + h.slice(1)}
                   </Button>
                 ))}
-                <Button disabled={busy} aria-label={`Cut ${i.title}`} onClick={() => change({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: {} })}>Cut</Button>
+                <Button className={PHONE_TAP} disabled={busy} aria-label={`Cut ${i.title}`} onClick={() => change({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: {} })}>Cut</Button>
               </span>
             )}
           </li>
@@ -396,7 +404,7 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
   };
   const proposalWords = (c: Meeting["pending_proposals"][number]) => {
     const t = itemTitle(c);
-    if (c.op === "change_horizon") return `move ${t ?? "an item"} to ${cap(String(c.after.horizon ?? ""))}`;
+    if (c.op === "change_horizon") return c.after.horizon ? `move ${t ?? "an item"} to ${cap(String(c.after.horizon))}` : `move ${t ?? "an item"}`;
     if (c.op === "cut") return `cut ${t ?? "an item"}`;
     if (c.op === "restore") return `restore ${t ?? "an item"}`;
     const w = opWords(c.op);
@@ -530,10 +538,17 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
       toast({ message: "Minutes saved" });
     });
   };
-  const send = () => act(async () => {
+  const send = () => {
+    // qa-simple-decide-46: Send keeps an action item with no words too: it says so first.
+    if (actions.some((a) => !a.title.trim())) {
+      setEmptyItem(true);
+      return;
+    }
+    return act(async () => {
     if (dirty) await unwrap(api.PUT("/v1/simple/meetings/{meeting_id}/minutes", { ...path, body: minutesIn() }));
     await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/send", { ...path, body: { email, slack } }));
-  });
+    });
+  };
   const edit = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
     setDirty(true);
@@ -584,15 +599,15 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                       <option value="">Who?</option>
                       {m.attendees.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </SimpleSelect>
-                    <input type="date" aria-label={`Due date of action item ${i + 1}`} value={a.due_date} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, due_date: e.target.value } : x)))} className="h-10 rounded-[8px] border border-line-strong bg-surface px-2 text-text [color-scheme:light_dark]" />
-                    <button type="button" className="simple-button" aria-label={`Remove action item ${i + 1}`} onClick={() => edit(setActions)(actions.filter((_, j) => j !== i))}>
+                    <input type="date" aria-label={`Due date of action item ${i + 1}`} value={a.due_date} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, due_date: e.target.value } : x)))} className="h-10 rounded-button border border-line-strong bg-surface px-2 text-text [color-scheme:light_dark]" />
+                    <button type="button" className={`simple-button ${PHONE_TAP} max-[600px]:min-w-11`} aria-label={`Remove action item ${i + 1}`} onClick={() => edit(setActions)(actions.filter((_, j) => j !== i))}>
                       ×
                     </button>
                   </div>
                 ))}
                 <Button onClick={() => edit(setActions)([...actions, { title: "", owner_id: "", due_date: "" }])}>Add action item</Button>
               </fieldset>
-              {emptyItem && <p role="alert" className="simple-small text-crit">Type what the action item is, or remove it.</p>}
+              {emptyItem && actions.some((a) => !a.title.trim()) && <p role="alert" className="simple-small text-crit">Type what the action item is, or remove it.</p>}
               <div className="flex flex-wrap items-center gap-3">
                 <button type="button" className="simple-button simple-button-primary" disabled={busy || !dirty} onClick={() => void save()}>
                   Save minutes
@@ -655,15 +670,6 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
               </p>
             )}
           </section>
-          <section aria-label="From the meeting" className="simple-card space-y-1">
-            <h2 className="simple-h2">From the meeting</h2>
-            <p>
-              <Link className="text-accent-ink hover:underline" href={`/simple/meetings/${m.id}/chat?session=${m.session_id}`}>Read the meeting chat</Link>
-            </p>
-            <p>
-              <Link className="text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>Its decisions and open questions</Link>
-            </p>
-          </section>
           <section aria-label="Delivery" className="simple-card space-y-2">
             <h2 className="simple-h2">Delivery</h2>
             {m.minutes_state === "sent" && d ? (
@@ -708,7 +714,7 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
 
 /** qa-simple-decide-47: a delivery's state in plain words. */
 function deliveryWords(status: string): string {
-  return ({ queued: "on its way", sent: "sent", delivered: "sent", posted: "posted", failed: "could not be sent", not_sent: "not sent: no sender is set up" } as Record<string, string>)[status] ?? status;
+  return ({ queued: "on its way", sent: "sent", delivered: "sent", posted: "posted", failed: "could not be sent", not_sent: "not sent: no sender is set up" } as Record<string, string>)[status] ?? "not known yet";
 }
 
 /** The agenda shows this many questions before "N more: <codes>". */

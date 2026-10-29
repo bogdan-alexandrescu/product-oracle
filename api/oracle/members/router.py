@@ -14,7 +14,7 @@ from sqlalchemy import func, select
 
 from oracle import audit
 from oracle.auth.deps import Principal, TenantDB, same_origin
-from oracle.auth.models import Role, User
+from oracle.auth.models import ROLES, Role, User
 from oracle.authz import has_role, not_for_runs, require_role
 from oracle.config import get_settings
 from oracle.connections.router import ProviderHttp
@@ -477,15 +477,20 @@ async def list_people(
     q: Annotated[str | None, Query(max_length=200)] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 20,
     ids: Annotated[list[uuid.UUID] | None, Query(max_length=100)] = None,
+    decides: bool = False,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[PersonOut]:
     """The company's active members for a person picker, matched on email (``q``):
     each one's name (from their email), email, role and whether they can write
     (commenter or above: answer, comment, be asked). Disabled members are not listed;
-    the full member list (``GET /v1/members``) stays the owner's.
+    the full member list (``GET /v1/members``) stays the owner's. ``decides`` lists only
+    the members whose role may decide a PRD question (approvers and owners). The list
+    is ordered by email and paged with ``limit`` and ``offset``.
 
     ``ids`` names people instead ("Waiting on <name>", "Answered by <name>"): the
     company's members with those ids, however many the company has, a disabled one too
-    (it keeps its name and cannot write); ``q`` and ``limit`` do not apply."""
+    (it keeps its name and cannot write); ``q``, ``decides``, ``limit`` and ``offset`` do
+    not apply."""
     if ids:
         stmt = select(User).where(User.id.in_(ids))
     else:
@@ -496,7 +501,9 @@ async def list_people(
                 func.lower(User.email).contains(needle, autoescape=True)
                 | func.lower(func.coalesce(User.name, "")).contains(needle, autoescape=True)
             )
-        stmt = stmt.limit(limit)
+        if decides:
+            stmt = stmt.where(User.role.in_([r for r in ROLES if has_role(r, "approver")]))
+        stmt = stmt.offset(offset).limit(limit)
     rows = (await db.scalars(stmt.order_by(User.email))).all()
     return [
         PersonOut(
