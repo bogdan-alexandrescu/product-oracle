@@ -85,6 +85,31 @@ const sameHorizon = (a: Horizon, b: Horizon) => a === b;
 
 const time = (at: string) => shownDay(at, { hour: "numeric", minute: "2-digit" });
 
+/** The Gantt's legend (roadmap-milestones D), naming only what the chart draws. */
+function ganttLegend(data: Roadmap, noWork: { start: string; end: string; label?: string | null }[], pulled: number): string {
+  const parts: string[] = [];
+  const dated = (i: Item) => i.slices.filter((x) => x.start_date && x.end_date);
+  const split = data.items.find((i) => dated(i).length > 1);
+  if (split) {
+    const codes = dated(split).map((x) => x.code);
+    parts.push(`One bar per slice (${codes.slice(0, 2).join(", ")}${codes.length > 2 ? ", …" : " …"}), dated by the PRD's order inside each milestone`);
+  }
+  if (data.milestones.some((m) => m.start_date && m.end_date)) parts.push("diamond and dashed line: a milestone ends");
+  if (noWork.length) parts.push(`grey columns: ${noWork.map((h) => h.label || `${shortDay(h.start)} – ${shortDay(h.end)}`).join(", ")}`);
+  if (data.items.some((i) => dated(i).some((x) => x.pm_owned || x.effort_weeks == null))) parts.push("dashed outline: PM-owned");
+  if (pulled) parts.push("amber: pulled in, pending");
+  const plain = data.items.filter((i) => !dated(i).length && !closedItem(i));
+  if (plain.some((i) => !i.draft && !i.estimated)) parts.push("solid: dated");
+  if (plain.some((i) => !i.draft && i.estimated)) parts.push("hatched: estimated (the horizon’s window)");
+  if (plain.some((i) => i.draft)) parts.push("dashed: draft");
+  if (data.items.some((i) => i.suggestion)) parts.push("dotted outline: Oracle’s date suggestion (? opens it)");
+  if (data.milestones.some((m) => m.date && !(m.start_date && m.end_date))) parts.push("small amber diamond: a track’s milestone");
+  if (data.key_dates?.length) parts.push("diamond and thin line: a key date");
+  if (data.items.some((i) => broken(i).length)) parts.push("red outline: a broken link");
+  parts.push("red line: today");
+  return parts.join(" · ");
+}
+
 /** The goal counters (each goal's metric line): items, and how many need a decision. S7:
  * each goal's suggested features open its panel; a goal with no items yet has its own tile. */
 function GoalCounters({ items, suggestions, onGoal }: { items: Item[]; suggestions: GoalSuggestionsApi; onGoal: (g: GoalBrief) => void }) {
@@ -103,7 +128,7 @@ function GoalCounters({ items, suggestions, onGoal }: { items: Item[]; suggestio
   const open = (id: string, title: string) => {
     const g = known(id);
     return g ? (
-      <button type="button" data-testid="goal-counter-suggestions" onClick={() => onGoal(g)} className="mt-1 text-sm font-semibold text-accent-ink hover:underline">
+      <button type="button" data-testid="goal-counter-suggestions" onClick={() => onGoal(g)} className="text-sm font-semibold text-accent-ink hover:underline">
         ✦ {count(id)} suggested {count(id) === 1 ? "feature" : "features"}
         <span className="sr-only"> for {title}</span>
       </button>
@@ -115,7 +140,7 @@ function GoalCounters({ items, suggestions, onGoal }: { items: Item[]; suggestio
         <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
           <p className="truncate text-[15px] font-semibold">{g.title}</p>
           <p className="truncate text-sm text-text2">{g.metric ?? "No metric yet"}</p>
-          <p className="mt-1 text-sm">
+          <p className="mt-0.5 text-sm">
             <b className="tnum">{g.items}</b> items
             {g.broken > 0 && (
               <span className="text-crit">
@@ -142,7 +167,8 @@ function Select({ label, value, options, onChange, all = "All", testId }: { labe
   return (
     <label className="flex items-center gap-1.5 text-sm text-text2">
       {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} className="h-8 max-w-[11rem] rounded-lg border border-line-strong bg-surface px-2 text-sm text-text">
+      {/* D1: as wide as its choice ("All"), so the filters sit on one line. */}
+      <select value={value} onChange={(e) => onChange(e.target.value)} data-testid={testId} className="h-8 max-w-[11rem] rounded-lg border border-line-strong bg-surface px-2 text-sm text-text [field-sizing:content]">
         <option value="">{all}</option>
         {options.map(([v, t]) => (
           <option key={v} value={v}>
@@ -398,6 +424,8 @@ export function SimpleRoadmap() {
   const [keyDates, setKeyDates] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [starting, setStarting] = useState(false);
+  // D3: on a phone, the milestone whose end the weeks hide to the right ("Swipe sideways for M3").
+  const [offscreen, setOffscreen] = useState<string | null>(null);
   const wrap = useRef<HTMLDivElement>(null);
   const svg = useRef<SVGSVGElement | null>(null);
 
@@ -730,12 +758,117 @@ export function SimpleRoadmap() {
   for (const s of suggestions.data?.suggestions ?? []) goalCounts.set(s.goal.id, (goalCounts.get(s.goal.id) ?? 0) + 1);
   const openGoal = (id: string, title: string) => setGoalPanel(suggestions.data?.goals.find((g) => g.goal.id === id)?.goal ?? { id, key: id, title });
 
+  // D: the items a change waiting for its decider pulls into another horizon ("pending").
+  const pulledIn = new Set(allProposals.filter((c) => c.op === "change_horizon" && c.target.item_id).map((c) => String(c.target.item_id)));
+  // roadmap-milestones D: the header's actions (D1: on the header's right, wrapping under the switch).
+  const actions = (
+    <div className={`flex flex-wrap items-center gap-2 ${phone ? "" : "ml-auto justify-end"}`} data-testid="roadmap-actions">
+      {phone && canChange && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
+      {decides && (
+        <Button data-testid="needs-decision" onClick={() => setTray(true)} className={waiting ? "border-warn" : ""}>
+          Needs a decision · {waiting}
+        </Button>
+      )}
+      <Button
+        data-testid="key-dates-open"
+        aria-expanded={keyDates}
+        onClick={() => {
+          setCard(null);
+          setPop(null);
+          setKeyDates(!keyDates);
+        }}
+      >
+        Key dates · {data.key_dates?.length ?? 0}
+      </Button>
+      <Button onClick={() => setStarting(true)}>Start review</Button>
+      <Button disabled={exporting} onClick={() => void doExport("png")}>
+        Export PNG
+      </Button>
+      <Button disabled={exporting} onClick={() => void doExport("pdf")}>
+        Export PDF
+      </Button>
+    </div>
+  );
+  const scaleSwitch = (
+    <SegmentedControl<GanttUnit>
+      label="Gantt scale"
+      size="sm"
+      value={unit}
+      onChange={setUnit}
+      items={[
+        { value: "day", label: "Day", testId: "unit-day" },
+        { value: "week", label: "Week", testId: "unit-week" },
+      ]}
+    />
+  );
+  // D1: PRD, Goal, Track, From, To, Group by and the Gantt's scale on one line (each select as wide as its choice).
+  const filters = (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
+      {readable.length > 1 && (
+        <Select label="Roadmap" all="All roadmaps" testId="filter-roadmap" value={data.roadmap?.id ?? ""} options={readable.map((r) => [r.roadmap.id, r.roadmap.title])} onChange={pickRoadmap} />
+      )}
+      <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => pickFilter("prd", prd)} />
+      <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => pickFilter("goal", goal)} />
+      <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
+      <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setF({ ...f, from })} />
+      <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setF({ ...f, to })} />
+      <span className="flex items-center gap-1.5 text-sm text-text2">
+        Group by
+        <SegmentedControl<Lane>
+          label="Group by"
+          size="sm"
+          value={f.group}
+          onChange={(group) => setF({ ...f, group })}
+          items={[
+            { value: "goal", label: "Goal", testId: "group-goal" },
+            { value: "track", label: "Track", testId: "group-track" },
+            { value: "prd", label: "PRD", testId: "group-prd" },
+            { value: "milestone", label: "Milestone", testId: "group-milestone" },
+          ]}
+        />
+      </span>
+      {format === "gantt" && !phone && (
+        <span className="flex items-center gap-1.5 text-sm text-text2">
+          Gantt scale
+          {scaleSwitch}
+        </span>
+      )}
+    </div>
+  );
+  const goalCounters = <GoalCounters items={data.items} suggestions={suggestions} onGoal={setGoalPanel} />;
+  const draftBanner = (
+    <DraftBanner
+      drafts={drafts.data ?? []}
+      inReview={data.changes_in_review ?? 0}
+      meId={me?.user_id ?? null}
+      onUndo={(id) =>
+        void undo(id).then(
+          () => {
+            toast({ message: "Undone" });
+            return reload();
+          },
+          (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
+        )
+      }
+      onSubmit={async (ds) => {
+        for (const d of ds) {
+          const r = await api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: d.id } } });
+          if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
+        }
+        toast({ message: "Sent for review: the approved roadmap stays published until it passes" });
+        await reload();
+      }}
+    />
+  );
+
   return (
-    <div className="simple-mode space-y-3 px-4 py-4 min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
-      <header className="relative flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Roadmap</h1>
+    // A phone's page ends clear of the tab bar (its filters come last, D3).
+    <div className="simple-mode space-y-3 px-4 py-4 max-[600px]:pb-[calc(var(--phone-tab-bar)+16px)] min-[641px]:px-6" data-testid="simple-roadmap" data-phone={phone ? "true" : "false"}>
+      <header className={`relative flex flex-wrap items-center ${phone ? "gap-2" : "gap-3"}`}>
+        {/* A phone's header bar names the page (D3): the H1 is for screen readers there. */}
+        <h1 className={phone ? "sr-only" : "text-2xl font-semibold"}>Roadmap</h1>
         {data.roadmap ? (
-          <span data-testid="roadmap-scope" className="rounded-full bg-accent-soft px-3 py-0.5 text-[15px] font-semibold text-accent-ink">
+          <span data-testid="roadmap-scope" className="rounded-full bg-accent-soft px-3 py-0.5 text-[15px] font-semibold whitespace-nowrap text-accent-ink">
             {data.roadmap.title}
           </span>
         ) : (
@@ -745,7 +878,7 @@ export function SimpleRoadmap() {
             </span>
           )
         )}
-        <div className={phone ? "order-last w-full" : ""} data-testid="format-switch">
+        <div className={phone ? "w-full" : ""} data-testid="format-switch">
           <SegmentedControl<Format>
             label="Format"
             size="sm"
@@ -764,96 +897,27 @@ export function SimpleRoadmap() {
             ]}
           />
         </div>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {phone && canChange && <QuickAdd phone options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
-          {decides && (
-            <Button data-testid="needs-decision" onClick={() => setTray(true)} className={waiting ? "border-warn" : ""}>
-              Needs a decision · {waiting}
-            </Button>
-          )}
-          <Button
-            data-testid="key-dates-open"
-            aria-expanded={keyDates}
-            onClick={() => {
-              setCard(null);
-              setPop(null);
-              setKeyDates(!keyDates);
-            }}
-          >
-            Key dates · {data.key_dates?.length ?? 0}
-          </Button>
-          <Button onClick={() => setStarting(true)}>Start review</Button>
-          <Button disabled={exporting} onClick={() => void doExport("png")}>
-            Export PNG
-          </Button>
-          <Button disabled={exporting} onClick={() => void doExport("pdf")}>
-            Export PDF
-          </Button>
-        </div>
+        {!phone && actions}
         {keyDates && <KeyDatesEditor key={data.roadmap?.id ?? "all"} data={data} act={act} mayChange={canChange} phone={phone} onClose={() => setKeyDates(false)} />}
       </header>
       <p role="status" aria-live="polite" className="sr-only" data-testid="key-pending">
         {said}
       </p>
+      {/* D3: a phone's Gantt shows its scale, and which milestone the weeks hide, over the chart. */}
+      {phone && format === "gantt" && (
+        <div className="flex flex-wrap items-center gap-2 text-[13px] text-text2" data-testid="phone-scale">
+          <span className="flex items-center gap-1.5">
+            Scale
+            {scaleSwitch}
+          </span>
+          {offscreen && <span data-testid="swipe-hint">Swipe sideways for {offscreen}</span>}
+        </div>
+      )}
       {!phone && canChange && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
-      <GoalCounters items={data.items} suggestions={suggestions} onGoal={setGoalPanel} />
+      {!phone && goalCounters}
       <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" />
-      <DraftBanner
-        drafts={drafts.data ?? []}
-        inReview={data.changes_in_review ?? 0}
-        meId={me?.user_id ?? null}
-        onUndo={(id) =>
-          void undo(id).then(
-            () => {
-              toast({ message: "Undone" });
-              return reload();
-            },
-            (e) => toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not undo it" }),
-          )
-        }
-        onSubmit={async (ds) => {
-          for (const d of ds) {
-            const r = await api.POST("/v1/simple/drafts/{draft_id}/submit", { params: { path: { draft_id: d.id } } });
-            if (!r.data) toast({ message: `${d.document.title} could not be sent for review` });
-          }
-          toast({ message: "Sent for review: the approved roadmap stays published until it passes" });
-          await reload();
-        }}
-      />
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-testid="filters">
-        {readable.length > 1 && (
-          <Select label="Roadmap" all="All roadmaps" testId="filter-roadmap" value={data.roadmap?.id ?? ""} options={readable.map((r) => [r.roadmap.id, r.roadmap.title])} onChange={pickRoadmap} />
-        )}
-        <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => pickFilter("prd", prd)} />
-        <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => pickFilter("goal", goal)} />
-        <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
-        <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setF({ ...f, from })} />
-        <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setF({ ...f, to })} />
-        <SegmentedControl<Lane>
-          label="Group by"
-          size="sm"
-          value={f.group}
-          onChange={(group) => setF({ ...f, group })}
-          items={[
-            { value: "goal", label: "Goal", testId: "group-goal" },
-            { value: "milestone", label: "Milestone", testId: "group-milestone" },
-            { value: "track", label: "Track", testId: "group-track" },
-            { value: "prd", label: "PRD", testId: "group-prd" },
-          ]}
-        />
-        {format === "gantt" && (
-          <SegmentedControl<GanttUnit>
-            label="Gantt scale"
-            size="sm"
-            value={unit}
-            onChange={setUnit}
-            items={[
-              { value: "day", label: "Day", testId: "unit-day" },
-              { value: "week", label: "Week", testId: "unit-week" },
-            ]}
-          />
-        )}
-      </div>
+      {draftBanner}
+      {!phone && filters}
       <div ref={wrap} className="relative">
         {format === "board" ? (
           <Board
@@ -890,8 +954,8 @@ export function SimpleRoadmap() {
               svg.current = el;
             }}
             dropTargets={canChange}
-            goalSuggestions={goalCounts}
-            onGoal={openGoal}
+            onOffscreen={setOffscreen}
+            pulled={pulledIn}
             onOpen={(item) => {
               setPop(null);
               setCard({ id: item.id, ...anchorOf(item.id) });
@@ -965,11 +1029,20 @@ export function SimpleRoadmap() {
         <p className="text-sm text-text2" data-testid="legend">
           Drag a card to another column{phone ? " (press and hold first)" : ""} to change its horizon · hatched dates: estimated (the horizon&rsquo;s window) · dashed: draft · red: a broken link
         </p>
+      ) : format === "gantt" ? (
+        <p className="text-sm text-text2" data-testid="legend">
+          {ganttLegend(laned ?? data, noWork, pulledIn.size)}
+        </p>
       ) : (
         <p className="text-sm text-text2" data-testid="legend">
-          Solid: dated · hatched: estimated (the horizon&rsquo;s window) · dashed: draft · dotted outline: Oracle&rsquo;s date suggestion (? opens it) · diamond: a milestone · diamond and thin line: a key date · red: a broken link
+          Solid: dated · hatched: estimated (the horizon&rsquo;s window) · dashed: draft · dotted outline: Oracle&rsquo;s date suggestion (? opens it) ·{" "}
+          {data.milestones.some((m) => m.start_date && m.end_date) && "flag and dashed line: a milestone ends · "}diamond: a milestone · diamond and thin line: a key date · red: a broken link
         </p>
       )}
+      {/* D3: on a phone the chart comes first; the actions, the goals and the filters follow it. */}
+      {phone && actions}
+      {phone && goalCounters}
+      {phone && filters}
       {tray && (
         <DecisionTray
           items={data.items}
