@@ -94,6 +94,9 @@ NEITHER: dict[str, Any] = {"label": "Neither", "op": None, "args": {}}
 READING = "Reading that…"
 COULD_NOT_READ = "I couldn't read that just now."
 SAY_AGAIN = "Say it another way."
+# qa-simple-decide-3: a question in a meeting's chat is kept for the minutes' open questions
+# (minutes.Record.questions); Ask Oracle answers it.
+MEETING_ASK = "Kept as a question for the minutes. For an answer now, use Ask Oracle."
 QUOTE = r"[\"'“‘](.+?)[\"'”’]"
 DAY = r"(\d{4}-\d{2}-\d{2}|[a-z]+ \d{1,2})"
 
@@ -1458,6 +1461,9 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     await c.load()
     answer = await ask(READER_JOB, await _payload(c, read))
     reply = _talk().restate(c, interpret(c, answer, read.ask_box))
+    if read.meeting_id is not None and reply.kind == "note" and read.line.rstrip().endswith("?") \
+            and reply.body == f"I could not tell what to change. {SAY_AGAIN}":
+        reply = Reply("note", MEETING_ASK)
     msg.body, msg.prompt, msg.status = reply.body, reply.kind, "complete"
     if reply.kind == "answer" and isinstance(answer, dict):
         msg.citations = _talk().source_of(c, answer.get("source"))
