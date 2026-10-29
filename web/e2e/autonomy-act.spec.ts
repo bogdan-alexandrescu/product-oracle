@@ -124,9 +124,9 @@ test("autonomy: at Act Oracle saves a run's order within the limits and tells it
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await page.getByTestId("checkpoint-feature_set").filter({ hasText: "Waiting" }).getByRole("button", { name: "Approve and continue" }).click();
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
 
   // No stop: the order is saved and the PRD draft runs.
   await expect(page.getByTestId("segment-prd_draft").getByTestId("segment-state")).toHaveText("Running");
@@ -135,7 +135,7 @@ test("autonomy: at Act Oracle saves a run's order within the limits and tells it
   await expect(decisions.filter({ hasText: "Priority order" })).toHaveText(
     "Priority order · skipped · note: Oracle saved this order: Order priorities is set to Act within limits.",
   );
-  await expect(page.getByRole("button", { name: "Check agents now" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh progress" })).toBeVisible();
 
   await rail(page).getByRole("link", { name: "Inbox" }).click();
   const did = page.getByRole("link", { name: /^Saved the priority order of .+, within one goal and your limit$/ });

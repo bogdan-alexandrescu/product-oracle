@@ -123,7 +123,8 @@ function AnswerBubble({ answer, people, me }: { answer: Card["answers"][number];
       <div className="min-w-0 flex-1 rounded-panel rounded-tl-sm border border-line bg-accent-soft/40 px-3 py-2">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-text2">
           <span className="font-semibold text-text">{who}</span>
-          <time dateTime={answer.created_at} title={when(answer.created_at)}>
+          {/* rirs-28: the day reads at full contrast on the tinted bubble, light and dark. */}
+          <time dateTime={answer.created_at} title={when(answer.created_at)} className="text-text">
             {dayMonth(answer.created_at)}
           </time>
           <Chip kind={kind}>{knowledgeLabel(answer, mine, who)}</Chip>
@@ -372,7 +373,7 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
   const sizes = preview && (n === 0 || preview.held) ? undefined : (
     <span data-testid="batch-size" className="inline-flex items-center gap-1.5 text-sm text-text2">
       <span aria-hidden>Ask</span>
-      <SegmentedControl label={`Ask ${size} at a time`} size="sm" items={SIZES.map((v) => ({ value: v, label: v }))} value={size} onChange={setSize} />
+      <SegmentedControl label={`Ask ${size} at a time`} size="sm" items={SIZES.map((v) => ({ value: v, label: v, ariaLabel: `Ask ${v} questions at a time` }))} value={size} onChange={setSize} />
       <span aria-hidden>at a time</span>
     </span>
   );
@@ -399,9 +400,12 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
                     {c.question.prompt}
                   </span>
                   {c.gap?.importance === "critical" && <Chip kind="crit">Critical</Chip>}
+                  {/* rirs-31: the drop-down says what it picks. */}
+                  <label className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-[13px] text-text2">
+                    <span aria-hidden>Who answers</span>
                   <select
                     aria-label={`Who answers: ${c.question.prompt}`}
-                    className={`${SELECT} max-w-full`}
+                    className={`${SELECT} max-w-full min-w-0`}
                     value={chosen[c.question.id] ?? c.question.asked_to ?? ""}
                     onChange={(e) => setChosen((m) => ({ ...m, [c.question.id]: e.target.value }))}
                   >
@@ -411,6 +415,7 @@ function NextQuestions({ intakeId, me, version, onAsked }: { intakeId: string; m
                       </option>
                     ))}
                   </select>
+                  </label>
                 </li>
               ))}
             </ol>

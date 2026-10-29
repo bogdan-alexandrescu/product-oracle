@@ -96,7 +96,8 @@ test("a triage the pool refused says when it failed, the refusal in the past", a
   // #633 re-review (MAJOR 1 a): the Requests header's status line reads the run's stored
   // refusal as the run page does, with when it failed.
   await page.getByTestId("nav-requests").filter({ visible: true }).first().click();
-  await page.getByRole("button", { name: "Classify now", exact: true }).click();
+  await page.getByTestId("triage-menu").click();
+  await page.getByRole("button", { name: "Sort now", exact: true }).click();
   const status = page.getByTestId("triage-status");
   await expect(status.getByTestId("failed-at")).toHaveText(/^Failed Oct \d+, \d+:\d{2} [AP]M PDT\.\s*$/, { timeout: 15_000 });
   await expect(status).toContainText(`Oracle's last triage did not finish. Failed`);

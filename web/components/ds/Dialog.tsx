@@ -30,6 +30,7 @@ export function Dialog({
   title,
   onClose,
   dirty = false,
+  askOnCancel = false,
   testId,
   head,
   actions,
@@ -43,6 +44,8 @@ export function Dialog({
   onClose: () => void;
   /** The person changed something: closing (bar Cancel) asks before it throws it away. */
   dirty?: boolean;
+  /** Cancel asks too while `dirty` (a dialog whose typed work is all it holds, qa-onboarding-1). */
+  askOnCancel?: boolean;
   testId?: string;
   /** Under the title, inside the head row's block (the PRD a dialog is about). */
   head?: ReactNode;
@@ -109,7 +112,7 @@ export function Dialog({
   const footer =
     actions !== undefined ? (
       <div className="flex flex-wrap items-center justify-end gap-2 border-t border-line px-5 py-3 max-[600px]:px-4" data-testid="dialog-footer">
-        <Button variant="secondary" onClick={onClose} disabled={busy}>
+        <Button variant="secondary" onClick={askOnCancel ? requestClose : onClose} disabled={busy}>
           {cancelLabel}
         </Button>
         {actions}

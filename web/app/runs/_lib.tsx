@@ -378,7 +378,7 @@ export function RunsWhere({ runtime }: { runtime?: string }) {
   if (runtime === "fake") {
     return (
       <span className="block" data-testid="runs-where">
-        This Oracle uses the local test runtime; in normal use runs execute in SwarmCloud.
+        In test mode this server runs the agents itself; in normal use runs go to SwarmCloud.
       </span>
     );
   }

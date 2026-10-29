@@ -166,7 +166,7 @@ test("the No document row clears itself once a later run imports the document", 
   const prd = page.getByTestId("segment-prd_draft").filter({ visible: true });
   const review = prd.getByTestId("checkpoint-prd_review").filter({ hasText: "Waiting" });
   await expect(async () => {
-    await page.getByRole("button", { name: "Check agents now" }).click();
+    await page.getByRole("button", { name: "Refresh progress" }).click();
     await expect(review).toHaveCount(1, { timeout: 1_000 });
   }).toPass({ timeout: 15_000 });
   await review.getByRole("link", { name: "Open review" }).click();

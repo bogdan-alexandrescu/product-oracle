@@ -97,6 +97,19 @@ const REVIEW_CHECKPOINT = "0b7e5d4c-3a29-4118-9f07-e6d5c4b3a2c1";
  * the runs mock prices it (researcher $4 + analyst $3 at standard).
  */
 export function baselineReviewStatus(now: Date = new Date()): ReviewStatus {
+  // qa-onboarding-5: a new company (the "empty" scenario) has never approved a baseline.
+  if (typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === "empty") {
+    return {
+      last_approved_at: null,
+      checkpoint_id: null,
+      run_id: null,
+      age_days: null,
+      build_under_way: false,
+      reusable: false,
+      reason: "never_reviewed",
+      baseline_segment_usd: { quick: 3.5, standard: 7, deep: 14 },
+    };
+  }
   const stale = typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === BASELINE_STALE_SCENARIO;
   const age = stale ? 41 : 9;
   const at = new Date(now.getTime() - age * 86_400_000);

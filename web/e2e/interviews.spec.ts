@@ -181,7 +181,7 @@ test("criterion 14: the finished interview and its requests, as a member", async
   await expect(page.getByRole("button", { name: "Withdraw link" })).toHaveCount(0);
 
   await page.getByTestId("requests-tab-new").filter({ visible: true }).click();
-  await expect(page).toHaveURL(/\/requests\/new$/);
+  await expect(page).toHaveURL(/\/requests\/to-decide$/);
   const fromInterview = page.getByTestId("request-row").filter({ hasText: "Ana Lima (Example Co)" });
   await expect(fromInterview).toHaveCount(3);
   for (const r of await fromInterview.all()) {

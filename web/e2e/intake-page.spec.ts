@@ -86,9 +86,9 @@ test("answer, review, ready: answer my question, review the critical one, then d
   const review = bubble(page, WAITING_REVIEW);
   await expect(review).toContainText("Waiting for review");
   await expect(draft(page)).toBeDisabled();
-  await expect(page.getByTestId("draft-reason")).toHaveText("1 critical question open: answer it or record a decision");
+  await expect(page.getByTestId("draft-reason")).toHaveText(/^\d critical questions open, 1 holds the draft: answer it or record a decision$/);
   const gate = inspector(page).getByTestId("ready-to-draft");
-  await expect(gate).toContainText("1 critical question open");
+  await expect(gate).toContainText("1 critical question holds the draft");
   await expect(gate.getByTestId("blocking-gap")).toContainText("Blockers: not known yet.");
 
   await review.getByRole("button", { name: "Review" }).click();
@@ -126,7 +126,7 @@ test("next questions: ask the preview, one of them of the approver, who finds it
   await expect(next).toContainText("Oracle has 12 more questions");
   const rows = next.getByTestId("next-question");
   await expect(rows).toHaveCount(5);
-  await next.getByRole("button", { name: "3", exact: true }).click();
+  await next.getByRole("button", { name: "Ask 3 questions at a time" }).click();
   await expect(rows).toHaveCount(3);
   const prompts = await rows.getByTestId("next-prompt").allTextContents();
   const picked = prompts[1];
@@ -168,7 +168,7 @@ test("phone: the thread is full width and the inspector opens from Gaps N open",
   await expect(open).toHaveText("Gaps 15 open");
   await open.click();
   const sheet = page.getByTestId("intake-sheet");
-  await expect(sheet.getByTestId("ready-to-draft")).toContainText("1 critical question open");
+  await expect(sheet.getByTestId("ready-to-draft")).toContainText("1 critical question holds the draft");
   await sheet.getByRole("button", { name: /^Close/ }).click();
   const sideways = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(sideways).toBeLessThanOrEqual(0);

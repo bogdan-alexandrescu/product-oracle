@@ -66,8 +66,8 @@ test("found in your sources: dismiss one, then the last; the panel goes", async 
   await expect(found(page)).toHaveCount(0);
 });
 
-test("Classify now: an approver starts triage and sees it finish", async ({ page }) => {
-  // protects=Classify now (approver+) and the header's status line ("Oracle is classifying ·
+test("Sort now: an approver starts triage and sees it finish", async ({ page }) => {
+  // protects=Classify now (approver+) and the header's status line ("Oracle is sorting ·
   // started …", then "left suggestions on N requests and found …", qa-work-5); the found panel is absent for
   // someone with no found items (criterion 16's second half); the daily-run tip; fails_when=the
   // button is missing for an approver, the status never changes, or another person's found items
@@ -75,16 +75,17 @@ test("Classify now: an approver starts triage and sees it finish", async ({ page
   await login(page, "approver@example.com");
   await openRequests(page);
   await expect(found(page)).toHaveCount(0);
-  await page.getByRole("button", { name: "About Classify now" }).click();
-  await expect(page.getByText("Oracle also classifies new requests every day at 07:00 PT")).toBeVisible();
-  await page.getByRole("button", { name: "Classify now", exact: true }).click();
+  await page.getByTestId("triage-menu").click();
+  await page.getByRole("button", { name: "About Sort now" }).click();
+  await expect(page.getByText("Oracle also sorts new requests every day at 7:00 AM PT")).toBeVisible();
+  await page.getByRole("button", { name: "Sort now", exact: true }).click();
   const status = page.getByTestId("triage-status");
-  await expect(status).toContainText(/Oracle is classifying · started (just now|\d+m ago)/);
-  await expect(page.getByRole("button", { name: "Classify now", exact: true })).toBeDisabled();
+  await expect(status).toContainText(/Oracle is sorting · started (just now|\d+m ago)/);
+  await expect(page.getByRole("button", { name: "Sort now", exact: true })).toBeDisabled();
   await expect(status).toContainText("Oracle's last triage left suggestions on 4 requests and found nothing new in your sources", {
     timeout: 15_000,
   });
-  await expect(page.getByRole("button", { name: "Classify now", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Sort now", exact: true })).toBeEnabled();
 });
 
 test("the daily run that could not start says why", async ({ page }) => {
@@ -97,8 +98,9 @@ test("the daily run that could not start says why", async ({ page }) => {
   const status = page.getByTestId("triage-status");
   await expect(status).toContainText("Oracle's daily triage did not run on 2026-10-22");
   await expect(status).toContainText("none of them is an active member");
-  await page.getByRole("button", { name: "Classify now", exact: true }).click();
-  await expect(status).toContainText(/Oracle is classifying · started/);
+  await page.getByTestId("triage-menu").click();
+  await page.getByRole("button", { name: "Sort now", exact: true }).click();
+  await expect(status).toContainText(/Oracle is sorting · started/);
   await expect(status).not.toContainText("did not run");
 });
 
@@ -109,7 +111,8 @@ test("a triage that failed with no reason says when, one sentence after another"
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "triage-failed-quietly"));
   await login(page, "approver@example.com");
   await openRequests(page);
-  await page.getByRole("button", { name: "Classify now", exact: true }).click();
+  await page.getByTestId("triage-menu").click();
+  await page.getByRole("button", { name: "Sort now", exact: true }).click();
   const status = page.getByTestId("triage-status");
   await expect(status.getByTestId("failed-at")).toBeVisible({ timeout: 15_000 });
   await expect(status).toContainText(/Oracle's last triage did not finish\. Failed Oct \d+, \d+:\d{2} [AP]M P[DS]T\./);
@@ -124,33 +127,37 @@ for (const email of ["commenter@example.com", "viewer@example.com"]) {
     await login(page, email);
     await openRequests(page);
     await expect(page.getByTestId("request-list")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Classify now", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Sort now", exact: true })).toHaveCount(0);
     await expect(found(page)).toHaveCount(0);
   });
 }
 
-const dailySwitch = (page: Page) => page.getByRole("switch", { name: "Daily triage at 07:00 PT" });
+const dailySwitch = (page: Page) => page.getByRole("switch", { name: /^Auto-sort new requests daily at 7:00 AM PT/ });
+/** rirs-35: the daily switch and Sort now sit in the Auto-sort panel. */
+const openTriage = (page: Page) => page.getByTestId("triage-menu").click();
 
 test("daily triage: an owner turns it on and sees who it runs as", async ({ page }) => {
-  // protects=owner decision 2026-10-21 (the switch "Daily triage at 07:00 PT", off by default;
+  // protects=owner decision 2026-10-21 (the switch "Auto-sort new requests daily at 7:00 AM PT", off by default;
   // the switch itself says it is off, then who the run acts as, qa-work-38); fails_when=the switch starts on, does
   // not change the status, or forgets its state on reload; no_claim=the ticker's run (the API's
   // tests/test_requests_triage.py).
   await login(page);
   await openRequests(page);
   const said = page.getByTestId("daily-triage-said");
+  await openTriage(page);
   await expect(dailySwitch(page)).not.toBeChecked();
   await expect(dailySwitch(page)).toBeEnabled();
-  await expect(said).toHaveText(/· Off$/);
+  await expect(said).toHaveText("Off");
   await dailySwitch(page).click();
   await expect(dailySwitch(page)).toBeChecked();
-  await expect(said).toHaveText(/· On, runs as Admin$/);
+  await expect(said).toHaveText("On, runs as Admin");
   await page.reload();
+  await openTriage(page);
   await expect(dailySwitch(page)).toBeChecked();
   await expect(said).toContainText("runs as Admin");
   await dailySwitch(page).click();
   await expect(dailySwitch(page)).not.toBeChecked();
-  await expect(said).toHaveText(/· Off$/);
+  await expect(said).toHaveText("Off");
 });
 
 test("daily triage: a commenter reads its state, with no switch to turn", async ({ page }) => {
@@ -160,7 +167,7 @@ test("daily triage: a commenter reads its state, with no switch to turn", async 
   await login(page, "commenter@example.com");
   await openRequests(page);
   await expect(dailySwitch(page)).toHaveCount(0);
-  await expect(page.getByTestId("daily-triage-state")).toHaveText("Daily triage off");
+  await expect(page.getByTestId("daily-triage-state")).toHaveText("Auto-sort off");
   await expect(page.getByTestId("daily-triage-said")).toHaveCount(0);
 });
 

@@ -15,7 +15,9 @@ import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 import { draftKey, loadDraft } from "./_draft";
 import type { ReviewViewProps } from "./_shell";
 import { FixButtons, LeaveOutPicker, RequirementRow, ScopeInspector } from "./_scope-inspector";
-import { actionsOn, changeText, decisionText, describeAction, fixesFor, pct, type Feature, type Mode, type Ops, type Reason, type Review, type Scope, type Ui } from "./_scope-lib";
+import { runDocName } from "../../../_lib";
+
+import { actionsOn, changeText, decisionText, describeAction, fixesFor, goalName, named, pct, reasonText, type Feature, type Mode, type Ops, type Reason, type Review, type Scope, type Ui } from "./_scope-lib";
 
 type Filter = "needs" | "all" | "out" | "changed";
 type Group = "goal" | "reason";
@@ -81,7 +83,8 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   });
   const path = { params: { path: { run_id: run.id, checkpoint_id: cp.id } } };
   const reviewQ = useQuery(draftKey(run.id, cp.id), () => loadDraft(run.id, cp.id));
-  const scope = scopeQ.data ?? null;
+  // rirs-2: rows the agents left untitled read as words, never as their keys.
+  const scope = useMemo(() => (scopeQ.data ? named(scopeQ.data) : null), [scopeQ.data]);
   const review = reviewQ.data ?? null;
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("needs");
@@ -189,7 +192,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   if (!scope) return <div className="px-6 py-8"><Loading /></div>;
 
   const title = (key: string) => scope.features.find((f) => f.key === key)?.title ?? key;
-  const goalTitle = (key: string) => scope.goals_available.find((g) => g.key === key)?.title ?? key;
+  const goalTitle = (key: string) => goalName(scope, key);
   const groups: { label: string; rows: Feature[] }[] = [];
   for (const f of rows) {
     const label =
@@ -230,7 +233,10 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
   const tally = `${s.handled} of ${s.features} handled · ${blockingLeftText(blocking)} · ${plural(s.suggestions_open, "suggestion")} waiting`;
   const fileProblems = (scope.check.problems ?? []).filter((p) => FILE_PROBLEMS.includes(p.code));
   const selectedFeature = scope.features.find((f) => f.key === selected) ?? scope.features.find((f) => f.needs_you) ?? scope.features[0] ?? null;
-  const prdTitle = run.document_slug ?? scope.title ?? "the PRD";
+  // rirs-2/24: the PRD by its name ("Saved addresses PRD"), never its slug.
+  const prdTitle = runDocName(run) ?? "this PRD";
+  // rirs-13: only an approver is asked; the others see what needs a decision.
+  const needsWord = mode === "approver" ? "Needs you" : "Needs a decision";
 
   const inspector = selectedFeature && (
     <ScopeInspector
@@ -258,15 +264,15 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               Runs
             </Link>{" "}
             /{" "}
-            <Link href={`/runs/${run.id}`} className="hover:underline">
-              {run.flow_title}
+            <Link href={`/runs/${run.id}`} className="break-words hover:underline" data-testid="run-name">
+              {runDocName(run) ? `${runDocName(run)} · ${run.flow_title}` : run.flow_title}
             </Link>
           </span>
         }
         title="Feature set"
         status={
           <>
-            <span className="text-sm text-text2" data-testid="scope-for">
+            <span className="min-w-0 text-sm break-words text-text2" data-testid="scope-for">
               For {prdTitle} · attempt {scope.attempt}
             </span>
             {cp.status === "pending" ? (
@@ -299,7 +305,7 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               value={filter}
               onChange={setFilter}
               items={[
-                { value: "needs", label: "Needs you", count: s.needs_you },
+                { value: "needs", label: needsWord, count: s.needs_you },
                 { value: "all", label: "All", count: s.features },
                 { value: "out", label: "Left out", count: scope.features.filter((f) => f.decision !== "include").length },
                 ...(scope.attempt > 1 && scope.previous ? [{ value: "changed" as const, label: "Changed", count: scope.features.filter((f) => changedChips(f, scope).length > 0).length }] : []),
@@ -316,14 +322,27 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
               <span role="columnheader">#</span>
               <span role="columnheader">Feature</span>
               <span role="columnheader">Goal</span>
-              <span role="columnheader">Conf.</span>
-              <span role="columnheader">Reqs</span>
-              <span role="columnheader">Needs you because</span>
+              {/* rirs-12: the narrow columns keep a short head; the full word is its name and tooltip. */}
+              <span role="columnheader" aria-label="Confidence">
+                <abbr title="Confidence" className="no-underline">
+                  Conf.
+                </abbr>
+              </span>
+              <span role="columnheader" aria-label="Requirements kept">
+                <abbr title="Requirements kept" className="no-underline">
+                  Reqs
+                </abbr>
+              </span>
+              <span role="columnheader">{needsWord} because</span>
               <span role="columnheader">Your call</span>
             </div>
             {rows.length === 0 && (
               <p className="px-4 py-6 text-sm text-text2" data-testid="scope-empty">
-                {filter === "needs" ? "Nothing needs you: every feature is fine as the agents proposed it." : "No features here."}
+                {filter === "needs"
+                  ? mode === "approver"
+                    ? "Nothing needs you: every feature is fine as the agents proposed it."
+                    : "Nothing needs a decision: every feature is fine as the agents proposed it."
+                  : "No features here."}
               </p>
             )}
             {groups.map((g) => (
@@ -439,24 +458,32 @@ function FeatureRow({
       className={`border-b border-line last:border-b-0 max-[600px]:rounded-button max-[600px]:border max-[600px]:bg-surface ${selected ? "bg-accent-soft/50 shadow-[inset_4px_0_0_var(--accent)]" : ""}`}
     >
       <div className={`grid ${COLS} items-center gap-x-2 px-2 py-2 max-[600px]:flex max-[600px]:flex-wrap max-[600px]:gap-2 max-[600px]:px-3`}>
-        <span role="cell" className="max-[600px]:order-last">
+        {/* rirs-41: on a phone the card's title line has a Details control instead of a lone chevron. */}
+        <span role="cell" className="max-[600px]:hidden">
           <button
             type="button"
             aria-expanded={expanded}
             aria-label={`Requirements of ${f.title}`}
             onClick={onToggle}
-            className="grid size-7 place-items-center rounded text-text2 hover:bg-surface2 max-[600px]:size-10"
+            className="grid size-7 place-items-center rounded text-text hover:bg-surface2"
+            data-testid="row-chevron"
           >
             <span aria-hidden className={`inline-block transition-transform ${expanded ? "rotate-90" : ""}`}>
               ›
             </span>
           </button>
         </span>
-        <span role="cell" className="tnum text-sm text-text2 max-[600px]:hidden">
+        <span role="cell" className="tnum text-sm text-text max-[600px]:hidden" data-testid="row-number">
           {f.position}
         </span>
         <span role="cell" className="flex min-w-0 flex-wrap items-center gap-1.5 max-[600px]:basis-full">
-          <button type="button" onClick={onSelect} className="min-w-0 truncate text-left font-medium hover:underline max-[600px]:whitespace-normal" data-testid="feature-title">
+          <button
+            type="button"
+            onClick={onSelect}
+            title={f.title}
+            className="min-h-6 min-w-0 truncate text-left font-medium hover:underline max-[600px]:min-h-10 max-[600px]:flex-1 max-[600px]:whitespace-normal"
+            data-testid="feature-title"
+          >
             {f.title}
           </button>
           {f.flags.includes("new_feature") && <Chip kind="acc">New</Chip>}
@@ -466,6 +493,12 @@ function FeatureRow({
               {c}
             </Chip>
           ))}
+          <span className="hidden flex-none max-[600px]:block">
+            <Button className="h-10 px-3 text-sm" aria-label={`Details of ${f.title}`} onClick={onSelect} data-testid="row-details">
+              Details
+              <span aria-hidden>›</span>
+            </Button>
+          </span>
         </span>
         <span role="cell" className="flex min-w-0 flex-wrap gap-1">
           {f.goals.length ? (
@@ -486,7 +519,7 @@ function FeatureRow({
         </span>
         <span role="cell" className="flex min-w-0 flex-wrap gap-1" data-testid="row-reasons">
           {open.map((r) => (
-            <Chip key={r.code} kind={r.severity === "blocking" ? "crit" : "warn"} title={r.label} wrap>
+            <Chip key={r.code} kind={r.severity === "blocking" ? "crit" : "warn"} title={reasonText(r, scope)} wrap>
               {REASON_CHIP[r.code] ?? r.label}
             </Chip>
           ))}

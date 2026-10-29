@@ -50,7 +50,8 @@ test("qa-work-37: one row of tabs with names that do not clash with the New chip
 test("qa-work-5: the header's triage line says what its count is, apart from the found panel", async ({ page }) => {
   await login(page, "approver@example.com");
   await openRequests(page);
-  await page.getByRole("button", { name: "Classify now", exact: true }).click();
+  await page.getByTestId("triage-menu").click();
+  await page.getByRole("button", { name: "Sort now", exact: true }).click();
   const status = page.getByTestId("triage-status");
   await expect(status).toContainText("Oracle's last triage left suggestions on 4 requests", { timeout: 15_000 });
   await expect(status).not.toContainText("4 suggestions,");
@@ -59,11 +60,12 @@ test("qa-work-5: the header's triage line says what its count is, apart from the
 test("qa-work-38: daily triage is one switch that says its own state", async ({ page }) => {
   await login(page);
   await openRequests(page);
-  const daily = page.getByRole("switch", { name: /^Daily triage at 07:00 PT · Off$/ });
+  await page.getByTestId("triage-menu").click();
+  const daily = page.getByRole("switch", { name: /^Auto-sort new requests daily at 7:00 AM PT\s*Off$/ });
   await expect(daily).not.toBeChecked();
   await expect(page.getByText("Daily triage is off")).toHaveCount(0);
   await daily.click();
-  await expect(page.getByRole("switch", { name: /^Daily triage at 07:00 PT · On, runs as Admin$/ })).toBeChecked();
+  await expect(page.getByRole("switch", { name: /^Auto-sort new requests daily at 7:00 AM PT\s*On, runs as Admin$/ })).toBeChecked();
 });
 
 test("qa-work-35, qa-work-36: every row has a checkbox slot and its fields in one labelled order", async ({ page }) => {
@@ -89,7 +91,7 @@ test("qa-work-6, qa-work-41: To decide rows open the request; ages, not dates; t
   await login(page);
   await openRequests(page);
   await tab(page, "new").click();
-  await expect(page).toHaveURL(/\/requests\/new$/);
+  await expect(page).toHaveURL(/\/requests\/to-decide$/);
   const first = rows(page).first();
   await expect(first).toBeVisible();
   expect(await first.evaluate((el) => getComputedStyle(el).cursor)).toBe("pointer");
@@ -153,7 +155,7 @@ test("qa-work-43, qa-work-44, qa-work-45: an interview's page says what to do, w
   await expect(page).toHaveURL(/\/requests\/interviews\/[^/]+$/);
   const header = page.locator("[data-page-header]");
   await expect(header.getByRole("heading", { name: /Ana Lima/ })).toBeAttached();
-  // The tabs are the way back; no breadcrumb as well.
+  // The tabs are a way back; rirs-40 adds "← Interviews" above the name (its name is not the tab's).
   await expect(header.getByRole("link", { name: "Interviews", exact: true })).toHaveCount(1);
   await expect(header.getByRole("button", { name: "Withdraw link" })).toBeVisible();
   await expect(page.getByTestId("interview-link-note")).toContainText("can't be shown or copied again");
@@ -174,7 +176,7 @@ test.describe("phone", () => {
     const at = await box(page, "requests-nav-top");
     expect(at.y).toBeLessThan(200);
     for (const [id, url] of [
-      ["new", /\/requests\/new$/],
+      ["new", /\/requests\/to-decide$/],
       ["interviews", /\/requests\/interviews$/],
       ["all", /\/requests$/],
     ] as const) {
@@ -253,7 +255,7 @@ test("fix-work review: To decide asks for the New requests, so ones past the que
   await expect(rows(page).filter({ hasText: "Decided request 1" }).first()).toBeVisible();
   await expect(rows(page).filter({ hasText: "Dark mode" })).toHaveCount(0);
   await tab(page, "new").click();
-  await expect(page).toHaveURL(/\/requests\/new$/);
+  await expect(page).toHaveURL(/\/requests\/to-decide$/);
   for (const title of ["Bulk edit prices", "Dark mode", "Save my card for the next order", "Pay by bank transfer"]) {
     await expect(rows(page).filter({ hasText: title })).toHaveCount(1);
   }
@@ -299,7 +301,7 @@ test("fix-work review: filters, ticked requests and the open request stay across
 
   // To decide keeps the goal and the search it shares with All requests.
   await tab(page, "new").click();
-  await expect(page).toHaveURL(/\/requests\/new$/);
+  await expect(page).toHaveURL(/\/requests\/to-decide$/);
   const toDecide = page.getByTestId("new-requests");
   await expect(toDecide.getByLabel("Goal", { exact: true }).locator("option:checked")).toHaveText("Raise activation");
   await expect(toDecide.getByLabel("Search requests")).toHaveValue("e");

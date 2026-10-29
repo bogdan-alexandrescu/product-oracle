@@ -23,7 +23,7 @@ import {
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatDateTime, plural } from "@/lib/format";
-import { docLabel, runLabel } from "@/lib/labels";
+import { docLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -35,6 +35,7 @@ import {
   runStatusKind,
   runStatusLabel,
   RunCost,
+  runName,
   RunStatusBadge,
   RunsWhere,
   SENT_BACK_STATE,
@@ -48,11 +49,12 @@ type DocNamed = Parameters<typeof docLabel>[0];
 
 /**
  * What a run is for, by name (qa-shell-32), never its slug or short id: its document's title
- * ("Usage alerts PRD"), else the run's document and flow in words (runLabel).
+ * ("Usage alerts PRD"), else the run's document in words (runName).
  */
 function runTitle(r: RunSummary, docs: Map<string, DocNamed>): string {
   const d = r.document_id ? docs.get(r.document_id) : undefined;
-  return d ? docLabel(d) : runLabel(r);
+  // rirs-23: the document alone (the Flow column names the flow), in full.
+  return d ? docLabel(d) : runName(r);
 }
 
 export default function RunsPage() {
@@ -108,7 +110,7 @@ export default function RunsPage() {
           <Link
             href={`/runs/${r.id}`}
             title={name}
-            className="block truncate font-medium hover:underline max-[600px]:flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal"
+            className="block font-medium break-words hover:underline max-[600px]:flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal"
             onClick={(e) => e.stopPropagation()}
           >
             {name}
@@ -270,10 +272,9 @@ function RunInspector({ run, name }: { run: RunSummary; name: string }) {
           <InspectorRow>{CHECKPOINT_LABEL[run.waiting_on]}</InspectorRow>
         </InspectorSection>
       )}
-      <InspectorSection label="Cost">
+      {/* rirs-18: the cost is one row of the details, not a section repeating its only row. */}
+      <InspectorSection label="Details">
         <InspectorRow value={<RunCost run={run} />}>Cost</InspectorRow>
-      </InspectorSection>
-      <InspectorSection label="Dates">
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>
         {run.started_at && <InspectorRow value={formatDateTime(run.started_at)}>Started</InspectorRow>}
         {run.finished_at && <InspectorRow value={formatDateTime(run.finished_at)}>Finished</InspectorRow>}

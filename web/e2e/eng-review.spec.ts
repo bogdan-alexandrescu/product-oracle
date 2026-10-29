@@ -140,11 +140,11 @@ test("started from the UI: a run from the sheet waits at its Engineering check a
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   const featureSet = page.getByTestId("segment-feature_set");
   await featureSet.getByRole("button", { name: "Approve" }).click();
   await expect(page.getByTestId("segment-eng_review").getByTestId("segment-state")).toHaveText("Running");
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   const line = page.getByTestId("segment-eng_review").getByTestId("review-screen-line");
   await expect(line).toContainText("3 features · 1 blocking");
   await line.getByRole("link", { name: "Review" }).click();

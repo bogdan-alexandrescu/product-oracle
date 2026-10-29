@@ -9,7 +9,7 @@ import type { Query } from "@/lib/use-query";
 
 import { InterviewDialog } from "./InterviewDialog";
 import { NewRequestButton } from "./NewRequest";
-import { ClassifyNow, DailyTriageSwitch, TriageStatusLine } from "./Triage";
+import { TriageMenu, TriageStatusLine } from "./Triage";
 
 /** On a phone the actions stack full width, one per line (qa-work-39): the Page's 10 px sides off the screen's width. */
 const ACTIONS =
@@ -18,8 +18,9 @@ const ACTIONS =
 /**
  * The header of every Requests tab (All requests, To decide, Themes, Interviews): the same
  * title, status line and actions on each (qa-work-41), so the tabs under it never move
- * (qa-shell-33). Daily triage and Classify now (approvers and owners; others see the daily
- * triage's state), Interview a customer (C3, commenters and up) and New request (#329). #370:
+ * (qa-shell-33). Auto-sort, one control holding the daily switch and Sort now (rirs-35;
+ * approvers and owners, others see its state), then the two primary actions: Interview a
+ * customer (C3, commenters and up) and New request (#329). #370:
  * each control shows only to a role that can use it; a role that can file nothing reads View only.
  */
 export function RequestsHeader({
@@ -48,8 +49,7 @@ export function RequestsHeader({
         action={
           capsReady && (
             <div data-testid="requests-actions" className={ACTIONS}>
-              <DailyTriageSwitch triage={triage} canChange={can("set_request_triage_daily")} />
-              {can("start_request_triage") && <ClassifyNow triage={triage} />}
+              <TriageMenu triage={triage} canChange={can("set_request_triage_daily")} canStart={can("start_request_triage")} />
               {can("create_interview") && (
                 <Button className="max-[600px]:h-11" onClick={() => setInterviewing(true)}>
                   Interview a customer

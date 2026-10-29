@@ -218,5 +218,5 @@ test("sheet toggle: Engineering dates is on with its help, unchecking it lowers 
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   const dates = page.getByTestId("segment-eng_dates");
   await expect(dates.getByTestId("segment-state")).toHaveText("Skipped");
-  await expect(dates).toContainText("Engineering dates: off");
+  await expect(dates).toContainText("Engineering dates: Not asked (checkpoint skipped)");
 });

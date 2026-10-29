@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent, type ReactNode } from "react";
 
-import { Button, Chip, Inspector, InspectorSection } from "@/components/ds";
+import { Button, Chip, Inspector, InspectorSection, LinkButton } from "@/components/ds";
 import { free, startPrdHref } from "@/components/RequestsBehind";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -513,6 +513,15 @@ function Decision({
         )
       : Promise.resolve([]),
   );
+  // qa-onboarding-12: a request is qualified under a confirmed goal; the Qualify form says how to get one.
+  const { can } = useMe();
+  const confirmed = useQuery(open === "qualify" ? `request-qualify-goals:${request.goal_ids.join(",")}` : "request-qualify-goals:none", () =>
+    open === "qualify"
+      ? unwrap(api.GET("/v1/baseline/entities", { params: { query: { type: "goal", status: "confirmed" } } }))
+      : Promise.resolve(undefined),
+  );
+  const noGoals = confirmed.data !== undefined && confirmed.data.length === 0;
+  const unlinked = confirmed.data !== undefined && !request.goal_ids.some((id) => confirmed.data!.some((g) => g.id === id));
   const picker = BASIS_PICKER[reason];
   const basisId = picked[reason] ?? detail.data?.suggested_basis?.[reason]?.id ?? "";
   const options = picker?.kind === "strategy_choice" ? (stops.data ?? []) : picker ? features : [];
@@ -604,11 +613,37 @@ function Decision({
                 done(() => unwrap(api.POST("/v1/requests/{request_id}/qualify", { ...path, body: { ...lock, note: note.trim() } })));
               }}
             >
+              {unlinked && (
+                <div data-testid="qualify-needs-goal" className="flex flex-col gap-2 rounded-lg bg-surface2 px-3 py-2 text-sm">
+                  {noGoals ? (
+                    <>
+                      <p>
+                        A request is qualified under a confirmed goal, and there are no goals yet. Oracle proposes your goals when it
+                        builds the baseline from your sources; confirm one, then link it here. Or disqualify this request as No goal.
+                      </p>
+                      {can("confirm_entity") ? (
+                        <LinkButton href="/baseline?build=1" className="self-start">
+                          Build the baseline
+                        </LinkButton>
+                      ) : (
+                        <Link href="/baseline" className="self-start font-semibold text-accent-ink underline-offset-2 hover:underline">
+                          See the baseline
+                        </Link>
+                      )}
+                    </>
+                  ) : (
+                    <p>
+                      A request is qualified under a confirmed goal. Tick one under Links and save, or disqualify this request as
+                      No goal.
+                    </p>
+                  )}
+                </div>
+              )}
               <label className={LABEL}>
                 Reason
                 <textarea className={INPUT} rows={2} value={note} maxLength={2000} onChange={(e) => setNote(e.target.value)} />
               </label>
-              <Button variant="solid" type="submit" disabled={busy || !note.trim()} className="self-end">
+              <Button variant="solid" type="submit" disabled={busy || !note.trim() || unlinked} className="self-end">
                 Qualify request
               </Button>
             </form>

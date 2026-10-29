@@ -4,10 +4,10 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 // #258: a running segment shows its agents (role, state, elapsed time, last heartbeat) and
-// the cost spent so far; "Check agents now" says what it checked. In the "slow-agents"
+// the cost spent so far; "Refresh progress" says what it checked. In the "slow-agents"
 // scenario the agents take two checks to finish a segment.
 
-test("a running segment shows its agents and the cost so far, and Check agents now says what it checked", async ({ page }) => {
+test("a running segment shows its agents and the cost so far, and Refresh progress says what it checked", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "slow-agents"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByRole("link", { name: "Plan", exact: true }).click();
@@ -27,7 +27,7 @@ test("a running segment shows its agents and the cost so far, and Check agents n
 
   // The first check: the agents are working; each shows its role, state, elapsed time and
   // last heartbeat, and the cost so far reaches the segment and the run.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(page.getByTestId("tick-result")).toHaveText(/^Checked \d+ active runs? at .+: .+\.$/);
   const agents = items.getByTestId("segment-agent");
   await expect(agents).not.toHaveCount(0);
@@ -41,7 +41,7 @@ test("a running segment shows its agents and the cost so far, and Check agents n
   await expect(page.getByTestId("run-details").getByTestId("run-spent")).not.toHaveText("$0.00");
 
   // The second check: the segment finished, and the result says so.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(page.getByTestId("tick-result")).toHaveText(/^Checked \d+ active runs? at .+: \d+ segments? finished\.$/);
   await expect(items.getByTestId("segment-agent")).toHaveCount(0);
   await expect(items.getByTestId("segment-progress")).toHaveCount(0);
@@ -49,7 +49,7 @@ test("a running segment shows its agents and the cost so far, and Check agents n
 
 // Review fix: a segment that starts during a check (the one before it has its stop turned
 // off) shows what that check read, not "Not checked yet".
-test("a segment that starts during Check agents now shows what that check read", async ({ page }) => {
+test("a segment that starts during Refresh progress shows what that check read", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "slow-agents"), MOCK_SCENARIO_KEY);
   await login(page);
   await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
@@ -76,10 +76,10 @@ test("a segment that starts during Check agents now shows what that check read",
   const priority = page.getByTestId("segment-priority");
   await expect(features.getByTestId("segment-state")).toHaveText("Running");
   // The first check reads the feature set's agents working.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(features.getByTestId("segment-agent")).not.toHaveCount(0);
   // The second finishes it; with its stop off, the priority order starts in the same check.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(page.getByTestId("tick-result")).toHaveText(/: 1 segment finished\.$/);
   await expect(priority.getByTestId("segment-state")).toHaveText("Running");
   const progress = priority.getByTestId("segment-progress");
