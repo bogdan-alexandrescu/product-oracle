@@ -227,6 +227,7 @@ function DiffSection({ d, doc, to, showLayer }: { d: SectionDiff; doc: string; t
   return (
     <li
       data-testid="diff-section"
+      data-section={d.section_key}
       data-status={d.status}
       className={`min-w-0 overflow-hidden rounded-panel border border-line bg-surface ${bar}`}
     >

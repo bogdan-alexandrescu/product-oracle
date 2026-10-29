@@ -112,7 +112,8 @@ test("full loop: push, review, pull, push v2 with resolutions, diff, publish, ex
   await page.goto(`/documents/${DOC}/v/2`);
   await page.getByRole("link", { name: "Compare with v1" }).click();
   await expect(page).toHaveURL(/\/diff\?from=1&to=2$/);
-  const diffOf = (k: string) => page.getByTestId("diff-section").filter({ hasText: `#${k}` });
+  // By the section's key (data-section): the page shows headings only, never anchors (qa-docs-28).
+  const diffOf = (k: string) => page.locator(`[data-testid="diff-section"][data-section="${k}"]`);
   await expect(diffOf("solution")).toHaveAttribute("data-status", "changed");
   await expect(diffOf("solution").getByTestId("word-diff").locator("ins").first()).toContainText("zip archive");
   await expect(diffOf("metrics")).toHaveAttribute("data-status", "changed");
