@@ -243,7 +243,8 @@ def suggest(
     conf = f"{confidence}-confidence" if confidence else "unrated"
     # finding 30: plain words, not statistics jargon ("median").
     how = (
-        f"{days} days, about the same as {len(durations)} similar {conf} item{'' if len(durations) == 1 else 's'}"
+        f"{days} days, about the same as {len(durations)} similar {conf} "
+        f"item{'' if len(durations) == 1 else 's'}"
         if durations
         else f"{days} days, typical with no dated {conf} items yet"
     )
