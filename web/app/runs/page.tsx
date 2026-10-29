@@ -103,6 +103,7 @@ export default function RunsPage() {
       key: "for",
       header: "For",
       phone: "title",
+      wrap: true,
       cell: (r) => {
         const name = runTitle(r, docs);
         return (
@@ -110,7 +111,7 @@ export default function RunsPage() {
           <Link
             href={`/runs/${r.id}`}
             title={name}
-            className="block font-medium break-words hover:underline max-[600px]:flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal"
+            className="block font-medium break-words whitespace-normal hover:underline max-[600px]:flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal"
             onClick={(e) => e.stopPropagation()}
           >
             {name}

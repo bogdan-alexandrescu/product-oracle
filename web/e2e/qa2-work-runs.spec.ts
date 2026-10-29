@@ -54,7 +54,7 @@ test("qa-onboarding-16, rirs-7: a waiting run offers one destructive action; onc
   await expect(cancel).toHaveText("Cancel run");
   await cancel.click();
   await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
-  await expect(page.getByTestId("run-status")).toHaveText("Cancelled");
+  await expect(header(page).getByTestId("run-status")).toHaveText("Cancelled");
   await expect(page.getByTestId("run-cancel")).toHaveCount(0);
   await page.getByTestId("run-delete").click();
   const dialog = page.getByRole("dialog", { name: "Delete the Team onboarding PRD run" });

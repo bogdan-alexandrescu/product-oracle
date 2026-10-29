@@ -118,7 +118,7 @@ test("criterion 12: a commenter drafts questions, edits them and creates the lin
   const created = page.getByRole("dialog", { name: "Link created" });
   await expect(created.getByLabel("Interview link")).toHaveValue(/^https?:\/\/[^/]+\/i\/i-[0-9a-f]+$/);
   await expect(created.getByRole("button", { name: "Copy" })).toBeVisible();
-  await expect(created.getByTestId("interview-link-terms")).toHaveText(/^Works once · expires .+ (P[DS]T|GMT[+-]\d+)$/);
+  await expect(created.getByTestId("interview-link-terms")).toHaveText(/^Works once · expires (in \d+ days|tomorrow|today), [A-Z][a-z]{2} \d{1,2}$/);
   await created.getByRole("button", { name: "Done" }).click();
   await expect(created).toHaveCount(0);
 

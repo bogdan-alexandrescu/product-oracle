@@ -408,7 +408,7 @@ class FakeRuntime:
         return True
 
     def notes(self) -> list[str]:
-        return ["Local agent runtime: segments finish at once with generic drafts."]
+        return ["Test mode: each step finishes at once with a sample draft."]
 
     async def whoami(self) -> dict[str, str | None]:
         return {"tenant_id": "fake"}

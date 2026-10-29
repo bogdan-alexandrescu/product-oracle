@@ -376,7 +376,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   approval_threshold_usd: 50,
   overrun_factor: 1.5,
   runtime: "fake",
-  runtime_notes: ["Local agent runtime: segments finish at once with generic drafts."],
+  runtime_notes: ["Test mode: each step finishes at once with a sample draft."],
 };
 
 const THRESHOLD = 50;

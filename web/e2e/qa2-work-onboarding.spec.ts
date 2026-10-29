@@ -6,8 +6,9 @@ import { login } from "./helpers";
 /*
  * A new company's first request (qa-onboarding-12, qa-onboarding-47), in the "empty" scenario
  * (members only: no goals, documents or runs), driven through the UI as a person would on the
- * mock API: file the first request, open it, try to qualify it, and follow the page's way to
- * a goal (Build the baseline), which is where the walk to a brief and a PRD goes on.
+ * mock API: file the first request, open it, try to qualify it, follow the page's way to a
+ * goal (Build the baseline), then write a brief through PRDs > New PRD and Draft with Oracle,
+ * which builds the baseline first and starts the run.
  */
 
 const TITLE = "Export invoices as a spreadsheet";
@@ -19,7 +20,7 @@ async function openRequests(page: Page) {
   await expect(page.getByRole("heading", { name: "Requests", level: 1 })).toBeAttached();
 }
 
-test("qa-onboarding-47, qa-onboarding-12: a new company files its first request and is told how to get a goal to qualify it", async ({
+test("qa-onboarding-47, qa-onboarding-12: a new company goes from its first request, through the goal hint and a brief, to its first PRD run", async ({
   page,
 }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "empty"), MOCK_SCENARIO_KEY);
@@ -55,4 +56,33 @@ test("qa-onboarding-47, qa-onboarding-12: a new company files its first request 
   // The way to a goal: Build the baseline.
   await needs.getByRole("link", { name: "Build the baseline" }).click();
   await expect(page).toHaveURL(/\/baseline\?build=1$/);
+
+  // On to a first PRD, as a new owner would: PRDs > New PRD, a title and the problem, Continue to the brief.
+  await page.keyboard.press("Escape");
+  await page.getByTestId("nav-prds").filter({ visible: true }).first().click();
+  await expect(page).toHaveURL(/\/documents$/);
+  await page.getByRole("link", { name: "New PRD" }).first().click();
+  await expect(page.getByRole("heading", { level: 1, name: "New PRD" })).toBeVisible();
+  await page.getByRole("textbox", { name: "Title" }).fill(TITLE);
+  await page.getByRole("textbox", { name: "What problem does it solve?" }).fill(WHY);
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(/\/intakes\/[0-9a-f-]+$/);
+
+  // Draft with Oracle: a new company has no baseline, so Oracle builds it first.
+  await page.getByRole("button", { name: "Draft with Oracle" }).click();
+  const sheet = page.getByRole("dialog", { name: "Draft with Oracle" });
+  const none = sheet.getByTestId("draft-baseline-none");
+  await expect(none).toContainText("Build the baseline ($7.00)");
+  await expect(none).toContainText("No baseline exists yet");
+  await expect(sheet.getByRole("radio")).toHaveCount(0);
+  await expect(sheet).not.toContainText("Use the current baseline");
+
+  await sheet.getByRole("button", { name: "Estimate" }).click();
+  await expect(sheet.getByTestId("draft-estimate")).toHaveText(/^Estimated \$[\d,]+\.\d{2}/);
+  // An owner approves a cost over the threshold here (#259); under it the button just starts.
+  await sheet.getByRole("button", { name: /^(Start drafting|Approve \$[\d,]+\.\d{2} and start)$/ }).click();
+
+  // The run page: the first PRD's run is under way.
+  await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
+  await expect(page.getByTestId("run-status").filter({ visible: true })).toHaveText("Running");
 });

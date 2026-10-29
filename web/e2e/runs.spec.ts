@@ -59,7 +59,7 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await openRuns(page);
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
-  await expect(page.getByTestId("run-notes")).toContainText("Local agent runtime");
+  await expect(page.getByTestId("run-notes")).toContainText("Test mode: each step finishes at once");
   // P3d Cost prominence: the cost is one small line in Details.
   await expect(page.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$6.30 of $26.50 estimated");
 

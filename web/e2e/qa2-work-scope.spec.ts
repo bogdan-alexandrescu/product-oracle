@@ -38,23 +38,31 @@ const inspector = (page: Page) => page.getByTestId("scope-inspector").filter({ v
 /** The contrast of an element's text (its colour, or an SVG text's fill) on the first painted background under it. */
 async function contrastOf(el: Locator): Promise<number> {
   return el.evaluate((node) => {
-    const rgb = (c: string) => (c.match(/[\d.]+/g) ?? []).slice(0, 4).map(Number);
+    // Any CSS colour (oklab, color-mix, alpha) painted over the page's white, read back as sRGB.
+    const ctx = document.createElement("canvas").getContext("2d")!;
+    const paint = (...layers: string[]) => {
+      ctx.clearRect(0, 0, 1, 1);
+      for (const c of layers) {
+        ctx.fillStyle = c;
+        ctx.fillRect(0, 0, 1, 1);
+      }
+      return Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3);
+    };
     const lum = ([r, g, b]: number[]) => {
       const f = (v: number) => ((v /= 255) <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
       return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
     };
     const style = getComputedStyle(node);
     const fg = node instanceof SVGTextElement ? style.fill : style.color;
-    let bg = "rgb(255, 255, 255)";
+    const layers: string[] = [];
     for (let at: Element | null = node; at; at = at.parentElement) {
       const c = getComputedStyle(at).backgroundColor;
-      const parts = rgb(c);
-      if (c && c !== "transparent" && !(parts.length === 4 && parts[3] === 0)) {
-        bg = c;
-        break;
-      }
+      if (c && c !== "transparent" && c !== "rgba(0, 0, 0, 0)") layers.unshift(c);
     }
-    const [a, b] = [lum(rgb(fg)), lum(rgb(bg))].sort((x, y) => y - x);
+    const bgLayers = ["#fff", ...layers];
+    const bg = paint(...bgLayers);
+    const text = paint(...bgLayers, fg);
+    const [a, b] = [lum(text), lum(bg)].sort((x, y) => y - x);
     return (a + 0.05) / (b + 0.05);
   });
 }
@@ -190,8 +198,8 @@ test.describe("phone", () => {
   test("rirs-24: the run's full name shows on the page, wrapped", async ({ page }) => {
     await seeded(page, "feature-set");
     await openReview(page);
-    const name = page.getByTestId("run-name");
-    await expect(name).toHaveText("Saved addresses PRD · Baseline to PRD");
+    const name = page.getByRole("link", { name: "Saved addresses PRD · Baseline to PRD", exact: true });
+    await expect(name).toHaveAttribute("data-testid", "run-name");
     await expect(name).toBeVisible();
     expect(await name.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
   });
