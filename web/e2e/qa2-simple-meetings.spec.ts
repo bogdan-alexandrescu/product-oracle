@@ -105,7 +105,7 @@ for (const phone of [false, true]) {
         }
         await expect(s.getByRole("radio", { name: "Presenter plus one or two people" })).toBeVisible();
         await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
-        for (const box of await s.getByRole("group", { name: "Attendees" }).getByRole("checkbox").all()) await box.uncheck();
+        for (const box of await s.getByRole("group", { name: "Who attends" }).getByRole("checkbox").all()) await box.uncheck();
         await expect(s.getByTestId("start-no-attendees")).toHaveText("Pick at least one attendee besides you.");
         await expect(s.getByRole("button", { name: "Start", exact: true })).toBeDisabled();
         await page.keyboard.press("Escape");

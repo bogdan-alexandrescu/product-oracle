@@ -177,7 +177,8 @@ function Form({ options, fixed, occurrence, ritual, origin, live, onClose }: { o
       ) : (
         <>
           <fieldset>
-            <legend className="font-semibold">Invite people with these roles</legend>
+            {/* The roadmap lane's plain words for the attendee boxes; they list people by name, not roles. */}
+            <legend className="font-semibold">Who attends</legend>
             <div className="mt-1 grid gap-1 sm:grid-cols-2">
               {options.members.map((m) => (
                 <label key={m.id} className={CHOICE}>

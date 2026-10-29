@@ -28,8 +28,9 @@ test.describe("FlowVisual full screen", () => {
 
   test("Comments shrinks the Steps list beside it, drops the PRD jargon, and Revise is really disabled", async ({ page }) => {
     await login(page);
-    await page.goto("/simple/prds/guided-setup");
-    await page.getByRole("button", { name: "Flow for bet 2" }).click();
+    await page.goto("/simple/one-pagers/guided-setup");
+    // The one-pager names a line by its first words (qa-simple-prd), not its number.
+    await page.getByRole("button", { name: /^Flow for “A setup checklist that shows/ }).click();
     const opened = page.getByTestId("flow-detail");
     await expect(opened.getByTestId("flow-steps")).toBeVisible();
     await opened.getByRole("button", { name: "Full screen" }).click();
@@ -69,9 +70,11 @@ test.describe("StartSheet", () => {
     await login(page);
     await page.goto("/simple/meetings");
     await expect(page.getByRole("region", { name: "Upcoming" })).toBeVisible();
-    await page.getByRole("button", { name: "Start a review" }).click();
+    // qa-simple-decide-34: one verb, "Start review".
+    await page.getByRole("button", { name: "Start review" }).first().click();
     const sheet = page.getByRole("dialog", { name: "Start a review" });
-    const group = sheet.getByRole("group", { name: "Invite people with these roles" });
+    // Plain words that fit people listed by name ("Commenter" is a person in the mock, not a role).
+    const group = sheet.getByRole("group", { name: "Who attends" });
     await expect(group).toBeVisible();
     await expect(group.getByRole("checkbox").first()).toBeVisible();
   });
