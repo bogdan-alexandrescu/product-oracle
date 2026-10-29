@@ -91,6 +91,9 @@ function AddSubgoal({
   );
 }
 
+/** A phone goal row's actions: tighter padding, so Make measurable, Confirm and Add subgoal share one row at 390 px (qa-plan-26). */
+const PHONE_ACTION = "max-[600px]:px-2!";
+
 /** A goal's typed cell, or its text in grey with the tooltip saying it is not checked yet. */
 function TextFallback({ attr, text }: { attr: string; text: unknown }) {
   if (text == null || text === "") return <span data-attr={attr} className="text-text2">–</span>;
@@ -456,13 +459,14 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
       align: "right",
       phone: "action",
       cell: (g) => (
-        <span className="flex flex-col items-end gap-1.5 py-1 max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:justify-start max-[600px]:py-0 max-[600px]:empty:hidden">
+        <span className="flex flex-col items-end gap-1.5 py-1 max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:justify-start max-[600px]:gap-1 max-[600px]:py-0 max-[600px]:empty:hidden">
           {g.goal_check?.measurable === false && onMakeMeasurable && (
             <span className="hidden max-[600px]:inline-flex">
               <Button
                 variant="ghost"
                 disabled={busy}
                 data-testid="make-measurable"
+                className={PHONE_ACTION}
                 onClick={(e: MouseEvent) => {
                   e.stopPropagation();
                   onMakeMeasurable(g);
@@ -475,6 +479,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           {canWrite && g.status === "proposed" && (
             <Button
               disabled={busy}
+              className={PHONE_ACTION}
               onClick={(e: MouseEvent) => {
                 e.stopPropagation();
                 onConfirm(g);
@@ -486,6 +491,7 @@ export function GraphTab({ graph, trace, canWrite, meId, busy, selectedId, tags,
           {canWrite && onAddSubgoal && !tree.get(g.id)?.depth && (
             <Button
               disabled={busy}
+              className={PHONE_ACTION}
               onClick={(e: MouseEvent) => {
                 e.stopPropagation();
                 setAdding(g);

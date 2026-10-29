@@ -343,7 +343,7 @@ function MethodSwitch({ value, onChange, locked = false }: { value: Method; onCh
       role="radiogroup"
       aria-label="Ranking method"
       onKeyDown={onKey}
-      className="inline-flex max-w-full flex-none overflow-x-auto rounded-button border border-line-strong bg-surface"
+      className="inline-flex max-w-full flex-none overflow-x-auto rounded-button border border-line-strong bg-surface max-[600px]:min-w-0 max-[600px]:flex-initial"
     >
       {METHODS.map((m) => {
         const on = value === m.method;
@@ -1243,6 +1243,9 @@ function Priorities() {
         <Split inspector={!phone && inspector}>
           <Panel>
             <div className="flex min-h-14 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2.5 max-[600px]:px-3">
+              {/* On a phone the method switch and the formula's (i) share one line that never
+                  wraps (qa-plan-21); above it the wrapper dissolves and the (i) goes right. */}
+              <div className="flex w-full min-w-0 flex-nowrap items-center gap-2 min-[601px]:contents">
               <MethodSwitch
                 value={method}
                 locked={!!snapshotId}
@@ -1251,8 +1254,18 @@ function Priorities() {
                   setSaved(null);
                 }}
               />
+              {r && (
+                <span className="flex flex-none items-center gap-2 min-[601px]:order-3" data-testid="formula-tip">
+                  <Label className="max-[600px]:sr-only">Formula</Label>
+                  <InfoTip label="Formula">
+                    <span data-testid="formula">{formulaText(r.method, r.formula)}</span>
+                    <span className="mt-1 block">Ranked {formatDateTime(r.generated_at)}, in dependency order.</span>
+                  </InfoTip>
+                </span>
+              )}
+              </div>
               {/* A view switch: read-only roles keep it too (qa-plan-22); only the write controls go. */}
-              <div className="max-w-full max-[600px]:order-2">
+              <div className="max-w-full">
                 <RadioSwitch
                   label="Order"
                   items={[
@@ -1263,17 +1276,7 @@ function Priorities() {
                   onChange={setOrder}
                 />
               </div>
-              <span className="flex-1 max-[600px]:hidden" />
-              {r && (
-                // On a phone the (i) sits beside the method switch, never alone on a line (qa-plan-21).
-                <span className="flex items-center gap-2 max-[600px]:order-1" data-testid="formula-tip">
-                  <Label className="max-[600px]:sr-only">Formula</Label>
-                  <InfoTip label="Formula">
-                    <span data-testid="formula">{formulaText(r.method, r.formula)}</span>
-                    <span className="mt-1 block">Ranked {formatDateTime(r.generated_at)}, in dependency order.</span>
-                  </InfoTip>
-                </span>
-              )}
+              <span className="flex-1 max-[600px]:hidden min-[601px]:order-2" />
             </div>
             {r && r.cycles.length > 0 && (
               <div
