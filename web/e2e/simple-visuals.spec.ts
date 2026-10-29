@@ -7,15 +7,18 @@ import { expect, test, type Locator, type Page } from "./test";
  * one-pager "guided-setup" and roadmap (./lib/api/mock/simple-visuals.ts), on desktop
  * (1366x820) and phone (390x844), light and dark, as each role.
  *
+ * The owner's flow picks (2026-10-28, simple-v3/talk/flow-display.html): a flow opens across
+ * the page (A), Full screen opens the viewer (C) whose Comment holds the comments, the notes,
+ * the versions and Revise.
+ *
  * Card visuals-bet-widen: protects = a one-pager bet ("What we will build") carries a flow
- * thumbnail; clicking it widens the card in place to the user flow (an image of the
- * sanitised SVG), its steps with the decision point, the feature of each and what is new,
- * the screen's low-fi wireframe (a sandboxed frame), and the numbered annotations tied to
- * the PRD section and requirement; Full screen opens the same visual over the page (the
- * meeting's or a presentation's view) and closes; a bet with none says "No flow yet";
- * fails_when = the thumbnail is missing, the card does not widen, the wireframe or notes
- * are missing, or full screen does not open; no_claim = the drawing's pixels and the
- * model's wording (api/tests/test_simple_visuals_api.py).
+ * thumbnail; clicking it opens the user flow across the page: the diagram, its steps with the
+ * decision point, the feature of each and what is new, the screen as numbered regions; Full
+ * screen opens the same visual over the page (the meeting's or a presentation's view) with
+ * the numbered notes tied to the PRD section and requirement under Comment, and closes; a bet
+ * with none says "No flow yet"; fails_when = the thumbnail is missing, the flow does not open,
+ * the regions or notes are missing, or full screen does not open; no_claim = the drawing's
+ * pixels and the model's wording (api/tests/test_simple_visuals_api.py).
  *
  * Card visuals-comment-revise: protects = an owner comments on one annotation, presses
  * Revise and the card shows version 2 with the comment addressed by it, while the history
@@ -38,10 +41,10 @@ import { expect, test, type Locator, type Page } from "./test";
  * version's lines (api/tests/test_simple_line_visuals_api.py).
  *
  * Card visuals-roadmap-item: protects = a roadmap item's floating card (a bottom sheet on a
- * phone) shows its flow's title; "Open the item's flow" widens the card in place to the
- * user flow and wireframe (full height on a phone); an item with none says "No flow yet"
- * and its owner asks Oracle to draw it, after which version 1 shows; fails_when = the card
- * does not widen or the ask draws nothing; no_claim = the job's queueing (the API's tests).
+ * phone) shows its flow's title; "Open the item's flow" opens the user flow and its screen
+ * across the page (full height on a phone); an item with none says "No flow yet" and its
+ * owner asks Oracle to draw it, after which version 1 shows; fails_when = the flow does not
+ * open or the ask draws nothing; no_claim = the job's queueing (the API's tests).
  */
 
 const ONE_PAGER = "/simple/prds/guided-setup";
@@ -51,13 +54,23 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 
 const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 
+/** Opens bet 2's flow across the page: the opened view. */
 async function openBet(page: Page, email?: string): Promise<Locator> {
   await login(page, email);
   await page.goto(ONE_PAGER);
   await page.getByRole("button", { name: "Flow for bet 2" }).click();
-  const wide = page.getByRole("group", { name: "User flow of bet 2" });
-  await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-  return wide;
+  const opened = page.getByTestId("flow-detail");
+  await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
+  return opened;
+}
+
+/** The viewer's comments (Full screen, then Comment): the notes, the versions, Revise. */
+async function openComments(page: Page, opened: Locator): Promise<Locator> {
+  await opened.getByRole("button", { name: "Full screen" }).click();
+  const full = page.getByTestId("flow-fullscreen");
+  await full.getByRole("button", { name: "Comment" }).click();
+  await expect(full.getByTestId("flow-version")).toBeVisible();
+  return full;
 }
 
 for (const [where, use] of [
@@ -68,49 +81,52 @@ for (const [where, use] of [
     test.describe(`${where}, ${scheme}`, () => {
       test.use({ ...use, colorScheme: scheme });
 
-      test("a bet's thumbnail widens its card to the flow and wireframe, then full screen", async ({ page }) => {
-        const wide = await openBet(page, "viewer@example.com");
-        await expect(wide.getByRole("heading", { name: "User flow: Finish setup from the checklist" })).toBeVisible();
-        await expect(wide.getByTestId("flow-svg")).toBeVisible();
-        await expect(wide.getByTestId("flow-steps")).toContainText("Decision: Invite now or later?");
-        await expect(wide.getByTestId("flow-steps")).toContainText("See the setup checklist · Setup checklist");
-        await expect(wide.getByTestId("flow-steps")).toContainText("New");
-        await expect(wide.getByTestId("flow-wireframe")).toBeVisible();
-        await expect(wide.getByTestId("flow-wireframe")).toHaveAttribute("sandbox", "");
-        await expect(wide.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · PRD § build, requirement R1");
-        await expect(page.frameLocator('[data-testid="flow-wireframe"]').first().getByText("Setup checklist: 4 steps")).toBeVisible();
-        // Roles: a viewer reads, with no comment box and no Revise.
-        await expect(wide.getByLabel("Comment on the flow")).toHaveCount(0);
-        await expect(wide.getByRole("button", { name: "Revise" })).toHaveCount(0);
-        await wide.getByRole("button", { name: "Full screen" }).click();
-        const full = page.getByTestId("flow-fullscreen");
-        await expect(full).toBeVisible();
+      test("a bet's thumbnail opens its flow and screen across the page, then full screen", async ({ page }) => {
+        const opened = await openBet(page, "viewer@example.com");
+        await expect(opened.getByRole("heading", { name: "Finish setup from the checklist · flow", level: 2 })).toBeVisible();
+        await expect(opened.getByTestId("flow-svg")).toBeVisible();
+        await expect(opened.getByTestId("flow-steps")).toContainText("Decision: Invite now or later?");
+        await expect(opened.getByTestId("flow-steps")).toContainText("See the setup checklist · Setup checklist");
+        await expect(opened.getByTestId("flow-steps")).toContainText("New");
+        await expect(opened.getByText("Screen: Home with the checklist")).toBeVisible();
+        await expect(opened.getByTestId("flow-regions")).toContainText("Setup checklist: 4 steps");
+        const full = await openComments(page, opened);
         await expect(full.getByRole("heading", { name: "Finish setup from the checklist", level: 2 })).toBeVisible();
+        await expect(full.getByTestId("flow-version")).toHaveText("Version 1 of 1");
+        await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · PRD § build, requirement R1");
+        // Roles: a viewer reads, with no comment box and no Revise.
+        await expect(full.getByLabel("Comment on the flow")).toHaveCount(0);
+        await expect(full.getByRole("button", { name: "Revise" })).toHaveCount(0);
         const box = (await full.boundingBox())!;
         expect(box.width).toBeGreaterThanOrEqual(page.viewportSize()!.width - 1);
         await full.getByRole("button", { name: "Exit full screen" }).click();
         await expect(full).toHaveCount(0);
-        await wide.getByRole("button", { name: "Close the flow" }).click();
-        await expect(wide.getByTestId("flow-detail")).toHaveCount(0);
+        await opened.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
+        await expect(page.getByTestId("flow-detail")).toHaveCount(0);
         // A bet Oracle has not drawn yet: its row says so on the line.
         await expect(page.getByRole("group", { name: "User flow of bet 3" }).getByTestId("flow-empty")).toContainText("No flow yet");
       });
 
       test("an owner comments on a note and revises: version 2, version 1 in the history", async ({ page }) => {
-        const wide = await openBet(page);
-        await expect(wide.getByRole("button", { name: "Revise" })).toBeDisabled();
-        await wide.getByLabel("Comment on the flow").fill("Show where a skipped invite comes back");
-        await wide.getByLabel("On annotation").selectOption("2");
-        await wide.getByRole("button", { name: "Comment", exact: true }).click();
-        await expect(wide.getByTestId("flow-comments")).toContainText("on note 2: Show where a skipped invite comes back · open");
-        await wide.getByRole("button", { name: "Revise" }).click();
-        await expect(wide.getByTestId("flow-version")).toHaveText("Version 2 of 2");
-        await expect(wide.getByRole("heading", { name: "User flow: Finish setup from the checklist (revised)" })).toBeVisible();
-        await expect(wide.getByTestId("flow-steps")).toContainText("Show where a skipped invite comes back");
-        await expect(wide.getByTestId("flow-comments")).toContainText("addressed in version 2");
-        await wide.getByLabel("Version").selectOption("1");
-        await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 2 (an older version)");
-        await expect(wide.getByRole("heading", { name: "User flow: Finish setup from the checklist" })).toBeVisible();
+        const full = await openComments(page, await openBet(page));
+        const panel = full.getByTestId("flow-comments-panel");
+        await expect(panel.getByRole("button", { name: "Revise" })).toBeDisabled();
+        await panel.getByLabel("Comment on the flow").fill("Show where a skipped invite comes back");
+        await panel.getByLabel("On annotation").selectOption("2");
+        await panel.getByRole("button", { name: "Comment", exact: true }).click();
+        await expect(panel.getByTestId("flow-comments")).toContainText("on note 2: Show where a skipped invite comes back · open");
+        await panel.getByRole("button", { name: "Revise" }).click();
+        await expect(panel.getByTestId("flow-version")).toHaveText("Version 2 of 2");
+        await expect(full.getByRole("heading", { name: "Finish setup from the checklist (revised) · flow", level: 2 })).toBeVisible();
+        await expect(panel.getByTestId("flow-comments")).toContainText("addressed in version 2");
+        // The revised steps, under the comments (a phone: on the Steps tab).
+        await full.getByRole("button", { name: "Close the comments" }).click();
+        if (where === "phone") await full.getByRole("tab", { name: "Steps" }).click();
+        await expect(full.getByTestId("flow-steps")).toContainText("Show where a skipped invite comes back");
+        await full.getByRole("button", { name: "Comment" }).click();
+        await panel.getByLabel("Version").selectOption("1");
+        await expect(panel.getByTestId("flow-version")).toHaveText("Version 1 of 2 (an older version)");
+        await expect(full.getByRole("heading", { name: "Finish setup from the checklist · flow", level: 2 })).toBeVisible();
       });
 
       test("an owner asks Oracle to draw a bet's flow: pending, then version 1", async ({ page }) => {
@@ -121,11 +137,12 @@ for (const [where, use] of [
         await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
         await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
         await expect(wide.getByRole("button", { name: "Ask Oracle to draw it" })).toHaveCount(0);
-        await expect(wide.getByTestId("flow-meta")).toContainText("version 1");
+        await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
         await wide.getByRole("button", { name: "Flow for bet 3" }).click();
-        await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await expect(wide.getByTestId("flow-svg")).toBeVisible();
-        await wide.getByRole("button", { name: "Close the flow" }).click();
+        const opened = page.getByTestId("flow-detail");
+        await expect(opened.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
+        await expect(opened.getByTestId("flow-svg")).toBeVisible();
+        await opened.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
         // The bet's thumbnail still shows its flow (no longer "No flow yet") after a reload.
         await page.reload();
         await expect(page.getByRole("button", { name: "Flow for bet 3" })).toBeVisible();
@@ -139,10 +156,10 @@ for (const [where, use] of [
         await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await wide.getByRole("button", { name: "Ask Oracle to draw it" }).click();
         await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
-        await expect(wide.getByTestId("flow-meta")).toContainText("version 1");
+        await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
         await wide.getByRole("button", { name: "Flow for bet 4" }).click();
-        await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await expect(wide.getByTestId("flow-svg")).toBeVisible();
+        await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
+        await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
       });
 
       for (const who of ["commenter@example.com", "viewer@example.com"]) {
@@ -156,14 +173,15 @@ for (const [where, use] of [
       }
 
       test("a commenter comments but cannot revise", async ({ page }) => {
-        const wide = await openBet(page, "commenter@example.com");
-        await wide.getByLabel("Comment on the flow").fill("Name the invite step after the calendar");
-        await wide.getByRole("button", { name: "Comment", exact: true }).click();
-        await expect(wide.getByTestId("flow-comments")).toContainText("Name the invite step after the calendar · open");
-        await expect(wide.getByRole("button", { name: "Revise" })).toHaveCount(0);
+        const full = await openComments(page, await openBet(page, "commenter@example.com"));
+        const panel = full.getByTestId("flow-comments-panel");
+        await panel.getByLabel("Comment on the flow").fill("Name the invite step after the calendar");
+        await panel.getByRole("button", { name: "Comment", exact: true }).click();
+        await expect(panel.getByTestId("flow-comments")).toContainText("Name the invite step after the calendar · open");
+        await expect(full.getByRole("button", { name: "Revise" })).toHaveCount(0);
       });
 
-      test("a roadmap item's card widens in place to its flow; an owner asks Oracle for one", async ({ page }) => {
+      test("a roadmap item's card opens its flow across the page; an owner asks Oracle for one", async ({ page }) => {
         await login(page);
         await page.goto(ROADMAP);
         await expect(bar(page, "alert-mobile")).toBeVisible();
@@ -171,23 +189,22 @@ for (const [where, use] of [
         const card = page.getByTestId("floating-card");
         await expect(card.getByTestId("card-flow")).toContainText("Act on a pushed alert");
         await card.getByRole("button", { name: "Open the item's flow" }).click();
-        await expect(card).toHaveAttribute("data-wide", "true");
-        const view = card.getByTestId("flow-detail");
-        await view.scrollIntoViewIfNeeded();
-        await expect(view.getByRole("heading", { name: "User flow: Act on a pushed alert" })).toBeVisible();
+        await expect(card).toHaveAttribute("data-flow-open", "true");
+        const view = page.getByTestId("flow-detail");
+        await expect(view.getByRole("heading", { level: 2 })).toHaveText(where === "phone" ? "Act on a pushed alert · flow" : "Mobile alert push · flow");
         await expect(view.getByTestId("flow-regions")).toContainText("Snooze and Assign buttons");
         if (where === "phone") {
-          const box = (await card.boundingBox())!;
+          const box = (await view.boundingBox())!;
           expect(box.height).toBeGreaterThanOrEqual(840);
         }
-        await view.getByRole("button", { name: "Close the flow" }).click();
-        await expect(card).toHaveAttribute("data-wide", "false");
+        await view.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
+        await expect(card).toHaveAttribute("data-flow-open", "false");
         await card.getByRole("button", { name: "Close", exact: true }).click();
         await bar(page, "alert-digest").click();
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
         await expect(card.getByTestId("flow-empty")).toContainText("No flow yet");
         await card.getByRole("button", { name: "Ask Oracle to draw it" }).click();
-        await expect(card.getByTestId("flow-meta")).toContainText("version 1");
+        await expect(card.getByTestId("flow-drawn")).toContainText("Version 1");
       });
     });
   }
@@ -220,9 +237,9 @@ test.describe("a drawing that takes a while lands without a reload", () => {
     // The job is still running at the panel's first read again.
     await page.waitForTimeout(2500);
     await expect(card.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
-    await expect(card.getByTestId("flow-meta")).toContainText("version 1", { timeout: JOB_MS + 6000 });
-    await card.getByRole("button", { name: "Open the flow" }).click();
-    await expect(card.getByTestId("flow-svg")).toBeVisible();
+    await expect(card.getByTestId("flow-drawn")).toContainText("Version 1", { timeout: JOB_MS + 6000 });
+    await card.getByRole("button", { name: "Open the flow", exact: true }).click();
+    await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
     expect(loads()).toBe(0);
   });
 
@@ -235,10 +252,10 @@ test.describe("a drawing that takes a while lands without a reload", () => {
     await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
     await page.waitForTimeout(2500);
     await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
-    await expect(wide.getByTestId("flow-meta")).toContainText("version 1", { timeout: JOB_MS + 6000 });
+    await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1", { timeout: JOB_MS + 6000 });
     await wide.getByRole("button", { name: "Flow for bet 3" }).click();
-    await expect(wide.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-    await expect(wide.getByTestId("flow-svg")).toBeVisible();
+    await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
+    await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
     expect(loads()).toBe(0);
   });
 });
