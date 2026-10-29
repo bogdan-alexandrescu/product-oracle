@@ -430,17 +430,17 @@ def validate_planning_horizons(value: Any) -> dict[str, int]:
     short, medium = value["short_quarters"], value["medium_quarters"]
     long_from, long_to = value["long_from_months"], value["long_to_months"]
     if not 1 <= short <= 2:
-        raise InvalidSetting("short_quarters must be 1 or 2")
+        raise InvalidSetting("'Now' must be the current quarter, or the current and next quarter.")
     if not 1 <= medium <= 4:
-        raise InvalidSetting("medium_quarters must be between 1 and 4")
+        raise InvalidSetting("'Next' must be 1 to 4 quarters.")
     next_ends = 3 * (short + medium)
     if not next_ends <= long_from <= 36:
         raise InvalidSetting(
-            f"long_from_months must start after Next ends (at least {next_ends} months) "
-            "and be at most 36"
+            f"'From' must start after Next ends (at least {next_ends} months) "
+            "and be at most 36 months."
         )
     if not long_from < long_to <= 60:
-        raise InvalidSetting("long_to_months must be after long_from_months and at most 60")
+        raise InvalidSetting("'To' must be after 'From' and at most 60 months.")
     return {k: value[k] for k in HORIZON_KEYS}
 
 

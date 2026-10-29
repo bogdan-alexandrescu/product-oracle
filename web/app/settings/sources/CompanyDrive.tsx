@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { type FormEvent, useId, useState } from "react";
 
 import { Button, Chip, confirmInPage, Icon, InfoTip, LinkButton, Notice, Panel } from "@/components/ds";
@@ -138,6 +139,14 @@ function CompanyDomains() {
         skipped (&ldquo;company domain not set&rdquo;). Removing a domain hides the docs it let in from every
         member&rsquo;s sources at once.
       </Heading>
+      {/* The same list as Members › Sign-in, which says so too (qa-settings-17). */}
+      <p className="text-sm text-text2" data-testid="company-domains-hint">
+        Which owners&rsquo; Drive files are read. It is the same list as Company domains in{" "}
+        <Link href="/settings/members" className="font-semibold text-accent-ink underline underline-offset-2">
+          Members › Sign-in
+        </Link>
+        , which also decides who may sign in.
+      </p>
       {q.error && <Notice tone="error">{q.error}</Notice>}
       {!q.data && !q.error && <span aria-busy className="block h-3 w-1/2 animate-pulse rounded bg-surface2" />}
       {q.data && list.length === 0 && (

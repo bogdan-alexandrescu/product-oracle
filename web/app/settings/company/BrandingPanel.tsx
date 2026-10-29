@@ -64,30 +64,83 @@ function ContrastResult({ accent }: { accent: string }) {
   );
 }
 
+/*
+ * qa-settings-5: the preview's colours are fixed, whatever the app's theme: the dark theme maps
+ * `white` and `black` (and the tokens) onto its own surface and text, so they are inline here.
+ */
+const PREVIEW_LIGHT = { background: "#ffffff", color: "#111827", border: "1px solid #d1d9e2" };
+const PREVIEW_DARK = { background: "#111827", color: "#ffffff", border: "1px solid #111827" };
+
 /** The live preview: the logo and name on a light header and on a dark slide. */
 function Preview({ name, accent, light, dark }: { name: string; accent: string | null; light?: string; dark?: string }) {
+  const edge = accent ? { borderBottom: `3px solid ${accent}` } : {};
   return (
     <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
-      <div
-        data-testid="brand-preview-light"
-        className="flex h-16 items-center gap-3 rounded-lg border border-line bg-white px-4"
-        style={accent ? { borderBottom: `3px solid ${accent}` } : undefined}
-      >
+      <div data-testid="brand-preview-light" className="flex h-16 items-center gap-3 rounded-lg px-4" style={{ ...PREVIEW_LIGHT, ...edge }}>
         {/* A data: URL: next/image would fetch it again through its optimiser. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {light && <img src={light} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />}
-        <span className="truncate text-[15px] font-semibold text-[#111]">{name}</span>
+        <span className="truncate text-[15px] font-semibold" style={{ color: PREVIEW_LIGHT.color }}>
+          {name}
+        </span>
       </div>
-      <div
-        data-testid="brand-preview-dark"
-        className="flex h-16 items-center gap-3 rounded-lg bg-[#111827] px-4"
-        style={accent ? { borderBottom: `3px solid ${accent}` } : undefined}
-      >
+      <div data-testid="brand-preview-dark" className="flex h-16 items-center gap-3 rounded-lg px-4" style={{ ...PREVIEW_DARK, ...edge }}>
         {/* A data: URL: next/image would fetch it again through its optimiser. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         {dark && <img src={dark} alt={name} className="h-10 w-auto max-w-[200px] object-contain" />}
-        <span className="truncate text-[15px] font-semibold text-white">{name}</span>
+        <span className="truncate text-[15px] font-semibold" style={{ color: PREVIEW_DARK.color }}>
+          {name}
+        </span>
       </div>
+    </div>
+  );
+}
+
+const UPLOAD =
+  "inline-flex h-8 cursor-pointer items-center justify-center gap-2 whitespace-nowrap rounded-lg border border-line-strong bg-surface px-3 text-sm font-semibold text-text hover:bg-surface2 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent has-[:disabled]:cursor-not-allowed has-[:disabled]:border-line has-[:disabled]:text-text2";
+
+/**
+ * qa-settings-20: a logo's upload as a button (the file input kept, out of sight, with the
+ * field's name), and what is there now: the file just uploaded, the stored logo's size, or none.
+ */
+function LogoUpload({
+  label,
+  action,
+  busy,
+  logo,
+  fileName,
+  onFile,
+}: {
+  label: string;
+  action: string;
+  busy: boolean;
+  logo: BrandLogo | null | undefined;
+  fileName?: string;
+  onFile: (file: File | undefined) => void;
+}) {
+  const now = fileName ?? (logo ? `${logo.width} × ${logo.height} px` : "None yet");
+  return (
+    <div className="flex min-w-56 flex-col gap-1.5">
+      <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">{label}</span>
+      <span className="flex min-w-0 items-center gap-2">
+        <label className={UPLOAD}>
+          <input
+            type="file"
+            aria-label={label}
+            accept={LOGO_TYPES}
+            disabled={busy}
+            className="sr-only"
+            onChange={(e) => {
+              onFile(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          {logo ? `Replace ${action}` : `Upload ${action}`}
+        </label>
+        <span className="min-w-0 truncate text-[13px] text-text2" title={now}>
+          {now}
+        </span>
+      </span>
     </div>
   );
 }
@@ -159,9 +212,15 @@ export function BrandingPanel() {
     }
   }
 
+  const [fileNames, setFileNames] = useState<Partial<Record<LogoVariant, string>>>({});
   const upload = (file: File | undefined, variant: LogoVariant) => {
-    if (file) void run(() => uploadBrandLogo(file, variant));
+    if (file) void run(() => uploadBrandLogo(file, variant), () => setFileNames((n) => ({ ...n, [variant]: file.name })));
   };
+  const remove = (variant: LogoVariant) =>
+    void run(
+      () => deleteBrandLogo(variant),
+      () => setFileNames((n) => ({ ...n, [variant]: undefined })),
+    );
 
   const save = () =>
     form &&
@@ -209,37 +268,29 @@ export function BrandingPanel() {
                 }}
               >
                 <div className="flex flex-wrap items-end gap-3">
-                  <Field label="Logo" className="min-w-56">
-                    <input
-                      type="file"
-                      accept={LOGO_TYPES}
-                      disabled={busy}
-                      className="text-[13px]"
-                      onChange={(e) => {
-                        upload(e.target.files?.[0], "light");
-                        e.target.value = "";
-                      }}
-                    />
-                  </Field>
-                  <Field label="Dark logo" className="min-w-56">
-                    <input
-                      type="file"
-                      accept={LOGO_TYPES}
-                      disabled={busy}
-                      className="text-[13px]"
-                      onChange={(e) => {
-                        upload(e.target.files?.[0], "dark");
-                        e.target.value = "";
-                      }}
-                    />
-                  </Field>
+                  <LogoUpload
+                    label="Logo"
+                    action="logo"
+                    busy={busy}
+                    logo={brand.logo}
+                    fileName={brand.logo ? fileNames.light : undefined}
+                    onFile={(f) => upload(f, "light")}
+                  />
+                  <LogoUpload
+                    label="Dark logo"
+                    action="dark logo"
+                    busy={busy}
+                    logo={brand.logo_dark}
+                    fileName={brand.logo_dark ? fileNames.dark : undefined}
+                    onFile={(f) => upload(f, "dark")}
+                  />
                   {brand.logo && (
-                    <Button variant="ghost" disabled={busy} onClick={() => void run(() => deleteBrandLogo("light"))}>
+                    <Button variant="ghost" disabled={busy} onClick={() => remove("light")}>
                       Remove logo
                     </Button>
                   )}
                   {brand.logo_dark && (
-                    <Button variant="ghost" disabled={busy} onClick={() => void run(() => deleteBrandLogo("dark"))}>
+                    <Button variant="ghost" disabled={busy} onClick={() => remove("dark")}>
                       Remove dark logo
                     </Button>
                   )}
@@ -251,14 +302,18 @@ export function BrandingPanel() {
                 <div className="flex flex-col gap-1.5">
                   <Field label="Accent">
                     <span className="flex items-center gap-2">
+                      {/* qa-settings-20: the swatch shows the colour, or says there is none. */}
                       <span
                         aria-hidden
-                        className="size-9 shrink-0 rounded-lg border border-line-strong"
-                        style={{ background: previewAccent ?? "transparent" }}
-                      />
+                        data-testid="accent-swatch"
+                        className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-line-strong text-[11px] font-semibold text-text2"
+                        style={previewAccent ? { background: previewAccent } : undefined}
+                      >
+                        {previewAccent ? "" : "None"}
+                      </span>
                       <input
                         className={`${INPUT} max-w-40 font-mono`}
-                        placeholder="#0369a1"
+                        placeholder="e.g. #0369a1"
                         spellCheck={false}
                         value={form.accent}
                         onChange={(e) => set({ accent: e.target.value })}

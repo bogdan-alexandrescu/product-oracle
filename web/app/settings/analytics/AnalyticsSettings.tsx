@@ -42,6 +42,16 @@ export function AnalyticsSettings() {
   const hostChoice = host ?? (storedHost in CLOUD ? storedHost : "own");
   const ownValue = ownHost ?? (storedHost in CLOUD ? "" : storedHost);
   const projectValue = project ?? a.project_id ?? "";
+  // Why Save waits, in a few words, until both are there.
+  const missing = !projectValue.trim()
+    ? key.trim()
+      ? "Add the project ID to save."
+      : "Add the project ID and a key to save."
+    : !key.trim()
+      ? connected
+        ? "Paste a new key to save a change."
+        : "Paste a key to save."
+      : null;
 
   async function run(call: () => Promise<unknown>) {
     setBusy(true);
@@ -110,13 +120,29 @@ export function AnalyticsSettings() {
               <input className={INPUT} value={ownValue} placeholder="https://posthog.example.com" onChange={(e) => setOwnHost(e.target.value)} />
             </label>
           )}
-          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-            Project id
-            <input className={INPUT} value={projectValue} inputMode="numeric" onChange={(e) => setProject(e.target.value)} />
-          </label>
-          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-            Personal API key
+          <div className="flex flex-col gap-1">
+            <label htmlFor="posthog-project" className="text-sm font-semibold text-text2">
+              Project ID
+            </label>
             <input
+              id="posthog-project"
+              className={INPUT}
+              value={projectValue}
+              inputMode="numeric"
+              aria-describedby="posthog-project-hint"
+              onChange={(e) => setProject(e.target.value)}
+            />
+            <span id="posthog-project-hint" className="text-[13px] text-text2">
+              Find it in PostHog › Project settings.
+            </span>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="posthog-key" className="text-sm font-semibold text-text2">
+              Personal API key
+            </label>
+            <input
+              id="posthog-key"
+              aria-describedby="posthog-key-hint"
               className={INPUT}
               type="password"
               autoComplete="off"
@@ -124,16 +150,29 @@ export function AnalyticsSettings() {
               placeholder={connected ? "Replace key" : ""}
               onChange={(e) => setKey(e.target.value)}
             />
-          </label>
+            <span id="posthog-key-hint" className="text-[13px] text-text2">
+              Make one in PostHog › Account settings › Personal API keys.
+            </span>
+          </div>
           {error && <ErrorNote>{error}</ErrorNote>}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="solid" disabled={busy || !key.trim() || !projectValue.trim()} onClick={save}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="primary"
+              disabled={busy || !key.trim() || !projectValue.trim()}
+              aria-describedby={missing ? "posthog-save-why" : undefined}
+              onClick={save}
+            >
               Save
             </Button>
             {connected && (
               <Button disabled={busy} onClick={disconnect}>
                 Disconnect
               </Button>
+            )}
+            {missing && (
+              <span id="posthog-save-why" data-testid="analytics-save-why" className="text-sm text-text2">
+                {missing}
+              </span>
             )}
           </div>
         </div>

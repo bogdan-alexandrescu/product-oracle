@@ -27,6 +27,13 @@ const TITLE: Partial<Record<State, string>> = {
   removed: "You were removed",
 };
 
+/** qa-onboarding-34: when the invite ran out, in words: past, today, or (not yet) when it will. */
+function expiry(at: string | null | undefined): string {
+  if (!at) return "It expired.";
+  if (formatDay(at) === formatDay(new Date().toISOString())) return "It expired today.";
+  return Date.parse(at) < Date.now() ? `It expired on ${formatDay(at)}.` : `It expires on ${formatDay(at)}.`;
+}
+
 function body(a: Access): string {
   const email = a.email ?? "your address";
   switch (a.state) {
@@ -37,7 +44,7 @@ function body(a: Access): string {
     case "declined":
       return `If you think this is a mistake, ask an owner to invite ${email}.`;
     case "invite_expired":
-      return `It expired${a.invite_expired_at ? ` on ${formatDay(a.invite_expired_at)}` : ""}. Ask the person who invited you to resend it.`;
+      return `${expiry(a.invite_expired_at)} Ask the person who invited you to resend it.`;
     case "invite_only":
       return `Ask an owner to invite ${email}.`;
     case "outside_domains":

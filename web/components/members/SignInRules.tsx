@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useState, type FormEvent } from "react";
 
 import { Field, INPUT, SELECT } from "@/app/settings/_components/fields";
@@ -91,6 +92,14 @@ export function SignInRules() {
           <>
             <section aria-label="Company domains" className="flex flex-col gap-2">
               <h3 className={H3}>Company domains</h3>
+              {/* qa-settings-17: Sources › Google Drive shows the same list as "Company email domains". */}
+              <p data-testid="sign-in-domains-hint" className="text-sm text-text2">
+                Who may sign in from Google. It is the same list as Company email domains in{" "}
+                <Link href="/settings/sources#company-domains" className="font-semibold text-accent-ink hover:underline">
+                  Settings › Sources
+                </Link>
+                , where it also decides which Google Drive docs Oracle reads.
+              </p>
               <ul aria-label="Company domains" className="flex flex-wrap gap-1.5">
                 {rules.domains.map((d) => (
                   <li key={d.domain} aria-label={d.domain} data-testid="sign-in-domain" data-from={d.from}>

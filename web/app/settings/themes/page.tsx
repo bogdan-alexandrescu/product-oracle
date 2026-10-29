@@ -18,7 +18,7 @@ import {
   Split,
   type Column,
 } from "@/components/ds";
-import { ThemeThumbnail } from "@/components/ThemePreview";
+import { ThemePreview } from "@/components/ThemePreview";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -123,7 +123,15 @@ function ThemeInspector({ t }: { t: Theme }) {
       }
     >
       <InspectorSection label="Preview">
-        <ThemeThumbnail tokens={t.tokens} css={t.css} kind={t.kind === "roadmap" ? "roadmap" : "prd"} scale={0.5} />
+        {/* The whole sample, scrollable: a scaled thumbnail cut the text off at its bottom edge. */}
+        <ThemePreview
+          tokens={t.tokens}
+          css={t.css}
+          kind={t.kind === "roadmap" ? "roadmap" : "prd"}
+          title={`${t.name} preview`}
+          testId="theme-inspector-preview"
+          height="h-[26rem]"
+        />
       </InspectorSection>
       <InspectorSection label="Colours">
         <Swatches t={t} size={28} />

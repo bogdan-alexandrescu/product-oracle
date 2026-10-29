@@ -56,7 +56,15 @@ export function LoginForm() {
     try {
       const { error: err, response } = await api.POST("/v1/auth/login", { body: { email, password } });
       if (err || !response.ok) {
-        setError(response.status === 401 ? "Invalid email or password." : "Login failed.");
+        // qa-onboarding-14: a refused invite (withdrawn, expired) says why, in the API's words.
+        const detail = (err as { detail?: unknown } | undefined)?.detail;
+        setError(
+          response.status === 401
+            ? "Invalid email or password."
+            : response.status === 403 && typeof detail === "string"
+              ? detail
+              : "Login failed.",
+        );
         return;
       }
       router.push(target ?? (await loadLanding()));

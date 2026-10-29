@@ -2,7 +2,7 @@
  * Mock of the connections and company settings endpoints (mock mode only). Kept apart
  * from server.ts; state lives in its own localStorage key.
  *
- * Token rules: anything starting with "bad" is rejected; a Google token starting with
+ * Token rules: anything starting with "bad" or "not-" is rejected; a Google token starting with
  * "legacy" has the short-lived drive.file grant, which cannot read folders ("Reconnect to
  * choose files"). OAuth is
  * "configured" for GitHub and Google: authorize connects at once and sends the browser
@@ -180,11 +180,11 @@ function horizonsError(value: unknown): string | null {
     return "planning_horizons needs short_quarters, medium_quarters, long_from_months and long_to_months as whole numbers";
   }
   const [short, medium, from, to] = HORIZON_KEYS.map((k) => v[k] as number);
-  if (short < 1 || short > 2) return "short_quarters must be 1 or 2";
-  if (medium < 1 || medium > 4) return "medium_quarters must be between 1 and 4";
+  if (short < 1 || short > 2) return "'Now' must be the current quarter, or the current and next quarter.";
+  if (medium < 1 || medium > 4) return "'Next' must be 1 to 4 quarters.";
   const nextEnds = 3 * (short + medium);
-  if (from < nextEnds || from > 36) return `long_from_months must start after Next ends (at least ${nextEnds} months) and be at most 36`;
-  if (to <= from || to > 60) return "long_to_months must be after long_from_months and at most 60";
+  if (from < nextEnds || from > 36) return `'From' must start after Next ends (at least ${nextEnds} months) and be at most 36 months.`;
+  if (to <= from || to > 60) return "'To' must be after 'From' and at most 60 months.";
   return null;
 }
 
@@ -297,10 +297,11 @@ function json(status: number, body: unknown): Response {
 const now = () => new Date().toISOString();
 
 function identity(provider: string, token: string): { account_id: string; label: string; scopes: string[] } | string {
-  if (token.startsWith("bad")) return `${PROVIDERS.find((p) => p.key === provider)?.name ?? provider} rejected the token (401)`;
+  // As a provider would turn them down: "bad…" and "not-…" (e.g. "not-a-token") tokens.
+  if (token.startsWith("bad") || token.startsWith("not-")) return `${PROVIDERS.find((p) => p.key === provider)?.name ?? provider} rejected the token (401)`;
   const labels: Record<string, string> = {
     github: "example-user",
-    slack: "pat @ Example",
+    slack: "pat in Example",
     notion: "Example Notion",
     fireflies: "pat@example.com",
     google: "pat@example.com",

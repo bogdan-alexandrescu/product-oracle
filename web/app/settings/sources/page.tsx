@@ -8,7 +8,6 @@ import {
   Button,
   Chip,
   confirmInPage,
-  Empty,
   Icon,
   InfoTip,
   Inspector,
@@ -84,6 +83,14 @@ const STATUS_LABEL: Record<Source["status"], string> = {
   error: "Error",
   needs_attention: "Needs attention",
 };
+
+/** Fireflies' own API: a source reading it says nothing of where it reads. */
+const FIREFLIES_API = "https://api.fireflies.ai/graphql";
+
+/** "1 item", "2 items": a count and its noun, in words (qa-settings-26). */
+function count(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
 
 const NEW_FIREFLIES: FirefliesConfig = { mode: "all", series: [], meetings: [], labels: {} };
 
@@ -472,7 +479,7 @@ function SourceRow({
     if (r.outcome === "completed") {
       setNotice({
         tone: "pass",
-        text: `Synced: ${r.upserted} item(s) seen, ${r.versions_written} new version(s), ${r.deleted} deleted.`,
+        text: `Synced: ${count(r.upserted, "item")} seen, ${count(r.versions_written, "new version")}, ${r.deleted} deleted.`,
       });
     } else if (r.outcome === "rate_limited") {
       setNotice({ tone: "pass", text: "Rate limited: the next sync resumes where this one stopped." });
@@ -512,7 +519,7 @@ function SourceRow({
     if (fileRef.current) fileRef.current.value = "";
     if (!r) return;
     const added = r.items.length - r.unchanged.length;
-    setNotice({ tone: "pass", text: `Uploaded ${added} file(s)${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ""}.` });
+    setNotice({ tone: "pass", text: `Uploaded ${count(added, "file")}${r.unchanged.length ? `, ${r.unchanged.length} unchanged` : ""}.` });
     const fresh = await act(() => unwrap(api.GET("/v1/sources/{source_id}", path)));
     if (fresh) onChange(fresh);
   }
@@ -528,6 +535,8 @@ function SourceRow({
   // GitHub's include: what the source reads, when it reads only some kinds.
   const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";
+  // An Uploads source with nothing in it yet points to its own Upload files (qa-onboarding-24).
+  const emptyUpload = source.kind === "upload" && source.item_count === 0 && !source.last_synced_at;
   // A sync that stopped part way (a rate limit) kept what it stored: say so, never "never synced".
   const synced = source.partly_synced_at
     ? `partly synced ${formatDateTime(source.partly_synced_at)} · resumes on the next sync`
@@ -557,9 +566,10 @@ function SourceRow({
               No connector
             </Chip>
           )}
-          {source.kind === "fireflies" && connection?.endpoint_url && (
+          {/* Where it reads, without the address: only when an owner set another endpoint (qa-settings-25). */}
+          {source.kind === "fireflies" && connection?.endpoint_url && connection.endpoint_url !== FIREFLIES_API && (
             <span className="min-w-0 max-w-full truncate text-sm text-text2" title={connection.endpoint_url}>
-              Reads <span className="font-mono">{connection.endpoint_url}</span>
+              Reads an endpoint an owner set
             </span>
           )}
         </span>
@@ -619,8 +629,14 @@ function SourceRow({
         </span>
       </div>
       <div className="tnum mt-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-text2">
-        <span>{source.item_count} item(s)</span>
-        <span data-testid="source-synced">{synced}</span>
+        {emptyUpload ? (
+          <span data-testid="source-items">No items yet — upload files to add some</span>
+        ) : (
+          <>
+            <span data-testid="source-items">{source.item_count ? count(source.item_count, "item") : "No items yet"}</span>
+            <span data-testid="source-synced">{synced}</span>
+          </>
+        )}
         {fireflies && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5" data-testid="fireflies-included">
             <Label className="flex-none">{fireflies.titleRule ? "Title rule" : "Meetings"}</Label>
@@ -631,7 +647,7 @@ function SourceRow({
             </span>
           </span>
         )}
-        {allowlist && (items.length > 0 || folders.length === 0) && (
+        {allowlist && (items.length > 0 || folders.length === 0) && !(source.kind === "github" && items.length > 0) && (
           <span className="flex min-w-0 max-w-full items-center gap-1.5">
             <Label className="flex-none">{allowlist.label}</Label>
             <span className="min-w-0 truncate text-text" title={items.join(", ")} data-testid="source-picks">
@@ -822,6 +838,17 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
     }
   }
 
+  // Why Add source is greyed out, next to it (qa-onboarding-17); other blocks say so above.
+  const reason = !name.trim()
+    ? "Name the source to add it"
+    : drive && !reconnect && usable.length > 0 && files.length === 0
+      ? "Choose files or folders to add it"
+      : kind === "notion" && usable.length > 0 && notionRoots(picked).length === 0
+        ? "Tick pages to add it"
+        : kind === "fireflies" && usable.length > 0 && !firefliesReady(meetings)
+          ? "Pick meetings to add it"
+          : null;
+
   const blocked =
     !option?.connector_available ||
     (needsConnection && usable.length === 0) ||
@@ -830,7 +857,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
     (kind === "notion" && notionRoots(picked).length === 0);
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source">
+    <form onSubmit={submit} className="flex flex-col gap-3" aria-label="Add a source" id="add-source">
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] gap-3">
         <Field label="Kind">
           <select
@@ -852,6 +879,7 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
         </Field>
         <Field label="Name">
           <input
+            id="add-source-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -902,10 +930,15 @@ function AddSource({ kinds, onAdded }: { kinds: KindOption[]; onAdded: (s: Sourc
       )}
       {Picker && usable.length > 0 && <Picker key={`${kind}:${connectionId}`} connectionId={connectionId} config={picked} onChange={setPicked} />}
       {error && <Notice tone="error">{error}</Notice>}
-      <div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Button type="submit" variant="solid" icon="plus" disabled={busy || blocked || !name.trim()}>
           Add source
         </Button>
+        {reason && option?.connector_available && !(needsConnection && usable.length === 0) && (
+          <span className="text-sm text-text2" data-testid="add-source-reason">
+            {reason}
+          </span>
+        )}
       </div>
     </form>
   );
@@ -933,6 +966,11 @@ export default function SourceSettingsPage() {
   const items = list.reduce((n, s) => n + s.item_count, 0);
 
   const target = useTargetedSource();
+  // The header's and the empty list's Add a source: to the form, cursor in its name.
+  const toAddSource = () => {
+    document.getElementById("add-source")?.scrollIntoView({ block: "center", behavior: "smooth" });
+    document.getElementById("add-source-name")?.focus({ preventScroll: true });
+  };
   const replace = (s: Source) => sources.setData((prev) => (prev ?? []).map((x) => (x.id === s.id ? s : x)));
 
   const inspector = (
@@ -950,9 +988,9 @@ export default function SourceSettingsPage() {
         </>
       }
       stats={[
-        { label: "Sources", value: sources.data ? list.length : "—" },
-        { label: "Items", value: sources.data ? items : "—" },
-        { label: "Errors", value: sources.data ? errors : "—", tone: errors > 0 ? "crit" : undefined },
+        { label: list.length === 1 ? "Source" : "Sources", value: sources.data ? list.length : "—" },
+        { label: items === 1 ? "Item" : "Items", value: sources.data ? items : "—" },
+        { label: errors === 1 ? "Error" : "Errors", value: sources.data ? errors : "—", tone: errors > 0 ? "crit" : undefined, testId: "stat-errors" },
       ]}
     >
       <InspectorSection>
@@ -987,9 +1025,15 @@ export default function SourceSettingsPage() {
           </>
         }
         action={
-          <LinkButton variant="primary" icon="search" href="/sources">
-            Search sources
-          </LinkButton>
+          // Adding a source is this page's main act (qa-settings-27); searching is next to it.
+          <span className="flex flex-wrap items-center gap-2">
+            <LinkButton variant="ghost" icon="search" href="/sources">
+              Search sources
+            </LinkButton>
+            <Button variant="primary" icon="plus" onClick={toAddSource}>
+              Add a source
+            </Button>
+          </span>
         }
       />
       <Split inspector={inspector}>
@@ -1004,7 +1048,14 @@ export default function SourceSettingsPage() {
               ))}
             </div>
           )}
-          {sources.data && list.length === 0 && <Empty>No sources yet</Empty>}
+          {sources.data && list.length === 0 && (
+            <div className="flex flex-col items-center gap-3 px-4 py-8 text-center" data-testid="sources-empty">
+              <p className="text-[15px] text-text2">No sources yet. Add one to give Oracle something to read.</p>
+              <Button variant="solid" icon="plus" onClick={toAddSource}>
+                Add a source
+              </Button>
+            </div>
+          )}
           {list.length > 0 && (
             <ul aria-label="My sources" className="flex flex-col">
               {list.map((s) => (

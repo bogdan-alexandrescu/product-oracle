@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { ActedCell, SETTLING, useActed } from "@/components/account/acted";
 import { ConfirmDialog, type Consequence } from "@/components/account/ConfirmDialog";
+import { scopeChips } from "@/components/account/scopes";
 import { Field, SELECT_FIELD } from "@/app/settings/_components/fields";
 import {
   Button,
@@ -83,24 +84,27 @@ export function Expiry({ t }: { t: Pick<ApiToken, "revoked_at" | "expires_at"> }
   );
 }
 
-/** Scopes on one line (mono, truncated, every one in the title); a service token's role. */
+/** Scopes as plain chips ("Read", "Read & write"), wrapping, never cut; a service token's role. */
 export function Scopes({ scopes, role }: { scopes?: string[] | null; role?: string }) {
   if (!scopes?.length) return <span className="text-text2">acts as {role}</span>;
-  const text = scopes.join(", ");
   return (
-    <span className="block truncate font-mono text-[13px] text-text" title={text}>
-      {text}
+    <span className="flex flex-wrap gap-1" data-testid="token-scopes">
+      {scopeChips(scopes).map((c) => (
+        <Chip key={c.label} kind="acc" wrap title={c.title}>
+          {c.label}
+        </Chip>
+      ))}
     </span>
   );
 }
 
 export const when = (iso?: string | null, never = "Never") =>
   iso ? (
-    <span className="tnum text-text2" title={formatDateTime(iso)}>
+    <span className="tnum whitespace-nowrap text-text2" title={formatDateTime(iso)}>
       {formatDate(iso)}
     </span>
   ) : (
-    <span className="text-text2">{never}</span>
+    <span className="whitespace-nowrap text-text2">{never}</span>
   );
 
 /** What revoking a credential of each kind does, for the confirm dialog. */
@@ -198,8 +202,8 @@ function OwnerTokens({ initialMember }: { initialMember: string | null }) {
       phoneLabel: "For ",
       cell: (t) => <span className={t.owner_email ? "" : "text-text2"}>{t.owner_email ?? "No one (company)"}</span>,
     },
-    { key: "scopes", header: "Scopes", width: "15%", hideOnPhone: true, cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
-    { key: "used", header: "Last used", width: "110px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
+    { key: "scopes", header: "Scopes", width: "15%", hideOnPhone: true, wrap: true, cell: (t) => <Scopes scopes={t.scopes} role={t.role} /> },
+    { key: "used", header: "Last used", width: "124px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
     // Created is in the name's title: the expiry matters more on one line.
     { key: "expires", header: "Expiry", width: "164px", cell: (t) => <Expiry t={t} /> },
     { key: "status", header: "Status", width: "150px", cell: (t) => <TokenStatus t={t} /> },

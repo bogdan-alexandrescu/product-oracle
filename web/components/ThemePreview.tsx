@@ -17,9 +17,18 @@ const loadPreview = (body: PreviewIn) =>
  * A sample document rendered by POST /v1/themes/preview with unsaved tokens and CSS,
  * refreshed 300 ms after the last change. Sandboxed: no scripts, no same-origin access.
  */
-export function ThemePreview({ tokens, css, kind, title = "Theme preview" }: PreviewIn & { title?: string }) {
+export function ThemePreview({
+  tokens,
+  css,
+  kind,
+  title = "Theme preview",
+  testId = "theme-preview",
+  height,
+}: PreviewIn & { title?: string; testId?: string; height?: string }) {
   const live = useLive<PreviewIn, string>({ tokens, css, kind }, loadPreview, 300);
-  return <PreviewFrame html={live.data} pending={live.pending} error={live.error} title={title} testId="theme-preview" />;
+  return (
+    <PreviewFrame html={live.data} pending={live.pending} error={live.error} title={title} testId={testId} height={height} />
+  );
 }
 
 type SlidePreviewIn = {
@@ -73,6 +82,7 @@ function PreviewFrame({
   title,
   testId,
   scale = 1,
+  height = "h-[34rem]",
 }: {
   html: string | undefined;
   pending: boolean;
@@ -80,6 +90,8 @@ function PreviewFrame({
   title: string;
   testId: string;
   scale?: number;
+  /** The frame's height class; the sample scrolls inside it, so nothing is cut off. */
+  height?: string;
 }) {
   return (
     <div className="relative">
@@ -89,10 +101,10 @@ function PreviewFrame({
           data-testid={testId}
           sandbox=""
           srcDoc={html ?? ""}
-          className="h-[34rem] w-full rounded-button border border-line bg-surface"
+          className={`${height} w-full rounded-button border border-line bg-surface`}
         />
       ) : (
-        <div className="h-[34rem] w-full overflow-hidden rounded-button border border-line bg-surface2">
+        <div className={`${height} w-full overflow-hidden rounded-button border border-line bg-surface2`}>
           <iframe
             title={title}
             data-testid={testId}

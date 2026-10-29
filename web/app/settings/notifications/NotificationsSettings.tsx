@@ -14,6 +14,7 @@ import { Button, confirmInPage, Notice, PageHeader, Panel } from "@/components/d
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
+import { zoneName } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { ZONE_NOT_SET } from "@/lib/zone";
@@ -79,7 +80,7 @@ function OwnerSettings() {
               await Promise.all([integrations.reload(), setting.reload(), status.reload()]);
             }}
           />
-          <SchedulePanel setting={setting.data} onSaved={(v) => setting.setData(() => v)} />
+          <SchedulePanel setting={setting.data} slackConnected={!!slack} onSaved={(v) => setting.setData(() => v)} />
         </>
       )}
     </div>
@@ -225,7 +226,7 @@ function SlackPanel({
   );
 }
 
-function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: (v: ReportSetting) => void }) {
+function SchedulePanel({ setting, slackConnected, onSaved }: { setting: ReportSetting; slackConnected: boolean; onSaved: (v: ReportSetting) => void }) {
   const [draft, setDraft] = useState(setting);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -252,15 +253,22 @@ function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: 
   return (
     <Panel title="Weekly alignment report" testId="report-schedule">
       <div className="space-y-3 px-4 py-3 text-[15px] max-[600px]:px-3">
-        <p className="text-text2">
-          Every week Oracle reports the roadmap against engineering for the week that ended: in owners&apos; Inbox and in the Slack channel.
+        {/* qa-settings-38: where the report goes, from whether Slack is connected and a channel picked. */}
+        <p className="text-text2" data-testid="report-where">
+          Every week Oracle reports the roadmap against engineering for the week that ended
+          {!slackConnected
+            ? ", in owners' Inbox. Inbox only until Slack is connected."
+            : setting.slack_channel
+              ? `: in owners' Inbox and in #${setting.slack_channel.name} on Slack.`
+              : ", in owners' Inbox. Inbox only until a Slack channel is picked."}
         </p>
-        <label className="flex items-center gap-2 font-medium">
+        {/* qa-settings-42: on a phone the whole row is the tap target, at least 44 px high. */}
+        <label className="flex items-center gap-2 font-medium max-[600px]:min-h-11 max-[600px]:min-w-11 max-[600px]:gap-3" data-testid="report-enabled">
           <input
             type="checkbox"
             checked={draft.enabled}
             onChange={(e) => setDraft({ ...draft, enabled: e.target.checked })}
-            className="size-4 accent-[var(--accent)]"
+            className="size-4 accent-[var(--accent)] max-[600px]:size-6"
           />
           Make the weekly report
         </label>
@@ -280,7 +288,7 @@ function SchedulePanel({ setting, onSaved }: { setting: ReportSetting; onSaved: 
           <div className="flex h-9 items-center gap-2 text-sm">
             <span className="font-semibold text-text2">Company time zone</span>
             <span data-testid="report-zone" className="tnum">
-              {stored.data?.is_default ? ZONE_NOT_SET : zone}
+              {stored.data?.is_default ? ZONE_NOT_SET : zoneName(zone)}
             </span>
             <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
               Change

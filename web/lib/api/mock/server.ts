@@ -6,7 +6,7 @@
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
-import { citationHref, formatDate } from "@/lib/format";
+import { citationHref, formatDate, formatDay } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
@@ -3686,6 +3686,21 @@ function claimInvite(db: Db, email: string): MemberRow | null {
   return member;
 }
 
+/**
+ * Why a sign-in with an invite's email is refused (qa-onboarding-14): the latest invite for
+ * the email was withdrawn, or is past its date. Null when there is no such invite.
+ */
+function inviteRefusal(db: Db, email: string): string | null {
+  const invite = db.invites.filter((i) => i.email === email && i.status !== "accepted").at(-1);
+  if (!invite) return null;
+  const by = db.members.find((x) => x.id === invite.invited_by);
+  const who = by ? displayName(by.email, by.name) : "an owner";
+  if (invite.status === "revoked") return `Your invite was withdrawn. Ask ${who} to invite you again.`;
+  if (invite.status === "open" && invite.expires_at && Date.parse(invite.expires_at) <= Date.now())
+    return `Your invite expired on ${formatDay(invite.expires_at)}. Ask ${who} to resend it.`;
+  return null;
+}
+
 /** Where an invitee signs in with Google: the app's own address in the mock. */
 const signInUrl = () => `${location.origin}/`;
 /** The mock company's sign-in domains (ORACLE_IAP_ALLOWED_DOMAINS). */
@@ -4510,6 +4525,11 @@ async function route(db: Db, req: Request): Promise<Response> {
     const member =
       db.members.find((x) => x.email === address) ??
       (passwordOk(db.account, address, password, MOCK_LOGIN.password) ? claimInvite(db, address) : null);
+    if (!member && passwordOk(db.account, address, password, MOCK_LOGIN.password)) {
+      // qa-onboarding-14: an invite withdrawn or past its date is refused in words, naming who to ask.
+      const refused = inviteRefusal(db, address);
+      if (refused) return json(403, { detail: refused });
+    }
     if (!member || member.status === "disabled" || !passwordOk(db.account, member.email, password, MOCK_LOGIN.password)) {
       return json(401, { detail: "Invalid credentials" });
     }
@@ -4542,7 +4562,8 @@ async function route(db: Db, req: Request): Promise<Response> {
       company: "Acme",
       requested_at: state === "pending" ? "2026-10-21T16:05:00Z" : null,
       note: (db.access_note ??= null),
-      invite_expired_at: state === "invite_expired" ? "2026-10-30T12:00:00Z" : null,
+      // qa-onboarding-34: past, from the mock's clock (14 days after an invite sent 17 days ago).
+      invite_expired_at: state === "invite_expired" ? new Date(Date.now() - 3 * 86_400_000).toISOString() : null,
     };
     if (p[3] === "note" && m === "POST") {
       if (state !== "pending") return json(409, { detail: "There is no request waiting for a note" });
