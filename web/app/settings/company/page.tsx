@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState, useSyncExternalStore } from "react";
 
 import { Button, confirmInPage, InfoTip, Notice, PageHeader, Panel, ViewOnly } from "@/components/ds";
 import { BRANDING_OPS } from "@/lib/api/branding";
@@ -58,9 +58,11 @@ function laterError(f: Form): string | null {
 
 /** Whether the page was opened from Home's Set up checklist (?from=setup). */
 function useFromSetup(): boolean {
-  const [fromSetup, setFromSetup] = useState(false);
-  useEffect(() => setFromSetup(new URLSearchParams(window.location.search).get("from") === "setup"), []);
-  return fromSetup;
+  return useSyncExternalStore(
+    () => () => {},
+    () => new URLSearchParams(window.location.search).get("from") === "setup",
+    () => false,
+  );
 }
 
 /** Horizons (A1): what Now, Next and Later mean on this company's roadmaps. Owners only. */
@@ -308,7 +310,7 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const zone = edit ?? stored;
-  const options = useMemo(zoneOptions, []);
+  const options = useMemo(() => zoneOptions(), []);
   const q = query.trim().toLowerCase();
   const pick = (list: ZoneOption[]) => list.filter((o) => o.zone === zone || matches(o, q));
   const known = !zone || options.common.some((o) => o.zone === zone) || options.rest.some((o) => o.zone === zone);
