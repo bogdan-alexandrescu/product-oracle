@@ -61,11 +61,13 @@ const json = (status: number, body: unknown) => new Response(JSON.stringify(body
 const iso = (t: number) => new Date(t).toISOString();
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-/** "Fri 6 Nov" (UTC, the mock company's days). */
+/** "Fri Nov 6" (UTC, the mock company's days). */
 const dayWords = (t: number) => {
   const d = new Date(t);
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  return `${WEEKDAYS[d.getUTCDay()]} ${MONTHS[d.getUTCMonth()]} ${d.getUTCDate()}`;
 };
+/** The approved version the questions were read from, and when (a day before the mock's today). */
+const SOURCE_VERSION = 3;
 const todayStart = () => Math.floor(mockNowMs() / DAY) * DAY;
 
 export function seedQuestions(ctx: QuestionsCtx): QuestionsDb {
@@ -146,6 +148,8 @@ function out(ctx: QuestionsCtx, q: Q): Question {
     waiting_for_me: !decided(q) && !!q.decider && q.decider === ctx.me.id,
     pending: q.pending ? { change_id: q.pending.change_id, by: ref(ctx, q.pending.by), answer: q.pending.answer } : null,
     can: canOf(ctx, q),
+    source: { version: SOURCE_VERSION, read_at: iso(todayStart() - DAY + 9 * 3_600_000) },
+    undo_id: null,
   };
 }
 
@@ -166,7 +170,53 @@ export function questionsOfMeeting(db: QuestionsDb, meetingId: string): Set<stri
 /** The person's waiting questions and counts (SimpleDecisionsOut's new fields), of `shown` when given. */
 export function questionsCounts(ctx: QuestionsCtx, db: QuestionsDb, shown?: Question[]) {
   const mine = (shown ?? questionsOut(ctx, db)).filter((q) => q.waiting_for_me);
-  return { mine, waiting_count: mine.length, late_count: mine.filter((q) => q.late).length, approvals_waiting: RANK[ctx.me.role] >= RANK.approver ? 1 : 0 };
+  const approvals = RANK[ctx.me.role] >= RANK.approver ? 1 : 0;
+  return {
+    mine,
+    waiting_count: mine.length,
+    late_count: mine.filter((q) => q.late).length,
+    approvals_waiting: approvals,
+    approvals_example: approvals ? "D-30 Approve the baseline check" : null,
+  };
+}
+
+/** The decided questions taken outside meetings, as the Decisions page's "Outside meetings" rows (with their code and answer). */
+export function decidedOutsideRows(ctx: QuestionsCtx, db: QuestionsDb, shown: Question[]): Schemas["SimpleDecisionRow"][] {
+  const ids = new Set(shown.map((q) => q.id));
+  return db.questions
+    .filter((q) => decided(q) && !q.meeting_id && ids.has(stableUuid(`simple-question/${q.n}`)))
+    .map((q) => {
+      const o = out(ctx, q);
+      return {
+        id: o.id, number: o.number, title: o.title, origin: "prd", status: "decided", approver: q.decider ? ref(ctx, q.decider) : null,
+        decided_at: o.decided_at ?? null, created_at: o.decided_at ?? iso(todayStart()), subjects: [{ kind: "document", id: QUESTIONS_PRD.id }],
+        code: o.code, chosen: o.chosen,
+      };
+    })
+    .sort((a, b) => b.number - a.number);
+}
+
+/**
+ * A review meeting's agenda (questions.due_for): the open questions blocking the milestone the
+ * soonest one blocks, and those decided in this meeting (they stay, with Undo for who decided
+ * them while it runs); soonest first.
+ */
+export function agendaOut(ctx: QuestionsCtx, db: QuestionsDb, meeting: { id: string; session_id: string; live: boolean }): Question[] {
+  const all = questionsOut(ctx, db);
+  const open = all.filter((q) => q.status === "proposed");
+  const ms = open.find((q) => q.blocks?.milestone)?.blocks?.milestone ?? null;
+  const here = new Set(db.questions.filter((q) => decided(q) && q.meeting_id === meeting.id).map((q) => stableUuid(`simple-question/${q.n}`)));
+  const done = all
+    .filter((q) => here.has(q.id))
+    .map((q) => {
+      const c = meeting.live
+        ? db.changes.find(
+            (x) => x.change.session_id === meeting.session_id && x.change.op === "decide_question" && x.change.status === "applied" && !x.change.undone && x.change.by === ctx.me.id && x.change.target.decision_id === q.id,
+          )
+        : undefined;
+      return { ...q, undo_id: c?.change.id ?? null };
+    });
+  return [...open.filter((q) => !ms || q.blocks?.milestone === ms), ...done].sort((a, b) => (a.due_on ?? "9999").localeCompare(b.due_on ?? "9999") || a.number - b.number);
 }
 
 /** GET /v1/simple/decisions/waiting: `others` is the decision log's judgement calls waiting for me. */

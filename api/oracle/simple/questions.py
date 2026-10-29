@@ -47,6 +47,7 @@ from oracle.simple.schemas import (
     SimpleQuestionFeature,
     SimpleQuestionOption,
     SimpleQuestionPending,
+    SimpleQuestionSource,
 )
 
 OPS: frozenset[str] = frozenset({"decide_question", "name_decider"})
@@ -191,6 +192,7 @@ async def import_answer(db: AsyncSession, document: Document, v: DocumentVersion
                             "recommended": True})  # fmt: skip
         options += [{"key": f"alt{i + 1}", "label": a} for i, a in enumerate(q["alternatives"])]
         info = {"code": q["code"], "document_id": str(document.id), "version_id": str(v.id),
+                "version": v.number, "read_at": now.isoformat(),
                 "recommendation": q.get("recommendation"), "milestone": q.get("milestone"),
                 "features": q.get("features") or [], "due_from_prd": q.get("due"),
                 "decider_named": named}  # fmt: skip
@@ -354,6 +356,12 @@ async def rows(
         pending.setdefault(c.target.get("decision_id"), c)
     names = await _names(db, {d.approver_id for d in ds} | {d.decided_by for d in ds}
                          | {c.by for c in pending.values()})  # fmt: skip
+    # The version each was read from (rows read before "version" was kept look it up).
+    vids = {uuid.UUID(v) for d in ds if not (d.prd_question or {}).get("version")
+            and (v := (d.prd_question or {}).get("version_id"))}  # fmt: skip
+    numbers = {str(i): n for i, n in (await db.execute(select(
+        DocumentVersion.id, DocumentVersion.number).where(DocumentVersion.id.in_(vids)))).all()
+    } if vids else {}  # fmt: skip
     today = company_time.today()
     me = getattr(principal, "user_id", None)
     out = []
@@ -418,6 +426,9 @@ async def rows(
                 and has_role(principal.role, "commenter"),
                 name_decider=decides,
             ),
+            source=SimpleQuestionSource(
+                version=info.get("version") or numbers.get(info.get("version_id") or ""),
+                read_at=info.get("read_at") or d.created_at),
         ))  # fmt: skip
     far = date.max
     out.sort(key=lambda q: (q.status != "proposed", q.due_on or far, q.number)
@@ -440,14 +451,14 @@ async def _readable(db: AsyncSession, principal: Any) -> set[uuid.UUID]:
     return {d.id for d in docs if await meetings._readable(db, principal, d)}
 
 
-async def _approvals(db: AsyncSession, principal: Any) -> int:
+async def _approvals(db: AsyncSession, principal: Any) -> list[Decision]:
+    """Oracle's run approvals waiting for this person, newest first."""
     me = getattr(principal, "user_id", None)
     if me is None:
-        return 0
-    ids = await db.scalars(select(Decision.id).where(
+        return []
+    return list(await db.scalars(select(Decision).where(
         Decision.origin == "checkpoint", Decision.status == "proposed",
-        Decision.approver_id == me))  # fmt: skip
-    return len(list(ids))
+        Decision.approver_id == me).order_by(Decision.number.desc())))  # fmt: skip
 
 
 async def waiting(db: AsyncSession, principal: Any) -> SimpleDecisionsWaitingOut:
@@ -463,7 +474,7 @@ async def waiting(db: AsyncSession, principal: Any) -> SimpleDecisionsWaitingOut
         late=sum(q.late for q in qs),
         questions=qs,
         others=others,
-        approvals_waiting=await _approvals(db, principal),
+        approvals_waiting=len(await _approvals(db, principal)),
     )
 
 
@@ -481,14 +492,49 @@ async def page_fields(
             UserPreference.principal_id == principal.id,
             UserPreference.key == "simple_decisions_view"))  # fmt: skip
     mine = [q for q in qs if q.waiting_for_me]
+    approvals = await _approvals(db, principal)
     return {"questions": qs, "waiting_count": len(mine), "late_count": sum(q.late for q in mine),
-            "approvals_waiting": await _approvals(db, principal),
+            "approvals_waiting": len(approvals),
+            "approvals_example": f"D-{approvals[0].number} {approvals[0].title}"
+            if approvals else None,
             "view": view if view in ("list", "board", "meetings") else "list"}  # fmt: skip
 
 
-async def due_for(db: AsyncSession, principal: Any, document_id: uuid.UUID) -> list[SimpleQuestion]:
-    """A review meeting's "Decisions due": its PRD's open questions, soonest first."""
-    return [q for q in await rows(db, principal, {document_id}) if q.status == "proposed"]
+async def due_for(
+    db: AsyncSession,
+    principal: Any,
+    document_id: uuid.UUID,
+    meeting_id: uuid.UUID | None = None,
+    session_id: uuid.UUID | None = None,
+) -> list[SimpleQuestion]:
+    """A review meeting's agenda ("Decisions due"): its PRD's open questions that block the
+    milestone the soonest one blocks (all of them when none names one), and the questions
+    decided in this meeting, which stay on it; soonest first. With the live meeting's
+    ``session_id``, a question I decided in it carries that change for its Undo."""
+    from oracle.simple.models import SimpleMeetingDecision as MeetingDecisionRow
+
+    qs = await rows(db, principal, {document_id})
+    open_ = [q for q in qs if q.status == "proposed"]
+    here: set[uuid.UUID] = set()
+    if meeting_id is not None:
+        here = set(await db.scalars(select(MeetingDecisionRow.decision_id).where(
+            MeetingDecisionRow.meeting_id == meeting_id)))  # fmt: skip
+    done = [q for q in qs if q.status == "decided" and q.id in here]
+    first = next((q for q in open_ if q.blocks and q.blocks.milestone), None)
+    ms = first.blocks.milestone if first and first.blocks else None
+    agenda = [q for q in open_ if ms is None or (q.blocks and q.blocks.milestone == ms)]
+    me = getattr(principal, "user_id", None)
+    if done and session_id is not None and me is not None:
+        made = list(await db.scalars(select(SimpleChange).where(
+            SimpleChange.session_id == session_id, SimpleChange.op == "decide_question",
+            SimpleChange.status == "applied", SimpleChange.by == me)
+            .order_by(SimpleChange.at.desc())))  # fmt: skip
+        undone = set(await db.scalars(select(SimpleChange.undoes_id).where(
+            SimpleChange.undoes_id.in_([c.id for c in made])))) if made else set()  # fmt: skip
+        for q in done:
+            q.undo_id = next((c.id for c in made if c.id not in undone
+                              and c.target.get("decision_id") == str(q.id)), None)  # fmt: skip
+    return sorted([*agenda, *done], key=lambda q: (q.due_on or date.max, q.number))
 
 
 # --------------------------------------------------------------------------- the ops

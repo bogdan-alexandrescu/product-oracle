@@ -46,6 +46,20 @@ Review fixes (verdict NOT_YET):
   fails_when=a word is cut in half; no_claim=the web's wrapping.
 - test_filters_narrow_questions: protects=the Decisions page's PRD and meeting filters
   narrow the questions too; fails_when=another PRD's questions show; no_claim=goals.
+
+Fidelity (option A "Imported as decisions", 2026-10-28):
+
+- test_page_source_outside_meetings_and_approvals: protects=each question says which
+  approved version it was read from and when ("From Guided setup draft 1 · read Oct 28");
+  Outside meetings lists a decided question with its code and answer and never an open one
+  (those wait in "Waiting for you"); the foot names one run approval; fails_when=the source
+  is missing, an open question shows outside meetings or the example is wrong;
+  no_claim=the web's wording.
+- test_meeting_agenda_keeps_what_it_decided: protects=a review meeting's agenda is the open
+  questions blocking the milestone the soonest one blocks, and a question decided in the
+  meeting stays on it with Undo for who decided it (others see no Undo); Undo opens it again;
+  fails_when=another milestone's question is on the agenda, a decided one leaves it, or the
+  Undo is offered to someone else; no_claim=the minutes' words.
 """
 
 import asyncio
@@ -148,13 +162,13 @@ async def test_due_dates_from_the_plan(client, monkeypatch):
     qs = {q["code"]: q for q in (await page(client, ctx))["questions"]}
     assert qs["Q2"]["due_on"] == "2026-11-06"  # the PRD's own date
     assert qs["Q3"]["due_on"] == "2026-11-27"  # M1 (the next to run): its end
-    assert qs["Q3"]["due_label"] == "Due Fri 27 Nov"
+    assert qs["Q3"]["due_label"] == "Due Fri Nov 27"
     assert qs["Q8"]["due_on"] == "2026-11-30"  # M2, a later milestone: its start
     assert qs["Q13"]["due_on"] == "2026-12-28"
     later = datetime(2026, 11, 10, 15, 0, tzinfo=UTC)
     monkeypatch.setattr(company_time, "now", lambda: later)
     qs = {q["code"]: q for q in (await page(client, ctx))["questions"]}
-    assert qs["Q2"]["late"] is True and qs["Q2"]["due_label"] == "Late · due Fri 6 Nov"
+    assert qs["Q2"]["late"] is True and qs["Q2"]["due_label"] == "Late · due Fri Nov 6"
     assert qs["Q3"]["late"] is False
 
 
@@ -356,7 +370,7 @@ async def test_due_follows_the_plan_read_again(client):
                             source="prd", data=data, read_at=NOW))  # fmt: skip
         await s.commit()
     qs = {q["code"]: q for q in (await page(client, ctx))["questions"]}
-    assert qs["Q3"]["due_on"] == "2026-12-04" and qs["Q3"]["due_label"] == "Due Fri 4 Dec"
+    assert qs["Q3"]["due_on"] == "2026-12-04" and qs["Q3"]["due_label"] == "Due Fri Dec 4"
 
 
 async def test_long_titles_cut_at_a_word(client):
@@ -391,3 +405,60 @@ async def test_filters_narrow_questions(client):
     r = await client.get(f"/v1/simple/decisions?meeting={uuid.uuid4()}", headers=ctx.as_("owner"))
     assert r.status_code == 200, r.text
     assert r.json()["questions"] == []
+
+
+async def test_page_source_outside_meetings_and_approvals(client):
+    ctx = await make_ctx()
+    await seed(ctx)
+    async with tenant_session(ctx.tenant_id) as s:
+        from oracle.decisions.service import next_number
+
+        s.add(Decision(number=await next_number(s), title="Approve Baseline confirm",
+                       status="proposed", approver_id=ctx.users["decider"].id, driver="oracle",
+                       origin="checkpoint",
+                       options=[{"key": "approve", "label": "Approve"}]))  # fmt: skip
+        await s.commit()
+    body = await page(client, ctx, "decider")
+    q3 = {q["code"]: q for q in body["questions"]}["Q3"]
+    assert q3["source"]["version"] == 1 and q3["source"]["read_at"].startswith("2026-10-28")
+    prd_rows = [d for d in body["other"] if d["origin"] == "prd"]
+    assert [d["code"] for d in prd_rows] == ["Q1"]
+    assert prd_rows[0]["chosen"] == "Option A for question 1"
+    assert body["approvals_waiting"] == 1
+    assert body["approvals_example"] is not None
+    assert body["approvals_example"].startswith("D-")
+    assert body["approvals_example"].endswith(" Approve Baseline confirm")
+
+
+async def test_meeting_agenda_keeps_what_it_decided(client):
+    ctx = await make_ctx()
+    await seed(ctx)
+    await page(client, ctx)
+    r = await client.post("/v1/simple/meetings", headers=ctx.as_("decider"),
+                          json={"prd": "guided-setup", "title": "Decisions due"})  # fmt: skip
+    assert r.status_code == 201, r.text
+    m = r.json()
+    # Q2 (due Nov 6) and Q3..Q6 block M1; Q7.. block later milestones.
+    assert [q["code"] for q in m["decisions_due"]] == ["Q2", "Q3", "Q4", "Q5", "Q6"]
+    # The agenda holds the PRD's questions; "Open decisions" never lists them again.
+    assert not [d for d in m["open_decisions"] if d["title"].startswith("Question number")]
+    q3 = next(q for q in m["decisions_due"] if q["code"] == "Q3")
+    c = await client.post("/v1/simple/changes", headers=ctx.as_("decider"), json={
+        "op": "decide_question", "target": {"decision_id": q3["id"]},
+        "session_id": m["session_id"], "before": {"status": "proposed"},
+        "after": {"option": "recommended"}})  # fmt: skip
+    assert c.status_code == 201, c.text
+    change = c.json()["change"]
+    url = f"/v1/simple/meetings/{m['id']}"
+    mine = {q["code"]: q for q in (await client.get(url, headers=ctx.as_("decider"))).json()[
+        "decisions_due"]}  # fmt: skip
+    assert list(mine) == ["Q2", "Q3", "Q4", "Q5", "Q6"]
+    assert mine["Q3"]["status"] == "decided" and mine["Q3"]["undo_id"] == change["id"]
+    assert mine["Q3"]["chosen"] == "Option A for question 3"
+    theirs = (await client.get(url, headers=ctx.as_("owner"))).json()["decisions_due"]
+    assert next(q for q in theirs if q["code"] == "Q3")["undo_id"] is None
+    u = await client.post(f"/v1/simple/changes/{change['id']}/undo", headers=ctx.as_("decider"))
+    assert u.status_code in (200, 201), u.text
+    again = {q["code"]: q for q in (await client.get(url, headers=ctx.as_("decider"))).json()[
+        "decisions_due"]}  # fmt: skip
+    assert again["Q3"]["status"] == "proposed" and again["Q3"]["undo_id"] is None
