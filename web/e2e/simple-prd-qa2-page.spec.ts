@@ -121,7 +121,7 @@ for (const scheme of ["light", "dark"] as const) {
       await open(page, "viewer@example.com");
       const start = page.getByRole("button", { name: "Start review" });
       await expect(start).toBeDisabled();
-      await expect(page.getByText("Ask an owner or approver to start a review")).toBeVisible();
+      await expect(page.getByText("Ask an owner to start a review")).toBeVisible();
       await expect(page.getByText(/No changes yet/)).toBeHidden();
     });
 

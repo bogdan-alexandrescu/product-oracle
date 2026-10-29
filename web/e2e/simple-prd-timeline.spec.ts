@@ -296,7 +296,7 @@ for (const phone of [false, true]) {
         const r2 = risks.getByRole("listitem").filter({ hasText: "Large imports could slow setup for everyone" });
         await expect(r2).toContainText("R-2");
         await expect(r2).toContainText("What we do: F-09 moves big imports to a queue.");
-        await expect(r2).toContainText("Likely: medium · Impact: medium");
+        await expect(r2).toContainText("Likelihood: Medium · Impact: Medium");
 
         if (!phone) {
           // A flag picks its milestone; so does a bar.

@@ -4,7 +4,7 @@ import { expect, test, type Page } from "./test";
 
 /*
  * The PRD page's plan, second QA pass (qa-simple-prd-4 ... 47): plain words for people
- * ("16 engineer-weeks capacity, nothing planned yet", no ".0 EW", "Likely: medium · Impact:
+ * ("16 engineer-weeks capacity, nothing planned yet", no ".0 EW", "Likelihood: Medium · Impact:
  * medium", feature names on the bars, one wording for a decision's day), the goals and their
  * standing on a phone and in a plan with no dates, decisions worded against a milestone kept
  * under it when it has no dates, the no-dates hint and its busy button, a bar or flag that
@@ -53,8 +53,8 @@ test.describe("desktop", () => {
     const part = page.getByTestId("milestone-part");
     await tl.getByRole("group", { name: "Milestones" }).getByRole("button", { name: /M2 Scale volume/ }).click();
     await expect(part.getByTestId("part-dates")).toContainText("16 engineer-weeks, 1 of it buffer");
-    await expect(part.getByTestId("part-risks")).toContainText("Likely: medium · Impact: medium");
-    await expect(part.getByTestId("part-risks")).toContainText("Likely: low · Impact: high");
+    await expect(part.getByTestId("part-risks")).toContainText("Likelihood: Medium · Impact: Medium");
+    await expect(part.getByTestId("part-risks")).toContainText("Likelihood: Low · Impact: High");
     // The same day in the same words, in the timeline and in the card.
     await expect(tl.getByTestId("timeline-decision").filter({ hasText: "Q8" })).toContainText("at the M1 review, 27 Nov");
     await expect(part.getByTestId("part-decisions").getByRole("listitem").filter({ hasText: "Q8" })).toContainText("at the M1 review, 27 Nov");
