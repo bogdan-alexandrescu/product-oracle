@@ -56,6 +56,7 @@ import {
   formatScore,
   formulaText,
   inputLabel,
+  scoreText,
   inputValueText,
   prdName,
   sourceName,
@@ -155,7 +156,7 @@ const flagOf = (flag: string) => FLAGS[flag] ?? { label: flag.replace(/_/g, " ")
 function FlagChip({ flag, hero = false }: { flag: string; hero?: boolean }) {
   const f = flagOf(flag);
   return (
-    <Chip kind={f.kind} hero={hero} title={f.title}>
+    <Chip kind={f.kind} hero={hero} title={f.title} wrap>
       {f.label}
     </Chip>
   );
@@ -169,10 +170,9 @@ const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n *
 /** A goal as words: its code and name ("G-B Growth"), never its key. */
 const goalText = (key: string, title: string) => namedText(named(title, key));
 
-/** A feature key as words: the ranked feature's code and name, else the key as given. */
+/** A feature key as words: the ranked feature's name only, never its code (qa-plan-17). */
 function featureText(features: RankedFeature[], key: string): string {
-  const f = features.find((x) => x.key === key);
-  return f ? namedText(named(f.title, f.key)) : key;
+  return features.find((x) => x.key === key)?.title ?? key;
 }
 
 /** A feature key as its name only (beside other names, the code adds nothing). */
@@ -416,7 +416,6 @@ function FeatureInspector({
   features: RankedFeature[];
 }) {
   const e = f.explanation;
-  const code = named(f.title, f.key).code;
   // The steps name each goal by its code and name, not its key (#304).
   const words = (s: string) => e.goals.reduce((t, g) => t.split(`(${g.goal})`).join(`(${goalText(g.goal, g.title)})`), s);
   // A feature the run ranks that Oracle's live ranking lacks (a proposal of the run): its own line only.
@@ -434,13 +433,10 @@ function FeatureInspector({
         title={f.title}
         label={`Feature ${f.title}`}
         testId="priority-inspector"
+        // On the theme's card surface like every other card, not a dark hero (qa-plan-33).
+        tone="card"
         chips={
           <>
-            {code && (
-              <Chip hero kind="na">
-                {code}
-              </Chip>
-            )}
             {f.flags.map((flag) => (
               <FlagChip key={flag} flag={flag} hero />
             ))}
@@ -453,7 +449,7 @@ function FeatureInspector({
           },
           ...(run ? [{ label: "Live", value: run.live_rank == null ? "—" : `#${run.live_rank}` }] : []),
           { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} text={confidencePercent(e.confidence.value)} size={46} /> },
-          { label: "Score", value: formatScore(f.score) },
+          { label: "Score", value: scoreText(f.score) },
         ]}
       >
         {run && (
@@ -638,21 +634,40 @@ function byGoal(features: RankedFeature[]): GoalRow[] {
   return [...m.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 }
 
-function Snapshots({ reloadKey, features }: { features: RankedFeature[]; reloadKey: number }) {
+/**
+ * Panel "Snapshots": the save controls (note and Save snapshot) sit with the list they add to
+ * (qa-plan-20, qa-plan-21), so on a phone the ranking comes first and an empty list says how.
+ */
+function Snapshots({
+  reloadKey,
+  features,
+  save,
+}: {
+  features: RankedFeature[];
+  reloadKey: number;
+  /** The note, Save snapshot and its notices; absent for who cannot save one. */
+  save?: ReactNode;
+}) {
   const q = useQuery(`priority-snapshots|${reloadKey}`, () => unwrap(api.GET("/v1/priorities/snapshots")));
   const list = q.data?.slice(0, 10);
   return (
     <Panel
       title="Snapshots"
       count={q.data?.length || undefined}
+      testId="snapshots-panel"
     >
+      {save && <div className="border-b border-line px-4 py-3 max-[600px]:px-3">{save}</div>}
       {q.error && (
         <div className="p-3">
           <Notice tone="error">{q.error}</Notice>
         </div>
       )}
       {q.loading && !q.data && <p className="px-4 py-3 text-text2">Loading…</p>}
-      {q.data && q.data.length === 0 && <p className="px-4 py-6 text-center text-text2">No snapshots yet.</p>}
+      {q.data && q.data.length === 0 && (
+        <p data-testid="snapshots-empty" className="px-4 py-6 text-center text-text2">
+          {save ? "No snapshots yet. Save one above to keep this order and compare it later." : "No snapshots yet."}
+        </p>
+      )}
       {list && list.length > 0 && (
         <ul data-testid="snapshot-list">
           {list.map((s) => (
@@ -967,7 +982,7 @@ function Priorities() {
     {
       key: "rank",
       header: "#",
-      width: "48px",
+      width: "44px",
       phone: "meta",
       cell: (f) => (
         <b className="tnum font-semibold max-[600px]:text-text">
@@ -996,6 +1011,8 @@ function Priorities() {
       key: "feature",
       header: "Feature",
       phone: "title",
+      // A long name wraps onto a second line, never cut (qa-plan-5).
+      wrap: true,
       cell: (f) => {
         const on = current?.key === f.key;
         return (
@@ -1007,8 +1024,8 @@ function Priorities() {
               e.stopPropagation();
               pick(f.key);
             }}
-            className="block max-w-full truncate text-left font-medium hover:underline"
-            title={f.title}
+            className="block max-w-full text-left font-medium break-words hover:underline"
+            data-testid="feature-name"
           >
             {f.title}
           </button>
@@ -1018,7 +1035,7 @@ function Priorities() {
     {
       key: "goal",
       header: "Goal",
-      width: "120px",
+      width: "112px",
       // Every goal whole (prod-4, qa-plan-42): one per line, a long name on two.
       wrap: true,
       cell: (f) =>
@@ -1050,19 +1067,20 @@ function Priorities() {
     {
       key: "score",
       header: "Score",
-      width: "68px",
+      // Two decimals for every score, right-aligned in tabular figures (qa-plan-18).
+      width: "84px",
       align: "right",
       phoneLabel: "Score",
       cell: (f) => (
-        <span data-testid="score" className="tnum">
-          {formatScore(f.score)}
+        <span data-testid="score" className="tnum block text-right whitespace-nowrap max-[600px]:inline">
+          {scoreText(f.score)}
         </span>
       ),
     },
     {
       key: "deps",
       header: "Depends on",
-      width: "108px",
+      width: "104px",
       hideOnPhone: true,
       narrow: "laptop",
       wrap: true,
@@ -1078,7 +1096,8 @@ function Priorities() {
     {
       key: "flags",
       header: "Flags",
-      width: "160px",
+      // Its chips wrap, so the Feature column keeps its room (qa-plan-5).
+      width: "144px",
       wrap: true,
       cell: (f) => {
         // A person's change leads; the flags fold into the count after it. Run mode: the
@@ -1120,7 +1139,7 @@ function Priorities() {
           {
             key: "actions",
             header: <span className="sr-only">Move or pin</span>,
-            width: "128px",
+            width: "112px",
             align: "right",
             phone: "action",
             cell: (f: RankedFeature) => (
@@ -1161,6 +1180,33 @@ function Priorities() {
     />
   );
 
+  // The note goes with the snapshot it is saved on (qa-plan-39), in the Snapshots panel.
+  const saveControls = !snapshotId && canSnapshot && (
+    <div className="flex flex-col gap-2">
+      <div className="flex max-w-full flex-wrap items-end gap-2" data-testid="snapshot-save">
+        <label className="flex min-w-0 flex-col gap-1 max-[600px]:w-full">
+          <span className="text-[13px] font-semibold text-text2">Snapshot note (optional)</span>
+          <input
+            id="snapshot-note"
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            className={`${INPUT} !w-56 max-[600px]:!w-full`}
+          />
+        </label>
+        <Button variant="primary" icon="check" onClick={saveSnapshot} disabled={saving || !r} title="Keep a dated copy of this ranking">
+          {saving ? "Saving…" : "Save snapshot"}
+        </Button>
+      </div>
+      {saved && (
+        <Notice tone="pass">
+          Snapshot saved: {METHOD_LABEL[saved.method]} ranking of {plural(saved.feature_count, "feature")}, top{" "}
+          {saved.top.slice(0, 3).map((k) => featureText(features, k)).join(", ")}.
+        </Notice>
+      )}
+      {saveError && <Notice tone="error">{saveError}</Notice>}
+    </div>
+  );
+
   return (
     <Page>
       <PageHeader
@@ -1176,36 +1222,9 @@ function Priorities() {
             </>
           )
         }
-        action={
-          !snapshotId &&
-          canSnapshot && (
-            // The note goes with the snapshot it is saved on (qa-plan-39).
-            <div className="flex max-w-full flex-wrap items-end gap-2" data-testid="snapshot-save">
-              <label className="flex min-w-0 flex-col gap-1">
-                <span className="text-[13px] font-semibold text-text2">Snapshot note (optional)</span>
-                <input
-                  id="snapshot-note"
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                  className={`${INPUT} !w-56 max-[600px]:!w-full`}
-                />
-              </label>
-              <Button variant="primary" icon="check" onClick={saveSnapshot} disabled={saving || !r} title="Keep a dated copy of this ranking">
-                {saving ? "Saving…" : "Save snapshot"}
-              </Button>
-            </div>
-          )
-        }
       />
 
       <div className="flex flex-col gap-3">
-        {saved && (
-          <Notice tone="pass">
-            Snapshot saved: {METHOD_LABEL[saved.method]} ranking of {plural(saved.feature_count, "feature")}, top{" "}
-            {saved.top.slice(0, 3).map((k) => featureText(features, k)).join(", ")}.
-          </Notice>
-        )}
-        {saveError && <Notice tone="error">{saveError}</Notice>}
         {changed && <Notice tone="info">{changed}</Notice>}
         {changeError && <Notice tone="error">{changeError}</Notice>}
         {q.error && <Notice tone="error">{q.error}</Notice>}
@@ -1232,22 +1251,23 @@ function Priorities() {
                   setSaved(null);
                 }}
               />
-              {/* Only who can make changes compares with and without them (qa-plan-38). */}
-              {canOverride && (
+              {/* A view switch: read-only roles keep it too (qa-plan-22); only the write controls go. */}
+              <div className="max-w-full max-[600px]:order-2">
                 <RadioSwitch
                   label="Order"
                   items={[
-                    { value: "changes", label: "With your changes" },
+                    { value: "changes", label: canOverride ? "With your changes" : "With people's changes" },
                     { value: "oracle", label: "Oracle's order" },
                   ]}
                   value={order}
                   onChange={setOrder}
                 />
-              )}
-              <span className="flex-1" />
+              </div>
+              <span className="flex-1 max-[600px]:hidden" />
               {r && (
-                <span className="flex items-center gap-2">
-                  <Label>Formula</Label>
+                // On a phone the (i) sits beside the method switch, never alone on a line (qa-plan-21).
+                <span className="flex items-center gap-2 max-[600px]:order-1" data-testid="formula-tip">
+                  <Label className="max-[600px]:sr-only">Formula</Label>
                   <InfoTip label="Formula">
                     <span data-testid="formula">{formulaText(r.method, r.formula)}</span>
                     <span className="mt-1 block">Ranked {formatDateTime(r.generated_at)}, in dependency order.</span>
@@ -1316,9 +1336,9 @@ function Priorities() {
             </Panel>
           )}
 
-          <Snapshots reloadKey={snapshotsKey} features={features} />
+          <Snapshots reloadKey={snapshotsKey} features={features} save={saveControls} />
 
-          <ChangesPanel reloadKey={changesKey} features={features} />
+          <ChangesPanel reloadKey={changesKey} features={features} canChange={canChange} />
         </Split>
         {phone && current && (
           <Sheet open={sheet} title={current.title} onClose={() => setSheet(false)} testId="priority-sheet">

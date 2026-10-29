@@ -68,9 +68,23 @@ export function BuildBanner({ build }: { build: RunSummary }) {
   const started = build.started_at ?? build.created_at;
   return (
     <Notice testId="baseline-build-banner">
-      Baseline being built · started {formatDateTime(started)} · {link("Open run")}
+      Baseline being built · started {formatDateTime(started)} · {link("Open run")}. You&apos;ll get an Inbox item when
+      it&apos;s ready to review.
     </Notice>
   );
+}
+
+/** "$50" for a whole-dollar line, else "$50.50". */
+const line = (usd_: number) => (Number.isInteger(usd_) ? `$${usd_}` : usd(usd_));
+
+/**
+ * What the build costs and who approves it (qa-onboarding-27): "$7.00 estimated · below the
+ * $50 approval line · starts at once"; above the line an owner approves before it starts.
+ */
+export function estimateLine(e: EstimateOut): string {
+  return e.needs_approval
+    ? `${usd(e.total_usd)} estimated · above the ${line(e.approval_threshold_usd)} approval line · an owner approves it before it starts`
+    : `${usd(e.total_usd)} estimated · below the ${line(e.approval_threshold_usd)} approval line · starts at once`;
 }
 
 type Drafted = { runId: string; estimate: EstimateOut };
@@ -198,7 +212,7 @@ export function BuildBaselineSheet({ onClose, onStarted }: { onClose: () => void
             <span className="font-semibold">Stop for my review</span>
           </label>
           <p className="tnum text-sm text-text2" data-testid="build-estimate" aria-live="polite">
-            {estimate ? `Estimate ${usd(estimate.total_usd)}` : busy ? "Estimating…" : ""}
+            {estimate ? estimateLine(estimate) : busy ? "Estimating…" : ""}
           </p>
           {estimate?.needs_approval && (
             <Notice tone="warn">

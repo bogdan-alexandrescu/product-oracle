@@ -52,15 +52,24 @@ const FORMULA_TEXT: Record<Method, string> = {
 export const formulaText = (method: string, fallback: string): string =>
   (FORMULA_TEXT as Record<string, string>)[method] ?? fallback;
 
-/** One decimal (two under 1), thousands separated: 5,400 · 562.5 · 8.1 · 0.33. */
+/** A factor (a weight, an input, a number in a step): up to two decimals, thousands separated: 5,400 · 562.5 · 2.25 · 0.33. */
 export function formatScore(n: number | null | undefined): string {
   if (n == null) return "—";
-  return n.toLocaleString("en-US", { maximumFractionDigits: n !== 0 && Math.abs(n) < 1 ? 2 : 1 });
+  return n.toLocaleString("en-US", { maximumFractionDigits: 2 });
 }
 
 /**
- * Every standalone number in a step, in the Score column's style ("5,400", "83.3"): never a
- * raw figure or one stuck at two decimals. A goal's key ("g.activation") has no digits, so it
+ * A feature's score as the Score column and the inspector show it: always two decimals,
+ * thousands separated (5,400.00 · 83.33 · 8.10 · 0.33), so a column of them lines up.
+ */
+export function scoreText(n: number | null | undefined): string {
+  if (n == null) return "—";
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * Every standalone number in a step, to at most two decimals ("5,400", "83.33"): never a
+ * raw three-place figure. A goal's key ("g.activation") has no digits, so it
  * is left alone; a number already turned into a percent ("60%") keeps its sign.
  */
 function fmtNums(s: string): string {
@@ -74,7 +83,13 @@ export function stepWords(step: string): string {
     return fmtNums(`${MOSCOW_LABEL[moscow[1]!]} = ${moscow[2]}; ties broken by goal value ${moscow[3]}`);
   }
   const named = step.match(/^(score|goal value|cost of delay|confidence) = /);
-  if (named) return fmtNums(named[1]!.charAt(0).toUpperCase() + step.slice(1));
+  if (named) {
+    const words = named[1]!.charAt(0).toUpperCase() + step.slice(1);
+    // The score a step arrives at reads as the Score column shows it: two decimals (qa-plan-18).
+    const sum = named[1] === "score" ? words.match(/^(.*) = (\d+(?:\.\d+)?)$/) : null;
+    if (sum) return `${fmtNums(sum[1]!)} = ${scoreText(Number(sum[2]))}`;
+    return fmtNums(words);
+  }
   const missing = step.match(/^not scored: missing (.+)$/);
   if (missing) return `Not scored: no ${missing[1]!.split(/,\s*/).map(inputLabel).join(", ")}`;
   return fmtNums(step);

@@ -92,6 +92,31 @@ export function horizonLabel(attrs: Attrs): string | null {
   return typeof attrs.due === "string" ? `${h.label} · ${shortDay(attrs.due)}` : h.label;
 }
 
+/**
+ * A target still written as words, in the table's one form (qa-plan-24): "below 8%" reads
+ * "< 8%", "at least 45%" reads "≥ 45%", as a typed target does. Other text is shown as written.
+ */
+export function targetText(text: string): string {
+  const t = text.trim();
+  const words: [RegExp, string][] = [
+    [/^(?:at least|no less than|min(?:imum)?\.?)\s+/i, "≥ "],
+    [/^(?:at most|no more than|max(?:imum)?\.?|up to)\s+/i, "≤ "],
+    [/^(?:below|under|less than|lower than|fewer than)\s+/i, "< "],
+    [/^(?:above|over|more than|greater than|higher than)\s+/i, "> "],
+  ];
+  for (const [rx, symbol] of words) if (rx.test(t)) return t.replace(rx, symbol);
+  return t;
+}
+
+/**
+ * The goal's gap, named plainly (qa-plan-9): a goal with its metric and target that only lacks
+ * an owner reads "No owner", not "Not measurable".
+ */
+export function gapLabel(check: Schemas["GoalCheck"] | null | undefined): "No owner" | "Not measurable" {
+  const missing = check?.missing ?? [];
+  return missing.length > 0 && missing.every((k) => k === "owner") ? "No owner" : "Not measurable";
+}
+
 /** The Not measurable chip's tooltip: "Missing: target, owner". */
 export const missingTip = (check: Schemas["GoalCheck"] | null | undefined) => `Missing: ${(check?.missing ?? []).join(", ")}`;
 

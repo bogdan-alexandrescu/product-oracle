@@ -24,7 +24,7 @@ import {
   LinkToGoalForm,
   type NewLink,
 } from "./LinkTools";
-import { GoalFields, goalDraft, goalPatch, Measurements, missingTip, problemsOf, type GoalDraft, type GoalProblem, type PlanningHorizons } from "./goal-fields";
+import { GoalFields, goalDraft, goalPatch, gapLabel, Measurements, missingTip, problemsOf, type GoalDraft, type GoalProblem, type PlanningHorizons } from "./goal-fields";
 import { LIMIT_LABEL, PromoteForm, suggestedBlocker } from "./PromoteBlocker";
 import { SubgoalActions } from "./subgoal-actions";
 import {
@@ -382,7 +382,7 @@ export function EntityDrawer({
             {!canComment && <Chip hero>View only</Chip>}
             {(d ?? entity).goal_check?.measurable === false && (
               <Chip kind="warn" hero title={missingTip((d ?? entity).goal_check)}>
-                Not measurable
+                {gapLabel((d ?? entity).goal_check)}
               </Chip>
             )}
             {suggestion && (
@@ -403,7 +403,8 @@ export function EntityDrawer({
           </Button>
         }
         stats={[
-          { label: "Confidence", figure: <ConfidenceRing value={(d ?? entity).confidence} low={low} size={44} /> },
+          // A score is built on evidence: none, no score (qa-plan-8).
+          { label: "Confidence", figure: <ConfidenceRing value={(d ?? entity).confidence} evidence={evidence} low={low} size={44} /> },
           { label: "Evidence", value: evidence },
           { label: "Links", value: links ?? "–" },
           { label: "Proposals", value: proposals ?? "–", tone: proposals ? "warn" : undefined },
@@ -454,20 +455,22 @@ export function EntityDrawer({
 
             {d.type === "goal" && d.goal_check?.measurable === false && onMakeMeasurable && (
               <InspectorSection
-                label="Not measurable"
+                label={gapLabel(d.goal_check)}
                 tools={
                   <Button disabled={busy} onClick={onMakeMeasurable}>
-                    Make measurable
+                    {gapLabel(d.goal_check) === "No owner" ? "Name an owner" : "Make measurable"}
                   </Button>
                 }
               >
                 <p className="text-text2" data-testid="drawer-missing">
-                  {missingTip(d.goal_check)}. Oracle asks one question at a time and proposes measurable versions.
+                  {gapLabel(d.goal_check) === "No owner"
+                    ? `${missingTip(d.goal_check)}. Oracle asks who should own it; an approver confirms.`
+                    : `${missingTip(d.goal_check)}. Oracle asks one question at a time and proposes measurable versions.`}
                 </p>
               </InspectorSection>
             )}
             {d.type === "goal" && d.goal_check?.measurable === false && !onMakeMeasurable && goalsNote && (
-              <InspectorSection label="Not measurable">
+              <InspectorSection label={gapLabel(d.goal_check)}>
                 <p className="text-text2" data-testid="drawer-missing">
                   {missingTip(d.goal_check)}.
                 </p>

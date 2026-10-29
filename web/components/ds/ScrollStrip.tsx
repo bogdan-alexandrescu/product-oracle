@@ -52,14 +52,7 @@ function reveal(s: HTMLElement) {
   s.scrollLeft = showing(s, items, span);
 }
 
-export function ScrollStrip({
-  children,
-  className = "",
-  stripClassName = "",
-  itemsName,
-  ref,
-  ...rest
-}: Omit<HTMLAttributes<HTMLDivElement>, "className"> & {
+type StripProps = Omit<HTMLAttributes<HTMLDivElement>, "className"> & {
   children: ReactNode;
   /** The wrapper (strip plus buttons). */
   className?: string;
@@ -68,7 +61,33 @@ export function ScrollStrip({
   /** What the strip holds, for its chevrons' names ("tabs": Scroll tabs right); none: Scroll right. */
   itemsName?: string;
   ref?: Ref<HTMLDivElement>;
-}) {
+};
+
+/**
+ * `wrap`: the items wrap onto more lines instead of scrolling, with no chevrons, so every
+ * item is in view (a section's few tabs on a phone, qa-plan-4).
+ */
+export function ScrollStrip({ wrap = false, ...props }: StripProps & { wrap?: boolean }) {
+  if (!wrap) return <ScrollingStrip {...props} />;
+  const { children, className = "", stripClassName = "", itemsName, ref, ...rest } = props;
+  void itemsName;
+  return (
+    <div className={`flex min-w-0 items-stretch ${className}`}>
+      <div ref={ref} {...rest} data-wrap className={`flex min-w-0 flex-1 flex-wrap ${stripClassName}`}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ScrollingStrip({
+  children,
+  className = "",
+  stripClassName = "",
+  itemsName,
+  ref,
+  ...rest
+}: StripProps) {
   const el = useRef<HTMLDivElement | null>(null);
   const [more, setMore] = useState({ left: false, right: false });
 

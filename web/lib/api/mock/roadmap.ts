@@ -20,7 +20,7 @@ import itemsFixture from "./roadmap-items.json";
 
 type Role = "viewer" | "commenter" | "approver" | "owner";
 type Item = Schemas["RoadmapItemOut"];
-type Track = { id: string; prd_id: string; roadmap_id: string | null; title: string; status: Schemas["TrackOverview"]["status"]; owner_id: string | null; started_version: number; current_version: number; lock_version: number; created_at: string; monitored_at: string | null; monitor: Record<string, unknown> };
+type Track = { id: string; prd_id: string; roadmap_id: string | null; title: string; status: Schemas["TrackOverview"]["status"]; owner_id: string | null; started_version: number; current_version: number; lock_version: number; created_at: string; monitored_at: string | null; monitor: Record<string, unknown>; plan?: boolean };
 type Milestone = Schemas["MilestoneOut"];
 type Basis = Schemas["ScheduleBasisOut"];
 type TrackerRecord = Schemas["TrackerRecordOut"];
@@ -195,7 +195,7 @@ function itemsFor(ctx: RoadmapContext, roadmap: Version, trackId: string | null)
  * against the API, with the mock's own ids; the default seed has no dates and nothing stale
  * (roadmap-tracks-mock.spec.ts expects the track on track).
  */
-export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): RoadmapDb {
+export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null, opts: { plan?: boolean } = {}): RoadmapDb {
   const withItems = scenario === ITEMS_SCENARIO;
   const withDiff = scenario === DIFF_SCENARIO;
   const noGaBasis = scenario === DATE_BASES_SCENARIO || scenario === VERSION_WARNINGS_SCENARIO;
@@ -212,6 +212,9 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
       owner_id: null, started_version: accepted.number, current_version: accepted.number, lock_version: 1,
       created_at: AT, monitored_at: null, monitor: {},
     };
+    // qa-plan-1: in the app (not the roadmap-only scenarios), the track reads the Plan's items.
+    const alertsScenario = scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO || scenario === TRACK_ALERTS_HISTORY_SCENARIO;
+    if (opts.plan && !withItems && !withDiff && !planStale && !alertsScenario) track.plan = true;
     db.tracks.push(track);
     const rv = roadmap && latest(ctx, roadmap.id);
     if (rv) db.items[rv.id] = itemsFor(ctx, rv, track.id);
@@ -245,9 +248,15 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
         target_date: "2026-12-15", observed_at: AT, recorded_by: ctx.userId, created_at: AT, updated_at: AT,
       } as TrackerRecord);
     }
+    // qa-plan-32: on the Plan, First release is the Plan's Now items, on Nov 30 as ENG-412 verifies.
+    const eng412 = db.bases.find((b) => b.reference === "ENG-412" && b.status === "verified");
+    const firstDated = track.plan && eng412;
     db.milestones.push({
-      id: mockUuid(), track_id: track.id, name: "First release", horizon: "now", target_date: null, basis_ids: [],
-      item_keys: (rv ? db.items[rv.id] : []).filter((i) => i.horizon === "now").map((i) => i.item_key),
+      id: mockUuid(), track_id: track.id, name: "First release", horizon: "now",
+      target_date: firstDated ? firstDated.supports_date : null, basis_ids: firstDated ? [firstDated.id] : [],
+      item_keys: track.plan
+        ? ALERTS_APPROVED.filter((i) => i.horizon === "now").map((i) => i.key)
+        : (rv ? db.items[rv.id] : []).filter((i) => i.horizon === "now").map((i) => i.item_key),
       status: "planned", lock_version: 1, created_at: AT, updated_at: AT,
     });
     // F7: acme/app#418 is already linked to "Spend forecast for the month" (the move flow).
@@ -602,10 +611,19 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   const rv = roadmap ? itemsVersion(ctx, db, roadmap, null, true) : undefined;
   const items = rv ? db.items[rv.id] ?? [] : [];
   const latestApproved = latest(ctx, prd.id, true)?.number ?? null;
-  const counts: Record<string, number> = { items: items.length, now: 0, next: 0, later: 0, at_risk: 0, blocked: 0, stale: 0, slipping: 0, done: 0 };
+  // qa-plan-1: the Plan's tracked PRD reads the Plan's own items (the rows its table shows), so
+  // the track's health, item count and next milestone are the ones the Plan card and table give.
+  const own = t.plan ? planTrackItems(db) : null;
+  const counts: Record<string, number> = { items: own ? own.length : items.length, now: 0, next: 0, later: 0, at_risk: 0, blocked: 0, stale: 0, slipping: 0, done: 0 };
   const atRisk: Schemas["AtRiskItem"][] = [];
   const allDrift: Schemas["DriftEntry"][] = [];
-  for (const i of items) {
+  for (const i of own ?? []) {
+    counts[i.horizon] += 1;
+    if (!i.reasons.length) continue;
+    for (const k of ["blocked", "stale", "slipping"]) if (i.reasons.some((r) => r.kind === k)) counts[k] += 1;
+    atRisk.push(i);
+  }
+  for (const i of own ? [] : items) {
     counts[i.horizon] += 1;
     const reasons: Record<string, string>[] = [];
     if (isStale(i)) reasons.push({ kind: "stale", detail: staleWhy(ownReasons(i), "its PRD trace changed") });
@@ -618,15 +636,16 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
     }
   }
   counts.at_risk = atRisk.length;
-  allDrift.push(...unplanned(db, t.id, new Set(items.map((i) => i.item_key))));
+  allDrift.push(...unplanned(db, t.id, new Set((own ?? items).map((i) => i.item_key))));
   const milestones = db.milestones.filter((m) => m.track_id === t.id);
   const planned = milestones.filter((m) => m.status === "planned");
   const next = planned.filter((m) => m.target_date && m.target_date >= today()).sort((a, b) => a.target_date!.localeCompare(b.target_date!))[0] ?? planned.find((m) => !m.target_date);
   const source = rv?.source?.version ?? null;
   const prdMoved = !!(source && latestApproved && latestApproved > source);
-  const slippingNext = !!next && atRisk.some((a) => next.item_keys.includes(a.item_key) && a.reasons.some((r) => r.kind === "slipping"));
+  // The Plan's items carry their own state (at risk, not off track), as its table shows them.
+  const slippingNext = !own && !!next && atRisk.some((a) => next.item_keys.includes(a.item_key) && a.reasons.some((r) => r.kind === "slipping"));
   const health: Schemas["TrackOverview"]["health"] =
-    t.status !== "active" ? t.status : !items.length ? "no_roadmap" : slippingNext ? "off_track" : atRisk.length || prdMoved ? "at_risk" : "on_track";
+    t.status !== "active" ? t.status : !counts.items ? "no_roadmap" : slippingNext ? "off_track" : atRisk.length || prdMoved ? "at_risk" : "on_track";
   const when = next ? ` Next milestone: ${next.name}${next.target_date ? `, ${calendarDay(next.target_date)}` : ""}.` : "";
   const headline = trackHeadline(health, counts, when, prdMoved ? latestApproved : null);
   return {
@@ -1140,6 +1159,19 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
     next: { action: "link_issue", who: "approver" } },
   { key: "team-budgets", title: "Budgets per team", horizon: "later", goals: ["g.early-churn"], state: "planned", section: "behaviour" },
 ];
+/**
+ * qa-plan-1: the tracked PRD's items as its track reads them: the Plan's approved rows, each with
+ * the reasons it needs attention (none once its slip was accepted from the alert).
+ */
+function planTrackItems(db: RoadmapDb): Schemas["AtRiskItem"][] {
+  return ALERTS_APPROVED.map((s) => ({
+    item_key: s.key,
+    title: s.title,
+    horizon: s.horizon,
+    reasons: db.accepted?.[s.key] ? [] : (s.reasons ?? []).map((r) => ({ ...r })),
+  }));
+}
+
 /** F5 lane 3: the title of a feature or requirement the mock plan's items trace, by its id. */
 export function planEntityTitle(id: string): string | null {
   for (const i of ALERTS_APPROVED) {
@@ -1291,6 +1323,9 @@ function planHistory(ctx: PlanContext, db: RoadmapDb, q: URLSearchParams): Respo
   return notFound(`document '${roadmap}'`);
 }
 
+/** As oracle.plan.service.HEALTH_WORD: a card's word for its track's health. */
+const HEALTH_WORD: Partial<Record<Schemas["TrackOverview"]["health"], string>> = { on_track: "On track", at_risk: "At risk", off_track: "Off track" };
+
 function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanOut"] {
   const may = (role: Who["role"]) => RANK[ctx.role] >= RANK[(role === "engineering_lead" || role === "track_owner" ? "approver" : role) as Role];
   const doc = (slug: string) => ctx.documents.find((d) => d.slug === slug);
@@ -1372,7 +1407,8 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
     for (const s of CHECKOUT_DRAFT) items.push(row(s, checkout, 2, { slug: CHECKOUT_ROADMAP_SLUG, version: 2 }, "draft", { kind: "new", fields: [], notes: [] }));
   }
 
-  const risky = items.some((i) => i.state === "at_risk" || i.state === "slipped");
+  // As oracle.plan.service: the card's word and health are the track's own health (qa-plan-1).
+  const health = track ? overview(ctx, db, track).health : null;
   const prds: PlanPrd[] = [];
   const order = new Map<string, number>();
   for (const d of ctx.documents) {
@@ -1386,8 +1422,8 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
     } satisfies Partial<PlanPrd>;
     let card: PlanPrd;
     if (d.slug === "usage-alerts" && track) {
-      card = { ...base, stage: "approved", stage_label: `Approved v${approved}`, journey_step: 9, figure: risky ? "At risk" : "On track",
-        track: { id: track.id, status: track.status, health: risky ? "at_risk" : "on_track", owner_id: track.owner_id } };
+      card = { ...base, stage: "approved", stage_label: `Approved v${approved}`, journey_step: 9, figure: HEALTH_WORD[health!] ?? null,
+        track: { id: track.id, status: track.status, health: health!, owner_id: track.owner_id } };
     } else if (d.slug === "saved-carts") {
       const mine = may("approver");
       card = { ...base, stage: "waiting", stage_label: `Feature set · waiting for ${mine ? "you" : "approver"}`, journey_step: 7, figure: "9 features",
@@ -1408,7 +1444,7 @@ function planOut(ctx: PlanContext, db: RoadmapDb, scope: string): Schemas["PlanO
       card = { ...base, stage: review ? "in_review" : "draft", stage_label: review ? `${label} in review${draft}` : label, journey_step: 8 };
       if (d.slug === "checkout-redesign" && scope === "all") card.figure = `${CHECKOUT_DRAFT.length} items`;
     }
-    order.set(d.id, (card.waiting_for_viewer ? 0 : 2) + (card.track?.health === "at_risk" ? 0 : 1));
+    order.set(d.id, (card.waiting_for_viewer ? 0 : 2) + (card.track?.health === "at_risk" || card.track?.health === "off_track" ? 0 : 1));
     prds.push(card);
   }
   const rank = (c: PlanPrd) => order.get(c.document.id) ?? 3;

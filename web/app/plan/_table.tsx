@@ -4,7 +4,7 @@ import { Button, Chip, CodeChip, DataTable, type Column } from "@/components/ds"
 import { namedText } from "@/lib/codes";
 
 import type { GoalView } from "../home/_goals";
-import { driftMarker, engineeringLine, HORIZON_LABEL, HORIZONS, prdLabel, prdName, stateChip, whoLabel, type PlanItem } from "./_lib";
+import { driftMarker, engineeringParts, HORIZON_LABEL, HORIZONS, prdLabel, prdName, stateChip, whoLabel, type PlanItem } from "./_lib";
 
 export type GroupBy = "horizon" | "goal" | "prd";
 const NO_GOAL = "No goal";
@@ -38,17 +38,26 @@ export function StateChip({ item, hero = false, wrap = false }: { item: PlanItem
   );
 }
 
+/** On a phone an empty cell ("—") is dropped rather than left alone on a line (qa-plan-54). */
+const EMPTY_ON_PHONE = "max-[600px]:has-[[data-empty]]:hidden";
+
 function NextCell({ item, me, onLink }: { item: PlanItem; me: string | null | undefined; onLink?: (i: PlanItem) => void }) {
   const n = item.next;
-  if (!n.action) return <span data-testid="plan-next" className="text-text2">—</span>;
+  if (!n.action)
+    return (
+      <span data-testid="plan-next" data-empty className="text-text2">
+        —
+      </span>
+    );
   const who = whoLabel(n.who, me);
   return (
-    // Wraps under the button rather than being cut: "Decide on slip" then "· owners" (qa-plan-4).
-    <span data-testid="plan-next" className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+    // qa-plan-13: the decision on line 1, who takes it on a deliberate line 2 ("owners"), never
+    // "Decide on slip" broken into fragments. The " · " is for screen readers and copied text.
+    <span data-testid="plan-next" className="flex min-w-0 flex-col items-start gap-0.5 max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-center max-[600px]:gap-x-1.5">
       {/* A decision taken on a page the viewer may act on is a button; the rest name it (F2, F3 add theirs). */}
       {n.action === "link_issue" && onLink && item.prd ? (
         <Button
-          className="h-7 flex-none px-2 whitespace-nowrap"
+          className="h-7 max-w-full flex-none px-2 whitespace-nowrap"
           onClick={(e) => {
             e.stopPropagation();
             onLink(item);
@@ -60,14 +69,37 @@ function NextCell({ item, me, onLink }: { item: PlanItem; me: string | null | un
         <Link
           href={n.href}
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex h-7 flex-none items-center rounded-lg border whitespace-nowrap border-line-strong px-2 text-sm font-semibold hover:bg-surface2"
+          className="inline-flex h-7 max-w-full flex-none items-center rounded-lg border whitespace-nowrap border-line-strong px-2 text-sm font-semibold hover:bg-surface2"
         >
           {n.label}
         </Link>
       ) : (
-        <span className="font-medium">{n.label}</span>
+        <span className="font-medium whitespace-nowrap">{n.label}</span>
       )}
-      {who && <span className="min-w-0 break-words text-text2">{` · ${who}`}</span>}
+      {who && (
+        <span className="min-w-0 text-sm text-text2">
+          <span className="sr-only max-[600px]:not-sr-only"> · </span>
+          {who}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** The Engineering cell: the issue key and its date together; a long pair breaks between them, never inside one (qa-plan-13). */
+function EngineeringCell({ item }: { item: PlanItem }) {
+  const [issue, day] = engineeringParts(item);
+  if (!issue && !day)
+    return (
+      <span data-testid="plan-engineering" data-empty className="tnum text-text2">
+        —
+      </span>
+    );
+  return (
+    <span data-testid="plan-engineering" className="tnum text-sm">
+      {issue && <span className="whitespace-nowrap">{issue}</span>}
+      {issue && day && " "}
+      {day && <span className="whitespace-nowrap">{issue ? `· ${day}` : day}</span>}
     </span>
   );
 }
@@ -127,7 +159,13 @@ export function PlanTable({
       wrap: true,
       // Two lines before an ellipsis; the whole title on hover (qa-plan-5).
       cell: (i) => (
-        <span data-testid="plan-title" title={i.title} className="line-clamp-2 font-semibold break-words max-[600px]:line-clamp-none">
+        <span
+          data-testid="plan-title"
+          title={i.title}
+          className={`line-clamp-2 font-semibold break-words max-[600px]:line-clamp-none ${
+            i.change?.kind === "dropped" ? "text-text2 line-through decoration-1" : ""
+          }`}
+        >
           {i.title}
         </span>
       ),
@@ -180,8 +218,8 @@ export function PlanTable({
       className: "overflow-visible",
       cell: (i) => (
         <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
+          {/* qa-plan-31: a dropped item's one chip says so, "Dropped in draft 2 (was Planned)". */}
           <StateChip item={i} wrap />
-          {i.change?.kind === "dropped" && <Chip kind="warn" wrap>Dropped in draft {i.change.draft_version}</Chip>}
           <DriftMarker item={i} />
         </span>
       ),
@@ -189,17 +227,14 @@ export function PlanTable({
     {
       key: "engineering",
       header: "Engineering",
-      width: "128px",
+      width: "160px",
       wrap: true,
       // Under 760 px (the Ask panel docked) the inspector says it; the other columns keep their room.
       narrow: "hide",
-      cell: (i) => (
-        <span data-testid="plan-engineering" className="tnum">
-          {engineeringLine(i)}
-        </span>
-      ),
+      className: EMPTY_ON_PHONE,
+      cell: (i) => <EngineeringCell item={i} />,
     },
-    { key: "next", header: "Next", width: "156px", wrap: true, cell: (i) => <NextCell item={i} me={me} onLink={onLink} /> },
+    { key: "next", header: "Next", width: "144px", wrap: true, className: EMPTY_ON_PHONE, cell: (i) => <NextCell item={i} me={me} onLink={onLink} /> },
   ];
   return (
     <DataTable<PlanItem>

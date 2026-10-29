@@ -1,6 +1,6 @@
 import { Chip, type ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { zoneDateTime } from "@/lib/dates";
+import { zoneDateTime, zoneDay, zoneTime } from "@/lib/dates";
 import { formatDateTime } from "@/lib/format";
 
 export type Report = Schemas["AlignmentReportOut"];
@@ -35,11 +35,25 @@ export function HealthChip({ track }: { track: Pick<ReportTrack, "health" | "hea
 /** A roadmap horizon as people write it: "Now", not "now" (qa-plan-57). */
 export const HORIZON_LABEL: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
 
+/** "Oct 29, 4:09 AM": an instant in `zone`, without the zone's name (said once beside it, qa-plan-44). */
+export const zoneMoment = (iso: string, zone: string) => zoneDateTime(iso, zone).replace(/\s+\S+$/, "");
+
+const midnight = (iso: string, zone: string) => zoneTime(iso, zone).startsWith("00:00");
+
 /**
- * A bound of the week a report covers, in the zone the report was made in: its bounds are
- * midnights there, so another zone would show them as odd hours.
+ * The bounds of the week a report covers (qa-plan-44), in the zone the report was made in:
+ * a bound at midnight there is a day ("Oct 26"); the end of a week so far is its moment
+ * ("Oct 29, 4:09 AM"). A weekly report ends at the next Monday's midnight, so it reads as
+ * the Sunday before ("Oct 12 – Oct 18").
  */
-export const periodBound = (iso: string, r: Pick<Report, "timezone">) => zoneDateTime(iso, r.timezone);
+export const periodStart = (r: Pick<Report, "period" | "timezone">) =>
+  midnight(r.period.from, r.timezone) ? zoneDay(r.period.from, r.timezone) : zoneMoment(r.period.from, r.timezone);
+
+export function periodEnd(r: Pick<Report, "period" | "timezone">): string {
+  const to = r.period.to;
+  if (!midnight(to, r.timezone)) return zoneMoment(to, r.timezone);
+  return zoneDay(new Date(new Date(to).getTime() - 1).toISOString(), r.timezone);
+}
 
 /** The report's Slack line: posted, waiting, refused, or not posted. */
 export function slackText(r: Pick<Report, "slack" | "timezone">): string {

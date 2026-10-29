@@ -24,6 +24,13 @@ const CATEGORY_LABEL: Record<Entry["category"], string> = {
 };
 const STATUS_LABEL: Record<Entry["status"], string> = { draft: "Draft", published: "Published", withdrawn: "Withdrawn" };
 const STATUS_KIND: Record<Entry["status"], ChipKind> = { draft: "na", published: "pass", withdrawn: "line" };
+/** qa-plan-38: a secondary button in the header row is the primary's 40 px height. */
+const HEADER_BUTTON = "h-10! rounded-button! px-4! text-[15px]!";
+/**
+ * qa-plan-37: a disabled export has no outline and no fill and is dimmed, so in dark it does
+ * not read like the bordered Launches link beside it.
+ */
+const EXPORT_BUTTON = `${HEADER_BUTTON} disabled:border-transparent! disabled:bg-transparent! disabled:opacity-60`;
 
 /** Days newest first, each with its categories in Keep a Changelog's order. */
 function grouped(entries: Entry[]): [string, [Entry["category"], Entry[]][]][] {
@@ -101,6 +108,8 @@ export default function ChangelogPage() {
           </InfoTip>
         }
         back={<PlanCrumb />}
+        // qa-plan-11: the crumb sits on the title row, so the title is where the Plan tabs have theirs.
+        backInline
         status={
           q.data && (
             <>
@@ -110,13 +119,14 @@ export default function ChangelogPage() {
         }
         action={
           <div className="flex flex-wrap gap-2">
-            <LinkButton href="/roadmap/launches" icon="flag" data-testid="launches-link">
+            <LinkButton href="/roadmap/launches" icon="flag" className={HEADER_BUTTON} data-testid="launches-link">
               Launches
             </LinkButton>
             <Button
               disabled={busy !== null || exportable === 0}
               title={exportWhy ?? undefined}
               aria-describedby={exportWhy ? "export-why" : undefined}
+              className={EXPORT_BUTTON}
               onClick={() => exportAs("md")}
               data-testid="export-md"
             >
@@ -126,6 +136,7 @@ export default function ChangelogPage() {
               disabled={busy !== null || exportable === 0}
               title={exportWhy ?? undefined}
               aria-describedby={exportWhy ? "export-why" : undefined}
+              className={EXPORT_BUTTON}
               onClick={() => exportAs("html")}
               data-testid="export-html"
             >

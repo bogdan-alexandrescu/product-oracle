@@ -94,6 +94,8 @@ class ReportTrack(BaseModel):
     drift: list[ReportDrift]
     dates: ReportDates
     prd_moved: bool
+    # The newer approved PRD version when prd_moved (older reports have none).
+    prd_moved_to: int | None = None
 
 
 class ReportChannel(BaseModel):

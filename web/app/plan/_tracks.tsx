@@ -21,7 +21,7 @@ import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatShortDate, plural } from "@/lib/format";
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
 
-import { HORIZON_LABEL, HORIZONS, type Horizon } from "./_lib";
+import { HORIZON_LABEL, HORIZONS, trackHealth, type Horizon } from "./_lib";
 
 export type Track = Schemas["TrackOverview"];
 type Milestone = Schemas["MilestoneOut"];
@@ -43,14 +43,6 @@ const MILESTONE_STATUS: Record<
   planned: { kind: "na", label: "Planned" },
   done: { kind: "pass", label: "Done" },
   dropped: { kind: "line", label: "Dropped" },
-};
-const HEALTH: Record<Track["health"], { kind: ChipKind; label: string }> = {
-  on_track: { kind: "pass", label: "On track" },
-  at_risk: { kind: "warn", label: "At risk" },
-  off_track: { kind: "crit", label: "Off track" },
-  no_roadmap: { kind: "na", label: "No roadmap" },
-  paused: { kind: "na", label: "Paused" },
-  closed: { kind: "na", label: "Closed" },
 };
 
 /** Every track with its overview (owner, status, health and milestones). */
@@ -184,7 +176,7 @@ export function TrackPanel({
   );
   const pushOff = connector.data && !connector.data.writes_allowed ? connector.data.reason : null;
   const pushWhy = useId();
-  const health = HEALTH[track.health];
+  const health = trackHealth(track.health);
   const off = busy;
   const actions = may.check || may.draftRoadmap || may.push;
 
@@ -300,17 +292,18 @@ export function TrackPanel({
         <p className="text-text2">{track.headline}</p>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="flex min-w-0 items-center gap-2">
-            <span className="text-[13px] font-semibold text-text2">Owner</span>
+            <span className="text-[13px] font-semibold text-text2">Owner:</span>
+            {/* qa-plan-30: no owner reads "not set" in plain grey, and the action is Set owner. */}
             <span
               data-testid="track-owner"
-              className="min-w-0 truncate font-semibold"
+              className={`min-w-0 truncate ${track.owner_id ? "font-semibold" : "text-text2"}`}
               title={ownerName ? `${ownerName.name} · ${ownerName.email}` : undefined}
             >
               {ownerName
                 ? `${ownerName.name} · ${ownerName.email}`
                 : track.owner_id
                   ? "…"
-                  : "No owner"}
+                  : "not set"}
             </span>
             {may.edit && (
               <Button
@@ -318,7 +311,7 @@ export function TrackPanel({
                 disabled={off}
                 onClick={() => setPicking((v) => !v)}
               >
-                Change owner
+                {track.owner_id ? "Change owner" : "Set owner"}
               </Button>
             )}
           </span>
@@ -586,15 +579,14 @@ function MilestoneForm({
       }),
     ),
   );
-  const roadmap = track.roadmap?.slug;
-  const items = useQuery(`plan|track-items|${roadmap ?? ""}`, () =>
-    roadmap
-      ? unwrap(
-          api.GET("/v1/roadmaps/{doc}/items", {
-            params: { path: { doc: roadmap } },
-          }),
-        ).then((r) => r.items)
-      : Promise.resolve([]),
+  // qa-plan-7: the track's roadmap items by name, as the Plan's table lists them (its approved
+  // rows on this track), not the roadmap document's sections.
+  const items = useQuery(`plan|track-items|${track.id}`, () =>
+    unwrap(api.GET("/v1/plan", { params: { query: { scope: "approved" } } })).then((p) =>
+      p.items
+        .filter((i) => i.track_id === track.id)
+        .map((i) => ({ item_key: i.key, title: i.title, horizon: i.horizon })),
+    ),
   );
   const supporting = (bases.data ?? []).filter(
     (b) => date && b.supports_date === date,
@@ -645,8 +637,8 @@ function MilestoneForm({
 
   return (
     <Inspector
-      eyebrow="Milestone · selected"
-      title={m ? milestoneTitle(track, m.id) : "New milestone"}
+      eyebrow={m ? "Milestone · selected" : "New milestone"}
+      title={m ? milestoneTitle(track, m.id) : undefined}
       label={m ? `Milestone ${m.name}` : "New milestone"}
       testId="plan-milestone"
       chips={<Chip hero>{track.title}</Chip>}
@@ -787,7 +779,13 @@ function MilestoneForm({
         </InspectorSection>
         <InspectorSection>
           <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center gap-2">
+            {/* qa-plan-34: as every dialog: Cancel on the left, the primary action on the right. */}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {onCancel && (
+                <Button variant="ghost" disabled={off} onClick={onCancel}>
+                  Cancel
+                </Button>
+              )}
               <Button
                 type="submit"
                 variant="solid"
@@ -795,11 +793,6 @@ function MilestoneForm({
               >
                 {m ? "Save milestone" : "Add milestone"}
               </Button>
-              {onCancel && (
-                <Button variant="ghost" disabled={off} onClick={onCancel}>
-                  Cancel
-                </Button>
-              )}
             </div>
             {error && <InlineError>{error}</InlineError>}
           </div>

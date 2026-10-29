@@ -24,6 +24,7 @@ export function PageHeader({
   status,
   action,
   back,
+  backInline = false,
   info,
   testId,
   phoneTitle = false,
@@ -36,6 +37,11 @@ export function PageHeader({
   /** The one primary action. */
   action?: ReactNode;
   back?: ReactNode;
+  /**
+   * `back` sits on the title row, before the title, instead of on a line of its own above it,
+   * so the title stays where it is on the pages it leads back from (qa-plan-11).
+   */
+  backInline?: boolean;
   /** An InfoTip about the page (qa-shell-22). */
   info?: ReactNode;
   testId?: string;
@@ -54,7 +60,11 @@ export function PageHeader({
       data-page-header
       className="flex min-h-16 flex-wrap items-center gap-x-3 gap-y-2 py-3 max-[600px]:min-h-0 max-[600px]:py-3"
     >
-      {back && <div className="flex min-h-6 basis-full items-center text-sm text-text2">{back}</div>}
+      {back && (
+        <div data-page-back className={`flex min-h-6 items-center text-sm text-text2 ${backInline ? "flex-none" : "basis-full"}`}>
+          {back}
+        </div>
+      )}
       <h1
         className={`min-w-0 font-display text-[28px] leading-8 font-bold tracking-heading ${
           phoneTitle ? "break-words max-[600px]:text-[22px] max-[600px]:leading-7" : "max-[600px]:sr-only"

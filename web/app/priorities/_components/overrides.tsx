@@ -21,13 +21,17 @@ export const MAX_CITED = 5;
 export const NUMBERS_ONLY = "Oracle checked the numbers only this time.";
 const CHECKED = new Set(["contradiction", "no_contradiction"]);
 
-/** What a change asks for: a move above `above`, or a pin at `position`. */
+/**
+ * What a change asks for: a move above `above`, or a pin at `position`. `below` is the row ▼
+ * steps past: the dialog says "Move below <it>" (the move itself is above the row after it).
+ */
 export type Draft = {
   feature: RankedFeature;
   kind: Kind;
   above: RankedFeature | null;
   position: number | null;
   reason?: string;
+  below?: RankedFeature | null;
 };
 
 /** A radio group drawn as B1's segmented control (the ranking method, the order, the log filter). */
@@ -86,7 +90,7 @@ export function RadioSwitch<V extends string>({
   );
 }
 
-const pct = (n: number | null | undefined) => (n == null ? "—" : String(Math.round(n * 100)));
+const pct = (n: number | null | undefined) => (n == null ? "—" : `${Math.round(n * 100)}%`);
 
 /** A cited piece of evidence: title, kind of source, date, confidence (as CitationChip shows them). */
 export function EvidenceChip({ e }: { e: Schemas["EvidenceChip"] }) {
@@ -137,7 +141,7 @@ export function RowChips({ f, name }: { f: RankedFeature; name: NameOf }) {
   return (
     <>
       {o && (
-        <Chip kind="acc" title={o.reason} data-testid="override-chip">
+        <Chip kind="acc" wrap title={o.reason} data-testid="override-chip">
           {o.kind === "move" ? `Moved by ${o.by}` : `Pinned #${o.position} by ${o.by}`}
         </Chip>
       )}
@@ -151,8 +155,9 @@ export function RowChips({ f, name }: { f: RankedFeature; name: NameOf }) {
 }
 
 /**
- * ▲ ▼ and ⋯ on a row (approvers and owners). Shown on the row under the pointer, the
- * focused row and the selected one; always on touch screens and phones.
+ * ▲ ▼ and ⋯ on a row (approvers and owners), on every row so touch users find them
+ * (qa-plan-19). ▼ moves a feature below the next one, in the Move dialog (qa-plan-6,
+ * qa-plan-15); a button that cannot act says why.
  */
 export function RowActions({
   f,
@@ -194,33 +199,32 @@ export function RowActions({
     };
   }, [menu]);
   const prev = features[index - 1];
-  // ▼ moves above the row two below; from the second-to-last row, to the bottom.
+  const next = features[index + 1];
+  // ▼ moves it below the next row: a move above the row after that. A change can only put a
+  // feature above another, so the second-to-last row has no ▼ (a pin at the bottom does it).
   const twoBelow = features[index + 2];
-  const down = (): Draft | null =>
-    twoBelow
-      ? { feature: f, kind: "move", above: twoBelow, position: null }
-      : index < features.length - 1
-        ? { feature: f, kind: "pin", above: null, position: features.length }
-        : null;
+  const down: Draft | null = next && twoBelow ? { feature: f, kind: "move", above: twoBelow, below: next, position: null } : null;
+  const upWhy = prev ? null : "Already first";
+  const downWhy = down
+    ? null
+    : !next
+      ? "Already last"
+      : `${next.title} is last: pin at #${features.length} from More actions`;
   const btn =
-    "grid size-8 min-h-6 min-w-6 place-items-center rounded-button text-text2 hover:bg-surface2 hover:text-text disabled:opacity-40 max-[600px]:size-11 max-[600px]:min-h-11 max-[600px]:min-w-11";
+    "grid size-7 min-h-6 min-w-6 place-items-center rounded-button text-text2 hover:bg-surface2 hover:text-text disabled:opacity-40 aria-disabled:opacity-40 aria-disabled:cursor-not-allowed aria-disabled:hover:bg-transparent max-[600px]:size-11 max-[600px]:min-h-11 max-[600px]:min-w-11";
   return (
     <div
       ref={box}
       data-testid="row-actions"
-      className={`flex items-center justify-end gap-0.5 ${
-        menu
-          ? "visible"
-          : "invisible [tr:focus-within_&]:visible [tr:hover_&]:visible [tr[aria-selected=true]_&]:visible [@media(hover:none)]:visible max-[600px]:visible"
-      }`}
+      className="flex items-center justify-end gap-0.5"
       onClick={(e) => e.stopPropagation()}
     >
       <button
         type="button"
         className={btn}
         aria-label="Move up"
-        title={`Move ${f.title} up`}
-        disabled={!prev}
+        title={upWhy ?? `Move ${f.title} above ${prev!.title}`}
+        aria-disabled={!prev || undefined}
         onClick={() => prev && onDraft({ feature: f, kind: "move", above: prev, position: null })}
       >
         ▲
@@ -229,11 +233,10 @@ export function RowActions({
         type="button"
         className={btn}
         aria-label="Move down"
-        title={`Move ${f.title} down`}
-        disabled={!down()}
+        title={downWhy ?? `Move ${f.title} below ${next!.title}`}
+        aria-disabled={!down || undefined}
         onClick={() => {
-          const d = down();
-          if (d) onDraft(d);
+          if (down) onDraft(down);
         }}
       >
         ▼
@@ -444,7 +447,13 @@ export function OverrideSheet({
           <>
             {draft.kind === "move" ? (
               <div className="flex flex-col gap-2">
-                <p className="font-semibold">{above ? `Move above ${above.title}` : "Move above…"}</p>
+                <p className="font-semibold" data-testid="move-target">
+                  {draft.below && above?.key === draft.above?.key
+                    ? `Move below ${draft.below.title}`
+                    : above
+                      ? `Move above ${above.title}`
+                      : "Move above…"}
+                </p>
                 {!draft.above && (
                   <>
                     <label className="flex flex-col gap-1">
@@ -500,8 +509,9 @@ export function OverrideSheet({
             {evidence.length > 0 && (
               <fieldset className="flex flex-col gap-1.5 rounded-button border border-line px-3 py-2">
                 <legend className="px-1 text-[13px] font-semibold text-text2">Cite evidence (optional)</legend>
-                <p className="tnum text-[13px] text-text2">
-                  {cited.length} of {MAX_CITED}
+                {/* Never "0 of 5" over one item: how many may be picked, then how many are (qa-plan-16). */}
+                <p className="tnum text-[13px] text-text2" data-testid="cited-count">
+                  {cited.length === 0 ? `Pick up to ${MAX_CITED}` : `${cited.length} picked, up to ${MAX_CITED}`}
                 </p>
                 {evidence.map((e) => {
                   const on = cited.includes(e.id);
@@ -626,7 +636,16 @@ export function YourChange({
 }
 
 /** Panel "Changes": the override log, newest first, active or all. */
-export function ChangesPanel({ reloadKey, features }: { reloadKey: number; features: RankedFeature[] }) {
+export function ChangesPanel({
+  reloadKey,
+  features,
+  canChange = false,
+}: {
+  reloadKey: number;
+  features: RankedFeature[];
+  /** Who can move and pin: the empty list says how (qa-plan-20). */
+  canChange?: boolean;
+}) {
   const [filter, setFilter] = useState<"active" | "all">("active");
   const q = useQuery(
     `priority-overrides|${filter}|${reloadKey}`,
@@ -660,7 +679,13 @@ export function ChangesPanel({ reloadKey, features }: { reloadKey: number; featu
           <Notice tone="error">{q.error}</Notice>
         </div>
       )}
-      {q.data && q.data.length === 0 && <p className="px-4 py-6 text-center text-text2">No changes yet.</p>}
+      {q.data && q.data.length === 0 && (
+        <p data-testid="changes-empty" className="px-4 py-6 text-center text-text2">
+          {filter === "active" && canChange
+            ? "No changes yet. Use ▲ ▼ or More actions on a row to move or pin a feature, with a reason."
+            : "No changes yet."}
+        </p>
+      )}
       <ul data-testid="change-log">
         {(q.data ?? []).map((o) => (
           <li

@@ -1875,7 +1875,7 @@ function baselineEntity(db: Db, type: BaselineEntity["type"], key: string, title
 /** The roadmap data, seeded on first use (./roadmap.ts), with the "sharing" roadmap's items (seedSharingRoadmap). */
 function ensureRoadmap(db: Db, ctx: RoadmapContext): RoadmapDb {
   if (!db.roadmap) {
-    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY));
+    db.roadmap = seedRoadmap(ctx, localStorage.getItem(MOCK_SCENARIO_KEY), { plan: true });
     for (const [id, items] of Object.entries(db.sharing_items ?? {})) db.roadmap.items[id] ??= items;
   }
   return db.roadmap;
@@ -2676,8 +2676,23 @@ function runsContext(db: Db): Omit<RunsContext, "db"> & { db?: RunsDb } {
   return ctx;
 }
 
+/**
+ * qa-plan-10: the db as the last save left it, with the text it was saved as. Each call used to
+ * parse the whole db from localStorage and write it all back, one call at a time, so a page's
+ * dozens of reads spent most of its 2-3 s in JSON. Now a call whose stored text is unchanged
+ * takes the saved object (no parse), and a save whose text is unchanged writes nothing.
+ * The object is handed to one caller at a time: load() clears the cache, the caller's save()
+ * sets it again, so a call that throws half-way leaves nothing changed in memory (the next
+ * load parses the stored text again). Another tab's write, a test's seed or a reset changes
+ * the stored text, which drops the cache.
+ */
+let cached: { raw: string; db: Db } | null = null;
+
 function load(): Db {
   const raw = localStorage.getItem(STORAGE_KEY);
+  const hit = cached;
+  cached = null;
+  if (raw && hit && hit.raw === raw) return hit.db;
   if (raw) {
     try {
       return JSON.parse(raw) as Db;
@@ -2905,6 +2920,8 @@ function load(): Db {
     if (prd && v1) v1.warnings = versionWarnings(prd.title, prd.slug);
   }
   save(db);
+  // The caller owns this object now (see `cached`).
+  cached = null;
   return db;
 }
 
@@ -3100,11 +3117,15 @@ function routeBaselineFor(db: Db, me: { id: string; role: Schemas["Me"]["role"] 
 }
 
 function save(db: Db) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+  const raw = JSON.stringify(db);
+  // A read that changed nothing writes nothing (qa-plan-10).
+  if (localStorage.getItem(STORAGE_KEY) !== raw) localStorage.setItem(STORAGE_KEY, raw);
+  cached = { raw, db };
 }
 
 /** Drops all mock state (used by the "Reset mock data" control). */
 export function resetMockData() {
+  cached = null;
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(SOURCES_STORAGE_KEY);
 }
@@ -4352,6 +4373,8 @@ function ensureBlockers(db: Db): BlockersDb {
       db.user_id,
       deposits && { documentId: deposits.id, v2 },
     );
+    // A new company ("empty" scenario) has no blockers yet (qa-onboarding-25).
+    if (typeof localStorage !== "undefined" && localStorage.getItem(MOCK_SCENARIO_KEY) === "empty") db.blockers.blockers = [];
   }
   return db.blockers;
 }

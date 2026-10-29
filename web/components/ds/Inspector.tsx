@@ -14,6 +14,10 @@ export type InspectorStat = {
   testId?: string;
 };
 
+/** The card head: the hero tokens re-pointed at the card surface's, for everything inside. */
+const CARD_HEAD =
+  "border-b border-line [--hero:var(--surface)] [--hero-2:var(--surface2)] [--hero-text:var(--text)] [--hero-text2:var(--text2)] [--hero-line:var(--line)] [--hero-accent:var(--accent)]";
+
 /**
  * B1's Atlas inspector: a dark head (eyebrow, title, chips, Open), a strip of big
  * numerals, then sections. Right of the table on desktop, below it on a phone.
@@ -30,6 +34,7 @@ export function Inspector({
   label,
   testId,
   className = "",
+  tone = "hero",
 }: {
   /** "Feature · selected" */
   eyebrow: ReactNode;
@@ -48,6 +53,12 @@ export function Inspector({
   testId?: string;
   /** Extra classes on the region (a sticky, height-capped panel). */
   className?: string;
+  /**
+   * "card": the head on the theme's card surface instead of the dark hero (qa-plan-33). The
+   * hero chips, buttons and rings passed in follow it (their hero colours are re-pointed at
+   * the card's), so a caller changes nothing else.
+   */
+  tone?: "hero" | "card";
 }) {
   const cols = Math.max(1, Math.min(statColumns ?? stats?.length ?? 1, stats?.length ?? 1));
   return (
@@ -56,7 +67,10 @@ export function Inspector({
       data-testid={testId}
       className={`min-w-0 overflow-hidden rounded-inspector border border-line bg-surface shadow-panel max-[600px]:rounded-[14px] ${className}`}
     >
-      <div className="flex-none bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4">
+      <div
+        data-inspector-head={tone}
+        className={`flex-none bg-hero px-5 pt-4 pb-[18px] text-hero-text max-[600px]:px-4 ${tone === "card" ? CARD_HEAD : ""}`}
+      >
         <div className="flex items-center justify-between gap-3">
           <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">{eyebrow}</span>
           {action}

@@ -162,10 +162,10 @@ def _amount(n: float, compact: bool) -> str:
 
 def distance_text(attrs: dict[str, Any]) -> str:
     """What Home shows under the goal: "7 pts to go", "Target met", "Not below", "" (no
-    distance can be given) or "No current value"."""
+    distance can be given) or "No current value yet"."""
     current = _first(attrs, "current")
     if current is None or current == "":
-        return "No current value"
+        return "No current value yet"
     unit = attrs.get("unit")
     c, t = _typed(current, unit), _typed(_first(attrs, "target"), unit)
     if not c or not t or c.range or not _same_unit(c, t):

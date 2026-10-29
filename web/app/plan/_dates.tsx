@@ -72,7 +72,7 @@ export function DatesTab() {
     }
   }
 
-  const columns: Column<Basis>[] = [
+  const allColumns: Column<Basis>[] = [
     {
       key: "reference",
       header: "Reference",
@@ -120,7 +120,8 @@ export function DatesTab() {
     },
     {
       key: "actions",
-      header: <span className="sr-only">Actions</span>,
+      // qa-plan-46: the actions column is labelled like the others.
+      header: "Actions",
       phone: "action",
       cell: (b) =>
         !verifies ? null : b.status === "proposed" ? (
@@ -139,6 +140,8 @@ export function DatesTab() {
         ) : null,
     },
   ];
+  // The actions column only for those who may act (it would be an empty, labelled column otherwise).
+  const columns = verifies ? allColumns : allColumns.filter((c) => c.key !== "actions");
 
   const done = async () => {
     setDialog(null);
@@ -171,10 +174,11 @@ export function DatesTab() {
           value={filter}
           onChange={setPicked}
           items={[
-            { value: "proposed", label: "Proposed", count: count("proposed") },
-            { value: "verified", label: "Verified", count: count("verified") },
-            { value: "withdrawn", label: "Withdrawn", count: count("withdrawn") },
-            { value: "all", label: "All", count: rows ? rows.length : null },
+            // qa-plan-47: a filter with nothing in it is dimmed and cannot be picked.
+            { value: "proposed", label: "Proposed", count: count("proposed"), disabled: count("proposed") === 0 },
+            { value: "verified", label: "Verified", count: count("verified"), disabled: count("verified") === 0 },
+            { value: "withdrawn", label: "Withdrawn", count: count("withdrawn"), disabled: count("withdrawn") === 0 },
+            { value: "all", label: "All", count: rows ? rows.length : null, disabled: rows?.length === 0 },
           ]}
         />
       </div>
@@ -205,15 +209,19 @@ export function DatesTab() {
   );
 }
 
-/** qa-plan-26: why a basis was withdrawn or rejected, on its own full-width line under the row. */
+/**
+ * qa-plan-26: why a basis was withdrawn or rejected, on its own full-width line under the row.
+ * qa-plan-46: a styled sub-row of that row (an inset, tinted box with a rule on its left), so
+ * it reads as part of the basis above it, not a stray line under the table.
+ */
 const reasonOf = (b: Basis) => (b.status === "withdrawn" ? b.withdrawn_reason : b.status === "rejected" ? b.rejected_reason : null) || null;
 
 function Reason({ basis: b }: { basis: Basis }) {
   const reason = reasonOf(b);
   if (!reason) return null;
   return (
-    <p data-testid={b.status === "withdrawn" ? "withdrawn-reason" : "rejected-reason"} data-reason-for={b.reference} className="text-sm break-words text-text2">
-      {b.status === "withdrawn" ? "Why it was withdrawn" : "Why it was rejected"}: {reason}
+    <p data-testid={b.status === "withdrawn" ? "withdrawn-reason" : "rejected-reason"} data-reason-for={b.reference} className="rounded-r-lg border-l-2 border-line-strong bg-surface2 px-3 py-1.5 text-sm break-words text-text2">
+      <span className="font-semibold text-text">{b.status === "withdrawn" ? "Why it was withdrawn" : "Why it was rejected"}:</span> {reason}
     </p>
   );
 }

@@ -122,15 +122,26 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
     source.kind === "version" ? (
       <DocCrumb doc={docQ.data ?? undefined} withTitle />
     ) : backTo ? (
-      <Link href={backTo.href} data-testid="impact-back" className="hover:underline">
-        ← {backTo.label}
+      <Link href={backTo.href} data-testid="impact-back" className="inline-flex min-h-6 items-center rounded-sm hover:text-text hover:underline">
+        ‹ {backTo.label}
       </Link>
     ) : undefined;
   const counts = report ? countFreshness(report.affected) : null;
   const status = report && (
     <>
       {!can("act_on_staleness") && <ViewOnly />}
-      <Chip kind={report.preview ? "acc" : "line"}>{report.preview ? "Preview" : "Recorded"}</Chip>
+      {/* What Preview means, in the badge itself (qa-plan-52): a what-if that changes nothing. */}
+      <Chip
+        kind={report.preview ? "acc" : "line"}
+        data-testid="impact-mode"
+        title={
+          report.preview
+            ? "A what-if: what would be affected if this changed. Nothing is marked stale."
+            : "A recorded change: these outputs were marked as it says."
+        }
+      >
+        {report.preview ? "Preview · nothing marked stale" : "Recorded"}
+      </Chip>
       {counts!.potentially_stale > 0 && (
         <Chip kind="warn" dot>
           {counts!.potentially_stale} potentially stale
@@ -148,6 +159,9 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
       <PageHeader
         title={title}
         back={back}
+        // qa-plan-11: Baseline's and a change's back link (‹, like the Plan crumb) sit on the
+        // title row, so the title does not move down; a version's crumb keeps its own line.
+        backInline={source.kind !== "version"}
         status={status}
         action={
           report && report.affected.length > 0 ? (
