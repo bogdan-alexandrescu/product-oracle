@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 
-import { Loading } from "@/components/ui";
 
 import { BriefDetail } from "../_brief-detail";
+import { PageSkeleton } from "@/components/ds";
 
 /** Spelled out rather than Next's generated PageProps, so tsc passes without a build first. */
 type Params = { params: Promise<{ id: string }> };
@@ -14,7 +14,7 @@ async function Detail({ params }: Params) {
 
 export default function BriefPage({ params }: Params) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Detail params={params} />
     </Suspense>
   );

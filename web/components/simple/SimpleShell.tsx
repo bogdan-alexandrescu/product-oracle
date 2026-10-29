@@ -133,7 +133,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       >
         <span className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
-          <span className="font-display text-[18px] font-semibold text-rail-active-text">Oracle</span>
+          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">Product Oracle</span>
         </span>
         {SIMPLE_DESTINATIONS.map((d) => (
           <span key={d.href} aria-hidden className="flex h-12 items-center gap-3 px-3">
@@ -158,7 +158,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
       >
         <Link href={SIMPLE_HOME} aria-label="Product Oracle" data-testid="simple-nav-brand" className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />
-          <span className="font-display text-[18px] font-semibold text-rail-active-text">Oracle</span>
+          <span className="font-display text-[18px] font-semibold whitespace-nowrap text-rail-active-text">Product Oracle</span>
         </Link>
         <ModeSwitch placement="wide" />
         {SIMPLE_DESTINATIONS.map((d) => {

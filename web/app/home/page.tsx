@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import { ClaudeOffNotice } from "@/components/ClaudeOffNotice";
-import { Chip, Empty, Icon, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
+import { Chip, Empty, Icon, InfoTip, LinkButton, Notice, Page, PageHeader, Panel, Split } from "@/components/ds";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -236,6 +236,11 @@ export default function HomePage() {
           testId="home-needs"
           tools={
             <>
+              {/* qa-shell-16: what this count counts, and why Simple's Home says another number. */}
+              <InfoTip label="Needs you" side="bottom">
+                Everything the Inbox has waiting on you: approvals, runs, access requests, reviews and the questions asked of you.
+                Simple&apos;s Home counts something else, the product decisions on PRDs that wait on you, so its number can differ.
+              </InfoTip>
               {/* qa-company-40: each count is a link to the Inbox, where its items are. */}
               {approvals.length > 0 && <CountChip label="Approvals" n={approvals.length} testId="home-count-approvals" />}
               {runs.length > 0 && <CountChip label="Runs" n={runs.length} testId="home-count-runs" />}

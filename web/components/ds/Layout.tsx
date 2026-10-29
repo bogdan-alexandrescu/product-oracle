@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { Icon, type IconName } from "./Icon";
 import { PageInfo } from "./page-info";
-import { PageTabs } from "./PageTabs";
+import { PageTabs, SectionTitle } from "./PageTabs";
 
 /**
  * The page under the shell's top bar. Every screen uses it, so the title, status and
@@ -60,7 +60,8 @@ export function PageHeader({
           phoneTitle ? "break-words max-[600px]:text-[22px] max-[600px]:leading-7" : "max-[600px]:sr-only"
         }`}
       >
-        {title}
+        {/* qa-shell-20: under a section's tabs the H1 is the section's name (SectionTitle). */}
+        <SectionTitle>{title}</SectionTitle>
         {suffix && <span data-title-suffix className="ml-1.5 align-baseline font-display text-lg font-semibold tracking-normal text-text2">{suffix}</span>}
       </h1>
       {info && <PageInfo info={info} />}
@@ -154,6 +155,62 @@ export function Panel({
       <div className={bodyClassName}>{children}</div>
     </As>
   );
+}
+
+/**
+ * qa-shell-8: the one not-found (and failed-page) pattern: the page's title as its H1, an
+ * icon, one sentence and the ways on (Back to PRDs, Go to Home) close under it. A wrong URL,
+ * a missing document, version or run, and the error page all draw it.
+ */
+export function NotFoundPanel({
+  title,
+  icon = "search",
+  testId,
+  back,
+  children,
+  actions,
+}: {
+  title: string;
+  icon?: IconName;
+  testId?: string;
+  back?: ReactNode;
+  /** What happened, a sentence or two. */
+  children: ReactNode;
+  /** The ways on: links or buttons. */
+  actions?: ReactNode;
+}) {
+  return (
+    <Page>
+      <PageHeader title={title} back={back} />
+      <Panel testId={testId} bodyClassName="flex flex-col items-center gap-3 px-4 pt-10 pb-8 text-center">
+        <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink">
+          <Icon name={icon} size={24} />
+        </span>
+        <div data-testid="not-found-text" className="flex max-w-prose flex-col gap-1 text-[15px] text-text2">
+          {children}
+        </div>
+        {actions && <div className="mt-1 flex flex-wrap justify-center gap-2">{actions}</div>}
+      </Panel>
+    </Page>
+  );
+}
+
+/**
+ * qa-shell-10: what a page draws while it loads, in its shapes: a title bar and two panels,
+ * so it does not jump into place. `bare`: without the page's padding, inside a section's
+ * layout (Settings, Company) that draws the page already.
+ */
+export function PageSkeleton({ bare = false }: { bare?: boolean }) {
+  const shapes = (
+    <div role="status" aria-label="Loading" aria-busy="true" data-testid="page-skeleton" className="flex flex-col gap-4">
+      <div className="flex min-h-16 items-center py-3">
+        <span className="block h-8 w-56 max-w-full animate-pulse rounded bg-surface2 max-[600px]:h-6" />
+      </div>
+      <span className="block h-40 animate-pulse rounded-panel border border-line bg-surface2" />
+      <span className="block h-64 animate-pulse rounded-panel border border-line bg-surface2" />
+    </div>
+  );
+  return bare ? shapes : <Page>{shapes}</Page>;
 }
 
 /** A small caps-like label ("Goal", "Sources"): 13 px, text2. */

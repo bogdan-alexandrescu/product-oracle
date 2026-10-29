@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 
 import { NewDraft, NewPrd } from "@/components/NewDraft";
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
+import { PageSkeleton } from "@/components/ds";
 
 async function Picker({ searchParams }: { searchParams: RouteProps["searchParams"] }) {
   const { kind, requests } = await searchParams;
@@ -15,7 +15,7 @@ async function Picker({ searchParams }: { searchParams: RouteProps["searchParams
 
 export default function NewDraftPage({ searchParams }: RouteProps) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Picker searchParams={searchParams} />
     </Suspense>
   );

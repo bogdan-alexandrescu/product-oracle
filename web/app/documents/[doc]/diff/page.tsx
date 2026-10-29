@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 
 import { DiffView } from "@/components/DiffView";
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
+import { PageSkeleton } from "@/components/ds";
 
 type Props = RouteProps<{ doc: string }>;
 
@@ -18,7 +18,7 @@ async function Diff({ params, searchParams }: Pick<Props, "params" | "searchPara
 
 export default function DiffPage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Diff params={params} searchParams={searchParams} />
     </Suspense>
   );

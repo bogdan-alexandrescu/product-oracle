@@ -30,6 +30,8 @@ const under = (pathname: string, base: string) => pathname === base || pathname.
  */
 const PAIRS: [simple: string, detailed: string][] = [
   ["/simple/roadmap", "/plan"],
+  // qa-shell-5: the Roadmap's Changelog and Launches are Plan's tabs too (the rail says Plan).
+  ["/simple/roadmap", "/roadmap"],
   ["/simple/priorities", "/priorities"],
   ["/simple/meetings", "/company/rituals"],
   ["/simple/decisions", "/company/decisions"],
@@ -46,7 +48,8 @@ const PAIRS: [simple: string, detailed: string][] = [
 export function switchTarget(pathname: string, to: Mode, documentHome?: string): string {
   if (to === modeOf(pathname)) return pathname;
   if (to === "detailed") {
-    const onePager = /^\/simple\/one-pagers\/([^/]+)/.exec(pathname)?.[1];
+    // qa-shell-4: /simple/prds/<doc> is the same one-pager, by its older path.
+    const onePager = /^\/simple\/(?:one-pagers|prds)\/([^/]+)/.exec(pathname)?.[1];
     if (onePager) return `/documents/${onePager}`;
     return PAIRS.find(([simple]) => under(pathname, simple))?.[1] ?? DETAILED_HOME;
   }

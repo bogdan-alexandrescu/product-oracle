@@ -6,6 +6,8 @@ import { useLayoutEffect } from "react";
 import { modeOf, saveMode, switchTarget, type Mode } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 
+import { onRadioKeys, radioTabIndex } from "./radio-keys";
+
 const MODES: { value: Mode; label: string }[] = [
   { value: "simple", label: "Simple" },
   { value: "detailed", label: "Detailed" },
@@ -39,9 +41,11 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
   if (!simpleMode) return null;
   const current = modeOf(pathname);
 
-  async function choose(mode: Mode) {
+  // qa-shell-6: the page opens at once; the choice is saved meanwhile (it only decides where
+  // the person lands next time), so a slow save never makes the click look dead.
+  function choose(mode: Mode) {
     if (mode === current) return;
-    await saveMode(mode);
+    void saveMode(mode);
     router.push(switchTarget(pathname, mode, documentHome));
   }
 
@@ -51,6 +55,7 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
     <div
       role="radiogroup"
       aria-label="Mode"
+      onKeyDown={(e) => onRadioKeys(e, MODES.map((m) => m.value), current, choose)}
       data-testid={rail ? "mode-switch" : "mode-switch-sheet"}
       className={
         wide
@@ -68,8 +73,9 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
             type="button"
             role="radio"
             aria-checked={on}
+            tabIndex={radioTabIndex(on)}
             data-testid={`mode-${m.value}${rail ? "" : "-sheet"}`}
-            onClick={() => void choose(m.value)}
+            onClick={() => choose(m.value)}
             className={
               wide
                 ? `h-9 rounded-lg text-[15px] ${on ? "bg-surface font-semibold text-rail-active-text shadow-sm" : "font-medium text-rail-text hover:text-rail-active-text"}`

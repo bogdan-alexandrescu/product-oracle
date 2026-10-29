@@ -17,7 +17,7 @@ import { ScreenSubjectProvider } from "@/lib/screen-subject";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 import { Mark } from "./Brand";
-import { ConfirmHost } from "./ConfirmDialog";
+import { ConfirmHost, confirmInPage } from "./ConfirmDialog";
 import { ToastHost } from "./Toast";
 import { initialsOf } from "./Figures";
 import { Button } from "./Button";
@@ -25,6 +25,7 @@ import { Icon, type IconName } from "./Icon";
 import { Notice } from "./Layout";
 import { ModeRoot, ModeSwitch } from "./ModeSwitch";
 import { usePageInfo } from "./page-info";
+import { onRadioKeys, radioTabIndex } from "./radio-keys";
 import { RAIL_SELECTED, TAB_BAR } from "./rail";
 import { Sheet } from "./Sheet";
 
@@ -174,13 +175,22 @@ function useInboxCount(enabled: boolean): number | null {
   return n;
 }
 
+/** The link's name with its badge: "Inbox, 11 waiting" (qa-shell-14: a span's aria-label is not read). */
+export const badgedName = (label: string, n: number | null | undefined) => (n ? `${label}, ${n} waiting` : undefined);
+
+/**
+ * qa-shell-14, qa-onboarding-32: the count sits beside the icon's top-right corner, starting
+ * just past the 24 px icon (50% + 14 px), so two or three digits never cover it; a ring in the
+ * bar's colour keeps its edge clear. The link carries the words (badgedName): the number is
+ * drawn, not read.
+ */
 function Badge({ n, testId }: { n: number | null; testId?: string }) {
   if (!n) return null;
   return (
     <span
       data-testid={testId}
-      aria-label={`${n} waiting`}
-      className="tnum absolute top-1 right-1.5 h-4 min-w-4 rounded-lg bg-rail-badge px-1 text-center font-mono text-[13px] leading-4 font-semibold text-on-rail-badge max-[600px]:right-auto max-[600px]:left-[calc(50%+6px)]"
+      aria-hidden
+      className="tnum absolute top-0.5 left-[calc(50%+14px)] h-4 min-w-4 rounded-lg bg-rail-badge px-1 text-center font-mono text-[13px] leading-4 font-semibold text-on-rail-badge ring-2 ring-rail"
     >
       {n}
     </span>
@@ -204,6 +214,7 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
   const { me, clear } = useMe();
   const [theme, setTheme] = useTheme();
   const [open, setOpen] = useState(false);
+  const [at, setAt] = useState({ bottom: 12, left: 100 });
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const email = me?.email ?? me?.token_name ?? "";
@@ -211,6 +222,12 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
   useEffect(() => {
     if (!open) return;
     root.current?.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]')?.focus();
+    // The rail scrolls when the window is short (qa-shell-2): the menu is fixed beside it,
+    // its foot level with the avatar's, never clipped by the rail.
+    const r = button.current?.getBoundingClientRect();
+    // Beside the rail, Detailed's or Simple's: past the rail's right edge.
+    const nav = button.current?.closest("nav")?.getBoundingClientRect();
+    if (r) setAt({ bottom: Math.max(8, window.innerHeight - r.bottom), left: (nav?.right ?? r.right) + 12 });
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       // Only this menu closes (not the Ask panel).
@@ -257,20 +274,26 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
     <div
       role="dialog"
       aria-label="Account"
+      style={rail ? at : undefined}
       className={
         rail
-          ? "absolute bottom-0 left-[calc(100%+12px)] z-50 w-72 rounded-panel border border-line bg-surface p-3 text-text shadow-tip [--focus-ring:var(--accent)]"
+          ? "fixed z-50 max-h-[calc(100dvh-16px)] w-72 overflow-y-auto rounded-panel border border-line bg-surface p-3 text-text shadow-tip [--focus-ring:var(--accent)]"
           : "absolute top-[calc(100%+8px)] right-0 z-50 w-72 max-w-[calc(100vw-20px)] rounded-panel border border-line bg-surface p-3 text-left text-text shadow-tip [--focus-ring:var(--accent)]"
       }
     >
       <p className="mb-3 truncate px-1 text-sm font-medium">{email}</p>
-      <div role="radiogroup" aria-label="Theme" className="mb-3 grid grid-cols-3 overflow-hidden rounded-button border border-line-strong">
+      <div
+        role="radiogroup"
+        aria-label="Theme"
+        onKeyDown={(e) => onRadioKeys(e, THEMES.map((t) => t.value), theme, setTheme)}
+        className="mb-3 grid grid-cols-3 overflow-hidden rounded-button border border-line-strong">
         {THEMES.map((t) => (
           <button
             key={t.value}
             type="button"
             role="radio"
             aria-checked={theme === t.value}
+            tabIndex={radioTabIndex(theme === t.value)}
             data-testid={`theme-${t.value}`}
             onClick={() => setTheme(t.value)}
             className={`flex h-9 items-center justify-center gap-1.5 border-r border-line text-sm font-medium last:border-r-0 ${
@@ -298,8 +321,15 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
       {MOCK_MODE && (
         <button
           type="button"
-          title="NEXT_PUBLIC_API_MOCKS=1: data comes from in-browser fixtures"
-          onClick={() => {
+          title="Restore the sample data and sign out"
+          onClick={async () => {
+            // qa-shell-13: it drops every change made in this browser, so it asks first.
+            const yes = await confirmInPage({
+              action: "Reset sample data",
+              message: "Restore the sample data and sign out? Every change made in this browser is lost.",
+              destructive: true,
+            });
+            if (!yes) return;
             resetMockData();
             // Full reload on purpose: every view re-reads the freshly seeded state.
             // eslint-disable-next-line @next/next/no-location-assign-relative-destination
@@ -323,7 +353,7 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
   );
 
   return (
-    <div ref={root} className={rail ? "relative mt-2" : "relative flex-none"}>
+    <div ref={root} className={rail ? "relative mt-2 flex-none" : "relative flex-none"}>
       <button
         ref={button}
         type="button"
@@ -357,7 +387,8 @@ function RailLink({ d, pathname, home, badge }: { d: Dest; pathname: string; hom
       href={d.href}
       data-testid={d.testId}
       aria-current={active ? "page" : undefined}
-      className={`relative flex w-[70px] flex-col items-center gap-0.5 rounded-[10px] pt-[7px] pb-1.5 text-[13px] leading-4 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${RAIL_SELECTED}`}
+      aria-label={badgedName(d.label, badge)}
+      className={`relative flex w-[70px] flex-none flex-col items-center gap-0.5 rounded-[10px] pt-[7px] pb-1.5 text-[13px] leading-4 font-medium text-rail-text hover:bg-rail-hover hover:text-rail-active-text ${RAIL_SELECTED}`}
     >
       <Icon name={d.icon} stroke={1.7} />
       {d.label}
@@ -413,12 +444,13 @@ function Navs() {
       <nav
         aria-label="Oracle"
         data-testid="app-nav"
-        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 bg-rail py-3.5 [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
+        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[88px] flex-col items-center gap-0.5 overflow-y-auto overscroll-contain bg-rail py-3.5 [scrollbar-width:none] [--focus-ring:var(--rail-bar)] max-[600px]:hidden"
       >
         <Link href="/home" aria-label="Product Oracle" data-testid="nav-brand" className="mb-3 flex-none rounded-xl">
           <Mark size={44} tone="sky" className="block" />
         </Link>
         <ModeSwitch placement="rail" documentHome={home} />
+        {/* qa-shell-2: a short window scrolls the rail, so Settings and the account menu stay reachable. */}
         {DESTINATIONS.map((d) => (
           <RailLink key={d.href} d={d} pathname={pathname} home={home} badge={d.label === "Inbox" ? inbox : undefined} />
         ))}
@@ -441,6 +473,7 @@ function Navs() {
               href={d.href}
               data-testid={`tab-${d.testId.slice(4)}`}
               aria-current={active ? "page" : undefined}
+              aria-label={d.label === "Inbox" ? badgedName(d.label, inbox) : undefined}
               className={`relative flex flex-col items-center justify-center gap-[3px] rounded-[10px] text-[13px] leading-4 ${
                 active ? `bg-rail-active font-semibold text-rail-active-text ${TAB_BAR}` : "font-medium text-rail-text"
               }`}
@@ -531,6 +564,14 @@ function h1Text(h1: Element | undefined, plain: boolean): string {
     .replace(/\s+/g, " ");
 }
 
+/** The section's open tab, from its strip under the H1 (the link marked current), before the H1's words. */
+function withTab(main: Element, words: string): string {
+  if (!words) return words;
+  const tab = Array.from(main.querySelectorAll('[data-page-header] nav a[aria-current="page"]')).find((a) => a.checkVisibility());
+  const label = tab?.textContent?.trim();
+  return label && label !== words ? `${label} · ${words}` : words;
+}
+
 /**
  * The open page's title, read from its H1 (PageHeader's title and suffix, "Checkout PRD v3")
  * and kept in step as the page loads; the destination's label until the page draws one.
@@ -548,12 +589,14 @@ function usePageTitle(pathname: string): { title: string; plain: string } {
       const h1s = Array.from(main.querySelectorAll("h1"));
       const h1 = h1s.find((h) => h.checkVisibility()) ?? h1s[0];
       const title = h1Text(h1, false);
-      const plain = h1Text(h1, true);
+      // qa-shell-3: a section's tab (Plan, Company, Settings) is headed by the section's name;
+      // the browser tab names the open tab too ("Dates · Plan"), so no two pages share one.
+      const plain = withTab(main, h1Text(h1, true));
       setRead((r) => (r?.title === title && r.plain === plain ? r : title ? { title, plain: plain || title } : null));
     };
     update();
     const watch = new MutationObserver(update);
-    watch.observe(main, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style"] });
+    watch.observe(main, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["hidden", "style", "aria-current"] });
     return () => watch.disconnect();
   }, [pathname]);
   // qa-shell-24: a not-found page renders on the server under another path than the

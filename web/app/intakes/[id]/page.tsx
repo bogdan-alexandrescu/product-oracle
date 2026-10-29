@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
 
 import { BeforeDrafting } from "./_shell";
+import { PageSkeleton } from "@/components/ds";
 
 async function Shell({ params }: { params: RouteProps<{ id: string }>["params"] }) {
   const { id } = await params;
@@ -13,7 +13,7 @@ async function Shell({ params }: { params: RouteProps<{ id: string }>["params"] 
 /** Before drafting (C5): Oracle's questions about a brief, and whether it is ready to draft. */
 export default function IntakePage({ params }: RouteProps<{ id: string }>) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Shell params={params} />
     </Suspense>
   );

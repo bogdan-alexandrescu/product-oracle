@@ -1,12 +1,12 @@
 import { Suspense } from "react";
 
-import { Loading } from "@/components/ui";
 
 import { AnalyticsSettings } from "./AnalyticsSettings";
+import { PageSkeleton } from "@/components/ds";
 
 export default function AnalyticsPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton bare />}>
       <AnalyticsSettings />
     </Suspense>
   );

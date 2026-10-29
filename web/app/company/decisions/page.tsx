@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
-import { Avatar, Button, Chip, DataTable, FilterChips, InfoTip, Panel, Sheet, Split, type Column } from "@/components/ds";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
+import { Avatar, Button, Chip, type Column, DataTable, FilterChips, InfoTip, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
+import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import type { paths } from "@/lib/api/schema";
 import { useMe } from "@/lib/me";
@@ -65,7 +65,7 @@ function useIsPhone(): boolean {
 
 export default function DecisionsPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton bare />}>
       <Decisions />
     </Suspense>
   );

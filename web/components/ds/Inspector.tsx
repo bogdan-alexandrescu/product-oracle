@@ -78,7 +78,8 @@ export function Inspector({
               } ${i >= cols ? "border-t border-line" : ""}`}
             >
               <dt className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
-                <span className="truncate">{s.label}</span>
+                {/* qa-shell-17: a stat's label wraps, never cut short. */}
+                <span className="min-w-0 break-words">{s.label}</span>
                 {s.extra}
               </dt>
               <dd>{s.figure ?? <Numeral value={s.value} of={s.of} tone={s.tone} />}</dd>

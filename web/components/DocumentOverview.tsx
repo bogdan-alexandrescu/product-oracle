@@ -7,6 +7,7 @@ import { useState } from "react";
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { BuildRoadmapButton, SourceLink } from "@/components/BuildRoadmap";
 import { DocToolbar } from "@/components/DocToolbar";
+import { DOC_MISSING, DocumentNotFound } from "@/components/DocumentNotFound";
 import { RoadmapSharing } from "@/components/share/RoadmapSharing";
 import { PricingDecide } from "@/components/PricingDecide";
 import { DraftWithOracleButton, isTemplateOnly } from "@/components/DraftWithOracle";
@@ -29,7 +30,7 @@ import { RequestSpecDialog, SPEC_STATE, specHref, useSpecs } from "@/components/
 import { Campaigns, ReviewSettingsButton, SectionAssignments } from "@/components/ReviewSetup";
 import { FRESHNESS, sizeText } from "@/components/tech-brief";
 import { ErrorNote, Loading } from "@/components/ui";
-import { api, unwrap, type Schemas, type VersionSummary } from "@/lib/api/client";
+import { api, ApiError, unwrap, type Schemas, type VersionSummary } from "@/lib/api/client";
 import { formatDate, formatDateTime, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
@@ -309,7 +310,12 @@ function EngineeringSpecs({ doc, approved }: { doc: string; approved: boolean })
 
 export function DocumentOverview({ doc }: { doc: string }) {
   const router = useRouter();
-  const q = useQuery(`doc|${doc}`, () => unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })));
+  // qa-shell-1: a document the API does not have says so in words, never the API's own text.
+  const q = useQuery(`doc|${doc}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc } } })).catch((e: unknown) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, DOC_MISSING) : e;
+    }),
+  );
   const d = q.data;
   const versions = [...(d?.versions ?? [])].reverse();
   const [picked, setPicked] = useState<number | null>(null);
@@ -326,6 +332,8 @@ export function DocumentOverview({ doc }: { doc: string }) {
   const templateOnly = isTemplateOnly(d?.kind, d?.versions ?? []);
   // G7 3.3: the panel is about this document (its latest version).
   useScreenSubject(d && versions[0] ? { kind: "document", subject: { document_id: d.id, version: versions[0].number } } : null, d?.title);
+  // A missing document: the one not-found page, no crumb waiting on a title that never comes.
+  if (q.error === DOC_MISSING) return <DocumentNotFound />;
   return (
     <div>
       <DocToolbar doc={d} />

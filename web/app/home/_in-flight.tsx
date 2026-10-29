@@ -238,7 +238,7 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           tone: r && r.blocking.length > 0 ? "crit" : undefined,
           testId: "stat-blockers",
         },
-        { label: "Sections approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
+        { label: "Approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
         { label: "Open items", value: openItems ?? 0, testId: "stat-open" },
       ]}
     >

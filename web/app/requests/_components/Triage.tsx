@@ -4,7 +4,10 @@ import { useEffect, useState } from "react";
 
 import { Button, Chip, InfoTip } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { failedAt, formatAge, plural } from "@/lib/format";
+import { dailyTime, failedAt, formatAge, plural } from "@/lib/format";
+
+/** When the daily triage runs (api/oracle/requests/triage.py: 07:00 Pacific), in the Company time zone. */
+const DAILY_AT = () => dailyTime("07:00", "America/Los_Angeles");
 import { errorMessage, useQuery, type Query } from "@/lib/use-query";
 
 type Status = Schemas["TriageStatus"];
@@ -133,7 +136,7 @@ export function DailyTriageSwitch({ triage, canChange }: { triage: Query<Status>
             data-testid="daily-triage-switch"
           />
           <span>
-            Daily triage at 07:00 PT
+            Daily triage at {DAILY_AT()}
             {said && (
               <span data-testid="daily-triage-said" className={`font-medium ${said.warn ? "text-warn" : "text-text2"}`}>
                 {" · "}
@@ -151,7 +154,7 @@ export function DailyTriageSwitch({ triage, canChange }: { triage: Query<Status>
         )
       )}
       <InfoTip label="Daily triage">
-        While this is on, Oracle classifies new requests every day at 07:00 PT, about $1.50 a run. It runs as whoever
+        While this is on, Oracle classifies new requests every day at {DAILY_AT()}, about $1.50 a run. It runs as whoever
         turned it on, while they are an approver or owner, otherwise as the longest-standing owner.
         {status?.daily_changed_by && ` Last turned ${status.daily_on ? "on" : "off"} by ${status.daily_changed_by}.`}
       </InfoTip>
@@ -198,7 +201,7 @@ export function ClassifyNow({ triage }: { triage: Query<Status> }) {
       <InfoTip label="Classify now">
         Oracle suggests a theme, goals, a duplicate and a feature for every new request, and looks through your own
         sources for requests. You accept or ignore each suggestion. Oracle also classifies new requests every day at
-        07:00 PT while Daily triage is on.
+        {DAILY_AT()} while Daily triage is on.
       </InfoTip>
     </span>
   );

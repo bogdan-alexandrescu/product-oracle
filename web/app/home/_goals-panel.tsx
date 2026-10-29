@@ -153,7 +153,7 @@ function GoalsSkeleton() {
     <ul
       aria-hidden
       data-testid="goals-loading"
-      className="grid grid-cols-4 divide-x divide-line max-[600px]:grid-cols-2 max-[600px]:divide-x-0 max-[600px]:[&>li]:border-b max-[600px]:[&>li:nth-child(odd)]:border-r"
+      className="grid grid-cols-4 divide-x divide-line max-[600px]:grid-cols-1 max-[600px]:divide-x-0 max-[600px]:[&>li:not(:last-child)]:border-b"
     >
       {[0, 1, 2, 3].map((i) => (
         <li key={i} className="flex min-w-0 flex-col gap-3 border-line px-4 pt-3.5 pb-3 max-[600px]:px-3">
@@ -246,10 +246,11 @@ export function GoalsPanel({
           )}
         </div>
       )}
+      {/* qa-shell-18: on a phone, one goal per row, so an odd one never sits beside an empty half. */}
       {shown.length > 0 && (
         <ul
           aria-label="Goals"
-          className="grid divide-x divide-line max-[600px]:grid-cols-2! max-[600px]:divide-x-0 max-[600px]:[&>li]:border-b max-[600px]:[&>li:nth-child(odd)]:border-r"
+          className="grid divide-x divide-line max-[600px]:grid-cols-1! max-[600px]:divide-x-0 max-[600px]:[&>li:not(:last-child)]:border-b"
           style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
         >
           {shown.map((g) => (
