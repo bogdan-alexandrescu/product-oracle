@@ -8,6 +8,9 @@ export type ToastAsk = {
   message: string;
   /** One action beside the message ("Undo"); the toast closes when it is pressed. */
   action?: { label: string; onClick: () => void };
+  /** "corner": bottom-right on a desktop, clear of a wide chart (Simple's Roadmap, #34);
+   * a phone keeps the centred strip. Every other toast stays centred. */
+  place?: "corner";
 };
 
 type Shown = ToastAsk & { id: number };
@@ -36,11 +39,9 @@ export function ToastHost() {
     return () => window.clearTimeout(t);
   }, [shown]);
   return (
-    // #34: the toast is one host for the whole app (no per-page position prop), so it
-    // centred over whatever page is open, including a wide chart; a minimal, global change
-    // moves it to the bottom-right corner on desktop (a phone keeps the centred strip,
-    // clear of the tab bar) rather than sitting mid-chart.
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0">
+    <div
+      className={`pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20${shown?.place === "corner" ? " min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0" : ""}`}
+    >
       {shown && (
         <div
           key={shown.id}

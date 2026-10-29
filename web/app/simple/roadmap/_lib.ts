@@ -24,11 +24,15 @@ export const daysBetween = (a: string, b: string): number => Math.round((ms(b) -
 export const shortDay = (day: string): string => calendarDay(day);
 
 /** A span in words, with its year when it is not this year's ("Jan 1 – Jun 30, 2027",
- * "Oct 22, 2027 – Oct 22, 2028"). */
-export function spanWords(start: string, end: string, today: string): string {
+ * "Oct 22, 2027 – Oct 22, 2028"). `eachEnd` (qa-simple-roadmap-27, the board): each end
+ * shows its year only when that end's own year isn't this year's ("Dec 14 – Jan 15, 2027",
+ * never "Dec 14, 2026 – Jan 15, 2027"). With no `today`, the year shows only when the two
+ * ends fall in different years (a chat card's move). */
+export function spanWords(start: string, end: string, today: string = start, eachEnd = false): string {
   const [ys, ye, yt] = [start, end, today].map((d) => d.slice(0, 4));
   if (ys === ye && ys === yt) return `${shortDay(start)} – ${shortDay(end)}`;
   if (ys === ye) return `${shortDay(start)} – ${shortDay(end)}, ${ye}`;
+  if (eachEnd) return `${ys === yt ? shortDay(start) : `${shortDay(start)}, ${ys}`} – ${ye === yt ? shortDay(end) : `${shortDay(end)}, ${ye}`}`;
   return `${shortDay(start)}, ${ys} – ${shortDay(end)}, ${ye}`;
 }
 

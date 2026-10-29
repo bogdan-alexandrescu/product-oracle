@@ -2,20 +2,13 @@
 
 import { useEffect, useState } from "react";
 
+import { spanWords } from "@/app/simple/roadmap/_lib";
 import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
 import { api, unwrap } from "@/lib/api/client";
 import { applyCard, CORRECT_FIELDS, discardCard, FLOW_OPS, isActionPreview, sendApplied, sendCardChanged, sendPreview, undoCard, type ActionPreview, type ChatCard as Card } from "@/lib/api/simple-chat";
-import { calendarDay } from "@/lib/dates";
 import { errorMessage } from "@/lib/use-query";
 
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
-
-/** "Nov 14 – Dec 24", as the roadmap itself words a span (app/simple/roadmap/_lib.ts's
- * spanWords): month-first, the year only when the two days fall in different years. */
-function spanWords(start: string, end: string): string {
-  const short = (d: string) => calendarDay(d);
-  return start.slice(0, 4) === end.slice(0, 4) ? `${short(start)} – ${short(end)}` : `${short(start)}, ${start.slice(0, 4)} – ${short(end)}, ${end.slice(0, 4)}`;
-}
 
 /** qa-simple-roadmap-26: a move's before/after in the app's month-first words ("Nov 14 –
  * Dec 24"), not the day-first text the reader typed into the chat. `before`/`after` carry

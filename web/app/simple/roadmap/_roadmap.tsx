@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
-import { Button, Notice, SegmentedControl, toast } from "@/components/ds";
+import { Button, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
 import { GoalPanel, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
@@ -47,6 +47,11 @@ import {
   type Where,
 } from "./_lib";
 import { Chart, PHASES } from "./_timeline";
+
+/** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
+const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
+
+const START_REVIEW_REASON = "Only an owner or the PRD's decider can start a review";
 
 const FORMAT_WORDS: Record<Format, string> = { timeline: "Timeline", gantt: "Gantt", board: "Now / Next / Later", waterfall: "Waterfall" };
 
@@ -324,6 +329,10 @@ function DecisionTray({
           ×
         </button>
       </div>
+      {/* #37: what the button's count is, on screen: this view's own, not the side menu's badges. */}
+      <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
+        {counters.reduce((n, [, c]) => n + c, 0)} on this roadmap view. The side menu&apos;s Decisions and Roadmap counts cover other things, so they can differ.
+      </p>
       <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
         {counters.map(([label, n]) => (
           <li key={label} className="rounded-lg border border-line px-2 py-1.5 text-center">
@@ -817,11 +826,18 @@ export function SimpleRoadmap() {
       </Button>
       <Button
         disabled={!mayStartReview}
-        title={mayStartReview ? undefined : "Only an owner (or the PRD's decider) can start a review"}
+        title={mayStartReview ? undefined : START_REVIEW_REASON}
+        aria-describedby={mayStartReview ? undefined : "start-review-reason"}
         onClick={() => setStarting(true)}
       >
         Start review
       </Button>
+      {/* #13: the reason is on screen, not only a hover title (touch and keyboard read it too). */}
+      {!mayStartReview && (
+        <span id="start-review-reason" data-testid="start-review-reason" className="self-center text-sm text-text2">
+          {START_REVIEW_REASON}
+        </span>
+      )}
       <Button disabled={exporting} onClick={() => void doExport("png")}>
         Export PNG
       </Button>

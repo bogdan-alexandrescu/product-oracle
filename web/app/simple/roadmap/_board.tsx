@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
-import { barKind, broken, closedItem, shortDay, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, closedItem, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -12,20 +12,8 @@ export const HORIZONS: { key: Horizon; label: string }[] = [
   { key: "later", label: "Later" },
 ];
 
-/**
- * qa-simple-roadmap-27: a span in words, each end showing its year only when that end's own
- * year isn't this year's (so a span that starts this year and ends next year reads "Dec 14 –
- * Jan 15, 2027", never "Dec 14, 2026 – Jan 15, 2027"); the shared spanWords (./_lib) decides
- * once for the whole span, which doubles the year when the two ends differ, so the board
- * keeps its own copy and uses it for both the column headers and the cards.
- */
-function boardSpanWords(start: string, end: string, today: string): string {
-  const [ys, ye, yt] = [start, end, today].map((d) => d.slice(0, 4));
-  if (ys === ye) return ys === yt ? `${shortDay(start)} – ${shortDay(end)}` : `${shortDay(start)} – ${shortDay(end)}, ${ye}`;
-  const s = ys === yt ? shortDay(start) : `${shortDay(start)}, ${ys}`;
-  const e = ye === yt ? shortDay(end) : `${shortDay(end)}, ${ye}`;
-  return `${s} – ${e}`;
-}
+/** qa-simple-roadmap-27: each end of a span shows its year only when it isn't this year's. */
+const boardSpanWords = (start: string, end: string, today: string): string => spanWords(start, end, today, true);
 
 /** qa-simple-roadmap-3: whether every item drawn in a column falls inside the column's
  * nominal window (a dragged card's horizon can move while its own dates stay put, so a

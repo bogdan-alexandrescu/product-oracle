@@ -266,8 +266,10 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
           : "absolute top-[calc(100%+8px)] right-0 z-50 w-72 max-w-[calc(100vw-20px)] rounded-panel border border-line bg-surface p-3 text-left text-text shadow-tip [--focus-ring:var(--accent)]"
       }
     >
-      <p className="mb-3 truncate px-1 text-sm font-medium" title={name ? `${name} (${email})` : email}>
-        {name ? `${name} · ${email}` : email}
+      {/* qa-simple-roadmap-46: the name and the whole email, each on its own line and wrapped, never cut off. */}
+      <p className="mb-3 px-1 text-sm font-medium" data-testid="account-who">
+        {name && <span className="block break-words">{name}</span>}
+        <span className={`block break-all ${name ? "font-normal text-text2" : ""}`}>{email}</span>
       </p>
       <div role="radiogroup" aria-label="Theme" className="mb-3 grid grid-cols-3 overflow-hidden rounded-button border border-line-strong">
         {THEMES.map((t) => (
