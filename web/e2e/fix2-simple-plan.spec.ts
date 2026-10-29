@@ -141,6 +141,32 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
     await expect(draft.getByRole("button", { name: "Merge", exact: true })).toHaveCount(1);
     await expect(draft.getByLabel("Merge into", { exact: true })).not.toContainText("setup-checklist");
   });
+  /*
+   * qa-simple-plan-4, -11: with a dated plan the plan's dates decide what makes the line; the
+   * Ranked list (and Value / effort's side list) shows what makes it first, the line once, then
+   * what misses it, and says so; the side list's codes are chips with the name on hover.
+   */
+  test("with a dated plan the line is drawn once, every row above it making it", async ({ page }) => {
+    await setUp(page, { scheme: "dark", scenario: "simple-plan" });
+    await open(page);
+    const rows = page.getByTestId("prio-row");
+    await expect(rows.first()).toBeVisible();
+    await expect(page.getByTestId("line-divider")).toHaveCount(1);
+    const above = await rows.evaluateAll((els) => els.map((e) => e.getAttribute("data-above")));
+    const first = above.indexOf("false");
+    expect(first).toBeGreaterThan(0);
+    expect(above.slice(0, first).every((a) => a === "true")).toBe(true);
+    expect(above.slice(first).every((a) => a === "false")).toBe(true);
+    await expect(page.getByTestId("prio-subtitle")).toContainText("what makes it is listed first");
+    await page.getByRole("tab", { name: "Value / effort" }).click();
+    await expect(page.getByTestId("prio-subtitle")).not.toContainText("listed first");
+    await expect(page.getByTestId("line-divider")).toHaveCount(1);
+    const side = await page.getByTestId("side-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-above")));
+    expect(side).toEqual(above);
+    const code = page.getByTestId("side-code").first();
+    expect(await code.getAttribute("title")).toBe(await page.getByTestId("side-row").first().getByTestId("prio-title").getAttribute("title"));
+    expect(await code.evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
+  });
 });
 
 test.describe("QA pass 2: simple-plan, Value / effort", () => {
