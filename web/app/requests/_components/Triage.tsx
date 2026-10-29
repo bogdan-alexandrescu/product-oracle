@@ -200,7 +200,7 @@ export function ClassifyNow({ triage }: { triage: Query<Status> }) {
       </Button>
       <InfoTip label="Classify now">
         Oracle suggests a theme, goals, a duplicate and a feature for every new request, and looks through your own
-        sources for requests. You accept or ignore each suggestion. Oracle also classifies new requests every day at
+        sources for requests. You accept or ignore each suggestion. Oracle also classifies new requests every day at{" "}
         {DAILY_AT()} while Daily triage is on.
       </InfoTip>
     </span>

@@ -57,7 +57,7 @@ test("app shell: each destination routes to its page", async ({ page }) => {
     ["nav-priorities", "Priorities", "/priorities"],
     ["nav-plan", "Plan", "/plan"],
     ["nav-inbox", "Inbox", "/inbox"],
-    ["nav-settings", "Members", "/settings/members"],
+    ["nav-settings", "Settings", "/settings/members"],
     ["nav-prds", "PRDs", "/documents"],
   ]) {
     await nav.getByTestId(id).click();
@@ -77,6 +77,7 @@ test("settings: its own strip routes to each section, Settings stays active", as
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   const strip = page.getByRole("navigation", { name: "Settings" });
   for (const [id, path, heading] of [
+    // qa-shell-20: every tab is headed "Settings"; the browser tab names the tab.
     ["nav-members", "/settings/members", "Members"],
     ["nav-api-tokens", "/settings/api-tokens", "API tokens"],
     ["nav-connections", "/settings/connections", "Connections"],
@@ -87,7 +88,8 @@ test("settings: its own strip routes to each section, Settings stays active", as
   ]) {
     await strip.getByTestId(id).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
-    await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Settings", exact: true })).toBeVisible();
+    await expect(page).toHaveTitle(`${heading} · Settings · Product Oracle`);
     await expect(strip.getByTestId(id)).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings")).toHaveAttribute(
       "aria-current",

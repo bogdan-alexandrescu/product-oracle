@@ -173,7 +173,7 @@ test("10d: an approver sees and comments on updates without verdicts or Approve;
   await expect(page.getByTestId("updates-not-found")).toHaveText("Not found");
   await expect(page.getByTestId("update-row")).toHaveCount(0);
   await page.goto("/documents/board-update-2026-10");
-  await expect(page.getByText("Document not found")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Document not found" })).toHaveCount(1);
   await expect(page.getByRole("heading", { name: "Board update · October 2026" })).toHaveCount(0);
   await page.goto("/sources");
   await page.getByLabel("Search", { exact: true }).fill("Larkspur");

@@ -48,7 +48,7 @@ const PAIRS: [simple: string, detailed: string][] = [
 export function switchTarget(pathname: string, to: Mode, documentHome?: string): string {
   if (to === modeOf(pathname)) return pathname;
   if (to === "detailed") {
-    // qa-shell-4: /simple/prds/<doc> is the same one-pager, by its older path.
+    // qa-shell-4: a PRD's one-pager by either of its paths opens that PRD's page.
     const onePager = /^\/simple\/(?:one-pagers|prds)\/([^/]+)/.exec(pathname)?.[1];
     if (onePager) return `/documents/${onePager}`;
     return PAIRS.find(([simple]) => under(pathname, simple))?.[1] ?? DETAILED_HOME;
