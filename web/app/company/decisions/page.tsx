@@ -194,7 +194,8 @@ function Decisions() {
   const clsLabel = cls === "checkpoint" ? "checkpoint decisions" : "judgement calls";
   const clearFilters = () => {
     setSearch("");
-    setParams({ state: "all", from: null, q: null, d: null });
+    // Every filter, the kind too: one click brings the rows back.
+    setParams({ state: "all", from: null, q: null, d: null, ...(cls !== "all" ? { class: "all" } : {}) });
   };
 
   // The picked decision stays open after it leaves the filtered rows (decided from Needs me).

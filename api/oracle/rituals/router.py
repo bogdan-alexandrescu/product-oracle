@@ -64,7 +64,8 @@ async def put_ritual_summary_settings(
 @router.get("/rituals", response_model=list[RitualOut])
 async def list_rituals(db: TenantDB, principal: Viewer) -> list[RitualOut]:
     """The company's rituals: built-ins first."""
-    return [await service.ritual_out(db, r) for r in await service.list_rituals(db)]
+    seen: dict[str, object] = {}
+    return [await service.ritual_out(db, r, seen) for r in await service.list_rituals(db)]
 
 
 @router.post("/rituals", response_model=RitualOut, status_code=201, responses=ERRORS)

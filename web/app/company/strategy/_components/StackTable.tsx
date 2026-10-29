@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 
-import { Button, Chip, DataTable, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
+import { Chip, DataTable, Inspector, InspectorRow, InspectorSection, type Column } from "@/components/ds";
 
 import { CompanyEmpty } from "../../_empty";
 import { FindingRow } from "./DriftList";
@@ -76,7 +76,7 @@ export function StackTable({
   onSelect,
   confirmedGoals = null,
   hasStrategy = false,
-  onNewStrategy,
+  canStart = false,
 }: {
   stack: Stack | undefined;
   rows: StackRow[];
@@ -86,8 +86,8 @@ export function StackTable({
   confirmedGoals?: number | null;
   /** A product strategy document exists (a draft, not approved yet). */
   hasStrategy?: boolean;
-  /** An owner may start the product strategy here (none exists yet). */
-  onNewStrategy?: () => void;
+  /** An owner may start the product strategy (on its card; none exists yet). */
+  canStart?: boolean;
 }) {
   const vision = stack?.vision;
   const columns: Column<StackRow>[] = [
@@ -147,21 +147,12 @@ export function StackTable({
     const goals = confirmedGoals ? `The ${plural(confirmedGoals, "confirmed goal")}` : "The confirmed goals";
     const next = hasStrategy
       ? "Open the product strategy draft to review it; an owner approves it."
-      : onNewStrategy
-        ? "Start one to line them up."
+      : canStart
+        ? "Start one on the Product strategy card above to line them up."
         : "An owner writes it.";
+    // One New product strategy, on its card (qa-company-20): the empty stack points to it.
     return (
-      <CompanyEmpty
-        testId="stack-empty"
-        title="Waiting for an approved product strategy"
-        action={
-          onNewStrategy && !hasStrategy ? (
-            <Button variant="primary" icon="plus" onClick={onNewStrategy}>
-              New product strategy
-            </Button>
-          ) : undefined
-        }
-      >
+      <CompanyEmpty testId="stack-empty" title="Waiting for an approved product strategy">
         {goals} show here under the focus choice each follows from, with the roadmap items serving it, once a product strategy is
         approved. {next}
       </CompanyEmpty>

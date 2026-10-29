@@ -408,7 +408,7 @@ export function MetricForm({
             <label htmlFor="metric-threshold">Threshold (%)</label>
             <input
               id="metric-threshold"
-              aria-describedby="metric-threshold-help"
+              aria-describedby={errors.threshold ? "metric-threshold-error metric-threshold-help" : "metric-threshold-help"}
               className={`${INPUT} w-32`}
               data-field="threshold"
               aria-invalid={!!errors.threshold}

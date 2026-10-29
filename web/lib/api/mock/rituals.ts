@@ -55,6 +55,8 @@ export interface RitualsContext {
   openVariances?: (occurrenceId: string) => number;
   /** H11 "Watch the market" above Observe: Oracle writes the competitive digest. */
   marketWrites: () => boolean;
+  /** H11 "Run rituals" at Act within limits: its max_run_usd (summaries._oracle_acts), else null. */
+  ritualsActCap?: () => number | null;
   /** The Baseline rebuild (rebuild.py): H11 "Keep the baseline current" is at Draft or above. */
   baselineStarts?: () => boolean;
   /** B1's build at the ritual's knobs (rebuild.estimate_usd): $7.00, unless a scenario prices it otherwise. */
@@ -487,15 +489,18 @@ function summaryOf(o: Occurrence): Schemas["OccurrenceSummary"] {
 function prepareUsd(ctx: RitualsContext | undefined, db: RitualsDb, r: Ritual): number | null {
   if (r.kind === REBUILD) return ctx && rebuildBlocked(ctx) ? null : ctx ? rebuildUsd(ctx) : REBUILD_USD;
   if (r.kind === DIGEST.kind && ctx && !ctx.marketWrites()) return null;
-  if (db.mode !== "always" || !(COVERED.has(r.kind) || r.kind in FLOW_FOR_KIND)) return null;
+  if (!(COVERED.has(r.kind) || r.kind in FLOW_FOR_KIND)) return null;
+  // As summaries.prepare_usd: on Every pre-read, or when Oracle writes it within its limit.
+  const cap = ctx?.ritualsActCap?.() ?? null;
+  if (db.mode !== "always" && !(cap != null && priceOf(r.kind) <= cap)) return null;
   return priceOf(r.kind);
 }
 
 /**
  * The ritual on the way out (service.ritual_out): a meeting made early (Prepare now, or the
  * lead time) and still ahead stays Next, with its ready pre-read, until its time
- * (qa-company-7); Last pre-read is the newest other one, so on a paused ritual (no Next) a
- * pre-read prepared now is its Last (qa-company-2).
+ * (qa-company-7); Last pre-read is the newest of a meeting whose time has come, or on a paused
+ * ritual (no Next) the newest at all, so a pre-read prepared now is its Last (qa-company-2).
  */
 function ritualOut(db: RitualsDb, r: Ritual, ctx?: RitualsContext): RitualOut {
   const t = now().getTime();
@@ -506,7 +511,7 @@ function ritualOut(db: RitualsDb, r: Ritual, ctx?: RitualsContext): RitualOut {
   let next = r.next_due_at;
   if (upcoming && next && Date.parse(upcoming.due_at) < Date.parse(next)) next = upcoming.due_at;
   const ready = r.status === "active" && !!upcoming && upcoming.status === "ready" && !!next && Date.parse(upcoming.due_at) === Date.parse(next);
-  const last = mine.filter((o) => o.pre_read.built_at && !(ready && o.id === upcoming.id)).sort((a, b) => b.due_at.localeCompare(a.due_at))[0];
+  const last = mine.filter((o) => o.pre_read.built_at && (r.status !== "active" || Date.parse(o.due_at) <= t)).sort((a, b) => b.due_at.localeCompare(a.due_at))[0];
   const out: RitualOut & { created_at?: string } = {
     ...r,
     next_due_at: next,

@@ -2335,6 +2335,11 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     openVariances: (id) => openVariances(ensureMetrics(db, me), id),
     marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
     baselineStarts: () => levelFor((db.autonomy ??= emptyAutonomy()), "baseline") !== "observe",
+    ritualsActCap: () => {
+      const a = (db.autonomy ??= emptyAutonomy());
+      const cap = levelFor(a, "rituals") === "act" ? limitsFor(a, "rituals")?.max_run_usd : null;
+      return typeof cap === "number" ? cap : null;
+    },
     rebuildUsd: () => db.baseline_build_usd ?? 7,
     // As rebuild.after_ready: B1's create, estimate and start through the runs mock's own routes.
     startBaselineBuild: async () => {
