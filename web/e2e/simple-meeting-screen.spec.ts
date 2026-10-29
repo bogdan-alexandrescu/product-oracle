@@ -59,7 +59,7 @@ for (const phone of [false, true]) {
       test("the three steps, the clock and the chat column", async ({ page }) => {
         await start(page);
         await expect(steps(page).getByRole("button", { name: "1 One-pager" })).toHaveAttribute("aria-pressed", "true");
-        const stage = page.getByRole("main", { name: "Stage" });
+        const stage = page.getByRole("region", { name: "Stage" });
         await expect(stage.getByRole("article", { name: "One-pager" })).toBeVisible();
         const clock = page.getByRole("timer", { name: "Meeting clock" });
         await expect(clock).toHaveText(/^0:0\d \/ 60:00$/);
@@ -127,7 +127,7 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("button", { name: /^Approve one-pager edits/ })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
         await expect(page.getByRole("button", { name: /is here/ })).toHaveCount(0);
-        await expect(page.getByTestId("change-mode")).toHaveText("Changes: Everyone");
+        await expect(page.getByTestId("change-mode")).toHaveText("Who changes things: Everyone");
       });
 
       test("the presenter lets only named people change things", async ({ page }) => {
@@ -143,7 +143,7 @@ for (const phone of [false, true]) {
         await page.goto("/simple/meetings");
         await switchTo(page, "commenter@example.com");
         await page.goto(url);
-        await expect(page.getByTestId("change-mode")).toHaveText("Changes: Only the presenter");
+        await expect(page.getByTestId("change-mode")).toHaveText("Who changes things: Only the presenter");
         await steps(page).getByRole("button", { name: "2 Roadmap" }).click();
         await expect(page.getByRole("region", { name: "Roadmap slice" })).toContainText("Setup checklist");
         await expect(page.getByRole("button", { name: /^Move / })).toHaveCount(0);
