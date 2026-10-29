@@ -58,22 +58,28 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
     keyRef.current = key;
   });
 
+  // The latest load only: two reloads in quick succession (each Pause on a list) can
+  // answer out of order, and the older answer must not land over the newer one.
+  const latest = useRef(0);
+
   const run = useCallback(async () => {
+    const n = ++latest.current;
     try {
       const data = await loadRef.current();
-      if (keyRef.current === key) setState({ key, data, error: null, loading: false });
+      if (keyRef.current === key && latest.current === n) setState({ key, data, error: null, loading: false });
     } catch (e) {
-      if (!onAuth(e) && keyRef.current === key) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
+      if (!onAuth(e) && keyRef.current === key && latest.current === n) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
     }
   }, [key, onAuth]);
 
   useEffect(() => {
     let live = true;
+    const n = ++latest.current;
     loadRef
       .current()
-      .then((data) => live && setState({ key, data, error: null, loading: false }))
+      .then((data) => live && latest.current === n && setState({ key, data, error: null, loading: false }))
       .catch((e) => {
-        if (live && !onAuth(e)) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
+        if (live && latest.current === n && !onAuth(e)) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
       });
     return () => {
       live = false;

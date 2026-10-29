@@ -163,7 +163,16 @@ test("fix-company review: with every ritual paused, the summaries estimate still
   const rows = page.getByTestId("ritual-row");
   const n = await rows.count();
   for (let i = 0; i < n; i++) {
-    await rows.nth(i).click();
+    const title = (await rows.nth(i).innerText()).split(/[\t\n]/)[0].trim();
+    // The inspector shows this ritual, selected, before its Pause is read: under load the
+    // page's own first selection could land after the click (which then unselected the
+    // row) or the inspector still showed the ritual before, and one ritual stayed active.
+    const toggle = inspector(page).getByRole("button", { name: /^(Pause|Resume)$/ });
+    await expect(async () => {
+      if (!(await toggle.isVisible()) || !(await inspector(page).innerText()).includes(title)) await rows.nth(i).click();
+      await expect(toggle).toBeVisible({ timeout: 1_000 });
+      await expect(inspector(page)).toContainText(title, { timeout: 1_000 });
+    }).toPass();
     const pause = inspector(page).getByRole("button", { name: "Pause", exact: true });
     if (await pause.isVisible()) {
       await pause.click();
@@ -173,7 +182,8 @@ test("fix-company review: with every ritual paused, the summaries estimate still
   const line = page.getByTestId("ritual-summaries");
   await line.getByRole("button", { name: "About the summaries estimate" }).click();
   const tip = line.getByRole("tooltip");
-  await expect(tip).toContainText("No active ritual would be summarized.");
+  // The estimate reloads after the last Pause; under load that can take a few seconds.
+  await expect(tip).toContainText("No active ritual would be summarized.", { timeout: 15_000 });
   await expect(tip).toContainText("Each summary is one Oracle run of about $3.00.");
 });
 
