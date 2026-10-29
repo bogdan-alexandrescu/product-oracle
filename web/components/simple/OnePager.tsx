@@ -8,6 +8,7 @@ import { clock, FlowPanel } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
 import { dmy, ew, PrdPlan, usePhone } from "@/components/simple/PrdTimeline";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
+import { quoteLine } from "@/components/simple/quote-line";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useCompanyZone } from "@/lib/dates";
@@ -17,11 +18,7 @@ type View = Schemas["OnePagerOut"];
 type Line = Schemas["OnePagerLine"];
 type Note = Schemas["OnePagerNote"];
 
-/** A line as people know it: its first words, quoted (qa-simple-prd-19: never "line 7"). */
-export function quoteLine(text: string | undefined): string {
-  const words = (text ?? "").replace(/\s+/g, " ").trim().split(" ");
-  return `“${words.slice(0, 5).join(" ")}${words.length > 5 ? "…" : ""}”`;
-}
+export { quoteLine };
 
 /** A section's Markdown as plain lines: no "- " bullets, "#" heads or "**" marks (qa-simple-prd-16/17). */
 export function plainLines(md: string): { text: string; bullet: boolean }[] {
@@ -143,11 +140,11 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     document.addEventListener("fullscreenchange", on);
     return () => document.removeEventListener("fullscreenchange", on);
   }, []);
-  // qa-simple-prd-16: Escape closes a line's sources.
+  // qa-simple-prd-16: Escape closes a line's sources, unless a dialog over them takes it.
   useEffect(() => {
     if (!open) return;
     const on = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(null);
+      if (e.key === "Escape" && !document.querySelector('[role="dialog"], dialog[open]')) setOpen(null);
     };
     document.addEventListener("keydown", on);
     return () => document.removeEventListener("keydown", on);
@@ -164,7 +161,17 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const phone = usePhone();
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
-  if (q.error || !q.data) return <div className="px-6 py-8"><ErrorNote>{q.error ?? "Not found"}</ErrorNote></div>;
+  if (q.error || !q.data) {
+    // A missing PRD's address says so in words, under the page's title.
+    const missing = !q.error || /not found|no such/i.test(q.error);
+    return (
+      <div className="mx-auto flex max-w-[1180px] flex-col items-start gap-3 px-12 pt-[26px] pb-12 max-[767px]:px-4 max-[767px]:pt-3.5">
+        <BackLink />
+        <h1 className="simple-h1">One-pager</h1>
+        <ErrorNote>{missing ? "No PRD at this address. It may have been deleted, or the link is old." : q.error}</ErrorNote>
+      </div>
+    );
+  }
   const v: View = q.data;
   const numbers = new Map<string, number>();
   const words = new Map<string, string>();
@@ -242,8 +249,9 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   ].filter(Boolean);
   // qa-simple-prd-18: a draft whose changes were all undone shows no banner.
   const draftShown = !!v.draft && (v.draft.changes > 0 || v.draft.status === "submitted");
-  // qa-simple-prd-10: who may start a review comes from the one-pager's can_edit (its owners and
-  // decider); everyone else reads who can, on a disabled button.
+  // qa-simple-prd-10: who may start a review is the start API's rule (can_start: an owner or the
+  // PRD's decider); everyone else reads who can, on a disabled button.
+  const startWhy = v.decider ? `Ask ${v.decider.name} or an owner to start a review` : "Ask an owner to start a review";
   const actions = presenting ? (
     <button type="button" className={btn(phone)} onClick={stopPresenting}>Stop presenting</button>
   ) : (
@@ -254,15 +262,15 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
         <button
           type="button"
           className={`${btn(phone)} disabled:cursor-not-allowed disabled:opacity-60`}
-          disabled={!v.can_edit}
-          title={v.can_edit ? undefined : "Ask an owner or approver to start a review"}
-          aria-describedby={v.can_edit ? undefined : "start-review-why"}
+          disabled={!v.can_start}
+          title={v.can_start ? undefined : startWhy}
+          aria-describedby={v.can_start ? undefined : "start-review-why"}
           onClick={() => setStarting(true)}
         >
           {!phone && <Glyph d={REVIEW} />}Start review
         </button>
       )}
-      {!sessionId && !v.can_edit && <span id="start-review-why" className="text-[14px] text-text2">Ask an owner or approver to start a review</span>}
+      {!sessionId && !v.can_start && <span id="start-review-why" className="text-[14px] text-text2">{startWhy}</span>}
       <Link className={`font-semibold whitespace-nowrap text-accent underline underline-offset-[3px] ${phone ? "text-[14px]" : "text-[15px]"}`} href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
     </>
   );
@@ -594,6 +602,15 @@ function MarginNote({
   const widened = wide === n.change_id;
   const shown = diff === n.change_id;
   const words = wordDiff(n.before, n.after);
+  // Escape closes the note's flow dialog, as the page's other dialogs.
+  useEffect(() => {
+    if (!widened) return;
+    const on = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setWide(null);
+    };
+    document.addEventListener("keydown", on);
+    return () => document.removeEventListener("keydown", on);
+  }, [widened, setWide]);
   return (
     <div
       role="note"

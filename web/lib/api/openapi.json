@@ -91625,6 +91625,10 @@
           "can_propose": {
             "type": "boolean",
             "title": "Can Propose"
+          },
+          "can_start": {
+            "type": "boolean",
+            "title": "Can Start"
           }
         },
         "type": "object",
@@ -91644,7 +91648,8 @@
           "draft",
           "changes_in_review",
           "can_edit",
-          "can_propose"
+          "can_propose",
+          "can_start"
         ],
         "title": "OnePagerOut"
       },

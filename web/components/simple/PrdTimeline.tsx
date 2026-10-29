@@ -1054,7 +1054,9 @@ function decisionWhen(plan: Plan, m: Milestone, d: Decision, today: string): { w
   return dueWords(plan, d.due_on, today);
 }
 
-/** "Likely: medium · Impact: high". */
+const level = (x: string): string => x.charAt(0).toUpperCase() + x.slice(1);
+
+/** "Likelihood: Medium · Impact: High". */
 function riskLevel(r: Risk): string | null {
-  return [r.likelihood && `Likely: ${r.likelihood}`, r.impact && `Impact: ${r.impact}`].filter(Boolean).join(" · ") || null;
+  return [r.likelihood && `Likelihood: ${level(r.likelihood)}`, r.impact && `Impact: ${level(r.impact)}`].filter(Boolean).join(" · ") || null;
 }
