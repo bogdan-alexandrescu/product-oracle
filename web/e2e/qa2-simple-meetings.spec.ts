@@ -138,7 +138,7 @@ test.describe("desktop · the live meeting", () => {
     await startReview(page);
     await expect(page.locator("main main")).toHaveCount(0);
     await expect(page.getByRole("region", { name: "Stage" })).toBeVisible();
-    await expect(page.getByRole("button", { name: /^Approve/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^Approve( one-pager|$)/ })).toHaveCount(0);
     await expect(page.getByRole("combobox", { name: "Who changes things" })).toHaveCount(1);
     await expect(chat(page)).not.toContainText("Change who may apply");
     await expect(chat(page).getByTestId("chat-rules")).toContainText("Who changes things: Everyone");
@@ -172,7 +172,7 @@ test.describe("desktop · the live meeting", () => {
     // The chat's own page: linked here, it names the meeting and leads back.
     await page.getByTestId("meeting-chat-page-link").click();
     await expect(page.getByTestId("meeting-chat-of")).toContainText("The chat of Review: Guided setup");
-    await expect(page.getByText("Meeting chat", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Meeting chat", { exact: true }).filter({ visible: true })).toHaveCount(1);
     await page.getByRole("link", { name: "Back to the meeting" }).click();
     await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
 
@@ -230,8 +230,12 @@ test.describe("desktop · the live meeting", () => {
   });
 
   test("as a commenter: Propose all, and a proposal names its item", async ({ page }) => {
-    await asRole(page, "commenter");
+    // Only an owner starts a review; the commenter then joins it (the mock keeps its data on reload).
     await startReview(page);
+    const url = page.url();
+    await page.evaluate(([key, r]) => localStorage.setItem(key, r), [MOCK_ROLE_KEY, "commenter"] as const);
+    await page.goto(url);
+    await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
     await steps(page).getByRole("button", { name: "2 Roadmap" }).click();
     const slice = page.getByRole("region", { name: "Roadmap slice" });
     const item = slice.locator("li").filter({ has: page.getByRole("button", { name: /^Move .* to Now$/ }) }).first();

@@ -99,7 +99,8 @@ test.describe("desktop · Decisions", () => {
     await decisions(page, "board");
     const a = await page.getByTestId("board-needs_input").boundingBox();
     const b = await page.getByTestId("board-decided").boundingBox();
-    expect(a!.width).toBeGreaterThan(560);
+    // Two columns across the content (three made ~300 px cards that broke titles at hyphens).
+    expect(a!.width).toBeGreaterThan(420);
     expect(b!.y).toBeGreaterThan(a!.y);
     const q2 = row(page, "Q2");
     await q2.getByRole("button", { name: "Name a decider" }).click();
