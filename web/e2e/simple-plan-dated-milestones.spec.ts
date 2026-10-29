@@ -91,14 +91,16 @@ for (const phone of [false, true]) {
           await page.locator('nav[aria-label="Simple"]:visible').getByRole("link", { name: "One-pagers" }).click();
           await page.getByTestId("simple-one-pagers").getByRole("link", { name: "Guided setup" }).click();
           await expect(page).toHaveURL(/\/simple\/one-pagers\/guided-setup$/);
-          // prd-timeline: the one-pager leads with the plan's timeline (its milestone chips carry
-          // their start and end dates) in place of the strip.
+          // prd-timeline (fidelity, picks D and B): the one-pager leads with the plan's timeline in
+          // place of the strip: each milestone's end is a flag on a desktop and "Milestones: done
+          // when" names them; down a phone each milestone starts on its day.
           const timeline = page.getByRole("region", { name: "Timeline" });
-          await expect(timeline.getByRole("group", { name: "Milestones" }).getByRole("button")).toHaveText([
-            "M1 Prove it · 2 Nov – 27 Nov",
-            "M2 Scale volume · 30 Nov – 25 Dec",
-            "M3 Open to all · 28 Dec – 12 Feb",
-          ]);
+          if (!phone) {
+            await expect(timeline.getByRole("group", { name: "Milestones" }).getByRole("button")).toHaveText(["M1 Prove it", "M2 Scale volume", "M3 Open to all"]);
+            for (const f of ["M1 ends 27 Nov", "M2 ends 25 Dec", "M3 ends 12 Feb"]) await expect(timeline.getByRole("button", { name: f })).toBeVisible();
+          } else {
+            await expect(timeline.getByTestId("timeline-step")).toHaveText([/^2 Nov.*M1 Prove it/, /^30 Nov.*M2 Scale volume/, /^28 Dec.*M3 Open to all/]);
+          }
           await expect(page.getByLabel("Timeline strip")).toHaveCount(0);
         });
       }

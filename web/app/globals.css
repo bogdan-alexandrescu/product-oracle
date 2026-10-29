@@ -900,6 +900,18 @@ code .date-mark {
   --simple-m3-edge: #c27c0e;
   --simple-m3-ink: #6b4300;
   --simple-hatch: rgba(120, 112, 96, 0.22);
+  /* fidelity prd (the owner's picks D and B, 2026-10-28): the PRD page's milestone hues as
+     the mock-ups draw them: a line and text colour, a soft background and a fill (time gone). */
+  --prd-m1: #0369a1;
+  --prd-m1-bg: #e5f3fc;
+  --prd-m1-fill: #cfe8f8;
+  --prd-m2: #6d28d9;
+  --prd-m2-bg: #f1ecfd;
+  --prd-m2-fill: #e0d4fa;
+  --prd-m3: #9a5b00;
+  --prd-m3-bg: #fdf3dc;
+  --prd-m3-fill: #f7e1b0;
+  --prd-pm: #5b6878;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -918,6 +930,16 @@ code .date-mark {
     --simple-m3-edge: #e0a53c;
     --simple-m3-ink: #ffe3ad;
     --simple-hatch: rgba(160, 172, 196, 0.22);
+    --prd-m1: #7cc8f8;
+    --prd-m1-bg: #10294a;
+    --prd-m1-fill: #173d66;
+    --prd-m2: #c4b5fd;
+    --prd-m2-bg: #221a3f;
+    --prd-m2-fill: #352a63;
+    --prd-m3: #f5c451;
+    --prd-m3-bg: #3a2a0c;
+    --prd-m3-fill: #574015;
+    --prd-pm: #9aa8b8;
   }
 }
 :root[data-theme="dark"] {
@@ -936,6 +958,16 @@ code .date-mark {
   --simple-m3-edge: #e0a53c;
   --simple-m3-ink: #ffe3ad;
   --simple-hatch: rgba(160, 172, 196, 0.22);
+  --prd-m1: #7cc8f8;
+  --prd-m1-bg: #10294a;
+  --prd-m1-fill: #173d66;
+  --prd-m2: #c4b5fd;
+  --prd-m2-bg: #221a3f;
+  --prd-m2-fill: #352a63;
+  --prd-m3: #f5c451;
+  --prd-m3-bg: #3a2a0c;
+  --prd-m3-fill: #574015;
+  --prd-pm: #9aa8b8;
 }
 @media print {
   .simple-noprint { display: none !important; }

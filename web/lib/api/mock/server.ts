@@ -2749,6 +2749,13 @@ function load(): Db {
                     db.simple_roadmap!.plan!.undated = true;
                     return db;
                   }
+              : scenario === "simple-plan-partly-dated"
+                ? () => {
+                    // fidelity prd (pick D, frame D3): only M1 has dates; M2 and M3 have none yet.
+                    const db = seedSimplePlanScenario();
+                    db.simple_roadmap!.plan!.partly_dated = true;
+                    return db;
+                  }
               : scenario === "simple-plan-goalless"
                 ? () => {
                     // prd-timeline review: Guided setup's plan with work that names no goal.
