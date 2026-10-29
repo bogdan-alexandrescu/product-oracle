@@ -36,7 +36,8 @@ export function ToastHost() {
     return () => window.clearTimeout(t);
   }, [shown]);
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20">
+    // While a sheet or a modal dialog is open, the message moves to the top, clear of its controls.
+    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 [body:has([aria-modal=true])_&]:bottom-auto [body:has([aria-modal=true])_&]:top-4">
       {shown && (
         <div
           key={shown.id}

@@ -9,8 +9,8 @@ type Plan = Schemas["SimplePlanOut"];
 type Milestone = Schemas["SimplePlanMilestone"];
 type Slice = Schemas["SimpleSlice"];
 
-/** One decimal, always ("4.0"): the owner's pick writes engineer-weeks this way. */
-export const wk = (n: number): string => n.toFixed(1);
+/** Engineer-weeks as the rest of the page writes them: "4", "5.5" (no trailing ".0"). */
+export const wk = (n: number): string => Number(n.toFixed(1)).toString();
 
 const NUMBER_WORDS = ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"];
 const count = (n: number, one: string, many: string) => `${NUMBER_WORDS[n] ?? n} ${n === 1 ? one : many}`;
@@ -43,16 +43,20 @@ function legendParts(m: Milestone): { dates: string | null; full: string } {
   return { dates, full };
 }
 
-/** "This quarter: 56.0 engineer-weeks over three milestones (51.0 planned + 5.0 spare). Bars are engineer-weeks." */
+/** "Nov 2 – Feb 12": the plan's span, in the milestones' date style. */
+export const planSpan = (span: { start: string; end: string }): string => `${day(span.start)} – ${day(span.end)}`;
+
+/** "This plan, Nov 2 – Feb 12: 56 engineer-weeks over three milestones (51 planned + 5 spare). Bars are engineer-weeks." */
 function summary(plan: Plan): string {
   const ms = plan.milestones;
+  const span = plan.span ? `This plan, ${planSpan(plan.span)}` : "This plan";
   const planned = ms.reduce((n, m) => n + (m.planned_weeks ?? 0), 0);
   const over = count(ms.length, "milestone", "milestones");
-  if (ms.some((m) => m.effort_weeks == null)) return `This quarter: ${wk(planned)} engineer-weeks planned over ${over}. Bars are engineer-weeks.`;
+  if (ms.some((m) => m.effort_weeks == null)) return `${span}: ${wk(planned)} engineer-weeks planned over ${over}. Bars are engineer-weeks.`;
   const capacity = ms.reduce((n, m) => n + (m.effort_weeks ?? 0), 0);
   const spare = capacity - planned;
   const split = spare >= 0 ? `${wk(planned)} planned + ${wk(spare)} spare` : `${wk(planned)} planned, ${wk(-spare)} over`;
-  return `This quarter: ${wk(capacity)} engineer-weeks over ${over} (${split}). Bars are engineer-weeks.`;
+  return `${span}: ${wk(capacity)} engineer-weeks over ${over} (${split}). Bars are engineer-weeks.`;
 }
 
 /** The goals in the plan's order (then any only the weeks name). */
@@ -163,7 +167,7 @@ export function PlanBucketsHead({ plan, codeOf }: { plan: Plan; codeOf: (goal: s
         ))}
       </ul>
       <p data-testid="buckets-footnote" className="mt-2 text-[14px] leading-5 text-text2">
-        Each feature counts once, under the goal it moves most (listed first in the PRD&apos;s Goals column). Engineer-weeks are the PRD&apos;s, per slice.
+        Each feature counts once, under the goal it moves most (the first goal the one-pager names for it). Engineer-weeks are the one-pager&apos;s, part by part.
       </p>
     </section>
   );
@@ -224,8 +228,8 @@ export function PlanFeatureList({ plan, goal }: { plan: Plan; goal: string | nul
   );
 }
 
-/** "4 features this quarter". */
+/** "4 features in the plan" (the plan may run past the quarter). */
 export const featureCount = (plan: Plan, goal: string | null): string => {
   const n = planFeatures(plan, goal).length;
-  return `${n} ${n === 1 ? "feature" : "features"} this quarter`;
+  return `${n} ${n === 1 ? "feature" : "features"} in the plan`;
 };

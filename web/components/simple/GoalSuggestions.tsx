@@ -9,7 +9,7 @@ import { useCompanyZone, zoneDateTime } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { FlowDetail, FlowThumb } from "./Flow";
+import { FlowDetail } from "./Flow";
 
 /**
  * Simple S7: Oracle's suggested features for a goal, wherever a goal shows (the roadmap's
@@ -103,7 +103,10 @@ export function useGoalSuggestions(onChanged?: () => unknown): GoalSuggestionsAp
               }
             : undefined,
         });
-      else toast({ message: `Proposed ${s.title}: it waits for the decider` });
+      else {
+        const decider = q.data?.goals.find((g) => g.goal.id === s.goal.id || g.goal.key === s.goal.key)?.decider_name;
+        toast({ message: `Proposed ${s.title}: ${decider ? `${decider} decides` : "the company's owners decide"}` });
+      }
       await after();
     },
     reject: async (s, reason) => {
@@ -188,17 +191,9 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
       data-wide={wide && !phone ? "true" : "false"}
       className="rounded-[var(--simple-card-radius)] border border-dashed border-accent bg-accent-soft/40 p-3 text-[length:var(--simple-small)]"
     >
-      <div className="flex flex-wrap items-start gap-3">
-        {s.flow ? (
-          <button type="button" aria-label={`Open the flow for ${s.title}`} onClick={() => setWide(!wide)} className="flex-none rounded-md border border-line bg-surface p-1" data-testid="flow-thumb">
-            <FlowThumb flow={s.flow} />
-          </button>
-        ) : (
-          <span className="flex-none rounded-md border border-dashed border-line px-2 py-1 text-text2" data-testid="flow-none">
-            No flow yet
-          </span>
-        )}
-        <div className="min-w-0 flex-1">
+      {/* The text takes the card's full width; the actions sit on their own row under it (no thumbnail glyph). */}
+      <div className="flex flex-col gap-2">
+        <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2">
             <span className="text-[length:var(--simple-text)] font-semibold text-text">{s.title}</span>
             <span className="rounded-full bg-surface2 px-2 text-text2" data-testid="oracle-suggested">
@@ -221,7 +216,9 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
                   ) : (
                     <span>{e.label}</span>
                   )}
-                  <span className={`rounded-full px-1.5 text-xs ${CONFIDENCE[e.confidence] ?? ""}`}>{e.confidence} confidence</span>
+                  <span data-testid="confidence" className={`whitespace-nowrap rounded-full px-1.5 text-xs ${CONFIDENCE[e.confidence] ?? ""}`}>
+                    {e.confidence} confidence
+                  </span>
                 </li>
               ))}
             </ul>
@@ -232,8 +229,8 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
             </p>
           ))}
         </div>
-        {(accepts || rejects) && (
-          <span className="flex flex-none gap-2">
+        {(accepts || rejects || s.flow) && (
+          <span className="flex flex-wrap items-center gap-2">
             {accepts && (
               <Button variant="solid" disabled={busy} onClick={() => void run(() => a.accept(s))}>
                 Accept
@@ -243,6 +240,11 @@ export function SuggestionCard({ s, api: a }: { s: GoalSuggestion; api: GoalSugg
               <Button disabled={busy} onClick={() => setRejecting(true)}>
                 Reject
               </Button>
+            )}
+            {s.flow && (
+              <button type="button" aria-expanded={wide} onClick={() => setWide(!wide)} className="font-semibold text-accent-ink hover:underline" data-testid="flow-open">
+                {wide ? "Hide the flow" : "Show the flow"}
+              </button>
             )}
           </span>
         )}
@@ -381,8 +383,8 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
   };
   return (
     <li data-testid="person-suggestion" data-title={s.title} className="rounded-[var(--simple-card-radius)] border border-line bg-surface p-3 text-[length:var(--simple-small)]">
-      <div className="flex flex-wrap items-start gap-3">
-        <div className="min-w-0 flex-1">
+      <div className="flex flex-col gap-2">
+        <div className="min-w-0">
           <p className="text-[length:var(--simple-text)] font-semibold text-text">{s.title}</p>
           <p data-testid="suggestion-outcome">{s.outcome}</p>
           <p className="text-text2" data-testid="suggestion-by">
@@ -395,7 +397,7 @@ function PersonCard({ s, api: a }: { s: GoalSuggestion; api: GoalSuggestionsApi 
           ))}
         </div>
         {(accepts || rejects) && (
-          <span className="flex flex-none gap-2">
+          <span className="flex flex-wrap gap-2">
             {accepts && (
               <Button variant="solid" disabled={busy} onClick={() => void run(() => a.accept(s))}>
                 Accept
@@ -450,7 +452,7 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
               onChat?.();
               askWith(`Suggest a feature for ${(state?.goal ?? goal).title}: `);
             }}
-            className="simple-small self-start text-accent-ink underline"
+            className="simple-small self-start font-semibold text-accent-ink hover:underline"
           >
             Suggest from the chat
           </button>
@@ -534,7 +536,10 @@ export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; a
       </Sheet>
     );
   return (
-    <aside role="dialog" aria-label={title} data-testid="goal-panel" className="fixed top-0 right-0 bottom-0 z-50 w-[480px] overflow-y-auto border-l border-line bg-surface p-4 text-text shadow-tip">
+    <>
+    {/* The page behind dims, as under the move dialog; a click on it closes the drawer. */}
+    <div data-testid="goal-panel-backdrop" aria-hidden className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
+    <aside role="dialog" aria-modal="true" aria-label={title} data-testid="goal-panel" className="fixed top-0 right-0 bottom-0 z-50 w-[480px] max-w-full overflow-y-auto border-l border-line bg-surface p-4 text-text shadow-tip">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="flex-1 text-lg font-semibold">{title}</h2>
         <button type="button" aria-label="Close" onClick={onClose} className="h-8 w-8 rounded text-text2 hover:bg-surface2">
@@ -543,5 +548,6 @@ export function GoalPanel({ goal, api: a, onClose, start }: { goal: GoalBrief; a
       </div>
       <GoalSuggestionList goal={goal} api={a} onChat={onClose} start={start} />
     </aside>
+    </>
   );
 }
