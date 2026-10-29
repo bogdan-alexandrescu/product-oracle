@@ -6,9 +6,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * findings, driven through the UI against the mock (web/lib/api/mock/simple-roadmap.ts,
  * simple-suggestions.ts), on desktop and phone.
  *
- * - qa-simple-roadmap-3: a column's header never claims a date range a card inside it
- *   contradicts (a card's horizon can move by drag or the arrow keys while its own dates
- *   stay put).
+ * - qa-simple-roadmap-3: a column keeps its date range, and a card whose own dates sit
+ *   outside it (its horizon moved by drag or the arrow keys, its dates kept) says so.
  * - qa-simple-roadmap-27: a date range's year shows only on the end whose year isn't this
  *   year's, the same way in every header and card.
  * - qa-simple-roadmap-42: an estimated card's dates sit on a plain background with a
@@ -69,7 +68,7 @@ for (const [where, use] of [
      * fails_when = the "Now" column's header still claims "Oct 1 – Dec 31" once it holds a
      * card dated months later, a false range the card's own dates contradict.
      */
-    test("a column's header drops a date range its own cards contradict", async ({ page }) => {
+    test("a column keeps its range and a card dated outside it says so", async ({ page }) => {
       // A phone's Timeline (goal lanes) has no suggestion marker to accept from; the desktop run covers it.
       test.skip(where === "phone", "the phone Timeline has no suggestion marker");
       await openBoard(page);
@@ -83,9 +82,11 @@ for (const [where, use] of [
       await expect(page.getByText("Moved 'Alert routing by team' to Now in your working draft")).toBeVisible();
       await expect(column(page, "now").locator('[data-item="alert-sso"]')).toBeVisible();
       // The card moved to Now, but its own (accepted) dates are still months later: the
-      // header no longer claims the Now window now that a card inside contradicts it.
-      await expect(column(page, "now").locator("header")).not.toContainText("Oct 1");
+      // column keeps its range (fix2 review: hiding it lost the label) and the card says
+      // its dates sit outside the column.
+      await expect(column(page, "now").locator("header")).toContainText("Oct 1 – Dec 31");
       await expect(card(page, "alert-sso").getByTestId("board-dates")).toContainText("2027");
+      await expect(card(page, "alert-sso").getByTestId("outside-column")).toHaveText("Dates outside Now");
     });
 
     /**
