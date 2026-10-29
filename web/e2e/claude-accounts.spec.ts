@@ -11,7 +11,7 @@ async function openAccounts(page: Page) {
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-claude-accounts").click();
   await expect(page).toHaveURL(/\/settings\/claude-accounts$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Claude accounts" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 }
 
 const row = (page: Page, label: string) => page.getByTestId(`account-row-${label}`);

@@ -28,7 +28,7 @@ test("autonomy: at Observe the Build draft sheet says Oracle builds nothing and 
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   await expect(row(page, "next_drafts")).toContainText("Build next drafts");
   await step(page, "next_drafts", "Observe").click();
   const change = page.getByRole("dialog", { name: "Change Build next drafts" });
@@ -61,7 +61,7 @@ test("autonomy: at Recommend the Build draft button and sheet say the changes ar
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   await expect(row(page, "next_drafts").getByTestId("autonomy-pending")).toHaveCount(0);
   // The limit is set with Act, then kept when the owner steps back to Recommend.
   await step(page, "next_drafts", "Act").click();

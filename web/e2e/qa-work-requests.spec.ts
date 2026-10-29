@@ -59,11 +59,11 @@ test("qa-work-5: the header's triage line says what its count is, apart from the
 test("qa-work-38: daily triage is one switch that says its own state", async ({ page }) => {
   await login(page);
   await openRequests(page);
-  const daily = page.getByRole("switch", { name: /^Daily triage at 07:00 PT · Off$/ });
+  const daily = page.getByRole("switch", { name: /^Daily triage at 7:00 AM PDT · Off$/ });
   await expect(daily).not.toBeChecked();
   await expect(page.getByText("Daily triage is off")).toHaveCount(0);
   await daily.click();
-  await expect(page.getByRole("switch", { name: /^Daily triage at 07:00 PT · On, runs as Admin$/ })).toBeChecked();
+  await expect(page.getByRole("switch", { name: /^Daily triage at 7:00 AM PDT · On, runs as Admin$/ })).toBeChecked();
 });
 
 test("qa-work-35, qa-work-36: every row has a checkbox slot and its fields in one labelled order", async ({ page }) => {

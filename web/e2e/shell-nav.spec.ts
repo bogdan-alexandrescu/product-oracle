@@ -46,10 +46,10 @@ test("the browser tab names the page: signed out, Home, a document", async ({ pa
   await page.goto(DOC);
   await expect(page.getByRole("heading", { level: 1, name: /Checkout redesign PRD/ })).toBeVisible();
   await expect(page).toHaveTitle("Checkout redesign PRD · Product Oracle");
-  // A section's tab is named for itself in the tab, for its section on the phone header.
+  // A section's tab is named for itself and its section in the tab (qa-shell-3), for its
+  // section on the phone header.
   await page.goto("/plan/dates");
-  const h1 = (await page.getByRole("heading", { level: 1 }).first().innerText()).trim();
-  await expect(page).toHaveTitle(`${h1} · Product Oracle`);
+  await expect(page).toHaveTitle("Dates · Plan · Product Oracle");
 });
 
 test("the active rail item: Plan for the Roadmap's tabs and a new roadmap, the avatar on My account", async ({ page }) => {

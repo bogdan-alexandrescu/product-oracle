@@ -21,7 +21,7 @@ test("autonomy: Internal launch work at Act is in effect, with no pending chip",
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   const launches = row(page, "launches");
   await expect(launches).toContainText("Internal launch work");
   await expect(launches.getByTestId("autonomy-pending")).toHaveCount(0);

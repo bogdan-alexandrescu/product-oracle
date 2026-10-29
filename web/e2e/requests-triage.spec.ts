@@ -76,7 +76,7 @@ test("Classify now: an approver starts triage and sees it finish", async ({ page
   await openRequests(page);
   await expect(found(page)).toHaveCount(0);
   await page.getByRole("button", { name: "About Classify now" }).click();
-  await expect(page.getByText("Oracle also classifies new requests every day at 07:00 PT")).toBeVisible();
+  await expect(page.getByText("Oracle also classifies new requests every day at 7:00 AM PDT")).toBeVisible();
   await page.getByRole("button", { name: "Classify now", exact: true }).click();
   const status = page.getByTestId("triage-status");
   await expect(status).toContainText(/Oracle is classifying · started (just now|\d+m ago)/);
@@ -129,10 +129,10 @@ for (const email of ["commenter@example.com", "viewer@example.com"]) {
   });
 }
 
-const dailySwitch = (page: Page) => page.getByRole("switch", { name: "Daily triage at 07:00 PT" });
+const dailySwitch = (page: Page) => page.getByRole("switch", { name: "Daily triage at 7:00 AM PDT" });
 
 test("daily triage: an owner turns it on and sees who it runs as", async ({ page }) => {
-  // protects=owner decision 2026-10-21 (the switch "Daily triage at 07:00 PT", off by default;
+  // protects=owner decision 2026-10-21 (the switch "Daily triage at 7:00 AM PDT", off by default;
   // the switch itself says it is off, then who the run acts as, qa-work-38); fails_when=the switch starts on, does
   // not change the status, or forgets its state on reload; no_claim=the ticker's run (the API's
   // tests/test_requests_triage.py).

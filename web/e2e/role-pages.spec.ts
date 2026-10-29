@@ -65,7 +65,7 @@ for (const role of ROLES) {
 
     // Requests: approvers turn daily triage and classify; others read its state, no switch.
     await open(page, "/requests", "Requests");
-    await expect(page.getByRole("switch", { name: "Daily triage at 07:00 PT" })).toHaveCount(approver ? 1 : 0);
+    await expect(page.getByRole("switch", { name: "Daily triage at 7:00 AM PDT" })).toHaveCount(approver ? 1 : 0);
     await expect(page.getByRole("button", { name: "Classify now", exact: true })).toHaveCount(approver ? 1 : 0);
     if (!approver) await expect(page.getByTestId("daily-triage-state")).toHaveText("Daily triage off");
     await expectViewOnly(page, !commenter);

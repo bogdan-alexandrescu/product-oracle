@@ -33,7 +33,7 @@ const notice = (page: Page) => page.getByTestId("ai-off").filter({ visible: true
 async function openAccounts(page: Page) {
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-claude-accounts").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Claude accounts" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 }
 
 test("a spent account reads Spent until a worded time, and the owner is told Oracle's AI is off", async ({ page }) => {

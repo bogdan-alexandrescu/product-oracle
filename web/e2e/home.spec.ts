@@ -80,7 +80,7 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await expect(inspector.getByTestId("row-goals")).toHaveText("Raise activationGrow paid conversion");
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
-  await expect(inspector.getByTestId("stat-sections")).toContainText("Sections approved");
+  await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
   await expect(inspector.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/documents/checkout-redesign");
 
   // A run: its segments and what comes next.

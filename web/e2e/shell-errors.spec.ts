@@ -12,10 +12,12 @@ import { login, signOut } from "./helpers";
 test("a run that does not exist says so, with a way back to Runs", async ({ page }) => {
   await login(page);
   await page.goto("/runs/no-such-run");
-  const note = page.getByRole("alert").filter({ hasText: "doesn't exist" });
-  await expect(note).toContainText("This run doesn't exist or was deleted.");
+  // qa-shell-8: the one not-found pattern, a heading, the sentence and the way back.
+  const card = page.getByTestId("run-not-found").filter({ visible: true });
+  await expect(page.getByRole("heading", { level: 1, name: "Run not found" }).filter({ visible: true })).toHaveCount(1);
+  await expect(card).toContainText("This run doesn't exist or was deleted.");
   await expect(page.getByText("no-such-run")).toHaveCount(0);
-  await note.getByRole("link", { name: "Back to Runs" }).click();
+  await card.getByRole("link", { name: "Back to Runs" }).click();
   await expect(page).toHaveURL(/\/runs$/);
 });
 

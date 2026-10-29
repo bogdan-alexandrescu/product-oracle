@@ -14,7 +14,7 @@ async function openAutonomy(page: Page) {
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
   await expect(page).toHaveURL(/\/settings\/autonomy$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 }
 
 const row = (page: Page, key: string) => page.getByTestId(`autonomy-row-${key}`);
@@ -110,7 +110,7 @@ test("autonomy: at 390 px every control fits on one line, no horizontal scroll",
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await page.goto("/settings/autonomy");
-  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   const groups = page.getByTestId(/^autonomy-row-/).getByRole("group");
   await expect(groups).toHaveCount(16); // H7 adds Watch the market
   for (const g of await groups.all()) {

@@ -24,7 +24,7 @@ const discuss = (page: Page) => page.getByTestId("goal-discuss");
 async function setShapeGoals(page: Page, level: "Observe" | "Draft", why: string) {
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   await expect(row(page, "goals")).toContainText("Shape goals");
   await step(page, "goals", level).click();
   const sheet = page.getByRole("dialog", { name: "Change Shape goals" });

@@ -123,7 +123,7 @@ test("/settings redirects to members", async ({ page }) => {
   await login(page);
   await page.goto("/settings");
   await expect(page).toHaveURL(/\/settings\/members$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Members" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 });
 
 test("user menu: the theme switch overrides the system setting and is remembered", async ({ page }) => {
@@ -217,7 +217,7 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   await expect(title).toHaveCSS("color", "rgb(255, 255, 255)");
   await expect(title).toHaveCSS("font-weight", "600");
   // The page's H1 stays for screen readers but is not drawn a second time.
-  const h1 = page.getByRole("heading", { level: 1, name: "Members" });
+  const h1 = page.getByRole("heading", { level: 1, name: "Settings" });
   await expect(h1).toHaveCount(1);
   expect((await h1.boundingBox())!.height).toBeLessThanOrEqual(1);
 
