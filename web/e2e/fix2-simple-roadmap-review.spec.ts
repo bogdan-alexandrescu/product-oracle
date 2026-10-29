@@ -119,9 +119,8 @@ test.describe("desktop", () => {
     await open(page);
     const tiles = page.getByTestId("goal-counter");
     await expect(tiles.first()).toBeVisible();
-    const words = (await tiles.allTextContents()).map((t) => t.replace(/\s+/g, " "));
-    expect(words.some((t) => /\b3 items · 1 broken\b/.test(t)), words.join(" | ")).toBe(true);
-    expect(words.some((t) => /\b4 items · 3 broken\b/.test(t)), words.join(" | ")).toBe(true);
+    await expect(tiles.filter({ hasText: "Faster activation" })).toContainText("3 items · 1 broken");
+    await expect(tiles.filter({ hasText: "Grow retention" })).toContainText("4 items · 3 broken");
   });
 });
 
