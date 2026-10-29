@@ -49,6 +49,8 @@
   --spark-fill: rgba(3, 105, 161, 0.1);
   --shadow: 0 1px 2px rgba(13, 23, 36, 0.06);
   --tip-shadow: 0 12px 32px rgba(13, 23, 36, 0.28);
+  /* A segmented switch's chosen segment (Simple's Ask panel: This page | General). */
+  --seg-on-shadow: 0 1px 2px rgba(13, 23, 36, 0.12);
   /* The rail, the phone header and tab bar: the same in both themes (SwarmCloud's rail, state for state). */
   --rail: linear-gradient(180deg, #0b3a7a, #06101e);
   --rail-top: #0b3a7a;
@@ -100,6 +102,7 @@
     --spark-fill: rgba(124, 200, 248, 0.14);
     --shadow: none;
     --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    --seg-on-shadow: 0 0 0 1px var(--line);
     color-scheme: dark;
   }
 }
@@ -136,6 +139,7 @@
   --spark-fill: rgba(124, 200, 248, 0.14);
   --shadow: none;
   --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --seg-on-shadow: 0 0 0 1px var(--line);
   color-scheme: dark;
 }
 

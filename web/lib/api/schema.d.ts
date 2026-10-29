@@ -17923,6 +17923,8 @@ export interface components {
              * @default false
              */
             general: boolean;
+            /** Question */
+            question?: string | null;
         };
         /** ChatThreadOut */
         ChatThreadOut: {

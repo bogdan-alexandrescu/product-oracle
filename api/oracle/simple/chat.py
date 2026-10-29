@@ -36,8 +36,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from oracle import audit, company_time
 from oracle.auth.models import User
@@ -1010,13 +1011,52 @@ def _ask_of(d: Discussion | None) -> uuid.UUID | None:
     return uuid.UUID(ask) if ask else None
 
 
-def _summary(d: Discussion) -> ChatSummaryOut:
-    """A chat on Recent chats: named by its page, or "General" for one started under General."""
+def _summary(d: Discussion, question: str | None = None) -> ChatSummaryOut:
+    """A chat on Recent chats: named by its page, or "General" for one started under General,
+    and by its first question."""
     page = page_of_thread(d) or "/simple"
     general = bool((d.subject or {}).get("general"))
     return ChatSummaryOut(id=d.id, page=page, page_name="General" if general else page_name(page),
                           last_at=d.last_message_at or d.created_at, ask_id=_ask_of(d),
-                          general=general)  # fmt: skip
+                          general=general, question=question)  # fmt: skip
+
+
+QUESTION_CHARS = 200
+
+
+async def _questions(db: AsyncSession, chats: list[Discussion]) -> dict[uuid.UUID, str]:
+    """Each chat's first question: the person's first line in it, else in the Oracle's Ask
+    chat it handed it to (a chat whose first line went to Ask holds none of its own)."""
+    asks = {d.id: a for d in chats if (a := _ask_of(d)) is not None}
+    ids = [d.id for d in chats] + list(asks.values())
+    if not ids:
+        return {}
+    M = aliased(DiscussionMessage)
+    at = (
+        select(func.min(DiscussionMessage.created_at))
+        .where(
+            DiscussionMessage.discussion_id == M.discussion_id,
+            DiscussionMessage.author_kind == "person",
+            DiscussionMessage.deleted_at.is_(None),
+        )
+        .scalar_subquery()
+    )
+    rows = await db.execute(
+        select(M.discussion_id, M.body).where(
+            M.discussion_id.in_(ids),
+            M.author_kind == "person",
+            M.deleted_at.is_(None),
+            M.created_at == at,
+        )
+    )
+    first = {i: " ".join(b.split())[:QUESTION_CHARS] for i, b in rows.all()}
+    out: dict[uuid.UUID, str] = {}
+    for d in chats:
+        ask = asks.get(d.id)
+        q = first.get(d.id) or (first.get(ask) if ask is not None else None)
+        if q:
+            out[d.id] = q
+    return out
 
 
 def page_name(page: str | None) -> str:
@@ -1040,12 +1080,9 @@ async def recent(db: AsyncSession, principal: Any, limit: int = 10) -> list[Chat
         .order_by(Discussion.last_message_at.desc().nulls_last(), Discussion.created_at.desc())
         .limit(limit)
     )
-    out = []
-    for d in rows:
-        if not _own_chat(d, me):
-            continue
-        out.append(_summary(d))
-    return out
+    chats = [d for d in rows if _own_chat(d, me)]
+    questions = await _questions(db, chats)
+    return [_summary(d, questions.get(d.id)) for d in chats]
 
 
 async def link_ask(
@@ -1060,7 +1097,7 @@ async def link_ask(
         raise ChatError(404, "No such chat")
     d.subject = {**(d.subject or {}), "ask": str(ask_id)}
     await db.commit()
-    return _summary(d)
+    return _summary(d, (await _questions(db, [d])).get(d.id))
 
 
 async def post(

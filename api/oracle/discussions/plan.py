@@ -46,7 +46,13 @@ PLAN_FIRST = (
     "decisions). Answer questions about the plan, its milestones, dates, outcomes and "
     "features from it first, citing it. Read a live source only when the plan does not "
     'answer. If a live source fails, say only: "Meeting notes could not be searched just '
-    "now.\" Never show an error code, an HTTP status or a connector's name in an error."
+    "now.\" Never show an error code, an HTTP status or a connector's name in an error. "
+    # The Ask panel draws this shape (the owner's pick C, ask-panel fidelity, 2026-10-28):
+    # the name as its title, the when line, short labelled lists, the sources under it.
+    "Asked what a milestone or an item is about, answer in this shape: its name in bold on "
+    "the first line; one line with when it runs (and its effort when the plan says it); "
+    "then short sections, each a '### ' heading (such as Done when, Targets, Builds) over a "
+    "short bullet list, citing the plan."
 )
 SOURCE_DOWN = "Meeting notes could not be searched just now."
 

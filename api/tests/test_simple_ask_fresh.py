@@ -29,11 +29,16 @@ Test cards (protects / fails_when / no_claim):
   "General" is listed in Recent as General (``general`` true, ``page_name`` "General")
   for each role, and stays General when continued (review minor); fails_when=a General
   chat is listed by the page it was opened on.
+- test_recent_names_each_chat_by_its_first_question: protects=each Recent chat carries
+  its first question (the person's first line, spaces folded), for each role, and a chat
+  whose first line went to Oracle's Ask carries that line from its linked Ask chat
+  (ask-panel fidelity: the Recent menu names chats by their question); fails_when=a chat
+  is listed without its question, or by a later line; no_claim=the menu (web spec).
 """
 
-from sqlalchemy import update
+from sqlalchemy import func, update
 
-from oracle.discussions.models import Discussion
+from oracle.discussions.models import Discussion, DiscussionMessage
 from oracle.tenancy import tenant_session
 from tests.test_simple_changes_api import clock as clock  # noqa: F401
 from tests.test_simple_meetings_api import MEETINGS, start, world
@@ -172,3 +177,33 @@ async def test_general_chat_listed_as_general(client):
         items = await recent(client, w, who)
         assert (items[0]["id"], items[0]["page_name"], items[0]["general"]) == (
             a["id"], "General", True), who  # fmt: skip
+
+
+async def test_recent_names_each_chat_by_its_first_question(client):
+    w = await world()
+    for who in ROLES:
+        a = await post(client, w, who, "who owns   Ledger v2?", page="/simple", new_chat=True)
+        await post(client, w, who, "when is Ledger v2?", chat_id=a["id"])
+        items = await recent(client, w, who)
+        assert items[0]["question"] == "who owns Ledger v2?", who
+    # A chat whose first line went to Oracle's Ask holds none of its own (here: its lines
+    # gone): named by that line, in its linked Ask chat.
+    chat = await post(client, w, "commenter", "who owns Ledger v2?", page="/simple/roadmap",
+                      new_chat=True)  # fmt: skip
+    async with tenant_session(w.ctx.tenant_id) as s:
+        gone = DiscussionMessage.discussion_id == chat["id"]
+        await s.execute(update(DiscussionMessage).where(gone).values(deleted_at=func.now()))
+        await s.commit()
+    r = await client.post("/v1/discussions", headers=w.ctx.as_("commenter"), json={
+        "subject_kind": "screen", "subject": {"path": "/simple/roadmap"},
+        "origin": "panel", "visibility": "private"})  # fmt: skip
+    ask = r.json()["id"]
+    said = {"body": "what is the plan about?", "mention_oracle": False}
+    r = await client.post(f"/v1/discussions/{ask}/messages", headers=w.ctx.as_("commenter"),
+                          json=said)  # fmt: skip
+    assert r.status_code in (200, 201), r.text
+    r = await client.put(f"/v1/simple/chats/{chat['id']}/ask", json={"ask_id": ask},
+                         headers=w.ctx.as_("commenter"))  # fmt: skip
+    assert r.status_code == 200 and r.json()["question"] == "what is the plan about?"
+    items = await recent(client, w, "commenter")
+    assert [x["question"] for x in items if x["id"] == chat["id"]] == ["what is the plan about?"]
