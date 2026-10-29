@@ -40,15 +40,15 @@ test("request changes on roadmap items: attempt 2 runs and the previous attempt'
   const previous = items.getByRole("group", { name: "Previous attempt (attempt 1)" });
   await expect(previous).toContainText("Previous attempt");
   await previous.getByRole("button", { name: "Roadmap items", exact: true }).click();
-  await expect(items.getByTestId("artifact-content")).toContainText("(local agent runtime, attempt 1)");
+  await expect(items.getByTestId("artifact-content")).toContainText("(sample, attempt 1)");
 
   // Attempt 2 finishes: the current file is attempt 2's, the previous link still opens attempt 1's.
   await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(items.getByTestId("items-review-line")).toBeVisible();
   const current = items.getByTestId("artifacts-current");
   await current.getByRole("button", { name: "Roadmap items", exact: true }).click();
-  await expect(items.getByTestId("artifact-content")).toContainText("(local agent runtime, attempt 2)");
+  await expect(items.getByTestId("artifact-content")).toContainText("(sample, attempt 2)");
   await previous.getByRole("button", { name: "Roadmap items", exact: true }).click();
-  await expect(items.getByTestId("artifact-content")).toContainText("(local agent runtime, attempt 1)");
+  await expect(items.getByTestId("artifact-content")).toContainText("(sample, attempt 1)");
   await expect(items.getByTestId("artifact-content")).not.toContainText("attempt 2");
 });

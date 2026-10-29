@@ -727,7 +727,7 @@ async def test_feedback_loop_imports_the_next_version(client, owner, runtime):
     assert pending(run)["payload"]["import"]["version"] == 2
     async with tenant_session(tenant_id) as s:
         v2 = await s.scalar(select(DocumentVersion).where(DocumentVersion.number == 2))
-        assert "Draft 1 written by the local agent runtime" in v2.markdown
+        assert "Sample draft 1" in v2.markdown
         # Imported as the run's creator: here the seeded API token.
         assert str(v2.imported_by) == run["created_by"]
     run = await decide(client, auth, run)

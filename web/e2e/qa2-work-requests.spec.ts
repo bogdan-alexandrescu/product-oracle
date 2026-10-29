@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_ROLE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -40,6 +40,23 @@ test("qa-onboarding-1, qa-onboarding-50: New request asks before Escape or Cance
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId("dialog-discard")).toContainText("Discard your changes?");
   await dialog.getByRole("button", { name: "Discard" }).click();
+  await expect(dialog).toHaveCount(0);
+
+  // Review minor: a click outside the form asks the same question before throwing typed work away.
+  await page.getByRole("button", { name: "New request" }).first().click();
+  await dialog.getByLabel("Title").fill("Export invoices as a spreadsheet");
+  await page.getByTestId("dialog-backdrop").click({ position: { x: 4, y: 4 } });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByTestId("dialog-discard")).toContainText("Discard your changes?");
+  await dialog.getByRole("button", { name: "Keep editing" }).click();
+  await expect(dialog.getByLabel("Title")).toHaveValue("Export invoices as a spreadsheet");
+  await page.getByTestId("dialog-backdrop").click({ position: { x: 4, y: 4 } });
+  await dialog.getByRole("button", { name: "Discard" }).click();
+  await expect(dialog).toHaveCount(0);
+
+  // Nothing typed: a click outside closes at once.
+  await page.getByRole("button", { name: "New request" }).first().click();
+  await page.getByTestId("dialog-backdrop").click({ position: { x: 4, y: 4 } });
   await expect(dialog).toHaveCount(0);
 
   // Nothing typed: Cancel closes at once.
@@ -126,9 +143,32 @@ test("rirs-36: To decide has its own address; the old one leads there", async ({
   await tab(page, "new").click();
   await expect(page).toHaveURL(/\/requests\/to-decide$/);
   await expect(tab(page, "new")).toHaveAttribute("aria-current", "page");
+  // Review minor: typing /requests/new opens the New request form, over the To decide tab.
   await page.goto("/requests/new");
-  await expect(page).toHaveURL(/\/requests\/to-decide$/);
+  const dialog = page.getByRole("dialog", { name: "New request" });
+  await expect(dialog).toBeVisible();
+  await expect(page).toHaveURL(/\/requests\/to-decide\?compose=request$/);
   await expect(tab(page, "new")).toHaveAttribute("aria-current", "page");
+  // Closing it leaves the tab's own address, so a reload does not open it again.
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page).toHaveURL(/\/requests\/to-decide$/);
+  await page.reload();
+  await expect(tab(page, "new")).toHaveAttribute("aria-current", "page");
+  await expect(dialog).toHaveCount(0);
+  // An old link to one request still opens that request on To decide, with no form.
+  await page.goto("/requests/new?request=00000000-0000-0000-0000-000000000000");
+  await expect(page).toHaveURL(/\/requests\/to-decide\?request=/);
+  await expect(dialog).toHaveCount(0);
+});
+
+test("rirs-36: a viewer typing /requests/new gets the To decide tab, with no form to fill", async ({ page }) => {
+  await page.addInitScript((key) => localStorage.setItem(key, "viewer"), MOCK_ROLE_KEY);
+  await login(page);
+  await page.goto("/requests/new");
+  await expect(tab(page, "new")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("View only").first()).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "New request" })).toHaveCount(0);
 });
 
 test("rirs-40, rirs-26: an interview's page has a way back and says when its link expires in days", async ({ page }) => {
