@@ -25,7 +25,7 @@ export function SettingsNav() {
       data-testid="settings-nav"
       className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
-      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1">
+      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1 lg:gap-0.5">
         {tabs.map((it) => {
           const on =
             pathname === it.href ||
@@ -37,7 +37,7 @@ export function SettingsNav() {
               href={it.href}
               data-testid={it.testId}
               aria-current={on ? "page" : undefined}
-              className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap ${
+              className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium lg:px-2.5 lg:text-sm whitespace-nowrap ${
                 on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
               }`}
             >

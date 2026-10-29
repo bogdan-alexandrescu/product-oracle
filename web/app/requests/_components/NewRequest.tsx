@@ -134,6 +134,7 @@ function NewRequestDialog({ onClose, onFiled }: { onClose: () => void; onFiled: 
       onClose={onClose}
       dirty={dirty}
       askOnCancel
+      phoneSheet
       busy={busy}
       onSubmit={() => void submit()}
       actions={

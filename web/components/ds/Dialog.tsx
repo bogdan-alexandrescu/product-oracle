@@ -38,6 +38,7 @@ export function Dialog({
   busy = false,
   onSubmit,
   size = "md",
+  phoneSheet = false,
   children,
 }: {
   title: string;
@@ -56,6 +57,8 @@ export function Dialog({
   busy?: boolean;
   onSubmit?: () => void;
   size?: keyof typeof SIZE;
+  /** On a phone the dialog fills the screen (a full-height sheet, #329 rule 5). */
+  phoneSheet?: boolean;
   children: ReactNode;
 }) {
   const id = useId();
@@ -129,7 +132,7 @@ export function Dialog({
     // Escape and Tab, which the dialog handles) from selecting or moving rows underneath.
     <div
       data-testid="dialog-backdrop"
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
+      className={`fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 ${phoneSheet ? "max-[600px]:p-0" : "max-[600px]:px-2 max-[600px]:py-4"}`}
       onClick={(e) => e.stopPropagation()}
       onKeyDown={(e) => e.key !== "Escape" && e.key !== "Tab" && e.stopPropagation()}
       onMouseDown={(e) => {
@@ -143,7 +146,7 @@ export function Dialog({
         aria-labelledby={titleId}
         tabIndex={-1}
         data-testid={testId}
-        className={`w-full ${SIZE[size]} min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none`}
+        className={`w-full ${SIZE[size]} min-w-0 rounded-inspector border border-line bg-surface text-text shadow-tip outline-none ${phoneSheet ? "max-[600px]:min-h-full max-[600px]:max-w-none max-[600px]:rounded-none max-[600px]:border-0" : ""}`}
       >
         <div className="flex min-h-14 items-start gap-3 border-b border-line py-3 pr-3 pl-5 max-[600px]:pl-4">
           <div className="min-w-0 flex-1 self-center">
