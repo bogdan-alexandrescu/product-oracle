@@ -83,7 +83,7 @@ for (const [where, use] of [
         await bar(page, ITEM).click();
         const card = page.getByTestId("floating-card");
         await expect(card.getByRole("heading", { name: TITLE })).toBeVisible();
-        await expect(card.getByTestId("card-dates")).toHaveText(`${shown} · accepted`);
+        await expect(card.getByTestId("card-dates")).toHaveText(`${shown} · Dates accepted from Oracle`);
 
         if (where === "phone") expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(391);
       });

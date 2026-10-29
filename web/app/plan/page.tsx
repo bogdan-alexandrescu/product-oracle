@@ -153,9 +153,12 @@ export default function PlanPage() {
       // #370 (#505): a role that can never change the milestone sees it read only.
       canWrite={milestone?.id ? canEditMilestone : trackRights.addMilestone}
       onSaved={async (m) => {
+        // The pick this save was made from: a pick made while the track reloads (Add milestone,
+        // another milestone) wins over the saved one, never the other way round.
+        const from = milestone;
         const t = await unwrap(api.GET("/v1/tracks/{track_id}", { params: { path: { track_id: m.track_id } } }));
         putTrack(t);
-        setMilestone({ trackId: m.track_id, id: m.id });
+        setMilestone((cur) => (cur === from ? { trackId: m.track_id, id: m.id } : cur));
       }}
       onCancel={() => {
         setMilestone(null);
