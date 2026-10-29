@@ -77,7 +77,8 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
                 className={`${GRID} items-center rounded-md py-1 hover:bg-surface2`}
               >
                 <span className="flex min-w-0 flex-col leading-tight max-[600px]:flex-row max-[600px]:flex-wrap max-[600px]:items-baseline max-[600px]:gap-x-2">
-                  <span className="truncate font-semibold max-[600px]:whitespace-normal max-[600px]:break-words" data-testid={`${testId}-label`}>{label}</span>
+                  {/* qa-docs-10: the label wraps in full, never cutting the name or its count. */}
+                  <span className="font-semibold [overflow-wrap:anywhere]" data-testid={`${testId}-label`}>{label}</span>
                   {when && <span className="simple-small tnum">{when}{r.past_edge ? `, after ${calendarDay(plan.end, { month: "short" })}` : ""}</span>}
                 </span>
                 <span className="relative h-7">

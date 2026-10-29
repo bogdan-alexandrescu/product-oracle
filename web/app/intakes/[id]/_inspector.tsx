@@ -168,7 +168,7 @@ export function IntakeInspector({
   /** Unused (#370: the capabilities decide); kept for the intake shell. */
   role?: Role | null;
   onChanged: () => void;
-  /** The question that asks about a gap, when one was asked (qa-docs-19: it gets an Answer). */
+  /** The question that asks about a gap, when one was asked (qa-docs-19: it gets a way to it). */
   questionFor?: (gapId: string) => string | null;
   /** Shows that question in the thread, ready to answer. */
   onAnswer?: (questionId: string) => void;
@@ -234,13 +234,14 @@ export function IntakeInspector({
                       {[categoryNote(g), unknown.has(g.id) && "answered “I don't know”"].filter(Boolean).join(" · ")}
                     </span>
                   )}
-                  {/* qa-docs-19: each open question has a way to answer it, in the thread. */}
+                  {/* qa-docs-19: each open question has a way to answer it, in the thread.
+                      qa-docs-23: the thread is the one place to answer; this takes you there. */}
                   {(() => {
                     const q = questionFor?.(g.id);
                     return q && onAnswer ? (
                       <div className="mt-1">
-                        <Button variant="secondary" aria-label={`Answer: ${g.statement}`} onClick={() => onAnswer(q)}>
-                          Answer
+                        <Button variant="secondary" aria-label={`Go to question: ${g.statement}`} onClick={() => onAnswer(q)}>
+                          Go to question
                         </Button>
                       </div>
                     ) : (

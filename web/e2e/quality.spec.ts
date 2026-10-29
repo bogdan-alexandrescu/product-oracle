@@ -264,9 +264,11 @@ test("History filters by evaluator", async ({ page }) => {
   await expect(history(page).getByTestId("history-row")).toHaveCount(4);
   await history(page).getByRole("button", { name: /^Human/ }).click();
   await expect(history(page).getByTestId("history-row")).toHaveCount(2);
-  await history(page).getByRole("button", { name: /^Model/ }).click();
+  await history(page).getByRole("button", { name: /^Oracle review/ }).click();
   await expect(history(page).getByTestId("history-row")).toHaveCount(1);
-  await expect(history(page).getByTestId("history-row")).toContainText("claude-sonnet");
+  // qa-docs-14: "Oracle review", never the model id or its cost.
+  await expect(history(page).getByTestId("history-row")).toContainText("Oracle review");
+  await expect(history(page).getByTestId("history-row")).not.toContainText(/claude-|\$/);
 });
 
 test("blocked: a critical hard check blocks the version", async ({ page }) => {

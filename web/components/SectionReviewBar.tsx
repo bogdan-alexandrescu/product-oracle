@@ -133,13 +133,19 @@ export function SectionReviewBar({
             </p>
           )}
           {error && <InlineError>{error}</InlineError>}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" variant="solid" icon="check" disabled={saving || (NOTE_REQUIRED[draft] && !note.trim())}>
               {saving ? "Saving…" : `Save: ${VERDICT_LABEL[draft]}`}
             </Button>
             <Button variant="ghost" onClick={() => setDraft(null)}>
               Cancel
             </Button>
+            {/* qa-docs-5: a disabled Save says what it waits for. */}
+            {NOTE_REQUIRED[draft] && !note.trim() && !saving && (
+              <span data-testid="verdict-save-hint" className="text-[13px] text-text2">
+                Write a note first
+              </span>
+            )}
             <span className="ml-auto text-[13px] text-text2 max-[600px]:hidden">Ctrl/⌘ + Enter</span>
           </div>
         </form>

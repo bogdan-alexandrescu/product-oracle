@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import {
   Button,
@@ -160,11 +160,13 @@ function Question<V extends string | boolean>({
 function NumberQuestion({
   label,
   hint,
+  placeholder,
   value,
   onChange,
 }: {
   label: string;
   hint?: string;
+  placeholder?: string;
   value: number | null | undefined;
   onChange: (v: number | null) => void;
 }) {
@@ -176,6 +178,7 @@ function NumberQuestion({
           type="number"
           min={0}
           className={`${INPUT} tnum w-28`}
+          placeholder={placeholder}
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value === "" ? null : Math.max(0, Math.floor(Number(e.target.value))))}
         />
@@ -263,11 +266,40 @@ export function useDraftChoice(input: Schemas["RecommendIn"], initial?: { templa
 
 type DraftChoice = ReturnType<typeof useDraftChoice>;
 
+/** A theme tile's narrowest and widest (its thumbnail's width plus the tile's padding). */
+const TILE_MIN = 150;
+const TILE_MAX = 220;
+const TILE_GAP = 12;
+
+/**
+ * As many columns as the row has room for, then as few as keep that many rows (qa-docs-22):
+ * five tiles where four fit make rows of three and two, never four and a lone one.
+ */
+function useBalancedColumns(count: number) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  // Measured before the first paint, so the tiles never show in one column first.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const read = () => setWidth(el.clientWidth);
+    read();
+    const watch = new ResizeObserver(read);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+  const fit = Math.max(1, Math.floor((width + TILE_GAP) / (TILE_MIN + TILE_GAP)));
+  const n = Math.max(1, count);
+  const rows = Math.ceil(n / Math.min(fit, n));
+  return [ref, Math.ceil(n / rows)] as const;
+}
+
 /** The template cards and theme thumbnails of a draft choice, with the recommended marks. */
 export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
   const { kind, rec, themes, templates, templateKey, templateSource, themeKey, themePick, setTemplatePick, setThemePick } = choice;
   // Unique per picker: Next keeps visited pages mounted, and same-named radios would share a group.
   const id = useId();
+  const [tilesRef, tileCols] = useBalancedColumns(themes.data?.length ?? 0);
   return (
     <>
       <section aria-labelledby={`${id}-template`}>
@@ -342,19 +374,26 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
         </div>
         {themes.error && <ErrorNote>{themes.error}</ErrorNote>}
         {themes.loading && <Loading />}
-        <div role="radiogroup" aria-labelledby={`${id}-theme`} className="flex flex-wrap gap-3">
+        {/* qa-docs-22: the tiles fill their rows evenly; no row holds a lone tile while two fit. */}
+        <div
+          ref={tilesRef}
+          role="radiogroup"
+          aria-labelledby={`${id}-theme`}
+          className="grid gap-3"
+          style={{ gridTemplateColumns: `repeat(${tileCols}, minmax(0, ${TILE_MAX}px))` }}
+        >
           {themes.data?.map((t) => {
             const checked = t.key === themeKey;
             return (
               <label
                 key={t.key}
                 data-testid={`theme-option-${t.key}`}
-                className={`flex w-[178px] cursor-pointer flex-col gap-1.5 rounded-button border bg-surface p-2 ${
+                className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-button border bg-surface p-2 ${
                   checked ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line hover:border-line-strong"
                 }`}
               >
                 {/* A 400 x 300 page at 0.4: the sample's words stay legible at 160 x 120 (QA docs-64). */}
-                <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} scale={0.4} page={{ width: 400, height: 300 }} />
+                <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} page={{ width: 400, height: 300 }} fluid />
                 <span className="flex min-w-0 items-center gap-1.5">
                   <input
                     type="radio"
@@ -692,7 +731,8 @@ export function NewDraft({ kind }: { kind: Kind }) {
                       />
                     ))}
                     <div className="flex flex-wrap gap-6">
-                      <NumberQuestion label="How many teams?" value={roadmap.teams} onChange={(v) => setRoad("teams", v)} />
+                      {/* qa-docs-21: an example of the answer. */}
+                      <NumberQuestion label="How many teams?" placeholder="e.g. 3" value={roadmap.teams} onChange={(v) => setRoad("teams", v)} />
                       <NumberQuestion
                         label="Confirmed goals"
                         hint="From the baseline; change it to plan ahead."

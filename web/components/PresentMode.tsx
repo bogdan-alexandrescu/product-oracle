@@ -192,7 +192,7 @@ const BAR_BTN =
 /** A key cap on the dark presentation bar. */
 function Key({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-grid h-6 min-w-6 place-items-center rounded-md border border-hero-line px-1 font-mono text-[13px] text-hero-text">
+    <kbd className="inline-grid h-6 min-w-6 place-items-center rounded-md border border-hero-line px-1 font-sans text-[13px] font-semibold text-hero-text">
       {children}
     </kbd>
   );
@@ -332,6 +332,12 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
       )}
       {deck && current && (
         <>
+          {/* qa-docs-24: a page heading per slide for screen readers, unless the slide has its own h1. */}
+          {!/<h1[\s>]/i.test(current.html) && (
+            <h1 className="sr-only" data-testid="present-heading">
+              Slide {index + 1} of {total}
+            </h1>
+          )}
           <p className="sr-only" aria-live="polite">
             Slide {index + 1} of {total}: {current.heading}
           </p>
@@ -409,15 +415,19 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
               <Link href={back} className={BAR_BTN} onClick={() => document.fullscreenElement && void document.exitFullscreen()}>
                 Exit
               </Link>
-              <span className="hidden items-center gap-1 pl-2 text-[13px] text-hero-text2 xl:flex">
+              {/* qa-docs-24: each key says what it does. */}
+              <span className="hidden items-center gap-1 pl-2 text-[13px] whitespace-nowrap text-hero-text2 xl:flex" data-testid="present-keys">
                 <Key>←</Key>
                 <Key>→</Key>
-                <Key>s</Key>
-                <Key>f</Key>
+                <span className="mr-2">Slides</span>
+                <Key>S</Key>
+                <span className="mr-2">Notes</span>
+                <Key>F</Key>
+                <span>Full screen</span>
               </span>
               <span className="hidden xl:inline-flex">
                 <InfoTip label="keys" hero>
-                  ← → slides · s presenter view · f full screen · Esc closes a detail
+                  ← → slides · S presenter view with notes · F full screen · Esc closes a detail
                 </InfoTip>
               </span>
             </span>

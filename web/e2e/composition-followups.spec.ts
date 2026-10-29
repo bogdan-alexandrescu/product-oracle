@@ -42,7 +42,7 @@ test("after the company policy is saved the Modules tab says so, previews with i
   await notice.getByRole("button", { name: "Preview with new policy" }).click();
   await expect(page.getByTestId("composition-source")).toContainText("Recommendation");
 
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   await dialog.getByLabel("Reason (required)").fill("Apply the new company policy.");
   await dialog.getByRole("button", { name: "Confirm revision 2", exact: true }).click();
@@ -70,7 +70,7 @@ test("adding a module under a custom order keeps Sources and data points last", 
   await inspector(page).getByRole("button", { name: "Move up" }).click();
   await row(page, "platform.tenant-isolation").click();
   await inspector(page).getByRole("button", { name: "Add to draft" }).click();
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   await expect(dialog.getByTestId("confirm-diff")).toContainText("Multi-tenant isolation");
   await expect(dialog.getByTestId("preview-problems")).toHaveCount(0);
@@ -94,7 +94,7 @@ test("Tab keeps the focus inside the desktop Confirm dialog", async ({ page }) =
   // protects=the desktop dialog traps focus as the phone sheet does; fails_when=Tab walks out
   // to the page behind it.
   await openComposition(page, "approver");
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   await expect(dialog).toBeVisible();
   for (let i = 0; i < 25; i++) {

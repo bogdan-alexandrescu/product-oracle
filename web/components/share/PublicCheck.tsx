@@ -5,7 +5,7 @@ import { useId, useState, type ReactNode } from "react";
 
 import { usePolling } from "@/components/JobsPanel";
 import { peopleByIds } from "@/components/PersonPicker";
-import { Button, Chip, Icon, LinkButton, Notice, Page, PageHeader, Panel, useDocumentDestination, type ChipKind } from "@/components/ds";
+import { Button, Chip, Icon, LinkButton, Page, PageHeader, Panel, useDocumentDestination, type ChipKind } from "@/components/ds";
 import { findingSentence, findingText, WarningTicks, type Places } from "@/components/share/PublicWarnings";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type LlmJob, type Schemas } from "@/lib/api/client";
@@ -703,7 +703,19 @@ export function PublicCheck({ doc }: { doc: string }) {
     return (
       <Page>
         {header}
-        <Notice>Approvers and owners check the Public version.</Notice>
+        {/* qa-docs-4: the Publish page's locked state: the lock, who may do this, and the way back. */}
+        <Panel testId="public-check-locked" bodyClassName="flex flex-col items-center gap-3 px-4 py-12 text-center">
+          <span aria-hidden className="grid size-12 place-items-center rounded-full bg-surface2 text-text2">
+            <Icon name="lock" size={24} />
+          </span>
+          <p className="font-display text-lg font-bold tracking-heading text-text">Only an approver or owner can check the Public version</p>
+          <p className="max-w-prose text-[15px] text-text2">
+            The Public version is the page anyone with the roadmap&apos;s public link sees. You can still read the roadmap and its other views.
+          </p>
+          <LinkButton href={`/documents/${doc}`} icon="back">
+            Back to the roadmap
+          </LinkButton>
+        </Panel>
       </Page>
     );
   }

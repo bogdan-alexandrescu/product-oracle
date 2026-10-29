@@ -550,12 +550,19 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
           testId="criteria-panel"
           tools={
             readiness && (
-              <span className="flex flex-wrap gap-1.5" data-testid="criteria-tally">
-                {ORDER.filter((s) => tally(s)).map((s) => (
-                  <Chip key={s} kind={STATUS[s].kind}>
-                    {tally(s)} {STATUS[s].word}
-                  </Chip>
-                ))}
+              // qa-docs-29: these count hard checks and advisory criteria together, unlike
+              // Publish's Advisory line; say so.
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span className="text-sm text-text2" data-testid="criteria-tally-label">
+                  All checks
+                </span>
+                <span className="flex flex-wrap gap-1.5" data-testid="criteria-tally">
+                  {ORDER.filter((s) => tally(s)).map((s) => (
+                    <Chip key={s} kind={STATUS[s].kind}>
+                      {tally(s)} {STATUS[s].word}
+                    </Chip>
+                  ))}
+                </span>
               </span>
             )
           }
@@ -596,7 +603,6 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
         <HistoryPanel
           n={n}
           reports={reports}
-          admin={admin}
           loading={reportsQ.loading || !readiness}
           error={reportsQ.error}
           jobs={jobs}
@@ -658,11 +664,12 @@ function CriterionInspector({
   const stats = item.hard || hidden
     ? undefined
     : [
-        {
-          label: "Model agrees with rules",
-          value: item.agreement.model == null ? "—" : item.agreement.model ? "Yes" : "No",
-          testId: "stat-model-agrees",
-        },
+        // qa-docs-28: the tile says what the panel says when no model has reviewed this version.
+        !readiness.model_review
+          ? { label: "No model review yet", value: "—", testId: "stat-model-agrees" }
+          : item.agreement.model == null
+            ? { label: "Model did not judge this", value: "—", testId: "stat-model-agrees" }
+            : { label: "Model agrees with rules", value: item.agreement.model ? "Yes" : "No", testId: "stat-model-agrees" },
         people
           ? { label: "People agree with rules", value: people.k, of: people.n, testId: "stat-people-agree" }
           : { label: "No human ratings yet", value: "—", testId: "stat-people-agree" },
@@ -912,7 +919,6 @@ const EVALUATOR_LABEL: Record<string, string> = { rules: "Saved check", human: "
 function HistoryPanel({
   n,
   reports,
-  admin,
   loading,
   error,
   jobs,
@@ -926,7 +932,6 @@ function HistoryPanel({
 }: {
   n: number;
   reports: Report[] | undefined;
-  admin: boolean;
   loading: boolean;
   error: string | null;
   jobs: Job[];
@@ -965,15 +970,15 @@ function HistoryPanel({
       cell: (r) => {
         const ev = evaluatorOf(r);
         const by = r.kind === "job" ? r.job.requested_by : r.report.created_by;
-        const model = r.kind === "job" ? r.job.model : r.job?.model;
         return (
           <span className="flex min-w-0 flex-col py-0.5">
             <span className="font-medium">
               {EVALUATOR_LABEL[ev] ?? ev} · {nameOf(by)}
             </span>
             <span className="text-sm text-text2">
+              {/* qa-docs-14: History is the PM's list: "Oracle review", never a model id or a
+                  cost (an owner finds those under the review's Details). */}
               {zoneDateTime(r.at, zone)}
-              {admin && model && <> · {model}</>}
               {r.kind === "report" && typeof r.report.summary.note === "string" && r.report.summary.note && <> · “{r.report.summary.note}”</>}
             </span>
           </span>
@@ -1027,7 +1032,6 @@ function HistoryPanel({
             <Chip kind={kind} dot={ACTIVE.includes(job.status)}>
               {JOB_STATUS_LABEL[job.status]}
             </Chip>
-            {admin && job.status === "succeeded" && job.cost_usd != null && <span className="text-sm text-text2">{formatUsd(job.cost_usd)}</span>}
             {mayCancel && ACTIVE.includes(job.status) && (
               <Button variant="ghost" disabled={busy} onClick={() => onCancel(job.id)}>
                 Cancel
@@ -1058,7 +1062,7 @@ function HistoryPanel({
             items={[
               { value: "all", label: "All", count: all.length },
               { value: "rules", label: "Rules", count: count("rules") },
-              { value: "llm_job", label: "Model", count: count("llm_job") },
+              { value: "llm_job", label: "Oracle review", count: count("llm_job") },
               { value: "human", label: "Human", count: count("human") },
             ]}
           />

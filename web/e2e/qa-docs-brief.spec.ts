@@ -52,7 +52,7 @@ test("qa-docs-19: the title agrees with the open critical questions, and each ha
   await expect(panel).not.toContainText("Ready to draft");
 
   // An asked critical question opens in the thread, its Answer focused.
-  const answer = gate.getByRole("button", { name: /^Answer: / }).first();
+  const answer = gate.getByRole("button", { name: /^Go to question: / }).first();
   await expect(answer).toBeVisible();
   await page.getByRole("tab", { name: /Gaps/ }).click();
   await answer.click();

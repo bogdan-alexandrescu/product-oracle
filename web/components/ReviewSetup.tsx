@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
-import { Button, Chip, Panel, Sheet } from "@/components/ds";
+import { Button, Chip, Icon, Panel, Sheet } from "@/components/ds";
 import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
@@ -31,6 +31,25 @@ const SOURCE_LABEL: Record<Policy["source"], string> = {
   company: "Company default",
   default: "Default policy",
 };
+
+/**
+ * qa-docs-18: the sheet's own tick box, on the app's tokens (a hairline box, the accent and a
+ * check when ticked, the focus ring), not the browser's; still a real checkbox for keys and readers.
+ */
+function Tick({ checked, onChange }: { checked: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <span className="relative grid size-[18px] flex-none place-items-center">
+      <input
+        type="checkbox"
+        data-testid="review-tick"
+        className="peer size-[18px] cursor-pointer appearance-none rounded-[5px] border-[1.5px] border-line-strong bg-surface checked:border-accent checked:bg-accent"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <Icon name="check" size={16} stroke={2.4} className="pointer-events-none absolute hidden text-on-accent peer-checked:block" />
+    </span>
+  );
+}
 
 /** A picked due date (YYYY-MM-DD) as the API's due_at: 17:00 UTC that day, shown back as that day. */
 const dueAt = (day: string) => (day ? `${day}T17:00:00Z` : null);
@@ -236,13 +255,11 @@ function PolicyForm({
             <legend className={`${FIELD_LABEL} mb-1.5`}>Required sections</legend>
             {sections.map((s) => (
               <label key={s.section_key} className="flex min-h-9 min-w-0 items-center gap-2 text-sm text-text">
-                <input
-                  type="checkbox"
-                  className="size-4 flex-none accent-[var(--accent)]"
+                <Tick
                   checked={required.has(s.section_key)}
-                  onChange={(e) =>
+                  onChange={(on) =>
                     set({
-                      required_section_keys: e.target.checked
+                      required_section_keys: on
                         ? [...draft.required_section_keys, s.section_key]
                         : draft.required_section_keys.filter((k) => k !== s.section_key),
                     })
@@ -253,12 +270,7 @@ function PolicyForm({
             ))}
           </fieldset>
           <label className="flex min-h-9 items-center gap-2 text-sm text-text">
-            <input
-              type="checkbox"
-              className="size-4 flex-none accent-[var(--accent)]"
-              checked={draft.rereview_on_change}
-              onChange={(e) => set({ rereview_on_change: e.target.checked })}
-            />
+            <Tick checked={draft.rereview_on_change} onChange={(on) => set({ rereview_on_change: on })} />
             Ask for re-review when an approved section changes
           </label>
         </>
@@ -597,6 +609,12 @@ function CampaignForm({ doc, onDone, onCancel }: { doc: string; onDone: () => Pr
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
+        {/* qa-docs-5: a disabled Send says what it waits for. */}
+        {!title.trim() && (
+          <span data-testid="campaign-send-hint" className="text-[13px] text-text2">
+            Add a title to send
+          </span>
+        )}
       </div>
     </form>
   );
