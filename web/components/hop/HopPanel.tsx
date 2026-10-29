@@ -225,10 +225,10 @@ function useDiscussion(id: string | null, tick: number) {
  * as discussion. Panel chats are private: just the reader and Oracle. The thread carries
  * G3's changes card and its actions (Stage, Suggest, Edit, Dismiss…) as anywhere else.
  */
-export function HopPanel(props: { onClose?: () => void; closeLabel?: string; showHeader?: boolean }) {
+export function HopPanel({ mark, ...props }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean; mark?: boolean }) {
   // ask-fresh: Simple's pages get Simple's own Ask panel (a clean chat each time it opens); Detailed is unchanged.
   const pathname = usePathname() ?? "";
-  return pathname.startsWith("/simple") ? <SimpleAskPanel {...props} /> : <DetailedPanel {...props} />;
+  return pathname.startsWith("/simple") ? <SimpleAskPanel {...props} mark={mark} /> : <DetailedPanel {...props} />;
 }
 
 function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = true }: { onClose?: () => void; closeLabel?: string; showHeader?: boolean }) {

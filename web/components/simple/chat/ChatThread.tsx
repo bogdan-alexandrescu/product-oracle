@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import {
   applyAll,
@@ -14,8 +14,10 @@ import {
   type ChatMessage,
   type ChatThread as Thread,
 } from "@/lib/api/simple-chat";
+import { useCompanyZone } from "@/lib/dates";
 import { errorMessage } from "@/lib/use-query";
 
+import { AnswerSources, Who } from "./AskAnswer";
 import { ChatCard } from "./ChatCard";
 
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
@@ -81,6 +83,7 @@ export function ChatComposer({
   hint,
   typed,
   note,
+  row = false,
 }: {
   send: (text: string) => Promise<unknown>;
   placeholder: string;
@@ -90,6 +93,8 @@ export function ChatComposer({
   typed?: Typed;
   /** A line under the message box (the item's talk: "Just you and Oracle · kept with this item"). */
   note?: string;
+  /** The Ask panel's box (the owner's pick C): the box and Send on one row, the box as tall as its words. */
+  row?: boolean;
 }) {
   const [text, setText] = useState(typed?.text ?? "");
   const box = useRef<HTMLTextAreaElement>(null);
@@ -127,6 +132,50 @@ export function ChatComposer({
       setBusy(false);
     }
   };
+  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      void submit();
+    }
+  };
+
+  if (row)
+    return (
+      <form
+        className="flex flex-col gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void submit();
+        }}
+      >
+        {hint && (
+          <p className="text-sm text-text2" data-testid="chat-hint">
+            {hint}
+          </p>
+        )}
+        <div className="flex items-end gap-2">
+          <textarea
+            ref={box}
+            aria-label="Message Oracle"
+            rows={1}
+            maxLength={2000}
+            value={text}
+            placeholder={placeholder}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={keys}
+            className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-[15px] leading-[22px] text-text [field-sizing:content] placeholder:text-text-faint"
+          />
+          <button type="submit" className="simple-button simple-button-primary flex-none" disabled={busy || !text.trim()}>
+            Send
+          </button>
+        </div>
+        {error && (
+          <p role="alert" className="text-sm text-crit">
+            {error}
+          </p>
+        )}
+      </form>
+    );
 
   return (
     <form
@@ -149,12 +198,7 @@ export function ChatComposer({
         value={text}
         placeholder={placeholder}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.shiftKey) {
-            e.preventDefault();
-            void submit();
-          }
-        }}
+        onKeyDown={keys}
         className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-text"
       />
       {error && (
@@ -211,10 +255,13 @@ export function ChatMessages({
   messages,
   onCardChanged,
   onThread,
+  ask,
 }: {
   messages: Thread["messages"];
   onCardChanged?: () => void;
   onThread?: (t: Thread) => void;
+  /** Lines drawn as the Ask panel's (author · time, Oracle's answer with its sources): the roadmap card's talk, pick C. */
+  ask?: boolean;
 }) {
   const corrected = useCorrections();
   return (
@@ -226,6 +273,7 @@ export function ChatMessages({
           onCardChanged={onCardChanged}
           onThread={onThread}
           corrected={corrected}
+          ask={ask}
         />
       ))}
     </ol>
@@ -270,24 +318,33 @@ export function ChatLine({
   onCardChanged,
   onThread,
   corrected,
+  ask = false,
 }: {
   message: ChatMessage;
   onCardChanged?: () => void;
   onThread?: (t: Thread) => void;
   /** roadmap-talk: the chat's open Correct forms (Apply all applies them with their typed values). */
   corrected?: Corrections;
+  /** Simple's Ask panel (the owner's pick C): author · time over the line, Oracle's answer with its sources under it. */
+  ask?: boolean;
 }) {
+  const zone = useCompanyZone();
+  const mine = m.author_kind === "person";
   return (
     <li
       data-testid="chat-message"
       data-kind={m.kind}
       data-author={m.author_kind}
-      className={`flex flex-col gap-2 ${m.author_kind === "person" ? "items-end" : "items-start"}`}
+      className={`flex flex-col gap-2 ${mine ? "items-end" : "items-start"}`}
     >
       <div
-        className={`max-w-[95%] rounded-xl px-3 py-2 ${m.author_kind === "person" ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}
+        className={
+          ask
+            ? `max-w-[94%] rounded-[14px] px-3 py-2 text-[15px] leading-[22px] ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
+            : `max-w-[95%] rounded-xl px-3 py-2 ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
+        }
       >
-        <p className="simple-small font-semibold">{m.author_name}</p>
+        {ask ? <Who name={m.author_name} at={m.at} zone={zone} mine={mine} /> : <p className="simple-small font-semibold">{m.author_name}</p>}
         {m.kind === "pending" ? (
           <p
             className="whitespace-pre-wrap text-text2"
@@ -301,7 +358,9 @@ export function ChatLine({
             {m.body}
           </p>
         )}
-        {m.source && (
+        {m.source && ask ? (
+          <AnswerSources cites={[{ kind: "simple_source", title: m.source }]} />
+        ) : m.source && (
           <p
             className="simple-small text-text2 [overflow-wrap:anywhere]"
             data-testid="chat-message-source"

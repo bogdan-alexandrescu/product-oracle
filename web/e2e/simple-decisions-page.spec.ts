@@ -43,14 +43,18 @@ for (const phone of [false, true]) {
         await expect(rows.first()).toContainText("Admin");
         await expect(rows.nth(1)).toContainText("D-4 Moved Weekly alert digest");
         const outside = group(page, "Outside meetings");
-        await expect(outside.getByTestId("decision-row")).toHaveCount(3);
-        await expect(outside.getByTestId("decision-row").first()).toContainText("D-3");
+        // prd-decisions A1: a PRD's decided question sits here too, with its code and answer.
+        await expect(outside.getByTestId("decision-row")).toHaveCount(4);
+        await expect(outside.getByTestId("decision-row").first()).toContainText("Q1 Data retention period");
+        await expect(outside.getByTestId("decision-row").first()).toContainText("Keep 90 days · Admin");
+        await expect(outside.getByTestId("decision-row").nth(1)).toContainText("D-3");
         await expect(outside).toContainText("D-1 Start guided setup with the checklist");
 
         await page.getByRole("combobox", { name: "PRD", exact: true }).selectOption({ label: "Guided setup" });
         await expect(page).toHaveURL(/\?prd=guided-setup$/);
         await expect(past).toHaveCount(0);
-        await expect(outside.getByTestId("decision-row")).toHaveCount(1);
+        await expect(outside.getByTestId("decision-row")).toHaveCount(2);
+        await expect(outside).toContainText("Q1 Data retention period");
         await expect(outside).toContainText("D-1 Start guided setup with the checklist");
 
         await page.getByRole("combobox", { name: "PRD", exact: true }).selectOption({ label: "All PRDs" });

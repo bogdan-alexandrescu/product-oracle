@@ -44,7 +44,10 @@ async function boxOf(l: Locator) {
 
 /** The item names listed under a lane's header, up to the next lane. */
 async function rowsUnder(labels: Locator, title: string): Promise<string[]> {
-  const rows = await labels.locator('[data-testid="chart-group"], [data-testid="chart-label"]').evaluateAll((els) => els.map((e) => [e.getAttribute("data-testid"), (e as HTMLElement).innerText.trim()]));
+  // An item row's name (its code, F-08, sits before it: roadmap-milestones D).
+  const rows = await labels
+    .locator('[data-testid="chart-group"], [data-testid="chart-label"]')
+    .evaluateAll((els) => els.map((e) => [e.getAttribute("data-testid"), ((e.querySelector('[data-testid="label-title"]') ?? e) as HTMLElement).innerText.trim()]));
   const at = rows.findIndex(([id, t]) => id === "chart-group" && t!.startsWith(title));
   const out: string[] = [];
   for (const [id, t] of rows.slice(at + 1)) {
@@ -63,8 +66,9 @@ for (const phone of [false, true]) {
       for (const format of ["timeline", "gantt"] as const) {
         /**
          * Card gantt-slices: protects = Team invites (F-05) is drawn as two bars on ONE row,
-         * F-05a inside M1 (9 Nov - 27 Nov) and F-05b inside M2 (30 Nov - 11 Dec), joined by a
-         * dotted connector, each coloured by its milestone (M1 and M2 differ) and dated from
+         * F-05a inside M1 (9 Nov - 27 Nov) and F-05b inside M2 (30 Nov - 11 Dec); on the
+         * Timeline joined by a dotted connector, each coloured by its milestone (M1 and M2
+         * differ); on the Gantt both in the accent with no connector (roadmap-milestones D); dated from
          * the plan; the milestone ends are three diamonds (M1 Prove it, M2 Scale volume, M3
          * Open to all) with a dashed line down the chart at each end date; the year-end break
          * is a grey no-work band; the Today line is drawn; fails_when = the feature is one bar,
@@ -87,15 +91,21 @@ for (const phone of [false, true]) {
           await expect(b).toHaveAttribute("data-start", "2026-11-30");
           await expect(b).toHaveAttribute("data-end", "2026-12-11");
           await expect(b).toHaveAttribute("data-milestone", "M2");
-          expect(await a.getAttribute("data-colour")).not.toBe(await b.getAttribute("data-colour"));
+          // roadmap-milestones D: the Gantt draws every slice in the accent, with no connector;
+          // the Timeline (timeline-overlap B2) colours them by milestone, joined by a dotted line.
+          if (format === "gantt") expect(await a.getAttribute("data-colour")).toBe(await b.getAttribute("data-colour"));
+          else expect(await a.getAttribute("data-colour")).not.toBe(await b.getAttribute("data-colour"));
           await a.scrollIntoViewIfNeeded();
           const [ba, bb] = [await boxOf(a), await boxOf(b)];
           expect(Math.abs(ba.mid - bb.mid), "both slices on the same row").toBeLessThan(1);
           expect(ba.right).toBeLessThanOrEqual(bb.x + 1);
           const link = page.locator('[data-testid="slice-connector"][data-feature="F-05"]');
-          await expect(link).toHaveAttribute("stroke-dasharray", /\d/);
-          const lb = (await link.boundingBox())!;
-          expect(Math.abs(lb.y + lb.height / 2 - ba.mid)).toBeLessThan(2);
+          if (format === "gantt") await expect(link).toHaveCount(0);
+          else {
+            await expect(link).toHaveAttribute("stroke-dasharray", /\d/);
+            const lb = (await link.boundingBox())!;
+            expect(Math.abs(lb.y + lb.height / 2 - ba.mid)).toBeLessThan(2);
+          }
 
           const ends = page.getByTestId("milestone-end");
           await expect(ends).toHaveCount(3);

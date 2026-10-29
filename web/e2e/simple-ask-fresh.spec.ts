@@ -105,7 +105,8 @@ for (const [phone, dark] of [
         await expect(panel.getByText(gone, { exact: false })).toHaveCount(0);
       await expect(panel.getByRole("checkbox")).toHaveCount(0);
       await say(panel, "who owns Weekly alert digest?");
-      await expect(panel.getByTestId("ask-about")).toHaveText("Chat about Home");
+      // The pick's frame "Home, a fresh chat answered": still "New chat about Home".
+      await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Home");
 
       // Opened again: a new, empty chat.
       await closeAsk(page, phone);
@@ -123,12 +124,14 @@ for (const [phone, dark] of [
       await expect(panel.getByTestId("chat-message")).toHaveCount(0);
       await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Roadmap");
 
-      // Recent chats: both, newest first, by page and time; never the meeting's.
+      // Recent chats: both, newest first, each by its question, page and time; never the meeting's.
       await tap(panel.getByRole("button", { name: "Recent chats" }));
       const rows = panel.getByTestId("ask-recent-row");
       await expect(rows).toHaveCount(2);
-      await expect(rows.nth(0)).toHaveText(new RegExp(`^Roadmap · ${WHEN}$`));
-      await expect(rows.nth(1)).toHaveText(new RegExp(`^Home · ${WHEN}$`));
+      await expect(rows.nth(0).getByTestId("ask-recent-question")).toHaveText("when is Alert rules engine?");
+      await expect(rows.nth(0).getByTestId("ask-recent-when")).toHaveText(new RegExp(`^Roadmap · ${WHEN}$`));
+      await expect(rows.nth(1).getByTestId("ask-recent-question")).toHaveText("who owns Weekly alert digest?");
+      await expect(rows.nth(1).getByTestId("ask-recent-when")).toHaveText(new RegExp(`^Home · ${WHEN}$`));
       await expect(panel.getByTestId("ask-recent-meetings")).toHaveText("Meeting chats stay in their meeting.");
       await expect(rows.filter({ hasText: /Meeting/ })).toHaveCount(0);
 
@@ -151,8 +154,9 @@ for (const [phone, dark] of [
       await tap(panel.getByRole("button", { name: "Recent chats" }));
       const rows = panel.getByTestId("ask-recent-row");
       await expect(rows).toHaveCount(2);
-      await expect(rows.nth(0)).toHaveText(new RegExp(`^Roadmap · ${WHEN}$`));
-      await expect(rows.nth(1)).toHaveText(new RegExp(`^General · ${WHEN}$`));
+      await expect(rows.nth(0).getByTestId("ask-recent-when")).toHaveText(new RegExp(`^Roadmap · ${WHEN}$`));
+      await expect(rows.nth(1).getByTestId("ask-recent-when")).toHaveText(new RegExp(`^General · ${WHEN}$`));
+      await expect(rows.nth(1).getByTestId("ask-recent-question")).toHaveText("who owns Weekly alert digest?");
       await tap(rows.nth(1));
       await expect(panel.getByTestId("ask-about")).toHaveText("Chat about General");
       await expect(panel.getByTestId("chat-message-body").filter({ hasText: "who owns Weekly alert digest?" })).toBeVisible();

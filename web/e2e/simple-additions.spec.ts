@@ -221,14 +221,16 @@ for (const scheme of ["light", "dark"] as const) {
     });
 
     /**
-     * Card simple-additions-suggest: protects = "✦ Ask Oracle for more" in a goal's header asks
-     * Oracle, the panel says "Oracle is suggesting features…" while the job runs, then shows
-     * 3 new suggestions; fails_when = no job, the pending line never shows or never ends, or
-     * the suggestions do not arrive; no_claim = the number Oracle proposes for real (3-5).
+     * Card simple-additions-suggest: protects = "✦ Ask Oracle for more" in a goal's panel
+     * (opened from the goal's card over the chart: roadmap-milestones D draws no button on the
+     * chart's goal row) asks Oracle, the panel says "Oracle is suggesting features…" while the
+     * job runs, then shows 3 new suggestions; fails_when = no job, the pending line never shows
+     * or never ends, or the suggestions do not arrive; no_claim = the number Oracle proposes
+     * for real (3-5).
      */
-    test("an owner asks Oracle to suggest features for a goal from its header", async ({ page }) => {
+    test("an owner asks Oracle to suggest features for a goal from its card", async ({ page }) => {
       await openRoadmap(page);
-      await page.getByRole("button", { name: "Suggested features for Faster activation", exact: true }).click();
+      await page.getByTestId("goal-counter").filter({ hasText: "Faster activation" }).getByTestId("goal-counter-suggestions").click();
       const panel = page.getByTestId("goal-panel");
       await expect(panel).toBeVisible();
       await panel.getByRole("tab", { name: "✦ Oracle · 0" }).click();

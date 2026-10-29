@@ -71,7 +71,8 @@ for (const phone of [false, true]) {
         await expect(stage.getByRole("region", { name: "Roadmap slice" })).not.toContainText("Weekly alert digest");
         await steps(page).getByRole("button", { name: "3 Decisions" }).click();
         await expect(stage.getByRole("region", { name: "Pending proposals" })).toContainText("Commenter proposes: ");
-        await expect(stage.getByRole("region", { name: "Open decisions" })).toBeVisible();
+        // prd-decisions A3: the Decisions step opens on "On the agenda"; "Open decisions" shows only when some are open.
+        await expect(stage.getByRole("region", { name: "On the agenda" })).toBeVisible();
         await expect(page.getByRole("region", { name: "Chat" })).toBeVisible();
         await expect(allDecisions(page)).toContainText("None yet.");
         if (phone) {

@@ -39,6 +39,7 @@ export function Sheet({
   full = false,
   above = false,
   id,
+  bare = false,
 }: {
   open: boolean;
   title: string;
@@ -55,6 +56,8 @@ export function Sheet({
   above?: boolean;
   /** The panel's id (a control's aria-controls). */
   id?: string;
+  /** The whole screen with no handle or title row: the content draws its own head and close button (Simple's Ask sheet). */
+  bare?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; dy: number; captured?: boolean } | null>(null);
@@ -156,31 +159,39 @@ export function Sheet({
         onPointerMove={above ? onPanelMove : undefined}
         onPointerUp={above ? onUp : undefined}
         onPointerCancel={above ? onUp : undefined}
-        className={`relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none`}
+        className={
+          bare
+            ? "relative flex h-dvh max-h-dvh min-h-0 flex-col bg-surface pt-[env(safe-area-inset-top)] text-text outline-none"
+            : `relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none`
+        }
       >
-        <div
-          data-testid="sheet-handle"
-          aria-hidden
-          className="flex h-6 flex-none cursor-grab touch-none items-center justify-center"
-          onPointerDown={onDown}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerCancel={onUp}
-        >
-          <span className="h-1 w-10 rounded-full bg-line-strong" />
-        </div>
-        <div className="flex min-h-11 flex-none items-center gap-2 border-b border-line pr-1 pl-4">
-          <h2 className="min-w-0 flex-1 truncate font-display text-lg font-bold tracking-heading">{title}</h2>
-          {tools}
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={`Close ${title}`}
-            className="grid size-11 flex-none place-items-center rounded-button text-text2 hover:bg-surface2 hover:text-text"
-          >
-            <Icon name="x" size={20} />
-          </button>
-        </div>
+        {!bare && (
+          <>
+            <div
+              data-testid="sheet-handle"
+              aria-hidden
+              className="flex h-6 flex-none cursor-grab touch-none items-center justify-center"
+              onPointerDown={onDown}
+              onPointerMove={onMove}
+              onPointerUp={onUp}
+              onPointerCancel={onUp}
+            >
+              <span className="h-1 w-10 rounded-full bg-line-strong" />
+            </div>
+            <div className="flex min-h-11 flex-none items-center gap-2 border-b border-line pr-1 pl-4">
+              <h2 className="min-w-0 flex-1 truncate font-display text-lg font-bold tracking-heading">{title}</h2>
+              {tools}
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label={`Close ${title}`}
+                className="grid size-11 flex-none place-items-center rounded-button text-text2 hover:bg-surface2 hover:text-text"
+              >
+                <Icon name="x" size={20} />
+              </button>
+            </div>
+          </>
+        )}
         <div
           className={`relative min-h-0 flex-1 pb-[env(safe-area-inset-bottom)] ${scroll ? "overflow-y-auto overscroll-contain" : "flex flex-col"}`}
         >

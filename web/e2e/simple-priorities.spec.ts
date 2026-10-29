@@ -129,8 +129,8 @@ test.describe("desktop", () => {
     await card.getByRole("button", { name: "Open the flow for alert-mobile" }).click();
     await expect(card).toHaveAttribute("data-wide", "true");
     await expect(card.getByTestId("flow-detail")).toContainText("User flow: Act on a pushed alert");
-    // S10: the wireframe is the visual's low-fi page in a sandboxed frame, its regions named under it.
-    await expect(card.getByTitle("Wireframe of Alert on a phone")).toBeVisible();
+    // S10, drawn to the owner's flow pick A: the screen as a wireframe of its numbered regions.
+    await expect(card.getByRole("img", { name: /^Wireframe of Alert on a phone/ })).toBeVisible();
     await expect(card.getByTestId("flow-regions")).toContainText("Snooze and Assign buttons");
 
     // An estimate with no flow bundle: "No flow yet".

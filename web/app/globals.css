@@ -49,6 +49,8 @@
   --spark-fill: rgba(3, 105, 161, 0.1);
   --shadow: 0 1px 2px rgba(13, 23, 36, 0.06);
   --tip-shadow: 0 12px 32px rgba(13, 23, 36, 0.28);
+  /* A segmented switch's chosen segment (Simple's Ask panel: This page | General). */
+  --seg-on-shadow: 0 1px 2px rgba(13, 23, 36, 0.12);
   /* The rail, the phone header and tab bar: the same in both themes (SwarmCloud's rail, state for state). */
   --rail: linear-gradient(180deg, #0b3a7a, #06101e);
   --rail-top: #0b3a7a;
@@ -100,6 +102,7 @@
     --spark-fill: rgba(124, 200, 248, 0.14);
     --shadow: none;
     --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+    --seg-on-shadow: 0 0 0 1px var(--line);
     color-scheme: dark;
   }
 }
@@ -136,6 +139,7 @@
   --spark-fill: rgba(124, 200, 248, 0.14);
   --shadow: none;
   --tip-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --seg-on-shadow: 0 0 0 1px var(--line);
   color-scheme: dark;
 }
 
@@ -638,7 +642,8 @@ code .date-mark {
   --simple-card-pad: 24px;
   --simple-card-radius: 18px;
   --simple-card-bg: var(--surface);
-  --simple-card-border: 0 solid transparent;
+  /* The simple-v3 mock-ups (2026-10-28 picks) draw every card with a 1 px line. */
+  --simple-card-border: 1px solid var(--line);
   --simple-card-shadow: var(--shadow);
   --simple-rail-border: 1px solid var(--line);
   /* S1 restyle (the owner's picks, 2026-10-26): the light 232 px rail, its 18 px labels and the
@@ -797,6 +802,7 @@ code .date-mark {
 }
 .simple-row:first-child {
   border-top: 0;
+  padding-top: 0;
 }
 .simple-row:not(:has(.simple-actions)) {
   grid-template-columns: auto minmax(0, 1fr);
@@ -813,6 +819,183 @@ code .date-mark {
   }
   .simple-actions {
     grid-column: 1 / -1;
+  }
+}
+/*
+ * prd-decisions (the owner's pick A "Imported as decisions", kept to the mock-up): a question
+ * row's round icon, its "PRD recommends" line and answer chips, the quiet Ask Oracle button,
+ * the "Show N more" line, the compact List | Board | By meeting switch, the filters' boxes and
+ * the run-approvals note at the page's foot. A narrow column (the Board) puts the buttons under
+ * the row, as a phone does.
+ */
+.simple-ico {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-ink);
+}
+.simple-ico-done {
+  background: var(--pass-bg);
+  color: var(--pass);
+}
+.simple-rb {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.simple-meta {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text2);
+}
+.simple-meta .simple-status {
+  display: inline-block;
+  padding: 1px 10px;
+  line-height: 20px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+.simple-rec {
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+}
+.simple-rec-label {
+  /* With the space after it, the mock-up's 6 px. */
+  margin-right: 2px;
+  font-weight: 650;
+  color: var(--accent-ink);
+}
+.simple-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.simple-chip {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  padding: 0 12px;
+  background: var(--surface);
+  color: var(--accent-ink);
+  font-size: 15px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.simple-chip:hover {
+  background: var(--accent-soft);
+}
+.simple-chip-dashed {
+  border-style: dashed;
+  border-color: var(--line-strong);
+  color: var(--text2);
+}
+.simple-button-quiet {
+  gap: 6px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--accent-ink);
+}
+.simple-button-quiet:hover {
+  background: var(--accent-soft);
+}
+.simple-button[aria-pressed="true"] {
+  background: var(--surface2);
+}
+.simple-link {
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 650;
+  color: var(--accent-ink);
+}
+.simple-link:hover {
+  text-decoration: underline;
+}
+.simple-more {
+  align-self: flex-start;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 650;
+  color: var(--accent-ink);
+}
+.simple-more:hover {
+  text-decoration: underline;
+}
+.simple-seg {
+  display: inline-flex;
+  flex: none;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--surface);
+  padding: 4px;
+}
+.simple-seg button {
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--text2);
+  white-space: nowrap;
+}
+.simple-seg button:hover {
+  background: var(--surface2);
+}
+.simple-seg button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+  font-weight: 650;
+}
+.simple-select {
+  min-width: 200px;
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 6px 38px 6px 10px;
+  font-size: 16px;
+  line-height: 24px;
+  color: var(--text);
+}
+.simple-plumb {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  border-top: 1px dashed var(--line);
+  padding-top: 14px;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text2);
+}
+.simple-narrow .simple-row {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.simple-narrow .simple-actions {
+  grid-column: 1 / -1;
+}
+@media (max-width: 600px) {
+  .simple-select {
+    width: 100%;
+    min-width: 0;
+  }
+  .simple-seg {
+    display: flex;
+    width: 100%;
+  }
+  .simple-seg button {
+    flex: auto;
+    padding: 6px 8px;
+    font-size: 14px;
+    text-align: center;
   }
 }
 .simple-goal-band {
@@ -916,6 +1099,18 @@ code .date-mark {
   --simple-m3-edge: #c27c0e;
   --simple-m3-ink: #6b4300;
   --simple-hatch: rgba(120, 112, 96, 0.22);
+  /* fidelity prd (the owner's picks D and B, 2026-10-28): the PRD page's milestone hues as
+     the mock-ups draw them: a line and text colour, a soft background and a fill (time gone). */
+  --prd-m1: #0369a1;
+  --prd-m1-bg: #e5f3fc;
+  --prd-m1-fill: #cfe8f8;
+  --prd-m2: #6d28d9;
+  --prd-m2-bg: #f1ecfd;
+  --prd-m2-fill: #e0d4fa;
+  --prd-m3: #9a5b00;
+  --prd-m3-bg: #fdf3dc;
+  --prd-m3-fill: #f7e1b0;
+  --prd-pm: #5b6878;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -934,6 +1129,16 @@ code .date-mark {
     --simple-m3-edge: #e0a53c;
     --simple-m3-ink: #ffe3ad;
     --simple-hatch: rgba(160, 172, 196, 0.22);
+    --prd-m1: #7cc8f8;
+    --prd-m1-bg: #10294a;
+    --prd-m1-fill: #173d66;
+    --prd-m2: #c4b5fd;
+    --prd-m2-bg: #221a3f;
+    --prd-m2-fill: #352a63;
+    --prd-m3: #f5c451;
+    --prd-m3-bg: #3a2a0c;
+    --prd-m3-fill: #574015;
+    --prd-pm: #9aa8b8;
   }
 }
 :root[data-theme="dark"] {
@@ -952,6 +1157,16 @@ code .date-mark {
   --simple-m3-edge: #e0a53c;
   --simple-m3-ink: #ffe3ad;
   --simple-hatch: rgba(160, 172, 196, 0.22);
+  --prd-m1: #7cc8f8;
+  --prd-m1-bg: #10294a;
+  --prd-m1-fill: #173d66;
+  --prd-m2: #c4b5fd;
+  --prd-m2-bg: #221a3f;
+  --prd-m2-fill: #352a63;
+  --prd-m3: #f5c451;
+  --prd-m3-bg: #3a2a0c;
+  --prd-m3-fill: #574015;
+  --prd-pm: #9aa8b8;
 }
 @media print {
   .simple-noprint { display: none !important; }
@@ -975,4 +1190,54 @@ code .date-mark {
   .simple-bar-flash {
     animation: none;
   }
+}
+
+/*
+ * fid-prio (Goal buckets, the owner's pick B "Effort per goal, per milestone"): each milestone's
+ * strong bar colour (M1 blue, M2 violet, M3 amber; a fourth green) with --on-accent text on it,
+ * and its chip's tint and ink in the goal cards. Light and dark.
+ */
+:root {
+  --simple-m1-bar: #0369a1;
+  --simple-m2-bar: #6d28d9;
+  --simple-m3-bar: #a8680a;
+  --simple-m4-bar: #0a7a55;
+  --simple-m1-tag: #e5f3fc;
+  --simple-m1-tag-ink: #075985;
+  --simple-m2-tag: #f1ecfd;
+  --simple-m2-tag-ink: #5b21b6;
+  --simple-m3-tag: #fbf1e1;
+  --simple-m3-tag-ink: #7a4f00;
+  --simple-m4-tag: #e3f5ee;
+  --simple-m4-tag-ink: #0a7a55;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --simple-m1-bar: #7cc8f8;
+    --simple-m2-bar: #c4b5fd;
+    --simple-m3-bar: #f0b75a;
+    --simple-m4-bar: #4cd9a0;
+    --simple-m1-tag: #0f2742;
+    --simple-m1-tag-ink: #b9e3fc;
+    --simple-m2-tag: #221a3f;
+    --simple-m2-tag-ink: #ddd6fe;
+    --simple-m3-tag: #2c2210;
+    --simple-m3-tag-ink: #f5d38a;
+    --simple-m4-tag: #0d2e25;
+    --simple-m4-tag-ink: #4cd9a0;
+  }
+}
+:root[data-theme="dark"] {
+  --simple-m1-bar: #7cc8f8;
+  --simple-m2-bar: #c4b5fd;
+  --simple-m3-bar: #f0b75a;
+  --simple-m4-bar: #4cd9a0;
+  --simple-m1-tag: #0f2742;
+  --simple-m1-tag-ink: #b9e3fc;
+  --simple-m2-tag: #221a3f;
+  --simple-m2-tag-ink: #ddd6fe;
+  --simple-m3-tag: #2c2210;
+  --simple-m3-tag-ink: #f5d38a;
+  --simple-m4-tag: #0d2e25;
+  --simple-m4-tag-ink: #4cd9a0;
 }

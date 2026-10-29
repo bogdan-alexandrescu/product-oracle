@@ -17947,6 +17947,8 @@ export interface components {
              * @default false
              */
             general: boolean;
+            /** Question */
+            question?: string | null;
         };
         /** ChatThreadOut */
         ChatThreadOut: {
@@ -37453,6 +37455,10 @@ export interface components {
                 [key: string]: unknown;
             }[];
             flow?: components["schemas"]["SimpleDecidedFlow"] | null;
+            /** Code */
+            code?: string | null;
+            /** Chosen */
+            chosen?: string | null;
         };
         /**
          * SimpleDecisionsOut
@@ -37492,6 +37498,8 @@ export interface components {
              * @default 0
              */
             approvals_waiting: number;
+            /** Approvals Example */
+            approvals_example?: string | null;
             /**
              * View
              * @default list
@@ -38587,13 +38595,19 @@ export interface components {
         };
         /**
          * SimplePlanDecision
-         * @description prd-timeline: an open decision a milestone waits on ("Q7 Legal input").
+         * @description prd-timeline: an open decision a milestone waits on ("Q7 Legal input"), with the
+         *     PRD's recommendation and its due day (the PRD's, else the PRD question's as Oracle reads
+         *     it; null: no day yet).
          */
         SimplePlanDecision: {
             /** Code */
             code: string;
             /** Title */
             title: string;
+            /** Recommendation */
+            recommendation?: string | null;
+            /** Due On */
+            due_on?: string | null;
         };
         /** SimplePlanGoal */
         SimplePlanGoal: {
@@ -38663,7 +38677,9 @@ export interface components {
              * Risks
              * @default []
              */
-            risks: string[];
+            risks: components["schemas"]["SimplePlanRisk"][];
+            /** Why */
+            why?: string | null;
         };
         /** SimplePlanOut */
         SimplePlanOut: {
@@ -38717,6 +38733,29 @@ export interface components {
             can_read_again: boolean;
             /** Read At */
             read_at?: string | null;
+            /**
+             * Summary
+             * @default []
+             */
+            summary: string[];
+        };
+        /**
+         * SimplePlanRisk
+         * @description fidelity prd: a risk a milestone carries, as the PRD's risks table states it: its
+         *     code ("R-3"), the risk in one sentence, how likely and how big (the PRD's words, "medium",
+         *     "high") and what we do about it.
+         */
+        SimplePlanRisk: {
+            /** Code */
+            code?: string | null;
+            /** Title */
+            title: string;
+            /** Likelihood */
+            likelihood?: string | null;
+            /** Impact */
+            impact?: string | null;
+            /** What We Do */
+            what_we_do?: string | null;
         };
         /**
          * SimplePlanRow
@@ -39099,6 +39138,9 @@ export interface components {
              *     }
              */
             can: components["schemas"]["SimpleQuestionCan"];
+            source?: components["schemas"]["SimpleQuestionSource"] | null;
+            /** Undo Id */
+            undo_id?: string | null;
         };
         /**
          * SimpleQuestionBlocks
@@ -39162,6 +39204,16 @@ export interface components {
             by: components["schemas"]["SimplePersonRef"];
             /** Answer */
             answer: string;
+        };
+        /**
+         * SimpleQuestionSource
+         * @description Where Oracle read the question: the PRD's approved version, and when.
+         */
+        SimpleQuestionSource: {
+            /** Version */
+            version?: number | null;
+            /** Read At */
+            read_at?: string | null;
         };
         /** SimpleResumeOut */
         SimpleResumeOut: {

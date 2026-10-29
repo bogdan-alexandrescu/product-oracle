@@ -38,7 +38,8 @@ async function rowsUnder(page: Page, title: string): Promise<string[]> {
   const rows = await page
     .getByTestId("chart-labels")
     .locator('[data-testid="chart-group"], [data-testid="chart-label"]')
-    .evaluateAll((els) => els.map((e) => [e.getAttribute("data-testid"), (e as HTMLElement).innerText.trim()]));
+    // An item row's name (its code, F-06, sits before it: roadmap-milestones D).
+    .evaluateAll((els) => els.map((e) => [e.getAttribute("data-testid"), ((e.querySelector('[data-testid="label-title"]') ?? e) as HTMLElement).innerText.trim()]));
   const at = rows.findIndex(([id, t]) => id === "chart-group" && t!.startsWith(title));
   expect(at, `a lane "${title}"`).toBeGreaterThanOrEqual(0);
   const out: string[] = [];
@@ -58,16 +59,17 @@ for (const phone of [false, true]) {
       /**
        * Card gantt-one-goal-lane: protects = an item under the goal Growth and the plan's items
        * whose slices move Growth share ONE Growth lane ("5 items": Team invites, Usage
-       * dashboard, Launch email, Referral link, Public signup) with its suggested features
-       * button; fails_when = two lanes are titled Growth, or the lane loses its suggestions
-       * button; no_claim = the lanes' order, other goals' lanes.
+       * dashboard, Launch email, Referral link, Public signup); its suggested features open
+       * from the goal's card above the chart (roadmap-milestones D draws no button on the
+       * lane); fails_when = two lanes are titled Growth; no_claim = the lanes' order, other
+       * goals' lanes.
        */
       test(`one lane per goal, whether the goal is the item's or its slices' (${where})`, async ({ page }) => {
         await open(page, scheme);
         const growth = lane(page, "Growth");
         await expect(growth).toHaveCount(1);
         await expect(growth.getByTestId("lane-count")).toHaveText("5 items");
-        await expect(growth.getByRole("button", { name: "Suggested features for Growth" })).toBeVisible();
+        await expect(growth.getByRole("button")).toHaveCount(0);
         const rows = await rowsUnder(page, "Growth");
         expect(rows).toContain("Public signup");
         expect(rows).toContain("Team invites");

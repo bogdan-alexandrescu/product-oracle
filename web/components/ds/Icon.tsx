@@ -182,7 +182,7 @@ export function Icon({
   className = "",
 }: {
   name: IconName;
-  size?: 16 | 20 | 24;
+  size?: 16 | 18 | 20 | 24;
   /** Stroke width; the rail draws its icons at 1.7. */
   stroke?: number;
   className?: string;

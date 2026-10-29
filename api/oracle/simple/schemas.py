@@ -154,14 +154,33 @@ class SimplePlanMilestone(BaseModel):
     source: Literal["prd", "oracle"] = "prd"
     # prd-timeline: its open decisions and its risks in plain words, as the PRD states them.
     decisions: list["SimplePlanDecision"] = []
-    risks: list[str] = []
+    risks: list["SimplePlanRisk"] = []
+    # fidelity prd (the owner's pick D, 2026-10-28): why this milestone comes now, in the
+    # PRD's words (null: the PRD does not say).
+    why: str | None = None
 
 
 class SimplePlanDecision(BaseModel):
-    """prd-timeline: an open decision a milestone waits on ("Q7 Legal input")."""
+    """prd-timeline: an open decision a milestone waits on ("Q7 Legal input"), with the
+    PRD's recommendation and its due day (the PRD's, else the PRD question's as Oracle reads
+    it; null: no day yet)."""
 
     code: str
     title: str
+    recommendation: str | None = None
+    due_on: dt.date | None = None
+
+
+class SimplePlanRisk(BaseModel):
+    """fidelity prd: a risk a milestone carries, as the PRD's risks table states it: its
+    code ("R-3"), the risk in one sentence, how likely and how big (the PRD's words, "medium",
+    "high") and what we do about it."""
+
+    code: str | None = None
+    title: str
+    likelihood: str | None = None
+    impact: str | None = None
+    what_we_do: str | None = None
 
 
 class SimplePlanGoalTarget(BaseModel):
@@ -210,6 +229,9 @@ class SimplePlanOut(BaseModel):
     holidays: list[SimpleHoliday] = []
     can_read_again: bool = False
     read_at: dt.datetime | None = None
+    # fidelity prd (the owner's pick B, the When strip): the PRD's summary lines (its
+    # Summary section's bullets, "**Goal: ...** ..."), shown above the timeline.
+    summary: list[str] = []
 
 
 class SimpleOpenDecision(BaseModel):
@@ -1346,6 +1368,9 @@ class ChatSummaryOut(BaseModel):
     ask_id: uuid.UUID | None = None
     # Started under "General": named so on Recent, and reopened as General.
     general: bool = False
+    # The chat's first question (the person's first line, in it or in the Oracle's Ask chat
+    # it handed it to): Recent chats names each chat by it (ask-panel fidelity, pick C).
+    question: str | None = None
 
 
 class ChatListOut(BaseModel):
@@ -1567,7 +1592,8 @@ class SimpleMeetingOut(SimpleMeetingBrief):
     roadmap_ids: list[uuid.UUID] = []
     meeting_decisions: list[SimpleMeetingDecision] = []
     open_decisions: list[SimpleOpenDecision] = []
-    # prd-questions: the agenda's "Decisions due": the PRD's open questions, soonest first.
+    # prd-questions: the agenda's "Decisions due": the PRD's open questions that block the
+    # milestone the soonest one blocks, soonest first, with those decided in this meeting.
     decisions_due: "list[SimpleQuestion]" = []
     pending_proposals: list[SimpleChangeOut] = []
     drafts: list[SimpleDraftOut] = []
@@ -1671,6 +1697,9 @@ class SimpleDecisionRow(BaseModel):
     subjects: list[dict[str, Any]] = []
     # A meeting decision on a new flow or feature: that flow.
     flow: SimpleDecidedFlow | None = None
+    # prd-questions: a PRD's question keeps its code ("Q10"); a decided one, its answer.
+    code: str | None = None
+    chosen: str | None = None
 
 
 class SimpleMeetingGroup(BaseModel):
@@ -1725,6 +1754,13 @@ class SimpleQuestionCan(BaseModel):
     name_decider: bool = False
 
 
+class SimpleQuestionSource(BaseModel):
+    """Where Oracle read the question: the PRD's approved version, and when."""
+
+    version: int | None = None
+    read_at: dt.datetime | None = None
+
+
 class SimpleQuestion(BaseModel):
     """prd-questions: one of a PRD's open questions, read in as a decision (origin
     ``prd``): the PRD's code (Q7), its recommendation and alternatives, what it blocks,
@@ -1741,7 +1777,7 @@ class SimpleQuestion(BaseModel):
     # What is missing for a "Needs input" question: "decider" or "recommendation".
     missing: Literal["decider", "recommendation"] | None = None
     due_on: dt.date | None = None
-    # "Late · due Fri 6 Nov" or "Due Fri 27 Nov" (company days); None when decided.
+    # "Late · due Fri Nov 6" or "Due Fri Nov 27" (company days); None when decided.
     due_label: str | None = None
     late: bool = False
     blocks: SimpleQuestionBlocks | None = None
@@ -1750,11 +1786,16 @@ class SimpleQuestion(BaseModel):
     chosen: str | None = None
     decided_at: dt.datetime | None = None
     decided_by: SimplePersonRef | None = None
-    # "Decided Fri 23 Oct by Ana Lee" or "Decided in the PRD on Fri 23 Oct by Ana Lee".
+    # "Decided on Fri Oct 23 by Ana Lee" or "Decided in the PRD on Fri Oct 23 by Ana Lee".
     decided_label: str | None = None
     waiting_for_me: bool = False
     pending: SimpleQuestionPending | None = None
     can: SimpleQuestionCan = SimpleQuestionCan()
+    # "From Guided setup draft 3 · read Oct 22": the version it was read from.
+    source: SimpleQuestionSource | None = None
+    # A live review meeting's agenda: the change that decided it in this meeting, for its
+    # Undo (only who made it, while the meeting runs).
+    undo_id: uuid.UUID | None = None
 
 
 class SimpleDecisionsOut(BaseModel):
@@ -1774,6 +1815,8 @@ class SimpleDecisionsOut(BaseModel):
     late_count: int = 0
     # Oracle's own run approvals waiting for this person (shown in Detailed only).
     approvals_waiting: int = 0
+    # One of them, for the page's foot ("D-12 Approve Baseline confirm").
+    approvals_example: str | None = None
     view: DecisionsView = "list"
 
 

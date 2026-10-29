@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ds";
 import { FlowPanel } from "@/components/simple/FlowVisual";
 import { PlanByMonth } from "@/components/simple/PlanByMonth";
-import { PrdTimeline } from "@/components/simple/PrdTimeline";
+import { dmy, ew, PrdPlan, usePhone } from "@/components/simple/PrdTimeline";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
@@ -109,6 +109,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     return () => window.removeEventListener("resize", on);
   }, []);
   useLayoutEffect(() => placeNotes(margin.current));
+  const phone = usePhone();
 
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) return <div className="px-6 py-8"><ErrorNote>{q.error ?? "Not found"}</ErrorNote></div>;
@@ -221,30 +222,53 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           {v.changes_in_review} {v.changes_in_review === 1 ? "change" : "changes"} in review · you read the published version
         </div>
       )}
-      <div className="simple-noprint mx-auto flex max-w-[1180px] flex-wrap items-center justify-end gap-2 px-4 pt-4">
-        {presenting ? (
-          <Button onClick={stopPresenting}>Stop presenting</Button>
-        ) : (
-          <Button onClick={present}>Present</Button>
-        )}
-        <Button onClick={exportPdf}>Export PDF</Button>
-        {!sessionId && <Button onClick={() => setStarting(true)}>Start review</Button>}
-        <Link className="underline" href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
-      </div>
       <StartSheet open={starting} onClose={() => setStarting(false)} prd={v.document.slug} origin="one_pager" />
-      {saved && <p role="status" className="simple-noprint mx-auto max-w-[1180px] px-4 text-right text-base">Saved {saved}</p>}
-      {error && <div className="mx-auto max-w-[1180px] px-4"><ErrorNote>{error}</ErrorNote></div>}
-      {planShown && (
-        <div className="mx-auto max-w-[1180px] px-4 pt-6">
-          <PrdTimeline plan={plan} onPlan={setPlanNow} />
+      {planShown ? (
+        <div className="mx-auto flex max-w-[1180px] flex-col gap-5 px-12 pt-[26px] pb-12 max-[767px]:gap-3.5 max-[767px]:px-4 max-[767px]:pt-3.5">
+          <PrdHeader
+            v={v}
+            plan={plan!}
+            phone={phone}
+            actions={
+              <>
+                {presenting ? <button type="button" className={btn(phone)} onClick={stopPresenting}>Stop presenting</button> : <button type="button" className={btn(phone)} onClick={present}>{!phone && <Glyph d={PRESENT} />}Present</button>}
+                <button type="button" className={btn(phone)} onClick={exportPdf}>{!phone && <Glyph d={PDF} />}Export PDF</button>
+                {!sessionId && <button type="button" className={btn(phone)} onClick={() => setStarting(true)}>{!phone && <Glyph d={REVIEW} />}Start review</button>}
+                <Link className={`font-semibold whitespace-nowrap text-accent underline underline-offset-[3px] ${phone ? "text-[14px]" : "text-[15px]"}`} href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
+              </>
+            }
+          />
+          {saved && <p role="status" className="simple-noprint text-right text-base">Saved {saved}</p>}
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <PrdPlan plan={plan!} title={v.document.title} onPlan={setPlanNow} />
         </div>
+      ) : (
+        <>
+          <div className="simple-noprint mx-auto flex max-w-[1180px] flex-wrap items-center justify-end gap-2 px-4 pt-4">
+            {presenting ? (
+              <Button onClick={stopPresenting}>Stop presenting</Button>
+            ) : (
+              <Button onClick={present}>Present</Button>
+            )}
+            <Button onClick={exportPdf}>Export PDF</Button>
+            {!sessionId && <Button onClick={() => setStarting(true)}>Start review</Button>}
+            <Link className="underline" href={`/documents/${v.document.slug}`}>Open the detailed view</Link>
+          </div>
+          {saved && <p role="status" className="simple-noprint mx-auto max-w-[1180px] px-4 text-right text-base">Saved {saved}</p>}
+          {error && <div className="mx-auto max-w-[1180px] px-4"><ErrorNote>{error}</ErrorNote></div>}
+        </>
       )}
+      {/* With a plan the page ends with the milestone's card (pick D); inside a review meeting
+          the one-pager's lines stay under it, so the meeting can still edit them. */}
+      {(!planShown || sessionId) && (
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-6 md:grid-cols-[minmax(0,820px)_var(--simple-margin)]">
         <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
-          <header className="mb-4 border-b border-[var(--simple-rule)] pb-3">
-            <h1 className="text-3xl font-semibold">{v.document.title}</h1>
-            <p className="mt-1 text-base text-text-faint" data-testid="one-pager-meta">{meta.join(" · ")}</p>
-          </header>
+          {!planShown && (
+            <header className="mb-4 border-b border-[var(--simple-rule)] pb-3">
+              <h1 className="text-3xl font-semibold">{v.document.title}</h1>
+              <p className="mt-1 text-base text-text-faint" data-testid="one-pager-meta">{meta.join(" · ")}</p>
+            </header>
+          )}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             <section key={b.key} aria-label={b.title} className="mt-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
@@ -349,6 +373,85 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           {v.notes.length === 0 && <p className="text-base text-text-faint">No changes yet.</p>}
         </aside>
       </div>
+      )}
+    </div>
+  );
+}
+
+const btn = (phone: boolean) =>
+  `simple-noprint inline-flex items-center gap-[7px] border border-line-strong bg-surface font-semibold whitespace-nowrap text-text ${phone ? "min-h-[34px] rounded-[9px] px-2.5 text-[14px]" : "min-h-10 rounded-[10px] px-3.5 text-[15px]"}`;
+const PRESENT = "M3 4h18v12H3zM12 16v4M8 20h8";
+const PDF = "M12 4v11M7 10l5 5 5-5M5 20h14";
+const REVIEW = "M4 5h16v11h-9l-5 4v-4H4z";
+function Glyph({ d }: { d: string }) {
+  return (
+    <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" className="flex-none">
+      <path d={d} />
+    </svg>
+  );
+}
+
+/**
+ * fidelity prd (pick D, D1 and D2): the PRD's own header above its timeline: the way back to
+ * One-pagers, Present, Export PDF, Start review and the detailed view, the title, then
+ * Approved, the version and its day, the owner, the plan's dates and its engineer-weeks.
+ * A phone (D2) keeps the title, the facts and the actions, smaller; its header bar names
+ * the page (One-pagers), so the title there is a level-1 heading that is not an H1.
+ */
+function PrdHeader({ v, plan, phone, actions }: { v: View; plan: Schemas["SimplePlanOut"]; phone: boolean; actions: ReactNode }) {
+  const span = plan.span ? { start: plan.span.start, end: plan.span.end } : v.span_start && v.span_end ? { start: v.span_start, end: v.span_end } : null;
+  const caps = plan.milestones.map((m) => m.effort_weeks).filter((x): x is number => x != null);
+  const total = caps.length ? caps.reduce((a, b) => a + b, 0) : null;
+  const published = v.published_at ? dmy(v.published_at.slice(0, 10)) : null;
+  const sep = phone ? null : <span className="text-line-strong">·</span>;
+  return (
+    <div className="flex flex-col gap-2.5">
+      {!phone && (
+        <div className="flex items-center gap-2.5">
+          <Link href="/simple/one-pagers" className="inline-flex items-center gap-1 text-[15px] font-semibold text-accent">
+            <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 6l-6 6 6 6" />
+            </svg>
+            One-pagers
+          </Link>
+          <span className="flex-1" />
+          {actions}
+        </div>
+      )}
+      {phone ? (
+        <div role="heading" aria-level={1} className="text-[25px] leading-[31px] font-[750] tracking-[-.01em]">{v.document.title}</div>
+      ) : (
+        <h1 className="text-[34px] leading-[42px] font-bold tracking-[-.01em]">{v.document.title}</h1>
+      )}
+      <div data-testid="one-pager-meta" className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-[15px] leading-[22px] text-text2">
+        {published && (
+          <span className="inline-flex h-6 items-center gap-[5px] rounded-xl bg-pass-bg px-[9px] text-[13px] leading-[18px] font-semibold whitespace-nowrap text-pass">
+            <svg viewBox="0 0 24 24" width={16} height={16} aria-hidden fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M5 12.5l4.5 4.5L19 7.5" />
+            </svg>
+            Approved
+          </span>
+        )}
+        <span>{phone ? `v${v.version}` : `Version ${v.version}`}{published ? ` · ${published}` : ""}</span>
+        {sep}
+        {v.owner ? <span>Owner <b className="font-[650] text-text">{v.owner.name}</b></span> : <span>No owner yet</span>}
+        {span && (
+          <>
+            {sep}
+            <b className="font-[650] text-text">{dmy(span.start)} → {dmy(span.end)}</b>
+          </>
+        )}
+        {total != null && (
+          <>
+            {sep}
+            <span>
+              <b className="font-[650] text-text">{ew(total)}</b>
+              {!phone && " (engineer-weeks)"}
+            </span>
+          </>
+        )}
+      </div>
+      {phone && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }

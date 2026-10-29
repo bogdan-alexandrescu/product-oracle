@@ -785,10 +785,11 @@ PRODUCT = Decision.origin != "checkpoint"
 
 
 async def _open_decisions(db: AsyncSession, document: Document, item_ids: set[uuid.UUID]):
-    """The PRD's open product decisions, never a run's approval (PRODUCT)."""
+    """The PRD's open product decisions, never a run's approval (PRODUCT) nor a PRD's own
+    question (the agenda's "On the agenda" lists those)."""
     rows = await db.scalars(
         select(Decision)
-        .where(Decision.status == "proposed", PRODUCT)
+        .where(Decision.status == "proposed", PRODUCT, Decision.origin != "prd")
         .where(
             or_(
                 Decision.subjects.contains([{"kind": "document", "id": str(document.id)}]),
@@ -877,7 +878,9 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
             for link, d in links
         ],
         open_decisions=await _open_decisions(db, document, item_ids),
-        decisions_due=await questions.due_for(db, principal, document.id),
+        decisions_due=await questions.due_for(
+            db, principal, document.id, m.id, m.session_id if m.status == "live" else None
+        ),
         pending_proposals=[await changes.one_out(db, principal, c) for c in seen],
         drafts=await _draft_outs(db, principal, ds),
         waiting_people=[_ref(i, waiting_names) for i in waiting],
@@ -1719,10 +1722,15 @@ async def decided_flows(db: AsyncSession, links: list) -> dict[uuid.UUID, Simple
 
 
 def _row(d: Decision, names: dict) -> SimpleDecisionRow:
+    chosen = next(
+        (o.get("label") for o in d.options or [] if o.get("key") == d.chosen_option), None
+    )
     return SimpleDecisionRow(
         id=d.id, number=d.number, title=d.title, origin=d.origin, status=d.status,
         approver=_ref(d.approver_id, names) if d.approver_id else None,
         decided_at=d.decided_at, created_at=d.created_at, subjects=list(d.subjects or []),
+        code=(d.prd_question or {}).get("code") if d.origin == "prd" else None,
+        chosen=chosen,
     )  # fmt: skip
 
 
@@ -1744,6 +1752,11 @@ async def decisions_page(
     readable = {i for i, d in docs.items() if await _readable(db, principal, d)}
     ms = [m for m in ms if m.prd_document_id in readable]
     await _settle(db, ms)
+    from oracle.simple import questions as prd_questions
+
+    # The PRDs' questions read first: a decided one belongs with the decisions below.
+    for i in readable:
+        await prd_questions.ensure(db, docs[i])
     read = await service.load(db)
     goals = {e.goal.id: e.goal for e in read.entries if e.goal is not None}
     prd_doc = None
@@ -1786,7 +1799,9 @@ async def decisions_page(
         shown_ms = [m for m in shown_ms if any(keep(d) for _, d in links[m.id])]
     others: list[Decision] = []
     if meeting is None:
-        q = select(Decision).where(Decision.origin != "meeting", PRODUCT)
+        # A PRD's open question is listed as a question (Waiting for you), not here.
+        q = select(Decision).where(Decision.origin != "meeting", PRODUCT, or_(
+            Decision.origin != "prd", Decision.status == "decided"))  # fmt: skip
         if in_meetings:
             q = q.where(Decision.id.not_in(in_meetings))
         if match is not None:

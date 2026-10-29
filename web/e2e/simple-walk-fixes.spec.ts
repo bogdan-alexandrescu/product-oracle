@@ -73,10 +73,10 @@ for (const phone of [false, true]) {
         const card = page.getByTestId("floating-card");
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
         await tap(card.getByRole("button", { name: "Ask Oracle to draw it" }));
-        await expect(card.getByTestId("flow-meta")).toContainText("version 1");
+        await expect(card.getByTestId("flow-drawn")).toContainText("Version 1");
         await expect(card.getByTestId("card-flow")).not.toContainText("No flow yet");
-        await tap(card.getByRole("button", { name: "Open the flow" }));
-        await expect(card.getByTestId("flow-svg")).toBeVisible();
+        await tap(card.getByRole("button", { name: "Open the flow", exact: true }));
+        await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
       });
 
       test(`a one-pager bet's thumbnail shows its drawn flow without a reload (${where})`, async ({ page }) => {
@@ -86,7 +86,7 @@ for (const phone of [false, true]) {
         await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await tap(wide.getByRole("button", { name: "Ask Oracle to draw it" }));
         await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
-        await expect(wide.getByTestId("flow-meta")).toContainText("version 1");
+        await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
         await expect(wide.getByRole("button", { name: "Flow for bet 3" })).toBeVisible();
         await expect(wide).not.toContainText("No flow yet");
       });
@@ -101,9 +101,9 @@ for (const phone of [false, true]) {
         await expect(card.getByTestId("flow-empty")).toContainText("Oracle could not draw this flow");
         await expect(card.getByTestId("flow-empty")).not.toContainText("Oracle is drawing");
         await tap(card.getByRole("button", { name: "Retry" }));
-        await expect(card.getByTestId("flow-meta")).toContainText("version 1");
-        await tap(card.getByRole("button", { name: "Open the flow" }));
-        await expect(card.getByTestId("flow-svg")).toBeVisible();
+        await expect(card.getByTestId("flow-drawn")).toContainText("Version 1");
+        await tap(card.getByRole("button", { name: "Open the flow", exact: true }));
+        await expect(page.getByTestId("flow-detail").getByTestId("flow-svg")).toBeVisible();
       });
 
       test(`a failed redraw with no open comment still offers Retry (${where})`, async ({ page }) => {
@@ -112,13 +112,19 @@ for (const phone of [false, true]) {
         await expect(bar(page, "alert-mobile")).toBeVisible();
         await bar(page, "alert-mobile").click();
         const card = page.getByTestId("floating-card");
-        await tap(card.getByRole("button", { name: "Open the item's flow" }));
-        const failed = card.getByTestId("flow-failed");
+        // The flow pick's row says so under the drawing, with Retry.
+        const failed = card.getByTestId("flow-row").getByTestId("flow-failed");
         await expect(failed).toContainText("Oracle could not draw the next version.");
-        await expect(card.getByText("No comments yet.")).toBeVisible();
         await tap(failed.getByRole("button", { name: "Retry" }));
-        await expect(card.getByTestId("flow-version")).toHaveText("Version 2 of 2");
+        await expect(card.getByTestId("flow-drawn")).toContainText("Version 2");
         await expect(card.getByTestId("flow-failed")).toHaveCount(0);
+        // The viewer's comments: version 2 of 2, no comments.
+        await tap(card.getByRole("button", { name: "Open the flow", exact: true }));
+        await tap(page.getByTestId("flow-detail").getByRole("button", { name: "Full screen" }));
+        const full = page.getByTestId("flow-fullscreen");
+        await tap(full.getByRole("button", { name: "Comment" }));
+        await expect(full.getByTestId("flow-version")).toHaveText("Version 2 of 2");
+        await expect(full.getByText("No comments yet.")).toBeVisible();
       });
 
       test(`the item card names the PRD's F-code, not the section key (${where})`, async ({ page }) => {

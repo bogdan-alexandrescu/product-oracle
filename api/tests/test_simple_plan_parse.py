@@ -155,7 +155,7 @@ def test_part_fields_pass_through():
     view = plan.compute(data)
     m1, m2 = view.milestones
     assert [(d.code, d.title) for d in m1.decisions] == [("Q7", "Legal input")]
-    assert m1.risks == ["Pilot teams may not finish setup"]
+    assert [r.title for r in m1.risks] == ["Pilot teams may not finish setup"]
     assert m2.decisions == [] and m2.risks == []
     f1, f2 = view.slices
     assert (f1.kind, f1.what, f1.flow_steps) == (
@@ -188,4 +188,4 @@ def test_features_table_with_a_risk_column_stays_features():
     m1, m2 = plan.compute(data).milestones
     assert [(d.code, d.title) for d in m1.decisions] == [("Q7", "Legal input on the sample data")]
     assert m1.risks == []
-    assert m2.risks == ["Pilot teams may be busy"]
+    assert [r.title for r in m2.risks] == ["Pilot teams may be busy"]

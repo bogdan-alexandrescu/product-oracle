@@ -24,6 +24,8 @@ async function open(page: Page, email?: string) {
 
 /** Drags a bar by `dx` pixels with the mouse, from its middle (a move, not a resize). */
 async function drag(page: Page, key: string, dx: number, steps = 12) {
+  // The bar in view first (the chart's header grows a row per crowded mark: roadmap-milestones).
+  await body(page, key).scrollIntoViewIfNeeded();
   const box = (await body(page, key).boundingBox())!;
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
@@ -111,7 +113,8 @@ for (const [where, use] of [
         await expect(card.getByTestId("card-decisions")).toContainText("Send the digest weekly or daily?");
         await expect(card.getByTestId("card-flags")).toContainText("which it depends on, ends");
         await expect(card.getByRole("link", { name: "Open the detailed view" })).toHaveAttribute("href", /^\/plan\?item=alert-digest&prd=[0-9a-f-]{36}$/);
-        await expect(card.getByRole("button", { name: "Talk to Oracle" })).toBeVisible();
+        // The owner's pick C: a desktop card's foot has Talk to Oracle; a phone's sheet has it as a tab.
+        await expect(card.getByRole(where === "phone" ? "tab" : "button", { name: "Talk to Oracle" })).toBeVisible();
         if (where === "desktop") {
           const c = (await card.boundingBox())!;
           const b = (await body(page, "alert-digest").boundingBox())!;

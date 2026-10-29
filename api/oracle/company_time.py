@@ -77,8 +77,8 @@ def day_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
 
 
 def date_in_words(on: date) -> str:
-    """A calendar day (already the company's) as "Fri 6 Nov" (prd-questions' due days)."""
-    return f"{on:%a} {on.day} {on:%b}"
+    """A calendar day (already the company's) as "Fri Nov 6" (prd-questions' due days)."""
+    return f"{on:%a} {on:%b} {on.day}"
 
 
 def calendar_day(d: date | str) -> str:
