@@ -82,12 +82,12 @@ for (const phone of [false, true]) {
       test(`a one-pager bet's thumbnail shows its drawn flow without a reload (${where})`, async ({ page }) => {
         await login(page);
         await page.goto("/simple/prds/guided-setup");
-        const wide = page.getByRole("group", { name: "User flow of bet 3" });
+        const wide = page.getByRole("group", { name: "User flow of “Invite suggestions from the admin's" });
         await expect(wide.getByTestId("flow-empty")).toContainText("No flow yet");
         await tap(wide.getByRole("button", { name: "Ask Oracle to draw it" }));
         await expect(wide.getByTestId("flow-empty")).toContainText("Oracle is drawing the flow");
         await expect(wide.getByTestId("flow-drawn")).toContainText("Version 1");
-        await expect(wide.getByRole("button", { name: "Flow for bet 3" })).toBeVisible();
+        await expect(wide.getByRole("button", { name: "Flow for “Invite suggestions from the admin's" })).toBeVisible();
         await expect(wide).not.toContainText("No flow yet");
       });
 

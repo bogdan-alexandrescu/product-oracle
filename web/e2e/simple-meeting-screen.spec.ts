@@ -85,11 +85,11 @@ for (const phone of [false, true]) {
 
       test("changes, an accepted proposal and a comment become the meeting's decisions", async ({ page }) => {
         await start(page);
-        await page.getByRole("button", { name: "Edit line 2" }).click();
-        await page.getByLabel("Line 2").fill("A setup checklist with the next two steps");
+        await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+        await page.getByLabel("New wording for").fill("A setup checklist with the next two steps");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup: “A setup checklist with the next two steps”");
-        await expect(page.getByRole("note").filter({ hasText: "You changed line 2" }).filter({ visible: true })).toContainText(", in Review: Guided setup");
+        await expect(page.getByRole("note").filter({ hasText: "You changed “A setup checklist" }).filter({ visible: true })).toContainText(", in Review: Guided setup");
         await steps(page).getByRole("button", { name: "2 Roadmap" }).click();
         await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
         await expect(allDecisions(page)).toContainText("Moved Setup checklist");
@@ -111,8 +111,8 @@ for (const phone of [false, true]) {
         await start(page);
         await page.getByRole("button", { name: "Approver is here" }).click();
         await expect(page.getByLabel("Attendees").locator('[data-present="false"]')).toContainText("Approver");
-        await page.getByRole("button", { name: "Edit line 3" }).click();
-        await page.getByLabel("Line 3").fill("Invite suggestions from a shared calendar");
+        await page.getByRole("button", { name: "Edit “Invite suggestions from the admin's" }).click();
+        await page.getByLabel("New wording for").fill("Invite suggestions from a shared calendar");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup");
         await page.getByRole("button", { name: "Approve", exact: true }).click();
