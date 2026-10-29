@@ -5,8 +5,7 @@ import { ADMIN, login } from "./helpers";
 
 /*
  * The review of the shell's QA pass 2: Home's inspector shows its stat and blocker words whole,
- * an old one-pager link lands on the one-pager's own path, the account menu stays by its avatar
- * while the window changes, sign-in never waits forever, the mode switch's arrow keys move
+ * the account menu stays by its avatar while the rail scrolls, sign-in never waits forever, the mode switch's arrow keys move
  * focus without leaving the page, and the rail never scrolls sideways.
  * protects = what a person sees and does in the shell; fails_when = any of those comes back;
  * no_claim = the pages' own content.
@@ -54,13 +53,6 @@ for (const [name, size] of [
     }
   });
 }
-
-test("qa-shell-4: an old /simple/prds link opens the one-pager at its own path", async ({ page }) => {
-  await login(page);
-  await page.goto("/simple/prds/checkout-redesign");
-  await expect(page).toHaveURL(/\/simple\/one-pagers\/checkout-redesign$/);
-  await expect(page.getByTestId("one-pager-meta")).toBeVisible();
-});
 
 test.describe("on a short window", () => {
   test.use({ viewport: { width: 1366, height: 600 } });
