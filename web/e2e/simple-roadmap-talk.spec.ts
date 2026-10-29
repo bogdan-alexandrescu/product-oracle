@@ -121,11 +121,12 @@ for (const [phone, dark] of [
       const answer = last(talk);
       await expect(answer).toHaveAttribute("data-kind", "answer");
       await expect(answer.getByTestId("chat-message-body")).toContainText("Adaptive pacing runs 16 Nov – 27 Nov");
-      await expect(answer.getByTestId("chat-message-source")).toHaveText("From the PRD · F-16 Adaptive pacing");
+      // The source is the Ask chat's link line (pick C: "From the PRD · …" in accent ink with its icon).
+      await expect(answer.getByTestId("answer-source")).toHaveText("From the PRD · F-16 Adaptive pacing");
       await expect(talk.getByTestId("chat-card")).toHaveCount(0);
       // A question about its days is read from the roadmap, and says so.
       await say(talk, "When is it?");
-      await expect(last(talk).getByTestId("chat-message-source")).toHaveText("From the roadmap · F-16 Adaptive pacing");
+      await expect(last(talk).getByTestId("answer-source")).toHaveText("From the roadmap · F-16 Adaptive pacing");
     });
 
     /**

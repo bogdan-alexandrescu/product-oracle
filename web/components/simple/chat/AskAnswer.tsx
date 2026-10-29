@@ -150,7 +150,7 @@ function source(c: AnswerCite): { key: string; icon: "prds" | "roadmap" | "flag"
   const url = c.url && isSafeHref(c.url) ? c.url : null;
   switch (c.kind) {
     case "simple_source":
-      return { key: title, icon: "prds", words: title, url };
+      return { key: title, icon: title.startsWith("From the roadmap") ? "roadmap" : "prds", words: title, url };
     case "section":
     case "document":
       return { key: title, icon: "prds", words: `From the PRD · ${title.includes(": ") ? after(title) : title}`, url };
