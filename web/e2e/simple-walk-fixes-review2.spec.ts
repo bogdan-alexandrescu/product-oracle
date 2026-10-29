@@ -41,15 +41,14 @@ test("the next review lists who was present until the ritual's attendees are edi
   // An owner edits the ritual's attendees after the review: its list is the list.
   await page.goto("/company/rituals");
   const ritualRow = page.getByTestId("ritual-row").filter({ hasText: title });
-  // The row's Attendees count (its whole text also changes when the owner's name loads, which proved nothing).
-  const count = ritualRow.getByRole("gridcell").nth(3);
-  const before = Number(await count.innerText());
   await ritualRow.click();
   const panel = page.getByTestId("ritual-inspector").filter({ visible: true });
   await panel.getByRole("checkbox", { name: "viewer@example.com" }).check();
+  await expect(panel.getByTestId("ritual-no-changes")).toHaveCount(0);
   await panel.getByRole("button", { name: "Save" }).click();
-  // The save has landed when the ritual's row counts one more attendee (the ticked box proves nothing).
-  await expect(count).toHaveText(String(before + 1));
+  // The save has landed when the inspector holds no unsaved change again (the ticked box proves
+  // nothing; with the inspector open the table drops its Attendees column, qa-company-22).
+  await expect(panel.getByTestId("ritual-no-changes")).toBeVisible();
 
   await page.goto("/simple");
   await expect(page.getByTestId("home-meeting-next")).toContainText("Viewer");

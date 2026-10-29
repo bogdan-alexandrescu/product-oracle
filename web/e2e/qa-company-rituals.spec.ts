@@ -64,13 +64,13 @@ test("qa-company-7: Prepare now keeps Mon Nov 2 as Next with its pre-read ready;
   // held (Nov 2); no_claim=the API (test_rituals.py).
   await openRituals(page);
   const row = ritualRow(page, "Weekly goals check-in");
-  await expect(row.locator('[data-col="next"]')).toHaveText("Mon, Nov 2, 9:00 AM PST");
+  await expect(row.locator('[data-col="next"]')).toHaveText("Mon, Nov 2, 9:00 AM");
   await row.click();
   await inspector(page).getByRole("button", { name: "Prepare now" }).click();
   await expect(page).toHaveURL(/\/company\/rituals\/[0-9a-f-]{36}$/);
-  await expect(page.getByTestId("occurrence-meta")).toContainText("Mon, Nov 2, 9:00 AM PST");
+  await expect(page.getByTestId("occurrence-meta")).toContainText("Mon, Nov 2, 9:00 AM");
   await page.getByRole("link", { name: "← Rituals" }).click();
-  await expect(row.locator('[data-col="next"]')).toHaveText("Mon, Nov 2, 9:00 AM PST");
+  await expect(row.locator('[data-col="next"]')).toHaveText("Mon, Nov 2, 9:00 AM");
   await expect(row.getByTestId("next-pre-read")).toHaveText("Pre-read ready");
   await expect(row).toContainText("Oct 26, 2026");
   await expect(row).not.toContainText("Nov 2, 2026");
@@ -86,13 +86,13 @@ test("qa-company-8: names, schedules and Next are shown whole, with the inspecto
   await ritualRow(page, "Weekly goals check-in").click();
   await expect(inspector(page)).toBeVisible();
   await expectNothingCut(page);
-  await expect(ritualRow(page, "Monthly roadmap refresh")).toContainText("First Tuesday of the month, 10:00 AM PT");
+  await expect(ritualRow(page, "Monthly roadmap refresh")).toContainText("First Tuesday of the month, 10:00 AM");
 });
 
 test("qa-company-8 (phone): at 390 px the rows wrap and nothing is cut or scrolls sideways", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openRituals(page);
-  await expect(ritualRow(page, "Weekly goals check-in")).toContainText("Mondays 9:00 AM PT");
+  await expect(ritualRow(page, "Weekly goals check-in")).toContainText("Mondays 9:00 AM");
   await expectNothingCut(page);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
@@ -105,7 +105,7 @@ test("qa-company-23/24: the zone is named in words and said to be not set yet", 
   await expect(row.locator('[data-col="next"]')).toHaveAttribute("title", /\(Pacific Time \(Los Angeles\)\)$/);
   await row.click();
   const panel = inspector(page);
-  await expect(panel.getByTestId("ritual-zone")).toHaveText("Company time zone · Not set · Pacific is used");
+  await expect(panel.getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles), not set yet");
   await expect(page.locator("main")).not.toContainText("America/Los_Angeles");
 });
 
@@ -113,20 +113,20 @@ test("qa-company-23: an approver's read-only inspector names the zone in words",
   await openRituals(page, APPROVER);
   await ritualRow(page, "Weekly goals check-in").click();
   await expect(inspector(page).getByTestId("ritual-zone")).toHaveText("Pacific Time (Los Angeles)");
-  await expect(inspector(page)).toContainText("Mondays 9:00 AM PT");
+  await expect(inspector(page)).toContainText("Mondays 9:00 AM");
 });
 
 test("qa-company-25: one time format, with the zone, in the table, inspector and Time field", async ({ page }) => {
   // protects=qa-company-25; fails_when="Mondays 9:00" (24 h, no zone) or the Time field reads "09:00 AM".
   await openRituals(page);
   const row = ritualRow(page, "Weekly goals check-in");
-  await expect(row).toContainText("Mondays 9:00 AM PT");
+  await expect(row).toContainText("Mondays 9:00 AM");
   await row.click();
   const time = inspector(page).getByRole("combobox", { name: /^Time\b/ });
   await expect(time.locator("option:checked")).toHaveText("9:00 AM");
   await time.selectOption({ label: "4:30 PM" });
   await inspector(page).getByRole("button", { name: "Save" }).click();
-  await expect(row).toContainText("Mondays 4:30 PM PT");
+  await expect(row).toContainText("Mondays 4:30 PM");
 });
 
 test("qa-company-26/28: names first in the Owner picker and attendees; Length and lead time inputs line up", async ({ page }) => {

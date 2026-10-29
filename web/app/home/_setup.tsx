@@ -7,7 +7,11 @@ import { ZONE_NOT_SET } from "@/lib/zone";
 
 type Step = Schemas["SetupStep"];
 
-type Copy = { label: string; href?: string; status: (s: Step) => string };
+/**
+ * A step's words. `href` is where its button goes while the step is open ("Open"); once done
+ * the button says `doneAction` ("Change", or "Review") and goes to `doneHref` when set.
+ */
+type Copy = { label: string; href?: string; status: (s: Step) => string; doneAction?: string; doneHref?: string };
 
 /**
  * The web's copy of each setup step the API names (A1): label, where Open goes, and the
@@ -28,8 +32,14 @@ const STEPS: Record<string, Copy> = {
   invite: {
     label: "Invite team",
     href: "/settings/members?from=setup",
-    // Done with a second member, or with an open invite while still alone.
-    status: (s) => (!s.done ? "Only you" : (s.count ?? 0) >= 2 ? `${s.count} people` : "Invited"),
+    // Done with a second member, or with an open invite while still alone; open invites
+    // are said too (qa-onboarding-18: "4 people · 3 invited").
+    status: (s) => {
+      if (!s.done) return "Only you";
+      const invited = s.invited ? `${s.invited} invited` : "";
+      if ((s.count ?? 0) < 2) return invited || "Invited";
+      return invited ? `${s.count} people · ${invited}` : `${s.count} people`;
+    },
   },
   domains: {
     label: "Company domains",
@@ -57,7 +67,11 @@ const STEPS: Record<string, Copy> = {
   build_baseline: {
     label: "Build baseline",
     href: "/baseline?build=1",
-    status: (s) => (!s.done ? "Not built" : s.detail ? `Built ${formatDay(s.detail)}` : "Built"),
+    // qa-onboarding-10: a build under way says so (its row opens the run, see stepAction).
+    status: (s) => (s.run_id ? "Building…" : !s.done ? "Not built" : s.detail ? `Built ${formatDay(s.detail)}` : "Built"),
+    // Built: the row reviews the baseline, never starts a second build from Home.
+    doneAction: "Review",
+    doneHref: "/baseline",
   },
 };
 
@@ -67,6 +81,30 @@ function copyOf(s: Step): Copy {
   if (known) return known;
   const words = String(s.key).replace(/_/g, " ");
   return { label: words.charAt(0).toUpperCase() + words.slice(1), status: (x) => (x.done ? "Done" : "Not done") };
+}
+
+/** The run of a Build the baseline under way, as the step reports it. */
+export const buildRun = (runId: string) => `/runs/${runId}`;
+
+/**
+ * qa-onboarding-10, -37: what Home's Goals card offers for the baseline. A build under way:
+ * its run. With the Set up row on screen (not hidden, not built): no second start, the card
+ * points at the row. Otherwise (no step, or the checklist hidden) the card's own start.
+ */
+export type BaselineState = { runId: string | null; inSetup: boolean };
+
+export function baselineStep(setup: Schemas["SetupOut"] | undefined): BaselineState | undefined {
+  const step = setup?.steps.find((s) => s.key === "build_baseline");
+  if (!setup || !step) return undefined;
+  return { runId: step.run_id ?? null, inSetup: setupOpen(setup) && !setup.hidden && !step.done };
+}
+
+/** A step's button: Open while it is open, Change or Review once done, Open the build while a build runs. */
+function stepAction(s: Step, copy: Copy): { label: string; href: string } | null {
+  if (s.run_id) return { label: "Open the build", href: buildRun(s.run_id) };
+  if (!copy.href) return null;
+  if (!s.done) return { label: "Open", href: copy.href };
+  return { label: copy.doneAction ?? "Change", href: copy.doneHref ?? copy.href };
 }
 
 /** Whether the checklist has anything left for this person. */
@@ -109,11 +147,13 @@ export function SetupPanel({ setup, onHide, busy }: { setup: Schemas["SetupOut"]
         {setup.steps.map((s) => {
           const copy = copyOf(s);
           const status = copy.status(s);
+          const action = stepAction(s, copy);
           return (
             <li
               key={s.key}
               data-testid={`setup-row-${s.key}`}
               data-done={s.done}
+              data-building={s.run_id ? true : undefined}
               className="flex min-h-12 min-w-0 items-center gap-2.5 border-b border-line px-4 py-1.5 last:border-b-0 max-[600px]:gap-2 max-[600px]:px-3"
             >
               {s.done ? (
@@ -130,9 +170,9 @@ export function SetupPanel({ setup, onHide, busy }: { setup: Schemas["SetupOut"]
                 <span data-testid="setup-status" title={status} className="tnum min-w-0 truncate text-[15px] text-text2">
                   {status}
                 </span>
-                {copy.href && (
-                  <LinkButton href={copy.href} className="flex-none">
-                    Open
+                {action && (
+                  <LinkButton href={action.href} className="flex-none" data-testid="setup-action">
+                    {action.label}
                   </LinkButton>
                 )}
               </span>

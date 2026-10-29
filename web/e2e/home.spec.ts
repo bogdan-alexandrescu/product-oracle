@@ -80,7 +80,7 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await expect(inspector.getByTestId("row-goals")).toHaveText("Raise activationGrow paid conversion");
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
-  await expect(inspector.getByTestId("stat-sections")).toContainText("Sections approved");
+  await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
   await expect(inspector.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/documents/checkout-redesign");
 
   // A run: its segments and what comes next.
@@ -115,6 +115,10 @@ test("Home on a phone: stacked blocks under the phone header, inspector below, n
   const goals = await top("home-goals");
   const needs = await top("home-needs");
   const flight = await top("home-in-flight");
+  // qa-company-32: on a phone the inspector opens on a tap on a row, right under In flight.
+  await expect(page.getByTestId("home-inspector")).toBeHidden();
+  await page.getByTestId("home-in-flight-table").getByTestId("flight-row").first().click();
+  await expect(page.getByTestId("home-inspector")).toBeVisible();
   const inspector = await top("home-inspector");
   expect(goals.bottom).toBeLessThanOrEqual(needs.y);
   expect(needs.y).toBeLessThan(flight.y);
@@ -135,7 +139,10 @@ test("Home for a new company: one line per block with what to do next", async ({
   await expect(setup.getByTestId("panel-count")).toHaveText("2 of 8");
   const goals = page.getByTestId("home-goals-empty");
   await expect(goals).toContainText("No goals yet");
-  await expect(goals.getByRole("link", { name: "Build the baseline" })).toHaveAttribute("href", "/baseline?build=1");
+  // qa-onboarding-37: one baseline action on Home; the Set up row holds it, the card points there.
+  await expect(goals.getByRole("link", { name: "Build the baseline" })).toHaveCount(0);
+  await expect(goals.getByTestId("goals-build-in-setup")).toHaveText("Build it from Set up, above");
+  await expect(setup.getByTestId("setup-row-build_baseline").getByRole("link", { name: "Open" })).toHaveAttribute("href", "/baseline?build=1");
   await expect(page.getByTestId("home-needs-empty")).toHaveText("Nothing waiting");
   const flight = page.getByTestId("home-in-flight-empty");
   await expect(flight).toContainText("Nothing in flight");

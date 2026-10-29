@@ -107,8 +107,11 @@ export function flightColumns(phoneHeader: ReactNode, docs?: DocumentSummary[]):
       width: "19%",
       phone: "hide",
       cell: (f) =>
+        // qa-company-31: one style for every row: what comes next, in plain words.
         f.kind === "prd" ? (
-          <Chip kind="now">Review</Chip>
+          <span className="truncate" title="Review">
+            Review
+          </span>
         ) : (
           <span className="truncate" title={runNext(f.run)}>
             {runNext(f.run)}
@@ -238,7 +241,8 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           tone: r && r.blocking.length > 0 ? "crit" : undefined,
           testId: "stat-blockers",
         },
-        { label: "Sections approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
+        // qa-company-26: a label that fits the stat's room ("Sections approved" was cut).
+        { label: "Approved", value: v ? approved : "–", of: v ? sections.length : undefined, testId: "stat-sections" },
         { label: "Open items", value: openItems ?? 0, testId: "stat-open" },
       ]}
     >
@@ -277,10 +281,12 @@ function PrdInspector({ f, openItems, goalIndex }: { f: Extract<Flight, { kind: 
           tools={<Chip kind="crit">{blockers.filter((b) => b.hard).length || blockers.length} critical</Chip>}
         >
           {blockers.map((b) => (
-            // qa-shell-17: a blocker's words wrap, never cut mid-word (an InspectorRow cuts them).
-            <div key={b.key} className="flex min-h-8 items-start gap-2.5 py-1.5" data-testid="inspector-blocker">
-              <Icon name="alert" size={16} className="mt-0.5 flex-none text-crit" />
-              <span className="min-w-0 break-words">{b.title}</span>
+            <div key={b.key} className="flex min-h-8 min-w-0 items-center py-1">
+              {/* qa-company-25: a long blocker wraps to two lines, then ends in an ellipsis (the title holds it all). */}
+              <span className="inline-flex min-w-0 items-start gap-2.5" title={b.title} data-testid="inspector-blocker">
+                <Icon name="alert" size={16} className="mt-[3px] flex-none text-crit" />
+                <span className="line-clamp-2 min-w-0 break-words">{b.title}</span>
+              </span>
             </div>
           ))}
         </InspectorSection>

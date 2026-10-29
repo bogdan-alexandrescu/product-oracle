@@ -14,17 +14,20 @@ async function openHome(page: Page, role?: "viewer" | "commenter" | "approver") 
   await login(page, role ? `${role}@example.com` : undefined);
   await page.goto("/home");
   await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeAttached();
-  await expect(page.getByTestId("home-needs-table").locator("tr[data-row]").first()).toBeVisible();
+  // qa-company-4: a viewer or commenter may have nothing waiting at all, so only an owner's rows are awaited.
+  if (!role || role === "approver")
+    await expect(page.getByTestId("home-needs-table").locator("tr[data-row]").first()).toBeVisible();
 }
 
 const lines = (page: Page) => page.getByTestId("home-needs-table").locator("tr[data-row]");
 
-test("the approvals chip says Approvals, and each count chip opens the Inbox", async ({ page }) => {
+test("the approvals chip says Approvals, and the Inbox link opens the Inbox", async ({ page }) => {
   await openHome(page);
   const needs = page.getByTestId("home-needs");
   await expect(needs.getByTestId("home-count-approvals")).toHaveText("Approvals 3");
   await expect(needs.getByText(/^Decisions \d/)).toHaveCount(0);
-  await needs.getByTestId("home-count-reviews").click();
+  // qa-company-5: the counts are plain counts (the Inbox has no view per kind); the Inbox link opens it.
+  await needs.getByTestId("home-inbox-link").click();
   await expect(page).toHaveURL(/\/inbox$/);
 });
 

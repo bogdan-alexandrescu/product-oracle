@@ -123,6 +123,9 @@ test("Home with no goals offers Build the baseline and opens the sheet", async (
   // (home-fixes.spec covers that they see no action).
   await page.addInitScript(() => localStorage.setItem("po-mock-scenario", "empty"));
   await login(page);
+  // qa-onboarding-37: with Set up on screen its row is the one start; hidden, the card offers it.
+  await expect(page.getByTestId("home-goals-empty").getByTestId("goals-build-in-setup")).toBeVisible();
+  await page.getByTestId("home-setup").getByRole("button", { name: "Hide" }).click();
   const empty = page.getByTestId("home-goals-empty");
   await expect(empty).toContainText("No goals yet");
   await expect(empty.getByRole("link", { name: "Import your baseline" })).toHaveCount(0);

@@ -49,6 +49,8 @@ function Market() {
   const setParams = useSetParams();
   const { can, capsReady, capsError } = useMe();
   const [adding, setAdding] = useState(false);
+  // qa-company-20: an empty list shows its own Add button, so the header drops its one.
+  const [noAlternatives, setNoAlternatives] = useState(false);
   if (!capsReady && !capsError) return <Loading />;
   const pricing = can("list_pricing_memos");
   const winLoss = pricing && can("list_deal_outcomes");
@@ -70,7 +72,8 @@ function Market() {
         status={capsReady && !mayWrite ? <ViewOnly /> : undefined}
         action={
           mayWrite &&
-          tab === "alternatives" && (
+          tab === "alternatives" &&
+          !noAlternatives && (
             <Button variant="primary" icon="plus" onClick={() => setAdding(true)}>
               Add alternative
             </Button>
@@ -85,6 +88,7 @@ function Market() {
           onOpenChange={(id) => setParams({ change: id })}
           adding={adding && mayWrite}
           onAdding={setAdding}
+          onEmpty={setNoAlternatives}
         />
       )}
       {tab === "changes" && (

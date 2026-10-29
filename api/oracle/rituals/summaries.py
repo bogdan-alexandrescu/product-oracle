@@ -24,6 +24,7 @@ succeeds (the ``ritual_summary`` importer).
 """
 
 import uuid
+from collections.abc import Awaitable, Callable
 from decimal import Decimal
 from typing import Any
 
@@ -251,18 +252,55 @@ async def _market_writes(db: AsyncSession) -> bool:
     return await autonomy.allows(db, "market", "draft")
 
 
+async def _act_cap(db: AsyncSession) -> Decimal | None:
+    """The ``rituals`` cost limit (``max_run_usd``) while H11 Run rituals is at "Act within
+    limits", else None."""
+    from oracle import autonomy
+
+    if not await autonomy.allows(db, "rituals", "act"):
+        return None
+    limits = await autonomy.limits(db, "rituals")
+    cap = getattr(limits, "max_run_usd", None)
+    return None if cap is None else Decimal(str(cap))
+
+
 async def _oracle_acts(db: AsyncSession, flow: str = FLOW) -> bool:
     """H11 Autonomy: Oracle starts the summary itself only at "Act within limits" and
     when the run's estimate (the kind's flow) is within the ``rituals`` limit
     (``max_run_usd``). Below that, or above the limit, the pre-read's Inbox row is the
     reminder and a person starts it."""
-    from oracle import autonomy
+    limit = await _act_cap(db)
+    return limit is not None and per_summary_usd(flow) <= limit
 
-    if not await autonomy.allows(db, "rituals", "act"):
-        return False
-    limits = await autonomy.limits(db, "rituals")
-    cap = getattr(limits, "max_run_usd", None)
-    return cap is not None and per_summary_usd(flow) <= Decimal(str(cap))
+
+async def prepare_usd(
+    db: AsyncSession, kind: str, seen: dict[str, object] | None = None
+) -> float | None:
+    """What Prepare now on a ritual of ``kind`` would spend (qa-company-1), as
+    :func:`after_ready` decides: the baseline build's estimate unless Oracle only observes
+    it; one summary when summaries are on Every pre-read or Oracle writes them within its
+    limit; else None (building a pre-read reads the company's own data). ``seen`` keeps
+    the tenant's settings read once over a list of rituals."""
+    seen = {} if seen is None else seen
+
+    async def once(key: str, read: Callable[[], Awaitable[object]]) -> object:
+        if key not in seen:
+            seen[key] = await read()
+        return seen[key]
+
+    if kind == rebuild.KIND:
+        blocked = await once("rebuild", lambda: rebuild.blocked(db))
+        return None if blocked is not None else float(rebuild.estimate_usd())
+    if not eligible(kind):
+        return None
+    if kind in MARKET_KINDS and not await once("market", lambda: _market_writes(db)):
+        return None
+    flow = flow_of(kind)
+    if await once("mode", lambda: mode(db)) != "always":
+        cap = await once("cap", lambda: _act_cap(db))
+        if not isinstance(cap, Decimal) or per_summary_usd(flow) > cap:
+            return None
+    return float(per_summary_usd(flow))
 
 
 async def after_ready(db: AsyncSession, occ_id: uuid.UUID, ritual_id: uuid.UUID) -> None:

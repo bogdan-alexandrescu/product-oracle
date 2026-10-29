@@ -56,6 +56,8 @@ export interface RitualsContext {
   openVariances?: (occurrenceId: string) => number;
   /** H11 "Watch the market" above Observe: Oracle writes the competitive digest. */
   marketWrites: () => boolean;
+  /** H11 "Run rituals" at Act within limits: its max_run_usd (summaries._oracle_acts), else null. */
+  ritualsActCap?: () => number | null;
   /** The Baseline rebuild (rebuild.py): H11 "Keep the baseline current" is at Draft or above. */
   baselineStarts?: () => boolean;
   /** B1's build at the ritual's knobs (rebuild.estimate_usd): $7.00, unless a scenario prices it otherwise. */
@@ -487,26 +489,39 @@ function summaryOf(o: Occurrence): Schemas["OccurrenceSummary"] {
   return { id: o.id, ritual_id: o.ritual_id, due_at: o.due_at, ends_at: o.ends_at, status: o.status };
 }
 
+/** What Prepare now would spend (summaries.prepare_usd, qa-company-1): the baseline build's estimate unless Oracle only observes it, one summary on Every pre-read, else nothing. */
+function prepareUsd(ctx: RitualsContext | undefined, db: RitualsDb, r: Ritual): number | null {
+  if (r.kind === REBUILD) return ctx && rebuildBlocked(ctx) ? null : ctx ? rebuildUsd(ctx) : REBUILD_USD;
+  if (r.kind === DIGEST.kind && ctx && !ctx.marketWrites()) return null;
+  if (!(COVERED.has(r.kind) || r.kind in FLOW_FOR_KIND)) return null;
+  // As summaries.prepare_usd: on Every pre-read, or when Oracle writes it within its limit.
+  const cap = ctx?.ritualsActCap?.() ?? null;
+  if (db.mode !== "always" && !(cap != null && priceOf(r.kind) <= cap)) return null;
+  return priceOf(r.kind);
+}
+
 /**
- * The ritual on the way out (service.ritual_out): Last pre-read is the newest one whose
- * meeting time has come; a meeting made early (Prepare now, or the lead time) and still
- * ahead stays Next, with its ready pre-read, until its time (qa-company-7).
+ * The ritual on the way out (service.ritual_out): a meeting made early (Prepare now, or the
+ * lead time) and still ahead stays Next, with its ready pre-read, until its time
+ * (qa-company-7); Last pre-read is the newest of a meeting whose time has come, or on a paused
+ * ritual (no Next) the newest at all, so a pre-read prepared now is its Last (qa-company-2).
  */
-function ritualOut(db: RitualsDb, r: Ritual): RitualOut {
+function ritualOut(db: RitualsDb, r: Ritual, ctx?: RitualsContext): RitualOut {
   const t = now().getTime();
   const mine = db.occurrences.filter((o) => o.ritual_id === r.id);
-  const last = mine.filter((o) => o.pre_read.built_at && Date.parse(o.due_at) <= t).sort((a, b) => b.due_at.localeCompare(a.due_at))[0];
   const upcoming = mine
     .filter((o) => Date.parse(o.due_at) > t && ["scheduled", "ready", "failed"].includes(o.status))
     .sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
   let next = r.next_due_at;
   if (upcoming && next && Date.parse(upcoming.due_at) < Date.parse(next)) next = upcoming.due_at;
-  const ready = !!upcoming && upcoming.status === "ready" && !!next && Date.parse(upcoming.due_at) === Date.parse(next);
+  const ready = r.status === "active" && !!upcoming && upcoming.status === "ready" && !!next && Date.parse(upcoming.due_at) === Date.parse(next);
+  const last = mine.filter((o) => o.pre_read.built_at && (r.status !== "active" || Date.parse(o.due_at) <= t)).sort((a, b) => b.due_at.localeCompare(a.due_at))[0];
   const out: RitualOut & { created_at?: string } = {
     ...r,
     next_due_at: next,
     last_pre_read: last ? summaryOf(last) : null,
     next_pre_read: ready ? summaryOf(upcoming) : null,
+    prepare_usd: prepareUsd(ctx, db, r),
   };
   delete out.created_at;
   return out;
@@ -658,7 +673,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     if (p.length === 2) {
       if (m === "GET") {
         const order = (r: Ritual) => (r.builtin ? 0 : 1);
-        return json(200, [...db.rituals].sort((a, b) => order(a) - order(b)).map((r) => ritualOut(db, r)));
+        return json(200, [...db.rituals].sort((a, b) => order(a) - order(b)).map((r) => ritualOut(db, r, ctx)));
       }
       if (m === "POST") {
         if (!owner) return notOwner();
@@ -685,13 +700,13 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
           created_at: now().toISOString(),
         };
         db.rituals.push(r);
-        return json(201, ritualOut(db, r));
+        return json(201, ritualOut(db, r, ctx));
       }
     }
     const r = db.rituals.find((x) => x.id === p[2]);
     if (!r) return fail(404, "Ritual not found");
     if (p.length === 3) {
-      if (m === "GET") return json(200, ritualOut(db, r));
+      if (m === "GET") return json(200, ritualOut(db, r, ctx));
       if (m === "DELETE") {
         if (!owner) return notOwner();
         if (r.builtin) return fail(409, "Built-in rituals pause; they are not deleted");
@@ -723,7 +738,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
           r.attendee_ids = input.attendee_ids;
         }
         r.lock_version += 1;
-        return json(200, ritualOut(db, r));
+        return json(200, ritualOut(db, r, ctx));
       }
     }
     if (p.length === 4 && m === "POST" && (p[3] === "pause" || p[3] === "resume")) {
@@ -731,7 +746,7 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
       r.status = p[3] === "pause" ? "paused" : "active";
       if (r.status === "active") r.next_due_at = nextOccurrence(r.schedule, now()).toISOString();
       r.lock_version += 1;
-      return json(200, ritualOut(db, r));
+      return json(200, ritualOut(db, r, ctx));
     }
     if (p.length === 4 && m === "POST" && p[3] === "prepare") {
       if (!owner) return notOwner();
@@ -745,7 +760,8 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
         db.occurrences.push(o);
       }
       Object.assign(o, { status: "ready", error: null, pre_read: { built_at: asOf, blocks: blocksFor(r.kind, asOf, TRACK_ID, ctx) } });
-      if (!failed) r.next_due_at = nextOccurrence(r.schedule, due).toISOString();
+      // As service.prepare: a paused ritual's next meeting does not move on.
+      if (!failed && r.status === "active") r.next_due_at = nextOccurrence(r.schedule, due).toISOString();
       if (r.kind === REBUILD) await rebuildAfterReady(ctx, r, o);
       return json(200, occurrenceOut(ctx, r, o));
     }

@@ -12,16 +12,31 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@
 
 import { useAccessRequestRows } from "../inbox/_access";
 import { useActed } from "../inbox/_actions";
-import { allNeeds, CountChip, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
+import { allNeeds, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
 import { useQuestionRows } from "../inbox/_questions";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
-import { SetupChip, SetupPanel, setupOpen } from "./_setup";
+import { baselineStep, SetupChip, SetupPanel, setupOpen } from "./_setup";
 import { WelcomePanel } from "./_welcome";
 import { useGoals } from "./_use-goals";
 
 /** Runs that are still going: under way, or waiting on a person. */
 const IN_FLIGHT = new Set(["running", "awaiting_checkpoint", "awaiting_approval", "paused_overrun"]);
+/** A phone's width, as the layout's max-[600px]. */
+const PHONE = "(max-width: 600px)";
+
+/**
+ * qa-company-5: how many of each kind wait, as a plain count. The Inbox has no view per
+ * kind, so a count is not a link that seems to filter; the Inbox link beside them opens it.
+ */
+function Count({ label, n, testId }: { label: string; n: number; testId: string }) {
+  return (
+    <Chip kind="line" data-testid={testId}>
+      {label} <b className="tnum">{n}</b>
+    </Chip>
+  );
+}
+
 /** Needs you shows this many lines; the rest are one click away in the Inbox. */
 const MAX_NEEDS = 7;
 
@@ -133,6 +148,14 @@ export default function HomePage() {
       : undefined;
   const [picked, setPicked] = useState<string | null>(null);
   const selected = flights?.find((f) => f.key === picked) ?? flights?.[0] ?? null;
+  // qa-company-32, qa-onboarding-39: on a phone the inspector waits for a tap on a row, then
+  // shows right under In flight; untapped, the row alone says what is in flight.
+  function pick(key: string) {
+    setPicked(key);
+    if (typeof window !== "undefined" && window.matchMedia(PHONE).matches) {
+      requestAnimationFrame(() => document.getElementById("home-inspector-slot")?.scrollIntoView({ block: "start", behavior: "smooth" }));
+    }
+  }
 
   // Needs you: the Inbox's rows, then the stakeholder questions asked of the signed-in person.
   const [busy, setBusy] = useState<string | null>(null);
@@ -213,7 +236,13 @@ export default function HomePage() {
         action={!nothingInFlight && newPrd()}
       />
       <Split
-        inspector={selected ? <FlightInspector f={selected} openItems={openItems} docs={docs} goalIndex={goalIndex} /> : undefined}
+        inspector={
+          selected ? (
+            <div id="home-inspector-slot" data-testid="home-inspector-slot" className={picked ? "scroll-mt-3" : "max-[600px]:hidden"}>
+              <FlightInspector f={selected} openItems={openItems} docs={docs} goalIndex={goalIndex} />
+            </div>
+          ) : undefined
+        }
       >
         {owner && poolQ.data && <ClaudeOffNotice page={poolQ.data} />}
         {setupError && <Notice tone="error">{setupError}</Notice>}
@@ -228,6 +257,7 @@ export default function HomePage() {
           loading={goalsLoading}
           canImport={canBuild}
           canInterview={can("start_goal_interview")}
+          baseline={baselineStep(setupQ.data)}
         />
 
         <Panel
@@ -241,12 +271,12 @@ export default function HomePage() {
                 Everything the Inbox has waiting on you: approvals, runs, access requests, reviews and the questions asked of you.
                 Simple&apos;s Home counts something else, the product decisions on PRDs that wait on you, so its number can differ.
               </InfoTip>
-              {/* qa-company-40: each count is a link to the Inbox, where its items are. */}
-              {approvals.length > 0 && <CountChip label="Approvals" n={approvals.length} testId="home-count-approvals" />}
-              {runs.length > 0 && <CountChip label="Runs" n={runs.length} testId="home-count-runs" />}
-              {access.length > 0 && <CountChip label="Access" n={access.length} testId="home-count-access" />}
-              {reviews.length > 0 && <CountChip label="Reviews" n={reviews.length} testId="home-count-reviews" />}
-              {asked.length > 0 && <CountChip label="Questions" n={asked.length} testId="home-count-questions" />}
+              {/* qa-company-5: plain counts; the Inbox link opens the Inbox, where the items are. */}
+              {approvals.length > 0 && <Count label="Approvals" n={approvals.length} testId="home-count-approvals" />}
+              {runs.length > 0 && <Count label="Runs" n={runs.length} testId="home-count-runs" />}
+              {access.length > 0 && <Count label="Access" n={access.length} testId="home-count-access" />}
+              {reviews.length > 0 && <Count label="Reviews" n={reviews.length} testId="home-count-reviews" />}
+              {asked.length > 0 && <Count label="Questions" n={asked.length} testId="home-count-questions" />}
               <Link
                 href="/inbox"
                 data-testid="home-inbox-link"
@@ -279,34 +309,35 @@ export default function HomePage() {
           )}
           <NeedTable title="Needs you" testId="home-needs-table" rows={shownNeeds} compact />
           {questionRows.sheet}
-
-          <section aria-label="In flight" data-testid="home-in-flight" className="border-t border-line">
-            <div data-testid="home-in-flight-phone-title" className="hidden min-h-12 items-center border-b border-line bg-surface2 px-3 max-[600px]:flex">
-              {flightHeader}
-            </div>
-            {(docsQ.error || runsQ.error) && (
-              <div className="p-4">
-                <Notice tone="error">{docsQ.error ?? runsQ.error}</Notice>
-              </div>
-            )}
-            {nothingInFlight ? (
-              <div data-testid="home-in-flight-empty" className="flex flex-wrap items-center gap-3 px-4 py-4 max-[600px]:px-3">
-                <span className="hidden font-display text-lg font-bold tracking-heading min-[601px]:inline">In flight</span>
-                <span className="text-[15px] font-semibold text-text2">Nothing in flight</span>
-                {newPrd("ml-auto")}
-              </div>
-            ) : (
-              <FlightTable
-                rows={flights}
-                loading={docsQ.loading || runsQ.loading}
-                selected={selected?.key ?? null}
-                onSelect={setPicked}
-                header={flightHeader}
-                docs={docs}
-              />
-            )}
-          </section>
         </Panel>
+
+        {/* qa-company-31: In flight is its own panel, apart from Needs you. */}
+        <section aria-label="In flight" data-testid="home-in-flight" className="min-w-0 overflow-clip rounded-panel border border-line bg-surface shadow-panel">
+          <div data-testid="home-in-flight-phone-title" className="hidden min-h-12 items-center border-b border-line bg-surface2 px-3 max-[600px]:flex">
+            {flightHeader}
+          </div>
+          {(docsQ.error || runsQ.error) && (
+            <div className="p-4">
+              <Notice tone="error">{docsQ.error ?? runsQ.error}</Notice>
+            </div>
+          )}
+          {nothingInFlight ? (
+            <div data-testid="home-in-flight-empty" className="flex flex-wrap items-center gap-3 px-4 py-4 max-[600px]:px-3">
+              <span className="hidden font-display text-lg font-bold tracking-heading min-[601px]:inline">In flight</span>
+              <span className="text-[15px] font-semibold text-text2">Nothing in flight</span>
+              {newPrd("ml-auto")}
+            </div>
+          ) : (
+            <FlightTable
+              rows={flights}
+              loading={docsQ.loading || runsQ.loading}
+              selected={selected?.key ?? null}
+              onSelect={pick}
+              header={flightHeader}
+              docs={docs}
+            />
+          )}
+        </section>
       </Split>
     </Page>
   );

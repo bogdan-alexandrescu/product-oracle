@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useLayoutEffect } from "react";
 
-import { modeOf, saveMode, switchTarget, type Mode } from "@/lib/experience";
+import { DETAILED_HOME, modeOf, SIMPLE_HOME, saveMode, switchTarget, type Mode } from "@/lib/experience";
 import { useMe } from "@/lib/me";
 
 import { onRadioKeys, radioTabIndex } from "./radio-keys";
@@ -51,6 +51,11 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
   const { simpleMode } = useMe();
   if (!simpleMode) return null;
   const current = modeOf(pathname);
+  // qa-company-45: a Detailed page with no Simple match (Inbox, Company, Settings…) says so on
+  // the switch, so Simple opening Simple's Home, and the rail showing Detailed here after
+  // choosing Simple, do not look broken.
+  const detailedOnly = current === "detailed" && pathname !== DETAILED_HOME && switchTarget(pathname, "simple", documentHome) === SIMPLE_HOME;
+  const note = detailedOnly ? "This page is in Detailed only. Simple opens Simple's Home." : undefined;
 
   // qa-shell-6: the page opens at once; the choice is saved meanwhile (it only decides where
   // the person lands next time), so a slow save never makes the click look dead.
@@ -69,6 +74,8 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
       aria-label="Mode"
       // A choice opens the other mode: the arrows move focus, Enter or Space opens it.
       onKeyDown={(e) => onRadioKeys(e, MODES.map((m) => m.value), current, choose, { follow: false })}
+      title={note}
+      data-detailed-only={detailedOnly || undefined}
       data-testid={rail ? "mode-switch" : "mode-switch-sheet"}
       // qa-simple-home-31: Simple's rail and the More sheet draw the one segmented control (the
       // rail's white pill, SEGMENTED); Detailed's narrow rail keeps its stacked switch.
@@ -88,6 +95,8 @@ export function ModeSwitch({ placement, documentHome }: { placement: "rail" | "w
             aria-checked={on}
             tabIndex={radioTabIndex(on)}
             data-mode-value={m.value}
+            aria-description={m.value === "simple" ? note : undefined}
+            title={m.value === "simple" ? note : undefined}
             data-testid={`mode-${m.value}${rail ? "" : "-sheet"}`}
             onClick={() => choose(m.value)}
             className={

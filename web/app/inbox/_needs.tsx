@@ -59,6 +59,11 @@ export type Need = {
   state?: string;
   /** Whether it counts as an item (a question settled in place does not, until it moves to Done). */
   counted?: boolean;
+  /**
+   * qa-company-4: only another role acts on it (Owners decide): shown under "For your
+   * information", never counted as waiting on me.
+   */
+  fyi?: boolean;
   /** Drawn under the row, across it: the row opened in place (a question's answer form). */
   detail?: ReactNode;
   /**
@@ -162,13 +167,21 @@ export const NEED_COLUMNS: Column<Need>[] = [
   },
 ];
 
+/** qa-company-27: on Home's narrow lines a long item or "For" wraps to a second line, then ends in an ellipsis (its title holds the rest). */
+const WRAP_TWO = "[&_.truncate]:line-clamp-2 [&_.truncate]:whitespace-normal [&_.truncate]:break-words";
+
 /** Home's narrower lines: one action each. */
-/** qa-shell-17: Home's few rows wrap at word ends instead of cutting a label short. */
-const WRAP_ALL = "[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words";
-export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) => {
-  const sized = c.key === "kind" ? { ...c, width: "150px" } : c.key === "context" ? { ...c, width: "22%", narrow: undefined } : c.key === "act" ? { ...c, width: "180px" } : c;
-  return c.key === "act" ? sized : { ...sized, wrap: true, className: `${sized.className ?? ""} ${WRAP_ALL}` };
-});
+export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
+  c.key === "kind"
+    ? { ...c, width: "150px" }
+    : c.key === "item"
+      ? { ...c, wrap: true, className: `${c.className ?? ""} ${WRAP_TWO}` }
+      : c.key === "context"
+        ? { ...c, width: "24%", narrow: undefined, wrap: true, className: `${c.className ?? ""} ${WRAP_TWO}` }
+        : c.key === "act"
+          ? { ...c, width: "180px" }
+          : c,
+);
 
 export function NeedTable({
   title,
@@ -207,7 +220,9 @@ export function NeedTable({
                 aria-label="Show the text"
                 aria-expanded={shown.has(n.key)}
                 onClick={() => toggle(n.key)}
-                className="flex-none rounded-goal text-text2 hover:text-text"
+                // qa-company-36: a target of at least 32 px, on a phone too.
+                className="-my-1 inline-grid size-8 flex-none place-items-center rounded-goal text-text2 hover:bg-surface2 hover:text-text"
+                data-testid="need-quote-toggle"
               >
                 <Icon name={shown.has(n.key) ? "chevron-up" : "chevron-down"} />
               </button>
@@ -276,13 +291,18 @@ function RunName({ run }: { run: Pick<RunSummary, "flow_title" | "document_slug"
  * What the signed-in person may do (lib/me's can, and their id for the items they started):
  * a row draws only the actions they can take. Everything, when a caller passes none.
  */
-export type Perms = { can: (op: Operation, onItem?: boolean) => boolean; userId: string | null };
-const ALL: Perms = { can: () => true, userId: null };
+export type Perms = {
+  can: (op: Operation, onItem?: boolean) => boolean;
+  userId: string | null;
+  /** The capabilities have loaded: until then no row is set aside as another role's. */
+  ready?: boolean;
+};
+const ALL: Perms = { can: () => true, userId: null, ready: true };
 
 /** The signed-in person's Perms, for allNeeds. */
 export function usePerms(): Perms {
-  const { can, me } = useMe();
-  return { can, userId: me?.user_id ?? null };
+  const { can, me, capsReady } = useMe();
+  return { can, userId: me?.user_id ?? null, ready: capsReady };
 }
 
 /** Who acts on a row the signed-in person cannot act on: said in the action's place. */
@@ -342,7 +362,8 @@ export type NeedGroup =
   | "outcomes"
   | "webhooks"
   | "reminders"
-  | "shipped";
+  | "shipped"
+  | "fyi";
 export type StatedNeed = Need & { state: InboxState; counted: boolean; group: NeedGroup };
 
 type FeedbackRow = InboxOut["items"][number];
@@ -377,6 +398,8 @@ export function feedbackNeeds(
 ): StatedNeed[] {
   // Accept, Decline and Stage for agents are an approver's (the API's route roles).
   const mayDecide = perms.can("accept_suggestion") && perms.can("update_feedback");
+  // qa-company-4: an open item only an approver decides is for my information, not counted.
+  const othersDecide = perms.ready !== false && !mayDecide;
   const docLink = (slug: string, title: string | null | undefined) => (
     <Link href={`/documents/${slug}`} className="block truncate hover:underline">
       {title ?? slug}
@@ -432,8 +455,9 @@ export function feedbackNeeds(
       kind: f.kind === "comment" ? "Comment" : f.kind === "section_review" ? "Section review" : "Feedback",
       state,
       quote: state === "declined" ? f.resolution_note : null,
-      counted: true,
-      group: "feedback",
+      // qa-company-4: an item only an approver decides is not waiting on me.
+      counted: !(live && othersDecide),
+      group: live && othersDecide ? "fyi" : "feedback",
       item: (
         <>
           <SuggestionPeek href={href} summary={f.summary} text={live ? f.suggestion_text : null} />
@@ -452,7 +476,8 @@ export function feedbackNeeds(
       action:
         state === "staged" ? (
           // One Build draft per document (its group row above); the item only opens itself.
-          <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`}>
+          // qa-company-29: a row's only action is its bordered one.
+          <LinkButton href={href} aria-label={`Open ${f.summary}`}>
             Open
           </LinkButton>
         ) : live && !compact && mayDecide ? (
@@ -464,7 +489,7 @@ export function feedbackNeeds(
             Open
           </LinkButton>
         ) : (
-          <LinkButton variant="ghost" href={href} aria-label={`Open ${f.summary}`}>
+          <LinkButton href={href} aria-label={`Open ${f.summary}`}>
             Open
           </LinkButton>
         ),
@@ -834,6 +859,9 @@ export function reportFailureNeeds(failures: ReportFailure[], busy: string | nul
 
 type OracleAction = NonNullable<InboxOut["oracle_actions"]>[number];
 
+/** Something written like a code ("G-B", "F-28", "R-12"): its expanded text names it. */
+const CODE_LIKE = /\b[A-Z]{1,3}-[A-Z0-9]{1,5}\b/;
+
 /**
  * "Oracle did" (H11): what Oracle did on its own, for each person it told. Counted until I
  * open it (Done then, for me only); Undo when the behaviour that acted gave an undo route.
@@ -843,22 +871,26 @@ export function oracleActionNeeds(actions: OracleAction[], busy: string | null, 
     const path = { params: { path: { action_id: a.id } } };
     const href = typeof a.subject?.href === "string" && a.subject.href.startsWith("/") ? a.subject.href : null;
     const open = a.state === "open";
+    const codes = CODE_LIKE.test(a.summary);
+    const line = codes ? "min-w-0 truncate" : "min-w-0";
     return {
       key: `oracle-${a.id}`,
       icon: "check",
       kind: "Oracle did",
-      quote: a.summary,
+      // qa-company-30: "Show the text" only where it adds something: Oracle's text names codes
+      // (#305, each carrying its card there). Otherwise the line wraps, all of it read in place.
+      quote: codes ? a.summary : null,
       state: open ? (isNew(a.created_at, seenBefore) ? "new" : "open") : "done",
       counted: true,
       group: "oracle-actions",
       item: (
         <>
           {href ? (
-            <Link href={href} className="min-w-0 truncate hover:underline" title={a.summary}>
+            <Link href={href} className={`${line} hover:underline`} title={codes ? a.summary : undefined} data-testid="oracle-did-summary">
               {a.summary}
             </Link>
           ) : (
-            <span className="min-w-0 truncate" title={a.summary}>
+            <span className={line} title={codes ? a.summary : undefined} data-testid="oracle-did-summary">
               {a.summary}
             </span>
           )}
@@ -1301,17 +1333,19 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
           // The run by its human name, never its slug (qa-company-11).
           <span className="block truncate" title={[c.segment_title, runLabel(c)].filter(Boolean).join(" · ")}>
             {c.segment_title ?? c.flow_title}
-            {c.document_slug && <span className="ml-1.5 text-sm text-text2">{runLabel(c).split(" · ")[0]}</span>}
+            {/* qa-company-17: the document's whole title ("Investor update · October 2026"), not cut at its own "·". */}
+            {c.document_slug && <span className="ml-1.5 text-sm text-text2">{runLabel({ ...c, flow_title: "" }).replace(/ · $/, "")}</span>}
             {isHeld(c) && <span className="block truncate text-warn">{CONSOLE_HELD}</span>}
           </span>
         ),
       at: c.created_at,
       left: wait?.state === "open" && wait.seconds_left != null ? timeLeft(wait.seconds_left) : null,
+      ...(c.can_decide ? {} : { counted: false, fyi: true }),
       action: !c.can_decide ? (
         // qa-company-3: a role that cannot decide reads the review; who decides is said.
         <>
           <ByRole who={`${ROLE_WORD[c.approver_role]} decide`} title={c.cannot_approve ?? `Only ${ROLE_WORD[c.approver_role].toLowerCase()} can decide this`} />
-          <LinkButton variant="ghost" href={c.kind === "baseline_confirm" ? `/baseline?run=${c.run_id}` : (reviewHref(c) ?? review)}>
+          <LinkButton href={c.kind === "baseline_confirm" ? `/baseline?run=${c.run_id}` : (reviewHref(c) ?? review)}>
             Open
           </LinkButton>
         </>
@@ -1361,6 +1395,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </Link>
     ),
     at: r.created_at,
+    ...(perms.ready === false || may("approve_run", r) ? {} : { counted: false, fyi: true }),
     action: !may("approve_run", r) ? (
       // qa-company-3: owners approve spend; anyone else sees the request, read-only.
       <>
@@ -1397,6 +1432,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
       </Link>
     ),
     at: r.started_at ?? r.created_at,
+    ...(perms.ready === false || may("resume_run", r) || may("cancel_run", r) ? {} : { counted: false, fyi: true }),
     // Home (qa-company-10): one Open, the run's page holds Resume and Cancel run.
     action: compact ? (
       openRun(r)
@@ -1417,7 +1453,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
         )}
         {may("cancel_run", r) && (
           <Button
-            variant="ghost"
+            variant={may("resume_run", r) ? "ghost" : "secondary"}
             disabled={busy !== null}
             onClick={async () => {
               // qa-company-1: asked first, as the run page does.
@@ -1636,7 +1672,7 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
  * channels, a date out of range), so they are not synced until edited. GET /v1/sources
  * filtered here; each row opens the source on Settings › Sources, where Edit is.
  */
-export function sourceNeeds(sources: Schemas["SourceOut"][]): Need[] {
+export function sourceNeeds(sources: Schemas["SourceOut"][], mayEdit = true): Need[] {
   return sources
     .filter((s) => s.status === "needs_attention")
     .map((s) => ({
@@ -1645,15 +1681,18 @@ export function sourceNeeds(sources: Schemas["SourceOut"][]): Need[] {
       kind: "Source",
       item: (
         <span className="truncate" title={s.last_error ?? undefined}>
-          {s.last_error ?? "Needs attention: edit this source to sync it again"}
+          {s.last_error ?? (mayEdit ? "Needs attention: edit this source to sync it again" : "Needs attention: it syncs again once it is edited")}
         </span>
       ),
       context: <span className="block truncate">{s.name}</span>,
       at: s.updated_at,
-      action: (
+      // qa-company-44: a role that cannot edit sources reads the row, with no Edit.
+      action: mayEdit ? (
         <LinkButton href={`/settings/sources#source-${s.id}`} aria-label={`Edit ${s.name}`}>
           Edit
         </LinkButton>
+      ) : (
+        <ByRole who="View only" title="Your role cannot edit sources: commenters and above can" />
       ),
     }));
 }
@@ -1973,7 +2012,7 @@ export function allNeeds(
       ...r,
       state: (r.state as InboxState | undefined) ?? (isNew(r.at, seenBefore) ? "new" : "open"),
       counted: r.counted ?? counted,
-      group,
+      group: r.fyi ? "fyi" : group,
     }));
   return [
     ...stated(n.checkpoints, "checkpoints"),
@@ -2192,7 +2231,6 @@ export function trackNeeds(
           <span data-child-actions className="inline-flex flex-wrap items-center justify-end gap-1.5 max-[600px]:w-full max-[600px]:[&>*]:w-full">
             {a.actions.includes("reopen") && (
               <Button
-                variant="ghost"
                 disabled={busy !== null}
                 aria-label={`Reopen ${alertTitle(a)}`}
                 onClick={() => act(`reopen-${a.id}`, () => reopenTrackAlert(a.id))}
@@ -2200,7 +2238,7 @@ export function trackNeeds(
                 Reopen
               </Button>
             )}
-            <LinkButton variant="ghost" href={planHref(a)} aria-label={`Open ${alertTitle(a)}`}>
+            <LinkButton variant={a.actions.includes("reopen") ? "ghost" : "secondary"} href={planHref(a)} aria-label={`Open ${alertTitle(a)}`}>
               Open
             </LinkButton>
           </span>

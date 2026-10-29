@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, type ReactNode } from "react";
 
-import { Button, Chip, Inspector, InspectorRow, InspectorSection } from "@/components/ds";
+import { Button, Chip, Inspector, InspectorRow, InspectorSection, confirmInPage } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
+import { formatMoney } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import {
@@ -51,6 +52,21 @@ function withPreset(s: Schedule, preset: Preset): Schedule {
   if (preset === "every_n_weeks") return { ...s, freq: "every_n_weeks", interval: s.interval >= 2 ? s.interval : 3 };
   if (preset === "quarterly") return { ...s, freq: preset, month: Math.min(s.month, 3) };
   return { ...s, freq: preset };
+}
+
+/**
+ * What Prepare now does, asked before it does it (qa-company-1), when it spends money (the
+ * baseline build, or a summary on Every pre-read) or the ritual is paused; else null.
+ */
+export function prepareAsk(r: Ritual): string | null {
+  const usd = r.prepare_usd ?? null;
+  const paused = r.status !== "active";
+  if (!usd && !paused) return null;
+  const what = r.kind === "baseline_rebuild" ? "starts the baseline build" : "writes its summary";
+  const cost = usd ? `, then ${what}: one Oracle run of about ${formatMoney(usd)}` : "";
+  const still = paused ? `${r.title} is paused; it stays paused. ` : "";
+  const waits = usd && r.kind === "baseline_rebuild" && usd > 50 ? " Over $50 it waits for an owner's approval." : "";
+  return `${still}Oracle builds the pre-read now and puts it in the attendees' Inbox${cost}.${waits}`;
 }
 
 /**
@@ -280,7 +296,7 @@ export function RitualInspector({
           </Field>
           {/* One zone (owner decision 2026-10-22): every ritual is in the Company time zone. */}
           <p className="col-span-2 self-center text-sm text-text2 max-[600px]:col-span-1">
-            <span data-testid="ritual-zone">Company time zone · {zoneText(saved.timezone, zoneDefault)}</span>{" "}
+            Company time zone: <span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>{" "}
             <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
               Change
             </Link>
@@ -331,13 +347,16 @@ export function RitualInspector({
             </span>
             <Button
               disabled={busy}
-              onClick={() =>
-                act(async () => {
+              onClick={async () => {
+                // qa-company-1: a Prepare now that spends money, or on a paused ritual, asks first.
+                const ask = prepareAsk(ritual);
+                if (ask && !(await confirmInPage({ action: "Prepare now", message: ask }))) return;
+                await act(async () => {
                   const o = await unwrap(api.POST("/v1/rituals/{ritual_id}/prepare", path));
                   await onChanged();
                   router.push(`/company/rituals/${o.id}`);
-                })
-              }
+                });
+              }}
             >
               Prepare now
             </Button>

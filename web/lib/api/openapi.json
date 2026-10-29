@@ -77555,6 +77555,17 @@
             ],
             "title": "Document Slug"
           },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
           "segment_title": {
             "anyOf": [
               {
@@ -104764,6 +104775,17 @@
                 "type": "null"
               }
             ]
+          },
+          "prepare_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prepare Usd"
           }
         },
         "type": "object",
@@ -106299,6 +106321,17 @@
             ],
             "title": "Document Slug"
           },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
+          },
           "document_kind": {
             "anyOf": [
               {
@@ -107156,6 +107189,17 @@
               }
             ],
             "title": "Document Slug"
+          },
+          "document_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Title"
           },
           "document_kind": {
             "anyOf": [
@@ -111695,6 +111739,28 @@
               }
             ],
             "title": "Detail"
+          },
+          "invited": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Invited"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
           }
         },
         "type": "object",

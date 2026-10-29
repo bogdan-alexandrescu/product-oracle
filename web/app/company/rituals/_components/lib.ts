@@ -3,7 +3,6 @@ import type { Schemas } from "@/lib/api/client";
 import { displayZone, formatInZone } from "@/lib/dates";
 import { formatDate, zoneName } from "@/lib/format";
 import { displayName } from "@/lib/names";
-import { ZONE_NOT_SET } from "@/lib/zone";
 
 export type Ritual = Schemas["RitualOut"];
 export type Occurrence = Schemas["OccurrenceOut"];
@@ -45,12 +44,6 @@ export function scheduleOf(raw: Ritual["schedule"]): Schedule {
   return { freq: "weekly", interval: 1, weekday: 0, week_of_month: 1, month: 1, time: "09:00", timezone: "America/Los_Angeles", ...(raw as Partial<Schedule>) };
 }
 
-/** The zone's short name for a time that repeats: "PT" (not PST or PDT), else "GMT+9". */
-export function zoneShort(zone: string): string {
-  const parts = formatInZone(new Date().toISOString(), zone, { timeZoneName: "shortGeneric" }).split(", ");
-  return parts[parts.length - 1] ?? zone;
-}
-
 /** "9:00 AM" from "09:00", "4:00 PM" from "16:00": the format every other time on the page has (qa-company-25). */
 function clockOnly(t: string): string {
   const [h, m] = t.split(":").map(Number);
@@ -71,39 +64,44 @@ export function timeOptions(current: string): { value: string; label: string }[]
 }
 const plural = (day: string) => `${day}s`;
 
-/** When the ritual meets, in the Company time zone: "Mondays 9:00 AM PT", "First Tuesday of the month, 10:00 AM PT". */
+/**
+ * When the ritual meets, in the Company time zone: "Mondays 9:00 AM", "First Tuesday of the
+ * month, 10:00 AM". qa-company-21: no zone on each time; the page names the zone once.
+ */
 export function whenText(s: Schedule): string {
-  const clock = (t: string) => `${clockOnly(t)} ${zoneShort(s.timezone)}`;
   const day = WEEKDAYS[s.weekday] ?? "Monday";
   const nth = WEEKS.find((w) => w.value === s.week_of_month)?.label ?? "First";
   switch (s.freq) {
     case "weekly":
-      return `${plural(day)} ${clock(s.time)}`;
+      return `${plural(day)} ${clockOnly(s.time)}`;
     case "every_n_weeks":
-      return `Every ${s.interval} weeks, ${day} ${clock(s.time)}`;
+      return `Every ${s.interval} weeks, ${day} ${clockOnly(s.time)}`;
     case "monthly":
-      return `${nth} ${day} of the month, ${clock(s.time)}`;
+      return `${nth} ${day} of the month, ${clockOnly(s.time)}`;
     case "quarterly":
-      return `${nth} ${day} of each quarter, ${clock(s.time)}`;
+      return `${nth} ${day} of each quarter, ${clockOnly(s.time)}`;
     case "yearly":
-      return `${nth} ${day} of ${MONTHS[s.month - 1]}, ${clock(s.time)}`;
+      return `${nth} ${day} of ${MONTHS[s.month - 1]}, ${clockOnly(s.time)}`;
   }
 }
 
 const WHEN: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" };
 
-/** A due time in the Company time zone: "Fri, Oct 30, 12:00 PM PDT". */
-export const localTime = (iso: string) => formatInZone(iso, displayZone(), WHEN);
+/** A formatted time without its trailing zone ("PDT", "GMT+9"): the page names the zone once (qa-company-21). */
+const withoutZone = (text: string) => text.replace(/\s(?:[A-Z]{2,5}|GMT[+-][\d:]+)$/, "");
+
+/** A due time in the Company time zone: "Fri, Oct 30, 12:00 PM" (the zone is named once on the page, qa-company-21). */
+export const localTime = (iso: string) => withoutZone(formatInZone(iso, displayZone(), WHEN));
 export const localDate = formatDate;
 
-/** The same instant in the ritual's own zone (it is scheduled there), for the tooltip. */
-export const zoneTime = (iso: string, timezone: string) => `${formatInZone(iso, timezone, WHEN)} (${zoneName(timezone)})`;
+/** The same instant in the ritual's zone, named in words, for the tooltip: "Fri, Oct 30, 12:00 PM (Pacific Time (Los Angeles))". */
+export const zoneTime = (iso: string, timezone: string) => `${withoutZone(formatInZone(iso, timezone, WHEN))} (${zoneName(timezone)})`;
 
 /**
- * The Company time zone in words (qa-company-23/24): "Pacific Time (Los Angeles)"; when no
- * owner chose one yet, it says so and names the default used meanwhile, as Home's set-up does.
+ * The Company time zone in words, the one way the page names it (qa-company-21/23/24):
+ * "Pacific Time (Los Angeles)"; when no owner chose one yet, "Pacific Time (Los Angeles), not set yet".
  */
-export const zoneText = (zone: string, isDefault: boolean) => (isDefault ? ZONE_NOT_SET : zoneName(zone));
+export const zoneText = (zone: string, isDefault: boolean) => (isDefault ? `${zoneName(zone)}, not set yet` : zoneName(zone));
 
 export const STATE_LABEL: Record<OccurrenceSummary["status"], string> = {
   scheduled: "Scheduled",
@@ -124,12 +122,16 @@ export const STATE_KIND: Record<OccurrenceSummary["status"], ChipKind> = {
 
 const summaries = (n: number) => `${n} ${n === 1 ? "summary" : "summaries"}`;
 
-/** "About $17 a month (6 summaries)"; on demand, what Every pre-read would cost (qa-company-27). */
+/** "Every pre-read costs about $17 a month (about 6 summaries)"; on demand, what it would cost (qa-company-23/27). */
 export function estimateText(s: SummarySettings): string {
+  return `Every pre-read ${s.mode === "on_demand" ? "would cost" : "costs"} ${monthlyText(s)}`;
+}
+
+/** "about $17 a month (about 6 summaries)". */
+export function monthlyText(s: SummarySettings): string {
   const usd = `$${Math.round(s.estimate.usd_per_month)}`;
   const n = Math.round(s.estimate.runs_per_month);
-  if (s.mode === "on_demand") return `Every pre-read would cost about ${usd} a month (about ${summaries(n)})`;
-  return `About ${usd} a month (${summaries(n)})`;
+  return `about ${usd} a month (about ${summaries(n)})`;
 }
 
 /** A ritual's summaries in whole numbers: "about 4 a month", "about 1 every 3 months", "about 1 a year". */

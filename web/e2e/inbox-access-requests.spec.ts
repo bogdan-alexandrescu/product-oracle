@@ -20,7 +20,7 @@ const badge = (page: Page) => page.getByTestId("nav-inbox-badge");
 const badgeCount = async (page: Page) => Number((await badge(page).innerText()).replace(/\D+/g, "") || "0");
 const requestRow = (page: Page) => page.getByTestId("inbox-access-requests").locator("tr[data-row]").filter({ hasText: NEW });
 
-test("inbox: an owner approves an access request in place and the badge drops by one", async ({ page }) => {
+test("inbox: an owner approves an access request, it moves to Done and the badge drops by one", async ({ page }) => {
   // AC 24
   await login(page);
   await page.goto("/inbox");
@@ -35,9 +35,12 @@ test("inbox: an owner approves an access request in place and the badge drops by
   const before = await badgeCount(page);
 
   await row.getByRole("button", { name: "Approve", exact: true }).click();
+  // qa-company-7: it leaves Needs you at once for Done, the banner says so.
+  await expect(page.getByTestId("inbox-acted")).toContainText(`Approved ${NEW} as Commenter`);
+  await expect(badge(page)).toHaveText(String(before - 1));
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Done/ }).click();
   await expect(row).toContainText("Approved as Commenter ✓");
   await expect(row.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
-  await expect(badge(page)).toHaveText(String(before - 1));
 
   // Approved: the request became an open invite.
   await page.goto("/settings/members");
@@ -46,7 +49,7 @@ test("inbox: an owner approves an access request in place and the badge drops by
   await expect(page.getByTestId("inbox-access-requests")).toHaveCount(0);
 });
 
-test("inbox: declining an access request shows Declined in place, and Home counts the request too", async ({ page }) => {
+test("inbox: declining an access request moves it to Declined, and Home counts the request too", async ({ page }) => {
   await login(page);
   const home = page.getByTestId("home-needs");
   // Home counts it under Access, with the rest of Needs you.
@@ -55,12 +58,11 @@ test("inbox: declining an access request shows Declined in place, and Home count
   const row = requestRow(page);
   const before = await badgeCount(page);
   await row.getByRole("button", { name: "Decline", exact: true }).click();
-  await expect(row).toContainText("Declined");
+  // qa-company-7: it leaves Needs you at once, for the Declined tab.
+  await expect(page.getByTestId("inbox-acted")).toContainText(`Declined ${NEW}`);
   await expect(badge(page)).toHaveText(String(before - 1));
-  // The tab changes: what was decided here leaves.
-  await page.getByRole("tab", { name: /^Seen/ }).click();
-  await page.getByRole("tab", { name: /New/ }).click();
-  await expect(page.getByTestId("inbox-access-requests")).toHaveCount(0);
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Declined/ }).click();
+  await expect(row).toContainText("Declined");
 });
 
 test("inbox: an approver approves as viewer or commenter; a commenter sees no access request", async ({ page }) => {

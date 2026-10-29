@@ -24576,6 +24576,8 @@ export interface components {
             flow_title: string;
             /** Document Slug */
             document_slug?: string | null;
+            /** Document Title */
+            document_title?: string | null;
             /** Segment Title */
             segment_title?: string | null;
             summary?: components["schemas"]["InboxSummary"] | null;
@@ -34479,6 +34481,8 @@ export interface components {
             replaced_by?: string | null;
             last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
             next_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
+            /** Prepare Usd */
+            prepare_usd?: number | null;
         };
         /** RitualPatch */
         RitualPatch: {
@@ -35001,6 +35005,8 @@ export interface components {
             document_id?: string | null;
             /** Document Slug */
             document_slug?: string | null;
+            /** Document Title */
+            document_title?: string | null;
             /** Document Kind */
             document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             source?: components["schemas"]["VersionSource"] | null;
@@ -35272,6 +35278,8 @@ export interface components {
             document_id?: string | null;
             /** Document Slug */
             document_slug?: string | null;
+            /** Document Title */
+            document_title?: string | null;
             /** Document Kind */
             document_kind?: ("prd" | "roadmap" | "spec" | "vision" | "strategy" | "update" | "pricing") | null;
             source?: components["schemas"]["VersionSource"] | null;
@@ -36899,6 +36907,10 @@ export interface components {
             count?: number | null;
             /** Detail */
             detail?: string | null;
+            /** Invited */
+            invited?: number | null;
+            /** Run Id */
+            run_id?: string | null;
         };
         /** ShareDayOut */
         ShareDayOut: {

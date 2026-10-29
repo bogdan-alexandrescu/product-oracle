@@ -8,6 +8,8 @@ import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
 import { useCompanyZone } from "@/lib/dates";
+import { formatMoney } from "@/lib/format";
+import { useQuery } from "@/lib/use-query";
 import { errorMessage } from "@/lib/use-query";
 
 import { TEMPLATES, defaultPeriod, defaultTitle, templateOf, todayIso, type Period, type Update, type UpdateTemplate } from "./lib";
@@ -36,6 +38,18 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
   const [busy, setBusy] = useState(false);
   const chosen = templateOf(template)!;
   const observing = useAutonomyLevel("external_messages") === "observe";
+  // qa-company-18: Draft with Oracle is a paid run: the dialog says what it costs before it
+  // starts, from the flow catalog (each step's roles at the template's depth, as the run's
+  // estimate counts them), and who approves it when it is over the approval threshold.
+  const catalog = useQuery("flows", () => unwrap(api.GET("/v1/flows")));
+  const cost = (() => {
+    const c = catalog.data;
+    const flow = c?.flows.find((f) => f.key === "update_draft");
+    if (!c || !flow) return null;
+    const base = flow.segments.reduce((sum, seg) => sum + seg.roles.reduce((n, r) => n + (c.roles.find((x) => x.key === r)?.base_usd ?? 0), 0), 0);
+    const usd = Math.round(base * (c.depths[chosen.depth] ?? 1) * 100) / 100;
+    return { usd, over: usd > c.approval_threshold_usd, threshold: c.approval_threshold_usd };
+  })();
 
   function pick(t: UpdateTemplate) {
     setTemplate(t);
@@ -133,10 +147,18 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
               change this in
             </AutonomyNote>
           ) : (
-            <p className="text-sm text-text2">
-              Oracle drafts the product part at {chosen.depth} depth: metrics first, only dates a verified schedule basis supports, and the asks left for
-              you to write. Owners and approvers see it; you decide what is said and approve it.
-            </p>
+            <>
+              <p className="text-sm text-text2">
+                Oracle drafts the product part at {chosen.depth} depth: metrics first, only dates a verified schedule basis supports, and the asks left
+                for you to write. Owners and approvers see it; you decide what is said and approve it.
+              </p>
+              {cost && (
+                <p className="text-sm text-text" data-testid="update-cost">
+                  The draft is one Oracle run of about <span className="tnum font-semibold">{formatMoney(cost.usd)}</span>.
+                  {cost.over && ` Over ${formatMoney(cost.threshold)}, an owner approves the cost before it runs.`}
+                </p>
+              )}
+            </>
           )}
           {error && <ErrorNote>{error}</ErrorNote>}
           <div className="flex justify-end gap-2 border-t border-line pt-3">
@@ -144,7 +166,15 @@ export function NewUpdateDialog({ updates, onClose }: { updates: Update[]; onClo
               Cancel
             </Button>
             <Button type="submit" variant="primary" disabled={busy}>
-              {observing ? (busy ? "Starting…" : "Start from the template") : busy ? "Drafting…" : "Draft with Oracle"}
+              {observing
+                ? busy
+                  ? "Starting…"
+                  : "Start from the template"
+                : busy
+                  ? "Drafting…"
+                  : cost
+                    ? `Draft with Oracle · ${formatMoney(cost.usd)}`
+                    : "Draft with Oracle"}
             </Button>
           </div>
         </form>

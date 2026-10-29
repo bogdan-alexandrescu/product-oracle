@@ -613,6 +613,9 @@ class _Refs:
     sources: dict[uuid.UUID, VersionSource]
     # The Company time zone a stored error's moments are read in (#556).
     zone: str = company_time.DEFAULT_ZONE
+    # qa-company-17: each document's own title, so a run is named as its document's page
+    # names it ("Investor update · October 2026"), not by its slug in words.
+    titles: dict[uuid.UUID, str] = field(default_factory=dict)
 
     def get(self, document_id: uuid.UUID | None) -> str | None:
         return self.slugs.get(document_id) if document_id else None
@@ -629,19 +632,22 @@ async def _refs(
     ids = {r.document_id for r in runs if r.document_id}
     slugs: dict[uuid.UUID, str] = {}
     kinds: dict[uuid.UUID, str] = {}
+    titles: dict[uuid.UUID, str] = {}
     if ids:
         rows = await db.execute(
-            select(Document.id, Document.slug, Document.kind).where(Document.id.in_(ids))
+            select(Document.id, Document.slug, Document.kind, Document.title).where(
+                Document.id.in_(ids)
+            )
         )
-        for doc_id, slug, kind in rows.all():
-            slugs[doc_id], kinds[doc_id] = slug, kind
+        for doc_id, slug, kind, title in rows.all():
+            slugs[doc_id], kinds[doc_id], titles[doc_id] = slug, kind, title
     sources = await docs_service.version_sources(db, [_source_id(r) for r in runs])
     zone = (
         await company_time.company_time_zone(db)
         if any(r.error for r in runs) or any(s.error for s in segments or [])
         else company_time.DEFAULT_ZONE
     )
-    return _Refs(slugs, kinds, sources, zone)
+    return _Refs(slugs, kinds, sources, zone, titles)
 
 
 def _progress(run: Run, segments: list[RunSegment]) -> RunProgress:
@@ -676,6 +682,7 @@ def _summary(
         document_slug=refs.get(run.document_id)
         if run.document_id
         else run.knobs.get("document_slug"),
+        document_title=refs.titles.get(run.document_id) if run.document_id else None,
         document_kind=(refs.kinds.get(run.document_id) if run.document_id else None)
         or flow.target_kind,  # type: ignore[arg-type]
         source=refs.sources.get(source_id) if source_id else None,
@@ -10854,6 +10861,7 @@ async def inbox(db: AsyncSession, principal: Principal, mark_seen: bool = False)
             flow=run.flow,  # type: ignore[arg-type]
             flow_title=_flow(run).title,
             document_slug=refs.get(run.document_id),
+            document_title=refs.titles.get(run.document_id) if run.document_id else None,
             segment_title=sdef.title if sdef else None,
         )
 

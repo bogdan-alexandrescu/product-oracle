@@ -72,12 +72,21 @@ async def test_a_new_companys_owner_has_every_step_open(client, owner):
     assert _step(body, "connect")["count"] == 0
     assert _step(body, "sources")["count"] == 0
     assert _step(body, "invite")["count"] == 1
-    assert _step(body, "domains") == {"key": "domains", "done": False, "count": 0, "detail": None}
+    assert _step(body, "domains") == {
+        "key": "domains",
+        "done": False,
+        "count": 0,
+        "detail": None,
+        "invited": None,
+        "run_id": None,
+    }
     assert _step(body, "horizons") == {
         "key": "horizons",
         "done": False,
         "count": None,
         "detail": None,
+        "invited": None,
+        "run_id": None,
     }
 
 
@@ -86,7 +95,14 @@ async def test_connect_counts_only_the_callers_active_connections(client, tenant
     # errored connection or someone else's counts; no_claim=the provider accepted the token.
     await add_connection(tenant_id, owner.id, "github", account_id="1")
     body = await _setup(client, owner)
-    assert _step(body, "connect") == {"key": "connect", "done": True, "count": 1, "detail": None}
+    assert _step(body, "connect") == {
+        "key": "connect",
+        "done": True,
+        "count": 1,
+        "detail": None,
+        "invited": None,
+        "run_id": None,
+    }
     assert body["done"] == 1
 
     await add_connection(tenant_id, owner.id, "slack", account_id="2", status="error")
@@ -125,6 +141,8 @@ async def test_sources_counts_the_callers_own_sources_with_items(client, tenant_
         "done": True,
         "count": 2,
         "detail": None,
+        "invited": None,
+        "run_id": None,
     }
 
 
@@ -165,7 +183,14 @@ async def test_domains_from_the_environment(client, owner, monkeypatch):
     monkeypatch.setenv("ORACLE_IAP_ALLOWED_DOMAINS", '["example.com"]')
     get_settings.cache_clear()
     step = _step(await _setup(client, owner), "domains")
-    assert step == {"key": "domains", "done": True, "count": 1, "detail": "example.com"}
+    assert step == {
+        "key": "domains",
+        "done": True,
+        "count": 1,
+        "detail": "example.com",
+        "invited": None,
+        "run_id": None,
+    }
 
     put = await client.put(
         "/v1/settings/company_email_domains",
@@ -174,7 +199,14 @@ async def test_domains_from_the_environment(client, owner, monkeypatch):
     )
     assert put.status_code == 200, put.text
     step = _step(await _setup(client, owner), "domains")
-    assert step == {"key": "domains", "done": True, "count": 2, "detail": None}
+    assert step == {
+        "key": "domains",
+        "done": True,
+        "count": 2,
+        "detail": None,
+        "invited": None,
+        "run_id": None,
+    }
 
 
 async def test_invite_is_done_with_two_members_or_an_open_invite(client, tenant_id, owner):
@@ -189,6 +221,8 @@ async def test_invite_is_done_with_two_members_or_an_open_invite(client, tenant_
         "done": False,
         "count": 1,
         "detail": None,
+        "invited": 0,
+        "run_id": None,
     }
     async with tenant_session(tenant_id) as s:
         s.add(Invite(email="next@example.com", role="commenter"))
@@ -210,6 +244,8 @@ async def test_invite_is_done_with_two_members_or_an_open_invite(client, tenant_
         "done": True,
         "count": 2,
         "detail": None,
+        "invited": 0,
+        "run_id": None,
     }
 
 
@@ -240,6 +276,7 @@ async def test_timezone_done_once_the_company_time_zone_is_stored(client, tenant
     before = await _setup(client, owner)
     assert _step(before, "timezone") == {
         "key": "timezone", "done": False, "count": None, "detail": None,
+        "invited": None, "run_id": None,
     }  # fmt: skip
     url = "/v1/settings/company_timezone"
     put = await client.put(url, json={"value": "Europe/Lisbon"}, headers=owner.headers)
@@ -247,6 +284,7 @@ async def test_timezone_done_once_the_company_time_zone_is_stored(client, tenant
     body = await _setup(client, owner)
     assert _step(body, "timezone") == {
         "key": "timezone", "done": True, "count": None, "detail": "Europe/Lisbon",
+        "invited": None, "run_id": None,
     }  # fmt: skip
     assert body["done"] == before["done"] + 1
     reset = await client.put(url, json={"value": None}, headers=owner.headers)
@@ -325,8 +363,9 @@ async def test_the_cost_is_fixed_whatever_the_size(tenant_id, owner, members):
             event.remove(engine, "before_cursor_execute", count)
     assert [st.key for st in out.steps] == OWNER_KEYS
     assert out.steps[2].count == members
-    # One statement per owner step (eight), plus the hide preference and the welcome.
-    assert len(statements) <= 9, statements
+    # One statement per owner step (eight; two for the baseline build: the last one built and
+    # the one under way), plus the hide preference and the welcome.
+    assert len(statements) <= 10, statements
 
 
 def test_step_keys_are_checked_against_the_registry():
@@ -350,6 +389,8 @@ async def test_build_baseline_is_the_owners_last_step(client, tenant_id, owner):
         "done": False,
         "count": None,
         "detail": None,
+        "invited": None,
+        "run_id": None,
     }
     async with tenant_session(tenant_id) as s:
         s.add(Run(flow="baseline", status="failed", created_by=owner.id))
@@ -369,7 +410,48 @@ async def test_build_baseline_is_the_owners_last_step(client, tenant_id, owner):
         "done": True,
         "count": None,
         "detail": "2026-10-20T15:00:00+00:00",
+        "invited": None,
+        "run_id": None,
     }
+
+
+async def test_invite_says_the_open_invites_beside_the_people(client, tenant_id, owner):
+    # protects=qa-onboarding-18: Invite team counts open invites too ("4 people · 3
+    # invited"); fails_when=an accepted or revoked invite is counted as open, or open
+    # invites are left out; no_claim=the web's wording.
+    await make_person(tenant_id, "second@example.com", "commenter")
+    async with tenant_session(tenant_id) as s:
+        s.add(Invite(email="a@example.com", role="viewer"))
+        s.add(Invite(email="b@example.com", role="commenter"))
+        s.add(Invite(email="gone@example.com", role="viewer", revoked_at=datetime.now(UTC)))
+        s.add(Invite(email="in@example.com", role="viewer", accepted_at=datetime.now(UTC)))
+        await s.commit()
+    step = _step(await _setup(client, owner), "invite")
+    assert step["count"] == 2 and step["invited"] == 2 and step["done"] is True
+
+
+async def test_build_baseline_names_the_build_under_way(client, tenant_id, owner):
+    # protects=qa-onboarding-10: while a baseline build is under way the step names its run,
+    # so Home says Building and links to it; fails_when=a finished, draft or other flow's run
+    # is named, or none is named while one runs; no_claim=the web's copy.
+    async with tenant_session(tenant_id) as s:
+        s.add(Run(flow="baseline", status="failed", created_by=owner.id))
+        s.add(Run(flow="baseline_to_prd", status="running", created_by=owner.id))
+        await s.commit()
+    assert _step(await _setup(client, owner), "build_baseline")["run_id"] is None
+    async with tenant_session(tenant_id) as s:
+        run = Run(flow="baseline", status="running", created_by=owner.id)
+        s.add(run)
+        await s.flush()
+        run_id = run.id
+        await s.commit()
+    step = _step(await _setup(client, owner), "build_baseline")
+    assert step["run_id"] == str(run_id) and step["done"] is False
+    async with tenant_session(tenant_id) as s:
+        (await s.get(Run, run_id)).status = "succeeded"
+        await s.commit()
+    step = _step(await _setup(client, owner), "build_baseline")
+    assert step["run_id"] is None and step["done"] is True
 
 
 def test_the_web_checklist_names_every_step_the_api_returns():
