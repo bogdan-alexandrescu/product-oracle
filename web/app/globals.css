@@ -792,6 +792,20 @@ code .date-mark {
 .simple-button-primary:hover {
   background: var(--accent-ink);
 }
+/* qa-simple-decide-51: a count that needs nothing from you (upcoming reviews): neutral, not yellow. */
+.simple-count-quiet {
+  background: var(--surface2);
+  color: var(--text2);
+}
+/* qa-simple-decide-25: a disabled button looks disabled (the empty Decide, the empty Send). */
+.simple-button:disabled,
+.simple-button:disabled:hover {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.simple-button-primary:disabled:hover {
+  background: var(--accent);
+}
 .simple-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) minmax(180px, auto);
@@ -819,6 +833,10 @@ code .date-mark {
   }
   .simple-actions {
     grid-column: 1 / -1;
+    /* qa-simple-decide-23: one compact row of buttons on a phone, not three full-width ones. */
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
   }
 }
 /*

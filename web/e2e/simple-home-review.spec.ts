@@ -72,7 +72,7 @@ test("people by name; Start meeting stays in Simple and opens the start sheet", 
   const next = page.getByTestId("home-meeting-next");
   await expect(next).toContainText("Admin");
   await expect(next).not.toContainText(/\badmin\b/);
-  const start = next.getByRole("link", { name: "Start meeting" });
+  const start = next.getByRole("link", { name: "Start review" });
   await expect(start).toHaveAttribute("href", /^\/simple\/meetings\?start=[0-9a-f-]+$/);
   await start.click();
   await expect(page).toHaveURL(/\/simple\/meetings\?start=/);

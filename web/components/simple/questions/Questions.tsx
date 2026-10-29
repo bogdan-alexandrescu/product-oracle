@@ -181,11 +181,16 @@ export function PersonPicker({
   /** "answers": the person named gives the answer the PRD does not recommend yet (and decides it). */
   verb?: "decides" | "answers";
 }) {
-  const members = useQuery("simple-question-members", () => unwrap(api.GET("/v1/simple/meetings/options")).then((o) => o.members));
+  // qa-simple-decide-9: only people whose role decides (approvers and owners) can be named.
+  const members = useQuery("simple-question-deciders", () =>
+    unwrap(api.GET("/v1/people", { params: { query: {} } })).then((rows) =>
+      rows.filter((p) => p.role === "approver" || p.role === "owner").map((p) => ({ id: p.user_id, name: p.name })),
+    ),
+  );
   return (
     <div role="group" aria-label={`Who ${verb} ${q.code}`} data-testid="question-people" className="mt-1.5 flex flex-col">
       <span className="simple-meta">
-        Who {verb} {q.code}?
+        Who {verb} {q.code}? Only approvers and owners decide.
       </span>
       {members.error && <span className="simple-meta text-crit">{members.error}</span>}
       {!members.data && !members.error && <span className="simple-meta">Loading people…</span>}
@@ -234,15 +239,16 @@ export function QuestionRow({
   const toggle = (what: "answers" | "people" | "answerer") => setOpen((o) => (o === what ? null : what));
   const done = q.column === "decided" || mode === "decided";
   const recommended = !!q.recommendation && writes && !done;
-  const full = mode === "list" || mode === "due";
   const at = q.decided_at ? formatInZone(q.decided_at, zone, { hour: "numeric", minute: "2-digit" }) : null;
-  const how = q.chosen && q.chosen === q.recommendation ? "as recommended" : q.chosen;
-  const here = [`Decided in this meeting${how ? `: ${how}` : ""}`, q.decided_by?.name, at].filter(Boolean).join(" · ");
+  // qa-simple-decide-44: the answer itself, not "as recommended".
+  const here = [`Decided in this meeting${q.chosen ? `: ${q.chosen}` : ""}`, q.decided_by?.name, at].filter(Boolean).join(" · ");
   const another = (label: string) => (
     <button type="button" aria-pressed={open === "answers"} aria-expanded={open === "answers"} className="simple-button" onClick={() => toggle("answers")}>
       {label}
     </button>
   );
+  // qa-simple-decide-8: the same verbs and the same actions for a question in every view
+  // (List, Board, Home, a meeting's agenda); one primary button per row (qa-simple-decide-24).
   let buttons: ReactNode = null;
   if (done) {
     if (mode === "due" && q.undo_id)
@@ -251,46 +257,32 @@ export function QuestionRow({
           Undo
         </button>
       );
-  } else if (full)
+  } else {
+    const nameIt = q.missing === "decider" && q.can.name_decider;
+    const askSomeone = q.missing === "recommendation" && writes;
+    const primary = recommended && open !== "answers";
     buttons = (
       <>
-        {recommended && (
+        {primary && (
           <button type="button" disabled={busy} className="simple-button simple-button-primary" onClick={() => void decide(q, { option: "recommended" })}>
             {verb} as recommended
           </button>
         )}
         {writes && another("Another answer")}
-        <AskButton q={q} />
-      </>
-    );
-  else if (mode === "recommended")
-    buttons = (
-      <>
-        {writes && (
-          <button type="button" disabled={busy} className="simple-button simple-button-primary" onClick={() => void decide(q, { option: "recommended" })}>
-            {q.can.decide ? "Accept" : "Propose"}
-          </button>
-        )}
-        {writes && another("Change")}
-        <AskButton q={q} />
-      </>
-    );
-  else if (mode === "needs_input")
-    buttons = (
-      <>
-        {q.missing === "decider" && q.can.name_decider && (
-          <button type="button" aria-expanded={open === "people"} className="simple-button simple-button-primary" onClick={() => toggle("people")}>
+        {nameIt && open !== "people" && (
+          <button type="button" aria-expanded={false} className={`simple-button ${primary || open === "answers" ? "" : "simple-button-primary"}`} onClick={() => toggle("people")}>
             Name a decider
           </button>
         )}
-        {q.missing === "recommendation" && writes && (
-          <button type="button" aria-expanded={open === "answerer"} className="simple-button simple-button-primary" onClick={() => toggle("answerer")}>
-            Name a person
+        {askSomeone && open !== "answerer" && (
+          <button type="button" aria-expanded={false} className={`simple-button ${primary || open === "answers" ? "" : "simple-button-primary"}`} onClick={() => toggle("answerer")}>
+            Ask someone to answer
           </button>
         )}
         <AskButton q={q} />
       </>
     );
+  }
   return (
     <Tag data-testid={testId} data-code={q.code} aria-label={`${q.code} ${q.title}`} className="simple-row">
       <span aria-hidden className={`simple-ico ${done ? "simple-ico-done" : ""}`}>

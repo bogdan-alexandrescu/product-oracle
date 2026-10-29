@@ -1,13 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, useFocusTrap } from "@/components/ds";
+import { Icon } from "@/components/ds/Icon";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
+
+import { CHECK, SimpleSelect } from "./SimpleSelect";
 
 type Options = Schemas["SimpleStartOptions"];
 type Mode = Schemas["SimpleMeetingIn"]["change_mode"] & string;
@@ -40,16 +44,16 @@ export function StartSheet({
   ritual?: Schemas["SimpleUpcomingMeeting"];
   origin?: Origin;
 }) {
-  useEffect(() => {
-    if (!open) return;
-    const on = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", on);
-    return () => window.removeEventListener("keydown", on);
-  }, [open, onClose]);
+  // qa-simple-decide-16: the focus moves into the sheet and stays there until it closes (Escape closes it).
+  const ref = useRef<HTMLDivElement>(null);
+  useFocusTrap(ref, open, onClose);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 sm:items-center" onClick={onClose}>
+    // qa-simple-decide-5: a dark scrim in both themes (bg-black is the text colour, light in dark mode).
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgb(0_0_0/0.5)] sm:items-center" data-testid="start-sheet-scrim" onClick={onClose}>
       <div
+        ref={ref}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label="Start a review"
@@ -58,7 +62,10 @@ export function StartSheet({
       >
         <div className="mb-3 flex items-baseline justify-between gap-2">
           <h2 className="simple-h2">Start a review</h2>
-          <Button variant="ghost" onClick={onClose}>Close</Button>
+          <button type="button" className="simple-button simple-button-quiet" aria-label="Close" onClick={onClose}>
+            <Icon name="x" size={18} stroke={1.7} />
+            Close
+          </button>
         </div>
         <Body prd={prd} occurrence={occurrence} ritual={ritual} origin={origin} />
       </div>
@@ -86,7 +93,11 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
   const [people, setPeople] = useState<string[]>(() => defaults());
   const [mode, setMode] = useState<Mode>("everyone");
   const [named, setNamed] = useState<string[]>([]);
-  const [length, setLength] = useState(options.length_min);
+  // qa-simple-decide-6: a scheduled review keeps its own length.
+  const [length, setLength] = useState(occ?.length_min ?? options.length_min);
+  const { me } = useMe();
+  // qa-simple-decide-35: someone besides the presenter attends.
+  const others = people.filter((id) => id !== me?.user_id);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const liveOne = chosen ? live.find((m) => m.prd.slug === chosen.document.slug) : undefined;
@@ -138,16 +149,21 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
         ) : (
           <label className="mt-1 flex flex-col gap-1">
             <span className="simple-small">PRD</span>
-            <select className="rounded border border-border bg-transparent p-2" value={slug} onChange={(e) => pick(e.target.value)}>
+            <SimpleSelect className="w-full" value={slug} onChange={(e) => pick(e.target.value)}>
               {options.prds.map((p) => <option key={p.document.slug} value={p.document.slug}>{p.document.title}</option>)}
-            </select>
+            </SimpleSelect>
           </label>
         )}
         <p className="simple-small">The PRD, its roadmap slice, its open decisions</p>
       </section>
       {chosen && !chosen.can_start ? (
         <div role="status" className="space-y-2" data-testid="start-not-allowed">
-          <p>Only {chosen.starters.map((s) => s.name).join(", ") || "an owner"} can start this review</p>
+          {/* qa-simple-decide-14: never "Only <me> can start": the person's role is why. */}
+          <p>
+            {chosen.starters.some((s) => s.id === me?.user_id) || !chosen.starters.length
+              ? "Your role can't start a review: owners, and a PRD's decider who can comment, start them."
+              : `Only ${chosen.starters.map((s) => s.name).join(", ")} can start this review.`}
+          </p>
           {liveOne && <Button variant="primary" onClick={() => router.push(`/simple/meetings/${liveOne.id}`)}>Join</Button>}
         </div>
       ) : (
@@ -157,17 +173,24 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
             <div className="mt-1 grid gap-1 sm:grid-cols-2">
               {options.members.map((m) => (
                 <label key={m.id} className="flex items-center gap-2">
-                  <input type="checkbox" checked={people.includes(m.id)} onChange={() => toggle(m.id)} />
+                  <input type="checkbox" className={CHECK} checked={people.includes(m.id)} onChange={() => toggle(m.id)} />
                   {m.name}
                 </label>
               ))}
             </div>
+            {others.length === 0 && (
+              <p role="status" className="simple-small text-crit" data-testid="start-no-attendees">
+                Pick at least one attendee besides you.
+              </p>
+            )}
+            {/* qa-simple-decide-36: say what else the list changes. */}
+            {occ && <p className="simple-small">The people ticked here also attend the next reviews of {occ.ritual_title}.</p>}
           </fieldset>
           <fieldset>
             <legend className="font-semibold">Who changes things in the chat</legend>
-            {([["everyone", "Everyone"], ["presenter", "Only the presenter"], ["named", "Presenter plus one or two people"]] as const).map(([v, label]) => (
+            {([["everyone", "Everyone"], ["presenter", "Only the presenter"], ["named", "Presenter plus named people"]] as const).map(([v, label]) => (
               <label key={v} className="flex items-center gap-2">
-                <input type="radio" name="change-mode" checked={mode === v} onChange={() => setMode(v)} />
+                <input type="radio" className={CHECK} name="change-mode" checked={mode === v} onChange={() => setMode(v)} />
                 {label}
               </label>
             ))}
@@ -175,7 +198,7 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
               <div className="ml-6 mt-1" aria-label="Who else changes things">
                 {people.map((id) => (
                   <label key={id} className="flex items-center gap-2">
-                    <input type="checkbox" checked={named.includes(id)} disabled={!named.includes(id) && named.length >= 2} onChange={() => toggleNamed(id)} />
+                    <input type="checkbox" className={CHECK} checked={named.includes(id)} disabled={!named.includes(id) && named.length >= 2} onChange={() => toggleNamed(id)} />
                     {name(id)}
                   </label>
                 ))}
@@ -184,12 +207,12 @@ function Form({ options, fixed, occurrence, ritual, origin, live }: { options: O
           </fieldset>
           <label className="flex items-center gap-2">
             <span className="font-semibold">Length</span>
-            <select className="rounded border border-border bg-transparent p-2" value={length} onChange={(e) => setLength(Number(e.target.value))}>
-              {[...new Set([...LENGTHS, options.length_min])].sort((a, b) => a - b).map((n) => <option key={n} value={n}>{n} min</option>)}
-            </select>
+            <SimpleSelect value={length} onChange={(e) => setLength(Number(e.target.value))}>
+              {[...new Set([...LENGTHS, options.length_min, occ?.length_min ?? options.length_min])].sort((a, b) => a - b).map((n) => <option key={n} value={n}>{n} min</option>)}
+            </SimpleSelect>
           </label>
           {error && <ErrorNote>{error}</ErrorNote>}
-          <Button variant="primary" disabled={busy || (mode === "named" && named.length === 0)} onClick={start}>Start</Button>
+          <Button variant="primary" disabled={busy || others.length === 0 || (mode === "named" && named.length === 0)} onClick={start}>Start</Button>
         </>
       )}
     </div>

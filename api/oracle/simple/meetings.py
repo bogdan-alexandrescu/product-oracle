@@ -254,7 +254,10 @@ async def prd_who(db: AsyncSession, document: Document) -> PrdWho:
 def may_start(principal: Any, w: PrdWho) -> bool:
     """Only owners and the document's decider start a meeting (the owner's pick)."""
     me = _me(principal)
-    return me is not None and (has_role(principal.role, "owner") or me == w.decider)
+    # qa-simple-decide-14: a viewer starts nothing, even as the named decider.
+    return me is not None and (
+        has_role(principal.role, "owner") or (me == w.decider and has_role(principal.role, "commenter"))
+    )
 
 
 async def _names(db: AsyncSession, ids: set[uuid.UUID]) -> dict[uuid.UUID, str]:
@@ -434,7 +437,11 @@ def may_start_ritual(principal: Any, ritual: Any) -> bool:
     """Starting a ritual's review uses up its occurrence: owners and the ritual's owner only,
     as Prepare now and the ritual's edits in Detailed (review)."""
     me = _me(principal)
-    return me is not None and (has_role(principal.role, "owner") or me == ritual.owner_id)
+    # qa-simple-decide-14: a viewer starts nothing, whichever ritual it owns.
+    return me is not None and (
+        has_role(principal.role, "owner")
+        or (me == ritual.owner_id and has_role(principal.role, "commenter"))
+    )
 
 
 async def _occurrence_now(
@@ -891,9 +898,12 @@ async def one(db: AsyncSession, principal: Any, meeting_id: uuid.UUID,
         email_available=email_available(),
         can=SimpleMeetingCan(
             change=rules.may_change(me) and has_role(principal.role, "commenter"),
-            set_rules=m.status == "live" and me == m.presenter_id,
+            # qa-simple-decide-14: a viewer is shown no control it cannot use (the routes need a commenter).
+            set_rules=m.status == "live" and me == m.presenter_id
+            and has_role(principal.role, "commenter"),
             approve=m.status == "live" and decider_or_owner,
-            end=_presenter_or_decider(principal, m, w) and m.minutes_state != "sent",
+            end=_presenter_or_decider(principal, m, w) and m.minutes_state != "sent"
+            and has_role(principal.role, "commenter"),
             redraft=job_state == "failed" and _presenter_or_decider(principal, m, w),
         ),
         not_approved=not_approved or [],
@@ -1207,9 +1217,9 @@ async def extract(db: AsyncSession, m: SimpleMeeting) -> dict[str, Any]:
     waits = await _waits(db, m)
     rec = await minutes.record(db, m, [d for _, d in reversed(links)], waits)
     if titles:
-        word = "decision" if len(titles) == 1 else "decisions"
         more = "…" if len(titles) > 6 else "."
-        summary = f"{len(titles)} {word} in {m.title}: " + "; ".join(titles[:6]) + more
+        # qa-simple-decide-32: the decisions themselves; the title and the count are beside it already.
+        summary = "; ".join(titles[:6]) + more
     elif rec.empty:
         summary = minutes.nothing(m.title)
     else:

@@ -230,7 +230,7 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
       presenter_id: owner, attendee_ids: people, absent_ids: [], change_mode: "everyone", change_people: [], length_min: 60, status: "ended",
       started_at: startedAt, ended_at: iso(Date.parse(startedAt) + 50 * 60_000), ended_by: owner,
       minutes: {
-        summary: `2 decisions in Review: Usage alerts: Moved ${digest?.title ?? "Alert digest"}; Comment: keep quiet hours on by default.`,
+        summary: `Moved ${digest?.title ?? "Alert digest"}; Comment: keep quiet hours on by default.`,
         open_questions: ["D-3: Should muted teams still get the weekly digest?"],
         action_items: commenter ? [{ title: "Draft the quiet hours copy", owner_id: commenter.id, owner_name: nameOf(ctx, commenter.id), due_date: iso(now + 7 * day).slice(0, 10) }] : [],
         waits: [{ what: "Usage alerts: the working draft is not approved yet", on: [] }],
@@ -250,12 +250,12 @@ export function ensureMeetings(holder: { simple_meetings?: MeetingsDb }, ctx: Me
 }
 
 function mayStart(ctx: MeetingsCtx, p: Prd): boolean {
-  return ctx.me.role === "owner" || ctx.me.id === p.decider;
+  return ctx.me.role === "owner" || (ctx.me.id === p.decider && RANK[ctx.me.role] >= RANK.commenter);
 }
 
 /** meetings.may_start_ritual: owners and the ritual's owner start a ritual's review. */
 function mayStartRitual(ctx: MeetingsCtx, ritualId: string): boolean {
-  return ctx.me.role === "owner" || ctx.rituals?.rituals.find((r) => r.id === ritualId)?.owner_id === ctx.me.id;
+  return ctx.me.role === "owner" || (ctx.rituals?.rituals.find((r) => r.id === ritualId)?.owner_id === ctx.me.id && RANK[ctx.me.role] >= RANK.commenter);
 }
 
 
@@ -388,9 +388,9 @@ function one(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Schemas["SimpleMeeti
     email_available: emailAvailable(),
     can: {
       change: mayChange(m, ctx.me.id) && RANK[ctx.me.role] >= RANK.commenter,
-      set_rules: m.status === "live" && ctx.me.id === m.presenter_id,
+      set_rules: m.status === "live" && ctx.me.id === m.presenter_id && RANK[ctx.me.role] >= RANK.commenter,
       approve: m.status === "live" && deciderOrOwner,
-      end: presenterOrDecider(ctx, m, p) && m.minutes_state !== "sent",
+      end: presenterOrDecider(ctx, m, p) && m.minutes_state !== "sent" && RANK[ctx.me.role] >= RANK.commenter,
       redraft: m.status === "ended" && m.minutes_state === "drafting" && m.minutes_job === "failed" && presenterOrDecider(ctx, m, p),
     },
     not_approved: [],
@@ -670,7 +670,7 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   // Only the meeting's own record (minutes.record): its decisions and its chat's lines.
   const lines = ctx.chatLines?.(m.id) ?? [];
   const summary = titles.length
-    ? `${titles.length} ${titles.length === 1 ? "decision" : "decisions"} in ${m.title}: ${titles.slice(0, 6).join("; ")}${titles.length > 6 ? "…" : "."}`
+    ? `${titles.slice(0, 6).join("; ")}${titles.length > 6 ? "…" : "."}`
     : lines.length || (m.notes ?? []).length
       ? `${m.title}: no decision was taken.`
       : `${m.title}: nothing was decided or recorded.`;
@@ -686,7 +686,8 @@ function extract(ctx: MeetingsCtx, db: MeetingsDb, m: Meeting): Minutes {
   return {
     summary: withNotes(m, summary).slice(0, 4000),
     // Only the meeting's own record: its open questions, then the chat's questions.
-    open_questions: [...questionsOf(m), ...lines.filter((x) => x.trim().endsWith("?"))].slice(0, 5),
+    // qa-simple-decide-4 (minutes.Record.questions): each once; a chat command is not asked again with its prefix.
+    open_questions: [...new Map([...questionsOf(m), ...lines.filter((x) => x.trim().endsWith("?") && !/^\s*(open question|question|note)\s*:/i.test(x))].map((x) => [x.toLowerCase().split(/\s+/).join(" "), x])).values()].slice(0, 5),
     action_items: [],
     waits,
     written_by: "extract",

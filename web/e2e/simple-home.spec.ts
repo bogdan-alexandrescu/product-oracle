@@ -205,7 +205,7 @@ for (const phone of [false, true]) {
         await page.evaluate((fail) => localStorage.removeItem(fail), MOCK_FAIL_KEY);
         await card(page, "meeting").getByRole("button", { name: "Retry" }).click();
         await expect(card(page, "meeting").getByTestId("home-meeting-next")).toBeVisible();
-        await expect(card(page, "meeting").getByRole("link", { name: "Start meeting" })).toBeVisible();
+        await expect(card(page, "meeting").getByRole("link", { name: "Start review" })).toBeVisible();
       });
     });
   }

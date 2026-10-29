@@ -51,6 +51,10 @@ class Line:
     by: uuid.UUID | None = None
 
 
+# A chat line that is a command to Oracle ("open question: ...", "note: ..."), not a question asked.
+COMMAND = re.compile(r"^\s*(open question|question|note)\s*:", re.I)
+
+
 @dataclass
 class Record:
     chat: list[Line] = field(default_factory=list)
@@ -79,7 +83,17 @@ class Record:
 
     def questions(self) -> list[str]:
         """The meeting's open questions, then the chat's questions, in order."""
-        return [*self.asked, *(c.text for c in self.chat if c.text.rstrip().endswith("?"))]
+        # qa-simple-decide-4: a chat command ("open question: ...", "note: ...") is in `asked` or
+        # the notes already; each question once, whatever its case or spacing.
+        out: list[str] = []
+        seen: set[str] = set()
+        chat = [c.text for c in self.chat if c.text.rstrip().endswith("?") and not COMMAND.match(c.text)]
+        for q in [*self.asked, *chat]:
+            key = " ".join(q.lower().split())
+            if key not in seen:
+                seen.add(key)
+                out.append(q)
+        return out
 
 
 def _clip(text: str) -> str:

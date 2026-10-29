@@ -770,6 +770,8 @@ function clauses(text: string): Clause[] {
 
 const QUESTION = /^(why|how|what|who|when|where|which|should|is|are|does|do)\b/i;
 const SAY_AGAIN = "I could not tell what to change. Say it another way.";
+/** qa-simple-decide-3: a question in a meeting's chat is kept for the minutes' open questions; Ask Oracle answers it. */
+const MEETING_ASK = "Kept as a question for the minutes. For an answer now, use Ask Oracle.";
 
 /** The items a phrase names (exact first, then every title that holds it). */
 function named(items: Item[], x: string): Item[] {
@@ -784,7 +786,7 @@ function readLine(db: SimpleDb, ctx: ChatCtx, r: NonNullable<StoredMessage["read
   // "What should we cut first?" is a question, whatever verbs it holds.
   if (!cs.length || QUESTION.test(r.text.trim())) {
     if (QUESTION.test(r.text.trim()) || r.text.trim().endsWith("?"))
-      return r.ask ? { kind: "ask", body: "Asking Oracle…", cards: [] } : { kind: "note", body: SAY_AGAIN, cards: [] };
+      return r.ask ? { kind: "ask", body: "Asking Oracle…", cards: [] } : { kind: "note", body: r.meeting_id ? MEETING_ASK : SAY_AGAIN, cards: [] };
     return { kind: "note", body: SAY_AGAIN, cards: [] };
   }
   if (r.meeting_id && r.role === "viewer") return { kind: "note", body: "Viewers ask questions here; ask the presenter to make a change.", cards: [] };

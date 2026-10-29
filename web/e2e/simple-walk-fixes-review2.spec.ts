@@ -32,6 +32,7 @@ test("the next review lists who was present until the ritual's attendees are edi
   await expect(page.getByLabel("Attendees")).toContainText("Commenter");
   // The review is held: end it, so Home's next review is the ritual's next one, not this live one.
   await page.getByRole("button", { name: "End meeting" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
   await page.goto("/simple");
   const next = page.getByTestId("home-meeting-next");

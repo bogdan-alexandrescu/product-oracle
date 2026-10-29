@@ -477,7 +477,7 @@ export default function SimpleHome() {
                       </Link>
                     ) : next.can_start ? (
                       <Link href={`/simple/meetings?start=${next.ritual_id}`} className="simple-button simple-button-primary">
-                        Start meeting
+                        Start review
                       </Link>
                     ) : undefined
                   }

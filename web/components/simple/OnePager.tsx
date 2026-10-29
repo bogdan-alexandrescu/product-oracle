@@ -315,7 +315,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                               // The owner's P6: "Edit" shows when the line is pointed at or tapped, not on every line.
                               <button
                                 type="button"
-                                className={`simple-noprint text-sm underline group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 ${tapped === l.id ? "opacity-100" : "opacity-0"}`}
+                                // qa-simple-decide-48: a 44 px tap target on a phone.
+                                className={`simple-noprint text-sm underline max-[600px]:min-h-11 max-[600px]:min-w-11 group-hover:opacity-100 group-focus-within:opacity-100 focus:opacity-100 ${tapped === l.id ? "opacity-100" : "opacity-0"}`}
                                 onClick={() => { setEditing(l.id); setDraftText(l.full ?? l.text); }}
                               >
                                 <span aria-hidden data-testid="line-edit-word">{v.can_edit ? "Edit" : "Propose wording"}</span>
@@ -372,7 +373,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
               <MarginNote {...{ n, no: numbers.get(n.line_id) ?? 0, busy, diff, setDiff, wide, setWide, undo, decide }} />
             </div>
           ))}
-          {v.notes.length === 0 && <p className="text-base text-text-faint">No changes yet.</p>}
+          {/* qa-simple-decide-42: the margin holds this one-pager's edits; roadmap changes and decisions are listed elsewhere. */}
+          {v.notes.length === 0 && <p className="text-base text-text-faint">No edits to this one-pager yet.</p>}
         </aside>
       </div>
       )}

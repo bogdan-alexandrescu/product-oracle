@@ -145,7 +145,7 @@ function out(ctx: QuestionsCtx, q: Q): Question {
     decided_at: q.decided_at ?? null,
     decided_by: q.decided_by ? ref(ctx, q.decided_by) : null,
     decided_label: decided(q) && q.decided_at ? `Decided ${q.in_prd ? "in the PRD on " : ""}${dayWords(Date.parse(q.decided_at))} by ${nameOf(ctx, q.decided_by)}` : null,
-    waiting_for_me: !decided(q) && !!q.decider && q.decider === ctx.me.id,
+    waiting_for_me: !decided(q) && !!q.decider && q.decider === ctx.me.id && RANK[ctx.me.role] >= RANK.approver,
     pending: q.pending ? { change_id: q.pending.change_id, by: ref(ctx, q.pending.by), answer: q.pending.answer } : null,
     can: canOf(ctx, q),
     source: { version: SOURCE_VERSION, read_at: iso(todayStart() - DAY + 9 * 3_600_000) },

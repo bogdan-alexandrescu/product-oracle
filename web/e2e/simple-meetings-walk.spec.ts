@@ -74,7 +74,7 @@ const delivery = (page: Page) => page.getByRole("region", { name: "Delivery" });
 async function endOne(page: Page) {
   await login(page);
   await page.goto("/simple/meetings");
-  await page.getByRole("button", { name: "Start a review" }).click();
+  await page.getByRole("button", { name: "Start review" }).first().click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
@@ -83,6 +83,7 @@ async function endOne(page: Page) {
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
   await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
   await page.getByRole("button", { name: "End meeting" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByTestId("end-screen")).toBeVisible();
 }
 
@@ -161,7 +162,7 @@ for (const phone of [false, true]) {
         // Home's next review is Upcoming's first row; its Start meeting opens the sheet on it.
         await page.goto("/simple");
         await expect(page.getByTestId("home-meeting-next")).toContainText(firstTitle);
-        await page.getByTestId("home-meeting-next").getByRole("link", { name: "Start meeting" }).click();
+        await page.getByTestId("home-meeting-next").getByRole("link", { name: "Start review" }).click();
         const sheet = page.getByRole("dialog", { name: "Start a review" });
         await expect(sheet.getByTestId("start-occurrence")).toContainText(firstTitle);
         const ritual = firstTitle;
@@ -202,7 +203,7 @@ for (const phone of [false, true]) {
         await page.getByLabel("Line 2").fill("A checklist that names the next step");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(bar).toContainText("1 change");
-        await page.getByRole("button", { name: "Approve", exact: true }).click();
+        await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
         await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
         await expect(onePager).toContainText("Version 4");
         await expect(onePager).not.toContainText("Version 3");
@@ -226,7 +227,7 @@ for (const phone of [false, true]) {
         await expect(otherPager).toContainText("Version 3");
         await expect(other.getByRole("status", { name: "Working draft" })).toContainText("1 change");
         await page.bringToFront();
-        await page.getByRole("button", { name: "Approve", exact: true }).click();
+        await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
         await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
         await other.bringToFront();
         await other.clock.runFor(6_000);
@@ -245,7 +246,7 @@ for (const phone of [false, true]) {
         await page.goto("/simple");
         const next = page.getByTestId("home-meeting-next");
         await expect(next).toBeVisible();
-        await expect(next.getByRole("link", { name: "Start meeting" })).toHaveCount(0);
+        await expect(next.getByRole("link", { name: "Start review" })).toHaveCount(0);
         await expect(next.getByText(/Pre-read not ready yet|Open pre-read/)).toBeVisible();
       });
 

@@ -26,7 +26,10 @@ function read(): boolean {
   return open;
 }
 
-export function setPanelOpen(next: boolean) {
+/** `remember` false: opened for one question (Simple's Ask Oracle): not reopened on the next page load (qa-simple-decide-10). */
+let transient = false;
+export function setPanelOpen(next: boolean, remember = true) {
+  transient = next && !remember;
   if (next && !read()) focusAsk = true;
   open = next;
   // Words no box took while it was open are dropped, never shown typed in later.
@@ -35,7 +38,7 @@ export function setPanelOpen(next: boolean) {
     draftListeners.forEach((l) => l());
   }
   try {
-    window.localStorage.setItem(OPEN_KEY, next ? "1" : "0");
+    window.localStorage.setItem(OPEN_KEY, next && remember ? "1" : "0");
   } catch {
     // Not remembered; the panel still opens.
   }
@@ -62,7 +65,12 @@ export function usePanelOpen(): boolean {
 export function askWith(text: string) {
   draft = text;
   draftListeners.forEach((l) => l());
-  setPanelOpen(true);
+  setPanelOpen(true, false);
+}
+
+/** Leaving the page that opened the panel for one question (Simple's Ask Oracle) closes it. */
+export function closeTransientPanel() {
+  if (transient && read()) setPanelOpen(false);
 }
 
 /** Takes the typed-in words (they are cleared). */

@@ -52,9 +52,9 @@ for (const phone of [false, true]) {
         await expect(page.getByRole("region", { name: "Live" })).toContainText("No meeting is on now.");
         const past = page.getByRole("region", { name: "Past" });
         await expect(past).toContainText("Review: Usage alerts");
-        await expect(past).toContainText("2 decisions in Review: Usage alerts");
+        await expect(past).toContainText("Comment: keep quiet hours on by default.");
         await expect(past.getByRole("link", { name: "Its decisions" })).toHaveAttribute("href", /\/simple\/decisions\?meeting=/);
-        await page.getByRole("button", { name: "Start a review" }).click();
+        await page.getByRole("button", { name: "Start review" }).first().click();
         const s = sheet(page);
         await expect(s.getByRole("region", { name: "What is reviewed" })).toContainText("The PRD, its roadmap slice, its open decisions");
         await s.getByLabel("PRD").selectOption({ label: "Guided setup" });
@@ -62,7 +62,7 @@ for (const phone of [false, true]) {
         await expect(s.getByRole("checkbox", { name: "Approver" })).toBeChecked();
         await expect(s.getByRole("checkbox", { name: "Commenter" })).not.toBeChecked();
         await s.getByRole("checkbox", { name: "Commenter" }).check();
-        await s.getByRole("radio", { name: "Presenter plus one or two people" }).check();
+        await s.getByRole("radio", { name: "Presenter plus named people" }).check();
         await s.getByLabel("Who else changes things").getByRole("checkbox", { name: "Commenter" }).check();
         await expect(s.getByLabel("Length")).toHaveValue("60");
         await s.getByLabel("Length").selectOption("45");
@@ -101,7 +101,7 @@ for (const phone of [false, true]) {
       for (const [email, role] of [["approver@example.com", "an approver"], ["commenter@example.com", "a commenter"], ["viewer@example.com", "a viewer"]] as const) {
         test(`${role} sees who starts a review and cannot start it`, async ({ page }) => {
           await meetings(page, email);
-          await page.getByRole("button", { name: "Start a review" }).click();
+          await page.getByRole("button", { name: "Start review" }).first().click();
           await sheet(page).getByLabel("PRD").selectOption({ label: "Guided setup" });
           await expect(sheet(page).getByTestId("start-not-allowed")).toContainText("Only Admin can start this review");
           await expect(sheet(page).getByRole("button", { name: "Start", exact: true })).toHaveCount(0);
@@ -111,14 +111,14 @@ for (const phone of [false, true]) {
 
       test("a commenter joins a live meeting an owner started", async ({ page }) => {
         await meetings(page);
-        await page.getByRole("button", { name: "Start a review" }).click();
+        await page.getByRole("button", { name: "Start review" }).first().click();
         await sheet(page).getByLabel("PRD").selectOption({ label: "Guided setup" });
         await sheet(page).getByRole("button", { name: "Start", exact: true }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
         await page.goto("/simple/meetings");
         await switchTo(page, "commenter@example.com");
         await page.goto("/simple/meetings");
-        await page.getByRole("button", { name: "Start a review" }).click();
+        await page.getByRole("button", { name: "Start review" }).first().click();
         await sheet(page).getByLabel("PRD").selectOption({ label: "Guided setup" });
         await sheet(page).getByRole("button", { name: "Join" }).click();
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
@@ -126,7 +126,7 @@ for (const phone of [false, true]) {
         await page.getByRole("button", { name: "Join" }).click();
         await expect(page.getByLabel("Attendees")).toContainText("Commenter");
         await expect(page.getByRole("button", { name: "Join" })).toHaveCount(0);
-        await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: /^Approve one-pager edits/ })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
       });
     });
@@ -142,19 +142,19 @@ test.describe("the PRD's decider", () => {
     test(`Dana Decider starts Guided setup's review; an approver may not (${phone ? "phone" : "desktop"})`, async ({ page }) => {
       await page.setViewportSize(phone ? { width: 390, height: 844 } : { width: 1366, height: 820 });
       await meetings(page, "approver@example.com");
-      await page.getByRole("button", { name: "Start a review" }).click();
+      await page.getByRole("button", { name: "Start review" }).first().click();
       await sheet(page).getByLabel("PRD").selectOption({ label: "Guided setup" });
       await expect(sheet(page).getByTestId("start-not-allowed")).toContainText("Only Dana Decider, Admin can start this review");
       await sheet(page).getByRole("button", { name: "Close" }).click();
       await switchTo(page, "dana.decider@example.com");
       await page.goto("/simple/meetings");
-      await page.getByRole("button", { name: "Start a review" }).click();
+      await page.getByRole("button", { name: "Start review" }).first().click();
       await sheet(page).getByLabel("PRD").selectOption({ label: "Guided setup" });
       await expect(sheet(page).getByRole("checkbox", { name: "Dana Decider" })).toBeChecked();
       await sheet(page).getByRole("button", { name: "Start", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
       await expect(page.getByLabel("Attendees")).toContainText("decider");
-      await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: /^Approve one-pager edits/ })).toBeVisible();
       await expect(page.getByRole("button", { name: "End meeting" })).toBeVisible();
     });
   }

@@ -64,7 +64,7 @@ async function startWithAnEdit(page: Page, absent?: string) {
   await page.getByLabel("Line 2").fill("A checklist that names the next step");
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status", { name: "Working draft" })).toContainText("1 change");
-  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
 }
 
 async function onePagerOutside(page: Page) {
@@ -77,7 +77,7 @@ async function onePagerOutside(page: Page) {
 async function endOne(page: Page) {
   await login(page);
   await page.goto("/simple/meetings");
-  await page.getByRole("button", { name: "Start a review" }).click();
+  await page.getByRole("button", { name: "Start review" }).first().click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
@@ -86,6 +86,7 @@ async function endOne(page: Page) {
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
   await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
   await page.getByRole("button", { name: "End meeting" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByTestId("end-screen")).toBeVisible();
 }
 

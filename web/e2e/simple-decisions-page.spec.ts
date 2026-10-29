@@ -32,7 +32,7 @@ for (const phone of [false, true]) {
         await login(page, "viewer@example.com");
         await page.goto("/simple/decisions");
         const past = group(page, "Review: Usage alerts");
-        await expect(past).toContainText("2 decisions in Review: Usage alerts");
+        await expect(past).toContainText("Comment: keep quiet hours on by default.");
         await expect(past).toContainText("Attendees: Admin, Approver, Commenter");
         await expect(past).toContainText("D-3: Should muted teams still get the weekly digest?");
         await expect(past).toContainText("Draft the quiet hours copy · Commenter · by");

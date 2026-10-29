@@ -115,7 +115,7 @@ for (const phone of [false, true]) {
         await page.getByLabel("Line 3").fill("Invite suggestions from a shared calendar");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(allDecisions(page)).toContainText("New wording for a line of Guided setup");
-        await page.getByRole("button", { name: "Approve", exact: true }).click();
+        await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
         await expect(page.getByRole("status").filter({ hasText: "Approved in Review: Guided setup" }).first()).toContainText("not yet published: Waiting on Approver's approval");
         await expect(allDecisions(page)).toContainText("Approved Guided setup (not yet published: Waiting on Approver's approval)");
         await expect(page.getByRole("status", { name: "Working draft" })).toContainText("Approved in Review: Guided setup · not yet published: Waiting on Approver's approval");
@@ -124,7 +124,7 @@ for (const phone of [false, true]) {
         await switchTo(page, "commenter@example.com");
         await page.goto(url);
         await expect(page.getByRole("heading", { name: "Review: Guided setup" })).toBeVisible();
-        await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+        await expect(page.getByRole("button", { name: /^Approve one-pager edits/ })).toHaveCount(0);
         await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
         await expect(page.getByRole("button", { name: /is here/ })).toHaveCount(0);
         await expect(page.getByTestId("change-mode")).toHaveText("Changes: Everyone");
