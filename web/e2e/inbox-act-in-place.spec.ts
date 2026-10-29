@@ -40,6 +40,9 @@ async function inbox(page: Page) {
   await page.goto("/inbox");
   await expect(tab(page, "New")).toHaveAttribute("aria-selected", "true");
   await expect(row(page, METRIC)).toHaveCount(1);
+  // A row draws only what the signed-in role may do (qa-company-3), so until the role's
+  // capabilities load it offers Open alone: read the rows once they have.
+  await expect(row(page, METRIC).getByRole("button", { name: "Accept", exact: true })).toBeVisible();
 }
 
 /** Buttons a row offers, in order, by their visible text. */
@@ -147,9 +150,7 @@ for (const [width, height] of [
     await suggestions(page);
     await inbox(page);
     const question = row(page, QUESTION);
-    // A row draws only what the signed-in role may do (qa-company-3): until the role's
-    // capabilities load it offers Open alone, so wait for the decided set.
-    await expect.poll(() => buttons(question)).toEqual(["Send answer", "Decline", "Stage for agents", "Open"]);
+    expect(await buttons(question)).toEqual(["Send answer", "Decline", "Stage for agents", "Open"]);
     const remark = row(page, REMARK);
     expect(await buttons(remark)).toEqual(["Close", "Decline", "Stage for agents", "Open"]);
     const duplicate = row(page, QUANTIFY);

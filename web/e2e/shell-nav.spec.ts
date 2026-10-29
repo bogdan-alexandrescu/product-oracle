@@ -115,7 +115,12 @@ test("Ask overlays at 1512 (the page keeps its width) and docks at 1700", async 
   await page.setViewportSize({ width: 1512, height: 900 });
   await login(page);
   const main = page.locator("main");
+  // Measure once the shell is in place (its rail and the Ask dock beside the page): measured
+  // while Home is still loading, the page spans the window.
+  await expect(page.getByTestId("hop-strip")).toBeVisible();
+  await expect(page.getByRole("navigation").first()).toBeVisible();
   const before = (await main.boundingBox())!.width;
+  expect(before).toBeLessThan(1512);
   await page.getByTestId("hop-strip").click();
   await expect(page.getByTestId("hop-panel").filter({ visible: true })).toBeVisible();
   expect((await main.boundingBox())!.width).toBe(before);
