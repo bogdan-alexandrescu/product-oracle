@@ -65,8 +65,9 @@ async function loadSteps(): Promise<Step[]> {
       title: d.title,
       why: d.question || "It waits for your decision.",
       question: null,
-      // Simple's Decisions page lists it under its number, as Home's "Decided lately" opens it.
-      url: `/simple/decisions#d-${d.number}`,
+      // Where it can be decided, as Home's card for it opens: Simple's Decisions page only lists
+      // a judgement call that is not a PRD's question (no Decide there).
+      url: `/company/decisions?d=${d.number}`,
     })),
   ];
   const broken = w.steps.filter((s) => s.kind === "broken_link");

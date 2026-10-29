@@ -77,8 +77,9 @@ test("at 1440 px with Ask open, a goal card's code and its share of the score st
   }
 });
 
-test("the walk's decisions open on Simple's Decisions page", async ({ page }) => {
-  // fails_when: a decision that is not a PRD's question opens Detailed's decisions page from Simple
+test("the walk opens each decision where it can be decided, as Home's card does", async ({ page }) => {
+  // fails_when: a judgement call (not a PRD's question) opens Simple's Decisions page, which only lists it (no Decide),
+  // or a PRD's question leaves Simple
   // The approver: "Ship usage caps before anomaly detection" (a judgement call, not a PRD's question) waits on them.
   await signIn(page, APPROVER, null);
   await page.getByRole("button", { name: "Walk me through it" }).click();
@@ -93,8 +94,12 @@ test("the walk's decisions open on Simple's Decisions page", async ({ page }) =>
     await page.getByRole("button", { name: "Skip" }).click();
   }
   expect(hrefs.length).toBeGreaterThan(0);
-  for (const h of hrefs) expect(h).toMatch(/^\/simple\//);
-  expect(hrefs.some((h) => /^\/simple\/decisions#d-\d+$/.test(h))).toBe(true);
+  for (const h of hrefs) expect(h).toMatch(/^\/simple\/decisions$|^\/company\/decisions\?d=\d+$/);
+  const judgement = hrefs.find((h) => /^\/company\/decisions\?d=\d+$/.test(h));
+  expect(judgement).toBeTruthy();
+  // The same place Home's card for it opens, where an approver can decide it.
+  await page.goto(judgement!);
+  await expect(page.getByRole("button", { name: /Decide/ }).first()).toBeVisible();
 });
 
 test("the walk still loads when the waiting decisions cannot be read", async ({ page }) => {

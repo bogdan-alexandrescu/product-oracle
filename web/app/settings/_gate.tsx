@@ -22,7 +22,7 @@ export function SettingsGate({ children }: { children: ReactNode }) {
     if (signedOut) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
   }, [signedOut, router, pathname]);
   const tab = settingsTabOf(pathname);
-  if (signedOut) return <Loading />;
+  if (signedOut) return <PageSkeleton bare />;
   const write = SETTINGS_WRITES[pathname];
   if (!tab || (tabs.includes(tab) && (!write || can(write)))) return children;
   // A failed read says so in the shell, with Retry (#370 fixes 4); no Loading forever.
