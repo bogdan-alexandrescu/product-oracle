@@ -84,10 +84,11 @@ test("phone: Make measurable and Add subgoal do not overlap", async ({ page }) =
 
 // protects=qa-plan-43: Progress says what its number is; fails_when=it reads "50% own";
 // no_claim=the roll-up maths (subgoals.spec, pytest).
-test("goals table: progress reads '50% of target'", async ({ page }) => {
+// qa-plan-2: and what it is measured from (its start, 31%), so it squares with Plan's 38% of 45%.
+test("goals table: progress reads '50% of the way from 31%'", async ({ page }) => {
   await openBaseline(page);
   const progress = page.getByTestId("goal-g.activation").locator('[data-attr="progress"]');
-  await expect(progress).toHaveText("50% of target");
+  await expect(progress).toHaveText("50% of the way from 31%");
   await expect(progress).not.toContainText("own");
 });
 

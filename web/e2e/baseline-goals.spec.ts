@@ -51,7 +51,7 @@ test("goals table: typed target, horizon and owner; a Not measurable chip on a g
   await expect(paid.getByTestId("not-measurable")).toHaveAttribute("title", "Missing: owner");
 
   const churn = page.getByTestId("goal-g.early-churn");
-  await expect(churn.locator('[data-attr="target"]')).toHaveText("below 8%");
+  await expect(churn.locator('[data-attr="target"]')).toHaveText("< 8%");
   await expect(churn.locator('[data-attr="target"]')).toHaveAttribute("title", "Not checked yet: fill from text or edit");
   await expect(churn.locator('[data-attr="target"]')).toHaveAttribute("data-text", "true");
   await expect(churn.getByTestId("not-measurable")).toHaveText("Not measurable");
@@ -69,7 +69,7 @@ test("edit form: a target without a unit shows the problem under Value and does 
   await form.getByRole("button", { name: "Save" }).click();
   await expect(form.getByTestId("field-error-target")).toHaveText("A target needs its unit and which way is success");
   await expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
-  await expect(page.getByTestId("goal-g.early-churn").locator('[data-attr="target"]')).toHaveText("below 8%");
+  await expect(page.getByTestId("goal-g.early-churn").locator('[data-attr="target"]')).toHaveText("< 8%");
 
   // The fix, in place.
   await form.getByLabel("Comparison").selectOption("below");
@@ -149,7 +149,7 @@ test("measurements: Home shows 7 pts to go; Record value 40 today moves the char
   await login(page);
   await page.goto("/home");
   await expect(page.getByTestId("home-goal-G1").getByTestId("goal-to-go")).toHaveText("7 pts to go");
-  await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("No current value");
+  await expect(page.getByTestId("home-goal-G3").getByTestId("goal-to-go")).toHaveText("No current value yet");
 
   await page.goto("/baseline");
   await page.getByTestId("goal-g.activation").getByRole("button", { name: "Raise activation" }).click();
@@ -197,7 +197,8 @@ test("confirm a Not measurable goal: Confirmed with the chip still on, and Home 
 
   await page.goto("/home");
   const g3 = page.getByTestId("home-goal-G3");
-  await expect(g3.getByTestId("goal-to-go")).toHaveText("No target");
+  // qa-plan-14: never "No target" beside the shown target "below 8%".
+  await expect(g3.getByTestId("goal-to-go")).toHaveText("No current value yet");
   await expect(g3.getByTestId("goal-to-go").locator("[title]")).toHaveAttribute(
     "title",
     "Not measurable yet: missing unit, comparison, target, horizon, owner",

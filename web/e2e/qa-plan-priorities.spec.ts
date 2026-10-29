@@ -10,7 +10,7 @@ import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
  * - qa-plan-14: on a phone a tapped feature opens in a bottom sheet.
  * - qa-plan-20: a row out of score order says why in the row itself.
  * - qa-plan-38 / qa-plan-39: the snapshot note sits labelled beside Save snapshot, for those
- *   who can save one; the "Order" switch only for those who can make changes.
+ *   who can save one (in the Snapshots panel); the "Order" view switch for every role (qa-plan-22).
  * - qa-plan-40 / qa-plan-41: one number style in body font; evidence by kind of source and
  *   date in words; no evidence ids; the confidence line in words.
  * - qa-plan-42 / prod-4: Goal and Depends on read in full.
@@ -111,11 +111,12 @@ test("qa-plan-20: every row out of score order says why in the row", async ({ pa
 });
 
 for (const role of ["viewer", "commenter"]) {
-  test(`qa-plan-38: a ${role} has no snapshot note and no Order switch`, async ({ page }) => {
+  // qa-plan-22 replaces qa-plan-38's Order rule: the view switch stays for read-only roles.
+  test(`qa-plan-38: a ${role} has no snapshot note, keeps the Order view switch`, async ({ page }) => {
     await open(page, `${role}@example.com`);
     await expect(page.getByRole("radiogroup", { name: "Ranking method" })).toBeVisible();
-    await expect(page.getByRole("radiogroup", { name: "Order" })).toHaveCount(0);
-    await expect(page.getByRole("radio", { name: "Oracle's order" })).toHaveCount(0);
+    await expect(page.getByRole("radiogroup", { name: "Order" })).toBeVisible();
+    await expect(page.getByRole("radio", { name: "Oracle's order" })).toBeVisible();
     await expect(page.getByRole("textbox", { name: /Snapshot note/ })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Save snapshot" })).toHaveCount(0);
   });
@@ -128,7 +129,7 @@ test("qa-plan-39: the snapshot note is labelled and sits beside Save snapshot", 
   await expect(note).toBeVisible();
   await expect(save.getByRole("button", { name: "Save snapshot" })).toBeVisible();
   await expect(page.getByTestId("snapshot-list").or(page.getByText("No snapshots yet."))).toBeVisible();
-  // Not in the Snapshots card any more.
+  // One note box only, in the Snapshots panel.
   await expect(page.getByRole("textbox", { name: /Snapshot note/ })).toHaveCount(1);
   await note.fill("Before planning");
   await save.getByRole("button", { name: "Save snapshot" }).click();
@@ -138,8 +139,8 @@ test("qa-plan-39: the snapshot note is labelled and sits beside Save snapshot", 
 test("qa-plan-40: scores in one style and body font; the Move dialog names the source and date", async ({ page }) => {
   await open(page);
   await page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name: "RICE" }).click();
-  await expect(rowOf(page, "F-2").getByTestId("score")).toHaveText("5,400");
-  await expect(rowOf(page, "F-8").getByTestId("score")).toHaveText("83.3");
+  await expect(rowOf(page, "F-2").getByTestId("score")).toHaveText("5,400.00");
+  await expect(rowOf(page, "F-8").getByTestId("score")).toHaveText("83.33");
   expect(await mono(rowOf(page, "F-2").getByTestId("score"))).toBe(false);
 
   await page.getByRole("radiogroup", { name: "Ranking method" }).getByRole("radio", { name: "Goal-weighted" }).click();

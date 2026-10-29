@@ -80,7 +80,7 @@ test("add a subgoal, set its target, link a feature, see the parent roll up, pic
   await expect(churn.locator('[data-attr="progress"]')).toHaveText("60% from subgoals");
   await expect(churn.locator('[data-attr="progress"]')).toHaveAttribute("data-source", "subgoals");
   // A goal with its own value says so.
-  await expect(page.getByTestId("goal-g.activation").locator('[data-attr="progress"]')).toHaveText("50% of target");
+  await expect(page.getByTestId("goal-g.activation").locator('[data-attr="progress"]')).toHaveText("50% of the way from 31%");
 
   // The tree folds.
   await churn.getByRole("button", { name: "Hide subgoals of Cut early churn" }).click();

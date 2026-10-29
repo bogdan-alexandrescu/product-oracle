@@ -14,7 +14,7 @@ import { login } from "./helpers";
 const withScenario = (page: Page, scenario: string) =>
   page.addInitScript(([key, s]) => localStorage.setItem(key, s), [MOCK_SCENARIO_KEY, scenario] as const);
 
-const TRACK_CONTROLS = ["Rename", "Change owner", "Add milestone", "Check now", "Draft roadmap from this track", "Push to tracker"];
+const TRACK_CONTROLS = ["Rename", "Set owner", "Add milestone", "Check now", "Draft roadmap from this track", "Push to tracker"];
 
 const track = (page: Page) => page.getByTestId("plan-track").filter({ visible: true }).filter({ hasText: "Usage alerts" });
 
@@ -58,7 +58,7 @@ test("a commenter opens a milestone and sees it read only", async ({ page }) => 
   const e = page.getByTestId("plan-milestone").filter({ visible: true });
   await expect(e).toContainText("Milestone · selected");
   await expect(e.getByTestId("milestone-name")).toHaveText("First release");
-  await expect(e.getByTestId("milestone-date")).toHaveText("No date");
+  await expect(e.getByTestId("milestone-date")).toHaveText("Nov 30");
   await expect(e.getByTestId("milestone-state")).toHaveText("Planned");
   await expect(e.getByRole("textbox")).toHaveCount(0);
   await expect(e.getByRole("checkbox")).toHaveCount(0);

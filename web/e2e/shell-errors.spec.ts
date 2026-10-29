@@ -25,7 +25,7 @@ test("a role refusal says who can act, not a status", async ({ page, context }) 
   await page.goto("/baseline");
   await page.getByRole("button", { name: "Build baseline" }).click();
   const sheet = page.getByRole("dialog", { name: "Build the baseline" });
-  await expect(sheet.getByTestId("build-estimate")).toHaveText("Estimate $7.00");
+  await expect(sheet.getByTestId("build-estimate")).toHaveText("$7.00 estimated · below the $50 approval line · starts at once");
 
   const owner = await context.newPage();
   await owner.goto("/home");

@@ -80,7 +80,7 @@ test("baseline rebuild: at Observe the occurrence only reminds and links the Bui
   await card.getByRole("link", { name: "Build the baseline" }).click();
   await expect(page).toHaveURL(/\/baseline\?build=1$/);
   const build = page.getByRole("dialog", { name: "Build the baseline" });
-  await expect(build).toContainText("Estimate $7.00");
+  await expect(build).toContainText("$7.00 estimated · below the $50 approval line");
 });
 
 // protects=the rebuild has no ritual cost cap: a build priced $14.00 (above Run rituals' default

@@ -49,8 +49,10 @@ test("qa-plan-17: an approved version 1 with a later draft still offers its item
 test("qa-plan-51: empty Launches and Changelog say so in a sentence and suggest the action the role has", async ({ page }) => {
   await start(page);
   await page.goto("/roadmap/launches");
-  await expect(page.getByTestId("table-empty")).toHaveText(
-    "No launches yet. Use New launch to plan the first, or approve a roadmap: its Now items get a launch each.",
+  // qa-plan-48: with no launch at all, the empty state stands alone (no table).
+  await expect(page.getByTestId("launches-empty")).toContainText("No launches yet");
+  await expect(page.getByTestId("launches-empty-text")).toHaveText(
+    "Use New launch to plan the first, or approve a roadmap: its Now items get a launch each.",
   );
   await page.goto("/roadmap/changelog");
   await expect(page.getByTestId("changelog-empty")).toHaveText(
@@ -62,7 +64,9 @@ test("qa-plan-51: empty Launches and Changelog say so in a sentence and suggest 
 test("qa-plan-51: a viewer's empty states do not suggest New launch or New entry", async ({ page }) => {
   await start(page, { role: "viewer" });
   await page.goto("/roadmap/launches");
-  await expect(page.getByTestId("table-empty")).toHaveText("No launches yet. They are planned when a roadmap is approved.");
+  await expect(page.getByTestId("launches-empty")).toContainText("No launches yet");
+  await expect(page.getByTestId("launches-empty-text")).toHaveText("They are planned when a roadmap is approved.");
+  await expect(page.getByTestId("launches-empty-new")).toHaveCount(0);
   await page.goto("/roadmap/changelog");
   await expect(page.getByTestId("changelog-empty")).toHaveText(
     "No entries yet. Oracle adds one when it drafts a launch's kit, and approvers add their own.",
