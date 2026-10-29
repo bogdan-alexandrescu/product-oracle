@@ -5,8 +5,10 @@ import { THEME_KEY } from "../lib/theme";
 import { ADMIN } from "./helpers";
 
 /*
- * roadmap-talk: the roadmap item card's "Talk to Oracle" widens the card in place (a phone's
- * sheet gets two tabs, Details and Talk to Oracle) with the item's own talk (one thread per
+ * roadmap-talk: the roadmap item card's "Talk to Oracle" widens the card (the owner's pick C,
+ * "Wider card, talk beside the details": 840 px over the roadmap, the details left, the talk
+ * right under "TALK ABOUT F-16" with its message box at the foot and "Hide the talk" beside the
+ * close; a phone's sheet gets two tabs, Details | Talk to Oracle) with the item's own talk (one thread per
  * item and person, "it" means the item); Oracle answers with its source and restates each
  * change as an action card with Before → After, Apply, Reject and Correct. The "roadmap-talk"
  * mock scenario (the mock's today: 22 Oct 2026) with its invented F-16 Adaptive pacing
@@ -46,14 +48,26 @@ async function openTalk(page: Page, key: string, phone: boolean): Promise<{ card
   } else {
     await tap(card.getByRole("button", { name: "Talk to Oracle" }));
     await expect(card).toHaveAttribute("data-talk", "true");
-    // Widened in place: the details stay on the left.
+    // Widened: the details stay on the left, the talk on the right.
     await expect(card.getByTestId("card-dates")).toBeVisible();
-    expect((await card.boundingBox())!.width).toBeGreaterThan(700);
+    expect((await card.boundingBox())!.width).toBeGreaterThan(800);
   }
   const talk = card.getByTestId("item-talk");
-  await expect(talk.getByRole("heading", { name: "Talk about F-16 Adaptive pacing" })).toBeVisible();
-  await expect(talk.getByRole("button", { name: phone ? "Back to the details" : "Hide the talk" })).toBeVisible();
+  await expect(card.getByRole("heading", { name: "F-16 Adaptive pacing", level: 2 })).toBeVisible();
+  if (phone) {
+    // A phone's tab is the talk itself: no heading over it, Details goes back.
+    await expect(card.getByRole("tab", { name: "Details" })).toBeVisible();
+  } else {
+    await expect(talk.getByRole("heading", { name: "Talk about F-16", exact: true })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Hide the talk" })).toBeVisible();
+  }
+  // A viewer asks questions only: "Ask about F-16…".
+  await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about F-16(, or ask for a change)?…$/);
   await expect(talk.getByTestId("chat-note")).toHaveText("Just you and Oracle · kept with this item");
+  // The message box sits at the foot of the talk, under the lines.
+  const box = (await talk.getByRole("textbox", { name: "Message Oracle" }).boundingBox())!;
+  const area = (await talk.boundingBox())!;
+  expect(area.y + area.height - (box.y + box.height)).toBeLessThan(140);
   return { card, talk };
 }
 
@@ -112,6 +126,36 @@ for (const [phone, dark] of [
       // A question about its days is read from the roadmap, and says so.
       await say(talk, "When is it?");
       await expect(last(talk).getByTestId("chat-message-source")).toHaveText("From the roadmap · F-16 Adaptive pacing");
+    });
+
+    /**
+     * Card roadmap-talk-pick-c: protects = the card as pick C draws it: the title with its
+     * code chip ("F-16 Adaptive pacing"), the details in C's order (Outcome … Needed by, then
+     * WHY, OPEN DECISIONS, FLOW, PROPOSALS ON IT, Open the detailed view), and with the talk
+     * open and empty its message box at the foot of the card (not under the heading), the
+     * details still beside it on a desktop with the flow as one line; fails_when = FLOW comes
+     * first, the code is missing, or the empty talk puts its box at the top; no_claim = the
+     * chat lines' look (the Ask chat's).
+     */
+    test(`the card follows pick C: its order, and the empty talk's box at the foot (${where})`, async ({ page }) => {
+      await signIn(page, EMAILS.owner, "/simple/roadmap");
+      await expect(bar(page, "adaptive-pacing")).toBeVisible();
+      await bar(page, "adaptive-pacing").click();
+      const floating = page.getByTestId("floating-card");
+      await expect(floating.getByRole("heading", { level: 2 })).toHaveText("F-16 Adaptive pacing");
+      await expect(floating.getByRole("heading", { level: 3 })).toHaveText(["Why", "Open decisions", "Flow", "Proposals on it"]);
+      await tap(floating.getByRole(phone ? "tab" : "button", { name: "Talk to Oracle" }));
+      const c = floating;
+      const talk = c.getByTestId("item-talk");
+      const box = (await talk.getByRole("textbox", { name: "Message Oracle" }).boundingBox())!;
+      const sheet = (await c.boundingBox())!;
+      expect(sheet.y + sheet.height - (box.y + box.height)).toBeLessThan(60);
+      if (!phone) {
+        // The details stay on the left, the flow as one line.
+        await expect(c.getByTestId("card-flow").getByTestId("flow-row")).toHaveText("No flow yet");
+        await expect(c.getByRole("link", { name: "Open the detailed view" })).toBeVisible();
+        await expect(c.getByRole("button", { name: "Talk to Oracle" })).toHaveCount(0);
+      }
     });
 
     /**
@@ -249,10 +293,11 @@ for (const [phone, dark] of [
     });
 
     /**
-     * Card roadmap-talk-wide-edge: protects = the widened talk card opened from the bar
-     * nearest the right edge stays inside the roadmap (it moves left), not at the narrow
-     * card's offset; fails_when = its right edge runs past the roadmap; no_claim = a phone
-     * (a bottom sheet there).
+     * Card roadmap-talk-wide-edge: protects = the widened talk card (pick C: 840 px, 16 px from
+     * the page's top and foot, its right edge 22 px inside the page) opened from the bar nearest
+     * the right edge stays inside the page, beside the rail and the Ask dock; "Hide the talk"
+     * narrows it back to the card by the bar; fails_when = its edges run past the page or it
+     * keeps the narrow card's offset; no_claim = a phone (a bottom sheet there).
      */
     test(`the talk card opened near the right edge stays inside the roadmap (${where})`, async ({ page }) => {
       test.skip(phone, "a phone's card is a bottom sheet");
@@ -265,9 +310,19 @@ for (const [phone, dark] of [
       await tap(floating.getByRole("button", { name: "Talk to Oracle" }));
       await expect(floating).toHaveAttribute("data-talk", "true");
       await expect(floating.getByTestId("item-talk")).toBeVisible();
-      const over = await floating.evaluate((el) => el.getBoundingClientRect().right - (el as HTMLElement).offsetParent!.getBoundingClientRect().right);
-      expect(over).toBeLessThanOrEqual(0);
-      expect((await floating.boundingBox())!.width).toBeGreaterThan(800);
+      const fit = await floating.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const main = document.querySelector("main")!.getBoundingClientRect();
+        return { left: r.left - main.left, right: main.right - r.right, top: r.top, foot: window.innerHeight - r.bottom, width: r.width };
+      });
+      expect(fit.left).toBeGreaterThanOrEqual(0);
+      expect(Math.round(fit.right)).toBe(22);
+      expect(Math.round(fit.top)).toBe(16);
+      expect(Math.round(fit.foot)).toBe(16);
+      expect(Math.round(fit.width)).toBe(840);
+      await tap(floating.getByRole("button", { name: "Hide the talk" }));
+      await expect(floating).toHaveAttribute("data-talk", "false");
+      expect(Math.round((await floating.boundingBox())!.width)).toBe(380);
     });
 
     /**

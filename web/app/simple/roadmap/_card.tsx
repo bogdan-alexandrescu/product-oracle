@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button, SegmentedControl } from "@/components/ds";
 import { FlowDetail, FlowThumb as FlowPicture } from "@/components/simple/Flow";
 import { FlowPanel, type FlowSubject } from "@/components/simple/FlowVisual";
+import { Code, Icon, ICONS, Tabs } from "@/components/simple/FlowViews";
 import { ItemTalk } from "@/components/simple/chat/ItemTalk";
 import { useScreenSubject } from "@/lib/screen-subject";
 
@@ -456,12 +457,44 @@ function FlowThumb({
   );
 }
 
+/** One of the card's parts ("WHY", "FLOW"): the mock-up's small-capitals heading over its body. */
+function Part({ title, children, testId }: { title: string; children: React.ReactNode; testId?: string }) {
+  return (
+    <section className="mt-3" data-testid={testId}>
+      <h3 className="text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase">
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
+/** Where the widened card sits beside its talk (pick C): 16 px from the page's top and foot, its
+ * right edge 22 px inside the page (the rail and the Ask dock stay clear). */
+function useTalkPlace(on: boolean): number {
+  const [right, setRight] = useState(66);
+  useLayoutEffect(() => {
+    if (!on) return;
+    const read = () => {
+      const r = document.querySelector("main")?.getBoundingClientRect();
+      setRight(r ? Math.max(8, Math.round(window.innerWidth - r.right) + 22) : 22);
+    };
+    read();
+    window.addEventListener("resize", read);
+    return () => window.removeEventListener("resize", read);
+  }, [on]);
+  return right;
+}
+
 /**
- * D8 as amended: a floating card by the bar (phones: a bottom sheet) with the item's
- * outcome, owner, dates and their source, status, confidence, dependencies, top 3 reasons,
- * open decisions, the proposals on it, "Open the detailed view" and "Talk to Oracle"
- * (roadmap-talk: the card widens in place, the details left and the item's talk right; a
- * phone's sheet has two tabs, Details and Talk to Oracle).
+ * D8 as amended, drawn to the owner's pick C ("Wider card, talk beside the details",
+ * simple-v3/talk/card-ask.html): a floating card by the bar (phones: a bottom sheet with a grab
+ * handle) headed by the item's code and title, with its outcome, owner, dates and their source,
+ * status, confidence, dependencies, top 3 reasons, open decisions, its flow (the flow pick's
+ * row), the proposals on it, "Open the detailed view" and "Talk to Oracle". Talk to Oracle
+ * widens the card to 840 px over the roadmap: the details on the left, the talk on the right
+ * with its message box at the foot, "Hide the talk" beside the close. A phone's sheet gets two
+ * tabs, Details | Talk to Oracle.
  */
 export function FloatingCard({
   item,
@@ -490,13 +523,12 @@ export function FloatingCard({
   /** The board's horizon control (a phone cannot always drag a card to a column off the screen). */
   onHorizon?: (h: Horizon) => void;
 }) {
-  // The widened card's visual: a draft's own flow ("item", S7) or a proposal's or the item's feature visual (S10).
+  // The widened card's visual: a draft's own flow ("item", S7) or a proposal's visual (S10).
   const [wide, setWide] = useState<FlowSubject | "item" | null>(null);
-  // The walk: the item's flow drawn while its card is open names itself here at once.
-  // The owner's flow picks: the item's flow row, opened in place (the card widens for it).
-  const [rowOpen, setRowOpen] = useState(false);
   // roadmap-talk: the item's talk with Oracle, open beside the details (a phone: its tab).
   const [talk, setTalk] = useState(false);
+  // The item's flow opened across the page (or its storyboard): the card steps out of its way.
+  const [flowOpen, setFlowOpen] = useState(false);
   const openFlow = (w: FlowSubject | "item" | null) => {
     setWide(w);
     if (w && !phone) setTalk(false);
@@ -516,23 +548,402 @@ export function FloatingCard({
   const dates = item.estimated
     ? `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · estimated (the ${item.horizon} window)`
     : `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · ${sourceWord(item.source)}`;
-  // A phone's widened card (the flow) is a full-height sheet.
-  const place = phone
-    ? wide || rowOpen
-      ? "fixed inset-0 z-50 h-dvh"
-      : "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl"
-    : `absolute z-40 rounded-xl ${talk ? "w-[820px]" : wide || rowOpen ? "w-[760px]" : "w-[380px]"}`;
-  const showDetails = !phone || !talk;
-  // roadmap-talk: a widened card (the talk, the flow) keeps inside the roadmap, not the 380 px card's left.
+  const beside = talk && !phone;
+  const talkRight = useTalkPlace(beside);
+  // A widened card (a proposal's flow) keeps inside the roadmap, not the 380 px card's left.
   const [left, setLeft] = useState<number | null>(null);
   const baseLeft = typeof style.left === "number" ? style.left : null;
   useLayoutEffect(() => {
     const el = ref.current;
     const parent = el?.offsetParent as HTMLElement | null;
-    if (phone || !el || !parent || baseLeft == null) return setLeft(null);
+    if (phone || beside || !el || !parent || baseLeft == null) return setLeft(null);
     const room = parent.clientWidth - el.offsetWidth - 8;
     setLeft(baseLeft > room ? Math.max(0, room) : null);
-  }, [talk, wide, rowOpen, phone, baseLeft]);
+  }, [wide, phone, beside, baseLeft]);
+
+  const place = phone
+    ? wide
+      ? "fixed inset-0 z-50 flex h-dvh flex-col"
+      : `fixed inset-x-0 bottom-0 z-50 flex flex-col rounded-t-2xl border-t h-[85dvh]`
+    : beside
+      ? "fixed z-40 flex w-[840px] flex-col rounded-xl border"
+      : `absolute z-40 rounded-xl border p-4 ${wide ? "w-[760px]" : "w-[380px]"}`;
+  const placeStyle: React.CSSProperties | undefined = phone
+    ? undefined
+    : beside
+      ? { top: 16, bottom: 16, right: talkRight }
+      : left == null
+        ? style
+        : { ...style, left };
+
+  const head = (
+    <div className="flex items-start gap-2">
+      <h2 className="min-w-0 flex-1 text-[18px] leading-6 font-semibold break-words">
+        {item.code && (
+          <>
+            <Code code={item.code} className="mr-0.5 align-[1px]" />{" "}
+          </>
+        )}
+        {item.title}
+        {item.draft && item.status !== "merged" && (
+          <span
+            className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na"
+            data-testid="draft-tag"
+          >
+            Draft
+          </span>
+        )}
+      </h2>
+      {beside && (
+        <button
+          type="button"
+          onClick={() => setTalk(false)}
+          className="inline-flex h-8 flex-none items-center rounded-lg px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-accent-ink hover:bg-surface2"
+        >
+          Hide the talk
+        </button>
+      )}
+      <button
+        type="button"
+        aria-label="Close"
+        onClick={onClose}
+        className="grid h-7 w-7 flex-none place-items-center rounded-md text-text2 hover:bg-surface2"
+      >
+        <Icon d={ICONS.close} size={18} width={1.7} />
+      </button>
+    </div>
+  );
+
+  const flowPart = item.draft ? (
+    item.status !== "merged" && (
+      <Part title="Flow">
+        <div className="mt-1 flex items-center gap-2">
+          {item.flow ? (
+            <button
+              type="button"
+              data-testid="item-flow-thumb"
+              aria-label="Open the flow"
+              onClick={() => openFlow(wide === "item" ? null : "item")}
+              className="rounded-md border border-line bg-surface p-1"
+            >
+              <FlowPicture flow={item.flow} />
+            </button>
+          ) : (
+            <span
+              className="rounded-md border border-dashed border-line px-2 py-0.5 text-text2"
+              data-testid="item-flow-none"
+            >
+              No flow yet
+            </span>
+          )}
+        </div>
+      </Part>
+    )
+  ) : (
+    <Part title="Flow" testId="card-flow">
+      <FlowPanel
+        key={`row-${item.id}-${beside ? "line" : "row"}`}
+        row={!beside}
+        line={beside}
+        subject={{ kind: "feature", id: item.id }}
+        openLabel="Open the item's flow"
+        code={item.code}
+        name={item.title}
+        backLabel="Roadmap"
+        onOpenChange={setFlowOpen}
+      />
+    </Part>
+  );
+
+  const details = (
+    <>
+      {item.drafting && (
+        <p
+          className="mt-1 text-sm text-accent-ink"
+          role="status"
+          data-testid="item-drafting"
+        >
+          Oracle is drafting…
+        </p>
+      )}
+      {item.merged_into && (
+        <p className="mt-1 text-sm text-text2" data-testid="item-merged">
+          Merged into {item.merged_into.code} {item.merged_into.title}
+        </p>
+      )}
+      <LooksLike item={item} act={act} canChange={canChange} />
+      <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
+        <dl className="mt-2.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5">
+          <dt className="text-text2">Outcome</dt>
+          <dd data-testid="card-outcome">
+            {item.outcome ?? (
+              <span className="text-text2">Not written yet</span>
+            )}
+          </dd>
+          <dt className="text-text2">Owner</dt>
+          <dd data-testid="card-owner">
+            {item.owner?.name ?? (
+              <span className="text-text2">No owner yet</span>
+            )}
+          </dd>
+          <dt className="text-text2">Dates</dt>
+          <dd data-testid="card-dates">{dates}</dd>
+          {item.slices.length > 0 && (
+            <>
+              <dt className="text-text2">Milestone</dt>
+              <dd data-testid="card-milestone">
+                {[
+                  ...new Map(
+                    item.slices.map((x) => [
+                      x.milestone,
+                      `${x.milestone} ${x.milestone_name}`,
+                    ]),
+                  ).values(),
+                ].join(", ")}
+              </dd>
+              <dt className="text-text2">Slices</dt>
+              <dd>
+                <ul className="space-y-1" data-testid="card-slices">
+                  {item.slices.map((x) => (
+                    <li
+                      key={x.code}
+                      data-testid="card-slice"
+                      className="flex gap-2"
+                    >
+                      <span
+                        aria-hidden
+                        className="mt-1.5 h-2.5 w-2.5 flex-none rounded-sm"
+                        style={{ background: milestoneInk(x.milestone) }}
+                      />
+                      <span>
+                        <b className="font-semibold">
+                          {x.code} {x.name}
+                        </b>
+                        <span className="block text-sm text-text2">
+                          {x.milestone} {x.milestone_name}
+                          {x.start_date && x.end_date
+                            ? ` · ${shortDay(x.start_date)} – ${shortDay(x.end_date)}`
+                            : " · not dated yet"}
+                          {x.pm_owned || x.effort_weeks == null
+                            ? " · PM-owned"
+                            : ` · ${x.effort_weeks} engineer-week${x.effort_weeks === 1 ? "" : "s"}`}
+                          {x.estimated ? " · placed by Oracle" : ""}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </>
+          )}
+          {near && (
+            <>
+              <dt className="text-text2">Near</dt>
+              <dd data-testid="card-near">{near}</dd>
+            </>
+          )}
+          {onHorizon && (
+            <>
+              <dt className="self-center text-text2">Horizon</dt>
+              <dd data-testid="card-horizon">
+                <SegmentedControl<Horizon>
+                  label="Horizon"
+                  size="sm"
+                  value={item.horizon}
+                  onChange={(h) => h !== item.horizon && onHorizon(h)}
+                  items={HORIZONS.map((h) => ({
+                    value: h.key,
+                    label: h.label,
+                  }))}
+                />
+              </dd>
+            </>
+          )}
+          <dt className="text-text2">Status</dt>
+          <dd data-testid="card-status">{item.status.replace("_", " ")}</dd>
+          <dt className="text-text2">Confidence</dt>
+          <dd>{item.confidence ?? "Not rated"}</dd>
+          <dt className="text-text2">Depends on</dt>
+          <dd data-testid="card-depends">{names(item.depends_on, items)}</dd>
+          <dt className="text-text2">Needed by</dt>
+          <dd data-testid="card-needed">{names(item.needed_by, items)}</dd>
+        </dl>
+        <div>
+          {item.flags.length > 0 && (
+            <section className="mt-3 space-y-1" data-testid="card-flags">
+              {item.flags.map((f) => (
+                <div key={`${f.kind}-${f.subject}`}>
+                  <FlagLine flag={f} />
+                  {f.state === "red" && (
+                    <FixButtons
+                      item={item}
+                      flag={f}
+                      items={items}
+                      act={act}
+                      canChange={canChange}
+                    />
+                  )}
+                </div>
+              ))}
+            </section>
+          )}
+          <Part title="Why">
+            {item.reasons.length ? (
+              <ul
+                className="mt-1 list-disc pl-[18px]"
+                data-testid="card-reasons"
+              >
+                {item.reasons.slice(0, 3).map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-text2">No reasons on record yet.</p>
+            )}
+          </Part>
+          <Part title="Open decisions">
+            {item.open_decisions.length ? (
+              <ul className="mt-1" data-testid="card-decisions">
+                {item.open_decisions.map((d) => (
+                  <li key={d.id}>
+                    <Link
+                      href={`/company/decisions?d=${d.id}`}
+                      className="text-accent-ink hover:underline"
+                    >
+                      D-{d.number}
+                    </Link>{" "}
+                    {d.title}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-text2">None open.</p>
+            )}
+          </Part>
+          {item.decided_in.length > 0 && (
+            <Part title="Decided">
+              <ul className="mt-1" data-testid="card-decided-in">
+                {item.decided_in.map((d) => (
+                  <li key={d.id}>
+                    Decided in{" "}
+                    <Link
+                      href={`/simple/decisions#d-${d.number}`}
+                      className="text-accent-ink hover:underline"
+                    >
+                      D-{d.number}
+                    </Link>{" "}
+                    {d.title}
+                  </li>
+                ))}
+              </ul>
+            </Part>
+          )}
+          {flowPart}
+          <Part title="Proposals on it">
+            {proposals.length ? (
+              <ul className="mt-1 space-y-2" data-testid="card-proposals">
+                {proposals.map((c) => (
+                  <li key={c.id} className="flex items-center gap-2">
+                    {featureProposal(c, items) && (
+                      <FlowThumb
+                        onOpen={() =>
+                          openFlow(
+                            wide !== "item" && wide?.id === c.id
+                              ? null
+                              : { kind: "change", id: c.id },
+                          )
+                        }
+                      />
+                    )}
+                    <span className="min-w-0 flex-1">
+                      {opWords(c.op)} ·{" "}
+                      <span className="text-text2">{c.by_name}</span>
+                    </span>
+                    {c.can_decide && (
+                      <>
+                        <Button onClick={() => onDecide(c, "accept")}>
+                          Accept
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => onDecide(c, "decline")}
+                        >
+                          Decline
+                        </Button>
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-text2">None waiting.</p>
+            )}
+          </Part>
+        </div>
+        {wide && (
+          <section
+            data-testid="flow-view"
+            className={`mt-3 ${phone ? "" : "col-span-2"}`}
+          >
+            <h3 className="font-semibold">
+              The flow and the screen it touches
+            </h3>
+            {wide === "item" ? (
+              <>
+                {item.flow ? (
+                  <FlowDetail flow={item.flow} />
+                ) : (
+                  <p
+                    className="mt-1 text-sm text-text2"
+                    data-testid="flow-empty"
+                  >
+                    No flow yet: Oracle has not drawn a user flow or a
+                    wireframe for this proposal.
+                  </p>
+                )}
+                <Button
+                  variant="ghost"
+                  className="mt-2"
+                  onClick={() => openFlow(null)}
+                >
+                  Close the flow
+                </Button>
+              </>
+            ) : (
+              <FlowPanel
+                key={`${wide.kind}-${wide.id}`}
+                subject={wide}
+                onClose={() => openFlow(null)}
+              />
+            )}
+          </section>
+        )}
+      </div>
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
+        <Link
+          href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}`}
+          className="inline-flex h-8 items-center rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap hover:bg-surface2"
+        >
+          Open the detailed view
+        </Link>
+        {!talk && !phone && (
+          <button
+            type="button"
+            onClick={() => setTalk(true)}
+            className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink"
+          >
+            <Icon d={ICONS.ask} size={16} />
+            Talk to Oracle
+          </button>
+        )}
+      </div>
+    </>
+  );
+
+  const talkPanel = (
+    <ItemTalk itemId={item.id} about={about} code={item.code} phone={phone} />
+  );
+
   return (
     <div
       ref={ref}
@@ -541,416 +952,71 @@ export function FloatingCard({
       aria-label={item.title}
       data-testid="floating-card"
       data-sheet={phone ? "bottom" : "float"}
-      data-wide={wide || rowOpen ? "true" : "false"}
+      data-wide={wide ? "true" : "false"}
       data-talk={talk ? "true" : "false"}
-      style={phone ? undefined : left == null ? style : { ...style, left }}
-      className={`${place} max-w-[calc(100vw-16px)] overflow-y-auto border border-line bg-surface p-4 shadow-tip outline-none`}
+      data-flow-open={flowOpen ? "true" : "false"}
+      style={placeStyle}
+      className={`${place} max-w-[calc(100vw-16px)] border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
     >
-      <div className="flex items-start gap-2">
-        <h2 className="flex-1 text-lg leading-snug font-semibold">
-          {item.title}
-          {item.draft && item.status !== "merged" && (
+      {phone ? (
+        <>
+          {!wide && (
             <span
-              className="ml-2 inline-block rounded-full bg-na-bg px-2 align-middle text-xs font-normal text-na"
-              data-testid="draft-tag"
-            >
-              Draft
-            </span>
+              aria-hidden
+              className="mx-auto mt-2 mb-1 block h-1 w-10 flex-none rounded-sm bg-line-strong opacity-60"
+            />
           )}
-        </h2>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="h-7 w-7 flex-none rounded text-text2 hover:bg-surface2"
-        >
-          ×
-        </button>
-      </div>
-      {phone && (
-        <div
-          role="tablist"
-          aria-label="The item"
-          className="mt-2 flex gap-1 border-b border-line"
-        >
-          {([false, true] as const).map((t) => (
-            <button
-              key={String(t)}
-              type="button"
-              role="tab"
-              aria-selected={talk === t}
-              onClick={() => setTalk(t)}
-              className={`-mb-px border-b-2 px-3 py-2 text-[15px] font-semibold ${talk === t ? "border-accent text-accent-ink" : "border-transparent text-text2"}`}
-            >
-              {t ? "Talk to Oracle" : "Details"}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className={talk && !phone ? "mt-2 grid grid-cols-2 gap-5" : ""}>
-        {showDetails && (
           <div
-            role={phone ? "tabpanel" : undefined}
-            aria-label={phone ? "Details" : undefined}
-            className="min-w-0"
+            className={`flex-none border-b border-line px-4 pb-2.5 ${wide ? "pt-3.5" : "pt-1.5"}`}
           >
-            {item.drafting && (
-              <p
-                className="mt-1 text-sm text-accent-ink"
-                role="status"
-                data-testid="item-drafting"
-              >
-                Oracle is drafting…
-              </p>
-            )}
-            {item.merged_into && (
-              <p className="mt-1 text-sm text-text2" data-testid="item-merged">
-                Merged into {item.merged_into.code} {item.merged_into.title}
-              </p>
-            )}
-            <LooksLike item={item} act={act} canChange={canChange} />
-            {item.draft && item.status !== "merged" && (
-              <div className="mt-2 flex items-center gap-2 text-sm">
-                <span className="text-text2">Flow</span>
-                {item.flow ? (
-                  <button
-                    type="button"
-                    data-testid="item-flow-thumb"
-                    aria-label="Open the flow"
-                    onClick={() => openFlow(wide === "item" ? null : "item")}
-                    className="rounded-md border border-line bg-surface p-1"
-                  >
-                    <FlowPicture flow={item.flow} />
-                  </button>
-                ) : (
-                  <span
-                    className="rounded-md border border-dashed border-line px-2 py-0.5 text-text2"
-                    data-testid="item-flow-none"
-                  >
-                    No flow yet
-                  </span>
-                )}
-              </div>
-            )}
-            {!item.draft && (
-              <section className="mt-3" data-testid="card-flow">
-                <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">
-                  Flow
-                </h3>
-                <FlowPanel
-                  key={`row-${item.id}`}
-                  row
-                  subject={{ kind: "feature", id: item.id }}
-                  openLabel="Open the item's flow"
-                  onOpenChange={setRowOpen}
-                />
-              </section>
-            )}
-            <div className={wide && !phone ? "grid grid-cols-2 gap-4" : ""}>
-              <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-[15px]">
-                <dt className="text-text2">Outcome</dt>
-                <dd data-testid="card-outcome">
-                  {item.outcome ?? (
-                    <span className="text-text2">Not written yet</span>
-                  )}
-                </dd>
-                <dt className="text-text2">Owner</dt>
-                <dd data-testid="card-owner">
-                  {item.owner?.name ?? (
-                    <span className="text-text2">No owner yet</span>
-                  )}
-                </dd>
-                <dt className="text-text2">Dates</dt>
-                <dd data-testid="card-dates">{dates}</dd>
-                {item.slices.length > 0 && (
-                  <>
-                    <dt className="text-text2">Milestone</dt>
-                    <dd data-testid="card-milestone">
-                      {[
-                        ...new Map(
-                          item.slices.map((x) => [
-                            x.milestone,
-                            `${x.milestone} ${x.milestone_name}`,
-                          ]),
-                        ).values(),
-                      ].join(", ")}
-                    </dd>
-                    <dt className="text-text2">Slices</dt>
-                    <dd>
-                      <ul className="space-y-1" data-testid="card-slices">
-                        {item.slices.map((x) => (
-                          <li
-                            key={x.code}
-                            data-testid="card-slice"
-                            className="flex gap-2"
-                          >
-                            <span
-                              aria-hidden
-                              className="mt-1.5 h-2.5 w-2.5 flex-none rounded-sm"
-                              style={{ background: milestoneInk(x.milestone) }}
-                            />
-                            <span>
-                              <b className="font-semibold">
-                                {x.code} {x.name}
-                              </b>
-                              <span className="block text-sm text-text2">
-                                {x.milestone} {x.milestone_name}
-                                {x.start_date && x.end_date
-                                  ? ` · ${shortDay(x.start_date)} – ${shortDay(x.end_date)}`
-                                  : " · not dated yet"}
-                                {x.pm_owned || x.effort_weeks == null
-                                  ? " · PM-owned"
-                                  : ` · ${x.effort_weeks} engineer-week${x.effort_weeks === 1 ? "" : "s"}`}
-                                {x.estimated ? " · placed by Oracle" : ""}
-                              </span>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </dd>
-                  </>
-                )}
-                {near && (
-                  <>
-                    <dt className="text-text2">Near</dt>
-                    <dd data-testid="card-near">{near}</dd>
-                  </>
-                )}
-                {onHorizon && (
-                  <>
-                    <dt className="self-center text-text2">Horizon</dt>
-                    <dd data-testid="card-horizon">
-                      <SegmentedControl<Horizon>
-                        label="Horizon"
-                        size="sm"
-                        value={item.horizon}
-                        onChange={(h) => h !== item.horizon && onHorizon(h)}
-                        items={HORIZONS.map((h) => ({
-                          value: h.key,
-                          label: h.label,
-                        }))}
-                      />
-                    </dd>
-                  </>
-                )}
-                <dt className="text-text2">Status</dt>
-                <dd data-testid="card-status">
-                  {item.status.replace("_", " ")}
-                </dd>
-                <dt className="text-text2">Confidence</dt>
-                <dd>{item.confidence ?? "Not rated"}</dd>
-                <dt className="text-text2">Depends on</dt>
-                <dd data-testid="card-depends">
-                  {names(item.depends_on, items)}
-                </dd>
-                <dt className="text-text2">Needed by</dt>
-                <dd data-testid="card-needed">
-                  {names(item.needed_by, items)}
-                </dd>
-              </dl>
-              <div>
-                {item.flags.length > 0 && (
-                  <section className="mt-3 space-y-1" data-testid="card-flags">
-                    {item.flags.map((f) => (
-                      <div key={`${f.kind}-${f.subject}`}>
-                        <FlagLine flag={f} />
-                        {f.state === "red" && (
-                          <FixButtons
-                            item={item}
-                            flag={f}
-                            items={items}
-                            act={act}
-                            canChange={canChange}
-                          />
-                        )}
-                      </div>
-                    ))}
-                  </section>
-                )}
-                <section className="mt-3">
-                  <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">
-                    Why
-                  </h3>
-                  {item.reasons.length ? (
-                    <ul
-                      className="mt-1 list-disc pl-5 text-[15px]"
-                      data-testid="card-reasons"
-                    >
-                      {item.reasons.slice(0, 3).map((r) => (
-                        <li key={r}>{r}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-text2">
-                      No reasons on record yet.
-                    </p>
-                  )}
-                </section>
-                <section className="mt-3">
-                  <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">
-                    Open decisions
-                  </h3>
-                  {item.open_decisions.length ? (
-                    <ul
-                      className="mt-1 text-[15px]"
-                      data-testid="card-decisions"
-                    >
-                      {item.open_decisions.map((d) => (
-                        <li key={d.id}>
-                          <Link
-                            href={`/company/decisions?d=${d.id}`}
-                            className="text-accent-ink hover:underline"
-                          >
-                            D-{d.number}
-                          </Link>{" "}
-                          {d.title}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-text2">None open.</p>
-                  )}
-                </section>
-                {item.decided_in.length > 0 && (
-                  <section className="mt-3">
-                    <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">
-                      Decided
-                    </h3>
-                    <ul
-                      className="mt-1 text-[15px]"
-                      data-testid="card-decided-in"
-                    >
-                      {item.decided_in.map((d) => (
-                        <li key={d.id}>
-                          Decided in{" "}
-                          <Link
-                            href={`/simple/decisions#d-${d.number}`}
-                            className="text-accent-ink hover:underline"
-                          >
-                            D-{d.number}
-                          </Link>{" "}
-                          {d.title}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                )}
-                <section className="mt-3">
-                  <h3 className="text-xs font-semibold tracking-wide text-text2 uppercase">
-                    Proposals on it
-                  </h3>
-                  {proposals.length ? (
-                    <ul className="mt-1 space-y-2" data-testid="card-proposals">
-                      {proposals.map((c) => (
-                        <li
-                          key={c.id}
-                          className="flex items-center gap-2 text-[15px]"
-                        >
-                          {featureProposal(c, items) && (
-                            <FlowThumb
-                              onOpen={() =>
-                                openFlow(
-                                  wide !== "item" && wide?.id === c.id
-                                    ? null
-                                    : { kind: "change", id: c.id },
-                                )
-                              }
-                            />
-                          )}
-                          <span className="min-w-0 flex-1">
-                            {opWords(c.op)} ·{" "}
-                            <span className="text-text2">{c.by_name}</span>
-                          </span>
-                          {c.can_decide && (
-                            <>
-                              <Button onClick={() => onDecide(c, "accept")}>
-                                Accept
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                onClick={() => onDecide(c, "decline")}
-                              >
-                                Decline
-                              </Button>
-                            </>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-sm text-text2">None waiting.</p>
-                  )}
-                </section>
-              </div>
-              {wide && (
-                <section
-                  data-testid="flow-view"
-                  className={`mt-3 ${phone ? "" : "col-span-2"}`}
-                >
-                  <h3 className="font-semibold">
-                    The flow and the screen it touches
-                  </h3>
-                  {wide === "item" ? (
-                    <>
-                      {item.flow ? (
-                        <FlowDetail flow={item.flow} />
-                      ) : (
-                        <p
-                          className="mt-1 text-sm text-text2"
-                          data-testid="flow-empty"
-                        >
-                          No flow yet: Oracle has not drawn a user flow or a
-                          wireframe for this proposal.
-                        </p>
-                      )}
-                      <Button
-                        variant="ghost"
-                        className="mt-2"
-                        onClick={() => openFlow(null)}
-                      >
-                        Close the flow
-                      </Button>
-                    </>
-                  ) : (
-                    <FlowPanel
-                      key={`${wide.kind}-${wide.id}`}
-                      subject={wide}
-                      onClose={() => openFlow(null)}
-                    />
-                  )}
-                </section>
-              )}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2 border-t border-line pt-3">
-              <Link
-                href={`/plan?item=${encodeURIComponent(item.key)}${item.prd ? `&prd=${item.prd.id}` : ""}`}
-                className="inline-flex h-8 items-center rounded-lg border border-line-strong px-3 text-sm font-semibold hover:bg-surface2"
-              >
-                Open the detailed view
-              </Link>
-              {!talk && (
-                <Button variant="ghost" onClick={() => setTalk(true)}>
-                  Talk to Oracle
-                </Button>
-              )}
-            </div>
-          </div>
-        )}
-        {talk && (
-          <div
-            role={phone ? "tabpanel" : undefined}
-            aria-label={phone ? "Talk to Oracle" : undefined}
-            className={`min-w-0 ${phone ? "mt-3" : "border-l border-line pl-5"}`}
-          >
-            <ItemTalk
-              itemId={item.id}
-              about={about}
-              onHide={() => setTalk(false)}
-              hideLabel={phone ? "Back to the details" : "Hide the talk"}
+            {head}
+            <Tabs
+              label="The item"
+              className="mt-2.5"
+              value={talk ? "talk" : "details"}
+              onChange={(t) => setTalk(t === "talk")}
+              items={[
+                { value: "details", label: "Details" },
+                { value: "talk", label: "Talk to Oracle" },
+              ]}
             />
           </div>
-        )}
-      </div>
+          {talk ? (
+            <div
+              role="tabpanel"
+              aria-label="Talk to Oracle"
+              className="flex min-h-0 flex-1 flex-col"
+            >
+              {talkPanel}
+            </div>
+          ) : (
+            <div
+              role="tabpanel"
+              aria-label="Details"
+              className="min-h-0 flex-1 overflow-y-auto px-4 pb-4"
+            >
+              {details}
+            </div>
+          )}
+        </>
+      ) : beside ? (
+        <>
+          <div className="flex-none border-b border-line px-4 pt-3.5 pb-2.5">
+            {head}
+          </div>
+          <div className="grid min-h-0 flex-1 grid-cols-[390px_minmax(0,1fr)]">
+            <div className="min-h-0 overflow-y-auto border-r border-line px-4 pt-1 pb-3">
+              {details}
+            </div>
+            <div className="flex min-h-0 min-w-0 flex-col">{talkPanel}</div>
+          </div>
+        </>
+      ) : (
+        <>
+          {head}
+          {details}
+        </>
+      )}
     </div>
   );
 }
