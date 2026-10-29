@@ -54,7 +54,19 @@ async function quickAdd(page: Page, phone: boolean, title: string, where: string
       await expect(page.getByTestId("quick-add-roadmap")).toHaveCount(0);
     }
     await expect(page.getByTestId("quick-add-chip")).toHaveAttribute("aria-disabled", "false");
-    await page.getByTestId("quick-add-chip").press("Enter");
+    // QA2 qa-simple-roadmap-10: a desktop's Enter adds at once (no sheet repeating the row's
+    // fields); a place other than the first is chosen by dragging the chip onto it.
+    const chip = page.getByTestId("quick-add-chip");
+    const target = page.locator(`[data-add-where="horizon:${where.toLowerCase()}"]`).first();
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const from = (await chip.boundingBox())!;
+    const to = (await target.boundingBox())!;
+    const bottom = (page.viewportSize()?.height ?? 800) - 12;
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(to.x + to.width / 2, Math.min(to.y + 40, bottom), { steps: 12 });
+    await page.mouse.up();
+    return;
   }
   const sheet = page.getByRole("dialog", { name: "Add an item" });
   await expect(sheet).toBeVisible();

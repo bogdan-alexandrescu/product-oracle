@@ -176,6 +176,7 @@ export function Callout({
   h,
   compact,
   maxX,
+  before,
 }: {
   item: Item;
   flag: Flag;
@@ -189,24 +190,28 @@ export function Callout({
   /** #4, #5: the chart's own drawn width, so the callout (and its buttons) stay inside it
    * rather than run past the right edge or start cut off the left. */
   maxX: number;
+  /** Where the bar starts, less a gap: a callout with no room on the right sits left of the bar. */
+  before?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [left, setLeft] = useState(Math.max(4, x));
   useLayoutEffect(() => {
     const w = ref.current?.offsetWidth ?? 0;
-    // Fits to the right of the bar when it can; otherwise slides left, never past either edge.
-    setLeft(Math.max(4, Math.min(x, maxX - w - 4)));
-  }, [x, maxX, flag.reason, compact]);
+    // Right of the bar when it fits; else left of the bar; else slid inside, never past either edge.
+    if (x + w + 4 <= maxX) setLeft(Math.max(4, x));
+    else if (before != null && before - w >= 4) setLeft(before - w);
+    else setLeft(Math.max(4, Math.min(x, maxX - w - 4)));
+  }, [x, before, maxX, flag.reason, compact]);
   return (
     <div
       ref={ref}
       data-testid="broken-callout"
       data-item={item.key}
       style={{ left, top: y + 3, minHeight: h - 6, maxWidth: Math.max(160, maxX - 8) }}
-      className="absolute z-10 flex flex-wrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1"
+      className="absolute z-10 flex flex-nowrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1"
     >
       <span
-        className={`text-sm text-crit ${compact ? "max-w-[220px]" : "max-w-[360px]"} whitespace-normal break-words`}
+        className={`min-w-0 truncate text-sm text-crit ${compact ? "max-w-[220px]" : "max-w-[360px]"}`}
         title={flag.reason}
       >
         ⚠ {flag.reason}

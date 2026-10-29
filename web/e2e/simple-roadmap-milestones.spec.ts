@@ -110,7 +110,7 @@ for (const phone of [false, true]) {
         if (phone) await expect(page.getByTestId("today-mark").locator("text")).toHaveCount(0);
 
         const legend = page.getByTestId("legend");
-        await expect(legend).toContainText("One bar per slice (F-");
+        await expect(legend).toContainText("One bar per part of a feature (F-");
         await expect(legend).toContainText("diamond and dashed line: a milestone ends");
         await expect(legend).toContainText("grey columns: Year-end break");
         await expect(legend).toContainText("amber: pulled in, pending");
@@ -149,7 +149,7 @@ for (const phone of [false, true]) {
           await open(page, scheme);
           await page.getByTestId("format-gantt").click();
           expect((await page.getByRole("heading", { name: "Roadmap", level: 1 }).boundingBox())!.width).toBeLessThanOrEqual(1);
-          await expect(page.getByTestId("swipe-hint")).toHaveText(/^Swipe sideways for M\d$/);
+          await expect(page.getByTestId("swipe-hint")).toHaveText(/^Swipe sideways for M\d \S/);
           const y = async (l: Locator) => (await l.boundingBox())!.y;
           const [sw, scale, chart, actions, filters] = [
             await y(page.getByTestId("format-switch")),

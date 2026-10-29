@@ -1028,8 +1028,8 @@ export function SimpleRoadmap() {
                 if (y == null || closedItem(i)) return [];
                 const f0 = broken(i).find((x) => x.kind === "dependency_order");
                 if (!f0) return [];
-                const [, end] = moved[i.id] ?? [i.start.date, i.end.date];
-                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} y={y} h={l.rowH} compact={phone} maxX={sc.width} />];
+                const [start, end] = moved[i.id] ?? [i.start.date, i.end.date];
+                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} before={sc.x(start) - 14} y={y} h={l.rowH} compact={phone} maxX={sc.width} />];
               })
             }
           />
@@ -1068,8 +1068,8 @@ export function SimpleRoadmap() {
                 if (y == null || closedItem(i)) return [];
                 const f0 = broken(i).find((x) => x.kind === "dependency_order");
                 if (!f0) return [];
-                const [, end] = moved[i.id] ?? [i.start.date, i.end.date];
-                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} y={y} h={l.rowH} compact={phone} maxX={sc.width} />];
+                const [start, end] = moved[i.id] ?? [i.start.date, i.end.date];
+                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} before={sc.x(start) - 14} y={y} h={l.rowH} compact={phone} maxX={sc.width} />];
               })
             }
           />

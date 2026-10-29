@@ -365,7 +365,7 @@ for (const [where, use] of [
         await expect(page.getByText(/proposed: it waits for the decider/)).toBeVisible();
         await page.waitForTimeout(800);
         await expect(column(page, "now").locator('[data-item="alert-rules"]')).toBeVisible();
-        await expect(card(page, "alert-rules").getByTestId("board-pending")).toHaveText(/Proposed: move to Later/);
+        await expect(card(page, "alert-rules").getByTestId("board-pending")).toHaveText(/Proposed by .*: move to Later/);
         // A phone reads the proposal on the Gantt's bar (its Timeline, timeline-overlap B3, has none).
         await page.getByTestId(where === "phone" ? "format-gantt" : "format-timeline").click();
         expect(await proposalsOn(page, bar(page, "alert-rules"))).toBe(1);
