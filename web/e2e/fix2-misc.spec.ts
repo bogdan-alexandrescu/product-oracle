@@ -13,10 +13,12 @@ const settings = async (page: Page, nav: string) => {
   await expect(page).toHaveURL(new RegExp(`/settings/${nav}$`));
 };
 
-async function openAccounts(page: Page) {
+async function openAccounts(page: Page, phone = false) {
   await standInClaudePage(page);
   await login(page);
-  await settings(page, "claude-accounts");
+  // A phone has no Settings link in its bar: open the page itself.
+  if (phone) await page.goto("/settings/claude-accounts");
+  else await settings(page, "claude-accounts");
   await expect(page.getByRole("heading", { level: 1, name: "Claude accounts" })).toBeVisible();
 }
 
@@ -53,7 +55,7 @@ test("claude accounts: the add form's placeholder is neutral and Remove is label
 // qa-settings-42 (part): on a phone every button in the pane is a 44 px tap.
 test("claude accounts: at 390 px the account's buttons are at least 44 px tall", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await openAccounts(page);
+  await openAccounts(page, true);
   const add = page.getByRole("button", { name: "+ Add account" });
   expect((await add.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   const pane = detail(page);

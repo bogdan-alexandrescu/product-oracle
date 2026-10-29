@@ -109,7 +109,7 @@ test("qa-onboarding-17 / qa-onboarding-36: one invite button, primary; disabled 
 test("qa-onboarding-19: after Send invite the outcome says it was sent", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members");
-  await page.getByLabel("Email").fill("pat@example.com");
+  await page.getByPlaceholder("name@company.com").fill("pat@example.com");
   await page.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(page.getByTestId("invite-outcome")).toHaveText("Invite sent to pat@example.com");
   await expect(inviteRow(page, "pat@example.com").getByTestId("invite-email")).toContainText("Sent");
@@ -173,7 +173,7 @@ test("qa-onboarding-42: Set up › Invite team › Open, send an invite, see it 
   await login(page);
   await setupRow(page, "invite").getByRole("link", { name: "Open" }).click();
   await expect(page).toHaveURL(/\/settings\/members\?from=setup$/);
-  await page.getByLabel("Email").fill("new.teammate@example.com");
+  await page.getByPlaceholder("name@company.com").fill("new.teammate@example.com");
   await page.getByRole("button", { name: "Send invite", exact: true }).click();
   await expect(page.getByTestId("invite-outcome")).toHaveText("Invite sent to new.teammate@example.com");
   await expect(inviteRow(page, "new.teammate@example.com")).toBeVisible();

@@ -4,12 +4,12 @@ import { login } from "./helpers";
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
-const DATE = /^[A-Z][a-z]{2} \d{1,2}, \d{4}$/;
+const DATE = /^[A-Z][a-z]{2}\s\d{1,2},\s\d{4}$/;
 
 /** Every cell of these rows that shows a date: whole ("Sep 28, 2026"), never cut. */
 async function datesWhole(rows: Locator) {
   const cells = await rows.locator("td").evaluateAll((tds) =>
-    tds.map((td) => ({ text: (td.textContent ?? "").trim(), cut: td.scrollWidth > td.clientWidth })),
+    tds.map((td) => ({ text: (td as HTMLElement).innerText.trim(), cut: td.scrollWidth > td.clientWidth })),
   );
   const dates = cells.filter((c) => DATE.test(c.text));
   expect(dates.length).toBeGreaterThan(0);

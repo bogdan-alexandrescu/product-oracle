@@ -41,7 +41,7 @@ test("sign-in: an invite the owner revoked is refused in words, naming who to as
   await signOut(page);
 
   await signInAs(page, "vi.viewer@example.com");
-  const alert = page.getByRole("alert");
+  const alert = page.getByRole("alert").filter({ hasText: /\S/ });
   await expect(alert).toHaveText("Your invite was withdrawn. Ask Admin to invite you again.");
   await expect(page.getByText("Invalid email or password.")).toHaveCount(0);
   await expect(page).toHaveURL(/\/login/);
@@ -49,7 +49,7 @@ test("sign-in: an invite the owner revoked is refused in words, naming who to as
 
 test("sign-in: an expired invite is refused in words, with its date", async ({ page }) => {
   await signInAs(page, "old.invite@example.com");
-  await expect(page.getByRole("alert")).toHaveText("Your invite expired on Oct 4. Ask Admin to resend it.");
+  await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText("Your invite expired on Oct 4. Ask Admin to resend it.");
   await expect(page).toHaveURL(/\/login/);
 });
 
@@ -58,7 +58,7 @@ test("sign-in: a wrong password still says so", async ({ page }) => {
   await page.getByLabel("Email").fill("old.invite@example.com");
   await page.getByLabel("Password").fill("not-the-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("alert")).toHaveText("Invalid email or password.");
+  await expect(page.getByRole("alert").filter({ hasText: /\S/ })).toHaveText("Invalid email or password.");
 });
 
 test("access: an expired invite's date is in the past", async ({ page }) => {
