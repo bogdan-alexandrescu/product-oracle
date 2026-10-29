@@ -59,7 +59,7 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   await openRuns(page);
   await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
-  await expect(page.getByTestId("run-notes")).toContainText("Local agent runtime");
+  await expect(page.getByTestId("run-notes")).toContainText("Test mode: each step finishes at once");
   // P3d Cost prominence: the cost is one small line in Details.
   await expect(page.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$6.30 of $26.50 estimated");
 
@@ -90,14 +90,14 @@ test("run detail: approve each checkpoint through to the imported PRD", async ({
   const segments = ["baseline", "feature_set", "priority"];
   const checkpoints = ["baseline_confirm", "feature_set", "priority_order"];
   for (const [i, kind] of checkpoints.entries()) {
-    await page.getByRole("button", { name: "Check agents now" }).click();
+    await page.getByRole("button", { name: "Refresh progress" }).click();
     const row = page.getByTestId(`segment-${segments[i]}`).getByTestId(`checkpoint-${kind}`).filter({ hasText: "Waiting" });
     await expect(row).toBeVisible();
     await row.getByRole("button", { name: "Approve and continue" }).click();
     await expect(row).toHaveCount(0);
   }
   // D10: the PRD review is decided in the version the draft made.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   const runUrl = page.url();
   await page.getByTestId("segment-prd_draft").getByTestId("checkpoint-prd_review").getByRole("link", { name: "Open review" }).click();
   await expect(page).toHaveURL(/\/documents\/team-onboarding\/v\/1\?run_review=/);
@@ -149,15 +149,15 @@ test("new run: knobs, estimate before start, skipped checkpoints", async ({ page
   await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(status(page)).toHaveText("Running");
-  await expect(page.getByTestId("segment-feature_set")).toContainText("Feature set and dependencies: off");
+  await expect(page.getByTestId("segment-feature_set")).toContainText("Feature set and dependencies: Won't ask (checkpoint off)");
 
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   // Feature set and priority order are off: two ticks run straight to the PRD draft.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(page.getByTestId("segment-feature_set").getByTestId("checkpoint-feature_set")).toContainText("Skipped");
-  await page.getByRole("button", { name: "Check agents now" }).click();
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(page.getByTestId("checkpoint-prd_review")).toContainText("Waiting");
 });
 
@@ -545,7 +545,7 @@ test("a decision SwarmCloud has not taken yet: recorded, shown as delivering, fi
   await other.close();
 
   // The tick delivers it: the line goes, the review reads approved, the run goes on.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(delivering).toHaveCount(0);
   await expect(segment.getByTestId("checkpoint-baseline_confirm")).toContainText("Approved");
   await expect(status(page)).toHaveText("Running");
@@ -580,7 +580,7 @@ test("a run delivering a decision reads Delivering decision: header, side panel 
 
   // Delivered: the run reads Running again.
   await row.getByRole("link").first().click();
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(status(page)).toHaveText("Running");
 });
 
@@ -591,7 +591,7 @@ test("fix-work review: a check that could not read some runs says so on a run th
   // The run's own page first: until it opens, the list's five statuses are on screen.
   await expect(page.getByRole("heading", { level: 1, name: /^Team onboarding PRD/ })).toBeVisible();
   await expect(status(page)).toHaveText("Waiting for review");
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   const result = page.getByTestId("tick-result");
   // Why no agent works on this run, and the runs the check could not read.
   await expect(result).toContainText("No agents are working right now; the run is waiting for your review.");

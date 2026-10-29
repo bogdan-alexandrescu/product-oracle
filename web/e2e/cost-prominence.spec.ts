@@ -84,8 +84,8 @@ for (const size of SIZES) {
       const tip = section.getByRole("tooltip");
       await expect(tip).toContainText("an owner approves the cost before any agent starts");
       await expect(tip).not.toContainText(/\d\. .+: \$/);
-      // The small line in Details stays.
-      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveText(/ estimated$/);
+      // rirs-18: one cost line per panel: Details does not repeat it.
+      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveCount(0);
     });
 
     test("run page paused on overrun: the Overrun section, prominent, with ceiling, no per-segment cost", async ({ page }) => {
@@ -99,7 +99,8 @@ for (const size of SIZES) {
       await expect(tip).toContainText("Spend passed $13.50 (1.5× the estimate)");
       await expect(tip).toContainText("Pauses above $13.50.");
       await expect(tip).not.toContainText(/\d\. .+: \$/);
-      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveText("$14.20 of $9.00 estimated");
+      // rirs-18: one cost line per panel: Details does not repeat it.
+      await expect(inspector.getByTestId("run-details").getByTestId("run-cost")).toHaveCount(0);
     });
   });
 }

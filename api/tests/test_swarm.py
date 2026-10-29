@@ -21,6 +21,7 @@ from oracle.swarm import (
     get_runtime,
     set_runtime,
 )
+from oracle.swarm.fake import _default_content, _spec_md
 from oracle.swarm.settings import RuntimeSettings, get_runtime_settings
 from oracle.swarm.swarmcloud import (
     NO_MCP_NOTE,
@@ -572,3 +573,27 @@ async def test_submission_carries_its_key_in_every_steps_metadata_only():
         {"agent_role": "researcher", "oracle_key": "oracle-r1-baseline-1"},
         {"agent_role": "analyst", "oracle_key": "oracle-r1-baseline-1"},
     ]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "prd.md",
+        "roadmap.md",
+        "eng_dates.yaml",
+        "roadmap_items.yaml",
+        "baseline.yaml",
+        "feature_set.yaml",
+        "tech_briefs.yaml",
+        "requests_triage.yaml",
+        "priority.yaml",
+        "other.yaml",
+        "notes.md",
+    ],
+)
+def test_fake_drafts_never_name_the_agent_runtime(name):
+    # Review minor (as qa-onboarding-30/rirs-16): a sample draft reads as a sample, not as the
+    # internal machinery that wrote it.
+    text = _default_content(name, "draft", 1, document="example-prd", scope=["price-early"])
+    assert "agent runtime" not in text.lower()
+    assert "agent runtime" not in _spec_md(1).lower()

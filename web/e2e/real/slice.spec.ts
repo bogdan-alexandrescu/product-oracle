@@ -6,7 +6,7 @@ import { login } from "./ui";
  * Wave 3, the vertical slice (docs/product-oracle-v2/waves.md): one short brief becomes a
  * published PRD and a roadmap on the real stack, on synthetic data. The agent work runs on
  * the API's FakeRuntime (ORACLE_RUNTIME=fake in playwright.real.config.ts) and advances
- * when the owner presses "Check agents now", as Cloud Scheduler's tick would.
+ * when the owner presses "Refresh progress", as Cloud Scheduler's tick would.
  *
  * Card (E2E real): protects=brief -> gaps and questions -> composition -> PRD draft ->
  * review -> publish -> roadmap, each step fed by the one before through the real API and
@@ -25,9 +25,9 @@ const DOC = "saved-delivery-notes";
 const PROBLEM =
   "Returning buyers type the same delivery note at every checkout. Saving it once would make repeat checkout faster.";
 
-/** The owner's "Check agents now" on the run page: one tick of the company's runs. */
+/** The owner's "Refresh progress" on the run page: one tick of the company's runs. */
 async function checkAgents(page: Page) {
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(page.getByTestId("tick-result")).toBeVisible();
 }
 

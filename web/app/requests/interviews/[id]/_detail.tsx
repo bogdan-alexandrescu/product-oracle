@@ -7,15 +7,15 @@ import { Button, Chip, confirmInPage, Dialog, Empty, Label, Page, PageHeader, Pa
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { INTERVIEW_STATUS_KIND, INTERVIEW_STATUS_LABEL, interviewsCall, type InterviewLink, type InterviewOut } from "@/lib/api/interviews";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDateTime, formatDay } from "@/lib/format";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { LinkShown } from "../../_components/InterviewDialog";
+import { expiresIn, LinkShown } from "../../_components/InterviewDialog";
 
 /**
  * One customer interview (C3): what it was about, the approved guide, the transcript, Oracle's
  * snapshot and the requests it created. Withdraw link: its creator or an approver, while the
- * link is open. The Requests tabs above are its way back (qa-work-45: no breadcrumb as well).
+ * link is open. "← Interviews" above the name goes back (rirs-40), as the Requests tabs do.
  * The link itself is shown once, when it is made, and only its hash is kept, so it cannot be
  * shown or copied again here (qa-work-43): the page says so and when it was made, and Make a
  * new link (its creator or an approver, while the link is open) shows a fresh one once, after
@@ -25,6 +25,12 @@ import { LinkShown } from "../../_components/InterviewDialog";
 export function InterviewDetail({ id }: { id: string }) {
   const q = useQuery(`interview:${id}`, () => interviewsCall<InterviewOut>("GET", `/v1/interviews/${encodeURIComponent(id)}`));
   const iv = q.data;
+  // rirs-40: back to the Interviews tab, above the name.
+  const back = (
+    <Link href="/requests/interviews" data-testid="interview-back" className="hover:underline">
+      ← Interviews
+    </Link>
+  );
   const requests = useQuery(`interview-requests:${iv?.request_ids.join(",") ?? ""}`, () =>
     Promise.all(
       (iv?.request_ids ?? []).map((rid) =>
@@ -55,7 +61,7 @@ export function InterviewDetail({ id }: { id: string }) {
   if (!iv) {
     return (
       <Page>
-        <PageHeader title="Interview" />
+        <PageHeader back={back} title="Interview" />
         {q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}
       </Page>
     );
@@ -77,6 +83,7 @@ export function InterviewDetail({ id }: { id: string }) {
   return (
     <Page>
       <PageHeader
+        back={back}
         title={who}
         status={
           <Chip kind={INTERVIEW_STATUS_KIND[iv.status]} dot data-testid="interview-status">
@@ -99,14 +106,18 @@ export function InterviewDetail({ id }: { id: string }) {
           <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-2 px-4 py-3 text-[15px]">
             <Fact label="What it was about">{iv.title}</Fact>
             <Fact label="Created by">
-              {iv.created_by_name ?? "—"} · {formatDate(iv.created_at)}
+              {iv.created_by_name ?? "—"} · {formatDay(iv.created_at)}
             </Fact>
             {iv.link_created_at && open && (
               <Fact label="Link made">
                 <span data-testid="interview-link-made">{formatDateTime(iv.link_created_at)}</span>
               </Fact>
             )}
-            {iv.link_expires_at && open && <Fact label="Link expires">{formatDateTime(iv.link_expires_at)}</Fact>}
+            {iv.link_expires_at && open && (
+              <Fact label="Link expires">
+                <span data-testid="interview-link-expires">{expiresIn(iv.link_expires_at)}</span>
+              </Fact>
+            )}
             {iv.finished_at && <Fact label="Finished">{formatDateTime(iv.finished_at)}</Fact>}
             {open && (
               <Fact label="Link">

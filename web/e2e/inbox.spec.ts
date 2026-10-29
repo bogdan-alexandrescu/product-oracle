@@ -149,7 +149,7 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
 
   // The tick delivers it; the row and its heading go.
   await page.goto(run);
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(page.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toHaveCount(0);
   await page.goto("/inbox");
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();

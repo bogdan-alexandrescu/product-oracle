@@ -14,8 +14,10 @@ import {
   decisionText,
   describeAction,
   fixesFor,
+  goalName,
   LEAVE_OUT_REASONS,
   pct,
+  reasonText,
   setDecision,
   type Feature,
   type Fix,
@@ -33,11 +35,13 @@ export function FixButtons({ fixes, small = true }: { fixes: Fix[]; small?: bool
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   return (
-    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+    <span className="flex min-w-0 max-w-full flex-wrap items-center gap-1.5" data-testid="fix-buttons">
       {fixes.map((f) => (
         <Button
           key={f.label}
-          className={small ? "h-8 px-2.5 text-sm max-[600px]:h-10" : ""}
+          title={f.title}
+          // rirs-1: a long label ("Include Shared address book export") wraps inside its column.
+          className={`h-auto! max-w-full min-h-8 py-1 text-left break-words whitespace-normal! ${small ? "px-2.5 text-sm max-[600px]:min-h-10" : ""}`}
           disabled={busy}
           onClick={async (e) => {
             e.stopPropagation();
@@ -198,7 +202,7 @@ function List({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-/** A requirement: text on one line (full in the tooltip), acceptance count, decision, Keep · Cut · Edit · Enhance. */
+/** A requirement: its text in full (on its own line in the inspector), acceptance count, decision, Keep · Cut · Edit · Enhance. */
 export function RequirementRow({ req, mode, ops, review, indent = true }: { req: Requirement; mode: Mode; ops: Ops; review: Review | null; indent?: boolean }) {
   const { can } = useMe();
   const [editing, setEditing] = useState<string | null>(null);
@@ -215,7 +219,11 @@ export function RequirementRow({ req, mode, ops, review, indent = true }: { req:
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <span role="cell" className={`min-w-0 flex-1 truncate text-sm ${cut ? "text-text2 line-through" : ""}`} title={text} data-testid="requirement-text">
+        <span
+          role="cell"
+          className={`min-w-0 text-sm break-words ${indent ? "flex-1 basis-[16rem]" : "basis-full"} ${cut ? "text-text2 line-through" : ""}`}
+          data-testid="requirement-text"
+        >
           {text}
         </span>
         {req.added && (
@@ -223,7 +231,9 @@ export function RequirementRow({ req, mode, ops, review, indent = true }: { req:
             Yours
           </Chip>
         )}
-        <span className="text-sm text-text2 tnum">{req.acceptance.length} AC</span>
+        <span className="text-sm text-text2 tnum" data-testid="requirement-checks">
+          {req.acceptance.length} acceptance {req.acceptance.length === 1 ? "check" : "checks"}
+        </span>
         {req.edited && !req.added ? (
           <span className="flex items-center gap-1.5 text-sm text-pass" data-testid="requirement-done">
             ✓ {cut ? "Requirement cut" : "Edited"}
@@ -456,8 +466,12 @@ export function ScopeInspector({
   const actions = actionsOn(review, f.key);
   const staged = actions.filter((a) => a.state === "staged");
   const suggested = actions.filter((a) => a.state === "suggested");
-  const goalTitle = (key: string) => scope.goals_available.find((g) => g.key === key)?.title ?? key;
+  const goalTitle = (key: string) => goalName(scope, key);
   const write = mode !== "viewer";
+  // rirs-14: a row the person has not decided yet shows what the agents proposed, not a decision.
+  const undecided = f.needs_you && !f.edited;
+  const proposedWord: Record<string, string> = { include: "include", exclude: "leave out", defer: "defer to a later PRD" };
+  const proposed = `Proposed: ${proposedWord[f.decision] ?? "include"}`;
   return (
     <Inspector
       eyebrow="Feature · selected"
@@ -466,14 +480,15 @@ export function ScopeInspector({
       testId="scope-inspector"
       chips={
         <>
-          <Chip hero kind={f.decision === "include" ? "now" : "na"}>
-            {decisionText(f.decision, f.decision_reason)}
+          <Chip hero kind={undecided ? "warn" : f.decision === "include" ? "now" : "na"}>
+            {undecided ? proposed : decisionText(f.decision, f.decision_reason)}
           </Chip>
           <Chip hero>{f.goals.length ? f.goals.map((g) => goalTitle(g.key)).join(", ") : "No goal"}</Chip>
         </>
       }
       stats={[
-        { label: "Confidence", figure: <Ring value={pct(f.confidence)} hero size={44} /> },
+        // rirs-11: the stats row is light, so the ring's figure takes the page's text colour, not the hero's.
+        { label: "Confidence", figure: <Ring value={pct(f.confidence)} size={44} /> },
         { label: "Requirements", value: f.requirements.filter((q) => q.decision === "keep").length, of: f.requirements.length },
       ]}
     >
@@ -483,7 +498,7 @@ export function ScopeInspector({
         </InspectorSection>
       )}
       {f.reasons.length > 0 && (
-        <InspectorSection label="Needs you because">
+        <InspectorSection label={mode === "approver" ? "Needs you because" : "Needs a decision because"}>
           <ul className="flex flex-col gap-2">
             {f.reasons.map((r) => {
               const answer = staged.find((a) => (a.kind === "waive" || a.kind === "accept") && (!a.answers.length || a.answers.includes(r.code)));
@@ -491,7 +506,7 @@ export function ScopeInspector({
                 <li key={r.code} className={`rounded-button border p-2.5 ${r.severity === "blocking" ? "border-crit/40" : "border-warn/40"}`} data-testid={`reason-${r.code}`}>
                   <span className="flex flex-wrap items-center gap-2">
                     <Chip kind={r.severity === "blocking" ? "crit" : "warn"}>{r.severity === "blocking" ? "Blocking" : "To confirm"}</Chip>
-                    <span className="min-w-0 flex-1 text-sm break-words">{r.label}</span>
+                    <span className="min-w-0 flex-1 text-sm break-words">{reasonText(r, scope)}</span>
                   </span>
                   {r.answered && answer ? (
                     <p className="mt-1.5 flex items-center gap-1.5 text-sm text-pass">
@@ -517,17 +532,28 @@ export function ScopeInspector({
         </InspectorSection>
       )}
       <InspectorSection label="Decision">
+        {undecided && (
+          <p className="mb-1.5 text-sm text-text2" data-testid="proposed-decision">
+            {proposed}. {mode === "approver" ? "Pick one to decide." : "Not decided yet."}
+          </p>
+        )}
         <SegmentedControl
           label="Decision"
           size="sm"
-          value={f.decision}
+          value={undecided ? null : f.decision}
           items={[
-            { value: "include", label: "Include", disabled: !write },
-            { value: "exclude", label: "Leave out", disabled: !write },
-            { value: "defer", label: "Defer to a later PRD", disabled: !write },
+            // rirs-13: only an approver decides here; a commenter suggests with the buttons above.
+            { value: "include", label: "Include", disabled: mode !== "approver" },
+            { value: "exclude", label: "Leave out", disabled: mode !== "approver" },
+            { value: "defer", label: "Defer to a later PRD", disabled: mode !== "approver" },
           ]}
           onChange={(v) => (v === "exclude" ? ui.leaveOut(f) : void setDecision(mode, ops, f, v))}
         />
+        {mode !== "approver" && (
+          <p className="mt-1.5 text-sm text-text2" data-testid="who-decides">
+            {mode === "commenter" ? "An approver decides; you can suggest a change." : "An approver decides."}
+          </p>
+        )}
         {leavingOut !== undefined && (
           <LeaveOutPicker preset={leavingOut ?? undefined} suggest={mode === "commenter"} onCancel={onLeaveOutDone} onPick={(reason) => Promise.resolve(setDecision(mode, ops, f, "exclude", reason)).then(onLeaveOutDone)} />
         )}

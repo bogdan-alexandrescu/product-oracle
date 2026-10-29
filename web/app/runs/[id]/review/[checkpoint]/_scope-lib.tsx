@@ -88,7 +88,7 @@ export type Ui = {
   waive: (f: Feature, code: string) => void;
 };
 
-export type Fix = { label: string; run: () => Promise<void> | void };
+export type Fix = { label: string; run: () => Promise<void> | void; title?: string };
 
 /** Sets a row's decision: a person's write for an approver, a suggestion for a commenter. */
 export function setDecision(mode: Mode, ops: Ops, row: { id: string; key: string; lock_version: number }, decision: string, reason?: string | null) {
@@ -116,7 +116,7 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
     case "depends_on_excluded": {
       const dep = f.depends_on.map((d) => byKey.get(d)).find((d) => d && d.decision !== "include");
       fixes = dep
-        ? [{ label: `Include ${dep.title}`, run: () => setDecision(mode, ops, dep, "include") }, removeDeps([dep.key]), { label: "Leave this out too", run: () => ui.leaveOut(f) }, waive]
+        ? [{ label: `Include ${dep.title}`, title: `Include ${dep.title}`, run: () => setDecision(mode, ops, dep, "include") }, removeDeps([dep.key]), { label: "Leave this out too", run: () => ui.leaveOut(f) }, waive]
         : [waive];
       break;
     }
@@ -160,6 +160,35 @@ export function fixesFor(reason: Reason, f: Feature, scope: Scope, mode: Mode, o
 /** The D8 actions on a row's key, by state. */
 export function actionsOn(review: Review | null, key: string): Action[] {
   return review?.items.find((i) => i.key === key)?.actions ?? [];
+}
+
+/** A key in words ("shared-address-book-export" is "Shared address book export"), for a row the agents left untitled. */
+export function keyWords(key: string): string {
+  const words = key.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** The scope with every feature named (rirs-2): a row whose title is only its key reads as words. */
+export function named(scope: Scope): Scope {
+  return { ...scope, features: scope.features.map((f) => (f.title && f.title !== f.key ? f : { ...f, title: keyWords(f.key) })) };
+}
+
+/** A goal's name: its title in the baseline, else plain words, never its key (rirs-2). */
+export function goalName(scope: Scope, key: string): string {
+  return scope.goals_available.find((g) => g.key === key)?.title ?? "A goal not in the baseline";
+}
+
+/**
+ * A reason in words (rirs-2): the check names features by key ("bulk-address-edit depends on
+ * shared-address-book-export, which is excluded"); the page names them by title.
+ */
+export function reasonText(reason: Pick<Reason, "label">, scope: Scope): string {
+  const byKey = new Map(scope.features.map((x) => [x.key, x.title]));
+  const text = reason.label
+    .replace(/[a-z0-9]+(?:[-_][a-z0-9]+)+/g, (k) => byKey.get(k) ?? k.replace(/[-_]+/g, " "))
+    .replace(/, which is excluded\b/g, ", which is left out")
+    .replace(/, which is not a feature\b/g, ", which is not in this feature set");
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 export const pct = (c: number | null | undefined) => (c == null ? null : Math.round(c * 100));

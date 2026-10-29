@@ -36,7 +36,7 @@ test("qa-work-11: the header has one overflow menu, Delete in it", async ({ page
   await expect(header.getByRole("button", { name: /^Actions for / })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "More actions" })).toHaveCount(0);
   await header.getByRole("button", { name: /^Actions for / }).click();
-  for (const name of ["Re-analyse", "Archive", "Delete…"]) {
+  for (const name of ["Rank the questions again", "Archive", "Delete…"]) {
     await expect(page.getByRole("menuitem", { name: new RegExp(`^${name}`) })).toBeVisible();
   }
 });
@@ -70,7 +70,7 @@ test("qa-work-22: on a phone, Ready to draft? stays on the page above the questi
   const ready = page.getByTestId("intake-readiness");
   await expect(ready).toBeVisible();
   await expect(ready.getByRole("heading", { name: "Ready to draft?" })).toBeVisible();
-  await expect(ready).toContainText("1 critical question open");
+  await expect(ready).toContainText("1 critical question holds the draft");
   await expect(ready.getByTestId("intake-readiness-counts")).toContainText("answered");
   await ready.getByRole("button", { name: /^Gaps \d+ open$/ }).click();
   await expect(page.getByTestId("intake-sheet").getByTestId("ready-to-draft")).toBeVisible();
@@ -91,7 +91,7 @@ test("qa-work-47: the batch size says what it is, and goes when Oracle has no mo
   const next = page.getByTestId("next-questions");
   await expect(next.getByRole("group", { name: "Ask 5 at a time" })).toBeVisible();
   await expect(next.getByText("at a time")).toBeVisible();
-  await next.getByRole("button", { name: "10", exact: true }).click();
+  await next.getByRole("button", { name: "Ask 10 questions at a time" }).click();
   await expect(next.getByRole("group", { name: "Ask 10 at a time" })).toBeVisible();
   await next.getByRole("button", { name: "Ask these" }).click();
   await expect(next).toContainText("Oracle has 2 more questions");

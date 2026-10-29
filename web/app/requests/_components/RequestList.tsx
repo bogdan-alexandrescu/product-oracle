@@ -27,11 +27,19 @@ export const CHANNEL_LABEL: Record<Request["channel"], string> = {
   other: "Other",
 };
 
-/** Why a request has no box to tick for Start a PRD. */
+/** Why a request has no box to tick for Start a PRD (rirs-32: says which requests can be ticked). */
 function notFree(r: Request): string {
-  if (r.state !== "qualified") return "Only a qualified request starts a PRD";
-  return "Already behind a brief or a PRD";
+  const which = "Only qualified requests not yet behind a brief or PRD can be ticked to start a PRD";
+  if (r.state === "new") return `Qualify this request first. ${which}`;
+  if (r.state === "merged") return `Merged into another request. ${which}`;
+  if (r.state === "disqualified") return `Disqualified. ${which}`;
+  return `Already behind a brief or a PRD. ${which}`;
 }
+
+/** rirs-9: on a phone a value wraps at word breaks instead of being cut. */
+const PHONE_WRAP = "max-[600px]:whitespace-normal max-[600px]:break-words max-[600px]:overflow-visible";
+/** A chip that wraps on a phone, as Chip's `wrap` does. */
+const PHONE_CHIP_WRAP = "max-[600px]:h-auto max-[600px]:min-h-[26px] max-[600px]:whitespace-normal max-[600px]:rounded-[13px] max-[600px]:py-1 max-[600px]:leading-[18px]";
 
 /** The meta columns, in this order on every row (qa-work-36): state, goal, theme, asker, channel, age. */
 const META_COLS = [
@@ -99,12 +107,23 @@ export function RequestList({
           const on = r.id === selected;
           const goals = r.goal_ids.map((id) => goalTitles.get(id) ?? "A goal");
           const cells: Record<(typeof META_COLS)[number]["key"], ReactNode> = {
-            state: <Chip kind={STATE[r.state].kind}>{STATE[r.state].label}</Chip>,
+            // rirs-33: Unverified sits with the state, not alone at the end of the title line.
+            state: (
+              <span className="flex min-w-0 flex-wrap gap-1">
+                <Chip kind={STATE[r.state].kind}>{STATE[r.state].label}</Chip>
+                {!r.verified && (
+                  // C3: a customer's own words from an interview are taken as given, not checked.
+                  <Chip kind="warn" data-testid="request-unverified" title="In the customer's own words from an interview: taken as given, not checked">
+                    Unverified
+                  </Chip>
+                )}
+              </span>
+            ),
             goal: goals.length ? (
               <span className="flex min-w-0 flex-wrap gap-1" title={goals.join(", ")}>
                 {goals.map((g, i) => (
-                  <Chip key={r.goal_ids[i]} kind="acc" data-testid="goal-chip" className="min-w-0">
-                    <span className="truncate">{g}</span>
+                  <Chip key={r.goal_ids[i]} kind="acc" data-testid="goal-chip" className={`min-w-0 ${PHONE_CHIP_WRAP}`}>
+                    <span className={`truncate ${PHONE_WRAP}`}>{g}</span>
                   </Chip>
                 ))}
               </span>
@@ -112,14 +131,14 @@ export function RequestList({
               none
             ),
             theme: r.theme ? (
-              <span className="truncate font-medium text-text" title={r.theme.title}>
+              <span className={`truncate font-medium text-text ${PHONE_WRAP}`} title={r.theme.title}>
                 {r.theme.title}
               </span>
             ) : (
               none
             ),
             asker: r.requester_name ? (
-              <span className="truncate" title={r.requester_name}>
+              <span className={`truncate ${PHONE_WRAP}`} title={r.requester_name}>
                 {r.requester_name}
               </span>
             ) : (
@@ -146,13 +165,14 @@ export function RequestList({
                 <label
                   data-testid="request-choose"
                   className={`${BOX_SLOT} ${free(r) ? "cursor-pointer" : "cursor-not-allowed"}`}
-                  title={free(r) ? undefined : notFree(r)}
+                  title={free(r) ? "Tick to start a PRD from it" : notFree(r)}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <input
                     type="checkbox"
                     className="size-4 accent-[var(--accent)] disabled:cursor-not-allowed"
                     aria-label={`Select ${r.title}`}
+                    title={free(r) ? "Tick to start a PRD from it" : notFree(r)}
                     disabled={!free(r)}
                     checked={chosen!.includes(r.id)}
                     onChange={(e) => onChoose!(e.target.checked ? [...chosen!, r.id] : chosen!.filter((id) => id !== r.id))}
@@ -172,12 +192,6 @@ export function RequestList({
                   >
                     {r.title}
                   </button>
-                  {!r.verified && (
-                    // C3: a customer's own words from an interview are taken as given, not checked.
-                    <Chip kind="warn" data-testid="request-unverified" title="In the customer's own words from an interview: taken as given, not checked">
-                      Unverified
-                    </Chip>
-                  )}
                 </div>
                 <div className={`${META_GRID} text-sm text-text2`}>
                   {META_COLS.map((c) => (

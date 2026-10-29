@@ -87,7 +87,7 @@ test("build roadmap: shown for an approver, on Plan's Roadmap documents and the 
   await expect(page.getByRole("dialog", { name: "Build roadmap" })).toContainText("Usage alerts PRD v1");
 });
 
-// The owner follows the run through ("Check agents now" is an owner's control).
+// The owner follows the run through ("Refresh progress" is an owner's control).
 test("build roadmap: pick template and theme, see the estimate, start the run and follow it", async ({ page }) => {
   await openRoadmap(page);
   await approvedPrd(page).getByRole("button", { name: "Build roadmap" }).click();
@@ -122,7 +122,7 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await expect(page.getByText("Template: Outcome roadmap, theme Roadmap board")).toBeVisible();
 
   // Roadmap items: the check's counts and problems, then the checkpoint.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   const items = page.getByTestId("segment-roadmap_items");
   await expect(items.getByTestId("items-check")).toContainText("1 roadmap item: 1 now, 0 next, 0 later");
   // D2: the item's problem reads as its blocking reason (chip, sentence naming the PRD version, fix).
@@ -143,7 +143,7 @@ test("build roadmap: pick template and theme, see the estimate, start the run an
   await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
 
   // Roadmap draft: imported as the roadmap's next version, linked to the PRD.
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   const draft = page.getByTestId("segment-roadmap_draft");
   await expect(draft.getByTestId("checkpoint-roadmap_review")).toContainText("Roadmap review");
   await expect(draft).toContainText("Imported as usage-alerts-roadmap v2");
@@ -171,7 +171,7 @@ test("build roadmap from the PRD view, into a new roadmap", async ({ page }) => 
   await expect(dialog.getByTestId("estimate-total")).toHaveText("$14.50");
   await dialog.getByRole("button", { name: "Start run" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
-  await expect(page.getByTestId("run-document").filter({ hasText: /^Alerts plan.* \(new\)$/ })).toBeVisible();
+  await expect(page.getByTestId("run-document").filter({ hasText: /^Alerts plan.* \(written by this run\)$/ })).toBeVisible();
   await expect(page.getByText("Template: Now / Next / Later, theme Roadmap board")).toBeVisible();
 });
 

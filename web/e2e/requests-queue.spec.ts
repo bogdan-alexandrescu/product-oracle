@@ -169,7 +169,8 @@ test("Inspector: decline Oracle's suggestion; it stays declined, with who and wh
   await expect(suggestion.getByRole("button")).toHaveCount(0);
   await expect(row(page, "Save my card for the next order").getByTestId("goal-chip")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Classify now", exact: true }).click();
+  await page.getByTestId("triage-menu").click();
+  await page.getByRole("button", { name: "Sort now", exact: true }).click();
   await expect(page.getByTestId("triage-status")).toContainText(/suggestions on \d+ requests? and found/, { timeout: 15_000 });
   await page.reload();
   await pick(page, "Save my card for the next order");

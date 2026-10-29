@@ -10,7 +10,7 @@ import { citationHref, formatDate } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
-import { mockUuid, seeded, stableUuid } from "./ids";
+import { MOCK_SCENARIO_KEY, mockUuid, seeded, stableUuid } from "./ids";
 import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
@@ -548,7 +548,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * "simple-chat" as "simple-home" plus S9's invented meeting, Weekly plan review (the owner
  * presents; everyone attends), for change by chat and "Walk me through it" (./simple-chat.ts).
  */
-export const MOCK_SCENARIO_KEY = "po-mock-scenario";
+export { MOCK_SCENARIO_KEY };
 /**
  * #723: Simple mode is on in the mock (the API's ORACLE_SIMPLE_MODE); tests set this
  * localStorage key to "off" to see the app without it (no switch, everyone in Detailed).

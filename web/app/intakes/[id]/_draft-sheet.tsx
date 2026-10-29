@@ -103,7 +103,9 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
   const serving = useMemo(() => goals.filter((g) => !leftOut.includes(g)), [goals, leftOut]);
 
   const status = review.data;
-  const reusable = !!status?.reusable;
+  // No baseline approved, ever (a new company): there is nothing to reuse (qa-onboarding-5).
+  const none = !!status && !status.last_approved_at && !status.build_under_way;
+  const reusable = !!status?.reusable && !!status.last_approved_at;
   // Reuse is preselected when the baseline is reusable; Rebuild is one click away.
   const reusing = reusable && (reuse ?? true);
 
@@ -272,7 +274,14 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
               </label>
             </div>
           )}
-          {status && !reusable && (
+          {status && !reusable && none && (
+            // qa-onboarding-5: a new company has no baseline to reuse: Oracle builds one first.
+            <div data-testid="draft-baseline-none" className="flex flex-col gap-1">
+              <p className="text-text">Build the baseline{rebuildUsd != null ? ` (${usd(rebuildUsd)})` : ""}</p>
+              <p className="text-sm text-text2">No baseline exists yet: Oracle builds it first, then drafts the PRD.</p>
+            </div>
+          )}
+          {status && !reusable && !none && (
             <p className="flex items-center gap-2 text-text">
               Oracle rebuilds the baseline first
               <InfoTip label="the baseline" align="start">

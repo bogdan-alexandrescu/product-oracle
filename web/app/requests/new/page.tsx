@@ -1,10 +1,12 @@
-import { RequestsScreen } from "../_components/RequestsScreen";
+import { redirect } from "next/navigation";
 
 /**
- * Requests' To decide tab (C1): the requests nobody has decided yet, newest first, in the
- * queue's rows; a row opens the same inspector as All requests (qa-work-6). An interview's
- * requests are marked Unverified.
+ * rirs-36: the To decide tab moved to /requests/to-decide; an old link (with its ?request=)
+ * lands there. Typed bare, /requests/new opens the New request form over that tab.
  */
-export default function NewRequestsPage() {
-  return <RequestsScreen view="new" />;
+export default async function OldToDecidePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(await searchParams)) for (const one of [v].flat()) if (one !== undefined) params.append(k, one);
+  if (!params.size) params.set("compose", "request");
+  redirect(`/requests/to-decide?${params.toString()}`);
 }

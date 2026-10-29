@@ -11,9 +11,9 @@ import { useSettingsTabs } from "@/lib/settings-tabs";
  * Settings' own sections: a strip under the page title (PageHeader draws it, see the
  * settings layout). Evidence search (/sources) lives under Sources. Opened from Home's Set
  * up checklist (?from=setup), it ends with the way back to Home; another tab drops it.
- * Only the tabs the signed-in role can read show (#370). Its 13 tabs do not fit one row
- * beside the rail and the Ask strip, so from 1024 px they wrap to a second row (every tab in
- * full view); on a phone they scroll sideways in the strip.
+ * Only the tabs the signed-in role can read show (#370). Its 13 tabs stay on one row (rirs-38:
+ * a wrapped second row left Trash alone at 1440 px); what does not fit scrolls sideways in
+ * the strip, its chevrons showing there is more.
  */
 export function SettingsNav() {
   const pathname = usePathname();
@@ -25,7 +25,7 @@ export function SettingsNav() {
       data-testid="settings-nav"
       className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel"
     >
-      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1 lg:flex-wrap">
+      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1 lg:gap-0.5">
         {tabs.map((it) => {
           const on =
             pathname === it.href ||
@@ -37,7 +37,7 @@ export function SettingsNav() {
               href={it.href}
               data-testid={it.testId}
               aria-current={on ? "page" : undefined}
-              className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap ${
+              className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium lg:px-2.5 lg:text-sm whitespace-nowrap ${
                 on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
               }`}
             >

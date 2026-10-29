@@ -8,7 +8,7 @@ import { login, signOut } from "./helpers";
  *
  * no_claim for every test here: the in-browser mock stands in for the API and SwarmCloud
  * (api/tests/test_baseline_flow.py covers the flow, the 409 rule and the estimate); the
- * mock's agents finish a segment on "Check agents now".
+ * mock's agents finish a segment on "Refresh progress".
  */
 
 const sheet = (page: Page) => page.getByRole("dialog", { name: "Build the baseline" });
@@ -74,7 +74,7 @@ test("the banner turns into Ready to review once the run waits at Confirm the ba
   await banner(page).getByRole("link", { name: "Open run" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { name: "Build the baseline" }).first()).toBeVisible();
-  await page.getByRole("button", { name: "Check agents now" }).click();
+  await page.getByRole("button", { name: "Refresh progress" }).click();
   await expect(page.getByTestId("checkpoint-baseline_confirm")).toBeVisible();
   await openBaseline(page);
   await expect(banner(page)).toContainText("Ready to review");

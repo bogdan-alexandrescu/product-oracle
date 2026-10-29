@@ -302,13 +302,19 @@ export function DecisionBar({
     return (
       <>
         {confirmSheet}
+        {/* rirs-4: outside the sticky bar, whose stacking context put the sheet under the phone tab bar. */}
+        <Sheet open={open} title={`Decide: ${title}`} onClose={() => setOpen(false)} testId="sheet-decide">
+          <div className="px-4 py-3">{body}</div>
+        </Sheet>
         <div ref={setBar} className="sticky bottom-[68px] z-20 -mx-2.5 border-t border-line bg-surface px-2.5 py-2" data-testid="decision-bar" data-collapsed="true">
-          <Button className="w-full justify-center" variant={canDecide ? "solid" : "secondary"} onClick={() => setOpen(true)}>
-            {canDecide ? `${plural(changes, "change")} · ${held ? "Confirm" : "Approve"}` : `${plural(changes, "change")} · Details`}
+          {/* rirs-5: while blocking problems are open the collapsed bar says so and does not look like Approve. */}
+          <Button className="h-auto! min-h-8 w-full justify-center py-1 whitespace-normal!" variant={canDecide && !blocked ? "solid" : "secondary"} onClick={() => setOpen(true)}>
+            {canDecide
+              ? blocked
+                ? `${blocked} · Review and decide`
+                : `${plural(changes, "change")} · ${held ? "Confirm" : "Approve"}`
+              : `${plural(changes, "change")} · Details`}
           </Button>
-          <Sheet open={open} title={`Decide: ${title}`} onClose={() => setOpen(false)} testId="sheet-decide">
-            <div className="px-4 py-3">{body}</div>
-          </Sheet>
         </div>
       </>
     );

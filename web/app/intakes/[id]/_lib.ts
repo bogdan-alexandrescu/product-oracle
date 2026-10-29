@@ -122,7 +122,18 @@ export function unknownGaps(batches: Batch[] | undefined): Set<string> {
   );
 }
 
-/** Why Draft with Oracle waits (C5 "Draft gate", decided 2026-10-21). */
-export function gateReason(n: number): string {
-  return `${criticalCount(n)} open: answer ${n === 1 ? "it" : "them"} or record a decision`;
+/** "1 critical question holds the draft" / "2 critical questions hold the draft". */
+export function holdCount(n: number): string {
+  return `${criticalCount(n)} ${n === 1 ? "holds" : "hold"} the draft`;
+}
+
+/**
+ * Why Draft with Oracle waits (C5 "Draft gate", decided 2026-10-21). rirs-10: the critical
+ * questions open in all (the inspector's "Critical open") and, of those, the ones that hold the
+ * draft, so the header and the inspector never read as two different counts.
+ */
+export function gateReason(blocking: number, open: number = blocking): string {
+  const all = Math.max(open, blocking);
+  const lead = all > blocking ? `${criticalCount(all)} open, ${blocking} ${blocking === 1 ? "holds" : "hold"} the draft` : holdCount(blocking);
+  return `${lead}: answer ${blocking === 1 ? "it" : "them"} or record a decision`;
 }

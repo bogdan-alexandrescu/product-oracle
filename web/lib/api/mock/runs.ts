@@ -376,7 +376,7 @@ export const FLOW_CATALOG: Schemas["FlowCatalog"] = {
   approval_threshold_usd: 50,
   overrun_factor: 1.5,
   runtime: "fake",
-  runtime_notes: ["Local agent runtime: segments finish at once with generic drafts."],
+  runtime_notes: ["Test mode: each step finishes at once with a sample draft."],
 };
 
 const THRESHOLD = 50;
@@ -1316,13 +1316,13 @@ function fileContent(name: string, segment: string, attempt: number, document?: 
   if (name === "eng_dates.yaml") return datesYaml({ ...LOCAL_DATES, prd: null, problems: [] }, attempt);
   if (name === "feature_set.yaml") return featureSetYaml(LOCAL_FEATURE_SET, document, segment, attempt);
   if (name === "priority.yaml") return priorityYaml(LOCAL_ORDER, segment, attempt);
-  if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt} from the local agent runtime.\n`;
-  if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt} from the local agent runtime.\n`;
+  if (name === "prd.md") return `---\ntitle: Example product PRD\n---\n\n# Example product PRD {#title}\n\nDraft ${attempt}, a sample.\n`;
+  if (name === "roadmap.md") return `---\ntitle: Example product roadmap\nkind: roadmap\n---\n\n# Example product roadmap {#roadmap}\n\nDraft ${attempt}, a sample.\n`;
   if (name === "roadmap_items.yaml") {
-    return `# ${segment} (local agent runtime, attempt ${attempt})\nversion: 1\nitems:\n  - id: price-early\n    title: Show the price early\n    outcome: Fewer buyers drop off at checkout\n    horizon: now\n    milestone: Beta\n    confidence: medium\n    prd_section: features\n`;
+    return `# ${segment} (sample, attempt ${attempt})\nversion: 1\nitems:\n  - id: price-early\n    title: Show the price early\n    outcome: Fewer buyers drop off at checkout\n    horizon: now\n    milestone: Beta\n    confidence: medium\n    prd_section: features\n`;
   }
   if (name.endsWith(".yaml")) return `# ${segment} (attempt ${attempt})\nitems:\n  - key: g1\n    title: Raise first-order completion to 70%\n    confidence: 0.82\n`;
-  return `# ${segment}\n\nWritten by the local agent runtime (attempt ${attempt}).\n`;
+  return `# ${segment}\n\nA sample draft (attempt ${attempt}).\n`;
 }
 
 function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
@@ -3445,7 +3445,7 @@ function briefsCheckOf(briefs: Brief[]): BriefsCheck {
 }
 
 function briefsYaml(briefs: Brief[], attempt: number): string {
-  const lines = [`# eng_review (local agent runtime, attempt ${attempt})`, "version: 1", "code_map: {used: false, repos: []}", "features:"];
+  const lines = [`# eng_review (sample, attempt ${attempt})`, "version: 1", "code_map: {used: false, repos: []}", "features:"];
   for (const b of briefs) {
     lines.push(`  - feature: ${b.key}`, `    title: ${b.title}`, `    approach: ${b.approach}`, `    size: ${b.size}`, `    depends_on: [${b.depends_on.join(", ")}]`, "    questions:");
     for (const q of b.questions) lines.push(`      - {id: ${q.id}, question: "${q.question}", blocking: ${q.blocking}}`);
@@ -3556,7 +3556,7 @@ function datesCheckOf(r: RunOut, spec: DatesSpec): DatesCheck {
 }
 
 function datesYaml(check: DatesCheck, attempt: number): string {
-  const lines = [`# eng_dates (local agent runtime, attempt ${attempt})`, "version: 1", `prd: {document: ${check.prd?.document ?? "null"}, version: ${check.prd?.version ?? "null"}}`, "items:"];
+  const lines = [`# eng_dates (sample, attempt ${attempt})`, "version: 1", `prd: {document: ${check.prd?.document ?? "null"}, version: ${check.prd?.version ?? "null"}}`, "items:"];
   for (const i of check.items) {
     lines.push(`  - item: ${i.key}`);
     if (i.proposed) lines.push(`    estimate: {kind: ${i.proposed.kind}, reference: ${i.proposed.reference}, supports_date: ${i.proposed.supports_date}}`, `    confidence: ${i.confidence}`);
