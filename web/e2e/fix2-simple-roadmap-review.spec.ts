@@ -89,5 +89,39 @@ test.describe("desktop", () => {
       expect(await stripe.getAttribute("opacity")).toBeNull();
     });
   }
+
+  /**
+   * qa-simple-roadmap-29: a date suggestion opened from the lowest bar on the Gantt opens
+   * above it when there is no room below, so it never covers the chart's foot, its sideways
+   * scrollbar or the legend under it.
+   */
+  test("the lowest bar's suggestion stays inside the chart", async ({ page }) => {
+    await open(page);
+    await page.getByTestId("format-gantt").click();
+    const markers = page.getByTestId("suggestion-open");
+    await expect(markers.first()).toBeVisible();
+    const ys = await markers.evaluateAll((ms) => ms.map((m) => m.getBoundingClientRect().top));
+    await markers.nth(ys.indexOf(Math.max(...ys))).click();
+    const pop = page.getByTestId("suggestion-popover");
+    await expect(pop).toContainText("Oracle suggests");
+    const box = (await pop.boundingBox())!;
+    const legend = (await page.getByTestId("legend").boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(legend.y);
+    const chart = (await page.getByTestId("chart-scroll").boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(chart.y + chart.height + 1);
+  });
+
+  /**
+   * cld-1, #1, #2: each goal tile counts the live items its lane draws and how many of them
+   * are broken (the review counted 3 items · 1 broken and 4 items · 3 broken in the mock).
+   */
+  test("the goal tiles count what their lanes draw", async ({ page }) => {
+    await open(page);
+    const tiles = page.getByTestId("goal-counter");
+    await expect(tiles.first()).toBeVisible();
+    const words = (await tiles.allTextContents()).map((t) => t.replace(/\s+/g, " "));
+    expect(words.some((t) => /\b3 items · 1 broken\b/.test(t)), words.join(" | ")).toBe(true);
+    expect(words.some((t) => /\b4 items · 3 broken\b/.test(t)), words.join(" | ")).toBe(true);
+  });
 });
 
