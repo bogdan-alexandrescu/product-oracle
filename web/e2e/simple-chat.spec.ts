@@ -65,7 +65,8 @@ for (const phone of [false, true]) {
       const owner = await attend(page, EMAILS.owner, true);
       const approver = await attend(page, EMAILS.approver, false);
       if (phone) await approver.setViewportSize({ width: 390, height: 844 });
-      await expect(approver.getByTestId("chat-rules")).toContainText("Who may apply: Only the presenter");
+      // qa-simple-decide-7: one wording for the rules (start sheet, header, chat).
+      await expect(approver.getByTestId("chat-rules")).toContainText("Who changes things: Only the presenter");
       await expect(approver.getByTestId("chat-mode")).toHaveCount(0);
 
       await say(approver, "rename Setup checklist to First-run checklist");
@@ -101,22 +102,22 @@ for (const phone of [false, true]) {
       await expect(card.getByTestId("chat-card-why-not")).toHaveText("Only the presenter applies changes in this meeting");
 
       await owner.bringToFront();
-      await owner.getByLabel("Who may apply").selectOption("everyone");
-      await expect(owner.getByTestId("chat-rules")).toContainText("Who may apply: Everyone");
+      await owner.getByLabel("Who changes things").selectOption("everyone");
+      await expect(owner.getByTestId("chat-rules")).toContainText("Who changes things: Everyone");
       await approver.bringToFront();
-      await expect(approver.getByTestId("chat-rules")).toContainText("Who may apply: Everyone");
+      await expect(approver.getByTestId("chat-rules")).toContainText("Who changes things: Everyone");
       await expect(card.getByRole("button", { name: "Propose" })).toBeEnabled();
 
       await owner.bringToFront();
-      await owner.getByLabel("Who may apply").selectOption("named");
+      await owner.getByLabel("Who changes things").selectOption("named");
       await owner.getByTestId("chat-mode").getByLabel("Commenter").check();
-      await expect(owner.getByTestId("chat-rules")).toContainText("Who may apply: Presenter + Commenter");
+      await expect(owner.getByTestId("chat-rules")).toContainText("Who changes things: Presenter plus Commenter");
       await approver.bringToFront();
       await expect(card.getByTestId("chat-card-why-not")).toHaveText("Only the presenter and the people they named apply changes in this meeting");
 
       await owner.bringToFront();
       await owner.getByTestId("chat-mode").getByLabel("Approver").check();
-      await expect(owner.getByTestId("chat-rules")).toContainText("Presenter + Commenter, Approver");
+      await expect(owner.getByTestId("chat-rules")).toContainText("Presenter plus Commenter, Approver");
       await approver.bringToFront();
       await tap(card.getByRole("button", { name: "Propose" }));
       await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by Approver");
@@ -124,11 +125,12 @@ for (const phone of [false, true]) {
     });
 
     test(`a viewer asks only; an ambiguous request gets one question (${where})`, async ({ page }) => {
-      // protects: a viewer's composer says it asks questions only, their change request gets a note and no card, their question an answer; "move alert to Q2" (several items) gets one "Which one" question and no card
+      // protects: a viewer's composer says it changes nothing and points questions to Ask Oracle, their change request gets a note and no card, their question an answer; "move alert to Q2" (several items) gets one "Which one" question and no card
       // fails_when: a viewer gets a change card, the composer does not say ask-only, or an ambiguous request makes a card or more than one reply
       // no_claim: Oracle's wording beyond the contract's examples
       const viewer = await attend(page, EMAILS.viewer, true);
-      await expect(chat(viewer).getByTestId("chat-hint")).toHaveText("You can ask questions here; viewers don't change the plan.");
+      // qa-simple-decide-3: the meeting's chat makes changes and notes; a question goes to Ask Oracle.
+      await expect(chat(viewer).getByTestId("chat-hint")).toHaveText("Viewers don't change the plan. For a question, use Ask Oracle.");
       await say(viewer, "move Weekly alert digest to Q2");
       await expect(chat(viewer).locator('[data-testid="chat-message"][data-kind="note"]')).toContainText("Viewers ask questions here");
       await say(viewer, "when is Weekly alert digest?");

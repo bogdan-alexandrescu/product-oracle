@@ -89,8 +89,9 @@ for (const phone of [false, true]) {
           await startReview(page);
           expect(await height(page.getByRole("button", { name: "End meeting" }))).toBeGreaterThanOrEqual(44);
           expect(await height(page.getByRole("button", { name: "Commenter is here" }))).toBeGreaterThanOrEqual(44);
-          await page.getByRole("button", { name: "Edit line 2" }).click();
-          await page.getByLabel("Line 2").fill("A checklist that names the next step");
+          // The one-pager names a line by its first words (qa-simple-prd), not its number.
+          await page.getByRole("button", { name: "Edit “A setup checklist that shows" }).click();
+          await page.getByLabel("New wording for").fill("A checklist that names the next step");
           await page.getByRole("button", { name: "Save" }).click();
           expect(await height(page.getByRole("button", { name: /^Approve one-pager edits/ }))).toBeGreaterThanOrEqual(44);
           await tap(page.getByRole("navigation", { name: "Steps" }).getByRole("button", { name: "2 Roadmap" }));

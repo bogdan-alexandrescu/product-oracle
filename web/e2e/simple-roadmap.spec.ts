@@ -284,6 +284,9 @@ test("the Gantt: day and week, today's line, arrows, the same card", async ({ pa
   await expect(page.getByTestId("dep-arrow").first()).toBeAttached();
   await bar(page, "alert-rules").click();
   await expect(page.getByTestId("floating-card").getByRole("heading", { name: "Alert rules engine" })).toBeVisible();
+  // #47: the card floats over a dimmed backdrop that takes the page's clicks; close it first.
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("floating-card")).toHaveCount(0);
   await page.getByTestId("format-board").click();
   await expect(page.getByTestId("board")).toBeVisible();
 });
