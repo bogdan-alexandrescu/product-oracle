@@ -159,7 +159,7 @@ test("archiving a brief that made no PRD releases its requests to the next brief
   await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
 
   // The brief is archived before it made a PRD.
-  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("alertdialog", { name: "Archive" }).getByRole("button", { name: "Archive" }).click();
   await expect(page.getByTestId("intake-status")).toHaveText("Archived");

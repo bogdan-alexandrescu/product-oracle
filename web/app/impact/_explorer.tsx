@@ -22,6 +22,7 @@ import {
   ViewOnly,
   type Column,
 } from "@/components/ds";
+import { DocCrumb } from "@/components/DocToolbar";
 import { api, unwrap } from "@/lib/api/client";
 import { shownDay } from "@/lib/dates";
 import { formatDate, formatPercent, plural } from "@/lib/format";
@@ -105,21 +106,26 @@ export function ImpactExplorer({ source }: { source: ImpactSource }) {
 
   const names = useNames(report);
   const subject = report ? subjectWords(report, names) : null;
-  // qa-plan-59: every Impact page leads back to what it is about (the version, Baseline or Sources).
-  const backTo =
-    source.kind === "version"
-      ? { href: `/documents/${source.doc}/v/${source.n}`, label: report?.subject.title ?? `${names.doc(source.doc)} v${source.n}` }
-      : source.kind === "entity"
-        ? { href: "/baseline", label: "Baseline" }
-        : subject?.back;
+  // qa-plan-59: every Impact page leads back to what it is about (the version, Baseline or
+  // Sources); a version's by its breadcrumb (below).
+  const backTo = source.kind === "entity" ? { href: "/baseline", label: "Baseline" } : source.kind === "change" ? subject?.back : undefined;
   // qa-plan-59 / review: the rail highlights by what a recorded change's impact is about (a
   // PRD version, Baseline, Sources), once the report has said so; nothing it can't place.
   useChangeDestination(source.kind === "change" ? source.id : undefined, source.kind === "change" ? backTo?.href : undefined);
-  const back = backTo ? (
-    <Link href={backTo.href} data-testid="impact-back" className="hover:underline">
-      ← {backTo.label}
-    </Link>
-  ) : undefined;
+  // qa-docs-58: a version's Impact has the header of its other sub-pages (Quality): the
+  // documents list and the document by name. Baseline's and a recorded change's lead back
+  // to what they are about (qa-plan-59).
+  const docQ = useQuery(source.kind === "version" ? `doc|${source.doc}` : "doc|none", () =>
+    source.kind === "version" ? unwrap(api.GET("/v1/documents/{doc}", { params: { path: { doc: source.doc } } })) : Promise.resolve(null),
+  );
+  const back =
+    source.kind === "version" ? (
+      <DocCrumb doc={docQ.data ?? undefined} withTitle />
+    ) : backTo ? (
+      <Link href={backTo.href} data-testid="impact-back" className="hover:underline">
+        ← {backTo.label}
+      </Link>
+    ) : undefined;
   const counts = report ? countFreshness(report.affected) : null;
   const status = report && (
     <>

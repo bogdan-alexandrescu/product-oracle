@@ -147,7 +147,9 @@ for (const [width, height] of [
     await suggestions(page);
     await inbox(page);
     const question = row(page, QUESTION);
-    expect(await buttons(question)).toEqual(["Send answer", "Decline", "Stage for agents", "Open"]);
+    // A row draws only what the signed-in role may do (qa-company-3): until the role's
+    // capabilities load it offers Open alone, so wait for the decided set.
+    await expect.poll(() => buttons(question)).toEqual(["Send answer", "Decline", "Stage for agents", "Open"]);
     const remark = row(page, REMARK);
     expect(await buttons(remark)).toEqual(["Close", "Decline", "Stage for agents", "Open"]);
     const duplicate = row(page, QUANTIFY);
@@ -233,14 +235,15 @@ test("phone (390 px): the buttons stack full width and the field opens under the
   await expect(row(page, METRIC)).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 
-  // Home's Needs you: the same rows, one primary action each; Open is the rest.
+  // Home's Needs you: the same rows, one action each. A feedback row is one Open, to the
+  // section where it is decided (qa-company-10); Accept and Decline stay the Inbox's.
   await page.setViewportSize({ width: 1366, height: 820 });
   await page.goto("/home");
   const home = page.getByTestId("home-needs-table").locator("tr[data-row]");
   const depot = home.filter({ hasText: DEPOT });
   await expect(depot).toHaveCount(1);
-  expect(await buttons(depot)).toEqual(["Accept", "Open"]);
-  await depot.getByRole("button", { name: "Accept", exact: true }).click();
-  await expect(page.getByTestId("inbox-acted")).toContainText("Staged for draft 3");
-  await expect(home.filter({ hasText: DEPOT })).toHaveCount(0);
+  expect(await buttons(depot)).toEqual(["Open"]);
+  await expect(depot.getByRole("button", { name: /^(Accept|Decline)$/ })).toHaveCount(0);
+  await depot.getByRole("link", { name: `Open ${DEPOT}` }).click();
+  await expect(page).toHaveURL(/\/documents\/fleet-next\/v\/\d+\?feedback=open/);
 });
