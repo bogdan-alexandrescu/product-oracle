@@ -128,7 +128,7 @@ test("a percentage is a warning: approve once it is ticked", async ({ page }) =>
 test("approvers check the Public version; commenters cannot open it", async ({ page }) => {
   await sharing(page, "commenter@example.com");
   await page.goto(`${DOC}/public`);
-  await expect(page.getByText("Approvers and owners check the Public version.")).toBeVisible();
+  await expect(page.getByText("Only an approver or owner can check the Public version")).toBeVisible();
   await expect(page.getByTestId("public-row")).toHaveCount(0);
 });
 

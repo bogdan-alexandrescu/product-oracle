@@ -71,17 +71,17 @@ test("annotations are numbered as Oracle labels them, with a thread each and the
 
   // C's filter, with counts: annotations with no comments.
   await expect(notes.getByRole("button", { name: "All 2" })).toBeVisible();
-  await notes.getByRole("button", { name: "No comments 2" }).click();
+  await notes.getByRole("button", { name: "Without comments 2" }).click();
   await expect(notes.getByTestId("annotation")).toHaveCount(2);
 
-  // An empty comment is refused with the API's message.
-  await notes.getByTestId("annotation").first().getByRole("button", { name: "Comment" }).click();
-  await expect(notes.getByRole("alert")).toContainText("a comment needs a body");
+  // An empty comment cannot be sent: Comment is off, with a hint.
+  await expect(notes.getByTestId("annotation").first().getByRole("button", { name: "Comment" })).toBeDisabled();
+  await expect(notes.getByTestId("annotation").first()).toContainText("Write a comment first");
   await notes.getByLabel("Comment on annotation 1").fill("Is 'from' price enough before the postcode?");
   await notes.getByTestId("annotation").first().getByRole("button", { name: "Comment" }).click();
   // Commented: it leaves the 'no comments' list.
   await expect(notes.getByTestId("annotation")).toHaveCount(1);
-  await expect(notes.getByRole("button", { name: "No comments 1" })).toBeVisible();
+  await expect(notes.getByRole("button", { name: "Without comments 1" })).toBeVisible();
   await notes.getByRole("button", { name: "All 2" }).click();
   await expect(notes.getByTestId("annotation").first()).toContainText("Is 'from' price enough before the postcode?");
   // The thread names its author.

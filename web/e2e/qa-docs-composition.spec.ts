@@ -50,7 +50,7 @@ async function expectNothingCut(target: Locator) {
 test("qa-docs-1: confirming keeps the brief sections, revision after revision", async ({ page }) => {
   // fails_when=the outline after a confirm loses the brief ("This PRD has no brief layer.").
   await open(page, APPROVER, "saved-carts");
-  await page.getByRole("button", { name: "Confirm revision 1" }).click();
+  await page.getByRole("button", { name: "Use these modules" }).click();
   let dialog = page.getByRole("dialog", { name: "Confirm revision 1" });
   const before = await briefHeadings(dialog);
   expect(before.length).toBeGreaterThan(0);
@@ -60,14 +60,14 @@ test("qa-docs-1: confirming keeps the brief sections, revision after revision", 
   await dialog.getByRole("button", { name: "Confirm revision 1", exact: true }).click();
   await expect(page.getByTestId("composition-in-force")).toHaveText("Revision 1 in force");
 
-  await page.getByRole("button", { name: "Confirm revision 2" }).click();
+  await page.getByRole("button", { name: "Use these modules" }).click();
   dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   expect(await briefHeadings(dialog)).toEqual(before);
   await dialog.getByLabel("Reason (required)").fill("Second look.");
   await dialog.getByRole("button", { name: "Confirm revision 2", exact: true }).click();
   await expect(page.getByTestId("composition-in-force")).toHaveText("Revision 2 in force");
 
-  await page.getByRole("button", { name: "Confirm revision 3" }).click();
+  await page.getByRole("button", { name: "Use these modules" }).click();
   expect(await briefHeadings(page.getByRole("dialog", { name: "Confirm revision 3" }))).toEqual(before);
 });
 
@@ -77,7 +77,7 @@ test("qa-docs-1: a brief-layer module's section sits in the brief, before the fu
   await open(page, APPROVER);
   await row(page, "economics.value").click();
   await inspector(page).getByRole("button", { name: "Add to draft" }).click();
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   let dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   const brief = await briefHeadings(dialog);
   // The module's brief section sits where the full version begins.
@@ -90,7 +90,7 @@ test("qa-docs-1: a brief-layer module's section sits in the brief, before the fu
   await expect(page.getByTestId("composition-in-force")).toHaveText("Revision 2 in force");
 
   // After the confirm, the next revision's outline keeps the brief in the same order.
-  await page.getByRole("button", { name: "Confirm revision 3" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   dialog = page.getByRole("dialog", { name: "Confirm revision 3" });
   expect(await briefHeadings(dialog)).toEqual(brief);
   await expect(dialog.getByTestId("outline-full")).not.toContainText("Strategic alignment");
@@ -98,8 +98,8 @@ test("qa-docs-1: a brief-layer module's section sits in the brief, before the fu
 
 test("qa-docs-14: the Confirm action reads in full, once", async ({ page }) => {
   await open(page, APPROVER, "team-workspaces");
-  const action = page.getByRole("button", { name: "Confirm revision 1" });
-  await expect(action).toHaveText("Confirm revision 1");
+  const action = page.getByRole("button", { name: "Use these modules" });
+  await expect(action).toHaveText("Use these modules");
   await expectNothingCut(action);
   // The notice above does not repeat the action's label.
   await expect(page.getByTestId("legacy-notice")).not.toContainText(/confirm rev/i);
@@ -109,7 +109,7 @@ test("qa-docs-15: the Confirm dialog names modules and sections in words, each o
   await open(page, APPROVER);
   await row(page, "platform.tenant-isolation").click();
   await inspector(page).getByRole("button", { name: "Add to draft" }).click();
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   await expect(dialog.getByTestId("confirm-diff")).toContainText("+ Multi-tenant isolation");
   await expect(dialog.getByTestId("confirm-approvals")).toHaveText("Approvals on the sections of Multi-tenant isolation will be cleared when you confirm.");
@@ -192,8 +192,8 @@ test.describe("on a phone", () => {
 
   test("qa-docs-14: the Confirm action reads in full on a phone", async ({ page }) => {
     await open(page, APPROVER);
-    const action = page.getByRole("button", { name: "Confirm revision 2" });
-    await expect(action).toHaveText("Confirm revision 2");
+    const action = page.getByRole("button", { name: "Use these modules" });
+    await expect(action).toHaveText("Use these modules");
     const box = await action.boundingBox();
     expect(box!.x + box!.width).toBeLessThanOrEqual(390);
     await expectNothingCut(action);

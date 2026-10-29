@@ -43,7 +43,7 @@ test("an approver adds a module and confirms rev 2 with the diff, the Brief/Full
   await inspector(page).getByRole("button", { name: "Add to draft" }).click();
   await expect(page.getByTestId("draft-changes")).toContainText("+ Multi-tenant isolation");
 
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   await expect(dialog.getByTestId("confirm-diff")).toContainText("Multi-tenant isolation");
   await expect(dialog.getByTestId("confirm-diff")).toContainText("Changes sections");
@@ -69,7 +69,7 @@ test("an approver saves a working draft, then confirms it from the draft", async
   await openComposition(page, "approver");
   await row(page, "economics.value").click();
   await inspector(page).getByRole("button", { name: "Add to draft" }).click();
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   await dialog.getByRole("button", { name: "Working draft" }).click();
   await dialog.getByLabel("Reason (required)").fill("Usage billing may come in scope.");
@@ -77,7 +77,7 @@ test("an approver saves a working draft, then confirms it from the draft", async
   await expect(page.getByTestId("composition-in-force")).toHaveText("Revision 1 in force");
   await expect(page.getByTestId("composition-working")).toHaveText("Working draft, revision 2");
   await expect(page.getByTestId("working-draft")).toContainText("+ Value and cost economics");
-  await page.getByRole("button", { name: "Confirm revision 3" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const next = page.getByRole("dialog", { name: "Confirm revision 3" });
   await next.getByLabel("Reason (required)").fill("Agreed with finance.");
   await next.getByRole("button", { name: "Confirm revision 3", exact: true }).click();
@@ -96,13 +96,13 @@ test("a stale base revision is refused with the API's message and a Reload", asy
   await other.goto("/documents/checkout-redesign/composition");
   await other.getByTestId("composition-modules").locator('[data-module="platform.tenant-isolation"]').click();
   await other.getByTestId("module-inspector").getByRole("button", { name: "Add to draft" }).click();
-  await other.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await other.getByRole("button", { name: "Use these modules" }).first().click();
   await other.getByLabel("Reason (required)").fill("Isolation first.");
   await other.getByRole("dialog", { name: "Confirm revision 2" }).getByRole("button", { name: "Confirm revision 2", exact: true }).click();
   await expect(other.getByTestId("composition-in-force")).toHaveText("Revision 2 in force");
   await other.close();
 
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   await dialog.getByLabel("Reason (required)").fill("Usage billing.");
   await dialog.getByRole("button", { name: "Confirm revision 2", exact: true }).click();
@@ -130,7 +130,7 @@ test("an approver moves a module up and confirms a reorder that is not material"
   await inspector(page).getByRole("button", { name: "Move up" }).click();
   await expect(page.getByTestId("draft-changes")).toContainText("↕ Custom order (7 modules)");
   await expect(row(page, "risks.register").locator("td").first()).toHaveText("4");
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   await expect(dialog.getByTestId("confirm-diff")).toContainText("Order only · sections unchanged");
   await dialog.getByLabel("Reason (required)").fill("Risks read better before constraints.");
@@ -143,7 +143,7 @@ test("moving a module after Sources and data points shows the API's order_violat
   await openComposition(page, "approver");
   await row(page, "agents.tool-policies").click();
   await inspector(page).getByRole("button", { name: "Move down" }).click();
-  await page.getByRole("button", { name: "Confirm revision 2" }).first().click();
+  await page.getByRole("button", { name: "Use these modules" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 2" });
   await expect(dialog.getByTestId("preview-problems")).toContainText("Blocks confirming");
   await expect(dialog.getByTestId("preview-problems")).toContainText("Tool policies must come before Sources and data points.");
@@ -193,7 +193,7 @@ test("a legacy PRD shows Oracle's recommendation and an approver confirms rev 1"
   await openComposition(page, "approver", "team-workspaces");
   await expect(page.getByTestId("legacy-notice")).toContainText("This PRD has no composition yet. Oracle recommends");
   await expect(row(page, "decision.executive")).toBeVisible();
-  await page.getByRole("button", { name: "Confirm revision 1" }).click();
+  await page.getByRole("button", { name: "Use these modules" }).click();
   const dialog = page.getByRole("dialog", { name: "Confirm revision 1" });
   await dialog.getByLabel("Reason (required)").fill("First confirmation of the recommendation");
   await dialog.getByRole("button", { name: "Confirm revision 1", exact: true }).click();
@@ -277,7 +277,7 @@ test.describe("on a phone", () => {
 
   test("the Confirm step opens as a sheet and confirms", async ({ page }) => {
     await openComposition(page, "approver");
-    await page.getByRole("button", { name: "Confirm revision 2" }).click();
+    await page.getByRole("button", { name: "Use these modules" }).click();
     const sheet = page.getByRole("dialog", { name: "Confirm revision 2" });
     await expect(sheet.getByTestId("confirm-diff")).toContainText("No change");
     await sheet.getByLabel("Reason (required)").fill("Re-confirm after the policy review.");

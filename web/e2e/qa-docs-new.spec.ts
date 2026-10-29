@@ -154,9 +154,10 @@ for (const scheme of ["light", "dark"] as const) {
     const n = await thumbs.count();
     expect(n).toBeGreaterThan(0);
     for (let i = 0; i < n; i++) await expect(thumbs.nth(i)).toHaveAttribute("data-ready", "true");
-    const frame = page.getByTestId("theme-option-clean-document").locator("iframe");
-    await expect(frame).toHaveCSS("width", "400px");
-    await expect(page.getByTestId("theme-option-clean-document").frameLocator("iframe").locator("body")).toContainText(/\w+/);
+    // qa-docs-2: a still picture of the 400 x 300 preview page (no frame), with its words.
+    const picture = page.getByTestId("theme-option-clean-document").getByTestId("theme-thumbnail-picture");
+    await expect(picture).toHaveJSProperty("naturalWidth", 400);
+    expect(decodeURIComponent((await picture.getAttribute("src")) ?? "")).toContain("Example feature PRD");
 
     // Template descriptions wrap, whole.
     const desc = page.getByTestId("template-option-oracle-default").getByText(/^Goal trace, problem alignment/);

@@ -269,7 +269,7 @@ test("evidence: a section counts as unsupported only when nothing under it is su
 test("evidence: the note on rendered pages shows once on a desktop", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await evidenceTab(page);
-  await expect(page.getByText(/Rendered pages never show these links/).filter({ visible: true })).toHaveCount(1);
+  await expect(page.getByText(/never s(ee|how) these links/).filter({ visible: true })).toHaveCount(1);
 });
 
 test("evidence: removing a target's last link in the coverage view still says Link removed.", async ({ page }) => {
