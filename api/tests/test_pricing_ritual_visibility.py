@@ -17,6 +17,7 @@ import pytest
 from sqlalchemy import select
 
 from oracle.decisions.models import Decision
+from oracle.rituals import clock as ritual_clock
 from oracle.rituals import service as rituals
 from oracle.rituals import summaries
 from oracle.rituals.models import Ritual, RitualOccurrence
@@ -24,7 +25,7 @@ from oracle.runs.models import Run
 from oracle.swarm import FakeRuntime, set_runtime
 from oracle.tenancy import tenant_session
 from tests.baseline_helpers import make_ctx
-from tests.decision_helpers import clock, today  # noqa: F401
+from tests.decision_helpers import clock, freeze, today  # noqa: F401
 from tests.pricing_helpers import QUESTION, approved_memo
 from tests.test_mcp import api_token, mcp_client, run_token, text_of
 
@@ -36,6 +37,21 @@ ROLES = [("owner", True), ("approver", True), ("commenter", False), ("viewer", F
 @pytest.fixture
 async def ctx():
     return await make_ctx()
+
+
+# A Tuesday noon in Los Angeles. On the real clock this module failed on Thursdays before
+# 9:00 (the Decisions due ritual's own hour): Prepare then built the next week's
+# occurrence, whose "Decisions made" window starts after a decision made that morning.
+AT = datetime(2026, 10, 27, 19, 0, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def pinned(monkeypatch, request):
+    """The decision log's and the rituals' clocks, both at :data:`AT` (after the decision
+    helpers' own autouse clock, which this overrides)."""
+    request.getfixturevalue("clock")
+    freeze(monkeypatch, AT)
+    monkeypatch.setattr(ritual_clock, "now", lambda: AT)
 
 
 @pytest.fixture(autouse=True)
@@ -71,7 +87,7 @@ async def _prepared(client, ctx, *, reverse: bool = False) -> tuple[str, str, in
             Decision(
                 number=d["number"] + 100, title=CONTROL, status="decided",
                 approver_id=ctx.users["owner"].id, driver="Ada Example", origin="manual",
-                chosen_option="a", rationale="Simpler", decided_at=datetime.now(UTC),
+                chosen_option="a", rationale="Simpler", decided_at=AT,
                 review_at=today(),
             )
         )  # fmt: skip
