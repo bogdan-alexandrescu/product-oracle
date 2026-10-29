@@ -217,13 +217,14 @@ def for_reader(reasons: Iterable[str] | None, hidden: Any) -> list[str]:
 
 
 def detail_for_reader(detail: str | None, hidden: Any) -> str | None:
-    """A stored ``"; "``-joined reason line (:func:`stale_why`) for the reader. A
-    reason stored in the old literal form (prod-6) is put into words on the way out
-    (:func:`for_reader`, :func:`_reworded`), with no migration needed, whether or not
-    this reader has anything hidden from them."""
+    """A stored ``"; "``-joined reason line for the reader: what they may not see is
+    hidden first (:func:`for_reader`), then the rest is put into words (:func:`in_words`),
+    so a reader never learns the kind of a hidden item ("A decision ... changed"). A
+    reason stored in an older form (worded, or prod-6's literal refs) reads the same way,
+    with no migration needed."""
     if not detail:
         return detail
-    return "; ".join(for_reader(detail.split("; "), hidden))
+    return "; ".join(in_words(one_count(for_reader(detail.split("; "), hidden))))
 
 
 def _mark(item: RoadmapItem, event: ChangeEvent, reason: str, now: datetime) -> None:

@@ -123,7 +123,7 @@ async def test_withdrawal_removes_the_date_everywhere(client, owner, runtime):  
     assert resp.status_code == 200, resp.text
     track = await track_of(client, auth)
     assert track["next_milestone"]["target_date"] == "2026-11-30"
-    assert "(2026-11-30)" in track["headline"]
+    assert "Nov 30" in track["headline"], track["headline"]
     assert "date_slip" in {d["kind"] for d in track["drift"]}
 
     bases = (await client.get("/v1/schedule-bases", headers=auth)).json()
