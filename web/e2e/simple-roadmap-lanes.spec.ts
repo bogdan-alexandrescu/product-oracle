@@ -144,14 +144,17 @@ for (const scheme of ["light", "dark"] as const) {
       for (const group of ["milestone", "track", "prd"] as const) {
         await page.getByTestId(`group-${group}`).click();
         await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-lanes", group);
-        if (group === "track") await expect(page.getByTestId("chart-group").first()).toContainText("Guided setup track");
-        if (group === "prd") await expect(page.getByTestId("chart-group").first()).toContainText("Guided setup");
-        // The bars move to the new grouping's lanes after the switch: read them until they settle (train AB review).
+        // The chart takes the new grouping at once but keeps the last answer's lanes until the new one lands
+        // (train AB re-review): wait for the new grouping's own lane, matched exactly, and for both bars in it.
+        const title = group === "track" ? "Guided setup track" : group === "prd" ? "Guided setup" : null;
+        if (title) await expect(lane(page, title)).toHaveCount(1);
         await expect
           .poll(async () => {
+            const want = title ? await lane(page, title).getAttribute("data-lane") : null;
             const [checklist, sample] = [await placeOf(page, "setup-checklist"), await placeOf(page, "setup-import")];
-            return checklist.lane === sample.lane && checklist.row !== sample.row ? "one lane, two rows" : `${checklist.lane}:${checklist.row} ${sample.lane}:${sample.row}`;
-          }, { message: `${group}: Setup checklist and Sample data import share one lane on two rows` })
+            const inLane = title ? checklist.lane === want && sample.lane === want : checklist.lane === sample.lane;
+            return inLane && checklist.row !== sample.row ? "one lane, two rows" : `${checklist.lane}:${checklist.row} ${sample.lane}:${sample.row} want ${want}`;
+          }, { message: `${group}: Setup checklist and Sample data import share ${title ?? "one"} lane on two rows` })
           .toBe("one lane, two rows");
         await expect(lane(page, "PM-owned")).toHaveCount(0);
       }

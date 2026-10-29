@@ -12,7 +12,8 @@ test("pricing: an owner opens Pricing and Win and loss, adds a record and sees i
   await expect(page.getByRole("button", { name: /^(New|Write a) pricing memo$/ })).toBeVisible();
 
   await openMarketTab(page, "win-loss");
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  // qa-company-20: with no record yet the header's Add gives way to the empty list's "Add a record".
+  await page.getByRole("button", { name: /^Add( a record)?$/ }).click();
   const add = page.getByRole("dialog", { name: "Add win or loss" });
   await add.getByLabel("Result").selectOption({ label: "Won" });
   await add.getByLabel("Account").fill("Account 31");
