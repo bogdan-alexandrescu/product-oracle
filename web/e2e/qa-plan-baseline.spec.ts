@@ -208,19 +208,16 @@ test("items: the empty state names the kinds, and one Add control", async ({ pag
   await expect(list.getByTestId("table-empty")).toHaveText("No risks yet");
 });
 
-// protects=qa-plan-50: on a phone the tabs are one scrolling line, the confirmed chip does not
-// stand alone, and the feature list keeps delivery state and confidence; fails_when=the tabs
-// wrap onto two lines, the chip shows, or a feature drops Delivery/Confidence;
-// no_claim=desktop.
-test("phone: tabs scroll on one line; features keep delivery and confidence", async ({ page }) => {
+// protects=qa-plan-50: on a phone the tabs all show (they wrap, qa-plan-25, rather than
+// scroll behind arrows), the confirmed chip does not stand alone, and the feature list keeps
+// delivery state and confidence; fails_when=a tab is cut or covered, the chip shows, or a
+// feature drops Delivery/Confidence; no_claim=desktop.
+test("phone: tabs all show; features keep delivery and confidence", async ({ page }) => {
   await page.setViewportSize(PHONE);
   await openBaseline(page);
-  const tabs = page.getByRole("tab");
-  const first = (await tabs.first().boundingBox())!;
-  const last = (await tabs.last().boundingBox())!;
-  expect(Math.abs(last.y - first.y)).toBeLessThan(2);
   const strip = page.getByRole("tablist", { name: "Baseline views" });
-  expect(await strip.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
+  expect(await strip.evaluate((e) => e.scrollWidth <= e.clientWidth + 1)).toBe(true);
+  await expect(page.getByRole("button", { name: /^Scroll/ })).toHaveCount(0);
   await expect(page.getByTestId("confirmed-chip")).toBeHidden();
 
   const guided = page.getByTestId("feature-f.guided-setup");

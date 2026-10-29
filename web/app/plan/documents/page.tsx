@@ -251,7 +251,7 @@ export default function RoadmapDocumentsPage() {
     {
       key: "state",
       header: "State",
-      width: "150px",
+      width: "128px",
       cell: (r) => (
         <span className="flex flex-col gap-0.5">
           <span className="flex items-center gap-2">
@@ -288,7 +288,8 @@ export default function RoadmapDocumentsPage() {
     {
       key: "source",
       header: "Source PRD",
-      width: "180px",
+      // Narrow enough to leave the roadmap's name room beside the open panel (it wraps).
+      width: "150px",
       hideOnPhone: true,
       wrap: true,
       // The header says where it came from; the cell is the PRD's name alone.
