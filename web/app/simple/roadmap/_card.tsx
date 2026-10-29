@@ -12,9 +12,11 @@ import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
 import {
+  confidenceWord,
   milestoneInk,
   shortDay,
   sourceWord,
+  statusWord,
   storedDates,
   type Change,
   type Flag,
@@ -305,7 +307,7 @@ export function SuggestionPopover({
 
 function names(ids: string[], items: Map<string, Item>): string {
   const t = ids.map((id) => items.get(id)?.title).filter(Boolean);
-  return t.length ? t.join(", ") : "Nothing";
+  return t.length ? t.join(", ") : "no other items";
 }
 
 const OP_WORDS: Record<string, string> = {
@@ -546,7 +548,7 @@ export function FloatingCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   const dates = item.estimated
-    ? `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · estimated (the ${item.horizon} window)`
+    ? `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · Estimated by Oracle (the ${item.horizon} window)`
     : `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · ${sourceWord(item.source)}`;
   const beside = talk && !phone;
   const talkRight = useTalkPlace(beside);
@@ -760,9 +762,9 @@ export function FloatingCard({
             </>
           )}
           <dt className="text-text2">Status</dt>
-          <dd data-testid="card-status">{item.status.replace("_", " ")}</dd>
+          <dd data-testid="card-status">{statusWord(item.status)}</dd>
           <dt className="text-text2">Confidence</dt>
-          <dd>{item.confidence ?? "Not rated"}</dd>
+          <dd data-testid="card-confidence">{item.confidence ? confidenceWord(item.confidence) : "Not rated"}</dd>
           <dt className="text-text2">Depends on</dt>
           <dd data-testid="card-depends">{names(item.depends_on, items)}</dd>
           <dt className="text-text2">Needed by</dt>
@@ -831,8 +833,8 @@ export function FloatingCard({
                       className="text-accent-ink hover:underline"
                     >
                       D-{d.number}
-                    </Link>{" "}
-                    {d.title}
+                    </Link>
+                    : {d.title}
                   </li>
                 ))}
               </ul>

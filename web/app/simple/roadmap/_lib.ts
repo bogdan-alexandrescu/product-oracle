@@ -87,16 +87,57 @@ export function barKind(i: Item): "draft" | "estimated" | "dated" {
   return "dated";
 }
 
-const SOURCE_WORDS: Record<Schemas["SimpleDate"]["source"], string> = {
-  typed: "typed",
-  accepted: "accepted",
-  engineering: "engineering",
-  tracker: "tracker",
-  estimated: "estimated",
+/** A date's source, in plain words for a reader (not the API's enum value). Also used for a
+ * bar's aria-label (_timeline.tsx, _lanes.tsx). */
+export const SOURCE_WORDS: Record<Schemas["SimpleDate"]["source"], string> = {
+  typed: "Dates set by you",
+  accepted: "Dates accepted from Oracle",
+  engineering: "Dates from engineering",
+  tracker: "Dates from the tracker",
+  estimated: "Estimated by Oracle",
 };
 
 export function sourceWord(source: Schemas["SimpleDate"]["source"]): string {
   return SOURCE_WORDS[source];
+}
+
+/** An item's status, in plain words for a reader (not the API's `in_progress`-style enum
+ * value). Also used for a bar's aria-label (_timeline.tsx, _lanes.tsx). */
+export const STATUS_WORDS: Record<Item["status"], string> = {
+  planned: "Planned",
+  in_progress: "In progress",
+  done: "Done",
+  cut: "Cut",
+  draft: "Draft",
+  merged: "Merged",
+};
+
+export function statusWord(status: Item["status"]): string {
+  return STATUS_WORDS[status];
+}
+
+/** A confidence rating, in plain words (title-cased, not the API's lowercase value). */
+export const CONFIDENCE_WORDS: Record<"low" | "medium" | "high", string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+};
+
+export function confidenceWord(confidence: string): string {
+  return CONFIDENCE_WORDS[confidence as "low" | "medium" | "high"] ?? confidence;
+}
+
+/** A phase's key (a gate or the waterfall's slice), in plain words. Also used for a bar's
+ * aria-label (_timeline.tsx, _lanes.tsx); matches _timeline.tsx's PHASES labels. */
+export const PHASE_WORDS: Record<Item["phases"][number]["key"], string> = {
+  discover: "Discover",
+  build: "Build",
+  beta: "Beta",
+  launch: "Launch",
+};
+
+export function phaseWord(key: Item["phases"][number]["key"]): string {
+  return PHASE_WORDS[key] ?? key;
 }
 
 /** The item's stored dates (the change engine's `before` of move_dates): typed or accepted

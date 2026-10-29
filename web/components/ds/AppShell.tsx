@@ -207,6 +207,9 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const email = me?.email ?? me?.token_name ?? "";
+  // qa-simple-roadmap-46: the panel truncates this line; the full address (and the name,
+  // when there is one) still reads on hover/focus.
+  const name = me && me.kind === "user" ? (me.name ?? null) : null;
 
   useEffect(() => {
     if (!open) return;
@@ -263,7 +266,9 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
           : "absolute top-[calc(100%+8px)] right-0 z-50 w-72 max-w-[calc(100vw-20px)] rounded-panel border border-line bg-surface p-3 text-left text-text shadow-tip [--focus-ring:var(--accent)]"
       }
     >
-      <p className="mb-3 truncate px-1 text-sm font-medium">{email}</p>
+      <p className="mb-3 truncate px-1 text-sm font-medium" title={name ? `${name} (${email})` : email}>
+        {name ? `${name} · ${email}` : email}
+      </p>
       <div role="radiogroup" aria-label="Theme" className="mb-3 grid grid-cols-3 overflow-hidden rounded-button border border-line-strong">
         {THEMES.map((t) => (
           <button

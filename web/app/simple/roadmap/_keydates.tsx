@@ -128,7 +128,7 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
               <span aria-hidden className="mt-1.5 inline-block h-2.5 w-2.5 flex-none rotate-45 bg-accent-ink" />
               <div className="min-w-0 flex-1">
                 <div className="font-medium">
-                  {k.name} <span className="text-text2">· {shortDay(k.date)}</span>
+                  {k.name} <span className="whitespace-nowrap text-text2">· {shortDay(k.date)}</span>
                   {k.in_draft && (
                     <span className="ml-2 rounded-full bg-surface2 px-2 text-xs text-text2" data-testid="key-date-in-draft">
                       in the draft

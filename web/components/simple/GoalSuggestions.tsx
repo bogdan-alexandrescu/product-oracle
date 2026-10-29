@@ -303,17 +303,18 @@ export function SuggestionsButton({ goal, api: a, onOpen, className = "" }: { go
   );
 }
 
-/** "Suggest a feature": name, what it does and for whom, the goal set, who decides; folded to one line for the decider. */
-function SuggestForm({ goal, decider, folded, focus = false, onSent }: { goal: GoalBrief; decider: string | null; folded: boolean; focus?: boolean; onSent: () => Promise<void> }) {
-  const [open, setOpen] = useState(!folded);
+/** "Suggest a feature": name, what it does and for whom, the goal set, who decides; folded to
+ * one line (a button, "+ Suggest a feature") for the decider. `open` and `onOpen` are the
+ * parent's, so the empty state's "Suggest the first feature" can open the same form. */
+function SuggestForm({ goal, decider, open, onOpen, focus = false, onSent }: { goal: GoalBrief; decider: string | null; open: boolean; onOpen: () => void; focus?: boolean; onSent: () => Promise<void> }) {
   const [title, setTitle] = useState("");
   const [outcome, setOutcome] = useState("");
   const [busy, setBusy] = useState(false);
   if (!open)
     return (
-      <button type="button" data-testid="suggest-form-open" onClick={() => setOpen(true)} className="simple-small self-start font-semibold text-accent-ink hover:underline">
+      <Button variant="secondary" data-testid="suggest-form-open" onClick={onOpen} className="self-start">
         + Suggest a feature
-      </button>
+      </Button>
     );
   return (
     <form
@@ -351,7 +352,7 @@ function SuggestForm({ goal, decider, folded, focus = false, onSent }: { goal: G
         Goal: {goal.title}
       </p>
       <p className="simple-small text-text2" data-testid="suggest-decider">
-        {decider ? `${decider} decides.` : "The company's owners decide."}
+        {decider ? `${decider} will review your suggestion.` : "The company's owners will review your suggestion."}
       </p>
       <Button type="submit" variant="solid" className="self-start" disabled={busy || !title.trim() || !outcome.trim()}>
         Send suggestion
@@ -433,6 +434,10 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
   const { people, oracle } = goalRows(a, goal);
   const [tab, setTab] = useState<"people" | "oracle">(start === "oracle" ? "oracle" : "people");
   const [asking, setAsking] = useState(false);
+  // qa-simple-roadmap-24/44: "+ Suggest a feature" starts folded the same way it always did;
+  // lifted here (not SuggestForm's own state) so the empty state's "Suggest the first feature"
+  // can open the same form.
+  const [formOpen, setFormOpen] = useState(() => !(start !== "form" && !!state?.can_decide));
   const suggests = can("create_goal_suggestion");
   const tabs = [
     { key: "people" as const, label: `People · ${people.length}` },
@@ -442,18 +447,18 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
     <div data-testid="goal-suggestions" data-goal={goal.key} className="flex flex-col gap-3">
       {suggests && (
         <>
-          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} folded={start !== "form" && !!state?.can_decide} focus={start === "form"} onSent={a.reload} />
-          <button
-            type="button"
+          <SuggestForm goal={state?.goal ?? goal} decider={state?.decider_name ?? null} open={formOpen} onOpen={() => setFormOpen(true)} focus={start === "form"} onSent={a.reload} />
+          <Button
+            variant="secondary"
             data-testid="suggest-from-chat"
             onClick={() => {
               onChat?.();
               askWith(`Suggest a feature for ${(state?.goal ?? goal).title}: `);
             }}
-            className="simple-small self-start text-accent-ink underline"
+            className="self-start"
           >
             Suggest from the chat
-          </button>
+          </Button>
         </>
       )}
       <div role="tablist" aria-label="Who suggested" className="flex gap-1 border-b border-line">
@@ -480,7 +485,14 @@ export function GoalSuggestionList({ goal, api: a, onChat, start }: { goal: Goal
               ))}
             </ul>
           ) : (
-            <p className="simple-small text-text2">No one has suggested a feature for {goal.title} yet.</p>
+            <p className="simple-small text-text2">
+              No one has suggested a feature for {goal.title} yet.{" "}
+              {suggests && !formOpen && (
+                <button type="button" data-testid="suggest-first-feature" onClick={() => setFormOpen(true)} className="font-semibold text-accent-ink hover:underline">
+                  Suggest the first feature
+                </button>
+              )}
+            </p>
           )}
         </div>
       ) : (

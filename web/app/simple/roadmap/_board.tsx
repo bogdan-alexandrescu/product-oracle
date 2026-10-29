@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 
-import { barKind, broken, closedItem, spanWords, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
+import { barKind, broken, closedItem, shortDay, whereAttr, type Change, type Item, type Roadmap } from "./_lib";
 
 export type Horizon = Item["horizon"];
 
@@ -11,6 +11,30 @@ export const HORIZONS: { key: Horizon; label: string }[] = [
   { key: "next", label: "Next" },
   { key: "later", label: "Later" },
 ];
+
+/**
+ * qa-simple-roadmap-27: a span in words, each end showing its year only when that end's own
+ * year isn't this year's (so a span that starts this year and ends next year reads "Dec 14 –
+ * Jan 15, 2027", never "Dec 14, 2026 – Jan 15, 2027"); the shared spanWords (./_lib) decides
+ * once for the whole span, which doubles the year when the two ends differ, so the board
+ * keeps its own copy and uses it for both the column headers and the cards.
+ */
+function boardSpanWords(start: string, end: string, today: string): string {
+  const [ys, ye, yt] = [start, end, today].map((d) => d.slice(0, 4));
+  if (ys === ye) return ys === yt ? `${shortDay(start)} – ${shortDay(end)}` : `${shortDay(start)} – ${shortDay(end)}, ${ye}`;
+  const s = ys === yt ? shortDay(start) : `${shortDay(start)}, ${ys}`;
+  const e = ye === yt ? shortDay(end) : `${shortDay(end)}, ${ye}`;
+  return `${s} – ${e}`;
+}
+
+/** qa-simple-roadmap-3: whether every item drawn in a column falls inside the column's
+ * nominal window (a dragged card's horizon can move while its own dates stay put, so a
+ * column may hold a card its header's range does not cover); the header's range is drawn
+ * only when it is true of everything in the column, so it never claims a span that
+ * contradicts a card inside it. */
+function windowFits(window: { start: string; end: string }, groups: { items: Item[] }[]): boolean {
+  return groups.every((g) => g.items.every((i) => i.start.date <= window.end && i.end.date >= window.start));
+}
 
 const LONG_PRESS_MS = 450;
 /** A held card this close to the screen's top or bottom scrolls the page (px), this far a frame. */
@@ -306,9 +330,9 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
             <span
               data-testid="board-dates"
-              className={kind === "estimated" ? "rounded bg-[repeating-linear-gradient(45deg,var(--accent-soft)_0_4px,var(--accent-mid)_4px_6px)] px-1 text-accent-ink" : ""}
+              className={kind === "estimated" ? "rounded border border-dashed border-accent-mid px-1 text-accent-ink" : ""}
             >
-              {spanWords(item.start.date, item.end.date, data.today)}
+              {boardSpanWords(item.start.date, item.end.date, data.today)}
               {kind === "estimated" && " · estimated"}
             </span>
             {kind === "draft" && (
@@ -341,7 +365,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {pending && (
             <p className="mt-1 text-sm text-accent-ink" data-testid="board-pending">
-              Proposed: move to {HORIZONS.find((h) => h.key === pending.after.horizon)?.label ?? String(pending.after.horizon)} · {pending.by_name}
+              Proposed by {pending.by_name || "a commenter"}: move to {HORIZONS.find((h) => h.key === pending.after.horizon)?.label ?? String(pending.after.horizon)}
             </p>
           )}
         </div>
@@ -363,9 +387,11 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
         >
           <header className="flex items-baseline gap-2 px-1 pb-2">
             <h2 className="text-lg font-semibold">{c.label}</h2>
-            <span className="text-sm text-text2">
-              {spanWords(c.window.start, c.window.end, data.today)}
-            </span>
+            {windowFits(c.window, c.groups) && (
+              <span className="text-sm text-text2" data-testid="column-window">
+                {boardSpanWords(c.window.start, c.window.end, data.today)}
+              </span>
+            )}
             <span className="tnum ml-auto text-sm text-text2" data-testid="column-count">
               {c.groups.reduce((n, g) => n + g.items.length, 0)}
             </span>
@@ -378,7 +404,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
                 data-add-label={g.title}
               >
                 <span className="min-w-0 flex-1 truncate">{g.title}</span>
-                {onGoal && data.group === "goal" && g.key !== "none" && (
+                {onGoal && data.group === "goal" && g.key !== "none" && !!goalSuggestions?.get(g.key) && (
                   <button
                     type="button"
                     data-testid="goal-suggestions-open"
@@ -387,7 +413,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
                     onClick={() => onGoal(g.key, g.title)}
                     className="flex h-6 flex-none items-center gap-0.5 rounded-full border border-accent-mid bg-surface px-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-soft"
                   >
-                    ✦<span className="tnum">{goalSuggestions?.get(g.key) ?? 0}</span>
+                    ✦<span className="tnum">{goalSuggestions?.get(g.key)}</span>
                   </button>
                 )}
               </h3>
