@@ -800,7 +800,7 @@ export function SimpleRoadmap() {
           onClick={() => setTray(true)}
           className={waiting ? "border-warn" : ""}
         >
-          Needs a decision here · {waiting}
+          Needs a decision · {waiting}
         </Button>
       )}
       <Button

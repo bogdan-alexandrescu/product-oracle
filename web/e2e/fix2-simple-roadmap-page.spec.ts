@@ -131,7 +131,7 @@ test.describe("desktop", () => {
   test("Needs a decision names what it counts, not the side menu's badges", async ({ page }) => {
     await open(page);
     const btn = page.getByTestId("needs-decision");
-    await expect(btn).toContainText("Needs a decision here");
+    await expect(btn).toContainText("Needs a decision");
     const title = await btn.getAttribute("title");
     expect(title).toMatch(/this roadmap/i);
   });

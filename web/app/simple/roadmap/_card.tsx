@@ -208,7 +208,7 @@ export function Callout({
       data-testid="broken-callout"
       data-item={item.key}
       style={{ left, top: y + 3, minHeight: h - 6, maxWidth: Math.max(160, maxX - 8) }}
-      className="absolute z-10 flex flex-nowrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1"
+      className="pointer-events-none absolute z-10 flex flex-nowrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 [&_button]:pointer-events-auto"
     >
       <span
         className={`min-w-0 truncate text-sm text-crit ${compact ? "max-w-[220px]" : "max-w-[360px]"}`}

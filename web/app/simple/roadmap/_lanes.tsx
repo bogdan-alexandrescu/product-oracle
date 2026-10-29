@@ -875,7 +875,10 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   const fixed = closedItem(item) || sliced;
   const box = (p: Piece) => {
     const x = sc.x(p.start);
-    return { x, w: Math.max(MIN_PILL_W, sc.px, sc.x(p.end) - x + sc.px) };
+    // A short piece widens to MIN_PILL_W, but never into the next piece of the same feature.
+    const next = pieces.filter((q) => q.start > p.start).map((q) => sc.x(q.start) - 2);
+    const room = next.length ? Math.min(...next) - x : Infinity;
+    return { x, w: Math.max(Math.min(MIN_PILL_W, room), sc.px, sc.x(p.end) - x + sc.px) };
   };
   const all = pieces.map(box);
   const x0 = Math.min(...all.map((b) => b.x));

@@ -112,7 +112,7 @@ for (const phone of [false, true]) {
         const legend = page.getByTestId("legend");
         await expect(legend).toContainText("One bar per part of a feature (F-");
         await expect(legend).toContainText("diamond and dashed line: a milestone ends");
-        await expect(legend).toContainText("grey columns: Year-end break");
+        await expect(legend).toContainText("grey columns: year-end break");
         await expect(legend).toContainText("amber: pulled in, pending");
         await expect(legend).toContainText("red line: today");
       });
@@ -161,7 +161,8 @@ for (const phone of [false, true]) {
           expect(sw).toBeLessThan(scale);
           expect(scale).toBeLessThan(chart);
           expect(chart).toBeLessThan(actions);
-          expect(actions).toBeLessThan(filters);
+          // QA2 qa-simple-roadmap-36: the filters sit above the chart they control.
+          expect(filters).toBeLessThan(chart);
           await page.getByTestId("group-milestone").click();
           await expect(page.getByTestId("group-milestone")).toHaveAttribute("aria-pressed", "true");
         });
