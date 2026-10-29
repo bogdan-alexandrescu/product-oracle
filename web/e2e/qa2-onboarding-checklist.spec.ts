@@ -9,7 +9,7 @@ import { login } from "./helpers";
  *
  * no_claim for the test here: the in-browser mock's /v1/setup, sources and runs stand in for
  * the API and SwarmCloud (api/tests/test_setup.py covers the API's step rules); the mock's
- * agents finish a segment on "Check agents now".
+ * agents finish a segment on "Refresh progress".
  */
 
 const panel = (page: Page) => page.getByTestId("home-setup");
@@ -77,7 +77,13 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await form.getByLabel("Kind").selectOption("upload");
   await form.getByLabel("Name").fill("Research notes");
   await form.getByRole("button", { name: "Add source" }).click();
-  await expect(page.getByRole("listitem", { name: "Research notes" })).toBeVisible();
+  const notes = page.getByRole("listitem", { name: "Research notes" });
+  await expect(notes).toBeVisible();
+  // An empty source does not tick the step (qa-onboarding-11): a file in it does.
+  await notes.getByLabel("Upload files to Research notes").setInputFiles([
+    { name: "interview.md", mimeType: "text/markdown", buffer: Buffer.from("# Interview\nThe export button is hard to find.") },
+  ]);
+  await expect(notes.getByTestId("source-items")).toHaveText("1 item");
   await backToHome(page);
   await seeDone(page, "sources", "1 source", 4);
 
@@ -91,7 +97,8 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
 
   // 4. Horizons: the defaults, confirmed.
   await openStep(page, "horizons", /\/settings\/company\?from=setup#horizons$/);
-  await page.locator("#horizons").getByRole("button", { name: "Confirm" }).click();
+  // Settings' panels all say Save; unchanged defaults are confirmed by it (qa-settings-18).
+  await page.locator("#horizons").getByRole("button", { name: "Save" }).click();
   await expect(page.locator("#horizons").getByRole("button", { name: "Reset" })).toBeVisible();
   await backToHome(page);
   await seeDone(page, "horizons", "Checked", 6);
@@ -99,6 +106,8 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   // 5. Time zone: Los Angeles (the default), saved.
   await expect(row(page, "timezone").getByTestId("setup-status")).toHaveText("Not set · Pacific is used");
   await openStep(page, "timezone", /\/settings\/company\?from=setup#timezone$/);
+  // Save waits for a zone to be picked (fix2-settings: "Not set" never stores Los Angeles).
+  await page.getByLabel("Company time zone").selectOption("America/Los_Angeles");
   await page.getByTestId("timezone-panel").getByRole("button", { name: "Save" }).click();
   await expect(page.getByTestId("timezone-panel").getByRole("status")).toHaveText("Saved");
   await backToHome(page);
@@ -114,7 +123,8 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await expect(sheet).toBeVisible();
   await sheet.getByRole("button", { name: "Start" }).click();
   await expect(sheet).toHaveCount(0);
-  await expect(page.getByText("Building the baseline. You'll get an Inbox item when it's ready to review.")).toBeVisible();
+  // The build banner says it, with the Inbox item to come (qa-onboarding-25: one line, not a toast too).
+  await expect(page.getByTestId("baseline-build-banner")).toContainText("You'll get an Inbox item when it's ready to review.");
 
   // Home while it builds: the row says so and opens the run; the Goals card opens it too.
   await page.getByTestId("nav-home").filter({ visible: true }).first().click();
@@ -136,7 +146,7 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   await expect(page.getByRole("heading", { name: "Build the baseline" }).first()).toBeVisible();
   const confirm = page.getByTestId("checkpoint-baseline_confirm");
   await expect(async () => {
-    if (!(await confirm.filter({ hasText: "Waiting" }).isVisible())) await page.getByRole("button", { name: "Check agents now" }).click();
+    if (!(await confirm.filter({ hasText: "Waiting" }).isVisible())) await page.getByRole("button", { name: "Refresh progress" }).click();
     await expect(confirm.filter({ hasText: "Waiting" })).toBeVisible({ timeout: 2_000 });
   }).toPass({ timeout: 30_000 });
   // A new company's sources gave the mock's agents no goal, so nothing blocks the approval.

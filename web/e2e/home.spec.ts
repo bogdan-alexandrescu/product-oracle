@@ -105,20 +105,22 @@ test("Home on a phone: stacked blocks under the phone header, inspector below, n
   // Every block loaded before measuring: a block still loading moves those below it (it was
   // flaky under two workers).
   await expect(page.getByTestId("home-in-flight-phone-title")).toHaveText("In flight6");
-  await expect(page.getByTestId("home-inspector").getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
+  // The inspector waits for a tap on a phone (qa-company-32): the In flight rows are the last block to load.
+  await expect(page.getByTestId("home-in-flight-table").getByTestId("flight-row").first()).toBeVisible();
   // Page offsets, so scrolling does not move them.
   const top = (id: string) =>
     page.getByTestId(id).evaluate((el) => {
       const r = el.getBoundingClientRect();
       return { y: r.top + window.scrollY, bottom: r.bottom + window.scrollY };
     });
-  const goals = await top("home-goals");
-  const needs = await top("home-needs");
-  const flight = await top("home-in-flight");
   // qa-company-32: on a phone the inspector opens on a tap on a row, right under In flight.
   await expect(page.getByTestId("home-inspector")).toBeHidden();
   await page.getByTestId("home-in-flight-table").getByTestId("flight-row").first().click();
   await expect(page.getByTestId("home-inspector")).toBeVisible();
+  // Measured once the tap has laid the page out, the inspector included.
+  const goals = await top("home-goals");
+  const needs = await top("home-needs");
+  const flight = await top("home-in-flight");
   const inspector = await top("home-inspector");
   expect(goals.bottom).toBeLessThanOrEqual(needs.y);
   expect(needs.y).toBeLessThan(flight.y);

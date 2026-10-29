@@ -9,7 +9,7 @@ import { login } from "./helpers";
  * one compact row, the run's inspector only on a tap.
  *
  * no_claim for every test here: the in-browser mock's /v1/setup and runs stand in for the API
- * (api/tests/test_setup.py covers run_id); the mock's agents move only on "Check agents now".
+ * (api/tests/test_setup.py covers run_id); the mock's agents move only on "Refresh progress".
  */
 
 const setupRow = (page: Page) => page.getByTestId("setup-row-build_baseline");

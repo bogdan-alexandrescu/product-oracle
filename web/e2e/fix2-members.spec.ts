@@ -213,7 +213,8 @@ test.describe("on a phone, dark", () => {
 test("qa-onboarding-42: Set up › Invite team › Open, send an invite, see it sent, the step stays ticked on Home", async ({ page }) => {
   await scenario(page, "empty");
   await login(page);
-  await setupRow(page, "invite").getByRole("link", { name: "Open" }).click();
+  // A done step's button says Change (qa-onboarding-37); it opens the same page.
+  await setupRow(page, "invite").getByTestId("setup-action").click();
   await expect(page).toHaveURL(/\/settings\/members\?from=setup$/);
   await page.getByPlaceholder("name@company.com").fill("new.teammate@example.com");
   await page.getByRole("button", { name: "Send invite", exact: true }).click();
@@ -228,7 +229,7 @@ test("qa-onboarding-43: Set up › Company domains › Open, add and remove a do
   await scenario(page, "empty");
   await login(page);
   await expect(setupRow(page, "domains").getByTestId("setup-status")).toHaveText("example.com");
-  await setupRow(page, "domains").getByRole("link", { name: "Open" }).click();
+  await setupRow(page, "domains").getByTestId("setup-action").click();
   await expect(page).toHaveURL(/\/settings\/sources\?from=setup#company-domains$/);
   const section = page.getByTestId("company-domains");
   await expect(section).toBeVisible();
@@ -238,7 +239,7 @@ test("qa-onboarding-43: Set up › Company domains › Open, add and remove a do
   await backToHome(page);
   await expect(setupRow(page, "domains").getByTestId("setup-status")).toHaveText("2 domains");
 
-  await setupRow(page, "domains").getByRole("link", { name: "Open" }).click();
+  await setupRow(page, "domains").getByTestId("setup-action").click();
   const again = page.getByTestId("company-domains");
   await again.getByRole("button", { name: "Remove acme.dev" }).click();
   await expect(again.getByRole("listitem", { name: "acme.dev" })).toHaveCount(0);

@@ -10,10 +10,8 @@ const PAGES = [
   "/documents",
   "/documents/new",
   "/documents/new?kind=roadmap",
-  "/priorities",
   "/plan/documents",
   "/runs",
-  "/settings/members",
   "/settings/sources",
   "/settings/claude-accounts",
   "/settings/themes",
@@ -41,6 +39,7 @@ async function headerButtons(page: Page) {
         variant: el.getAttribute("data-variant"),
         background: s.backgroundColor,
         border: s.borderTopWidth,
+        disabled: el.matches(":disabled, [aria-disabled=true]"),
         surface,
       };
     });
@@ -55,7 +54,8 @@ async function expectOneFilledPrimary(page: Page, path: string) {
   // Filled: a fill of its own, no outline.
   expect(p.background, `${path}: ${p.name} is filled`).not.toBe(TRANSPARENT);
   expect(p.background, `${path}: ${p.name} is filled`).not.toBe(p.surface);
-  expect(p.border, `${path}: ${p.name} has no outline`).toBe("0px");
+  // qa-docs-5: a disabled filled button takes the strong line outline, so it still reads as a button.
+  if (!p.disabled) expect(p.border, `${path}: ${p.name} has no outline`).toBe("0px");
   // Nothing else in the header is filled.
   for (const b of buttons.filter((x) => x !== p)) {
     expect(["primary", "solid"], `${path}: ${b.name} is not filled`).not.toContain(b.variant);
@@ -78,6 +78,14 @@ for (const scheme of ["light", "dark"] as const) {
       await expectOneFilledPrimary(page, path);
       await expectOnePrimaryOnPage(page, path);
     }
+    // Members' one primary is the invite form's Send invite, its one way to invite (qa-settings).
+    await page.goto("/settings/members");
+    await expect(page.locator('main [data-variant="primary"]').filter({ visible: true }).filter({ hasText: "Send invite" })).toBeVisible();
+    await expectOnePrimaryOnPage(page, "/settings/members");
+    // Priorities' one primary is Save snapshot, beside its note in the Snapshots panel (qa-plan-39).
+    await page.goto("/priorities");
+    await expect(page.locator('main [data-variant="primary"]').filter({ visible: true }).filter({ hasText: "Save snapshot" })).toBeVisible();
+    await expectOnePrimaryOnPage(page, "/priorities");
     // Sources is a search page: its one primary is the search form's Search. It sits under
     // Settings › Sources already, so its header has no Manage link (qa-work-53).
     await page.goto("/sources");
@@ -87,6 +95,9 @@ for (const scheme of ["light", "dark"] as const) {
     await page.goto("/runs");
     await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
     await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
-    await expectOneFilledPrimary(page, "run waiting at a checkpoint");
+    // One way to decide (rirs-21): the decision below; the header's Decide only goes to it, so
+    // neither is drawn as a second primary.
+    await expect(page.getByTestId("run-go-decide")).not.toHaveAttribute("data-variant", "primary");
+    await expect(page.locator("#decide").getByRole("button", { name: "Approve and continue" })).toBeVisible();
   });
 }

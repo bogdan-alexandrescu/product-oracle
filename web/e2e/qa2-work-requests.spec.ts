@@ -98,7 +98,8 @@ test("qa-onboarding-9: the daily triage time is in the company's time zone, 12-h
   await page.goto("/home");
   await openRequests(page);
   await page.getByTestId("triage-menu").click();
-  await expect(page.getByRole("switch", { name: /^Auto-sort new requests daily at 7:00 AM Berlin time/ })).toBeVisible();
+  // A European zone reads by its short name, as Settings names it (qa-onboarding-38: CET, or CEST in summer).
+  await expect(page.getByRole("switch", { name: /^Auto-sort new requests daily at 7:00 AM CES?T/ })).toBeVisible();
 });
 
 test("rirs-35: the header holds one Auto-sort control and two primary actions", async ({ page }) => {
@@ -199,8 +200,9 @@ test.describe("phone", () => {
     expect(cut).toEqual([]);
   });
 
-  // rirs-37: the strip's scroll arrows never sit on a tab label, at either end.
-  for (const path of ["/requests", "/requests/interviews", "/sources"]) {
+  // rirs-37: the strip's scroll arrows never sit on a tab label, at either end. /sources is a
+  // Settings page: on a phone it picks its page from a select, no strip (qa-settings-41).
+  for (const path of ["/requests", "/requests/interviews"]) {
     test(`rirs-37: the tab strip's arrows do not cover a tab on ${path}`, async ({ page }) => {
       await login(page);
       await page.goto(path);
