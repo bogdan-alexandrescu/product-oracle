@@ -10570,7 +10570,10 @@ export interface paths {
          * @description For the web page: ``locked`` until the passcode opened the link in this browser
          *     (for every token, known or not, and nothing else), then ``active`` or ``ended`` with
          *     the link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF
-         *     only when it is on).
+         *     only when it is on); an active link also gives its document's ``title``, the company
+         *     that shared it (``shared_by``, null when it has no name), the person who made the link
+         *     (``shared_by_name``), ``expires_at`` and ``expires_on`` (its day in the Company time
+         *     zone, as the page's footer), for the page's header.
          */
         get: operations["public_share_status"];
         put?: never;
@@ -11695,6 +11698,27 @@ export interface paths {
          * @description Create the private link: shown once, works once, expires after 7 days.
          */
         post: operations["create_interview_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/interviews/{interview_id}/new-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Make New Interview Link
+         * @description Make a new link for an invited or in-progress interview: shown once; the old link
+         *     stops working at once and says it was replaced. Not for a finished or closed one.
+         */
+        post: operations["make_new_interview_link"];
         delete?: never;
         options?: never;
         head?: never;
@@ -26358,6 +26382,11 @@ export interface components {
              * Format: date-time
              */
             expires_at: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** InterviewMessageOut */
         InterviewMessageOut: {
@@ -26423,6 +26452,8 @@ export interface components {
             interviewee_company?: string | null;
             /** Link Expires At */
             link_expires_at?: string | null;
+            /** Link Created At */
+            link_created_at?: string | null;
             /** Link Opened At */
             link_opened_at?: string | null;
             /**
@@ -31678,7 +31709,7 @@ export interface components {
              * Reason
              * @enum {string}
              */
-            reason: "used" | "expired" | "withdrawn";
+            reason: "used" | "expired" | "withdrawn" | "replaced";
         };
         /** PublicInterviewTurn */
         PublicInterviewTurn: {
@@ -34443,6 +34474,7 @@ export interface components {
             /** Replaced By */
             replaced_by?: string | null;
             last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
+            next_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
         };
         /** RitualPatch */
         RitualPatch: {
@@ -35021,6 +35053,11 @@ export interface components {
              * @default false
              */
             can_dismiss_overrun: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
             /** Searching */
             searching?: string | null;
             /** Import Failed */
@@ -35287,6 +35324,11 @@ export interface components {
              * @default false
              */
             can_dismiss_overrun: boolean;
+            /**
+             * Can Decide
+             * @default false
+             */
+            can_decide: boolean;
             /** Searching */
             searching?: string | null;
             /** Import Failed */
@@ -55629,6 +55671,7 @@ export interface operations {
                 status?: ("proposed" | "decided" | "review_due" | "open" | "superseded" | "reversed" | "withdrawn") | null;
                 /** @description me or a member id */
                 approver?: string | null;
+                /** @description true: only those whose review has come; false: none of them */
                 due?: boolean | null;
                 /** @description one or more of manual, oracle, version_approval, assumption, blocker, pushback_override, priority_override, autonomy, checkpoint, request_decline, pricing, meeting, comma-separated */
                 origin?: string | null;
@@ -67698,6 +67741,37 @@ export interface operations {
         };
     };
     create_interview_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                interview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InterviewLinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    make_new_interview_link: {
         parameters: {
             query?: never;
             header?: never;

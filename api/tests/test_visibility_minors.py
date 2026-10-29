@@ -69,11 +69,14 @@ async def _stale_by_hidden_decision(client, ctx, runtime) -> tuple[str, dict]:
 async def test_a_stale_reason_names_a_hidden_decision_only_to_who_may_see_it(
     client, ctx, runtime, who, sees
 ):
-    """protects=#541 plan staleness: the roadmap items' stale_reasons and the stale track
-    alert's detail name the pricing decision's key to an owner and an approver; a
-    commenter and a viewer read the same item stale, with the company reason kept and
-    the hidden one worded without the key; fails_when=a commenter or viewer reads
-    "decision:d-n"; no_claim=how the reason was first recorded (staleness' own tests)."""
+    """protects=#541 plan staleness: the roadmap items' stale_reasons name the pricing
+    decision's key to an owner and an approver; a commenter and a viewer read the same item
+    stale, with the company reason kept and the hidden one worded without the key. The
+    stale track alert's detail is put into words for everyone (prod-6, no refs), after
+    hiding: an owner reads "A decision and a requirement changed", a commenter "a linked
+    baseline item changed; a requirement changed"; fails_when=a commenter or viewer reads
+    "decision:d-n", or learns from the alert that a decision changed; no_claim=how the
+    reason was first recorded (staleness' own tests)."""
     key, track = await _stale_by_hidden_decision(client, ctx, runtime)
     me = ctx.as_(who)
     resp = await client.get(f"/v1/roadmaps/{ROADMAP}/items", headers=me)
@@ -86,11 +89,17 @@ async def test_a_stale_reason_names_a_hidden_decision_only_to_who_may_see_it(
         assert "a linked baseline item changed" in item["stale_reasons"]
     stale = [a for a in await alerts_of(client, me) if a["kind"] == "stale"]
     assert len(stale) == 1
-    assert "requirement:saved-cards changed" in stale[0]["detail"]
-    assert (f"decision:{key}" in stale[0]["detail"]) is sees, who
+    detail = stale[0]["detail"]
+    assert "saved-cards" not in detail and f"decision:{key}" not in detail, detail
+    if sees:
+        assert detail == "A decision and a requirement changed", (who, detail)
+    else:
+        assert detail == "a linked baseline item changed; a requirement changed", (who, detail)
     overview = await client.get(f"/v1/tracks/{track['id']}", headers=me)
     assert overview.status_code == 200
-    assert (f"decision:{key}" in overview.text) is sees, who
+    # The track's alerts read in words for everyone; only who may see it learns a decision changed.
+    assert f"decision:{key}" not in overview.text, who
+    assert ("A decision and a requirement changed" in overview.text) is sees, who
 
 
 async def _stopped_for_pricing_review(client, ctx, runtime) -> str:

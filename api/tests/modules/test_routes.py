@@ -404,3 +404,50 @@ async def test_another_companys_compositions_are_invisible(client):
         m["key"] for m in (await client.get("/v1/module-catalog", headers=owner)).json()
     }
     assert (await client.get("/v1/module-policy", headers=owner)).json()["required"] == []
+
+
+async def test_confirming_keeps_the_brief_sections_of_the_outline(client):
+    """QA docs-1: after a confirm, the next revision's preview still lists the brief."""
+    ctx = await seeded_ctx()
+    await _doc(client, ctx)
+    approver = ctx.as_("approver")
+
+    async def brief() -> list[str]:
+        # The template's latest version marks a brief (its first, as the draft names, has none).
+        body = {"document": SLUG, "template": "oracle-default"}
+        resp = await client.post("/v1/compositions/recommend", json=body, headers=approver)
+        assert resp.status_code == 200, resp.text
+        return [(o["section_id"], o["layer"]) for o in resp.json()["outline"]]
+
+    before = await brief()
+    assert before, "the template has an outline"
+    assert any(layer == "brief" for _, layer in before), "the outline has a brief layer"
+    resp = await _confirm(client, ctx)
+    assert resp.status_code == 201, resp.text
+    assert await brief() == before
+    resp = await _confirm(client, ctx, base_revision=1, reason="Second look")
+    assert resp.status_code == 201, resp.text
+    after = await brief()
+    assert any(layer == "brief" for _, layer in after), "the brief survives a confirm"
+    assert after == before
+
+
+async def test_reasons_name_the_pack_by_its_title(client):
+    """QA docs-27: a mandatory module's reason names the pack as people know it, not its id."""
+    ctx = await seeded_ctx()
+    await _doc(client, ctx)
+    rec = (
+        await client.post(
+            "/v1/compositions/recommend", json={"document": SLUG}, headers=ctx.as_("viewer")
+        )
+    ).json()
+    packs = builtin_packs()
+    titles = ", ".join(packs[p].title for p in rec["packs"])
+    by_pack = [
+        m for m in rec["modules"] if m["policy_source"] == "pack" and m["selection"] == "mandatory"
+    ]
+    assert by_pack
+    for m in by_pack:
+        assert m["reason"] == f"Mandatory in the {titles} pack."
+        said = m["reason"] + " ".join(m["explanation"])
+        assert not any(pid in said for pid in packs), said

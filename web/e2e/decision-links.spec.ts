@@ -23,7 +23,7 @@ const chip = (page: Page, name: string) => page.getByRole("group", { name: "Stat
 
 async function openCaps(page: Page) {
   await page.goto("/company/decisions");
-  await chip(page, "All").click();
+  await chip(page, "Any state").click();
   await row(page, CAPS).click();
   await expect(inspector(page)).toContainText("Do caps wait for detection?");
 }
@@ -41,7 +41,7 @@ test("a proposal names the baseline items, evidence and document it is about; th
   await dialog.getByLabel("Decision", { exact: true }).fill("Point new accounts to payment setup first");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Checklist first");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Sample data first");
-  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: APPROVER });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: `Approver · ${APPROVER}` });
 
   const evidence = dialog.getByRole("group", { name: "Evidence" });
   await expect(evidence).toContainText("Link a baseline item to pick from its evidence");
@@ -60,7 +60,7 @@ test("a proposal names the baseline items, evidence and document it is about; th
   await about.getByLabel("Kind", { exact: true }).selectOption({ label: "Document" });
   await about.getByLabel("Item", { exact: true }).selectOption({ label: "Checkout redesign PRD" });
   await about.getByRole("button", { name: "Add", exact: true }).click();
-  await expect(about.getByRole("button", { name: "Remove Document checkout-redesign" })).toBeVisible();
+  await expect(about.getByRole("button", { name: "Remove Checkout redesign PRD" })).toBeVisible();
   await dialog.getByRole("button", { name: "Propose" }).click();
   await expect(dialog).toHaveCount(0);
 
@@ -73,7 +73,7 @@ test("a proposal names the baseline items, evidence and document it is about; th
     await expect(restsOn).not.toContainText("Cut early churn");
     await expect(restsOn.getByTestId("decision-evidence")).toHaveCount(1);
     await expect(restsOn.getByTestId("decision-evidence")).toContainText(STALL);
-    await expect(ins.getByRole("link", { name: "Document checkout-redesign" })).toHaveAttribute("href", "/documents/checkout-redesign");
+    await expect(ins.getByRole("link", { name: "Checkout redesign PRD", exact: true })).toHaveAttribute("href", "/documents/checkout-redesign");
   }
 });
 

@@ -3,7 +3,6 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 
 import { Button, Chip, Icon } from "@/components/ds";
-import { ApiError } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
 
 import { INPUT, TEXTAREA } from "../_components/fields";
@@ -65,11 +64,6 @@ export function sameLabels(a: Record<string, string>, b: Record<string, string>)
 
 function parseLines(text: string): string[] {
   return [...new Set(text.split(/[\n,]/).map((l) => l.trim()).filter(Boolean))];
-}
-
-/** The API's detail without the status suffix the client adds ("… (429)"). */
-function message(e: unknown): string {
-  return e instanceof ApiError ? e.message.replace(/ \(\d{3}\)$/, "") : errorMessage(e);
 }
 
 function Row({ item, checked, onToggle }: { item: BrowseItem; checked: boolean; onToggle: (on: boolean) => void }) {
@@ -176,7 +170,7 @@ export function BrowseList({
       if (!cursor || page.notice) setNotice(page.notice ?? null);
     } catch (e) {
       if (mine !== run.current) return;
-      setError(message(e));
+      setError(errorMessage(e));
       if (!cursor) setItems(null);
     } finally {
       if (mine === run.current) setBusy(false);

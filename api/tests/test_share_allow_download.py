@@ -56,7 +56,10 @@ async def test_an_open_link_answers_allow_download_and_the_page_follows(client, 
     cookie = await opened(client, token)
     status = await client.get(f"{PUBLIC}/{token}/status", headers=cookie)
     assert status.status_code == 200
-    assert status.json() == {"state": "active", "allow_download": allow}
+    got = status.json()
+    assert got["state"] == "active" and got["allow_download"] is allow
+    # qa-docs-71: only an opened, active link names its roadmap, sender and end.
+    assert got["title"] == "Example Labs roadmap" and got["shared_by"] and got["expires_at"]
     page = await client.get(f"{PUBLIC}/{token}", headers={**cookie, **NAVIGATION})
     assert page.status_code == 200, page.text
     assert ("Download PDF" in page.text) is allow

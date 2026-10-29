@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useId, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useId, useState, type ReactNode } from "react";
 
-import { Button, Icon, Notice } from "@/components/ds";
+import { Button, Dialog, Notice } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -30,62 +29,38 @@ export function useDateRights() {
   return useQuery("schedule-bases|rights", () => unwrap(api.GET("/v1/schedule-bases/rights")));
 }
 
-/** The dialog frame: a centred card over the page, full width on a phone. */
+/** The dialog frame: the design system's Dialog with no footer (the caller draws its buttons). */
 export function Frame({
   title,
   onClose,
   children,
   testId,
+  dirty = false,
 }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   testId: string;
+  dirty?: boolean;
 }) {
-  const id = useId();
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return createPortal(
-    <div
-      className="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-hero/50 px-4 py-10 max-[600px]:px-2 max-[600px]:py-4"
-      onClick={(e) => e.stopPropagation()}
-      onKeyDown={(e) => e.key !== "Escape" && e.stopPropagation()}
-    >
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={`${id}-title`}
-        data-testid={testId}
-        className="w-full max-w-xl overflow-hidden rounded-inspector border border-line bg-surface text-text shadow-tip"
-      >
-        <div className="flex items-center justify-between gap-3 bg-hero px-5 py-4 text-hero-text max-[600px]:px-4">
-          <h2 id={`${id}-title`} className="font-display text-[20px] leading-[26px] font-bold tracking-heading">
-            {title}
-          </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="grid size-8 place-items-center rounded-lg text-hero-text2 hover:bg-hero-2 hover:text-hero-text"
-          >
-            <Icon name="x" size={20} />
-          </button>
-        </div>
-        <div className="space-y-4 px-5 py-4 text-[15px] max-[600px]:px-4">{children}</div>
-      </div>
-    </div>,
-    document.body,
+  return (
+    <Dialog title={title} onClose={onClose} testId={testId} dirty={dirty}>
+      {children}
+    </Dialog>
   );
 }
 
-export function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: ReactNode }) {
+export function Field({ label, htmlFor, required = false, children }: { label: string; htmlFor: string; required?: boolean; children: ReactNode }) {
   return (
     <div>
       <label htmlFor={htmlFor} className="mb-1.5 block text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2">
         {label}
+        {required && (
+          <span data-required className="text-crit" aria-hidden="true">
+            {" "}
+            *
+          </span>
+        )}
       </label>
       {children}
     </div>
@@ -134,7 +109,24 @@ export function DateBasisDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const propose = rights.rights === "propose";
-  const ready = !!prd && !!reference.trim() && !!day && (scope === "prd" || !!key.trim());
+  // qa-plan-28: what is still missing, named under the fields (the submit stays disabled).
+  const missing = [
+    !prd && "a PRD",
+    !reference.trim() && "a reference",
+    !day && "the date it supports",
+    scope === "item" && !key.trim() && "the item",
+    scope === "tracker" && !key.trim() && "the tracker issue key",
+  ].filter((m): m is string => !!m);
+  const ready = missing.length === 0;
+  // Anything the person changed: closing asks before it is thrown away.
+  const dirty =
+    prd !== (prefill.prd ?? "") ||
+    kind !== "estimate" ||
+    reference !== (prefill.reference ?? "") ||
+    day !== (prefill.supports_date ?? "") ||
+    key !== (prefill.item_key ?? "") ||
+    !!recordId ||
+    !!detail;
 
   async function submit() {
     setBusy(true);
@@ -162,9 +154,19 @@ export function DateBasisDialog({
   }
 
   return (
-    <Frame title="Record basis" onClose={onClose} testId="date-basis-dialog">
+    <Dialog
+      title="Record basis"
+      onClose={onClose}
+      testId="date-basis-dialog"
+      dirty={dirty}
+      actions={
+        <Button variant="primary" disabled={!ready || busy} onClick={submit}>
+          {propose ? "Propose for verification" : "Record and verify"}
+        </Button>
+      }
+    >
       <p className="text-text2">{HELP}</p>
-      <Field label="PRD" htmlFor={`${id}-prd`}>
+      <Field label="PRD" htmlFor={`${id}-prd`} required>
         <select id={`${id}-prd`} className={INPUT} value={prd} onChange={(e) => setPrd(e.target.value)}>
           <option value="">Choose a PRD</option>
           {prefill.prd && !prds.data?.some((d) => d.slug === prefill.prd || d.id === prefill.prd) && (
@@ -187,7 +189,7 @@ export function DateBasisDialog({
             ))}
           </select>
         </Field>
-        <Field label="Reference" htmlFor={`${id}-ref`}>
+        <Field label="Reference" htmlFor={`${id}-ref`} required>
           <input
             id={`${id}-ref`}
             className={INPUT}
@@ -197,7 +199,7 @@ export function DateBasisDialog({
           />
         </Field>
       </div>
-      <Field label="Date it supports" htmlFor={`${id}-date`}>
+      <Field label="Date it supports" htmlFor={`${id}-date`} required>
         <input id={`${id}-date`} type="date" className={INPUT} value={day} onChange={(e) => setDay(e.target.value)} />
       </Field>
       <Field label="For" htmlFor={`${id}-for`}>
@@ -208,7 +210,7 @@ export function DateBasisDialog({
         </select>
       </Field>
       {scope === "item" && (
-        <Field label="Item" htmlFor={`${id}-item`}>
+        <Field label="Item" htmlFor={`${id}-item`} required>
           <select id={`${id}-item`} className={INPUT} value={key} onChange={(e) => setKey(e.target.value)}>
             <option value="">Choose an item</option>
             {key && !items.some((i) => i.key === key) && <option value={key}>{key}</option>}
@@ -221,7 +223,7 @@ export function DateBasisDialog({
         </Field>
       )}
       {scope === "tracker" && (
-        <Field label="Tracker issue key" htmlFor={`${id}-key`}>
+        <Field label="Tracker issue key" htmlFor={`${id}-key`} required>
           <input id={`${id}-key`} className={INPUT} value={key} onChange={(e) => setKey(e.target.value)} />
         </Field>
       )}
@@ -251,16 +253,16 @@ export function DateBasisDialog({
         <textarea id={`${id}-detail`} className={INPUT} rows={2} value={detail} onChange={(e) => setDetail(e.target.value)} />
       </Field>
       {propose && <p className="text-sm text-text2">{LEAD_VERIFIES}</p>}
+      {missing.length > 0 && (
+        <p data-testid="basis-missing" className="text-sm text-text2">
+          <span className="text-crit" aria-hidden="true">
+            *
+          </span>{" "}
+          Required. Still needed: {missing.join(", ")}.
+        </p>
+      )}
       {error && <Notice tone="error">{error}</Notice>}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button variant="primary" disabled={!ready || busy} onClick={submit}>
-          {propose ? "Propose for verification" : "Verify"}
-        </Button>
-      </div>
-    </Frame>
+    </Dialog>
   );
 }
 
@@ -314,7 +316,17 @@ export function WithdrawBasisDialog({ basis, onClose, onDone }: { basis: Basis; 
   }
 
   return (
-    <Frame title={`Withdraw ${basis.reference}`} onClose={onClose} testId="withdraw-basis-dialog">
+    <Dialog
+      title={`Withdraw ${basis.reference}`}
+      onClose={onClose}
+      testId="withdraw-basis-dialog"
+      dirty={!!reason}
+      actions={
+        <Button variant="danger" disabled={!reason.trim() || !impact.data || busy} onClick={submit}>
+          Withdraw date basis
+        </Button>
+      }
+    >
       <p data-testid="withdraw-impact" className="font-medium">
         {impact.data ? impactSentence(basis, impact.data) : (impact.error ?? "Reading what rests on this date…")}
       </p>
@@ -322,15 +334,7 @@ export function WithdrawBasisDialog({ basis, onClose, onDone }: { basis: Basis; 
         <textarea id={`${id}-reason`} className={INPUT} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
       </Field>
       {error && <Notice tone="error">{error}</Notice>}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button variant="danger" disabled={!reason.trim() || !impact.data || busy} onClick={submit}>
-          Withdraw date basis
-        </Button>
-      </div>
-    </Frame>
+    </Dialog>
   );
 }
 
@@ -356,20 +360,22 @@ export function RejectBasisDialog({ basis, onClose, onDone }: { basis: Basis; on
     }
   }
   return (
-    <Frame title={`Reject ${basis.reference}`} onClose={onClose} testId="reject-basis-dialog">
+    <Dialog
+      title={`Reject ${basis.reference}`}
+      onClose={onClose}
+      testId="reject-basis-dialog"
+      dirty={!!reason}
+      actions={
+        <Button variant="danger" disabled={!reason.trim() || busy} onClick={submit}>
+          Reject
+        </Button>
+      }
+    >
       <Field label="Reason" htmlFor={`${id}-reason`}>
         <textarea id={`${id}-reason`} className={INPUT} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
       </Field>
       {error && <Notice tone="error">{error}</Notice>}
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
-          Cancel
-        </Button>
-        <Button variant="danger" disabled={!reason.trim() || busy} onClick={submit}>
-          Reject
-        </Button>
-      </div>
-    </Frame>
+    </Dialog>
   );
 }
 

@@ -138,8 +138,8 @@ test("roadmap table: grouped by horizon, goal or PRD; draft items are dashed Pro
   );
   await expect(row(page, "Spend forecast for the month").getByTestId("plan-goal")).toHaveText("No goal");
   await expect(row(page, "Threshold alerts on spend").getByTestId("plan-goal")).toHaveText("Raise activation");
-  await expect(row(page, "Threshold alerts on spend").getByTestId("plan-prd")).toHaveText("Usage alerts PRD v1");
-  await expect(row(page, "One-page checkout").getByTestId("plan-prd")).toHaveText("Checkout redesign PRD draft 2");
+  await expect(row(page, "Threshold alerts on spend").getByTestId("plan-prd")).toHaveText("Usage alerts");
+  await expect(row(page, "One-page checkout").getByTestId("plan-prd")).toHaveText("Checkout redesign");
 
   const group = page.getByRole("group", { name: "Group by" });
   await group.getByRole("button", { name: "Goal" }).click();
@@ -192,8 +192,10 @@ test("selecting a row opens the inspector with its links", async ({ page }) => {
   await expect(tracker).toHaveAttribute("href", "https://tracker.example.com/ENG-405");
   await expect(tracker).toHaveAttribute("target", "_blank");
   await expect(tracker).toHaveAttribute("rel", "noopener noreferrer");
-  await expect(inspector.getByTestId("plan-why")).toContainText("ENG-405 targets 2026-12-09");
-  await expect(inspector.getByTestId("plan-history")).toContainText("PRD v1 Now · approved Oct 18");
+  await expect(inspector.getByTestId("plan-why")).toContainText("ENG-405 targets Dec 9");
+  // qa-plan-17: the roadmap is never approved by default (the Documents tab agrees), so its
+  // item history says so too, instead of a date that contradicted it.
+  await expect(inspector.getByTestId("plan-history")).toContainText("PRD v1 Now · in a draft");
   await expect(inspector.getByTestId("plan-item-goal")).toContainText("Grow paid conversion");
   await expect(inspector.getByTestId("plan-item-goal")).toContainText("to go");
 });
@@ -211,7 +213,7 @@ test("the tab strip lists Plan's tabs in order; Roadmap documents keeps the list
   const strip = page.getByTestId("plan-tabs").filter({ visible: true });
   // F3 (Dates) and H3 (Outcomes) landed in PLAN_TABS, in that order; the registered entry is
   // now H6's Launches, whose page has not landed.
-  await expect(strip.getByRole("link")).toHaveText(["Plan", "Roadmap documents", "Dates", "Outcomes", "Launches"]);
+  await expect(strip.getByRole("link")).toHaveText(["Plan", "Documents", "Dates", "Outcomes", "Reports", "Launches"]);
   await expect(strip.getByTestId("plan-tab-plan")).toHaveAttribute("aria-current", "page");
   await strip.getByRole("link", { name: "Roadmap documents" }).click();
   await expect(page).toHaveURL(/\/plan\/documents$/);

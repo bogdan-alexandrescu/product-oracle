@@ -28,7 +28,7 @@ test("the Warnings panel says what to do, and the date warning opens Plan › Da
   // id; no_claim=the API's wording (api/tests/test_warning_wording.py).
   await openVersion(page);
   const date = warning(page, "unverified_date");
-  await expect(date).toContainText("the date 2026-12-15");
+  await expect(date).toContainText("the date Dec 15, 2026");
   await expect(date).toContainText("record a date basis on Plan › Dates");
   await expect(date).toContainText('"Usage alerts PRD"');
   const citation = warning(page, "unknown_citation_item");
@@ -40,7 +40,7 @@ test("the Warnings panel says what to do, and the date warning opens Plan › Da
 
   await date.getByRole("link", { name: "Open Plan › Dates" }).click();
   await expect(page).toHaveURL(/\/plan\/dates$/);
-  await expect(page.getByRole("heading", { name: "Dates" }).first()).toBeVisible();
+  await expect(page.getByTestId("plan-tabs").filter({ visible: true }).getByTestId("plan-tab-dates")).toHaveAttribute("aria-current", "page");
 });
 
 test("a viewer reads the same plain warnings", async ({ page }) => {
@@ -60,7 +60,7 @@ test("Approve on a spec version that may be stale says what to do, in the app's 
   await page.getByRole("button", { name: "Approve version" }).click();
   await page.getByRole("group", { name: "Confirm approval" }).getByRole("button", { name: "Confirm" }).click();
   const refusal = page.getByRole("group", { name: "Confirm approval" }).getByRole("alert");
-  await expect(refusal).toContainText("this spec version may be stale");
+  await expect(refusal).toContainText(/this spec version may be stale/i);
   await expect(refusal).toContainText("Potentially stale");
   expect(await refusal.innerText()).not.toMatch(ROUTE_OR_ID);
   await expect(page.getByText(/✓ Approved/)).toHaveCount(0);

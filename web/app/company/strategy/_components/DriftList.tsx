@@ -141,7 +141,8 @@ export function DriftList({
         </InfoTip>
       }
     >
-      <div className="border-b border-line px-4 py-3 max-[600px]:px-3">
+      {/* qa-company-52: 8 px between the chips, as elsewhere. */}
+      <div className="border-b border-line px-4 py-3 max-[600px]:px-3 [&>[role=group]]:gap-2">
         <FilterChips
           label="Finding state"
           testId="finding-state"

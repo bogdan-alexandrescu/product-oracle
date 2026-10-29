@@ -32,10 +32,8 @@ export function HealthChip({ track }: { track: Pick<ReportTrack, "health" | "hea
   );
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-/** "Nov 30" from "2026-11-30" (a calendar date, no time zone). */
-export const shortDay = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}`;
+/** A roadmap horizon as people write it: "Now", not "now" (qa-plan-57). */
+export const HORIZON_LABEL: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
 
 /**
  * A bound of the week a report covers, in the zone the report was made in: its bounds are
@@ -54,7 +52,7 @@ export function slackText(r: Pick<Report, "slack" | "timezone">): string {
   return "Not posted to Slack.";
 }
 
-/** "1 at risk · 2 slips": the Inbox row's figures. */
+/** "1 at risk · 1 slip": the Inbox row's figures. */
 export function figures(s: Schemas["ReportSummaryFigures"]): string {
   const risky = s.at_risk + s.off_track;
   return `${risky} at risk · ${s.slips} ${s.slips === 1 ? "slip" : "slips"}`;

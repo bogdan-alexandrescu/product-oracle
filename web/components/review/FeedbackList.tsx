@@ -433,6 +433,10 @@ export function FeedbackList({
   }, [ctx.activeId]);
 
   const discussing = filters.kind === "discussion";
+  // No feedback on the version and no discussion: nothing to filter.
+  const nothing = entries.length === 0 && !(discussions?.rows?.length);
+  // A filter narrower than the default (another state, a kind) hides what there is.
+  const filtered = filters.state !== DEFAULT_FILTERS.state || filters.kind !== DEFAULT_FILTERS.kind || filters.scope !== "auto";
   const discussionChip = discussions && (
     <button
       type="button"
@@ -477,6 +481,8 @@ export function FeedbackList({
             </Button>
           </div>
         ))}
+      {/* qa-docs-49: no filters until there is feedback (or a discussion) to filter. */}
+      {nothing ? null : (
       <div className="flex flex-col gap-2">
         <FilterChips<FeedbackState>
           label="Feedback state"
@@ -501,10 +507,26 @@ export function FeedbackList({
           <KindSelect filters={filters} setFilters={setFilters} />
         </div>
       </div>
-      {shown.length === 0 ? (
+      )}
+      {nothing ? (
+        <Empty testId="feedback-empty">No feedback yet</Empty>
+      ) : shown.length === 0 ? (
         <Empty testId="feedback-empty">
           No {FEEDBACK_STATE_LABEL[filters.state].toLowerCase()} feedback
           {scope === "section" ? " on this section" : scope === "general" ? " on the whole draft" : ""}
+          {filtered && (
+            <>
+              {" · "}
+              <button
+                type="button"
+                data-testid="feedback-clear-filter"
+                onClick={() => setFilters(DEFAULT_FILTERS)}
+                className="font-semibold text-accent-ink underline underline-offset-2"
+              >
+                Clear filter
+              </button>
+            </>
+          )}
         </Empty>
       ) : (
         <ol ref={listRef} className="flex flex-col" aria-label="Feedback items">

@@ -1,10 +1,11 @@
 "use client";
 
-import { Chip, DataTable, InfoTip, Inspector, InspectorSection, Ring, type Column } from "@/components/ds";
+import { Chip, DataTable, InfoTip, Inspector, InspectorSection, type Column } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
+import { formatCount, formatPercent, plural } from "@/lib/format";
 
 import { KIND_LABEL } from "./confidence";
-import { FreshnessBar, FreshRing, NoSources, Synced } from "./coverage";
+import { FreshnessBar, FreshShare, NONE, NoSources, Synced } from "./coverage";
 
 export type CompanyCoverage = Schemas["CompanyCoverage"];
 type MemberCoverage = Schemas["CompanyMemberCoverage"];
@@ -61,7 +62,7 @@ export function CompanyTable({
       header: "Kind",
       cell: (r) => (
         <span data-testid="company-kind">
-          <Chip kind="acc">{r.kind ? KIND_LABEL[r.kind.kind] : "–"}</Chip>
+          <Chip kind="acc">{r.kind ? KIND_LABEL[r.kind.kind] : NONE}</Chip>
         </span>
       ),
     },
@@ -86,17 +87,17 @@ export function CompanyTable({
       hideOnPhone: true,
       cell: (r) => (
         <span className="tnum" data-testid="company-items">
-          {(r.kind?.items ?? 0).toLocaleString("en-US")}
+          {formatCount(r.kind?.items ?? 0)}
         </span>
       ),
     },
     {
       key: "fresh",
       header: "Fresh",
-      width: "72px",
-      align: "center",
+      width: "96px",
+      align: "right",
       phone: "action",
-      cell: (r) => (r.kind ? <FreshRing freshness={r.kind.freshness} testId="company-fresh" /> : null),
+      cell: (r) => (r.kind ? <FreshShare freshness={r.kind.freshness} testId="company-fresh" /> : null),
     },
     {
       key: "synced",
@@ -112,7 +113,7 @@ export function CompanyTable({
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 max-[600px]:px-3">
         {data && (
           <Chip kind="acc" data-testid="company-members-chip">
-            {data.members_with_sources} of {data.members_total} members have a source
+            {data.members_with_sources} of {plural(data.members_total, "member")} have a source
           </Chip>
         )}
         {stale > 0 && (
@@ -147,7 +148,6 @@ export function CompanyTable({
 /** A selected Company row: the four numbers and the freshness counts, nothing else. */
 export function CompanyInspector({ row }: { row: CompanyRow & { kind: KindCoverage } }) {
   const k = row.kind;
-  const share = k.items ? Math.round((k.freshness.fresh / k.items) * 100) : null;
   return (
     <Inspector
       testId="company-inspector"
@@ -157,11 +157,8 @@ export function CompanyInspector({ row }: { row: CompanyRow & { kind: KindCovera
       statColumns={2}
       stats={[
         { label: "Sources", value: k.sources },
-        { label: "Items", value: k.items.toLocaleString("en-US") },
-        {
-          label: "Fresh",
-          figure: share == null ? <span className="text-text2">–</span> : <Ring value={share} size={40} label={`Fresh ${share}%`} />,
-        },
+        { label: "Items", value: formatCount(k.items) },
+        { label: "Fresh", value: k.items ? formatPercent(k.freshness.fresh / k.items) : NONE },
         { label: "Last sync", figure: <Synced at={k.last_synced_at} /> },
       ]}
     >

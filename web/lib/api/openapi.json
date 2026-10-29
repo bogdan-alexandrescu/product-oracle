@@ -18082,8 +18082,10 @@
                   "type": "null"
                 }
               ],
+              "description": "true: only those whose review has come; false: none of them",
               "title": "Due"
-            }
+            },
+            "description": "true: only those whose review has come; false: none of them"
           },
           {
             "name": "origin",
@@ -36817,7 +36819,7 @@
           "shares"
         ],
         "summary": "Public Share Status",
-        "description": "For the web page: ``locked`` until the passcode opened the link in this browser\n(for every token, known or not, and nothing else), then ``active`` or ``ended`` with\nthe link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF\nonly when it is on).",
+        "description": "For the web page: ``locked`` until the passcode opened the link in this browser\n(for every token, known or not, and nothing else), then ``active`` or ``ended`` with\nthe link's ``allow_download`` (owner decision 2026-10-26: the page shows Download PDF\nonly when it is on); an active link also gives its document's ``title``, the company\nthat shared it (``shared_by``, null when it has no name), the person who made the link\n(``shared_by_name``), ``expires_at`` and ``expires_on`` (its day in the Company time\nzone, as the page's footer), for the page's header.",
         "operationId": "public_share_status",
         "parameters": [
           {
@@ -40574,6 +40576,60 @@
         "summary": "Create Interview Link",
         "description": "Create the private link: shown once, works once, expires after 7 days.",
         "operationId": "create_interview_link",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "interview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Interview Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InterviewLinkOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "x-min-role": "commenter",
+        "x-per-item": "approver"
+      }
+    },
+    "/v1/interviews/{interview_id}/new-link": {
+      "post": {
+        "tags": [
+          "interviews"
+        ],
+        "summary": "Make New Interview Link",
+        "description": "Make a new link for an invited or in-progress interview: shown once; the old link\nstops working at once and says it was replaced. Not for a finished or closed one.",
+        "operationId": "make_new_interview_link",
         "security": [
           {
             "HTTPBearer": []
@@ -81870,12 +81926,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Expires At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
           }
         },
         "type": "object",
         "required": [
           "url",
-          "expires_at"
+          "expires_at",
+          "created_at"
         ],
         "title": "InterviewLinkOut",
         "description": "The private link, shown once."
@@ -82081,6 +82143,18 @@
               }
             ],
             "title": "Link Expires At"
+          },
+          "link_created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Link Created At"
           },
           "link_opened_at": {
             "anyOf": [
@@ -96727,7 +96801,8 @@
             "enum": [
               "used",
               "expired",
-              "withdrawn"
+              "withdrawn",
+              "replaced"
             ],
             "title": "Reason"
           }
@@ -104663,6 +104738,16 @@
                 "type": "null"
               }
             ]
+          },
+          "next_pre_read": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OccurrenceSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -106403,6 +106488,11 @@
             "title": "Can Dismiss Overrun",
             "default": false
           },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
+            "default": false
+          },
           "searching": {
             "anyOf": [
               {
@@ -107254,6 +107344,11 @@
           "can_dismiss_overrun": {
             "type": "boolean",
             "title": "Can Dismiss Overrun",
+            "default": false
+          },
+          "can_decide": {
+            "type": "boolean",
+            "title": "Can Decide",
             "default": false
           },
           "searching": {

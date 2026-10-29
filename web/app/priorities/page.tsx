@@ -22,15 +22,17 @@ import {
   PageHeader,
   Panel,
   Ring,
+  Sheet,
   Split,
   ViewOnly,
   type ChipKind,
   type Column,
 } from "@/components/ds";
+import { usePhone } from "@/components/ds/page-info";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { named, namedText } from "@/lib/codes";
-import { formatDate, formatDateTime, isHttpUrl } from "@/lib/format";
+import { formatDateTime, isHttpUrl, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { errorMessage, useQuery } from "@/lib/use-query";
@@ -44,7 +46,21 @@ import {
   RowChips,
   YourChange,
   type Draft,
+  type NameOf,
 } from "./_components/overrides";
+import {
+  confidencePercent,
+  confidenceWords,
+  dayText,
+  evidenceName,
+  formatScore,
+  formulaText,
+  inputLabel,
+  inputValueText,
+  prdName,
+  sourceName,
+  stepWords,
+} from "./_components/words";
 
 type Method = Schemas["PriorityRanking"]["method"];
 type RankedFeature = Schemas["RankedFeature"];
@@ -72,8 +88,8 @@ const FLAGS: Record<string, { label: string; kind: ChipKind; title: string }> = 
     title: "Part of a set of features that depend on each other.",
   },
   missing_inputs: { label: "Missing inputs", kind: "warn", title: "Some inputs this method needs are not set." },
-  no_confidence: { label: "No confidence data", kind: "warn", title: "No evidence or confidence value: 50 assumed." },
-  low_confidence: { label: "Low confidence", kind: "warn", title: "Confidence below 40." },
+  no_confidence: { label: "No confidence data", kind: "warn", title: "No evidence or confidence value: 50% assumed." },
+  low_confidence: { label: "Low confidence", kind: "warn", title: "Confidence below 40%." },
   moved_for_dependency: {
     label: "Moved for a dependency",
     kind: "acc",
@@ -121,6 +137,19 @@ function ProblemChip({ p }: { p: PriorityProblem }) {
 /** Δ: how far the run ranks a feature above (↑) or below (↓) Oracle's live ranking. */
 const deltaText = (d: number | null | undefined) => (d == null ? "—" : d === 0 ? "=" : d > 0 ? `↑${d}` : `↓${-d}`);
 
+/** Flags that explain a row's place come first; the rest after, in this order. */
+const FLAG_ORDER = [
+  "dependency_cycle",
+  "moved_for_dependency",
+  "held_by_dependency",
+  "no_confirmed_goal",
+  "missing_inputs",
+  "no_confidence",
+  "low_confidence",
+];
+const flagRank = (f: string) => (FLAG_ORDER.includes(f) ? FLAG_ORDER.indexOf(f) : FLAG_ORDER.length);
+const sortFlags = (flags: string[]) => [...flags].sort((a, b) => flagRank(a) - flagRank(b));
+
 const flagOf = (flag: string) => FLAGS[flag] ?? { label: flag.replace(/_/g, " "), kind: "na" as const, title: flag };
 
 function FlagChip({ flag, hero = false }: { flag: string; hero?: boolean }) {
@@ -132,8 +161,9 @@ function FlagChip({ flag, hero = false }: { flag: string; hero?: boolean }) {
   );
 }
 
+/** The scorer's own rounding (two places), to find a factor in a step it wrote. */
 const fmt = (n: number | null | undefined) => (n == null ? "—" : String(Math.round(n * 100) / 100));
-/** Confidence 0-1 as 0-100: the one scale the page shows it in (ring, bar, figures). */
+/** Confidence 0-1 as 0-100, the ring's and the bar's fill; their figures are confidencePercent's. */
 const pct = (n: number | null | undefined) => (n == null ? null : Math.round(n * 100));
 
 /** A goal as words: its code and name ("G-B Growth"), never its key. */
@@ -145,22 +175,106 @@ function featureText(features: RankedFeature[], key: string): string {
   return f ? namedText(named(f.title, f.key)) : key;
 }
 
-const SOURCE_KIND: Record<string, string> = {
-  upload: "Upload",
-  google_docs: "Google Docs",
-  slack: "Slack",
-  github: "GitHub",
-  fireflies: "Meeting notes",
-  notion: "Notion",
-};
+/** A feature key as its name only (beside other names, the code adds nothing). */
+function featureName(features: RankedFeature[], key: string): string {
+  return features.find((x) => x.key === key)?.title ?? key;
+}
+
+type RankReason = { label: string; title: string; flag?: string };
+
+/**
+ * Why a row sits where its score alone would not put it (a higher score below it, or a lower
+ * one above it): its own reason, in words, for the row itself. None when it is in score order.
+ */
+function rankReasons(f: RankedFeature, features: RankedFeature[]): RankReason[] {
+  const at = features.findIndex((x) => x.key === f.key);
+  const s = (x: RankedFeature) => x.score ?? -Infinity;
+  const outOfOrder =
+    features.slice(0, at).some((x) => s(x) < s(f)) || features.slice(at + 1).some((x) => s(x) > s(f));
+  if (!outOfOrder) return [];
+  const out: RankReason[] = [];
+  const names = (list: string) =>
+    list
+      .split(/,\s*/)
+      .filter(Boolean)
+      .map((k) => featureName(features, k));
+  for (const o of f.explanation.order ?? []) {
+    const earlier = o.match(/^placed earlier because (.+) depend\(s\) on it$/);
+    if (earlier) {
+      const n = names(earlier[1]!);
+      out.push({
+        label: `Ranked higher: ${n.join(", ")} ${n.length > 1 ? "depend" : "depends"} on it`,
+        title: "Placed above its score because a higher-ranked feature needs it first.",
+        flag: "moved_for_dependency",
+      });
+    }
+    const after = o.match(/^placed after its prerequisite\(s\) (.+)$/);
+    if (after) {
+      out.push({
+        label: `Ranked lower: depends on ${names(after[1]!).join(", ")}`,
+        title: "Placed below its score because it needs these features first.",
+      });
+    }
+  }
+  if (f.flags.includes("dependency_cycle")) {
+    out.push({ label: "Dependency cycle", title: "Part of a set of features that depend on each other: ordered by score until the cycle is broken.", flag: "dependency_cycle" });
+  }
+  if (!f.serves_goal) {
+    out.push({
+      label: "Ranked lower: no confirmed goal",
+      title: "Features that serve no confirmed goal rank after every feature that serves one, whatever their score.",
+      flag: "no_confirmed_goal",
+    });
+  } else if (f.score == null) {
+    const missing = f.explanation.missing.map(inputLabel).join(", ");
+    out.push({
+      label: missing ? `Not scored: no ${missing}` : "Not scored",
+      title: "Features with a goal but no score rank after the scored ones and before features with no goal.",
+      flag: "missing_inputs",
+    });
+  }
+  // A person moved or pinned a lower-scored feature above it (qa-plan-20): that says who,
+  // beside any reason of its own, never left to read as a dependency's doing.
+  const moved = (x: RankedFeature) => `${x.title} (moved by ${x.override!.by})`;
+  const higher = features.slice(0, at).filter((x) => s(x) < s(f));
+  const movedAbove = higher.filter((x) => !!x.override).map(moved);
+  if (out.length === 0) {
+    // Nothing of its own: features moved up for their dependencies sit above it.
+    const above = higher.filter((x) => !x.override).map((x) => x.title);
+    if (above.length > 0) {
+      out.push({
+        label: `Below ${above.join(", ")}: placed earlier for a dependency`,
+        title: "A feature that others depend on is placed above its score, so features scored higher can sit below it.",
+      });
+    }
+    // Or it sits above features scored higher that rank lower for their own reason.
+    const below = features
+      .slice(at + 1)
+      .filter((x) => s(x) > s(f))
+      .map((x) => (x.override ? moved(x) : `${x.title} (${!x.serves_goal ? "no confirmed goal" : "waits for a dependency"})`));
+    if (higher.length === 0 && below.length > 0) {
+      out.push({
+        label: `Above ${below.join(", ")}`,
+        title: "Features scored higher rank below this one: a person moved them, features with no confirmed goal come last, or a feature waits for those it depends on.",
+      });
+    }
+  }
+  if (movedAbove.length > 0) {
+    out.push({
+      label: `Below ${movedAbove.join(", ")}`,
+      title: "A person moved or pinned these features above their score.",
+    });
+  }
+  return out;
+}
 
 type EvidenceUsed = Schemas["ConfidenceUsed"]["evidence"][number];
 
-/** An evidence item by its source's title and date; its id, confidence and link in the card (#304). */
+/** An evidence item by its source's title and date; its confidence and link in the card (#304). */
 function EvidenceChip({ ev }: { ev: EvidenceUsed }) {
-  const title = ev.title ?? ev.ref ?? "Evidence";
-  const date = ev.date ? formatDate(ev.date.length === 10 ? `${ev.date}T12:00:00Z` : ev.date) : null;
-  const kind = ev.source_kind ? (SOURCE_KIND[ev.source_kind.split(":")[0]] ?? ev.source_kind) : null;
+  const title = evidenceName(ev);
+  const date = dayText(ev.date);
+  const kind = sourceName(ev.source_kind);
   return (
     <HoverCard
       testId="evidence-chip"
@@ -176,10 +290,7 @@ function EvidenceChip({ ev }: { ev: EvidenceUsed }) {
       <CardEyebrow>{["Evidence", kind].filter(Boolean).join(" · ")}</CardEyebrow>
       <span className="block font-semibold break-words">{title}</span>
       <span className="tnum mt-1 block text-text2">
-        {[date, ev.confidence != null && `confidence ${pct(ev.confidence)}`].filter(Boolean).join(" · ")}
-      </span>
-      <span className="mt-1 block font-mono text-[13px] break-all text-text2" data-testid="card-id">
-        {ev.id}
+        {[date, ev.confidence != null && `confidence ${confidencePercent(ev.confidence)}`].filter(Boolean).join(" · ")}
       </span>
       {/* Only an http(s) URL opens: an upload's file name or another scheme is no link. */}
       {ev.ref && isHttpUrl(ev.ref) && !ev.source_removed && (
@@ -197,10 +308,13 @@ function EvidenceChip({ ev }: { ev: EvidenceUsed }) {
 }
 
 /**
- * A score step with its confidence factor on the page's 0-100 scale: "score = 6 × 0.75 ÷ 2"
- * reads "score = 6 × 75% ÷ 2" (the same arithmetic).
+ * A step with confidence as a percent wherever it is a factor, so its arithmetic stays true:
+ * "score = 6 × 0.75 ÷ 2" reads "score = 6 × 75% ÷ 2", and "confidence = 0.75 × track record
+ * 0.77 = 0.578" reads "confidence = 75% × track record 0.77 = 57.8%" (one way in every step).
  */
 function stepText(step: string, confidence: number | null | undefined): string {
+  const track = step.match(/^confidence = (\d+(?:\.\d+)?) × track record (\S+) = (\d+(?:\.\d+)?)$/);
+  if (track) return `confidence = ${confidencePercent(Number(track[1]))} × track record ${track[2]} = ${confidencePercent(Number(track[3]))}`;
   if (confidence == null || !/^score\b/.test(step)) return step;
   // The last "× c": confidence is the last factor in every formula (impact comes before it in RICE).
   const factor = [` × ${confidence}`, ` × ${fmt(confidence)}`].find((f) => step.includes(f));
@@ -208,13 +322,7 @@ function stepText(step: string, confidence: number | null | undefined): string {
   const at = step.lastIndexOf(factor);
   const end = at + factor.length;
   if (end < step.length && step[end] !== " ") return step;
-  return `${step.slice(0, at)} × ${pct(confidence)}%${step.slice(end)}`;
-}
-
-function inputValue(v: unknown): string {
-  if (v == null) return "—";
-  if (typeof v === "object") return JSON.stringify(v);
-  return String(v);
+  return `${step.slice(0, at)} × ${confidencePercent(confidence)}${step.slice(end)}`;
 }
 
 /** The ranking method: a radio group drawn as B1's segmented control. */
@@ -313,7 +421,12 @@ function FeatureInspector({
   const words = (s: string) => e.goals.reduce((t, g) => t.split(`(${g.goal})`).join(`(${goalText(g.goal, g.title)})`), s);
   // A feature the run ranks that Oracle's live ranking lacks (a proposal of the run): its own line only.
   const live = !run || run.live_rank != null || f.entity_id !== "";
-  const inputs = Object.entries(e.inputs ?? {}) as [string, Record<string, unknown> | null][];
+  const given = Object.entries(e.inputs ?? {}) as [string, Record<string, unknown> | null][];
+  // Confidence is an input of every formula that multiplies by it: its row reads as the steps do.
+  const inputs: [string, Record<string, unknown> | null][] =
+    /confidence/.test(e.formula) && !given.some(([name]) => name === "confidence")
+      ? [...given, ["confidence", { value: e.confidence.value, from: CONFIDENCE_SOURCE[e.confidence.source] }]]
+      : given;
   return (
     <div id={id}>
       <Inspector
@@ -339,8 +452,8 @@ function FeatureInspector({
             value: f.formula_rank != null && f.formula_rank !== f.rank ? `#${f.rank} · Oracle #${f.formula_rank}` : `#${f.rank}`,
           },
           ...(run ? [{ label: "Live", value: run.live_rank == null ? "—" : `#${run.live_rank}` }] : []),
-          { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} size={46} /> },
-          { label: "Score", value: fmt(f.score) },
+          { label: "Confidence", figure: <Ring value={pct(e.confidence.value)} text={confidencePercent(e.confidence.value)} size={46} /> },
+          { label: "Score", value: formatScore(f.score) },
         ]}
       >
         {run && (
@@ -367,14 +480,14 @@ function FeatureInspector({
             label="Score"
             tools={
               <InfoTip label="Formula">
-                <span className="font-mono">{e.formula}</span>
+                <span>{formulaText(e.method, e.formula)}</span>
                 {f.rank !== f.score_rank && <span className="mt-1 block">Rank by score alone: #{f.score_rank}</span>}
               </InfoTip>
             }
           >
-            <ol className="list-decimal space-y-1 pl-5 font-mono text-[13px] leading-5" aria-label="Steps">
+            <ol className="tnum list-decimal space-y-1 pl-5 text-sm break-words" aria-label="Steps">
               {e.steps.map((s, i) => (
-                <li key={i}>{words(stepText(s, e.confidence.value))}</li>
+                <li key={i}>{words(stepWords(stepText(s, e.confidence.value)))}</li>
               ))}
             </ol>
             {e.calibration && (
@@ -387,7 +500,7 @@ function FeatureInspector({
             {e.missing.length > 0 && (
               <p className="mt-2 flex flex-wrap items-center gap-1.5">
                 <Chip kind="warn">Missing</Chip>
-                <span className="font-mono text-[13px]">{e.missing.join(", ")}</span>
+                <span className="text-sm">{e.missing.map(inputLabel).join(", ")}</span>
               </p>
             )}
           </InspectorSection>
@@ -404,19 +517,21 @@ function FeatureInspector({
                 </thead>
                 <tbody>
                   {inputs.map(([name, v]) => (
-                    <tr key={name} className="border-t border-line">
-                      <td className="truncate py-1 pr-2">{name.replace(/_/g, " ")}</td>
-                      <td className="tnum truncate py-1 pr-2 font-mono">
-                        {name === "confidence" && typeof v?.value === "number" ? pct(v.value) : inputValue(v?.value)}
+                    <tr key={name} className="border-t border-line align-top">
+                      <td className="py-1 pr-2 break-words">{inputLabel(name)}</td>
+                      <td className="tnum py-1 pr-2 break-words">
+                        {name === "confidence" && typeof v?.value === "number" ? confidencePercent(v.value) : inputValueText(name, v?.value)}
                       </td>
-                      <td className="truncate py-1 text-text2">
-                        {name === "goal_value" ? (
-                          "goal terms"
-                        ) : v?.attr ? (
-                          <span className="font-mono">attrs.{String(v.attr)}</span>
-                        ) : (
-                          "—"
-                        )}
+                      <td className="py-1 break-words text-text2">
+                        {name === "goal_value"
+                          ? v?.estimated
+                            ? "A person's estimate"
+                            : "The feature's goals"
+                          : typeof v?.from === "string"
+                            ? v.from.charAt(0).toUpperCase() + v.from.slice(1)
+                            : v?.attr
+                              ? `${inputLabel(String(v.attr))} (from the feature)`
+                              : "—"}
                       </td>
                     </tr>
                   ))}
@@ -439,12 +554,14 @@ function FeatureInspector({
             label="Confidence"
             tools={
               <InfoTip label="Confidence used">
-                {e.confidence.explain}
+                <span data-testid="confidence-explain">{confidenceWords(e.confidence, e.calibration?.applied ? e.calibration.factor : null)}</span>
               </InfoTip>
             }
           >
             <div className="flex items-center gap-2.5">
-              <b className="tnum font-mono">{pct(e.confidence.value) ?? "—"}</b>
+              <b className="tnum" data-testid="confidence-figure">
+                {confidencePercent(e.confidence.value)}
+              </b>
               <span className="text-sm text-text2">{CONFIDENCE_SOURCE[e.confidence.source]}</span>
             </div>
             {e.confidence.evidence.length > 0 && (
@@ -454,7 +571,9 @@ function FeatureInspector({
                     <span className="flex min-w-0 flex-1">
                       <EvidenceChip ev={ev} />
                     </span>
-                    <span className="tnum flex-none text-text2">{pct(ev.confidence) ?? "—"}</span>
+                    <span className="tnum flex-none text-text2" data-testid="evidence-confidence">
+                      {ev.confidence != null ? confidencePercent(ev.confidence) : "—"}
+                    </span>
                     {ev.source_removed && (
                       <Chip kind="na" data-testid="source-removed">
                         source removed
@@ -474,17 +593,17 @@ function FeatureInspector({
                 {e.goals.map((g) => (
                   <li key={g.goal} className="min-w-0">
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <CodeChip kind="goal" entityKey={g.goal} title={g.title} />
+                      <CodeChip kind="goal" entityKey={g.goal} title={g.title} wrap />
                     </div>
                     {g.parent && (
                       <div className="mt-0.5 text-[13px] text-text2" data-testid="goal-via-parent">
                         Subgoal of {g.parent_title ?? g.parent}: its weight is its share of the parent&apos;s
                       </div>
                     )}
-                    <div className="tnum mt-1 flex flex-wrap items-center gap-x-1 font-mono text-[13px] text-text2">
-                      weight {g.weight}
-                      {g.weight_assumed && <AssumedMark />} × contribution {g.contribution}
-                      {g.contribution_assumed && <AssumedMark />} = {fmt(g.term)}
+                    <div className="tnum mt-1 flex flex-wrap items-center gap-x-1 text-[13px] text-text2">
+                      Weight {formatScore(g.weight)}
+                      {g.weight_assumed && <AssumedMark />} × contribution {formatScore(g.contribution)}
+                      {g.contribution_assumed && <AssumedMark />} = {formatScore(g.term)}
                     </div>
                   </li>
                 ))}
@@ -519,40 +638,13 @@ function byGoal(features: RankedFeature[]): GoalRow[] {
   return [...m.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 }
 
-function Snapshots({
-  reloadKey,
-  note,
-  onNote,
-  canSnapshot,
-  features,
-}: {
-  features: RankedFeature[];
-  reloadKey: number;
-  note: string;
-  onNote: (v: string) => void;
-  canSnapshot: boolean;
-}) {
+function Snapshots({ reloadKey, features }: { features: RankedFeature[]; reloadKey: number }) {
   const q = useQuery(`priority-snapshots|${reloadKey}`, () => unwrap(api.GET("/v1/priorities/snapshots")));
   const list = q.data?.slice(0, 10);
   return (
     <Panel
       title="Snapshots"
       count={q.data?.length || undefined}
-      tools={
-        <>
-          <label className="sr-only" htmlFor="snapshot-note">
-            Snapshot note
-          </label>
-          <input
-            id="snapshot-note"
-            value={note}
-            onChange={(e) => onNote(e.target.value)}
-            placeholder="Note"
-            disabled={!canSnapshot}
-            className={`${INPUT} !w-52 max-[600px]:!w-40`}
-          />
-        </>
-      }
     >
       {q.error && (
         <div className="p-3">
@@ -572,14 +664,14 @@ function Snapshots({
               <Chip kind="acc">{METHOD_LABEL[s.method]}</Chip>
               {s.run_id && (
                 <span className="min-w-0 truncate font-medium" data-testid="snapshot-prd">
-                  {s.document ? `${s.document.title ?? s.document.slug} · ` : ""}approved order
+                  {s.document ? `${prdName(s.document)} · ` : ""}approved order
                 </span>
               )}
-              <span className="tnum text-text2">{s.feature_count} features</span>
-              <span className="min-w-0 truncate font-mono text-[13px] text-text2">
-                top {s.top.map((k) => featureText(features, k)).join(", ") || "—"}
+              <span className="tnum text-text2">{plural(s.feature_count, "feature")}</span>
+              <span className="min-w-0 break-words text-text2">
+                Top: {s.top.map((k) => featureText(features, k)).join(", ") || "—"}
               </span>
-              {s.note && <span className="min-w-0 truncate text-text2">“{s.note}”</span>}
+              {s.note && <span className="min-w-0 break-words text-text2">“{s.note}”</span>}
             </li>
           ))}
         </ul>
@@ -628,7 +720,7 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
   const [error, setError] = useState<string | null>(null);
   const { snapshot: snap, run, checkpoint: cp } = c;
   const doc = snap.document;
-  const prd = doc ? (doc.title ?? doc.slug) : null;
+  const prd = doc ? prdName(doc) : null;
   const deciding = snap.status === "proposed" && cp?.status === "pending";
   const blocked = cp?.cannot_approve ? `${cp.cannot_approve.charAt(0).toUpperCase()}${cp.cannot_approve.slice(1)}.` : null;
 
@@ -656,7 +748,7 @@ function SnapshotBand({ c, onDecided }: { c: CompareOut; onDecided: () => void }
     snap.status === "proposed"
       ? [
           `Proposed by ${run?.flow_title ?? "a run"}`,
-          run?.document_slug,
+          prd,
           deciding && cp?.can_decide ? "waiting for you" : deciding ? `waiting for an ${cp?.approver_role ?? "approver"}` : null,
         ]
           .filter(Boolean)
@@ -763,6 +855,13 @@ function Priorities() {
   const canOverride = can("create_priority_override");
   const canChange = canOverride && !snapshotId;
   const withChanges = order === "changes";
+  // qa-plan-14: on a phone the selected feature opens in a bottom sheet, as on Impact.
+  const phone = usePhone();
+  const [sheet, setSheet] = useState(false);
+  const pick = (key: string) => {
+    setSelected(key);
+    if (phone) setSheet(true);
+  };
 
   const q = useQuery(`priorities|${method}|${order}`, () =>
     unwrap(api.GET("/v1/priorities", { params: { query: { method, overrides: withChanges } } })),
@@ -781,6 +880,7 @@ function Priorities() {
   const current = features.find((f) => f.key === selected) ?? features[0];
   const inspectorId = "priority-inspector";
   const anyOverride = withChanges && features.some((f) => f.override);
+  const nameOf: NameOf = (key) => featureName(features, key);
 
   async function afterChange(notice: string | null) {
     setChanged(notice);
@@ -805,6 +905,7 @@ function Priorities() {
     const f = current;
     const p = features.find((x) => x.key === prerequisite);
     if (!f?.override || !p) return;
+    setSheet(false);
     const above = f.override.above ? (features.find((x) => x.key === f.override!.above) ?? null) : null;
     setDraft({ feature: p, kind: f.override.kind, above, position: f.override.position ?? null, reason: f.override.reason });
   }
@@ -836,7 +937,7 @@ function Priorities() {
           phone: "meta",
           phoneLabel: "Live",
           cell: (f) => (
-            <span data-testid="live-rank" className="tnum font-mono" title="Rank in Oracle's live ranking of the same features">
+            <span data-testid="live-rank" className="tnum" title="Rank in Oracle's live ranking of the same features">
               {byKey.get(f.key)?.live_rank ?? "—"}
             </span>
           ),
@@ -852,7 +953,7 @@ function Priorities() {
             return (
               <span
                 data-testid="delta"
-                className={`tnum font-mono ${d == null || d === 0 ? "text-text2" : "text-text"}`}
+                className={`tnum ${d == null || d === 0 ? "text-text2" : "text-text"}`}
                 title={d == null ? "Not in the live ranking" : d === 0 ? "Same rank as the live ranking" : `${Math.abs(d)} ${d > 0 ? "above" : "below"} the live ranking`}
               >
                 {deltaText(d)}
@@ -904,10 +1005,10 @@ function Priorities() {
             aria-controls={inspectorId}
             onClick={(e: MouseEvent) => {
               e.stopPropagation();
-              setSelected(f.key);
+              pick(f.key);
             }}
             className="block max-w-full truncate text-left font-medium hover:underline"
-            title={`${f.title} · ${f.key}`}
+            title={f.title}
           >
             {f.title}
           </button>
@@ -917,14 +1018,16 @@ function Priorities() {
     {
       key: "goal",
       header: "Goal",
-      width: "80px",
+      width: "120px",
+      // Every goal whole (prod-4, qa-plan-42): one per line, a long name on two.
+      wrap: true,
       cell: (f) =>
         f.explanation.goals.length === 0 ? (
           <span className="text-text2">—</span>
         ) : (
-          <span className="flex min-w-0 gap-1">
+          <span className="flex min-w-0 flex-col items-start gap-1 py-0.5 max-[600px]:flex-row max-[600px]:flex-wrap" data-testid="row-goals">
             {f.explanation.goals.map((g) => (
-              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} />
+              <CodeChip key={g.goal} kind="goal" entityKey={g.goal} title={g.title} wrap />
             ))}
           </span>
         ),
@@ -932,66 +1035,95 @@ function Priorities() {
     {
       key: "confidence",
       header: "Confidence",
-      width: "104px",
+      // The bar and its figure to the tenth ("57.8%").
+      width: "112px",
       hideOnPhone: true,
+      // Kept at 1440 px and up with the inspector docked; only a table under 820 px drops it.
+      narrow: "laptop",
       cell: (f) => {
-        const c = pct(f.explanation.confidence.value);
-        return c == null ? (
-          <span className="text-text2">—</span>
-        ) : (
-          <Meter value={c} max={100} showMax={false} label={`Confidence ${c}`} width={80} />
-        );
+        const v = f.explanation.confidence.value;
+        if (v == null) return <span className="text-text2">—</span>;
+        const text = confidencePercent(v);
+        return <Meter value={pct(v)!} max={100} showMax={false} text={text} label={`Confidence ${text}`} />;
       },
     },
     {
       key: "score",
       header: "Score",
-      width: "80px",
+      width: "68px",
       align: "right",
       phoneLabel: "Score",
       cell: (f) => (
-        <span data-testid="score" className="tnum font-mono">
-          {fmt(f.score)}
+        <span data-testid="score" className="tnum">
+          {formatScore(f.score)}
         </span>
       ),
     },
     {
       key: "deps",
       header: "Depends on",
-      width: "96px",
+      width: "108px",
       hideOnPhone: true,
-      cell: (f) => <span className="text-[13px] text-text2">{f.depends_on.map((k) => featureText(features, k)).join(", ") || "—"}</span>,
+      narrow: "laptop",
+      wrap: true,
+      cell: (f) => {
+        const text = f.depends_on.map((k) => featureName(features, k)).join(", ");
+        return (
+          <span data-testid="row-deps" className="block text-[13px] leading-[18px] text-text2" title={text || undefined}>
+            {text || "—"}
+          </span>
+        );
+      },
     },
     {
       key: "flags",
       header: "Flags",
-      width: "240px",
-      // ▲ ▼ ⋯ float over the cell's right end (in the flow on a phone).
-      className: "relative max-[600px]:static",
+      width: "160px",
+      wrap: true,
       cell: (f) => {
         // A person's change leads; the flags fold into the count after it. Run mode: the
         // check's problems first (blocking red, advisory amber), every flag in the count.
+        // Otherwise a row out of score order says why first (qa-plan-20).
         const changed = withChanges && (!!f.override || !!f.held_below);
-        const shown = changed || cmp ? 0 : 1;
-        const rest = f.flags.slice(shown);
+        const reasons = changed || cmp ? [] : rankReasons(f, features);
+        const told = new Set(reasons.map((r) => r.flag).filter(Boolean));
+        const flags = sortFlags(f.flags).filter((x) => !told.has(x));
+        const shown = changed || cmp || reasons.length > 0 ? 0 : 1;
+        const rest = flags.slice(shown);
         return (
-          <>
-            <span className="flex items-center gap-1.5 overflow-hidden max-[600px]:flex-wrap">
-              {byKey.get(f.key)?.problems.map((p) => (
-                <ProblemChip key={p.code} p={p} />
-              ))}
-              {changed && <RowChips f={f} />}
-              {f.flags.slice(0, shown).map((flag) => (
-                <FlagChip key={flag} flag={flag} />
-              ))}
-              {rest.length > 0 && (changed || !!cmp || f.flags.length > 1) && (
-                <Chip kind="na" title={rest.map((x) => flagOf(x).label).join(", ")}>
-                  +{rest.length}
-                  <span className="sr-only">{rest.map((x) => flagOf(x).label).join(", ")}</span>
-                </Chip>
-              )}
-            </span>
-            {canChange && withChanges && (
+          <span data-testid="row-flags" className="flex flex-wrap items-center gap-1.5 py-0.5">
+            {byKey.get(f.key)?.problems.map((p) => (
+              <ProblemChip key={p.code} p={p} />
+            ))}
+            {changed && <RowChips f={f} name={nameOf} />}
+            {reasons.map((r) => (
+              <Chip key={r.label} kind={r.flag === "moved_for_dependency" ? "acc" : "warn"} wrap title={r.title} data-testid="rank-reason">
+                {r.label}
+              </Chip>
+            ))}
+            {flags.slice(0, shown).map((flag) => (
+              <FlagChip key={flag} flag={flag} />
+            ))}
+            {rest.length > 0 && (
+              <Chip kind="na" title={rest.map((x) => flagOf(x).label).join(", ")}>
+                +{rest.length}
+                <span className="sr-only">{rest.map((x) => flagOf(x).label).join(", ")}</span>
+              </Chip>
+            )}
+          </span>
+        );
+      },
+    },
+    // ▲ ▼ ⋯ in a column of their own: they never cover the flags (qa-plan-7).
+    ...(canChange && withChanges
+      ? [
+          {
+            key: "actions",
+            header: <span className="sr-only">Move or pin</span>,
+            width: "128px",
+            align: "right",
+            phone: "action",
+            cell: (f: RankedFeature) => (
               <RowActions
                 f={f}
                 index={features.findIndex((x) => x.key === f.key)}
@@ -999,15 +1131,35 @@ function Priorities() {
                 onDraft={setDraft}
                 onRemove={(id) => void removeChange(id)}
               />
-            )}
-          </>
-        );
-      },
-    },
+            ),
+          } satisfies Column<RankedFeature>,
+        ]
+      : []),
   ];
 
   const goals = byGoal(features);
   const counts = r?.counts;
+  const inspector = current && (
+    <FeatureInspector
+      key={current.key}
+      f={current}
+      features={features}
+      id={inspectorId}
+      run={cmp ? byKey.get(current.key) : undefined}
+      change={
+        withChanges && (
+          <YourChange
+            f={current}
+            o={active.data?.find((o) => o.id === current.override?.id)}
+            canChange={canChange}
+            onRemove={(id) => void removeChange(id)}
+            onMoveToo={moveToo}
+            name={nameOf}
+          />
+        )
+      }
+    />
+  );
 
   return (
     <Page>
@@ -1027,9 +1179,21 @@ function Priorities() {
         action={
           !snapshotId &&
           canSnapshot && (
-            <Button variant="primary" icon="check" onClick={saveSnapshot} disabled={saving || !r} title="Keep a dated copy of this ranking">
-              {saving ? "Saving…" : "Save snapshot"}
-            </Button>
+            // The note goes with the snapshot it is saved on (qa-plan-39).
+            <div className="flex max-w-full flex-wrap items-end gap-2" data-testid="snapshot-save">
+              <label className="flex min-w-0 flex-col gap-1">
+                <span className="text-[13px] font-semibold text-text2">Snapshot note (optional)</span>
+                <input
+                  id="snapshot-note"
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  className={`${INPUT} !w-56 max-[600px]:!w-full`}
+                />
+              </label>
+              <Button variant="primary" icon="check" onClick={saveSnapshot} disabled={saving || !r} title="Keep a dated copy of this ranking">
+                {saving ? "Saving…" : "Save snapshot"}
+              </Button>
+            </div>
           )
         }
       />
@@ -1037,7 +1201,7 @@ function Priorities() {
       <div className="flex flex-col gap-3">
         {saved && (
           <Notice tone="pass">
-            Snapshot saved: {METHOD_LABEL[saved.method]} ranking of {saved.feature_count} features, top{" "}
+            Snapshot saved: {METHOD_LABEL[saved.method]} ranking of {plural(saved.feature_count, "feature")}, top{" "}
             {saved.top.slice(0, 3).map((k) => featureText(features, k)).join(", ")}.
           </Notice>
         )}
@@ -1057,30 +1221,7 @@ function Priorities() {
           />
         )}
 
-        <Split
-          inspector={
-            current && (
-              <FeatureInspector
-                key={current.key}
-                f={current}
-                features={features}
-                id={inspectorId}
-                run={cmp ? byKey.get(current.key) : undefined}
-                change={
-                  withChanges && (
-                    <YourChange
-                      f={current}
-                      o={active.data?.find((o) => o.id === current.override?.id)}
-                      canChange={canChange}
-                      onRemove={(id) => void removeChange(id)}
-                      onMoveToo={moveToo}
-                    />
-                  )
-                }
-              />
-            )
-          }
-        >
+        <Split inspector={!phone && inspector}>
           <Panel>
             <div className="flex min-h-14 flex-wrap items-center gap-2.5 border-b border-line px-4 py-2.5 max-[600px]:px-3">
               <MethodSwitch
@@ -1091,23 +1232,24 @@ function Priorities() {
                   setSaved(null);
                 }}
               />
-              <RadioSwitch
-                label="Order"
-                items={[
-                  { value: "changes", label: "With your changes" },
-                  { value: "oracle", label: "Oracle's order" },
-                ]}
-                value={order}
-                onChange={setOrder}
-              />
+              {/* Only who can make changes compares with and without them (qa-plan-38). */}
+              {canOverride && (
+                <RadioSwitch
+                  label="Order"
+                  items={[
+                    { value: "changes", label: "With your changes" },
+                    { value: "oracle", label: "Oracle's order" },
+                  ]}
+                  value={order}
+                  onChange={setOrder}
+                />
+              )}
               <span className="flex-1" />
               {r && (
                 <span className="flex items-center gap-2">
                   <Label>Formula</Label>
                   <InfoTip label="Formula">
-                    <code data-testid="formula" className="font-mono">
-                      {r.formula}
-                    </code>
+                    <span data-testid="formula">{formulaText(r.method, r.formula)}</span>
                     <span className="mt-1 block">Ranked {formatDateTime(r.generated_at)}, in dependency order.</span>
                   </InfoTip>
                 </span>
@@ -1122,7 +1264,7 @@ function Priorities() {
                 <Icon name="alert" size={16} />
                 <span>{r.cycles.length > 1 ? "Cycles" : "Cycle"}</span>
                 {r.cycles.map((c, i) => (
-                  <span key={i} className="font-mono font-medium">
+                  <span key={i} className="font-medium">
                     {i > 0 && "; "}
                     {c.map((k) => featureText(features, k)).join(" → ")}
                   </span>
@@ -1139,7 +1281,7 @@ function Priorities() {
               rows={rows}
               rowKey={(f) => f.key}
               selected={current?.key ?? null}
-              onSelect={(k) => setSelected(k)}
+              onSelect={(k) => pick(k)}
               loading={snapshotId ? cq.loading && !cmp : q.loading}
               empty="No features ranked"
               rowProps={(f) => ({ "data-testid": `priority-row-${f.key}` })}
@@ -1174,10 +1316,15 @@ function Priorities() {
             </Panel>
           )}
 
-          <Snapshots reloadKey={snapshotsKey} note={note} onNote={setNote} canSnapshot={canSnapshot} features={features} />
+          <Snapshots reloadKey={snapshotsKey} features={features} />
 
           <ChangesPanel reloadKey={changesKey} features={features} />
         </Split>
+        {phone && current && (
+          <Sheet open={sheet} title={current.title} onClose={() => setSheet(false)} testId="priority-sheet">
+            {inspector}
+          </Sheet>
+        )}
         {draft && (
           <OverrideSheet
             key={`${draft.feature.key}|${draft.kind}|${draft.above?.key ?? draft.position ?? ""}`}
@@ -1187,7 +1334,7 @@ function Priorities() {
             onStored={(o) => {
               setDraft(null);
               const quiet = !["contradiction", "no_contradiction"].includes(o.reason_check.status);
-              const held = o.held_below ? `Held below ${o.held_below}: it depends on it.` : null;
+              const held = o.held_below ? `Held below ${nameOf(o.held_below)}: it depends on it.` : null;
               void afterChange([quiet ? NUMBERS_ONLY : null, held].filter(Boolean).join(" ") || null);
             }}
           />

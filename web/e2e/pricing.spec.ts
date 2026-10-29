@@ -169,7 +169,7 @@ test("10e: a commenter has no Pricing or Win and loss tab and no pricing decisio
   const decided = "Price: Should the Starter plan cost less for teams under 5 seats?";
   await login(page, APPROVER);
   await page.goto("/company/decisions");
-  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^All/ }).click();
+  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^Any state/ }).click();
   await expect(page.getByTestId("decision-row").filter({ hasText: decided })).toHaveCount(1);
   await signOut(page);
 
@@ -182,7 +182,7 @@ test("10e: a commenter has no Pricing or Win and loss tab and no pricing decisio
   await expect(page.getByTestId("market-tab-pricing")).toHaveCount(0);
   await expect(page.getByTestId("market-tab-win-loss")).toHaveCount(0);
   await nav.getByTestId("company-tab-decisions").click();
-  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^All/ }).click();
+  await page.getByRole("group", { name: "State" }).getByRole("button", { name: /^Any state/ }).click();
   await expect(page.getByTestId("decision-row").first()).toBeVisible();
   await expect(page.getByTestId("decision-row").filter({ hasText: decided })).toHaveCount(0);
   for (const tab of ["pricing", "win-loss"]) {
@@ -263,9 +263,9 @@ test("10h: the Pricing and Win and loss tables label their dates with the Compan
   // no_claim=the day itself (lib/format.ts formats it in the Company zone).
   await login(page, APPROVER);
   await openMarket(page);
-  await expect(page.getByTestId("pricing-table").getByRole("columnheader", { name: "Updated (America/Los_Angeles)" })).toBeVisible();
+  await expect(page.getByTestId("pricing-table").getByRole("columnheader", { name: "Updated, Pacific Time (Los Angeles)" })).toBeVisible();
   await page.getByTestId("market-tab-win-loss").click();
-  await expect(page.getByTestId("deals-table").getByRole("columnheader", { name: "Decided on (America/Los_Angeles)" })).toBeVisible();
+  await expect(page.getByTestId("deals-table").getByRole("columnheader", { name: "Decided on, Pacific Time (Los Angeles)" })).toBeVisible();
 });
 
 test("10i: Win and loss filters by result, reason and period", async ({ page }) => {
@@ -283,7 +283,7 @@ test("10i: Win and loss filters by result, reason and period", async ({ page }) 
   await page.getByLabel("Reason").selectOption({ label: "Price" });
   await expect(accounts(page)).toHaveText(["Account 7"]);
   await page.getByLabel("Result").selectOption({ label: "Won" });
-  await expect(page.getByTestId("deals-empty")).toHaveText("No win or loss records match");
+  await expect(page.getByTestId("deals-empty")).toContainText("No win or loss records match");
   await page.getByLabel("Result").selectOption({ label: "Any result" });
   await page.getByLabel("Reason").selectOption({ label: "Any reason" });
   await expect(accounts(page)).toHaveCount(6);

@@ -6,12 +6,12 @@
 import type { Schemas } from "@/lib/api/client";
 import { addMonths, todayIn } from "@/lib/dates";
 import { sectionDiff } from "@/lib/diff";
-import { citationHref } from "@/lib/format";
+import { citationHref, formatDate } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { displayName } from "@/lib/names";
 
 import { mockUuid, seeded, stableUuid } from "./ids";
-import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
+import { addDecisionEntity, addGoalCodes, addGoalWords, addNoisyProposals, addOverlappingProposals, addStatusOverlapProposals, addThreeWayConflict, attributeCommenterProposal, attributeGoalOwner, attributeLocks, enlargeBaseline, routeBaseline, seedBaseline, setEntityEffort, type BaselineState } from "./baseline";
 import { BLOCKER_NARROWED_SCENARIO, documentGate, narrowResolvedBlocker, routeBlockers, seedBlockers, type BlockersDb } from "./blockers";
 import { CODED_PRD } from "./named-codes";
 import { BIG_PRD, BIG_PRD_COMMENTS, BIG_PRD_REVIEWS, BIG_PRD_SUGGESTIONS } from "./big-prd";
@@ -653,7 +653,8 @@ function buildVersion(doc: DocumentRow, seed: VersionSeed): VersionRow {
     warnings: [],
     notes: [],
     imported_by: (seed.by ?? AGENT_TRACK).id,
-    imported_by_name: (seed.by ?? AGENT_TRACK).name,
+    // As the API names a token's import: "API token agent-track".
+    imported_by_name: seed.by ? seed.by.name : `API token ${AGENT_TRACK.name}`,
     approved_at: null,
     approval_lapses: [],
     created_at: seed.created_at,
@@ -1919,7 +1920,10 @@ function ensureReviewV2(db: Db): ReviewV2Db {
 /** O5: the share links' context (./shares.ts); `me` is null for a link holder. */
 function sharesContext(db: Db, me: { id: string; role: Role } | null): SharesContext {
   const publications = ensureReviewV2(db).publications;
-  const base = { documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now };
+  const base = {
+    documents: db.documents, versions: db.versions, publications, members: db.members, company: MOCK_COMPANY, uuid, now,
+    zone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
+  };
   const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
   db.shares ??= scenario === SHARING_SCENARIO || scenario === SHARING_PUBLIC_SCENARIO
     ? seeded("shares", () => seedShares(base, db.user_id, db.members.find((m) => m.status === "disabled")?.id ?? null, scenario === SHARING_SCENARIO))
@@ -2325,6 +2329,8 @@ function ritualsContext(db: Db, me: MemberRow): RitualsContext {
     uuid,
     companyTimezone: () => String(mockSettingValue("company_timezone") ?? "America/Los_Angeles"),
     decisions: () => db.decisions?.decisions ?? [],
+    // qa-company-6: the goals block reads the baseline's goals, as Home does.
+    goals: () => db.baseline.entities.filter((e) => e.type === "goal") as Schemas["EntityOut"][],
     openVariances: (id) => openVariances(ensureMetrics(db, me), id),
     marketWrites: () => levelFor((db.autonomy ??= emptyAutonomy()), "market") !== "observe",
     baselineStarts: () => levelFor((db.autonomy ??= emptyAutonomy()), "baseline") !== "observe",
@@ -2879,6 +2885,8 @@ function load(): Db {
     db.autonomy.actions.push(seedOracleDid(db.user_id, uuid(), "Moved 'Saved addresses' up 2 within G-B, ahead of G-Z"));
   }
   if (scenario === "proposal-overlap") addOverlappingProposals(db.baseline, uuid);
+  if (scenario === "proposal-overlap-status") addStatusOverlapProposals(db.baseline, uuid);
+  if (scenario === "conflict-3way") addThreeWayConflict(db.baseline, uuid);
   if (scenario === "goal-words") addGoalWords(db.baseline, db.members.find((m) => m.email === "approver@example.com")!.id);
   if (scenario === DIFF_SCENARIO) addRoadmapVersion(db);
   if (scenario === APPROVED_PLAN_SCENARIO) addApprovedPlan(db);
@@ -3450,9 +3458,11 @@ function escapeHtml(s: string) {
 
 /** `audience`: O5, the label of the audience the export renders for (as the API's banner). */
 function banner(doc: DocumentRow, v: VersionRow, audience?: string | null) {
-  const status = v.approved_at ? "approved" : doc.status;
-  const badge = audience ? ` · audience ${audience}` : "";
-  return `${doc.title} · version ${v.number}${badge} · ${status} · ${(v.approved_at ?? v.created_at).slice(0, 10)}`;
+  // qa-docs-39: as the API's export banner (prd.html.j2): the state in words and a readable date.
+  const status = (v.approved_at ? "approved" : doc.status).replace(/_/g, " ");
+  const badge = audience ? ` · Audience ${audience}` : "";
+  const when = v.approved_at ? `Approved ${formatDate(v.approved_at)}` : `Imported ${formatDate(v.created_at)}`;
+  return `${doc.title} · Version ${v.number}${badge} · ${status.charAt(0).toUpperCase()}${status.slice(1)} · ${when}`;
 }
 
 /** Every HTML export starts with the company's brand header (O5 lane 4); never "Made with Product Oracle". */
@@ -5001,7 +5011,11 @@ async function route(db: Db, req: Request): Promise<Response> {
       role: me.role,
       document: (ref) => {
         const doc = findDocument(db, ref);
-        return doc && doc.kind === "prd" ? { id: doc.id, slug: doc.slug, template: doc.template ?? null } : null;
+        if (!doc || doc.kind !== "prd") return null;
+        // The newest version's sections stand in for the template's (the brief ones flagged).
+        const latest = db.versions.filter((v) => v.document_id === doc.id).sort((a, b) => b.number - a.number)[0];
+        const sections = latest?.sections.map((s) => ({ key: s.section_key, heading: s.heading, level: s.level, brief: s.layer === "brief" }));
+        return { id: doc.id, slug: doc.slug, template: doc.template ?? null, sections };
       },
       approvedVersion: (documentId, n) =>
         db.versions.find((v) => v.document_id === documentId && v.number === n && v.approved_at)?.id ?? null,
@@ -5176,8 +5190,10 @@ async function route(db: Db, req: Request): Promise<Response> {
   // approver role records, verifies, rejects and withdraws them. So do Simple's routes
   // (./simple-changes.ts: commenters propose, D-a track owners decide as approvers).
   const draftWrite = p[1] === "runs" && p[3] === "checkpoints" && (p[5] === "actions" || p[5] === "note" || p[5] === "decide");
+  // As the API: any member asks for a template recommendation or a theme's preview (they write nothing).
+  const readOnlyPost = (p[1] === "drafts" && p[2] === "recommend") || (p[1] === "themes" && (p[2] === "preview" || p[2] === "validate"));
   const need: Role | null =
-    m === "GET" || draftWrite || p[1] === "decisions" || p[1] === "schedule-bases" || p[1] === "simple"
+    m === "GET" || draftWrite || readOnlyPost || p[1] === "decisions" || p[1] === "schedule-bases" || p[1] === "simple"
       ? null
       : p[1] === "comments" || ((p[5] === "comments" || p[5] === "feedback") && m === "POST") ||
           // As the API: commenters propose a blocker's solution options.
@@ -5404,7 +5420,7 @@ async function route(db: Db, req: Request): Promise<Response> {
     if (input?.kind === "pricing") return startPricing(db, me, input);
   }
   if (p[1] === "priorities" && p[2] === "calibration" && p.length === 3 && m === "GET") return json(200, trackRecord(db));
-  const handled = await laneF(db, req, p, m, me.role);
+  const handled = await laneF(db, req, p, m, me.role, localStorage.getItem(MOCK_SCENARIO_KEY));
   // E1: a draft started from the template's empty skeleton has nothing to derive yet.
   if (handled?.status === 201 && p[1] === "drafts" && p.length === 2 && m === "POST") {
     const started = (await handled.clone().json()) as { document_id?: string; version?: number };
@@ -5771,10 +5787,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       const marked = dateMarks(db.roadmap, v.source?.document_id, v.sections).filter((d) => d.label);
       if (marked.length) {
         return json(409, {
-          detail: `${marked.length} date${marked.length === 1 ? " rests" : "s rest"} on no verified basis: ${marked
-            .map((d) => `${d.text} (${d.section_key}: ${d.label})`)
+          detail: `${marked.length} date${marked.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${marked
+            .map((d) => `${formatDate(d.date)} (${d.section_key}: ${d.label})`)
             .join(", ")}`,
-          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: d.text, rationale: `${d.text} is marked ${d.label}` })),
+          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: formatDate(d.date), rationale: `${formatDate(d.date)} is not backed by a confirmed schedule` })),
           dates: marked,
         });
       }
@@ -5784,10 +5800,10 @@ async function route(db: Db, req: Request): Promise<Response> {
       const marked = updateDateMarks(db.roadmap, v.sections).filter((d) => d.label);
       if (marked.length) {
         return json(409, {
-          detail: `${marked.length} date${marked.length === 1 ? " rests" : "s rest"} on no verified basis: ${marked
-            .map((d) => `${d.text} (${d.section_key}: ${d.label})`)
+          detail: `${marked.length} date${marked.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${marked
+            .map((d) => `${formatDate(d.date)} (${d.section_key}: ${d.label})`)
             .join(", ")}`,
-          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: d.text, rationale: `${d.text} is marked ${d.label}` })),
+          blocking: marked.map((d) => ({ key: "unverified_date", id: `${d.section_key}:${d.text}`, title: formatDate(d.date), rationale: `${formatDate(d.date)} is not backed by a confirmed schedule` })),
           dates: marked,
         });
       }

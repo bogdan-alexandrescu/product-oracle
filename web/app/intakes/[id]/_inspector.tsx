@@ -3,15 +3,16 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Chip, CodeChip, Inspector, InspectorRow, InspectorSection } from "@/components/ds";
+import { Button, Chip, CodeChip, Inspector, InspectorRow, InspectorSection, type ChipKind } from "@/components/ds";
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { assess, goalViews } from "@/app/home/_goals";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { formatCount, plural } from "@/lib/format";
 import { useMe, type Role } from "@/lib/me";
 import { sectionHref } from "@/lib/section-link";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
-import { CATEGORY_LABEL, DECIDED_GAP, HARD_BLOCKERS, criticalCount, type Gap, type Summary } from "./_lib";
+import { DECIDED_GAP, HARD_BLOCKERS, categoryNote, criticalCount, tally, unknownGaps, type Batch, type Gap, type Summary } from "./_lib";
 
 type Decision = Schemas["DecisionIn"]["decision"];
 
@@ -134,6 +135,20 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
   return <p className="text-sm text-text2">{confirmed.data?.length ? "No goal chosen yet" : "No confirmed company goal yet"}</p>;
 }
 
+/** Critical questions still open that hold nothing (none is a blocker): what the draft lacks. */
+function missingGaps(s: Summary): Summary["gaps"] {
+  return s.readiness.blocking_gap_ids.length ? [] : s.gaps.filter((g) => g.importance === "critical" && !DECIDED_GAP.has(g.status));
+}
+
+/** Where the brief stands, as the inspector's chip says it: archived, blocked, open critical questions, or ready. */
+export function readiness(s: Summary): { label: string; kind: ChipKind } {
+  if (s.intake.status === "archived") return { label: "Archived", kind: "na" };
+  if (s.readiness.gate === "blocked") return { label: `${criticalCount(s.readiness.blocking_gap_ids.length)} open`, kind: "crit" };
+  const missing = missingGaps(s).length;
+  if (missing > 0) return { label: `${criticalCount(missing)} open`, kind: "warn" };
+  return { label: "Ready to draft", kind: "pass" };
+}
+
 /**
  * The right column (a sheet behind "Gaps N open" on a phone): Ready to draft, with each
  * critical question that holds the draft and Decide, or the critical questions still open
@@ -142,12 +157,21 @@ function IntakeGoals({ summary: s }: { summary: Summary }) {
  */
 export function IntakeInspector({
   summary: s,
+  batches,
   onChanged,
+  questionFor,
+  onAnswer,
 }: {
   summary: Summary;
+  /** The thread's batches, once read: how the asked questions stand (qa-work-21). */
+  batches?: Batch[];
   /** Unused (#370: the capabilities decide); kept for the intake shell. */
   role?: Role | null;
   onChanged: () => void;
+  /** The question that asks about a gap, when one was asked (qa-docs-19: it gets an Answer). */
+  questionFor?: (gapId: string) => string | null;
+  /** Shows that question in the thread, ready to answer. */
+  onAnswer?: (questionId: string) => void;
 }) {
   const { can } = useMe();
   const [deciding, setDeciding] = useState<string | null>(null);
@@ -155,21 +179,36 @@ export function IntakeInspector({
   const blocking = gate.blocking_gap_ids.map((id) => s.gaps.find((g) => g.id === id)).filter((g): g is Summary["gaps"][number] => !!g);
   const converted = s.intake.status === "converted";
   const archived = s.intake.status === "archived";
-  // Critical questions still open that hold nothing (none is a blocker): what the draft lacks.
-  const missing = blocking.length ? [] : s.gaps.filter((g) => g.importance === "critical" && !DECIDED_GAP.has(g.status));
+  const missing = missingGaps(s);
+  const counts = tally(s, batches);
+  const unknown = unknownGaps(batches);
+  // qa-docs-19: the title answers the question, in the same words as what follows it (and,
+  // #307, never "Ready to draft" while a critical question is open).
+  const title = archived
+    ? "Not drafting"
+    : gate.gate !== "clear"
+      ? "Not ready to draft"
+      : missing.length > 0
+        ? "Can draft, with gaps"
+        : "Ready to draft";
   return (
     <Inspector
       eyebrow="Before drafting"
-      title="Ready to draft?"
+      title={title}
       testId="intake-inspector"
       label="Before drafting"
       stats={[
-        { label: "Open", value: s.batch.asked, testId: "stat-open" },
-        { label: "Answered", value: s.batch.answered, testId: "stat-answered" },
+        { label: "Open", value: counts.open, testId: "stat-open" },
+        { label: "Answered", value: counts.answered, testId: "stat-answered" },
         { label: "Critical", value: gate.open_critical, tone: gate.open_critical ? "crit" : undefined, testId: "stat-critical" },
       ]}
     >
       <InspectorSection testId="ready-to-draft">
+        {counts.unknown > 0 && (
+          <p data-testid="answered-unknown" className="mb-2 text-[13px] text-text2">
+            {counts.unknown} answered as unknown (&ldquo;I don&apos;t know&rdquo;)
+          </p>
+        )}
         {archived ? (
           <div className="flex flex-col gap-1.5">
             <Chip kind="na" dot>
@@ -182,12 +221,32 @@ export function IntakeInspector({
             <Chip kind="warn" dot>
               {criticalCount(missing.length)} open
             </Chip>
-            <p className="text-[13px] text-text2">None of them holds the draft, but the draft has no answer for them yet.</p>
+            <p data-testid="missing-note" className="text-[13px] text-text2">
+              {missing.length === 1 ? "It does not stop the draft." : "They do not stop the draft."} The PRD will mark{" "}
+              {missing.length === 1 ? "it" : "them"} as still unknown.
+            </p>
             <ul className="flex flex-col gap-2">
               {missing.map((g) => (
                 <li key={g.id} className="flex min-w-0 flex-col gap-0.5" data-testid="missing-gap">
                   <span className="text-sm break-words text-text">{g.statement}</span>
-                  <span className="text-[13px] text-text2">{CATEGORY_LABEL[g.category]}</span>
+                  {(categoryNote(g) || unknown.has(g.id)) && (
+                    <span className="text-[13px] text-text2">
+                      {[categoryNote(g), unknown.has(g.id) && "answered “I don't know”"].filter(Boolean).join(" · ")}
+                    </span>
+                  )}
+                  {/* qa-docs-19: each open question has a way to answer it, in the thread. */}
+                  {(() => {
+                    const q = questionFor?.(g.id);
+                    return q && onAnswer ? (
+                      <div className="mt-1">
+                        <Button variant="secondary" aria-label={`Answer: ${g.statement}`} onClick={() => onAnswer(q)}>
+                          Answer
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-[13px] text-text2">Not asked yet: ask it from Next questions.</span>
+                    );
+                  })()}
                 </li>
               ))}
             </ul>
@@ -208,7 +267,7 @@ export function IntakeInspector({
                     <span className="min-w-0 flex-1 text-sm break-words text-text">{g.statement}</span>
                     <Chip kind="crit">{g.importance === "critical" ? "Critical" : g.importance}</Chip>
                   </div>
-                  <span className="text-[13px] text-text2">{CATEGORY_LABEL[g.category]}</span>
+                  {categoryNote(g) && <span className="text-[13px] text-text2">{categoryNote(g)}</span>}
                   {/* #370: an approver may still reject a critical gap; the form says what needs an owner. */}
                   {can("decide_knowledge_gap", true) && deciding !== g.id && (
                     <div>
@@ -246,12 +305,12 @@ export function IntakeInspector({
       {converted && (
         <InspectorSection label="Drafting" testId="answers-since">
           <p className="text-sm text-text">
-            {s.answers_since_run === 1 ? "1 answer" : `${s.answers_since_run ?? 0} answers`} since drafting started
+            {plural(s.answers_since_run ?? 0, "answer")} since drafting started
           </p>
           {/* C5: each became a feedback item on the PRD; the next draft takes them. */}
           {(s.late_answers_as_feedback ?? 0) > 0 && (
             <p className="text-sm text-text" data-testid="late-answers-feedback">
-              {s.late_answers_as_feedback === 1 ? "1" : s.late_answers_as_feedback} became feedback for the next draft
+              {formatCount(s.late_answers_as_feedback ?? 0)} became feedback for the next draft
               {s.draft_document && s.draft_version != null && (
                 <>
                   {" · "}

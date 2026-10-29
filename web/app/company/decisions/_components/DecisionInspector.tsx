@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { Button, Chip, Inspector, InspectorRow, InspectorSection, LinkButton } from "@/components/ds";
 import { ErrorNote, INPUT } from "@/components/ui";
@@ -20,12 +20,14 @@ import {
   entityTypeLabel,
   isCheckpoint,
   isoDay,
+  personName,
+  personOption,
   shortDate,
   type Decision,
   type DecisionOption,
   type Person,
 } from "./lib";
-import { LinksPicker, linksOf, subjectLabel, type Links } from "./LinksPicker";
+import { LinksPicker, linksOf, useSubjectLabel, type Links } from "./LinksPicker";
 import { OptionsEditor, People, optionsOf, type Draft } from "./ProposeDialog";
 
 type Done = (updated?: Decision) => Promise<void> | void;
@@ -53,7 +55,21 @@ export function DecisionInspector({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const checkpoint = isCheckpoint(d);
-  const email = (id: string | null | undefined) => people.find((p) => p.id === id)?.email ?? null;
+  // People by name (qa-company-28); the email only where no member record names them.
+  const name = (id: string | null | undefined) => {
+    const p = people.find((x) => x.id === id);
+    return p ? personName(p) : null;
+  };
+  const named = (id: string | null | undefined, email?: string | null) => name(id) ?? (email ? personName({ email }) : null);
+  // prod-3: a decision recorded from where a person took it (a review meeting, an approval)
+  // is driven by that person, though Oracle wrote the record; Oracle drives only its own.
+  const driver =
+    d.driver !== "oracle"
+      ? (name(d.driver.replace(/^user:/, "")) ?? "A member")
+      : d.origin !== "oracle" && d.origin !== "autonomy" && d.decided_actor === "user" && d.decided_by
+        ? (named(d.decided_by, d.decided_by_email) ?? "A member")
+        : "Oracle";
+  const subjectName = useSubjectLabel();
   const chosen = d.options.find((o) => o.key === d.chosen_option);
   const stop = d.subjects.find((s) => s.kind === "run");
 
@@ -113,7 +129,7 @@ export function DecisionInspector({
       {d.status === "withdrawn" && (
         <InspectorSection label="Withdrawn">
           <p data-testid="decision-withdrawn" className="text-[15px]">
-            Withdrawn by {d.withdrawn_by_email ?? email(d.withdrawn_by) ?? "a member"}, {shortDate(d.withdrawn_at)}
+            Withdrawn by {named(d.withdrawn_by, d.withdrawn_by_email) ?? "a member"}, {shortDate(d.withdrawn_at)}
             {d.withdrawn_reason ? `: ${d.withdrawn_reason}` : ""}
           </p>
         </InspectorSection>
@@ -130,7 +146,7 @@ export function DecisionInspector({
               </a>
             </p>
           )}
-          {stop && <p className="mt-1 text-sm text-text2">Decided {shortDate(d.decided_at)} by {d.decided_by_email ?? email(d.approver_id) ?? "the approver"}</p>}
+          {stop && <p className="mt-1 text-sm text-text2">Decided {shortDate(d.decided_at)} by {named(d.decided_by, d.decided_by_email) ?? named(d.approver_id, d.approver_email) ?? "the approver"}</p>}
         </InspectorSection>
       ) : (
         <>
@@ -226,17 +242,17 @@ export function DecisionInspector({
         </>
       )}
       <InspectorSection label="People">
-        <InspectorRow value={d.approver_email ?? email(d.approver_id) ?? "—"}>Approver</InspectorRow>
-        <InspectorRow value={d.driver === "oracle" ? "Oracle" : (email(d.driver.replace(/^user:/, "")) ?? "A member")}>Driver</InspectorRow>
-        {d.contributor_ids.length > 0 && <InspectorRow value={d.contributor_ids.map((i) => email(i) ?? "a member").join(", ")}>Contributors</InspectorRow>}
-        {d.informed_ids.length > 0 && <InspectorRow value={d.informed_ids.map((i) => email(i) ?? "a member").join(", ")}>Informed</InspectorRow>}
+        <InspectorRow value={named(d.approver_id, d.approver_email) ?? "—"}>Approver</InspectorRow>
+        <InspectorRow value={driver}>Driver</InspectorRow>
+        {d.contributor_ids.length > 0 && <InspectorRow value={d.contributor_ids.map((i) => name(i) ?? "a member").join(", ")}>Contributors</InspectorRow>}
+        {d.informed_ids.length > 0 && <InspectorRow value={d.informed_ids.map((i) => name(i) ?? "a member").join(", ")}>Informed</InspectorRow>}
       </InspectorSection>
       {d.subjects.length > 0 && (
         <InspectorSection label="About">
           <ul className="flex flex-col gap-1 text-sm">
             {d.subjects.map((s) => (
               <li key={`${s.kind}:${s.id}`}>
-                <SubjectLink subject={s} />
+                <SubjectLink subject={s} label={subjectName(s)} />
               </li>
             ))}
           </ul>
@@ -277,9 +293,8 @@ function reviewFile(d: Decision): string | null {
   return m?.[1] ?? null;
 }
 
-function SubjectLink({ subject: s }: { subject: Decision["subjects"][number] }) {
+function SubjectLink({ subject: s, label }: { subject: Decision["subjects"][number]; label: string }) {
   const kind = String(s.kind);
-  const label = subjectLabel({ kind, ref: s.ref == null ? null : String(s.ref) });
   const href =
     kind === "run" ? `/runs/${String(s.id)}` : kind === "entity" ? `/baseline?entity=${encodeURIComponent(String(s.id))}` : kind === "document" && s.ref ? `/documents/${String(s.ref)}` : kind === "document_version" && s.ref ? versionHref(String(s.ref)) : null;
   return href ? (
@@ -387,7 +402,7 @@ function Actions({
         </Button>
       )}
       {d.can_withdraw && (
-        <Button variant="ghost" onClick={() => setMode("withdraw")} aria-expanded={mode === "withdraw"}>
+        <Button variant="danger" onClick={() => setMode("withdraw")} aria-expanded={mode === "withdraw"}>
           Withdraw
         </Button>
       )}
@@ -415,6 +430,7 @@ function FormShell({
   onCancel,
   error,
   busy,
+  danger = false,
 }: {
   name: string;
   onSubmit: () => Promise<void>;
@@ -423,9 +439,22 @@ function FormShell({
   onCancel: () => void;
   error: string | null;
   busy: boolean;
+  /** A submit that undoes something (Withdraw): styled as danger. */
+  danger?: boolean;
 }) {
+  const form = useRef<HTMLFormElement>(null);
+  // qa-company-14: a form opens below the actions, often under the fold of the inspector:
+  // bring it into view and put the cursor in its first field.
+  useEffect(() => {
+    const el = form.current;
+    if (!el) return;
+    const first = el.querySelector<HTMLElement>("input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])");
+    (first ?? el).scrollIntoView({ block: "center" });
+    first?.focus({ preventScroll: true });
+  }, []);
   return (
     <form
+      ref={form}
       aria-label={name}
       className="mt-3 flex flex-col gap-2.5"
       onSubmit={(e: FormEvent) => {
@@ -436,7 +465,7 @@ function FormShell({
       {children}
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="flex gap-2">
-        <Button type="submit" variant="solid" disabled={busy}>
+        <Button type="submit" variant={danger ? "danger" : "solid"} disabled={busy}>
           {submit}
         </Button>
         <Button variant="ghost" onClick={onCancel}>
@@ -737,7 +766,7 @@ function ReassignForm({ d, people, onDone, onCancel }: { d: Decision; people: Pe
         <select aria-label="New approver" className={INPUT} value={approver} onChange={(e) => setApprover(e.target.value)}>
           {approvers.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.email}
+              {personOption(p)}
             </option>
           ))}
         </select>
@@ -756,6 +785,7 @@ function WithdrawForm({ d, onDone, onCancel }: { d: Decision; onDone: Done; onCa
     <FormShell
       name="Withdraw"
       submit="Withdraw"
+      danger
       busy={busy}
       error={error}
       onCancel={onCancel}

@@ -166,5 +166,5 @@ test("Requests: the rail item still opens the Requests screen with the mock's ro
   await login(page, "approver@example.com");
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-requests").click();
   await expect(page).toHaveURL(/\/requests$/);
-  await expect(page.getByRole("heading", { name: "Requests" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Requests" })).toBeVisible();
 });

@@ -11,7 +11,7 @@ test("inbox lists checkpoints, cost approvals, overruns and feedback by state", 
   const checkpoints = page.getByTestId("inbox-checkpoints");
   await expect(checkpoints).toContainText("Confirm the baseline");
   await expect(checkpoints).toContainText("Baseline proposal");
-  await expect(page.getByTestId("inbox-approvals")).toContainText("usage-alerts-v2");
+  await expect(page.getByTestId("inbox-approvals")).toContainText("Usage alerts v2");
   await expect(page.getByTestId("inbox-overruns")).toContainText("Spent $14.20 of $9.00 estimated");
   // One list by state (C1e): New is the default tab, everything new on a first visit.
   await expect(page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^New/ })).toHaveAttribute("aria-selected", "true");
@@ -49,9 +49,11 @@ test("inbox: cancel a run paused on overrun", async ({ page }) => {
   await login(page);
   await page.goto("/inbox");
   await page.getByTestId("inbox-overruns").getByRole("button", { name: "Cancel run" }).click();
+  // Asked first, as the run page asks (qa-company-1).
+  await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
   await page.goto("/runs");
-  await expect(page.getByTestId("run-row").filter({ hasText: "team-workspaces" })).toContainText("Cancelled");
+  await expect(page.locator('[data-testid="run-row"][data-document="team-workspaces"]')).toContainText("Cancelled");
 });
 
 test("inbox: retry importing a run's output Oracle stopped trying to import", async ({ page }) => {
@@ -73,11 +75,12 @@ test("inbox: retry importing a run's output Oracle stopped trying to import", as
   await page.goto("/inbox");
   const imports = page.getByTestId("inbox-imports");
   await expect(imports).toContainText("Couldn't import team-onboarding's output: DataError");
-  await imports.getByRole("link").click();
+  // The run's name opens it (Open, the row's action, goes there too).
+  await imports.getByRole("link").first().click();
   await expect(page.getByTestId("run-import-failed")).toContainText("DataError");
   // A second visit: the row is Open.
   await page.goto("/inbox");
-  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
   await page.getByTestId("inbox-imports").getByRole("button", { name: "Retry" }).click();
   await expect(page.getByTestId("inbox-imports")).toHaveCount(0);
 });
@@ -121,7 +124,7 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
   // The seed's 10 and the pending access request (A5, #203 part 3).
   await expect(badge).toHaveText("11");
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   await expect(page.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toBeVisible();
   const run = page.url();
@@ -132,14 +135,14 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
   await expect(page.getByText("10 waiting").filter({ visible: true })).toBeVisible();
   await expect(page.getByTestId("inbox-checkpoints")).toHaveCount(0);
   // Shown only, under Open, with a heading saying what it is.
-  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
   const group = page.getByTestId("inbox-tab-open").getByTestId("inbox-deliveries");
   await expect(group.getByRole("heading", { name: "Decision not delivered yet" })).toBeVisible();
   const row = group.locator("tr[data-row]");
   await expect(row).toHaveCount(1);
   await expect(row).toContainText("Confirm the baseline: approved by admin@example.com");
   await expect(row).toContainText("Last: SwarmCloud HTTP 503 unavailable");
-  await expect(row).toContainText("team-onboarding");
+  await expect(row).toContainText("Team onboarding");
   // Nothing to decide here: only Open, to the run.
   await expect(row.getByRole("button")).toHaveCount(0);
   await expect(row.getByRole("link", { name: "Open" })).toHaveAttribute("href", new URL(run).pathname);
@@ -149,7 +152,7 @@ test("inbox: a decision not delivered yet shows under its own heading, uncounted
   await page.getByRole("button", { name: "Check agents now" }).click();
   await expect(page.getByTestId("segment-baseline").getByTestId("checkpoint-delivering")).toHaveCount(0);
   await page.goto("/inbox");
-  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
   await expect(page.getByTestId("inbox-tab-open")).toBeVisible();
   await expect(page.getByTestId("inbox-deliveries")).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Decision not delivered yet" })).toHaveCount(0);

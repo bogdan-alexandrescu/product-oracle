@@ -47,8 +47,8 @@ test("a skeleton-only PRD: Draft with Oracle is the main action and starts its d
 
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "saved-wishlists" }).first()).toBeVisible();
-  await expect(page.getByText("template prd-rfc").first()).toBeVisible();
+  await expect(page.getByRole("link", { name: /^Saved wishlists/ }).first()).toBeVisible();
+  await expect(page.getByText(/^Template: /).first()).toBeVisible();
 });
 
 test("a PRD with content keeps Publish as its main action and no Draft with Oracle", async ({ page }) => {

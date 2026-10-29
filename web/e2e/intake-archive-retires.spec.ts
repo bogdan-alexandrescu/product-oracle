@@ -61,7 +61,7 @@ test("archiving a brief takes its questions out of the Inbox and its page offers
 
   await page.goBack();
   await expect(page).toHaveURL(brief);
-  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("alertdialog", { name: "Archive" }).getByRole("button", { name: "Archive" }).click();
   await expect(page.getByTestId("intake-status")).toHaveText("Archived");

@@ -2,13 +2,16 @@
  * Mock of the cadence engine (H2, /v1/rituals and /v1/ritual-occurrences) and its Inbox
  * rows. Synthetic data only. The built-in rituals are seeded in every company (the API's
  * first tick does that); the "rituals" scenario adds a Monthly roadmap refresh pre-read an
- * owner prepared early and last week's goals check-in, held, whose summary run failed. No
+ * owner prepared early (still Next on Company › Rituals until its time) and last week's
+ * goals check-in, held, whose summary run failed. No
  * other scenario has occurrences, so other specs' Inbox counts stay as they were.
  *
  * The schedule maths is the API's (api/oracle/rituals/schedule.py): wall-clock times in the
  * schedule's IANA zone, stored in UTC.
  */
-import type { Schemas } from "@/lib/api/client";
+import { assess, goalViews } from "@/app/home/_goals";
+import type { EntityOut, Schemas } from "@/lib/api/client";
+import { formatDate } from "@/lib/format";
 
 import { companyStamp } from "./connections";
 
@@ -46,6 +49,8 @@ export interface RitualsContext {
   companyTimezone: () => string;
   /** The decision log, for the decisions recorded with an occurrence. */
   decisions: () => LoggedDecision[];
+  /** The baseline's goals (./baseline.ts), which the goals block reads as Home does (qa-company-6). */
+  goals?: () => EntityOut[];
   /** H5: how many of a metrics review's variances are open (./metrics.ts). */
   openVariances?: (occurrenceId: string) => number;
   /** H11 "Watch the market" above Observe: Oracle writes the competitive digest. */
@@ -223,10 +228,10 @@ function roadmapBlocks(asOf: string, trackId: string) {
       { text: "Usage alerts PRD: at risk, 2 at risk", href: `/roadmap?track=${trackId}` },
       { text: "Team onboarding PRD: on track, 0 at risk", href: "/roadmap" },
     ]),
-    block("slips", asOf, [{ text: "Threshold alerts beta: 2026-11-10 -> 2026-11-24", href: `/roadmap?track=${trackId}` }]),
+    block("slips", asOf, [{ text: `Threshold alerts beta: ${formatDate("2026-11-10")} → ${formatDate("2026-11-24")}`, href: `/roadmap?track=${trackId}` }]),
     block("stale_items", asOf, [{ text: "Digest emails", href: "/roadmap?item=usage-alerts:digest-emails" }]),
     block("done_items", asOf, [{ text: "ENG-401 Alert settings page", href: `/roadmap?track=${trackId}` }]),
-    block("priority_changes", asOf, [{ text: "Usage alerts: #5 -> #2", href: "/priorities" }]),
+    block("priority_changes", asOf, [{ text: "Usage alerts: #5 → #2", href: "/priorities" }]),
     block("suggested_next", asOf, [
       { label: "Start a roadmap run from Usage alerts PRD", method: "POST", href: `/v1/tracks/${trackId}/roadmap-run`, text: "Start a roadmap run from Usage alerts PRD" },
       { label: "Review goals", href: "/baseline", text: "Review goals" },
@@ -235,12 +240,23 @@ function roadmapBlocks(asOf: string, trackId: string) {
   ];
 }
 
-function goalsBlocks(asOf: string) {
+/**
+ * The goals block (blocks.goals): the confirmed goals by title, each with Home's current,
+ * target and distance (qa-company-6: the same figures Home shows, from the same goals).
+ */
+function goalRows(ctx: RitualsContext): Row[] {
+  const confirmed = (ctx.goals?.() ?? []).filter((e) => e.type === "goal" && e.status === "confirmed");
+  return goalViews(confirmed)
+    .sort((a, b) => a.title.localeCompare(b.title))
+    .map((g) => {
+      const distance = assess(g).text;
+      return { text: `${g.title}: ${g.currentText ?? "-"} of ${g.targetText ?? "-"}${distance ? ` · ${distance}` : ""}`, href: `/baseline?entity=${g.id}` };
+    });
+}
+
+function goalsBlocks(asOf: string, ctx: RitualsContext) {
   return [
-    block("goals", asOf, [
-      { text: "Raise activation: 38% of 45%, 7 pts to go", href: "/baseline" },
-      { text: "Grow paid conversion: No current value", href: "/baseline" },
-    ]),
+    block("goals", asOf, goalRows(ctx)),
     block("since_last", asOf, [
       { text: "PRD versions approved: 1", href: "/plan" },
       { text: "Runs finished: 3", href: "/runs" },
@@ -319,7 +335,7 @@ function syncRebuild(ctx: RitualsContext, o: Occurrence) {
 function blocksFor(kind: string, asOf: string, trackId: string, ctx?: RitualsContext) {
   if (kind === REBUILD && ctx) return rebuildBlocks(ctx, asOf);
   if (kind === "roadmap_refresh") return roadmapBlocks(asOf, trackId);
-  if (kind === "goals_checkin" || kind === "goals_review") return goalsBlocks(asOf);
+  if ((kind === "goals_checkin" || kind === "goals_review") && ctx) return goalsBlocks(asOf, ctx);
   return [block("since_last", asOf, [{ text: "Runs finished: 3", href: "/runs" }]), block("needs_decision", asOf, [])];
 }
 
@@ -363,9 +379,9 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
   db.occurrences.push(
     occurrence(ctx, checkin, last, {
       status: "held",
-      notes: "Activation is on pace; conversion still has no current value.",
+      notes: "Activation is on pace; paid conversion is still short of its target.",
       decision_ids: named ? [named.id] : [],
-      pre_read: { built_at: new Date(last.getTime() - 12 * 3_600_000).toISOString(), blocks: goalsBlocks(asOf) },
+      pre_read: { built_at: new Date(last.getTime() - 12 * 3_600_000).toISOString(), blocks: goalsBlocks(asOf, ctx) },
       summary_state: "failed",
       summary_note: "Summary failed · Summarize with Oracle to retry",
     }),
@@ -467,11 +483,27 @@ function summaryOf(o: Occurrence): Schemas["OccurrenceSummary"] {
   return { id: o.id, ritual_id: o.ritual_id, due_at: o.due_at, ends_at: o.ends_at, status: o.status };
 }
 
+/**
+ * The ritual on the way out (service.ritual_out): Last pre-read is the newest one whose
+ * meeting time has come; a meeting made early (Prepare now, or the lead time) and still
+ * ahead stays Next, with its ready pre-read, until its time (qa-company-7).
+ */
 function ritualOut(db: RitualsDb, r: Ritual): RitualOut {
-  const last = db.occurrences
-    .filter((o) => o.ritual_id === r.id && o.pre_read.built_at)
-    .sort((a, b) => b.due_at.localeCompare(a.due_at))[0];
-  const out: RitualOut & { created_at?: string } = { ...r, last_pre_read: last ? summaryOf(last) : null };
+  const t = now().getTime();
+  const mine = db.occurrences.filter((o) => o.ritual_id === r.id);
+  const last = mine.filter((o) => o.pre_read.built_at && Date.parse(o.due_at) <= t).sort((a, b) => b.due_at.localeCompare(a.due_at))[0];
+  const upcoming = mine
+    .filter((o) => Date.parse(o.due_at) > t && ["scheduled", "ready", "failed"].includes(o.status))
+    .sort((a, b) => a.due_at.localeCompare(b.due_at))[0];
+  let next = r.next_due_at;
+  if (upcoming && next && Date.parse(upcoming.due_at) < Date.parse(next)) next = upcoming.due_at;
+  const ready = !!upcoming && upcoming.status === "ready" && !!next && Date.parse(upcoming.due_at) === Date.parse(next);
+  const out: RitualOut & { created_at?: string } = {
+    ...r,
+    next_due_at: next,
+    last_pre_read: last ? summaryOf(last) : null,
+    next_pre_read: ready ? summaryOf(upcoming) : null,
+  };
   delete out.created_at;
   return out;
 }

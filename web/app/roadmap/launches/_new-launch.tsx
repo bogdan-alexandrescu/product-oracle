@@ -1,21 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
-import { Chip } from "@/components/ds";
-import { INPUT } from "@/components/ui";
+import { Button, Chip, Dialog } from "@/components/ds";
+import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { docLabel } from "@/lib/labels";
 import { errorMessage, useQuery } from "@/lib/use-query";
-
-import { FormDialog } from "../_form-dialog";
 
 type Track = Schemas["TrackSummary"];
 type Item = Schemas["RoadmapItemOut"];
 
 const HORIZON: Record<string, string> = { now: "Now", next: "Next", later: "Later" };
 
-/** The track's approved roadmap, the one launches are planned from (null until one is approved). */
+/**
+ * The track's approved roadmap, the one launches are planned from (null until one is approved).
+ * As the API (oracle.roadmap.views.track_out): a track's roadmap is its latest approved version
+ * with items, else its latest; a later version in review keeps the approved one here.
+ */
 const approvedRoadmap = (t: Track | undefined) => (t?.roadmap?.approved && t.roadmap.version ? t.roadmap : null);
+const roadmapName = (r: { title: string }) => docLabel({ title: r.title, kind: "roadmap" });
 
 /**
  * New launch (#344): plan a launch by hand that groups one or more items of a track's latest
@@ -60,18 +65,35 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
     }
   }
 
+  const problem = error ?? tracksQ.error ?? itemsQ.error;
+  const canSubmit = !!track && picked.length > 0 && !!name.trim();
+  // Until the track has an approved roadmap there is nothing to plan: the dialog says what to do first.
+  const blocked = !!tracksQ.data && !roadmap;
+
   return (
-    <FormDialog
+    <Dialog
       title="New launch"
       testId="new-launch-dialog"
-      submitLabel="Create launch"
-      submit="Creating…"
-      canSubmit={!!track && picked.length > 0 && !!name.trim()}
+      dirty={picked.length > 0 || customName !== null || trackId !== null}
       busy={busy}
-      error={error ?? tracksQ.error ?? itemsQ.error}
-      onSubmit={create}
       onClose={onClose}
+      onSubmit={() => {
+        if (canSubmit && !busy) void create();
+      }}
+      cancelLabel={blocked ? "Close" : "Cancel"}
+      actions={
+        blocked ? null : (
+          <Button type="submit" variant="primary" disabled={busy || !canSubmit}>
+            {busy ? "Creating…" : "Create launch"}
+          </Button>
+        )
+      }
     >
+      {tracks.length === 1 && track && (
+        <p className="text-sm text-text2" data-testid="new-launch-track">
+          Track: <span className="font-semibold text-text">{track.title}</span>
+        </p>
+      )}
       {tracks.length > 1 && (
         <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
           Track
@@ -93,10 +115,39 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
       )}
       <fieldset className="flex min-w-0 flex-col gap-1.5">
         <legend className="mb-1 text-sm font-semibold text-text2">
-          Items{roadmap ? ` · ${roadmap.title} v${roadmap.version}` : ""}
+          Items{roadmap ? ` · ${roadmapName(roadmap)}, version ${roadmap.version}` : ""}
         </legend>
-        {tracksQ.data && !track && <p className="text-sm text-text2">No product track yet. Start one from a PRD to plan launches.</p>}
-        {track && !roadmap && <p className="text-sm text-text2">This track has no approved roadmap yet. Launches group items of an approved roadmap.</p>}
+        {tracksQ.data && !track && (
+          <p className="text-sm text-text2" data-testid="new-launch-blocked">
+            No product track yet. A track starts when a PRD is approved; then build and approve its roadmap in{" "}
+            <Link href="/plan/documents" className="font-medium text-accent-ink underline-offset-2 hover:underline">
+              Roadmap documents
+            </Link>
+            .
+          </p>
+        )}
+        {track && !roadmap && (
+          <p className="text-sm text-text2" data-testid="new-launch-blocked">
+            {track.title} has no approved roadmap yet, and a launch groups items of an approved roadmap.{" "}
+            {track.roadmap ? (
+              <>
+                Approve{" "}
+                <Link href={`/documents/${track.roadmap.slug}`} className="font-medium text-accent-ink underline-offset-2 hover:underline">
+                  {roadmapName(track.roadmap)}
+                </Link>{" "}
+                first.
+              </>
+            ) : (
+              <>
+                Build its roadmap in{" "}
+                <Link href="/plan/documents" className="font-medium text-accent-ink underline-offset-2 hover:underline">
+                  Roadmap documents
+                </Link>{" "}
+                and approve it first.
+              </>
+            )}
+          </p>
+        )}
         {roadmap && itemsQ.data && items.length === 0 && <p className="text-sm text-text2">The approved roadmap has no items.</p>}
         <ul className="flex max-h-72 flex-col gap-1 overflow-y-auto">
           {items.map((i) => (
@@ -117,14 +168,19 @@ export function NewLaunchDialog({ onClose, onCreated }: { onClose: () => void; o
           ))}
         </ul>
       </fieldset>
-      <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-        Name
-        <input className={INPUT} value={name} maxLength={300} onChange={(e) => setCustomName(e.target.value)} />
-      </label>
-      <p className="text-sm text-text2">
-        The launch starts Planned with Oracle&apos;s suggested tier and its checklist. It is ready when the items&apos; tracker issues or
-        milestones are done.
-      </p>
-    </FormDialog>
+      {!blocked && (
+        <>
+          <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
+            Name
+            <input className={INPUT} value={name} maxLength={300} onChange={(e) => setCustomName(e.target.value)} />
+          </label>
+          <p className="text-sm text-text2">
+            The launch starts Planned with Oracle&apos;s suggested tier and its checklist. It is ready when the items&apos; tracker issues
+            or milestones are done.
+          </p>
+        </>
+      )}
+      {problem && <ErrorNote>{problem}</ErrorNote>}
+    </Dialog>
   );
 }

@@ -24,9 +24,10 @@ import {
   type ChipKind,
   type Column,
 } from "@/components/ds";
+import { PlanCrumb } from "@/app/plan/_crumb";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { AutonomyNote, useAutonomyLevel } from "@/lib/autonomy";
-import { formatDate } from "@/lib/format";
+import { formatDate, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
@@ -175,27 +176,23 @@ function Launches() {
     <Page>
       <PageHeader
         title="Launches"
-        back={
-          <Link href="/roadmap" className="hover:underline">
-            Roadmap
-          </Link>
+        info={
+          <InfoTip label="Launches" align="start" side="bottom">
+            Approving a roadmap plans a launch for each item in Now. It is ready when its tracker issues or milestones
+            are done. Oracle drafts the kit; a person checks it, sends it and marks the launch launched.
+          </InfoTip>
         }
+        back={<PlanCrumb />}
         status={
           q.data && (
             <>
-              <Chip kind="acc">
-                {rows.length} {rows.length === 1 ? "launch" : "launches"}
-              </Chip>
-              <InfoTip label="Launches" align="start" side="bottom">
-                Approving a roadmap plans a launch for each item in Now. It is ready when its tracker issues or milestones
-                are done. Oracle drafts the kit; a person checks it, sends it and marks the launch launched.
-              </InfoTip>
+              <Chip kind="acc">{plural(rows.length, "launch", "launches")}</Chip>
             </>
           )
         }
         action={
           <div className="flex flex-wrap gap-2">
-            <LinkButton href="/roadmap/changelog" icon="doc">
+            <LinkButton href="/roadmap/changelog" icon="doc" data-testid="changelog-link">
               Changelog
             </LinkButton>
             {can("create_launch") && (
@@ -238,7 +235,7 @@ function Launches() {
                 if (phone) setSheet(true);
               }}
               loading={q.loading && !q.data}
-              empty="No launches here"
+              empty={emptyText(current, rows.length, can("create_launch"))}
               rowProps={(l) => ({ "data-testid": "launch-row", "data-state": l.state })}
             />
           </Panel>
@@ -266,6 +263,16 @@ function Launches() {
       )}
     </Page>
   );
+}
+
+const FILTER_WORD: Record<Exclude<Filter, "all">, string> = { ready: "ready", planned: "planned", launched: "launched" };
+
+/** What the table says with no row: why, and the next step where this role can take it. */
+function emptyText(filter: Filter, total: number, canCreate: boolean): string {
+  if (total > 0 && filter !== "all") return `No ${FILTER_WORD[filter]} launches. Pick All to see the other ${plural(total, "launch", "launches")}.`;
+  return canCreate
+    ? "No launches yet. Use New launch to plan the first, or approve a roadmap: its Now items get a launch each."
+    : "No launches yet. They are planned when a roadmap is approved.";
 }
 
 function LaunchInspector({ id, onChanged }: { id: string; onChanged: () => Promise<void> }) {

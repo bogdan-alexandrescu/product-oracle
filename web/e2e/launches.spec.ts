@@ -51,9 +51,9 @@ async function notesToSend(page: Page): Promise<string> {
   let text = "";
   await expect
     .poll(async () => {
-      for (const name of ["New", "Open"]) {
+      for (const [name, id] of [["New", "new"], ["Seen", "open"]]) {
         await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: new RegExp(`^${name}`) }).click();
-        const panel = page.getByTestId(`inbox-tab-${name.toLowerCase()}`);
+        const panel = page.getByTestId(`inbox-tab-${id}`);
         await expect(panel).toBeVisible();
         const row = panel.getByTestId("launch-need").filter({ hasText: "Notes to send" });
         if (await row.count()) {
@@ -176,7 +176,7 @@ test("12e: the changelog shows the launch's entry under Added; Publish and Expor
   await expect(entry).toBeVisible();
   await expect(entry.getByTestId("entry-status")).toHaveText("Draft");
   // Newest day first.
-  await expect(page.getByTestId("changelog-day").first().locator("time")).toHaveText("2026-10-20");
+  await expect(page.getByTestId("changelog-day").first().locator("time")).toHaveText("Oct 20, 2026");
 
   await entry.getByRole("button", { name: "Publish" }).click();
   await expect(entry.getByTestId("entry-status")).toHaveText("Published");

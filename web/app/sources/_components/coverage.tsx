@@ -14,13 +14,13 @@ import {
   InspectorRow,
   InspectorSection,
   LinkButton,
-  Ring,
+  Notice,
   type Column,
 } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatAge, formatCount, formatDate, formatDateTime, formatPercent, plural } from "@/lib/format";
 
-import { KIND_LABEL } from "./confidence";
+import { itemKinds, KIND_LABEL } from "./confidence";
 
 export type Coverage = Schemas["SourceCoverage"];
 export type CoverageDetail = Schemas["SourceCoverageDetail"];
@@ -41,39 +41,41 @@ const NOT_READ_LABEL: Record<NotReadStatus, string> = {
   limited: "Limited",
 };
 
-const n = (v: number) => v.toLocaleString("en-US");
+const n = formatCount;
 
-/** "now", "5 min", "3 h", "3 d", "2 mo", "1 y": how long ago. */
-export function ago(iso: string, now = Date.now()): string {
-  const s = Math.max(0, (now - new Date(iso).getTime()) / 1000);
-  if (s < 60) return "now";
-  if (s < 3600) return `${Math.floor(s / 60)} min`;
-  if (s < 86_400) return `${Math.floor(s / 3600)} h`;
-  const d = Math.floor(s / 86_400);
-  if (d < 60) return `${d} d`;
-  if (d < 730) return `${Math.floor(d / 30.4)} mo`;
-  return `${Math.floor(d / 365)} y`;
-}
+/** No value: one dash style on the page. */
+export const NONE = "—";
 
 /** The last sync, relative, with the full date in the title; "Never" before the first. */
 export function Synced({ at, testId }: { at: string | null | undefined; testId?: string }) {
   if (!at) return <span data-testid={testId}>Never</span>;
   return (
     <span data-testid={testId} title={formatDateTime(at)}>
-      {ago(at)}
+      {formatAge(at)}
     </span>
   );
 }
 
 const total = (f: Freshness) => f.fresh + f.aging + f.stale;
 
-/** The fresh share as a ring ("Fresh 62%"), or "–" with no items. */
-export function FreshRing({ freshness, testId, size = 32 }: { freshness: Freshness; testId?: string; size?: number }) {
+/** The fresh share of a source's items in words ("50% fresh"), with the counts on hover; "—" with no items. */
+export function FreshShare({ freshness, testId }: { freshness: Freshness; testId?: string }) {
   const items = total(freshness);
-  const share = items ? Math.round((freshness.fresh / items) * 100) : null;
+  if (!items) {
+    return (
+      <span data-testid={testId} className="text-text2" title="No items yet">
+        {NONE}
+      </span>
+    );
+  }
+  const share = formatPercent(freshness.fresh / items);
   return (
-    <span data-testid={testId} className="inline-flex items-center">
-      {share == null ? <span className="text-text2">–</span> : <Ring value={share} size={size} stroke={4} label={`Fresh ${share}%`} />}
+    <span
+      data-testid={testId}
+      className="tnum whitespace-nowrap"
+      title={`${formatCount(freshness.fresh)} of ${plural(items, "item")} fresh: newer than their kind's half-life`}
+    >
+      {share} fresh
     </span>
   );
 }
@@ -101,6 +103,13 @@ export function FreshnessBar({ freshness }: { freshness: Freshness }) {
       </ul>
     </div>
   );
+}
+
+/** The reason without the status the chip beside it already says: "Skipped: shared from outside" is "Shared from outside". */
+function whyNotRead(reason: string, label: string): string {
+  const prefix = `${label.toLowerCase()}:`;
+  const rest = reason.toLowerCase().startsWith(prefix) ? reason.slice(prefix.length).trim() : reason.trim();
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
 }
 
 const notReadTotal = (c: Coverage) => c.not_read.skipped + c.not_read.unavailable + c.not_read.flagged + c.not_read.limited;
@@ -146,7 +155,7 @@ export function CoverageTable({
       header: "Not read",
       width: "92px",
       align: "right",
-      hideOnPhone: true,
+      phoneLabel: "Not read",
       cell: (c) => {
         const v = notReadTotal(c);
         return (
@@ -165,17 +174,17 @@ export function CoverageTable({
     {
       key: "fresh",
       header: "Fresh",
-      width: "72px",
-      align: "center",
+      width: "96px",
+      align: "right",
       phone: "action",
-      cell: (c) => <FreshRing freshness={c.freshness} testId="coverage-fresh" />,
+      cell: (c) => <FreshShare freshness={c.freshness} testId="coverage-fresh" />,
     },
     {
       key: "used",
       header: "Used",
       width: "72px",
       align: "right",
-      hideOnPhone: true,
+      phoneLabel: "Used",
       cell: (c) => (
         <span className="tnum" data-testid="coverage-used">
           {n(usedTotal(c))}
@@ -187,7 +196,7 @@ export function CoverageTable({
       header: "Synced",
       width: "84px",
       align: "right",
-      hideOnPhone: true,
+      phoneLabel: "Synced",
       cell: (c) => <Synced at={c.last_synced_at} testId="coverage-synced" />,
     },
   ];
@@ -260,6 +269,9 @@ export function CoverageInspector({
   detail,
   summary,
   busy,
+  canSync,
+  capsReady,
+  notice,
   onSync,
   onLoadMore,
   loadingMore,
@@ -268,6 +280,12 @@ export function CoverageInspector({
   detail: CoverageDetail | undefined;
   summary: Coverage;
   busy: boolean;
+  /** Whether the person may sync and edit sources (a viewer reads only). */
+  canSync: boolean;
+  /** Whether the capabilities have loaded: until then neither Sync now nor the read-only note shows. */
+  capsReady: boolean;
+  /** How the last sync of this source went when it did not finish (rate limited, superseded). */
+  notice?: { tone: "pass" | "warn"; text: string } | null;
   onSync: () => void;
   onLoadMore: () => void;
   loadingMore: boolean;
@@ -311,7 +329,7 @@ export function CoverageInspector({
               </>
             }
           >
-            {k.kind.replace("_", " ")}
+            {itemKinds(k.kind)}
           </InspectorRow>
         ))}
         <InspectorRow value={n(c.removed)}>
@@ -339,10 +357,10 @@ export function CoverageInspector({
         <FreshnessBar freshness={c.freshness} />
         <div className="mt-2 flex gap-4 text-sm text-text2">
           <span>
-            Newest <b className="text-text">{c.newest_at ? ago(c.newest_at) : "–"}</b>
+            Newest <b className="text-text" title={c.newest_at ? formatDateTime(c.newest_at) : undefined}>{c.newest_at ? formatAge(c.newest_at) : NONE}</b>
           </span>
           <span>
-            Oldest <b className="text-text">{c.oldest_at ? ago(c.oldest_at) : "–"}</b>
+            Oldest <b className="text-text" title={c.oldest_at ? formatDateTime(c.oldest_at) : undefined}>{c.oldest_at ? formatAge(c.oldest_at) : NONE}</b>
           </span>
         </div>
       </InspectorSection>
@@ -355,11 +373,17 @@ export function CoverageInspector({
               const status = u.status ?? "unavailable";
               return (
                 <li key={u.external_id} className="flex min-w-0 flex-wrap items-center gap-x-2.5 border-t border-line py-1.5 first:border-t-0">
-                  <span className="min-w-0 flex-1 truncate">{u.name ?? u.external_id}</span>
+                  {/* fix-work review: an item without a name reads by its id. */}
+                  <span className="min-w-0 flex-1 truncate" title={u.name ?? u.external_id}>
+                    {u.name ?? `Item ${u.external_id}`}
+                  </span>
                   <Chip kind={status === "skipped" ? "na" : "warn"} title={u.reason}>
                     {NOT_READ_LABEL[status]}
                   </Chip>
-                  <span className="hidden basis-full text-[13px] text-text2 max-[600px]:block">{u.reason}</span>
+                  {/* qa-work-51: why it was not read, on every width. */}
+                  <span data-testid="not-read-reason" className="basis-full text-[13px] text-text2">
+                    {whyNotRead(u.reason, NOT_READ_LABEL[status])}
+                  </span>
                 </li>
               );
             })}
@@ -384,18 +408,35 @@ export function CoverageInspector({
           </>
         )}
       </InspectorSection>
-      <InspectorSection>
-        <div className="flex flex-wrap gap-2">
-          {c.kind !== "upload" && (
-            <Button onClick={onSync} disabled={busy || c.status === "paused"} icon="clock">
-              Sync now
-            </Button>
+      {/* fix-work review: nothing until the capabilities answer; if they fail, the shell's Retry shows. */}
+      {capsReady && (
+        <InspectorSection>
+          {notice && (
+            <div className="mb-2">
+              <Notice tone={notice.tone} testId="sync-notice">
+                {notice.text}
+              </Notice>
+            </div>
           )}
-          <LinkButton href={`/settings/sources#source-${c.source_id}`} icon="settings">
-            Edit picks
-          </LinkButton>
-        </div>
-      </InspectorSection>
+          {canSync ? (
+            <div className="flex flex-wrap items-center gap-2">
+              {c.kind !== "upload" && (
+                <Button onClick={onSync} disabled={busy || c.status === "paused"} icon="clock">
+                  {busy ? "Syncing…" : "Sync now"}
+                </Button>
+              )}
+              <LinkButton href={`/settings/sources#source-${c.source_id}`} icon="settings">
+                Edit picks
+              </LinkButton>
+              {c.status === "paused" && c.kind !== "upload" && <span className="text-sm text-text2">Paused: resume it to sync</span>}
+            </div>
+          ) : (
+            <p className="text-sm text-text2" data-testid="sync-viewer-note">
+              You can read coverage, but not sync or edit sources. Ask an owner if you need to.
+            </p>
+          )}
+        </InspectorSection>
+      )}
     </Inspector>
   );
 }

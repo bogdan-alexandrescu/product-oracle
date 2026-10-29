@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { Button, Chip, FilterChips, Page, PageHeader, Ring, SegmentedControl, Sheet, Split } from "@/components/ds";
-import { DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
+import { blockingLeftText, DecisionBar, type StagedChip } from "@/components/review/DecisionBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
@@ -225,7 +225,9 @@ export function ScopeReview({ run, cp, item, reloadRun }: ReviewViewProps) {
     }
   }
   const s = scope.summary;
-  const tally = `${s.handled} of ${s.features} handled · ${s.blocking} blocking left · ${plural(s.suggestions_open, "suggestion")} waiting`;
+  // Features with a blocking reason open, as the bar's gate line counts them (s.blocking counts reasons).
+  const blocking = scope.features.filter((f) => openReasons(f).some((r) => r.severity === "blocking")).length;
+  const tally = `${s.handled} of ${s.features} handled · ${blockingLeftText(blocking)} · ${plural(s.suggestions_open, "suggestion")} waiting`;
   const fileProblems = (scope.check.problems ?? []).filter((p) => FILE_PROBLEMS.includes(p.code));
   const selectedFeature = scope.features.find((f) => f.key === selected) ?? scope.features.find((f) => f.needs_you) ?? scope.features[0] ?? null;
   const prdTitle = run.document_slug ?? scope.title ?? "the PRD";
@@ -607,7 +609,7 @@ function RawFile({ open, onClose, runId, seq }: { open: boolean; onClose: () => 
     if (!open) return;
     let live = true;
     api.GET("/v1/runs/{run_id}/segments/{seq}/artifacts/{name}", { params: { path: { run_id: runId, seq, name } }, parseAs: "text" }).then(({ data, response }) => {
-      if (live) setLoaded({ name, text: response.ok ? (data as string) : `Could not load ${name} (${response.status}).` });
+      if (live) setLoaded({ name, text: response.ok ? (data as string) : `Could not load ${name}. Try again.` });
     });
     return () => {
       live = false;

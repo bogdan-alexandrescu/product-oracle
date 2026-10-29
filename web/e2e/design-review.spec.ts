@@ -40,13 +40,13 @@ test("an approver opens the flow from the tech brief: sandboxed canvas, Approve 
   await expect(frame).toHaveAttribute("sandbox", "");
   await expect(frame).toHaveAttribute("title", /checkout-flow\.svg/);
   await expect(page.frameLocator('[data-testid="design-canvas"] iframe').first().locator("svg")).toBeVisible();
-  await expect(canvas(page)).toContainText("image/svg+xml");
+  await expect(canvas(page)).toContainText("Checkout with an early quote");
 
   const panel = inspector(page);
   await expect(panel).toContainText("Potentially stale");
-  await expect(panel).toContainText("section s-5-2 changed in checkout-redesign");
+  await expect(page.getByTestId("stale-notice").filter({ visible: true })).toContainText('Section "5.2 Shipping step" changed in Checkout redesign PRD');
   await expect(panel.getByRole("button", { name: "Approve" })).toBeDisabled();
-  await expect(panel.getByRole("link", { name: "Open tech brief" })).toHaveAttribute("href", BRIEF);
+  await expect(panel.getByRole("link", { name: "Go to the tech brief" })).toHaveAttribute("href", BRIEF);
 
   // Request changes needs a note: the API's message is shown.
   await panel.getByRole("button", { name: "Request changes" }).click();
@@ -67,7 +67,7 @@ test("annotations are numbered as Oracle labels them, with a thread each and the
   await expect(notes.getByTestId("annotation").first()).toContainText("The quote shows before the address step.");
   await expect(notes.getByTestId("annotation").first()).toContainText("No comments on this annotation yet.");
   // Mockup A: each annotation names its requirements.
-  await expect(notes.getByTestId("annotation").first()).toContainText("req-shipping-cost");
+  await expect(notes.getByTestId("annotation").first()).toContainText("Show shipping cost on the cart");
 
   // C's filter, with counts: annotations with no comments.
   await expect(notes.getByRole("button", { name: "All 2" })).toBeVisible();
@@ -109,6 +109,7 @@ test("a viewer reads the review without composer or verdicts", async ({ page }) 
   await expect(panel.getByRole("button", { name: "Comment", exact: true })).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "Approve" })).toHaveCount(0);
   // Provenance and version meta.
+  await panel.getByTestId("version-details").getByText("Technical details").click();
   await expect(panel.getByTestId("version-meta")).toContainText("prd_to_spec/1");
   await expect(panel.getByTestId("version-meta")).toContainText("claude-code");
 });
@@ -119,9 +120,9 @@ test("wireframes: switch screens, compare 2-4 side by side, see the sanitised no
   await page.getByRole("navigation", { name: "Design artifacts" }).getByRole("link", { name: /Early shipping cost: wireframes/ }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Early shipping cost: wireframes");
   const files = page.getByRole("group", { name: "Files" });
-  await expect(files.getByRole("button", { name: "cart-1.html" })).toHaveAttribute("aria-pressed", "true");
+  await expect(files.getByRole("button", { name: "Cart 1" })).toHaveAttribute("aria-pressed", "true");
   await expect(page.frameLocator('[data-testid="design-canvas"] iframe').first().locator(".oracle-annotations")).toContainText("1. cost-early [s-5-2]");
-  await files.getByRole("button", { name: "cart-2.html" }).click();
+  await files.getByRole("button", { name: "Cart 2" }).click();
   await expect(canvas(page).locator("iframe")).toHaveAttribute("title", /cart-2\.html/);
   await expect(page.getByTestId("sanitised").filter({ visible: true })).toContainText("Sanitised");
 
@@ -185,7 +186,7 @@ test("an approver who is not named sees who the spec's engineering approvers are
   await login(page, "approver@example.com");
   await openFlow(page);
   const panel = inspector(page);
-  await expect(panel).toContainText("only the spec's engineering approvers (or an owner) decide on it");
+  await expect(panel).toContainText("Only the spec's engineering approvers (or an owner) decide on it.");
   await expect(panel).toContainText("Engineering approver named on this spec: Admin");
   await expect(panel.getByRole("button", { name: "Request changes" })).toBeDisabled();
 });
@@ -197,7 +198,7 @@ test("an owner rejects with a note; the rejected version is read only", async ({
   await panel.getByLabel("Note (required to request changes or reject)").fill("Superseded by the postcode-first flow.");
   await panel.getByRole("button", { name: "Reject" }).click();
   await expect(page.getByTestId("page-header").filter({ visible: true })).toContainText("Rejected");
-  await expect(panel).toContainText("version 1 is rejected");
+  await expect(panel).toContainText("Version 1 is rejected");
   await expect(panel.getByRole("button", { name: "Approve" })).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "Reject" })).toHaveCount(0);
   // Its annotations still take comments, as the API allows.

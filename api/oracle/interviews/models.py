@@ -3,7 +3,8 @@
 - ``interviews``: one interview. A customer interview (lane 1) has the customer's name
   and company as given (unverified), what it is about (an intake, a request theme or a
   topic), the guide a member approved (``[{id, prompt, purpose}]``) and, once a member
-  creates it, a private link: only the token's sha256 is kept (``link_token_hash``), and
+  creates it, a private link: only the token's sha256 is kept (``link_token_hash``; a
+  link replaced by Make a new link keeps its sha256 in ``replaced_link_hashes``), and
   the first browser to open it is bound by the sha256 of its cookie (``session_hash``).
   ``position`` is the current guide question and ``followed_up`` whether Oracle has
   asked its one follow-up on it; ``turn_started_at`` claims the running turn and
@@ -31,7 +32,7 @@ from sqlalchemy import (
     false,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from oracle.db import Base, TenantScoped
@@ -57,6 +58,11 @@ class Interview(TenantScoped, Base):
             name="team",
         ),
         CheckConstraint("kind <> 'customer' OR interviewee_name IS NOT NULL", name="customer"),
+        Index(
+            "ix_interviews_replaced_link_hashes",
+            "replaced_link_hashes",
+            postgresql_using="gin",
+        ),
         Index(
             "ux_interviews_team",
             "intake_id",
@@ -86,6 +92,12 @@ class Interview(TenantScoped, Base):
     )
     link_token_hash: Mapped[str | None] = mapped_column(Text, unique=True)
     link_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the current link was made (Make a new link replaces it: qa-work-43).
+    link_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The sha256 of each link a new one replaced: opening one says it was replaced.
+    replaced_link_hashes: Mapped[list[str]] = mapped_column(
+        ARRAY(Text), nullable=False, default=list, server_default="{}"
+    )
     link_opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     session_hash: Mapped[str | None] = mapped_column(Text)
     position: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

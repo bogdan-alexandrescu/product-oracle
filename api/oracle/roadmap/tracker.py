@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from oracle import audit
+from oracle import audit, company_time
 from oracle.auth.deps import Principal
 from oracle.config import get_settings
 from oracle.roadmap import schedule
@@ -236,7 +236,7 @@ def drift_of(
             DriftEntry(
                 kind="ahead",
                 item_key=item.item_key,
-                detail=f"Engineering has started work planned for {item.horizon}.",
+                detail=f"Engineering has started work planned for {item.horizon.capitalize()}.",
             )
         )
     if states == {"cancelled"}:
@@ -257,8 +257,9 @@ def drift_of(
                         kind="date_slip",
                         item_key=item.item_key,
                         tracker_ref=r.external_ref,
-                        detail=f"{r.external_ref} targets {r.target_date}, after the "
-                        f"milestone date {when}.",
+                        detail=f"{r.external_ref} targets "
+                        f"{company_time.calendar_day(r.target_date)}, after the "
+                        f"milestone date {company_time.calendar_day(when)}.",
                     )
                 )
         if when < today and not states <= {"done", "cancelled"}:
@@ -266,7 +267,8 @@ def drift_of(
                 DriftEntry(
                     kind="overdue",
                     item_key=item.item_key,
-                    detail=f"The milestone date {when} has passed and the work is not done.",
+                    detail=f"The milestone date {company_time.calendar_day(when)} has passed "
+                    "and the work is not done.",
                 )
             )
     return out

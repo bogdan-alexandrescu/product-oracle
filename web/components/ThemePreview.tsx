@@ -115,25 +115,51 @@ function PreviewFrame({
 
 /**
  * A small, non-interactive picture of a theme: the preview page scaled down (a quarter by
- * default: 160 x 120).
+ * default: 160 x 120). `page` is the preview's own size before scaling (640 x 480): a smaller
+ * page keeps the sample's words large enough to read in a small thumbnail. Until the preview
+ * arrives (or when it cannot be had) the theme's own colours and fonts draw a sketch of a
+ * page, so a thumbnail is never blank.
  */
-export function ThemeThumbnail({ tokens, css, kind, scale = 0.25 }: PreviewIn & { scale?: number }) {
+export function ThemeThumbnail({
+  tokens,
+  css,
+  kind,
+  scale = 0.25,
+  page = { width: 640, height: 480 },
+}: PreviewIn & { scale?: number; page?: { width: number; height: number } }) {
   const live = useLive<PreviewIn, string>({ tokens, css, kind }, loadPreview, 0);
+  const c = tokens.colors ?? {};
   return (
     <div
       aria-hidden
+      data-testid="theme-thumbnail"
+      data-ready={live.data ? "true" : undefined}
       className="pointer-events-none overflow-hidden rounded border border-line bg-surface"
-      style={{ width: 640 * scale, height: 480 * scale }}
+      style={{ width: page.width * scale, height: page.height * scale }}
     >
-      {live.data && (
+      {live.data ? (
         <iframe
           title="Theme thumbnail"
           tabIndex={-1}
           sandbox=""
           srcDoc={live.data}
           className="border-0"
-          style={{ width: 640, height: 480, transform: `scale(${scale})`, transformOrigin: "top left" }}
+          style={{ width: page.width, height: page.height, transform: `scale(${scale})`, transformOrigin: "top left" }}
         />
+      ) : (
+        <div
+          data-testid="theme-thumbnail-sketch"
+          className="flex h-full flex-col gap-1 p-2"
+          style={{ background: c.background ?? "#ffffff", fontFamily: tokens.fonts?.heading ?? undefined }}
+        >
+          <span className="text-[10px] leading-tight font-bold" style={{ color: c.heading ?? "#111827" }}>
+            {kind === "roadmap" ? "Product roadmap" : "Feature PRD"}
+          </span>
+          <span className="h-0.5 w-1/2 rounded" style={{ background: c.accent ?? "#2f5bd3" }} />
+          {[90, 75, 85, 60].map((w) => (
+            <span key={w} className="h-1 rounded" style={{ width: `${w}%`, background: c.muted ?? "#5b6472", opacity: 0.5 }} />
+          ))}
+        </div>
       )}
     </div>
   );

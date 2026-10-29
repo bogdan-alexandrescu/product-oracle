@@ -191,7 +191,10 @@ async def situations(db: AsyncSession, track: ProductTrack, found: "TrackRead") 
                     )
                 )  # fmt: skip
         if staleness.is_stale(item):
-            why = staleness.stale_why(staleness.own_reasons(item), "Its PRD trace changed")
+            # Stored as the item's own reasons (refs kept), so each reader's line hides what
+            # they may not see before it is put into words (staleness.detail_for_reader).
+            own = staleness.one_count(staleness.own_reasons(item))
+            why = "; ".join(own) or "Its PRD trace changed"
             out.append(
                 Situation(
                     item.item_key, "stale", str(item.caused_by_change_id or ""), why,

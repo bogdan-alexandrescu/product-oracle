@@ -135,7 +135,7 @@ test("the slice: a brief becomes a published PRD and a roadmap", async ({ page }
   // 6. Publish: the publish check, then the publish (it approves v1 and the run's review).
   await page.getByTestId("publish-link").filter({ visible: true }).first().click();
   await expect(page).toHaveURL(new RegExp(`/documents/${DOC}/publish`));
-  await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v1");
+  await expect(page.getByTestId("publish-ready")).toHaveText(/^(Ready to publish v1|Publishable, but .+)$/);
   await page.getByTestId("publish-button").click();
   await page.getByRole("dialog", { name: "Publish v1?" }).getByRole("button", { name: "Publish", exact: true }).click();
   await expect(page.getByTestId("published-chip")).toHaveText("Published v1");

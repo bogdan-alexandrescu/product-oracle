@@ -58,22 +58,35 @@ export function useQuery<T>(key: string, load: () => Promise<T>, { keepPrevious 
     keyRef.current = key;
   });
 
+  // The latest load of each key only: two reloads in quick succession (each Pause on a
+  // list) can answer out of order, and the older answer must not land over the newer one.
+  // Per key, so a late reload under an older key never holds back the new key's answer.
+  const latest = useRef<{ n: number; byKey: Map<string, number> }>({ n: 0, byKey: new Map() });
+  const begin = (k: string) => {
+    const n = ++latest.current.n;
+    latest.current.byKey.set(k, n);
+    return n;
+  };
+  const isLatest = (k: string, n: number) => latest.current.byKey.get(k) === n;
+
   const run = useCallback(async () => {
+    const n = begin(key);
     try {
       const data = await loadRef.current();
-      if (keyRef.current === key) setState({ key, data, error: null, loading: false });
+      if (keyRef.current === key && isLatest(key, n)) setState({ key, data, error: null, loading: false });
     } catch (e) {
-      if (!onAuth(e) && keyRef.current === key) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
+      if (!onAuth(e) && keyRef.current === key && isLatest(key, n)) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
     }
   }, [key, onAuth]);
 
   useEffect(() => {
     let live = true;
+    const n = begin(key);
     loadRef
       .current()
-      .then((data) => live && setState({ key, data, error: null, loading: false }))
+      .then((data) => live && isLatest(key, n) && setState({ key, data, error: null, loading: false }))
       .catch((e) => {
-        if (live && !onAuth(e)) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
+        if (live && isLatest(key, n) && !onAuth(e)) setState((s) => ({ ...s, key, error: errorMessage(e), loading: false }));
       });
     return () => {
       live = false;

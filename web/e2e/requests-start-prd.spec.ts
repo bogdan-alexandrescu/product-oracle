@@ -88,7 +88,7 @@ test("Start a PRD from the queue: selected qualified requests are ticked in the 
   await login(page, "approver@example.com");
   await openRequests(page);
   // New requests are not selectable: only qualified ones go into a PRD.
-  await expect(row(page, "Dark mode").getByRole("checkbox")).toHaveCount(0);
+  await expect(row(page, "Dark mode").getByRole("checkbox")).toBeDisabled();
   await expect(page.getByRole("button", { name: /Start a PRD from/ })).toHaveCount(0);
   await row(page, "Invite a whole team at once").getByRole("checkbox", { name: "Select Invite a whole team at once" }).check();
   await row(page, "Share a board read-only").getByRole("checkbox", { name: "Select Share a board read-only" }).check();
@@ -129,8 +129,8 @@ test("already behind a brief or a PRD: such requests are not offered in the queu
   // Neither can be ticked or started from again.
   await page.reload();
   await expect(page.getByTestId("request-row").first()).toBeVisible();
-  await expect(row(page, "Invite a whole team at once").getByRole("checkbox")).toHaveCount(0);
-  await expect(row(page, "Share a board read-only").getByRole("checkbox")).toHaveCount(0);
+  await expect(row(page, "Invite a whole team at once").getByRole("checkbox")).toBeDisabled();
+  await expect(row(page, "Share a board read-only").getByRole("checkbox")).toBeDisabled();
   await expect(row(page, "Weekly summary email").getByRole("checkbox")).toHaveCount(1);
   await pick(page, "Invite a whole team at once");
   await expect(inspector(page).getByRole("link", { name: "Team invites" })).toBeVisible();
@@ -159,7 +159,7 @@ test("archiving a brief that made no PRD releases its requests to the next brief
   await expect(page.getByTestId("intake-requests").getByRole("link")).toHaveText(["Invite a whole team at once"]);
 
   // The brief is archived before it made a PRD.
-  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Archive" }).click();
   await page.getByRole("alertdialog", { name: "Archive" }).getByRole("button", { name: "Archive" }).click();
   await expect(page.getByTestId("intake-status")).toHaveText("Archived");

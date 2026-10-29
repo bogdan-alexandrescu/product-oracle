@@ -81,6 +81,13 @@ def date_in_words(on: date) -> str:
     return f"{on:%a} {on:%b} {on.day}"
 
 
+def calendar_day(d: date | str) -> str:
+    """A calendar day (no zone: a milestone's, a tracker issue's target) as "Nov 30"."""
+    if isinstance(d, str):
+        d = date.fromisoformat(d[:10])
+    return f"{d:%b} {d.day}"
+
+
 def day_first_in_words(moment: datetime | str, zone: str = DEFAULT_ZONE) -> str:
     """The company's day at ``moment`` as "25 Oct"."""
     local = _local(moment, zone)

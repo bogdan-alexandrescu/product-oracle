@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import { InfoTip, PageHeader, Panel, Split, ViewOnly } from "@/components/ds";
+import { InfoTip, Panel, Split, ViewOnly } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { goalViews } from "@/app/home/_goals";
 import { api, unwrap } from "@/lib/api/client";
@@ -10,6 +10,7 @@ import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 import { invalidateWaiting, waitingChanged } from "@/lib/waiting";
 
+import { CompanyHeader } from "../_nav";
 import { StrategyCard, VisionCard } from "./_components/Cards";
 import { DraftSheet } from "./_components/DraftSheet";
 import { DriftList } from "./_components/DriftList";
@@ -73,18 +74,7 @@ export default function StrategyPage() {
 
   return (
     <div data-testid="strategy-page" className="flex min-w-0 flex-col gap-4 max-[600px]:gap-3">
-      <PageHeader
-        title="Company"
-        status={
-          <>
-            {readOnly && <ViewOnly />}
-            <InfoTip label="the strategy" align="start" side="bottom">
-              The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and
-              each roadmap item from a goal; what does not shows as drift.
-            </InfoTip>
-          </>
-        }
-      />
+      <CompanyHeader status={readOnly && <ViewOnly />} />
       {(stackQ.error || docsQ.error) && <ErrorNote>{stackQ.error ?? docsQ.error}</ErrorNote>}
       <div className="grid grid-cols-2 items-stretch gap-4 max-[900px]:grid-cols-1 max-[600px]:gap-3">
         <VisionCard stack={stack} doc={docs ? docOf("vision") : null} owner={owner && !!docs} onDraft={setDrafting} />
@@ -95,8 +85,9 @@ export default function StrategyPage() {
           title="Strategy stack"
           tools={
             <InfoTip label="the strategy stack" align="end">
-              One line per goal under the focus choice it derives from, with the roadmap items serving it. The last group lists the goals
-              and items not under the strategy.
+              The vision and the product strategy Oracle drafts and an owner approves. Each goal should follow from a focus choice, and each
+              roadmap item from a goal; what does not shows as drift. One line per goal under the focus choice it derives from, with the
+              roadmap items serving it. The last group lists the goals and items not under the strategy.
             </InfoTip>
           }
         >

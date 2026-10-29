@@ -40,7 +40,7 @@ test("review and approve the run's order", async ({ page }) => {
 
   await expect(page).toHaveURL(/\/priorities\?snapshot=/);
   const band = page.getByTestId("snapshot-band");
-  await expect(band).toContainText("Proposed by Baseline to PRD · saved-addresses · waiting for you");
+  await expect(band).toContainText("Proposed by Baseline to PRD · Saved addresses PRD · waiting for you");
   // The method switch is locked to the snapshot's method.
   const methods = page.getByRole("radiogroup", { name: "Ranking method" });
   await expect(methods.getByRole("radio", { name: "Goal-weighted" })).toHaveAttribute("aria-checked", "true");

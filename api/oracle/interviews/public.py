@@ -7,8 +7,8 @@ tools (``oracle.mcp.tools.PUBLIC_OPERATIONS``). Rules (decision V2e):
    to the interview's API path and records ``link_opened_at``; only its sha256 is kept
    (``session_hash``). Every later request needs that cookie: without it, 410 ``used``.
 2. Expiry: 7 days from the link's creation (410 ``expired``); a withdrawn link is 410
-   ``withdrawn``; an unknown token is 404 with the same body as ``expired``, so a guess
-   learns nothing.
+   ``withdrawn``; a link a new one replaced (Make a new link) is 410 ``replaced``; an
+   unknown token is 404 with the same body as ``expired``, so a guess learns nothing.
 3. Limits: 2000 characters a message (422), one message every 2 seconds (429), 40
    customer messages at most: the 40th finishes the interview.
 4. The shared connection pool: the link, cookie, status and pace checks run before any
@@ -32,7 +32,8 @@ from typing import Any
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import case, or_, select, update
+from sqlalchemy import Text, case, literal, or_, select, update
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from oracle import audit
@@ -64,7 +65,7 @@ COOKIE = "po_interview"
 MIN_INTERVAL_SECONDS = 2.0
 MAX_MESSAGES = 40
 ACTOR = "interviewee"
-CLOSING = "That was my last question. Press Send my answers when you're ready."
+CLOSING = "That was my last question. Press Finish interview when you're ready."
 SKIPPED = "(skipped)"
 #: Refused requests audited per interview per window; past it they are not audited.
 REFUSED_AUDITS = 20
@@ -111,12 +112,18 @@ async def _locate(token: str) -> tuple[Interview, str]:
     lookup by hash, before the company is known), or 404 ``expired``."""
     if not token or len(token) > 128:
         raise _refuse("expired", 404)
+    digest = hash_value(token)
     async with unscoped_session() as s:
         found = (
             await s.execute(
                 select(Interview, Tenant.name)
                 .join(Tenant, Tenant.id == Interview.tenant_id)
-                .where(Interview.link_token_hash == hash_value(token))
+                .where(
+                    or_(
+                        Interview.link_token_hash == digest,
+                        Interview.replaced_link_hashes.contains(literal([digest], ARRAY(Text))),
+                    )
+                )
             )
         ).first()
     if found is None:
@@ -124,14 +131,18 @@ async def _locate(token: str) -> tuple[Interview, str]:
     return found[0], found[1]
 
 
-def _check(row: Interview, cookie: str | None, *, opening: bool) -> None:
-    """Refuse a link that is withdrawn, expired, finished or bound to another browser."""
+def _check(row: Interview, token: str, cookie: str | None, *, opening: bool) -> None:
+    """Refuse a link that is withdrawn, expired, finished or bound to another browser,
+    and one a new link replaced (``token`` is the request's own link). A closed interview
+    says why it closed, whichever of its links is opened."""
     if row.status == "revoked":
         raise _refuse("withdrawn")
     if row.status == "expired" or (row.link_expires_at and row.link_expires_at <= _now()):
         raise _refuse("expired")
     if row.status not in ("invited", "in_progress"):
         raise _refuse("used")
+    if not secrets.compare_digest(hash_value(token), row.link_token_hash or ""):
+        raise _refuse("replaced")
     if row.link_opened_at is None:
         if not opening:
             raise _refuse("used")
@@ -247,7 +258,7 @@ async def _within(
     tenant_id, interview_id = seen.tenant_id, seen.id
     cookie = request.cookies.get(COOKIE)
     try:
-        _check(seen, cookie, opening=opening)
+        _check(seen, token, cookie, opening=opening)
     except Refused as r:
         return await _refused(tenant_id, interview_id, action, r)
     async with tenant_session(tenant_id) as db:
@@ -255,7 +266,7 @@ async def _within(
         if row is None:
             return JSONResponse({"reason": "expired"}, status_code=404)
         try:
-            _check(row, cookie, opening=opening)
+            _check(row, token, cookie, opening=opening)
             response = await work(db, row, company)
         except Refused as r:
             await db.rollback()
@@ -312,7 +323,7 @@ class Claimed:
 
 
 async def _claim(
-    tenant_id: uuid.UUID, interview_id: uuid.UUID, cookie: str | None, text: str
+    tenant_id: uuid.UUID, interview_id: uuid.UUID, token: str, cookie: str | None, text: str
 ) -> Claimed | JSONResponse:
     """Save the customer's answer under a short row lock. The 40th finishes the
     interview, as does an answer after the last question; either is the response."""
@@ -321,7 +332,7 @@ async def _claim(
         if row is None:
             return JSONResponse({"reason": "expired"}, status_code=404)
         try:
-            _check(row, cookie, opening=False)
+            _check(row, token, cookie, opening=False)
             await _paced(db, interview_id)
         except Refused as r:
             await db.rollback()
@@ -427,14 +438,15 @@ async def public_interview(token: str, request: Request) -> JSONResponse:
         if row.link_opened_at is None:
             # Only the first open binds the link: it alone takes the row lock.
             await db.refresh(row, with_for_update=True)
-            _check(row, None, opening=True)
+            _check(row, token, None, opening=True)
             secret = secrets.token_urlsafe(32)
             row.link_opened_at = _now()
             row.session_hash = hash_value(secret)
-            row.status = "in_progress"
             guide = row.guide or []
-            if guide:
+            # A new link (qa-work-43) on an interview in progress carries it on.
+            if guide and row.status == "invited":
                 _post(db, row, "oracle", "question", guide[0]["prompt"])
+            row.status = "in_progress"
             await db.flush()
         page = PublicInterview(
             company=company,
@@ -485,7 +497,7 @@ async def public_interview_message(
     cookie = request.cookies.get(COOKIE)
     try:
         # The cheap check, before any lock: the link and this browser.
-        _check(seen, cookie, opening=False)
+        _check(seen, token, cookie, opening=False)
     except Refused as r:
         return await _refused(tenant_id, interview_id, "message", r)
     # One turn per link at a time, claimed on the interview row (any API instance).
@@ -498,7 +510,7 @@ async def public_interview_message(
                 await _paced(db, interview_id)  # the pace, on an unlocked read
         except Refused as r:
             return await _refused(tenant_id, interview_id, "message", r)
-        claimed = await _claim(tenant_id, interview_id, cookie, text)
+        claimed = await _claim(tenant_id, interview_id, token, cookie, text)
         if isinstance(claimed, JSONResponse):
             return claimed
         # No row lock and no connection are held across the model call.

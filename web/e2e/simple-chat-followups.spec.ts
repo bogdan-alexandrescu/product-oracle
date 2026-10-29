@@ -36,6 +36,16 @@ async function openAsk(page: Page, phone: boolean) {
   return panel;
 }
 
+/**
+ * Closes Ask on a desktop: below 1600 px the open panel overlays the page (qa-shell-8) and stays
+ * open from page to page, so it would cover Home's rows. A phone's sheet closes on the next page.
+ */
+async function closeAsk(page: Page, phone: boolean) {
+  if (phone) return;
+  await tap(page.getByTestId("hop-dock").getByRole("button", { name: "Close Ask Oracle" }));
+  await expect(page.getByTestId("hop-panel").filter({ visible: true })).toHaveCount(0);
+}
+
 for (const [phone, dark] of [
   [false, false],
   [true, true],
@@ -64,6 +74,7 @@ for (const [phone, dark] of [
       await tap(card.getByRole("button", { name: "Propose" }));
       await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin; they decide");
       await expect(card.getByRole("button", { name: "Undo" })).toHaveCount(0);
+      await closeAsk(page, phone);
 
       await page.goto("/simple/decisions");
       await expect(page.getByRole("region", { name: "Outside meetings" })).toContainText(TEXT);
@@ -95,6 +106,7 @@ for (const [phone, dark] of [
       await expect(card.getByTestId("chat-card-proposed-to")).toHaveText("Goes to Admin; they decide (not Approver: the page's decider confirms a commenter's decision)");
       await tap(card.getByRole("button", { name: "Propose" }));
       await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin; they decide");
+      await closeAsk(page, phone);
 
       await page.goto("/home");
       await tap(page.getByTestId("user-menu").or(page.getByTestId("phone-user-menu")).filter({ visible: true }).first());

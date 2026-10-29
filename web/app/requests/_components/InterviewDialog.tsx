@@ -27,7 +27,7 @@ const ABOUT: { value: About; label: string }[] = [
 
 const QUESTIONS: { value: Questions; label: string; testId: string }[] = [
   { value: "drafted", label: "Oracle drafts them", testId: "interview-questions-drafted" },
-  { value: "pricing", label: "Pricing", testId: "interview-questions-pricing" },
+  { value: "pricing", label: "Use the pricing question set", testId: "interview-questions-pricing" },
 ];
 
 /** A link's expiry in the Company time zone, labelled ("Oct 29, 9:14 AM PDT", #447). */
@@ -179,11 +179,12 @@ function SubjectStep({ onCancel, onCreated }: { onCancel: () => void; onCreated:
       <div className="flex flex-col gap-1">
         <span className="text-sm font-semibold text-text2">Questions</span>
         <SegmentedControl label="Questions" size="sm" items={QUESTIONS} value={questions} onChange={setQuestions} />
-        {questions === "pricing" && (
-          <p data-testid="interview-pricing-hint" className="text-sm text-text2">
-            Six fixed questions on price, what it replaces and who approves the purchase. You can edit them next.
-          </p>
-        )}
+        {/* qa-work-12: one line on what each choice does. */}
+        <p data-testid="interview-questions-hint" className="text-sm text-text2">
+          {questions === "pricing"
+            ? "Six fixed questions on price, what it replaces and who approves the purchase. You can edit them next."
+            : "Oracle writes questions about what you picked above. You can edit them next."}
+        </p>
       </div>
       {error && <ErrorNote>{error}</ErrorNote>}
       <div className="flex justify-end gap-2 pt-1">
@@ -400,6 +401,20 @@ function GuideStep({ initial, onCancel, onLinked }: { initial: Created; onCancel
 }
 
 function LinkStep({ link, onDone }: { link: InterviewLink; onDone: () => void }) {
+  return (
+    <div className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4">
+      <LinkShown link={link} />
+      <div className="flex justify-end">
+        <Button variant="primary" onClick={onDone}>
+          Done
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** The private link, shown once, with Copy: here and on Make a new link (qa-work-43). */
+export function LinkShown({ link }: { link: InterviewLink }) {
   const [copied, setCopied] = useState(false);
   async function copy() {
     try {
@@ -410,7 +425,7 @@ function LinkStep({ link, onDone }: { link: InterviewLink; onDone: () => void })
     }
   }
   return (
-    <div className="flex flex-col gap-3 px-5 py-4 max-[600px]:px-4">
+    <>
       <p className="text-sm text-text2">Copy it now: it shows only once. Send it to the customer yourself.</p>
       <div className="flex min-w-0 items-center gap-2">
         <input aria-label="Interview link" data-testid="interview-link" readOnly className={`${INPUT} min-w-0 flex-1 font-mono text-sm`} value={link.url} onFocus={(e) => e.target.select()} />
@@ -421,11 +436,6 @@ function LinkStep({ link, onDone }: { link: InterviewLink; onDone: () => void })
       <p data-testid="interview-link-terms" className="text-sm font-semibold">
         Works once · expires {formatPt(link.expires_at)}
       </p>
-      <div className="flex justify-end">
-        <Button variant="primary" onClick={onDone}>
-          Done
-        </Button>
-      </div>
-    </div>
+    </>
   );
 }

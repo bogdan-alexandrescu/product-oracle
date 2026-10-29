@@ -12,7 +12,7 @@ import { invalidateWaiting, loadInbox, loadMyQuestions, waitingChanged } from "@
 
 import { useAccessRequestRows } from "../inbox/_access";
 import { useActed } from "../inbox/_actions";
-import { allNeeds, CountChip, NeedTable, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
+import { allNeeds, CountChip, NeedTable, usePerms, waitingNeeds, type Need, type StatedNeed } from "../inbox/_needs";
 import { useQuestionRows } from "../inbox/_questions";
 import { GoalsPanel } from "./_goals-panel";
 import { FlightInspector, FlightTable, type Flight, type GoalIndex } from "./_in-flight";
@@ -163,10 +163,14 @@ export default function HomePage() {
   const requestRows = useAccessRequestRows(inbox?.access_requests ?? [], inboxQ.reload);
   // Needs you: the Inbox's New and Open items, each once (owner, 2026-10-20); a question
   // answered here stays shown, no longer counted.
-  const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true, undefined, requestRows.rows) : [];
+  // qa-company-3: a line draws only the actions the signed-in person's role can take.
+  const perms = usePerms();
+  const all = inbox ? allNeeds(inbox, questionRows.rows, busy, act, inbox.last_seen_at ?? null, onActed, true, undefined, requestRows.rows, perms) : [];
   const needs = waitingNeeds(all);
   const visible = all.filter((r) => needs.includes(r) || ((r.group === "questions" || r.group === "access-requests") && !r.counted && r.state !== "done"));
-  const decisions = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
+  // Checkpoints, cost approvals and overruns: "Approvals", what they are (qa-shell-6), not the
+  // decision log's Decisions.
+  const approvals = needs.filter((r) => r.group === "checkpoints" || r.group === "approvals" || r.group === "overruns");
   // Stuck runs and failed imports: counted in the badge, so drawn here too (searches are not).
   const runs = needs.filter((r) => r.group === "lookups" || r.group === "imports");
   // Revokes a removed member's disable could not make, and access changes still failing
@@ -232,11 +236,12 @@ export default function HomePage() {
           testId="home-needs"
           tools={
             <>
-              {decisions.length > 0 && <CountChip label="Decisions" n={decisions.length} />}
-              {runs.length > 0 && <CountChip label="Runs" n={runs.length} />}
-              {access.length > 0 && <CountChip label="Access" n={access.length} />}
-              {reviews.length > 0 && <CountChip label="Reviews" n={reviews.length} />}
-              {asked.length > 0 && <CountChip label="Questions" n={asked.length} />}
+              {/* qa-company-40: each count is a link to the Inbox, where its items are. */}
+              {approvals.length > 0 && <CountChip label="Approvals" n={approvals.length} testId="home-count-approvals" />}
+              {runs.length > 0 && <CountChip label="Runs" n={runs.length} testId="home-count-runs" />}
+              {access.length > 0 && <CountChip label="Access" n={access.length} testId="home-count-access" />}
+              {reviews.length > 0 && <CountChip label="Reviews" n={reviews.length} testId="home-count-reviews" />}
+              {asked.length > 0 && <CountChip label="Questions" n={asked.length} testId="home-count-questions" />}
               <Link
                 href="/inbox"
                 data-testid="home-inbox-link"
@@ -292,6 +297,7 @@ export default function HomePage() {
                 selected={selected?.key ?? null}
                 onSelect={setPicked}
                 header={flightHeader}
+                docs={docs}
               />
             )}
           </section>

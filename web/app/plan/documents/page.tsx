@@ -23,7 +23,8 @@ import {
   type Column,
 } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { DOC_STATUS_LABEL, formatDateTime, formatDay } from "@/lib/format";
+import { DOC_STATUS_LABEL, formatDateTime, formatDay, plural } from "@/lib/format";
+import { docLabel } from "@/lib/labels";
 import { useArtifactsChanged } from "@/lib/artifacts";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -35,6 +36,40 @@ type Row = { kind: "roadmap"; d: Doc } | { kind: "prd"; d: Doc; built: Doc[] };
 
 const STATUS_KIND: Record<Doc["status"], ChipKind> = { draft: "na", in_review: "acc", approved: "pass" };
 const GROUP = { roadmap: "Roadmaps", prd: "Approved PRDs" } as const;
+
+/** A template's or theme's key in words, until the list names it: "roadmap-board" is "Roadmap board". */
+function keyWords(key: string): string {
+  const words = key.replace(/[-_.]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+/** Roadmap templates and themes by their names, as the Build roadmap dialog shows them. */
+function useStyleNames() {
+  const templates = useQuery("templates|roadmap", () => unwrap(api.GET("/v1/templates", { params: { query: { kind: "roadmap" } } })));
+  const themes = useQuery("themes|roadmap", () => unwrap(api.GET("/v1/themes", { params: { query: { kind: "roadmap" } } })));
+  const name = (list: { key: string; name: string }[] | undefined, key: string | null | undefined) =>
+    key ? (list?.find((t) => t.key === key)?.name ?? keyWords(key)) : null;
+  return {
+    template: (key: string | null | undefined) => name(templates.data, key),
+    theme: (key: string | null | undefined) => name(themes.data, key),
+  };
+}
+type StyleNames = ReturnType<typeof useStyleNames>;
+
+/** "v1, Oct 18": the approved version and the day it was approved, read off the versions. */
+function ApprovedValue({ d }: { d: Doc }) {
+  const versions = useQuery(`versions|${d.slug}`, () =>
+    unwrap(api.GET("/v1/documents/{doc}/versions", { params: { path: { doc: d.slug } } })),
+  );
+  if (d.approved_version == null) return <>Not yet</>;
+  const at = versions.data?.find((v) => v.number === d.approved_version)?.approved_at;
+  return (
+    <span data-testid="roadmap-approved">
+      v{d.approved_version}
+      {at ? `, ${formatDay(at)}` : ""}
+    </span>
+  );
+}
 
 function StatusChip({ status, hero = false }: { status: Doc["status"]; hero?: boolean }) {
   return (
@@ -63,11 +98,13 @@ function SharedCell({ slug }: { slug: string }) {
   );
 }
 
-function RoadmapInspector({ d }: { d: Doc }) {
+function RoadmapInspector({ d, names }: { d: Doc; names: StyleNames }) {
+  const template = names.template(d.template);
+  const theme = names.theme(d.theme);
   return (
     <Inspector
       eyebrow="Roadmap · selected"
-      title={d.title}
+      title={docLabel({ title: d.title, kind: "roadmap" })}
       label={`Roadmap ${d.title}`}
       testId="roadmap-inspector"
       action={
@@ -79,20 +116,20 @@ function RoadmapInspector({ d }: { d: Doc }) {
         <>
           <StatusChip status={d.status} hero />
           {d.latest_version != null && <Chip hero>v{d.latest_version}</Chip>}
-          {d.template && <Chip hero>{d.template}</Chip>}
+          {template && <Chip hero>{template}</Chip>}
         </>
       }
       stats={[
         { label: "Latest", value: d.latest_version != null ? `v${d.latest_version}` : "—" },
-        { label: "Approved", value: d.approved_version != null ? `v${d.approved_version}` : "—" },
+        { label: "Approved", value: <ApprovedValue d={d} /> },
       ]}
     >
       <InspectorSection label="Source PRD">
         {d.source ? <SourceLink source={d.source} /> : <span className="text-text2">—</span>}
       </InspectorSection>
       <InspectorSection label="Template and theme">
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{d.template ?? "—"}</span>}>Template</InspectorRow>
-        <InspectorRow value={<span className="font-mono text-sm font-medium">{d.theme ?? "—"}</span>}>Theme</InspectorRow>
+        <InspectorRow value={<span className="text-sm font-medium">{template ?? "—"}</span>}>Template</InspectorRow>
+        <InspectorRow value={<span className="text-sm font-medium">{theme ?? "—"}</span>}>Theme</InspectorRow>
       </InspectorSection>
       <InspectorSection label="Updated">
         <span className="tnum">{formatDateTime(d.updated_at)}</span>
@@ -105,7 +142,7 @@ function PrdInspector({ d, built }: { d: Doc; built: Doc[] }) {
   return (
     <Inspector
       eyebrow="PRD · selected"
-      title={d.title}
+      title={docLabel({ title: d.title, kind: "prd" })}
       label={`PRD ${d.title}`}
       testId="roadmap-inspector"
       action={
@@ -126,7 +163,7 @@ function PrdInspector({ d, built }: { d: Doc; built: Doc[] }) {
           built.map((r) => (
             <InspectorRow key={r.id} value={<StatusChip status={r.status} />}>
               <Link href={`/documents/${r.slug}`} className="underline-offset-2 hover:underline">
-                {r.title}
+                {docLabel({ title: r.title, kind: "roadmap" })}
               </Link>
             </InspectorRow>
           ))
@@ -154,6 +191,7 @@ export default function RoadmapDocumentsPage() {
   // roadmap build is not one, so the item lets an approver in.
   const canBuild = can("create_run", true);
   const [selected, setSelected] = useState<string | null>(null);
+  const names = useStyleNames();
   const roadmaps = [...(q.data ?? [])].sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   const approved = (prds.data ?? []).filter((d) => d.approved_version != null);
 
@@ -170,28 +208,33 @@ export default function RoadmapDocumentsPage() {
     {
       key: "name",
       header: "Roadmap",
+      // The name in full: it wraps rather than being cut.
+      wrap: true,
       cell: (r) =>
         r.kind === "roadmap" ? (
-          <Link href={`/documents/${r.d.slug}`} title={r.d.slug} className="font-semibold hover:underline">
-            {r.d.title}
+          <Link href={`/documents/${r.d.slug}`} data-testid="roadmap-name" className="font-semibold hover:underline">
+            {docLabel({ title: r.d.title, kind: "roadmap" })}
           </Link>
         ) : (
-          <Link href={`/documents/${r.d.slug}/v/${r.d.approved_version}`} className="font-semibold hover:underline">
-            {r.d.title}
+          <Link href={`/documents/${r.d.slug}/v/${r.d.approved_version}`} data-testid="roadmap-name" className="font-semibold hover:underline">
+            {docLabel({ title: r.d.title, kind: "prd" })}
           </Link>
         ),
     },
     {
       key: "template",
       header: "Template",
-      width: "150px",
+      width: "128px",
       hideOnPhone: true,
-      // The template key alone (the theme is in the inspector). An approved PRD has no template
-      // or source of its own; the roadmaps it built are in its inspector.
+      // A narrow table drops it: the inspector names the template too.
+      narrow: "hide",
+      wrap: true,
+      // The template by name alone (the theme is in the inspector). An approved PRD has no
+      // template or source of its own; the roadmaps it built are in its inspector.
       cell: (r) =>
         r.kind === "roadmap" ? (
-          <span className="font-mono text-sm text-text2" title={r.d.template ?? undefined}>
-            {r.d.template ?? "—"}
+          <span className="text-sm text-text2" data-testid="roadmap-template">
+            {names.template(r.d.template) ?? "—"}
           </span>
         ) : null,
     },
@@ -201,15 +244,23 @@ export default function RoadmapDocumentsPage() {
       width: "150px",
       cell: (r) =>
         r.kind === "roadmap" ? (
-          <span className="flex items-center gap-2">
-            <StatusChip status={r.d.status} />
-            {r.d.latest_version != null && (
-              <Link
-                href={versionHref(r.d.slug, "roadmap", r.d.latest_version)}
-                className="tnum font-medium text-accent-ink hover:underline"
-              >
-                v{r.d.latest_version}
-              </Link>
+          <span className="flex flex-col gap-0.5">
+            <span className="flex items-center gap-2">
+              <StatusChip status={r.d.status} />
+              {r.d.latest_version != null && (
+                <Link
+                  href={versionHref(r.d.slug, "roadmap", r.d.latest_version)}
+                  className="tnum font-medium text-accent-ink hover:underline"
+                >
+                  v{r.d.latest_version}
+                </Link>
+              )}
+            </span>
+            {/* An earlier version may be approved while a later one is in review. */}
+            {r.d.approved_version != null && r.d.status !== "approved" && (
+              <span className="tnum text-[13px] leading-4 text-text2" data-testid="roadmap-approved-version">
+                v{r.d.approved_version} approved
+              </span>
             )}
           </span>
         ) : (
@@ -230,8 +281,9 @@ export default function RoadmapDocumentsPage() {
     {
       key: "source",
       header: "Source PRD",
-      width: "200px",
+      width: "180px",
       hideOnPhone: true,
+      wrap: true,
       // The header says where it came from; the cell is the PRD's name alone.
       cell: (r) =>
         r.kind === "roadmap" ? (
@@ -239,10 +291,9 @@ export default function RoadmapDocumentsPage() {
             <Link
               href={`/documents/${r.d.source.slug}/v/${r.d.source.version}`}
               data-testid="roadmap-source"
-              title={`${r.d.source.title} v${r.d.source.version}`}
               className="font-medium underline-offset-2 hover:underline"
             >
-              {r.d.source.title} v{r.d.source.version}
+              {docLabel({ title: r.d.source.title, kind: "prd" })} v{r.d.source.version}
             </Link>
           ) : (
             <span className="text-text2">—</span>
@@ -272,16 +323,18 @@ export default function RoadmapDocumentsPage() {
     <Page>
       <PageHeader
         title="Plan"
+        info={
+          <InfoTip label="Roadmap documents" align="start" side="bottom">
+            Each roadmap opens in the document view. A run turns an approved PRD&apos;s version into roadmap items
+            and a roadmap draft for review.
+          </InfoTip>
+        }
         status={
           q.data && (
             <>
               {capsReady && !canBuild && <ViewOnly />}
-              <Chip kind="acc">{roadmaps.length} {roadmaps.length === 1 ? "roadmap" : "roadmaps"}</Chip>
+              <Chip kind="acc">{plural(roadmaps.length, "roadmap")}</Chip>
               {inReview > 0 && <Chip kind="acc">{inReview} in review</Chip>}
-              <InfoTip label="Roadmap documents" align="start" side="bottom">
-                Each roadmap opens in the document view. A run turns an approved PRD&apos;s version into roadmap items
-                and a roadmap draft for review.
-              </InfoTip>
             </>
           )
         }
@@ -310,7 +363,7 @@ export default function RoadmapDocumentsPage() {
           inspector={
             current &&
             (current.kind === "roadmap" ? (
-              <RoadmapInspector key={keyOf(current)} d={current.d} />
+              <RoadmapInspector key={keyOf(current)} d={current.d} names={names} />
             ) : (
               <PrdInspector key={keyOf(current)} d={current.d} built={current.built} />
             ))

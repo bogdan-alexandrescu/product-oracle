@@ -122,7 +122,7 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   await page.goto("/inbox");
   const tabs = page.getByTestId("inbox-state-tabs");
   await expect(tabs.getByRole("tab", { name: /^New/ })).toBeVisible();
-  for (const tab of [/^New/, /^Open/, /^Done/]) {
+  for (const tab of [/^New/, /^Seen/, /^Done/]) {
     await tabs.getByRole("tab", { name: tab }).click();
     await expect(page.getByTestId("request-need").filter({ hasText: "Replies to send" })).toHaveCount(0);
   }
@@ -140,7 +140,7 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   // the row moves from New to Open, so each state tab is read.
   const answers = async () => {
     let n = 0;
-    for (const tab of [/^New/, /^Open/, /^Done/]) {
+    for (const tab of [/^New/, /^Seen/, /^Done/]) {
       await tabs.getByRole("tab", { name: tab }).click();
       n += await answer.count();
     }
@@ -150,7 +150,7 @@ test("Say no on the stop list: decision chip, drafts for 3 askers, edit, copy, s
   await expect(tabs.getByRole("tab", { name: /^New/ })).toBeVisible();
   expect(await answers()).toBe(1);
   await tabs.getByRole("tab", { name: /^New/ }).click();
-  if (!(await answer.count())) await tabs.getByRole("tab", { name: /^Open/ }).click();
+  if (!(await answer.count())) await tabs.getByRole("tab", { name: /^Seen/ }).click();
   const answerRow = page.locator("tr, li, [role=row]").filter({ has: answer }).last();
   await answerRow.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(/\/requests\?request=/);
@@ -232,7 +232,7 @@ test("Themes: confirm Oracle's suggested problem; the inspector shows it", async
   // fails_when=Confirm is missing or the confirmed problem does not show; no_claim=triage's
   // import of the suggestion (API tests).
   await open(page, "approver@example.com");
-  await page.getByRole("button", { name: /^Themes/ }).click();
+  await page.getByTestId("requests-tab-themes").filter({ visible: true }).click();
   const theme = page.getByTestId("theme-row").filter({ hasText: "Board exports" });
   await expect(theme.getByTestId("theme-problem")).toContainText("Oracle suggests");
   await theme.getByRole("button", { name: "Confirm" }).click();
@@ -241,7 +241,7 @@ test("Themes: confirm Oracle's suggested problem; the inspector shows it", async
   await expect(theme.getByTestId("theme-problem")).toContainText("How we would know it is solved");
   await expect(theme.getByTestId("theme-problem")).toContainText("A month-end report takes minutes, not an afternoon.");
 
-  await page.getByRole("button", { name: /^Queue/ }).click();
+  await page.getByTestId("requests-tab-all").filter({ visible: true }).click();
   await pick(page, ROOT);
   await expect(inspector(page).getByTestId("theme-problem")).toContainText("Finance leads need every board's totals");
 });
@@ -263,7 +263,7 @@ test("A viewer reads the Why not panel and the problem with no controls", async 
   for (const name of ["Edit", "Copy", "Mark sent", "Skip", "Tell them in Oracle", "Disqualify", "Confirm", "Draft again with Oracle"]) {
     await expect(inspector(page).getByRole("button", { name, exact: true })).toHaveCount(0);
   }
-  await page.getByRole("button", { name: /^Themes/ }).click();
+  await page.getByTestId("requests-tab-themes").filter({ visible: true }).click();
   await expect(page.getByTestId("theme-row").filter({ hasText: "Board exports" }).getByRole("button", { name: "Confirm" })).toHaveCount(0);
 });
 

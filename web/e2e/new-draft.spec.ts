@@ -39,7 +39,8 @@ test("new PRD: answers give a recommendation; override template and theme; start
   await page.getByRole("button", { name: "Start from an empty skeleton instead" }).click();
   await expect(page).toHaveURL(/\/documents\/address-lookup-prd$/);
   await expect(page.getByRole("heading", { level: 1, name: "Address lookup PRD" })).toBeVisible();
-  await expect(page.getByText("template prd-rfc v1")).toBeVisible();
+  await expect(page.getByTestId("doc-template")).toBeVisible();
+  await expect(page.getByTestId("doc-template")).not.toContainText("prd-rfc");
   await page.getByRole("link", { name: "Open latest (v1)" }).click();
   await expect(page).toHaveURL(/\/documents\/address-lookup-prd\/v\/1$/);
 
@@ -70,7 +71,9 @@ test("new roadmap: a board audience gets the outcome roadmap; company default", 
 
   // The owner makes it the company default; it shows on the next visit.
   await page.getByRole("button", { name: "Make company default" }).click();
-  await expect(page.getByRole("status")).toContainText("Company default for new roadmaps saved");
+  // QA docs-8: it asks first, as it changes every new roadmap in the company.
+  await page.getByRole("alertdialog", { name: "Make company default" }).getByRole("button", { name: "Make company default" }).click();
+  await expect(page.getByTestId("company-default-saved")).toContainText("Company default for new roadmaps saved");
   await page.reload();
   await expect(page.getByTestId("company-default")).toContainText("Outcome roadmap");
   // With no answers, the company default is the recommendation.
@@ -80,5 +83,6 @@ test("new roadmap: a board audience gets the outcome roadmap; company default", 
   await page.getByRole("textbox", { name: "Title" }).fill("Board roadmap");
   await page.getByRole("button", { name: "Create draft" }).click();
   await expect(page).toHaveURL(/\/documents\/board-roadmap$/);
-  await expect(page.getByText("template outcome-roadmap v1")).toBeVisible();
+  await expect(page.getByTestId("doc-template")).toBeVisible();
+  await expect(page.getByTestId("doc-template")).not.toContainText("outcome-roadmap");
 });

@@ -173,7 +173,7 @@ test("Change on Oracle's recorded verdict opens it and the owner changes it", as
   await start(page, undefined, "outcomes-recorded");
   await page.goto("/inbox");
   // Oracle recorded is shown, not counted: it waits under Open.
-  await page.getByRole("tab", { name: /^Open/ }).first().click();
+  await page.getByRole("tab", { name: /^Seen/ }).first().click();
   const section = page.getByTestId("inbox-outcomes");
   await expect(section.getByTestId("outcome-need")).toHaveText(["Oracle recorded: partly held · Weekly digest email"]);
   await section.getByRole("link", { name: "Change" }).click();
@@ -189,6 +189,6 @@ test("Change on Oracle's recorded verdict opens it and the owner changes it", as
   await expect(inspector(page).getByTestId("outcome-state").first()).toHaveText("Held");
   await expect(inspector(page).getByTestId("outcome-history")).toContainText("Held · 42% · a person");
   await page.goto("/inbox");
-  await page.getByRole("tab", { name: /^Open/ }).first().click();
+  await page.getByRole("tab", { name: /^Seen/ }).first().click();
   await expect(page.getByTestId("outcome-need").filter({ hasText: "Oracle recorded" })).toHaveCount(0);
 });

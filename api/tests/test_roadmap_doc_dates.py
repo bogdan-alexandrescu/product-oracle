@@ -96,7 +96,7 @@ async def test_a_person_s_import_refuses_an_unverified_date(client, owner, runti
     assert resp.status_code == 422, resp.text
     assert _codes(resp) == ["unverified_date"]
     (problem,) = resp.json()["errors"]
-    assert problem["section_key"] == "now-payment-step" and "2026-12-15" in problem["message"]
+    assert problem["section_key"] == "now-payment-step" and "Dec 15, 2026" in problem["message"]
     # Written another way, still a date.
     resp = await push(client, auth, with_line("GA on December 15, 2026."))
     assert resp.status_code == 422 and _codes(resp) == ["unverified_date"]
@@ -161,7 +161,7 @@ async def test_a_run_s_import_marks_an_unverified_date(client, owner, runtime): 
     assert run["status"] == "succeeded", run
     version = (await client.get(f"{VERSIONS}/1", headers=auth)).json()
     warnings = [w for w in version["warnings"] if w["code"] == "unverified_date"]
-    assert len(warnings) == 1 and "2026-12-15" in warnings[0]["message"]
+    assert len(warnings) == 1 and "Dec 15, 2026" in warnings[0]["message"]
     assert warnings[0]["section_keys"] == ["now-payment-step"]
     marks = {(m["text"], m["status"], m["label"]) for m in version["date_marks"]}
     assert marks == {("2026-11-30", "verified", None), ("2026-12-15", "unverified", "unverified")}

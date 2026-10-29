@@ -10,6 +10,7 @@
  * Synthetic placeholders only. Reads need a viewer; writes an approver, as in the API.
  */
 import type { Schemas } from "@/lib/api/client";
+import { calendarDay } from "@/lib/dates";
 import type { AcceptDateOut, InboxTrack, TrackAlertAction, TrackAlertOut, TrackerRecordEventOut } from "@/lib/api/track-alerts";
 
 import { mockUuid, seeded, stableUuid } from "./ids";
@@ -266,6 +267,16 @@ export function seedRoadmap(ctx: RoadmapContext, scenario?: string | null): Road
     if (withDiff && roadmap) seedDiff(ctx, db, roadmap.id, track.id);
     if (scenario === TRACK_ALERTS_SCENARIO || scenario === TRACK_ALERTS_MANY_SCENARIO || scenario === TRACK_ALERTS_ACTIONS_SCENARIO || scenario === TRACK_ALERTS_HISTORY_SCENARIO)
       seedAlerts(db, track.id, scenario === TRACK_ALERTS_MANY_SCENARIO, scenario === TRACK_ALERTS_ACTIONS_SCENARIO, scenario === TRACK_ALERTS_HISTORY_SCENARIO);
+    // "launches": a second track, Checkout redesign PRD, with no roadmap yet (New launch's Track picker).
+    const checkout = scenario === "launches" ? ctx.documents.find((d) => d.slug === "checkout-redesign") : undefined;
+    if (checkout) {
+      const started = latest(ctx, checkout.id)?.number ?? 1;
+      db.tracks.push({
+        id: mockUuid(), prd_id: checkout.id, roadmap_id: null, title: checkout.title, status: "active",
+        owner_id: null, started_version: started, current_version: started, lock_version: 1,
+        created_at: AT, monitored_at: null, monitor: {},
+      });
+    }
     return db;
   });
 }
@@ -480,16 +491,16 @@ function drift(db: RoadmapDb, item: Item): Schemas["DriftEntry"][] {
   if (!recs.length) return [];
   const out: Schemas["DriftEntry"][] = [];
   const states = new Set(recs.map((r) => r.state));
-  if (item.horizon !== "now" && (states.has("in_progress") || states.has("done"))) out.push({ kind: "ahead", item_key: item.item_key, detail: `Engineering has started work planned for ${item.horizon}.` });
+  if (item.horizon !== "now" && (states.has("in_progress") || states.has("done"))) out.push({ kind: "ahead", item_key: item.item_key, detail: `Engineering has started work planned for ${item.horizon[0].toUpperCase()}${item.horizon.slice(1)}.` });
   if (states.size === 1 && states.has("cancelled")) out.push({ kind: "cancelled", item_key: item.item_key, detail: "Every tracker issue for this item is cancelled." });
   const when = itemDate(db, item);
   if (when) {
     for (const r of recs) {
       if (r.state !== "done" && r.state !== "cancelled" && r.target_date && r.target_date > when) {
-        out.push({ kind: "date_slip", item_key: item.item_key, tracker_ref: r.external_ref, detail: `${r.external_ref} targets ${r.target_date}, after the milestone date ${when}.` });
+        out.push({ kind: "date_slip", item_key: item.item_key, tracker_ref: r.external_ref, detail: `${r.external_ref} targets ${calendarDay(r.target_date)}, after the milestone date ${calendarDay(when)}.` });
       }
     }
-    if (when < today() && [...states].some((s) => s !== "done" && s !== "cancelled")) out.push({ kind: "overdue", item_key: item.item_key, detail: `The milestone date ${when} has passed and the work is not done.` });
+    if (when < today() && [...states].some((s) => s !== "done" && s !== "cancelled")) out.push({ kind: "overdue", item_key: item.item_key, detail: `The milestone date ${calendarDay(when)} has passed and the work is not done.` });
   }
   return out;
 }
@@ -512,7 +523,48 @@ function staleWhy(reasons: readonly string[], fallback: string): string {
     if (verb) out.splice(0, out.length, ...out.filter((o) => counted.exec(o)?.[2] !== verb));
     if (!out.includes(r)) out.push(r);
   }
-  return out.join("; ") || fallback;
+  return inWords(out).join("; ") || fallback;
+}
+
+/** oracle.roadmap.staleness.in_words (prod-6): "feature:x changed", "goal:y changed" read "The feature and a goal changed". */
+function inWords(reasons: readonly string[]): string[] {
+  const ref = /^([a-z][a-z_]*):\S+ (.+)$/;
+  const noun = (kind: string, n: number) => {
+    const word = kind.replace(/_/g, " ");
+    if (n === 1) return kind === "feature" || kind === "product" ? `the ${word}` : `a ${word}`;
+    if (/[^aeou]y$/.test(word)) return `${n} ${word.slice(0, -1)}ies`;
+    return `${n} ${word}${/(s|x|ch|sh)$/.test(word) ? "es" : "s"}`;
+  };
+  const out: (string | { verb: string; kinds: Map<string, number> })[] = [];
+  const byVerb = new Map<string, Map<string, number>>();
+  for (const r of reasons) {
+    const m = ref.exec(r);
+    if (!m) {
+      if (!out.includes(r)) out.push(r);
+      continue;
+    }
+    const [, kind, verb] = m as unknown as [string, string, string];
+    let kinds = byVerb.get(verb);
+    if (!kinds) {
+      kinds = new Map();
+      byVerb.set(verb, kinds);
+      out.push({ verb, kinds });
+    }
+    kinds.set(kind, (kinds.get(kind) ?? 0) + 1);
+  }
+  const lines: string[] = [];
+  for (const e of out) {
+    if (typeof e === "string") {
+      lines.push(e);
+      continue;
+    }
+    const nouns = [...e.kinds].map(([k, n]) => noun(k, n));
+    const subject = nouns.length === 1 ? nouns[0]! : `${nouns.slice(0, -1).join(", ")} and ${nouns.at(-1)}`;
+    const many = nouns.length > 1 || [...e.kinds.values()][0]! > 1;
+    const line = `${subject} ${many && e.verb.startsWith("was ") ? e.verb.replace("was ", "were ") : e.verb}`;
+    lines.push(lines.length ? line : line[0]!.toUpperCase() + line.slice(1));
+  }
+  return lines;
 }
 
 /** As oracle.roadmap.staleness.own_reasons: without "the PRD has a new version (N)" (P11). */
@@ -575,7 +627,7 @@ function overview(ctx: RoadmapContext, db: RoadmapDb, t: Track): Schemas["TrackO
   const slippingNext = !!next && atRisk.some((a) => next.item_keys.includes(a.item_key) && a.reasons.some((r) => r.kind === "slipping"));
   const health: Schemas["TrackOverview"]["health"] =
     t.status !== "active" ? t.status : !items.length ? "no_roadmap" : slippingNext ? "off_track" : atRisk.length || prdMoved ? "at_risk" : "on_track";
-  const when = next ? ` Next: ${next.name}${next.target_date ? ` (${next.target_date})` : ""}.` : "";
+  const when = next ? ` Next milestone: ${next.name}${next.target_date ? `, ${calendarDay(next.target_date)}` : ""}.` : "";
   const headline = trackHeadline(health, counts, when, prdMoved ? latestApproved : null);
   return {
     id: t.id, title: t.title, status: t.status, owner_id: t.owner_id, prd: docRef(prd), started_version: t.started_version,
@@ -1072,16 +1124,17 @@ const ALERTS_APPROVED: PlanSeedItem[] = [
   { key: "alert-digest", title: "Daily alert digest email", horizon: "now", goals: ["g.paid-conversion"], state: "at_risk", section: "behaviour",
     records: [{ ref: "ENG-405", state: "in_progress", target: "2026-12-09" }], date: "2026-11-30", dateStatus: "verified", dateSource: "ENG-412", slipDays: 9,
     reasons: [
-      // #505: two bulk baseline writes marked it stale, as the API's stale reasons read.
-      { kind: "stale", detail: staleWhy(["42 baseline items changed", "11 baseline items changed"], "its PRD trace changed") },
-      { kind: "slipping", detail: "ENG-405 targets 2026-12-09, after the milestone date 2026-11-30." },
+      // #505: two bulk baseline writes marked it stale, as the API's stale reasons read; prod-6:
+      // changes to its feature, goals and product, named by ref, read in words.
+      { kind: "stale", detail: staleWhy(["feature:alert-digest changed", "goal:g-paid-conversion changed", "goal:g-activation changed", "product:usage was confirmed", "42 baseline items changed", "11 baseline items changed"], "its PRD trace changed") },
+      { kind: "slipping", detail: "ENG-405 targets Dec 9, after the milestone date Nov 30." },
     ],
     next: { action: "decide_slip", who: "owner" } },
   { key: "alert-rules-api", title: "Alert rules API", horizon: "now", goals: ["g.activation"], state: "done", section: "behaviour",
     records: [{ ref: "ENG-398", state: "done" }] },
   { key: "slack-alerts", title: "Alerts in the team chat", horizon: "now", goals: ["g.activation"], state: "on_track", section: "behaviour",
     records: [{ ref: "ENG-431", state: "todo" }], date: "2026-12-15", dateStatus: "unverified", dateSource: "ENG-431", next: { action: "verify_date", who: "approver" } },
-  { key: "usage-dashboard", title: "Usage dashboard", horizon: "now", goals: ["g.activation"], state: "planned", section: "behaviour",
+  { key: "usage-dashboard", title: "Usage dashboard", horizon: "now", goals: ["g.activation", "g.paid-conversion", "g.early-churn"], state: "planned", section: "behaviour",
     next: { action: "link_issue", who: "approver" } },
   { key: "spend-forecast", title: "Spend forecast for the month", horizon: "next", state: "planned", section: "behaviour",
     next: { action: "link_issue", who: "approver" } },
@@ -1137,7 +1190,7 @@ const CHECKOUT_DRAFT: PlanSeedItem[] = [
  */
 export function routePlan(ctx: PlanContext, db: RoadmapDb, req: Request, p: string[], q: URLSearchParams): Response | null {
   if (p[1] !== "plan" || req.method !== "GET") return null;
-  if (p[2] === "items" && p[3] === "history") return planHistory(db, q);
+  if (p[2] === "items" && p[3] === "history") return planHistory(ctx, db, q);
   if (p[2]) return null;
   const scope = q.get("scope") ?? "all";
   if (scope !== "all" && scope !== "approved") return json(422, { detail: "scope: all or approved" });
@@ -1196,7 +1249,7 @@ function dateStatus(
 const TRACKER_HISTORY_LIMIT = 20;
 const SHOWN_FIELDS: Schemas["TrackerFieldChange"]["field"][] = ["state", "target_date", "estimate"];
 
-function planHistory(db: RoadmapDb, q: URLSearchParams): Response {
+function planHistory(ctx: PlanContext, db: RoadmapDb, q: URLSearchParams): Response {
   const roadmap = q.get("roadmap");
   const key = q.get("item") ?? "";
   // F2 §2: the tracker history of the item's issues (the Plan's seeded records), as
@@ -1221,7 +1274,12 @@ function planHistory(db: RoadmapDb, q: URLSearchParams): Response {
   if (roadmap === ALERTS_ROADMAP_SLUG) {
     const a = ALERTS_APPROVED.find((i) => i.key === key);
     if (!a) return out([]);
-    const versions: Schemas["ItemVersion"][] = [{ version: 1, prd_version: 1, horizon: a.horizon, approved_at: "2026-10-18T10:00:00Z" }];
+    // qa-plan-17: v1's own approval reads the roadmap document's real versions, so this
+    // agrees with the Documents tab (never approved by default; approved once a scenario
+    // approves it) instead of a date hardcoded here regardless of that.
+    const roadmapDoc = ctx.documents.find((d) => d.slug === ALERTS_ROADMAP_SLUG);
+    const v1ApprovedAt = (roadmapDoc && ctx.versions.find((v) => v.document_id === roadmapDoc.id && v.number === 1)?.approved_at) ?? null;
+    const versions: Schemas["ItemVersion"][] = [{ version: 1, prd_version: 1, horizon: a.horizon, approved_at: v1ApprovedAt }];
     const d = ALERTS_DRAFT[key];
     if (!d || d.change.kind !== "dropped") versions.push({ version: 2, prd_version: 1, horizon: d?.horizon ?? a.horizon, approved_at: null });
     return out(versions);
@@ -1744,7 +1802,7 @@ export function versionWarnings(prdTitle: string, prdSlug: string): Schemas["Ver
   return [
     {
       code: "unverified_date",
-      message: `the date 2026-12-15 ("Behaviour", line 1) rests on no verified estimate, capacity or commitment of the PRD "${prdTitle}" for this item; ${RECORD_DATE_BASIS} or drop the date. Oracle never invents dates`,
+      message: `the date Dec 15, 2026 ("Behaviour", line 1) is not backed by a confirmed schedule: no verified estimate, capacity or commitment of the PRD "${prdTitle}" for this item; ${RECORD_DATE_BASIS} or drop the date. Oracle never invents dates`,
       section_keys: ["item-behaviour"],
       refs: { date: "2026-12-15", prd: prdSlug },
     },

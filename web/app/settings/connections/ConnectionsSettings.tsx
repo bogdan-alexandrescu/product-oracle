@@ -58,16 +58,18 @@ export function ConnectionsSettings() {
     <>
       <PageHeader
         title="Connections"
+        info={
+          <InfoTip label="connections" align="start" side="bottom">
+            Your own accounts. Only you see these connections and what they pull in; nobody else in the company can
+            use them. Oracle&apos;s own Claude calls run on the company&apos;s{" "}
+            <Link href="/settings/claude-accounts" className="underline">
+              Claude accounts
+            </Link>
+            .
+          </InfoTip>
+        }
         status={
           <>
-            <InfoTip label="connections" align="start" side="bottom">
-              Your own accounts. Only you see these connections and what they pull in; nobody else in the company can
-              use them. Oracle&apos;s own Claude calls run on the company&apos;s{" "}
-              <Link href="/settings/claude-accounts" className="underline">
-                Claude accounts
-              </Link>
-              .
-            </InfoTip>
             {q.data && (
               <Chip kind="line">
                 <span className="tnum">{active}</span> active

@@ -105,7 +105,7 @@ export function MembersSettings() {
   if (ready && (canManage || canInvite)) return <OwnerView selfId={me?.user_id ?? null} manage={canManage} />;
   return (
     <>
-      <PageHeader title="Members" status={pageTip} />
+      <PageHeader title="Members" info={pageTip} />
       {ready && (
         <Split inspector={<RolesInspector />}>
           <RoleNote />

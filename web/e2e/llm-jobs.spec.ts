@@ -95,6 +95,8 @@ test("an accepted suggestion goes into the next draft: one build, diff preview, 
   // no other build of the document starts (#574 review): the owner cancels it first.
   await page.goto("/inbox");
   await page.getByTestId("inbox-overruns").getByRole("button", { name: "Cancel run" }).click();
+  // Asked first, as the run page asks (qa-company-1).
+  await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
   await expect(page.getByTestId("inbox-overruns")).toHaveCount(0);
   await page.goto("/documents/team-workspaces/v/2");
   await openTab(page, "Feedback");
@@ -228,7 +230,7 @@ test("an owner turns a job kind off for a document", async ({ page }) => {
   await expect(review).not.toBeChecked();
   await page.getByTestId("jobs-panel").filter({ visible: true }).getByRole("button", { name: "Suggest changes now" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "turned off" })).toHaveText(
-    '"Suggest changes from feedback" is turned off for this document (409)',
+    '"Suggest changes from feedback" is turned off for this document',
   );
   await page.reload();
   await openTab(page, "History");

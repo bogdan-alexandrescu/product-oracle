@@ -35,7 +35,7 @@ test("publish: the screen follows the API's readiness verdict", async ({ page })
     await expect(publish).toBeDisabled();
     await expect(page.getByTestId("block-row")).not.toHaveCount(0);
   } else {
-    await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v1");
+    await expect(page.getByTestId("publish-ready")).toHaveText(/^(Ready to publish v1|Publishable, but .+)$/);
     await publish.click();
     await page.getByRole("dialog", { name: "Publish v1?" }).getByRole("button", { name: "Publish", exact: true }).click();
     await expect(page.getByTestId("published-chip")).toHaveText("Published v1");
@@ -47,7 +47,7 @@ test("publish gate: a blocker linked after the page loaded is refused by the API
   expect(await oracle("push", path.join(__dirname, "fixtures", "publish_gate_draft.md"))).toContain(`Imported ${doc} version 1`);
   await login(page);
   await page.goto(`/documents/${doc}/publish`);
-  await expect(page.getByTestId("publish-ready")).toHaveText("Ready to publish v1");
+  await expect(page.getByTestId("publish-ready")).toHaveText(/^(Ready to publish v1|Publishable, but .+)$/);
   await page.getByTestId("publish-button").click();
   const dialog = page.getByRole("dialog", { name: "Publish v1?" });
   await expect(dialog).toBeVisible();

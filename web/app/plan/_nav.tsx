@@ -38,7 +38,7 @@ export function PlanNav() {
   const extra = useMemo(() => parse(raw).filter((t) => !PLAN_TABS.some((x) => x.key === t.key)), [raw]);
   return (
     <nav aria-label="Plan" data-testid="plan-tabs" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
-      <ScrollStrip className="min-h-9" stripClassName="items-center gap-1">
+      <ScrollStrip itemsName="tabs" className="min-h-9" stripClassName="items-center gap-1">
         {[...PLAN_TABS, ...extra].map((t) => {
           const on = isOpen(t, pathname);
           return (
@@ -46,6 +46,8 @@ export function PlanNav() {
               key={t.key}
               href={t.href}
               data-testid={t.testId}
+              aria-label={t.name}
+              title={t.name}
               aria-current={on ? "page" : undefined}
               className={`flex h-8 flex-none items-center rounded-lg px-3 text-[15px] font-medium whitespace-nowrap ${
                 on ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"

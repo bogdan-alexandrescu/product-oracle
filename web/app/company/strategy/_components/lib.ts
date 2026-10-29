@@ -1,6 +1,6 @@
 import type { ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { shownDay } from "@/lib/dates";
+import { formatDate } from "@/lib/format";
 import type { useMe } from "@/lib/me";
 
 export type Stack = Schemas["StrategyStackOut"];
@@ -48,13 +48,13 @@ export function canWaive(f: Finding, can: ReturnType<typeof useMe>["can"]): bool
   return can("waive_strategy_finding", f.kind === "outside_strategy");
 }
 
-/** "1 Oct 2027" from an ISO date or time. */
+/** "Oct 1, 2027" from an ISO date or time: the shared format (qa-company-22), never "1 Sept 2027". */
 export function shortDate(value: string | null | undefined): string {
   if (!value) return "—";
-  return shownDay(value, { day: "numeric", month: "short", year: "numeric" }, "en-GB");
+  return formatDate(value);
 }
 
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+export { plural } from "@/lib/format";
 
 /** What a finding is about, in words: the goal, choice or item by name, else its reference. */
 export function subjectName(f: Finding, stack: Stack | undefined): string {

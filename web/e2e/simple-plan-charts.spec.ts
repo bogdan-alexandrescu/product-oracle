@@ -302,10 +302,12 @@ for (const v of VIEWS) {
       await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
       if (!v.phone) {
         // Escape closes what is open on top first (the Ask panel), and leaves the selection.
-        await page.getByTestId("hop-strip").click();
+        // Simple has no Ask strip: its rail's Ask Oracle opens the panel (qa-shell-16), and a
+        // closed panel leaves no dock behind.
+        await page.getByTestId("simple-ask").click();
         await expect(page.getByTestId("hop-dock")).toHaveAttribute("data-open", "true");
         await page.keyboard.press("Escape");
-        await expect(page.getByTestId("hop-dock")).toHaveAttribute("data-open", "false");
+        await expect(page.getByTestId("hop-dock")).toHaveCount(0);
         await expect(sideRow(page, "alert-digest")).toHaveAttribute("data-selected", "true");
       }
       // Escape clears both.

@@ -159,15 +159,13 @@ export default function ThemesPage() {
     <>
       <PageHeader
         title="Themes"
-        status={
-          <>
-            <InfoTip label="themes" align="start" side="bottom">
-              How exported PRDs and roadmaps look: fonts, colours, spacing, page and layout features. Text colours must be
-              readable on the background (WCAG AA).
-            </InfoTip>
-            {capsReady && !canCreate && <ViewOnly />}
-          </>
+        info={
+          <InfoTip label="themes" align="start" side="bottom">
+            How exported PRDs and roadmaps look: fonts, colours, spacing, page and layout features. Text colours must be
+            readable on the background (WCAG AA).
+          </InfoTip>
         }
+        status={capsReady && !canCreate && <ViewOnly />}
         action={
           canCreate && (
             <LinkButton variant="primary" icon="plus" href="/settings/themes/new">

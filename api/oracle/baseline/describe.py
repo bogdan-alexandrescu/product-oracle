@@ -39,6 +39,10 @@ STRENGTHS = ("none", "weak", "medium", "strong")
 ATTR_LABELS = {"effort": "effort", "current": "current value", "contribution": "strength"}
 # Top-level entity and edge fields, when several change at once.
 FIELD_LABELS = {"title": "title", "body": "description", "status": "status"}
+# Keys whose values are a fixed set of states: they read capitalized, as the app shows
+# them ("planned" -> "Planned", "in_progress" -> "In progress").
+STATE_KEYS = {"status"}
+_STATE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 _UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I)
 _SNAKE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)+$")
@@ -74,6 +78,9 @@ def _value(value: Any, key: str | None, entities: Mapping[uuid.UUID, Entity]) ->
     if isinstance(value, dict):
         return "a new value"
     text = str(value)
+    if key in STATE_KEYS and _STATE.match(text):
+        text = _words(text)
+        return text[:1].upper() + text[1:]
     if _UUID.fullmatch(text.strip()):
         # An item's id: its title, never the id itself.
         target = entities.get(uuid.UUID(text.strip()))

@@ -18,11 +18,15 @@ import {
   WEEKS,
   localDate,
   localTime,
+  memberName,
+  personEmail,
   personName,
   presetOf,
   ruleOf,
   scheduleOf,
   whenText,
+  timeOptions,
+  zoneText,
   zoneTime,
   type Member,
   type Person,
@@ -31,10 +35,11 @@ import {
   type Schedule,
 } from "./lib";
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+/** A labelled input; labels sit at the top and the inputs at the bottom of their row, so a label that wraps does not push its input below its neighbour's (qa-company-26). */
+function Field({ label, wide, children }: { label: string; wide?: boolean; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
-      {label}
+    <label className={`flex flex-col justify-between gap-1 text-sm font-semibold text-text2 ${wide ? "col-span-2 max-[600px]:col-span-1" : ""}`}>
+      <span>{label}</span>
       {children}
     </label>
   );
@@ -57,12 +62,15 @@ export function RitualInspector({
   ritual,
   members,
   people,
+  zoneDefault = false,
   canEdit,
   onChanged,
 }: {
   ritual: Ritual;
   members: Member[] | undefined;
   people: Person[] | undefined;
+  /** No owner chose the Company time zone yet: the default is used meanwhile (qa-company-24). */
+  zoneDefault?: boolean;
   canEdit: boolean;
   onChanged: (r?: Ritual) => Promise<void>;
 }) {
@@ -81,6 +89,11 @@ export function RitualInspector({
   const active = (members ?? []).filter((m) => m.status !== "disabled");
   const preset = presetOf(schedule);
   const set = (patch: Partial<Schedule>) => setSchedule((s) => ({ ...s, ...patch }));
+  // Save is offered once something changed (qa-company-30): until then it says so.
+  const edits = (sc: Schedule, d: string, p: string, o: typeof owner, a: string[]) => JSON.stringify([ruleOf(sc), d, p, o, [...a].sort()]);
+  const changed =
+    edits(schedule, duration, prep, owner, attendees) !==
+    edits(saved, String(ritual.duration_min), String(ritual.prep_hours), ritual.owner_id, ritual.attendee_ids);
 
   async function act(call: () => Promise<unknown>) {
     setBusy(true);
@@ -147,7 +160,7 @@ export function RitualInspector({
       <Inspector eyebrow="Ritual · selected" title={ritual.title} chips={chips} testId="ritual-inspector">
         <InspectorSection label="Schedule">
           <InspectorRow value={whenText(saved)}>When</InspectorRow>
-          <InspectorRow value={saved.timezone}>Time zone</InspectorRow>
+          <InspectorRow value={<span data-testid="ritual-zone">{zoneText(saved.timezone, zoneDefault)}</span>}>Time zone</InspectorRow>
           <InspectorRow value={`${ritual.duration_min} min`}>Length</InspectorRow>
           <InspectorRow value={`${ritual.prep_hours} h before`}>Pre-read ready</InspectorRow>
           <InspectorRow value={ritual.next_due_at ? <span title={zoneTime(ritual.next_due_at, saved.timezone)}>{localTime(ritual.next_due_at)}</span> : "—"}>
@@ -155,7 +168,7 @@ export function RitualInspector({
           </InspectorRow>
         </InspectorSection>
         <InspectorSection label="People">
-          <InspectorRow value={personName(people, ritual.owner_id)}>Owner</InspectorRow>
+          <InspectorRow value={<span title={personEmail(people, ritual.owner_id)}>{personName(people, ritual.owner_id)}</span>}>Owner</InspectorRow>
           <InspectorRow value={ritual.attendee_ids.length}>Attendees</InspectorRow>
         </InspectorSection>
         {recent}
@@ -256,11 +269,18 @@ export function RitualInspector({
             </Field>
           )}
           <Field label="Time">
-            <input type="time" required className={INPUT} value={schedule.time} onChange={(e) => set({ time: e.target.value })} />
+            {/* The page's one time format, "9:00 AM" (qa-company-25), not the browser's "09:00 AM". */}
+            <select required aria-label="Time" className={INPUT} value={schedule.time} onChange={(e) => set({ time: e.target.value })}>
+              {timeOptions(schedule.time).map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
           </Field>
           {/* One zone (owner decision 2026-10-22): every ritual is in the Company time zone. */}
           <p className="col-span-2 self-center text-sm text-text2 max-[600px]:col-span-1">
-            <span data-testid="ritual-zone">Company time zone · {saved.timezone}</span>{" "}
+            <span data-testid="ritual-zone">Company time zone · {zoneText(saved.timezone, zoneDefault)}</span>{" "}
             <Link href="/settings/company#timezone" className="font-semibold text-accent-ink hover:underline">
               Change
             </Link>
@@ -271,11 +291,12 @@ export function RitualInspector({
           <Field label="Pre-read lead time (hours)">
             <input type="number" min={0} max={168} required className={INPUT} value={prep} onChange={(e) => setPrep(e.target.value)} />
           </Field>
-          <Field label="Owner">
+          {/* Names, as the table's Owner column has them; the email second (qa-company-26/28). */}
+          <Field label="Owner" wide>
             <select className={INPUT} value={owner} onChange={(e) => setOwner(e.target.value)}>
               {active.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.email}
+                  {memberName(m)} · {m.email}
                 </option>
               ))}
             </select>
@@ -290,15 +311,24 @@ export function RitualInspector({
                     checked={attendees.includes(m.id)}
                     onChange={(e) => setAttendees((a) => (e.target.checked ? [...a, m.id] : a.filter((x) => x !== m.id)))}
                   />
-                  <span className="truncate">{m.email}</span>
+                  <span className="min-w-0 break-words">
+                    {memberName(m)} <span className="text-text2">· {m.email}</span>
+                  </span>
                 </label>
               ))}
             </div>
           </fieldset>
           <div className="col-span-2 flex flex-wrap gap-2 max-[600px]:col-span-1">
-            <Button type="submit" variant="solid" disabled={busy}>
-              Save
-            </Button>
+            <span className="flex items-center gap-2">
+              <Button type="submit" variant="solid" disabled={busy || !changed} title={changed ? undefined : "No changes to save"}>
+                Save
+              </Button>
+              {!changed && (
+                <span className="text-sm text-text2" data-testid="ritual-no-changes">
+                  No changes
+                </span>
+              )}
+            </span>
             <Button
               disabled={busy}
               onClick={() =>

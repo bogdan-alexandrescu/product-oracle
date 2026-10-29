@@ -753,3 +753,20 @@ async def test_goal_reply_with_versions_and_changes(client, fake):
     async with tenant_session(ctx.tenant_id) as s:
         turn = await s.get(DiscussionMessage, uuid.UUID(evs[-1][1]["id"]))
         assert "<<<" not in turn.body and "entity_edit" not in turn.body
+
+
+# protects=qa-plan-48: an interview whose goal only lacks an owner is titled by that gap;
+# fails_when=it reads "Make “…” measurable" while the goal has its metric, target and horizon;
+# no_claim=the opening turn's wording (the reply tests).
+async def test_owner_only_gap_titles_the_interview_by_its_question(client):
+    ctx = await company()
+    attrs = {
+        "metric": "Trials that move to a paid plan", "unit": "%",
+        "comparison": "at_least", "target": 12, "horizon": "medium",
+    }  # fmt: skip
+    goal = await entity(
+        client, ctx, type="goal", key="paid", title="Grow paid conversion", attrs=attrs
+    )
+    first = await start(client, ctx, goal["id"])
+    d = await client.get(f"/v1/discussions/{first['discussion_id']}", headers=ctx.as_("owner"))
+    assert d.json()["title"] == "Who should own “Grow paid conversion”?"

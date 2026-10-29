@@ -474,6 +474,7 @@ function summary(r: RunOut): Schemas["RunSummary"] {
     sent_back: refused(r, true),
     progress: progressOf(r),
     delivering: r.delivering ?? null,
+    can_decide: false,
   };
 }
 
@@ -1415,6 +1416,9 @@ function advance(ctx: RunsContext, r: RunOut, s: SegmentOut) {
   else next(ctx, r, s);
 }
 
+/** Tests: a count of runs every check reports it could not read. */
+export const MOCK_TICK_ERRORS_KEY = "po-mock-tick-errors";
+
 function tick(ctx: RunsContext): Schemas["TickOut"] {
   const out = {
     runs_checked: 0,
@@ -1463,6 +1467,9 @@ function tick(ctx: RunsContext): Schemas["TickOut"] {
     else out.runs_advanced += 1;
     startedInCheck(ctx, r);
   }
+  // Tests: runs the check could not read (the API lists each with its error).
+  const failing = typeof localStorage === "undefined" ? null : localStorage.getItem(MOCK_TICK_ERRORS_KEY);
+  if (failing) for (let i = 0; i < Number(failing); i++) out.errors.push(`run ${i + 1}: SwarmCloud did not answer`);
   return out;
 }
 
@@ -1571,7 +1578,8 @@ function inbox(ctx: RunsContext): Schemas["InboxOut"] {
       .filter((c) => c.status === "pending" && mine(c, r))
       .map((c) => ({
         ...gated(ctx, c),
-        can_decide: true,
+        // As the API's may_decide: by the stop's role (an engineering stop as `mine` says).
+        can_decide: ctx.userRole == null || atLeast(ctx.userRole, c.approver_role) || (!!ctx.mayDecide && ENGINEERING_KINDS.includes(c.kind)),
         flow: r.flow,
         flow_title: r.flow_title,
         document_slug: r.document_slug,
@@ -1744,7 +1752,11 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       ctx.db.runs
         .filter((r) => !status || r.status === status)
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
-        .map(summary),
+        .map((r) => {
+          // As the API: the row's Decide follows the run page's can_decide for its waiting checkpoint.
+          const cp = r.checkpoints.find((c) => c.status === "pending");
+          return { ...summary(r), can_decide: !!cp && mayStage(ctx, r, cp, ctx.userRole ?? null) };
+        }),
     );
   }
   if (p.length === 2 && m === "POST") {
@@ -1841,6 +1853,7 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
       can_retry_lookup: false,
       cancel_again: [],
       can_dismiss_overrun: false,
+      can_decide: false,
       can_retry_import: false,
       knobs,
       snapshot_id: null,
@@ -1878,7 +1891,8 @@ export async function routeRuns(ctx: RunsContext, req: Request, p: string[]): Pr
     }));
     // As the API (#556, #561 review): stored errors read in words, a failed one in the past.
     const segments = r.segments.map((s) => (s.error ? { ...s, error: readableRefusal(s.error, s.status === "failed") } : s));
-    return json(status, { ...r, error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
+    const can_decide = checkpoints.some((c) => c.status === "pending" && c.can_decide);
+    return json(status, { ...r, error: readableRefusal(r.error, r.status === "failed"), segments, checkpoints, can_decide, open_proposals: ctx.openProposals?.(r.id) ?? 0 });
   };
 
   if (p.length === 3 && m === "GET") return done();
@@ -2258,6 +2272,7 @@ function seedRun(ctx: Omit<RunsContext, "db">, db: RunsDb, flow: RunOut["flow"],
     can_retry_lookup: false,
     cancel_again: [],
     can_dismiss_overrun: false,
+    can_decide: false,
     can_retry_import: false,
     knobs: k,
     snapshot_id: ctx.uuid(),
@@ -3069,6 +3084,7 @@ function roadmapReviewRun(): RunOut {
     can_retry_lookup: false,
     cancel_again: [],
     can_dismiss_overrun: false,
+    can_decide: false,
     can_retry_import: false,
     knobs,
     snapshot_id: ids(),
@@ -4223,6 +4239,7 @@ export function startDraftItemsRun(
     can_retry_lookup: false,
     cancel_again: [],
     can_dismiss_overrun: false,
+    can_decide: false,
     can_retry_import: false,
     knobs,
     snapshot_id: args.uuid(),

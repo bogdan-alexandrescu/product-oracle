@@ -35,6 +35,9 @@ const EDGE_VERBS: Record<string, string> = {
 const STRENGTHS = ["none", "weak", "medium", "strong"];
 const ATTR_LABELS: Record<string, string> = { effort: "effort", current: "current value", contribution: "strength" };
 const FIELD_LABELS: Record<string, string> = { title: "title", body: "description", status: "status" };
+/** Keys whose values are a fixed set of states: they read capitalized ("planned" -> "Planned"). */
+const STATE_KEYS = new Set(["status"]);
+const STATE = /^[a-z][a-z0-9_]*$/;
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 const ONLY_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -62,6 +65,10 @@ function value(v: unknown, key: string | null, entities: Map<string, Entity>): s
   }
   if (isRecord(v)) return "a new value";
   let text = String(v);
+  if (key != null && STATE_KEYS.has(key) && STATE.test(text)) {
+    const w = words(text);
+    return w.charAt(0).toUpperCase() + w.slice(1);
+  }
   if (ONLY_UUID.test(text.trim())) return entities.get(text.trim().toLowerCase())?.title ?? REMOVED;
   if (SNAKE.test(text)) text = words(text);
   text = text.replace(UUID, "an item");

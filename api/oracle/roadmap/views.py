@@ -585,7 +585,10 @@ def _headline(
         return "No roadmap items yet: derive the roadmap from the PRD."
     when = ""
     if nxt is not None:
-        when = f" Next: {nxt.name}" + (f" ({nxt.target_date})." if nxt.target_date else ".")
+        day = nxt.target_date
+        when = f" Next milestone: {nxt.name}" + (
+            f", {company_time.calendar_day(day)}." if day else "."
+        )
     moved = f" The PRD has a newer approved version (v{prd_moved_to})." if prd_moved_to else ""
     n = counts["items"]
     if health == "on_track":
@@ -662,7 +665,7 @@ def item_risk(
             and not risk.done
         ):
             risk.passed = True
-            detail = f"Milestone {m.name} ({m.target_date}) has passed."
+            detail = f"Milestone {m.name}, {company_time.calendar_day(m.target_date)}, has passed."
             if all(r["detail"] != detail for r in reasons):
                 reasons.append({"kind": "slipping", "detail": detail})
     return risk

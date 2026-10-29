@@ -28,10 +28,12 @@ let closeOpen: (() => void) | null = null;
 
 /**
  * The one hover-and-tap card (#304) behind a chip. It opens on hover (after a short delay),
- * on keyboard focus and on tap, and closes with Escape and on a click outside. Below 640 px
- * it is a bottom sheet. The card sits in a portal, so a narrow table cell never clips it.
- * Keyboard: a click (Enter, Space) or Tab from the open chip moves focus into the card, Tab
- * cycles inside it, and Escape closes it with focus back on the chip.
+ * and on a click or tap, and closes with Escape and on a click outside. Below 640 px it is a
+ * bottom sheet. The card sits in a portal, so a narrow table cell never clips it.
+ * Keyboard (qa-company-4): Tab passes over the chip, one stop, without opening the card;
+ * Enter or Space opens it with focus inside; Tab moves through the card's links and, past
+ * the last, closes it and goes on to what follows the chip; Escape closes it with focus
+ * back on the chip.
  */
 export function HoverCard({
   trigger,
@@ -61,8 +63,6 @@ export function HoverCard({
   const pinned = useRef(false);
   /** Focus goes into the card once it is drawn. */
   const focusIn = useRef(false);
-  /** The chip takes focus back on Escape: that focus does not reopen the card. */
-  const returning = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const clear = () => {
@@ -102,6 +102,20 @@ export function HoverCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, at]);
 
+  // A card opened from the keyboard before its link loaded holds focus itself; the link,
+  // once drawn, takes it (Enter lands on the card's Open, not on a stop before it).
+  useEffect(() => {
+    const el = card.current;
+    if (!open || !at || !el) return;
+    const watch = new MutationObserver(() => {
+      if (document.activeElement !== el) return;
+      const first = el.querySelector<HTMLElement>(FOCUSABLE);
+      if (first) first.focus({ preventScroll: true });
+    });
+    watch.observe(el, { childList: true, subtree: true });
+    return () => watch.disconnect();
+  }, [open, at]);
+
   useLayoutEffect(() => {
     if (!open || !button.current) return;
     const r = button.current.getBoundingClientRect();
@@ -138,9 +152,7 @@ export function HoverCard({
       const inside = !!card.current?.contains(document.activeElement);
       hide();
       if (inside) {
-        returning.current = true;
         button.current?.focus({ preventScroll: true });
-        returning.current = false;
       }
     };
     const onDown = (e: PointerEvent) => {
@@ -179,14 +191,6 @@ export function HoverCard({
         data-testid={testId}
         onMouseEnter={() => (open ? stay() : later(show, OPEN_DELAY))}
         onMouseLeave={leave}
-        onFocus={() => {
-          if (!returning.current) show();
-        }}
-        onKeyDown={(e) => {
-          if (e.key !== "Tab" || e.shiftKey || !open || !focusables().length) return;
-          e.preventDefault();
-          enter();
-        }}
         onBlur={(e) => {
           if (!card.current?.contains(e.relatedTarget as Node) && !pinned.current) setOpen(false);
         }}
@@ -199,7 +203,7 @@ export function HoverCard({
             enter();
           }
         }}
-        className={unstyled ? className : `inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-goal text-left align-middle outline-offset-2 ${className}`}
+        className={unstyled ? className : `inline-flex min-h-6 max-w-full min-w-6 items-center gap-1.5 rounded-goal text-left align-middle outline-offset-2 ${className}`}
       >
         {trigger}
       </button>
@@ -217,12 +221,24 @@ export function HoverCard({
             onMouseLeave={leave}
             onKeyDown={(e) => {
               if (e.key !== "Tab") return;
-              // Tab cycles inside the card.
+              // Tab moves through the card; past its last link it closes and goes on from the
+              // chip, before its first it closes onto the chip: never a trap, one stop each.
               e.preventDefault();
               const els = focusables();
-              if (!els.length) return;
               const i = els.indexOf(document.activeElement as HTMLElement);
-              els[e.shiftKey ? (i <= 0 ? els.length - 1 : i - 1) : (i + 1) % els.length].focus();
+              const next = e.shiftKey ? i - 1 : i + 1;
+              if (i >= 0 && next >= 0 && next < els.length) return els[next].focus();
+              if (!e.shiftKey && i < 0 && els.length) return els[0].focus();
+              const chip = button.current;
+              hide();
+              if (!chip) return;
+              if (e.shiftKey) return chip.focus({ preventScroll: true });
+              // The first focusable after the chip in the page, the card's own links left out.
+              const all = [...document.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+                (el) => !card.current?.contains(el) && el.getClientRects().length > 0,
+              );
+              const after = all.find((el) => chip.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING && !chip.contains(el));
+              (after ?? chip).focus();
             }}
             onBlur={(e) => {
               if (!card.current?.contains(e.relatedTarget as Node) && e.relatedTarget !== button.current && !pinned.current) setOpen(false);

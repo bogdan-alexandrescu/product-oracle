@@ -106,7 +106,7 @@ test("baseline: the feature drawer shows links, evidence and the lock", async ({
   const chips = d.getByTestId("evidence-chip");
   await expect(chips).toHaveCount(3);
   await expect(chips.nth(0)).toContainText("GitHub issue");
-  await expect(chips.nth(0).getByTestId("confidence")).toHaveText("0.80");
+  await expect(chips.nth(0).getByTestId("confidence")).toHaveText("80%");
   await expect(chips.nth(0).getByTestId("confidence")).toHaveAttribute("data-tone", "green");
   await expect(chips.nth(1)).toContainText("Slack");
   await expect(chips.nth(1).getByTestId("confidence")).toHaveAttribute("data-tone", "amber");
@@ -235,24 +235,24 @@ test("baseline: an approver resolves an open material conflict by picking a clai
   const conflicts = page.getByTestId("conflict");
   await expect(conflicts).toHaveCount(2);
   const open = conflicts.filter({ hasText: "Saved carts" });
-  await expect(open.getByTestId("conflict-field")).toHaveText("status");
+  await expect(open.getByTestId("conflict-field")).toHaveText("Delivery status");
   await expect(open.getByTestId("conflict-status")).toHaveText("Open");
   await expect(open).toContainText("Material");
-  await expect(open.getByTestId("conflict-rule")).toContainText("code beats tracker");
+  await expect(open.getByTestId("conflict-rule")).toContainText("GitHub pull request (code) outranks Linear (tracker)");
   const claims = open.getByTestId("claim");
   await expect(claims).toHaveCount(2);
-  await expect(claims.nth(0)).toContainText("in_progress");
+  await expect(claims.nth(0)).toContainText("In progress");
   await expect(claims.nth(0)).toContainText("GitHub pull request");
-  await expect(claims.nth(0).getByTestId("confidence")).toHaveText("0.52");
+  await expect(claims.nth(0).getByTestId("confidence")).toHaveText("52%");
   await expect(claims.nth(1)).toContainText("Linear");
 
   const logged = conflicts.filter({ hasText: "Raise activation" });
   await expect(logged.getByTestId("conflict-status")).toHaveText("Logged");
   await expect(logged.getByRole("button", { name: /Pick/ })).toHaveCount(0);
 
-  await claims.nth(0).getByRole("button", { name: "Pick in_progress" }).click();
+  await claims.nth(0).getByRole("button", { name: "Pick In progress" }).click();
   await expect(open.getByTestId("conflict-status")).toHaveText("Resolved");
-  await expect(open).toContainText("Set to in_progress");
+  await expect(open).toContainText("Set to In progress");
   await expect(open.getByRole("button", { name: /Pick/ })).toHaveCount(0);
   await expect(tab.getByTestId("tab-count-conflicts")).toHaveText("0");
 
@@ -271,8 +271,8 @@ test("baseline: an approver accepts and rejects proposals", async ({ page }) => 
   const proposals = page.getByTestId("proposal");
   await expect(proposals).toHaveCount(3);
   const onLocked = proposals.filter({ hasText: "Guided setup" });
-  await expect(onLocked).toContainText("update");
-  await expect(onLocked).toContainText("attrs.effort:L");
+  await expect(onLocked.getByTestId("proposal-op")).toHaveText("Change:");
+  await expect(onLocked.getByLabel("Proposed fields")).toHaveText("effort → L");
   await expect(onLocked).toContainText("The setup review estimated more work than planned.");
   await expect(onLocked).toContainText("From run · Baseline to PRD · Oct 16");
 
@@ -417,8 +417,8 @@ test("baseline: the run page counts its open proposals and Review opens them", a
   await page.goto(`/runs/${AGENT_RUN}`);
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   const count = page.getByTestId("run-proposals");
-  await expect(count).toHaveText("2 open · Review");
-  await expect(page.getByTestId("run-proposals-row")).toContainText("Baseline proposals");
+  await expect(count).toHaveText("2 to review · Review");
+  await expect(page.getByTestId("run-proposals-row")).toContainText("Changes it proposed");
 
   await count.getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(new RegExp(`/baseline\\?tab=proposals&run=${AGENT_RUN}$`));
@@ -430,7 +430,7 @@ test("baseline: the run page counts its open proposals and Review opens them", a
 
   await page.getByTestId("run-filter-line").getByRole("link", { name: "Open run" }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${AGENT_RUN}$`));
-  await expect(page.getByTestId("run-proposals")).toHaveText("1 open · Review");
+  await expect(page.getByTestId("run-proposals")).toHaveText("1 to review · Review");
 });
 
 /**
@@ -455,7 +455,7 @@ test("baseline: proposals by run fit a phone", async ({ page }) => {
 // TypeScript port (lib/api/mock/describe.ts) must write the same ones.
 const SENTENCES = {
   "Guided setup": "Set Guided setup’s effort to L (was M)",
-  "Dark mode": "Set Dark mode’s delivery status to planned (was idea)",
+  "Dark mode": "Set Dark mode’s delivery status to Planned (was Idea)",
   "Team invites": "Set Team invites’ effort to XS (was S)",
 };
 
@@ -482,7 +482,7 @@ test("baseline: proposals read as sentences", async ({ page }) => {
   await expect(fields).toBeHidden();
   await guided.getByText("Details", { exact: true }).click();
   await expect(fields).toBeVisible();
-  await expect(fields).toHaveText("attrs.effort:L");
+  await expect(fields).toHaveText("effort → L");
 });
 
 /**

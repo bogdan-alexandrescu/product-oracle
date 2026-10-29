@@ -1461,6 +1461,85 @@ export function addOverlappingProposals(s: BaselineState, uuid: () => string) {
   propose({ attrs: { milestone: "Below the line", effort: "XL" } }, "Moved below the line after sizing.", "2026-10-16T08:31:00Z");
 }
 
+/**
+ * The "proposal-overlap-status" scenario (review minor #3): two run proposals on Team
+ * invites that both set its delivery status, written before either was accepted - the
+ * overlap warning must name the field fully ("delivery status"), not bare "status".
+ */
+export function addStatusOverlapProposals(s: BaselineState, uuid: () => string) {
+  const invites = s.entities.find((e) => e.key === "f.team-invites")!;
+  const propose = (fields: Attrs, reason: string, created_at: string) =>
+    s.proposals.push({
+      id: uuid(),
+      entity_id: invites.id,
+      edge_id: null,
+      payload: { op: "update", kind: "entity", fields, reason, origin: "agent" },
+      run_id: AGENT_RUN,
+      actor: `run:${AGENT_RUN}`,
+      status: "open",
+      decided_by: null,
+      decided_at: null,
+      created_at,
+    });
+  propose({ attrs: { status: "in_progress" } }, "Work started on the invite flow.", "2026-10-16T08:30:00Z");
+  propose({ attrs: { status: "planned" } }, "Rescoped for next sprint.", "2026-10-16T08:31:00Z");
+}
+
+/**
+ * The "conflict-3way" scenario (review minor, #2): Dark mode's delivery status has three
+ * competing claims, all within the tie margin of each other. The winner (code) and the
+ * true runner-up (tracker) share the same precedence tiebreak the rule names; a third
+ * claim (chat) has higher raw confidence than the runner-up but a weaker source, so
+ * naming "the best other claim by confidence" instead of the one the rule actually
+ * ranked second would point at the wrong claim.
+ */
+export function addThreeWayConflict(s: BaselineState, uuid: () => string) {
+  const dark = s.entities.find((e) => e.key === "f.dark-mode")!;
+  s.conflicts.push({
+    id: uuid(),
+    entity_id: dark.id,
+    edge_id: null,
+    field: "attrs.status",
+    claims: [
+      {
+        value: "in_progress",
+        evidence_ids: [],
+        source_kind: "github:pull_request",
+        source_class: "code",
+        observed_at: "2026-10-18T11:00:00Z",
+        confidence: 0.52,
+      },
+      {
+        value: "idea",
+        evidence_ids: [],
+        source_kind: "slack",
+        source_class: "chat",
+        observed_at: "2026-10-17T09:00:00Z",
+        confidence: 0.55,
+      },
+      {
+        value: "planned",
+        evidence_ids: [],
+        source_kind: "linear",
+        source_class: "tracker",
+        observed_at: "2026-10-16T09:00:00Z",
+        confidence: 0.5,
+      },
+    ],
+    resolution: {
+      rule: "confidence tie (0.52 vs 0.50); code beats tracker",
+      decided_by: "precedence",
+      current: "idea",
+      winner: 0,
+      value: "in_progress",
+      applied: false,
+    },
+    material: true,
+    status: "open",
+    created_at: "2026-10-18T07:30:00Z",
+  });
+}
+
 /** Makes the seeded activation goal owned by the given member (the mock's members get their ids after the seed). */
 export function attributeGoalOwner(s: BaselineState, userId: string) {
   const g = s.entities.find((e) => e.key === "g.activation");

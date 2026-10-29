@@ -210,7 +210,7 @@ test("Interview vague goals (2) steps Goal 1 of 2 · Next, creating each discuss
   await expect(stepper.getByTestId("stepper-position")).toHaveText("Goal 1 of 2");
   await expect(stepper.getByRole("button", { name: "Next" })).toBeVisible();
   await expect(stepper.getByRole("button", { name: "Skip" })).toBeVisible();
-  await expect(thread(page).getByRole("heading", { name: "Make “Grow paid conversion” measurable" })).toBeVisible();
+  await expect(thread(page).getByRole("heading", { name: "Who should own “Grow paid conversion”?" })).toBeVisible();
   await expect(chips(page)).toHaveText(["Owner"]);
   expect(await interviews(page)).toBe(1);
 
@@ -229,7 +229,7 @@ test("Interview vague goals (2) steps Goal 1 of 2 · Next, creating each discuss
 test("after the baseline review: the run row and From this run band offer Interview; nothing starts before", async ({ page }) => {
   await login(page);
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
   const line = page.getByTestId("segment-baseline").getByTestId("vague-goals-line");
   await expect(line).toContainText("2 goals are not measurable · Interview");

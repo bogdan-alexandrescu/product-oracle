@@ -18,8 +18,8 @@ async function checkpointsOnDecisions(page: Page) {
   await expect(page).toHaveURL(/\/company\/strategy$/);
   await page.getByRole("navigation", { name: "Company" }).getByTestId("company-tab-decisions").click();
   await expect(page).toHaveURL(/\/company\/decisions/);
-  await chip(page, "State", "All").click();
-  await chip(page, "Class", "Checkpoints").click();
+  await chip(page, "State", "Any state").click();
+  await chip(page, "Kind", "Checkpoints").click();
 }
 
 for (const who of ["commenter", "viewer"]) {
@@ -48,7 +48,7 @@ for (const who of ["commenter", "viewer"]) {
     await expect(page.getByTestId("run-decision")).toHaveCount(1);
     // Another run's stop, on a company document, for contrast.
     await page.getByTestId("nav-runs").click();
-    await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").first().click();
+    await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").first().click();
     await page.getByTestId("checkpoint-baseline_confirm").getByRole("button", { name: "Approve and continue" }).click();
     await expect(page.getByTestId("run-decision")).toHaveCount(1);
     await signOut(page);

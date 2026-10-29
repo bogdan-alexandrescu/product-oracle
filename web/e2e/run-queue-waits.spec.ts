@@ -67,12 +67,12 @@ test("a step SwarmCloud holds reads why and since when on the Runs row and the r
   await seedQueuedRun(page);
 
   await page.goto("/runs");
-  const row = page.locator("tr[data-row]").filter({ hasText: "queued-onboarding" });
+  const row = page.locator('tr[data-row][data-document="queued-onboarding"]');
   await expect(row.getByTestId("run-queue-wait")).toHaveText(`${QUOTA} · since ${SINCE_WORDS}`);
   // A run SwarmCloud does not hold shows nothing of the kind.
-  await expect(page.locator("tr[data-row]").filter({ hasText: "team-onboarding" }).getByTestId("run-queue-wait")).toHaveCount(0);
+  await expect(page.locator('tr[data-row][data-document="team-onboarding"]').getByTestId("run-queue-wait")).toHaveCount(0);
 
-  await row.getByRole("link", { name: "queued-onboarding" }).click();
+  await row.getByRole("link", { name: /queued onboarding/i }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN_ID}$`));
   await expect(page.getByTestId("segment-queue-wait")).toHaveCount(1);
   await expect(page.getByTestId("segment-queue-wait")).toHaveText(`${QUOTA} · since ${SINCE_WORDS}`);
@@ -88,13 +88,15 @@ test("a run not started after 30 minutes is an Inbox row with Open and Cancel, c
 
   await page.goto("/inbox");
   await expect(badge).toHaveText(String(before + 1));
-  const row = page.getByTestId("inbox-lookups").locator("tr[data-row]").filter({ hasText: "queued-onboarding" });
+  const row = page.getByTestId("inbox-lookups").locator("tr[data-row]").filter({ hasText: "Queued onboarding" });
   await expect(row).toContainText(QUOTA);
   await expect(row).toContainText(`since ${SINCE_WORDS}`);
   await expect(row.getByRole("button", { name: "Retry" })).toHaveCount(0);
   await expect(row.getByRole("link", { name: "Open", exact: true })).toHaveAttribute("href", `/runs/${RUN_ID}`);
 
   await row.getByRole("button", { name: "Cancel run" }).click();
+  // Asked first, as the run page asks (qa-company-1).
+  await page.getByRole("alertdialog", { name: "Cancel run" }).getByRole("button", { name: "Cancel run" }).click();
   await expect(row).toHaveCount(0);
   await expect(badge).toHaveText(String(before));
 

@@ -244,6 +244,7 @@ PER_ITEM: dict[str, Role | None] = {
     # in_audience): the track's owner, else every owner, and the leads for slips.
     "keep_track_alert": None,
     "list_simple_changes": "owner",
+    "make_new_interview_link": "approver",
     "mark_metric_variance_unknown": "approver",
     "mark_request_reply_sent": "approver",
     "mirror_discussion_to_slack": "approver",

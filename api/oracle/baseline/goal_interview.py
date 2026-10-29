@@ -194,6 +194,15 @@ async def _owner(db: AsyncSession, e: Entity) -> uuid.UUID | None:
     return owner if user is not None and user.disabled_at is None else None
 
 
+def interview_title(title: str, missing: list[str]) -> str:
+    """The interview's title names its gap: "Who should own “X”?" when only an owner is
+    missing (the goal is measured already), else "Make “X” measurable"."""
+    short = title[: MAX_TITLE - 20]
+    if set(missing) == {"owner"}:
+        return f"Who should own “{short}”?"
+    return f"Make “{short}” measurable"
+
+
 async def interview(
     db: AsyncSession, principal: Principal, entity_id: uuid.UUID, private: bool = False
 ) -> tuple[Discussion, bool]:
@@ -204,7 +213,8 @@ async def interview(
         raise HTTPException(404, "Entity not found")
     if e.type != "goal":
         raise HTTPException(422, ONLY_GOALS)
-    if (await _check(db, e))["measurable"]:
+    check = await _check(db, e)
+    if check["measurable"]:
         raise HTTPException(422, MEASURABLE)
     if await autonomy.level(db, "goals") == "observe":
         raise HTTPException(409, OBSERVING)
@@ -215,7 +225,7 @@ async def interview(
     body = DiscussionCreate(
         subject_kind="entity",
         subject={"entity_id": str(e.id), "interview": True},
-        title=f"Make “{e.title[: MAX_TITLE - 20]}” measurable",
+        title=interview_title(e.title, check["missing"]),
         visibility="private" if private else "open",
         participants=[owner] if owner is not None and owner != principal.user_id else [],
     )

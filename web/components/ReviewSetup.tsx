@@ -7,7 +7,7 @@ import { peopleByIds, PersonPicker, type Person } from "@/components/PersonPicke
 import { FIELD_LABEL, InlineError, TEXTAREA } from "@/components/review/parts";
 import { ErrorNote, Loading } from "@/components/ui";
 import { ApiError, api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatDay } from "@/lib/format";
+import { formatDay, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -303,10 +303,16 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
   const canEdit = can("put_section_assignment");
   const people = usePeople(states.flatMap((s) => [s.owner_id, ...(s.reviewer_ids ?? [])]));
   const [editing, setEditing] = useState<string | null>(null);
+  // qa-docs-45: sections nobody owns yet fold into one line; Assign (Show, read-only) lists them.
+  const [unfolded, setUnfolded] = useState(false);
+  // A required section keeps its row: its Required chip says something about it.
+  const assigned = (s: SectionState) => !!s.owner_id || (s.reviewer_ids ?? []).length > 0 || !!s.due_at || !!s.required;
+  const open = states.filter((s) => !assigned(s));
+  const shown = states.filter((s) => assigned(s) || unfolded || editing === s.section_key);
   return (
-    <Panel title="Section owners and reviewers" count={states.length} testId="section-assignments">
+    <Panel title="Section owners and reviewers" testId="section-assignments">
       <ul className="divide-y divide-line">
-        {states.map((s) => (
+        {shown.map((s) => (
           <li key={s.section_key} data-section-key={s.section_key} className="flex min-w-0 flex-col gap-2 px-4 py-2.5">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5">
               <span className="min-w-0 font-semibold break-words text-text">{s.heading}</span>
@@ -347,6 +353,17 @@ export function SectionAssignments({ doc, states, onSaved }: { doc: string; stat
             )}
           </li>
         ))}
+        {open.length > 0 && (
+          <li data-testid="unassigned-sections" className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 px-4 py-2.5">
+            <span className="min-w-0 text-text2">
+              {open.length === states.length ? `${plural(open.length, "section")}, no owner yet` : `${plural(open.length, "more section")} with no owner`}
+            </span>
+            <span className="flex-1" />
+            <Button variant="ghost" aria-expanded={unfolded} onClick={() => setUnfolded((u) => !u)}>
+              {unfolded ? "Hide" : canEdit ? "Assign" : "Show"}
+            </Button>
+          </li>
+        )}
       </ul>
     </Panel>
   );

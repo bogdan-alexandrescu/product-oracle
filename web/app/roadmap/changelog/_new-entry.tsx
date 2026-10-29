@@ -2,11 +2,10 @@
 
 import { useState } from "react";
 
-import { INPUT } from "@/components/ui";
+import { Button, Dialog } from "@/components/ds";
+import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { errorMessage } from "@/lib/use-query";
-
-import { FormDialog } from "../_form-dialog";
 
 type Entry = Schemas["ChangelogEntryOut"];
 
@@ -30,7 +29,8 @@ export function NewEntryDialog({
 }) {
   const [category, setCategory] = useState<Entry["category"]>("added");
   const [audience, setAudience] = useState<Entry["audience"]>("internal");
-  const [releasedOn, setReleasedOn] = useState(today);
+  const [firstDay] = useState(today);
+  const [releasedOn, setReleasedOn] = useState(firstDay);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [busy, setBusy] = useState(false);
@@ -53,17 +53,22 @@ export function NewEntryDialog({
     }
   }
 
+  const canSubmit = !!title.trim() && !needsDate;
+
   return (
-    <FormDialog
+    <Dialog
       title="New entry"
       testId="new-entry-dialog"
-      submitLabel="Add entry"
-      submit="Adding…"
-      canSubmit={!!title.trim() && !needsDate}
-      busy={busy}
-      error={error}
-      onSubmit={create}
+      dirty={!!title || !!body || category !== "added" || audience !== "internal" || releasedOn !== firstDay}
       onClose={onClose}
+      onSubmit={() => {
+        if (canSubmit && !busy) void create();
+      }}
+      actions={
+        <Button type="submit" variant="primary" disabled={busy || !canSubmit}>
+          {busy ? "Adding…" : "Add entry"}
+        </Button>
+      }
     >
       <div className="grid grid-cols-3 gap-3 max-[600px]:grid-cols-1">
         <label className="flex flex-col gap-1 text-sm font-semibold text-text2">
@@ -100,6 +105,7 @@ export function NewEntryDialog({
       <p className="text-sm text-text2">
         The entry starts as a draft. Internal entries are for everyone at the company; an approver publishes public ones.
       </p>
-    </FormDialog>
+      {error && <ErrorNote>{error}</ErrorNote>}
+    </Dialog>
   );
 }

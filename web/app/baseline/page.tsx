@@ -344,7 +344,7 @@ export default function BaselinePage() {
       if (accept) await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/accept", { ...params, body: { skip_fields: skip } }));
       else await unwrap(api.POST("/v1/baseline/proposals/{proposal_id}/reject", params));
       if (accept && skip.length > 0)
-        return `Proposal accepted without ${skip.map(fieldName).join(", ")}: the rest is applied and the item is locked against Oracle's changes until a person unlocks it.`;
+        return `Proposal accepted without ${skip.map((k) => fieldName(k)).join(", ")}: the rest is applied and the item is locked against Oracle's changes until a person unlocks it.`;
       if (accept) return "Proposal accepted: the change is applied and the item is locked against Oracle's changes until a person unlocks it.";
       return noChange(proposal) ? "Proposal dismissed: it changed nothing." : "Proposal rejected.";
     });
@@ -419,9 +419,15 @@ export default function BaselinePage() {
       )}
       <PageHeader
         title="Baseline"
+        info={
+          <InfoTip label="Baseline" align="start" side="bottom">
+            Goals, products and features the product is built on, each linked to its evidence.
+          </InfoTip>
+        }
         action={
           <span className="flex flex-wrap items-center gap-2">
-            {canWrite && (
+            {/* The Items tab has its own Add, on the kind it shows: one Add control there (qa-plan-49). */}
+            {canWrite && tab !== "items" && (
               <Button icon="plus" className="h-10" onClick={() => setAdding("goal")}>
                 Add item
               </Button>
@@ -439,15 +445,16 @@ export default function BaselinePage() {
         }
         status={
           <>
+            {/* On a phone the Counts strip right below says it ("Goals confirmed"): the chip
+                would stand on a line by itself above the actions (qa-plan-50). */}
             {s && (
-              <Chip kind="pass" data-testid="confirmed-chip">
-                {s.confirmed_goals} confirmed
-              </Chip>
+              <span className="inline-flex max-[600px]:hidden">
+                <Chip kind="pass" data-testid="confirmed-chip">
+                  {s.confirmed_goals} confirmed
+                </Chip>
+              </span>
             )}
             {capsReady && !canComment && <ViewOnly />}
-            <InfoTip label="Baseline" align="start" side="bottom">
-              Goals, products and features the product is built on, each linked to its evidence.
-            </InfoTip>
           </>
         }
       />

@@ -16,8 +16,6 @@ import { errorMessage } from "@/lib/use-query";
 
 type View = { kind: "list" } | { kind: "thread"; id: string } | { kind: "share"; id: string };
 
-const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
-
 /** Chats on this subject ("Here") and the reader's own panel chats ("Recent", the last 10). */
 function useLists(subject: ScreenSubject, tick: number) {
   const [here, setHere] = useState<DiscussionRow[] | null>(null);
@@ -100,7 +98,7 @@ function NewChat({ subject, onStarted }: { subject: ScreenSubject; onStarted: (i
       setText("");
       onStarted(id);
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -154,7 +152,7 @@ function ShareForm({ id, onShared, onCancel }: { id: string; onShared: (id: stri
         setTitle(d.title);
         setText(d.summary ?? lastReply?.body ?? "");
       })
-      .catch((e) => live && setError(detail(e)));
+      .catch((e) => live && setError(errorMessage(e)));
     return () => {
       live = false;
     };
@@ -169,7 +167,7 @@ function ShareForm({ id, onShared, onCancel }: { id: string; onShared: (id: stri
       );
       onShared(d.id);
     } catch (e) {
-      setError(detail(e));
+      setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -267,17 +265,20 @@ function DetailedPanel({ onClose, closeLabel = "Close Ask Oracle", showHeader = 
         </div>
       )}
       <div className="flex flex-none flex-col gap-2 border-b border-line px-4 py-3">
-        <p className="flex min-w-0 items-center gap-1.5 text-[15px]" data-testid="hop-about">
-          <span className="min-w-0 truncate rounded-full bg-accent-soft px-2.5 py-0.5 font-semibold text-accent-ink">
-            {about.url ? (
-              <Link href={about.url} className="hover:underline">
-                About: {about.label}
-              </Link>
-            ) : (
-              <>About: {about.label}</>
-            )}
-          </span>
-        </p>
+        {/* In a thread its own header names the subject (qa-shell-20): the chip is for the list. */}
+        {view.kind === "list" && (
+          <p className="flex min-w-0 items-center gap-1.5 text-[15px]" data-testid="hop-about">
+            <span className="min-w-0 truncate rounded-full bg-accent-soft px-2.5 py-0.5 font-semibold text-accent-ink">
+              {about.url ? (
+                <Link href={about.url} className="hover:underline">
+                  About: {about.label}
+                </Link>
+              ) : (
+                <>About: {about.label}</>
+              )}
+            </span>
+          </p>
+        )}
         {view.kind === "list" && (
           <SegmentedControl
             label="About"

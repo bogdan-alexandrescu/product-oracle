@@ -23,14 +23,14 @@ const CHIPS = [
   "PRD section changed",
 ];
 
-const UNVERIFIED = "No verified estimate, capacity or commitment supports 2026-11-30.";
+const UNVERIFIED = "No verified estimate, capacity or commitment supports Nov 30, 2026.";
 
 /** Opens the seeded run from the runs list, as a person would. */
 async function openRun(page: Page) {
   await login(page);
   await seedRoadmapReview(page);
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap"]').getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
   const check = page.getByTestId("items-check");
   await expect(check).toBeVisible();
@@ -62,12 +62,12 @@ async function expectNothingCut(page: Page) {
 test("the roadmap items check counts blocking and to-confirm reasons; the review screen shows every chip in full", async ({ page }) => {
   const check = await openRun(page);
   await expect(check.getByTestId("items-check-summary")).toHaveText(
-    "9 roadmap items: 4 now, 2 next, 3 later · 3 blocking · 8 to confirm",
+    "9 roadmap items: 4 now, 2 next, 3 later · 3 blocking · 7 to confirm",
   );
   // D1 (#542): the run page lists no item; its reasons are on the review screen.
   await expect(check.getByTestId("item-reasons")).toHaveCount(0);
   await openReview(page);
-  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 8 to confirm");
+  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 7 to confirm");
   for (const chip of CHIPS) await expect(page.getByTestId("reason-chip").filter({ hasText: chip }).first()).toBeVisible();
   // Reasons are read per item, with every fix.
   await expect(row(page, "budget-caps").getByTestId("reason-chip")).toHaveText(["Depends on a later item"]);
@@ -84,11 +84,11 @@ test("the roadmap items check counts blocking and to-confirm reasons; the review
 test("on a phone the summary and every reason stay readable with no horizontal scroll", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const check = await openRun(page);
-  await expect(check.getByTestId("items-check-summary")).toContainText("3 blocking · 8 to confirm");
+  await expect(check.getByTestId("items-check-summary")).toContainText("3 blocking · 7 to confirm");
   await expect(page.getByTestId("items-review-line")).toBeVisible();
   await expectNothingCut(page);
   await openReview(page);
-  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 8 to confirm");
+  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 7 to confirm");
   await expectNothingCut(page);
 });
 

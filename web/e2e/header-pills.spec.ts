@@ -58,9 +58,11 @@ function overlaps(a: Box, b: Box) {
 }
 
 /** The pill's top and height, and the height of its text's lines (one line: under 26 px). */
-async function pillMetrics(page: Page, text: string) {
-  const pill = page.locator("main [data-page-header]").getByText(text, { exact: true });
+async function pillMetrics(page: Page, testId: string, text: RegExp) {
+  // qa-docs: the pills name the template and theme ("Template: Goal-traced PRD"), not their keys.
+  const pill = page.locator("main [data-page-header]").getByTestId(testId);
   await expect(pill).toBeVisible();
+  await expect(pill).toHaveText(text);
   return pill.evaluate((el) => {
     const range = document.createRange();
     range.selectNodeContents(el);
@@ -91,11 +93,14 @@ for (const size of SIZES) {
       await setPanel(page, open);
 
       const tops: number[] = [];
-      for (const text of ["template oracle-default v2", "theme clean-document"]) {
-        const m = await pillMetrics(page, text);
-        expect(m.height, `${text} height`).toBe(26);
-        expect(m.lines, `${text} lines`).toBe(1);
-        expect(m.textHeight, `${text} text height`).toBeLessThan(26);
+      for (const [testId, text] of [
+        ["doc-template", /^Template: \S/],
+        ["doc-theme", /^Theme: \S/],
+      ] as const) {
+        const m = await pillMetrics(page, testId, text);
+        expect(m.height, `${testId} height`).toBe(26);
+        expect(m.lines, `${testId} lines`).toBe(1);
+        expect(m.textHeight, `${testId} text height`).toBeLessThan(26);
         tops.push(m.top);
       }
       // The status chip and both pills share one row (beside the title or wrapped below it as

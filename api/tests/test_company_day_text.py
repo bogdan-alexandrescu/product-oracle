@@ -160,6 +160,7 @@ EXCEPTIONS = {
     ("market/blocks.py", "finding_row"): "a finding's published date: a calendar date, no time",
     ("metrics/review.py", "variances"): "a metric week's Monday: a calendar date, no time of day",
     ("priorities/service.py", "_cited_as"): "machine field: a citation's ISO date",
+    ("roadmap/doc_dates.py", "shown_day"): "a date written in a draft: a calendar date, no time",
     ("requests/triage.py", "prompt_lines"): "agent prompt, labelled UTC",
     ("requests/triage.py", "daily_due"): "machine field: the triage_day knob",
     ("requests/triage.py", "daily"): "machine field: the triage_day knob",
@@ -434,7 +435,10 @@ def test_the_deck_banner_names_the_company_time():
     ev = ExportVersion(
         document=doc, version=version, sections=[], citations=[], latest_number=2, zone=AUCKLAND
     )
-    assert "approved 2026-10-13 09:00 NZDT" in deck._banner(ev)
+    banner = deck._banner(ev)
+    # In words, capitalised, no ISO date (QA docs-30).
+    assert "Approved Oct 13, 2026, 9:00 AM NZDT" in banner
+    assert "2026-" not in banner
 
 
 # --------------------------------------------------------------------------- #463 fixes 2

@@ -47,7 +47,7 @@ test("a PRD version has Document and Roadmap 4 tabs; Roadmap shows 3 Now, 1 Next
   const pane = visible(page, "draft-roadmap");
   await expect(pane).toContainText("Proposed by draft v2 · not an approved roadmap");
   await expect(status(page)).toHaveAttribute("data-status", "ready");
-  await expect(status(page)).toContainText(/^4 items · 3 Now · 1 Next · derived \w{3} \d{1,2}, \d{1,2}:\d\d [AP]M \S+ · 1 problem/);
+  await expect(status(page)).toContainText(/^4 items · 3 Now · 1 Next · built \w{3} \d{1,2}, \d{1,2}:\d\d [AP]M \S+ · 1 problem/);
   // E3b: the tab opens on what changed since draft v1; All shows every item.
   await visible(page, "items-filter").getByRole("button", { name: /^All/ }).click();
   await expect(rows(page)).toHaveCount(4);
@@ -87,7 +87,7 @@ test("an approver's Derive again shows Queued, and after two ticks the page show
   await page.goto(`${PRD}/v/1/roadmap`);
   await expect(status(page)).toHaveAttribute("data-status", "ready");
   await expect(rows(page)).toHaveCount(4);
-  await status(page).getByRole("button", { name: "Derive again" }).click();
+  await status(page).getByRole("button", { name: "Build again" }).click();
   await expect(status(page)).toHaveAttribute("data-status", "queued");
   await expect(status(page)).toHaveText("Queued. Oracle starts deriving within a minute.");
   // No Derive while it is queued; the current items stay.
@@ -100,7 +100,7 @@ test("an approver's Derive again shows Queued, and after two ticks the page show
   await expect(status(page).getByRole("link", { name: "Open run" })).toHaveAttribute("href", /^\/runs\/[0-9a-f-]+$/);
   await tick(page);
   await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
-  await expect(status(page)).toContainText(/^4 items · 2 Now · 1 Next · 1 Later · derived/);
+  await expect(status(page)).toContainText(/^4 items · 2 Now · 1 Next · 1 Later · built/);
   await expect(rows(page)).toHaveCount(4);
   await expect(row(page, "wallet-pay")).toBeVisible();
 });
@@ -115,30 +115,30 @@ test("Derive and the owner switch by role; unticking the switch persists across 
     await login(page, who);
     await page.goto(URL);
     await expect(status(page)).toHaveAttribute("data-status", "ready");
-    await expect(visible(page, "draft-roadmap").getByRole("button", { name: /Derive/ })).toHaveCount(0);
+    await expect(visible(page, "draft-roadmap").getByRole("button", { name: /Build/ })).toHaveCount(0);
     await expect(page.getByTestId("draft-roadmap-auto")).toHaveCount(0);
     await signOut(page);
   }
 
   await login(page, "approver@example.com");
   await page.goto(URL);
-  await expect(status(page).getByRole("button", { name: "Derive again" })).toBeVisible();
+  await expect(status(page).getByRole("button", { name: "Build again" })).toBeVisible();
   await expect(page.getByTestId("draft-roadmap-auto")).toHaveCount(0);
   await signOut(page);
 
   await login(page);
   await page.goto(URL);
-  await expect(status(page).getByRole("button", { name: "Derive again" })).toBeVisible();
+  await expect(status(page).getByRole("button", { name: "Build again" })).toBeVisible();
   const auto = visible(page, "draft-roadmap-auto");
-  const box = auto.getByRole("checkbox", { name: "Derive for each new draft" });
+  const box = auto.getByRole("checkbox", { name: "Update the draft roadmap with each new draft" });
   await expect(box).toBeChecked();
-  await auto.getByRole("button", { name: "About deriving for each new draft" }).click();
+  await auto.getByRole("button", { name: "About updating with each new draft" }).click();
   await expect(page.getByText("About $5.50 per draft at standard depth. Runs in the background.").filter({ visible: true })).toBeVisible();
   await box.uncheck();
   await expect(box).not.toBeChecked();
   await expect(box).toBeEnabled();
   await page.reload();
-  await expect(visible(page, "draft-roadmap-auto").getByRole("checkbox", { name: "Derive for each new draft" })).not.toBeChecked();
+  await expect(visible(page, "draft-roadmap-auto").getByRole("checkbox", { name: "Update the draft roadmap with each new draft" })).not.toBeChecked();
 });
 
 // Card open-section: protects = a row's "Open PRD section" opens the Document tab of the
@@ -197,7 +197,7 @@ test("Build roadmap reuses the approved version's draft items, unless asked to d
   // usage-alerts v1 is approved and has no draft items yet: derive them first.
   await page.goto("/documents/usage-alerts/v/1/roadmap");
   await expect(status(page)).toHaveAttribute("data-status", "none");
-  await status(page).getByRole("button", { name: "Derive now" }).click();
+  await status(page).getByRole("button", { name: "Build draft roadmap now" }).click();
   await expect(status(page)).toHaveAttribute("data-status", "queued");
   await tick(page);
   await tick(page);
@@ -236,7 +236,7 @@ test("Build roadmap offers Derive the items again only when the version has read
   await expect(dialog.getByRole("checkbox", { name: "Derive the items again" })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Cancel" }).click();
 
-  await status(page).getByRole("button", { name: "Derive now" }).click();
+  await status(page).getByRole("button", { name: "Build draft roadmap now" }).click();
   await tick(page);
   await tick(page);
   await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
@@ -252,7 +252,7 @@ test("Build roadmap offers Derive the items again only when the version has read
 test("Start after the draft items changed since the estimate asks to estimate again", async ({ page, context }) => {
   await login(page, "approver@example.com");
   await page.goto("/documents/usage-alerts/v/1/roadmap");
-  await status(page).getByRole("button", { name: "Derive now" }).click();
+  await status(page).getByRole("button", { name: "Build draft roadmap now" }).click();
   await tick(page);
   await tick(page);
   await expect(status(page)).toHaveAttribute("data-status", "ready", { timeout: 15_000 });
@@ -264,7 +264,7 @@ test("Start after the draft items changed since the estimate asks to estimate ag
   // Meanwhile, in another tab, the same approver derives the items again.
   const other = await context.newPage();
   await other.goto("/documents/usage-alerts/v/1/roadmap");
-  await status(other).getByRole("button", { name: "Derive again" }).click();
+  await status(other).getByRole("button", { name: "Build again" }).click();
   await expect(status(other)).toHaveAttribute("data-status", "queued");
   await other.close();
 

@@ -36,7 +36,7 @@ test("spec: an added section is labelled Proposed · added in an edit; Oracle's 
     "Proposed · until an engineering approver approves this version",
   );
   // The acceptance criteria read as two parts, in the full document.
-  await page.getByRole("button", { name: /Show full document/ }).click();
+  await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
   const ac = await openSection(page, "acceptance-criteria");
   await expect(ac.getByTestId("spec-state")).toHaveText([
     "Decided · from the approved PRD",
@@ -77,7 +77,7 @@ test("spec: a source an edit added is listed under Added sources, apart from Ora
 test("spec: a full engineering spec labels only the section outside the template as added", async ({ page }) => {
   await login(page);
   await page.goto(`${FULL}/v/1`);
-  await page.getByRole("button", { name: /Show full document/ }).click();
+  await page.getByRole("group", { name: "Document view" }).getByRole("button", { name: "Full" }).click();
   await expectAdded((await openSection(page, "launch-checklist")).getByTestId("spec-state"));
   // Architecture is in a full spec's template: proposed until an engineering approver approves.
   const architecture = (await openSection(page, "architecture")).getByTestId("spec-state");

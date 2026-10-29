@@ -1,7 +1,8 @@
 """Customer interviews for members: create, draft the guide, edit it, link, withdraw.
 
 Who may do what: viewers read; commenters create; the interview's creator or an
-approver edits a Draft, redrafts its guide, creates its link and withdraws it. Nothing
+approver edits a Draft, redrafts its guide, creates its link, makes a new one (the old
+link stops working) and withdraws it. Nothing
 reaches the customer that a member did not approve, except Oracle's acknowledgements
 and at most one follow-up per question (oracle.interviews.turns).
 
@@ -47,6 +48,14 @@ DRAFT_ONLY = "Only a draft interview can change"
 NO_GUIDE = "Draft the questions first"
 OPEN = ("draft", "invited", "in_progress")
 PRICING_FIXED = "A pricing interview's guide is fixed; edit it instead"
+NO_LINK_YET = "This interview has no link yet; create its link first."
+#: Replaced links' sha256 kept so opening one says it was replaced; older ones read as expired.
+REPLACED_LINKS_KEPT = 5
+NEW_LINK_REFUSED = {
+    "finished": "This interview is finished, so it can't get a new link.",
+    "expired": "This interview's link expired, so it can't get a new link. Interview them again.",
+    "revoked": "This interview was withdrawn, so it can't get a new link.",
+}
 
 #: H9: the guide of a pricing interview, (prompt, purpose) in order. Questions 1 to 4 are
 #: the Van Westendorp questions; the snapshot reads the prices back (oracle.interviews.jobs).
@@ -211,6 +220,7 @@ async def out(db: AsyncSession, principal: Principal, row: Interview) -> Intervi
         interviewee_name=row.interviewee_name,
         interviewee_company=row.interviewee_company,
         link_expires_at=row.link_expires_at,
+        link_created_at=row.link_created_at,
         link_opened_at=row.link_opened_at,
         created_by=row.created_by,
         created_by_name=names.get(row.created_by),
@@ -354,11 +364,49 @@ async def create_link(
 
     raw, digest = new_token()
     row.link_token_hash = digest
-    row.link_expires_at = _now() + timedelta(days=LINK_DAYS)
+    row.link_created_at = _now()
+    row.link_expires_at = row.link_created_at + timedelta(days=LINK_DAYS)
     row.status = "invited"
     await flush_or_conflict(db)
     await audit.record(db, principal, "interview.link_created", "interview", row.id)
-    return InterviewLinkOut(url=app_url(f"/i/{raw}"), expires_at=row.link_expires_at)
+    return _link(raw, row)
+
+
+def _link(raw: str, row: Interview) -> InterviewLinkOut:
+    assert row.link_expires_at is not None and row.link_created_at is not None
+    return InterviewLinkOut(
+        url=app_url(f"/i/{raw}"), expires_at=row.link_expires_at, created_at=row.link_created_at
+    )
+
+
+async def new_link(
+    db: AsyncSession, principal: Principal, interview_id: uuid.UUID
+) -> InterviewLinkOut:
+    """Make a new link (qa-work-43): who may create the link may replace it. The old link
+    stops working at once and, opened, says it was replaced; the new one is shown once,
+    works once (a new browser binds it) and expires 7 days from now. The transcript
+    carries on."""
+    row = await get_row(db, interview_id, lock=True)
+    _manage(principal, row)
+    if row.status not in ("invited", "in_progress") or row.link_token_hash is None:
+        raise InterviewError(409, NEW_LINK_REFUSED.get(row.status, NO_LINK_YET))
+    if row.link_expires_at is not None and row.link_expires_at <= _now():
+        # Past its 7 days, before the ticker marks it: refused as an expired one is.
+        raise InterviewError(409, NEW_LINK_REFUSED["expired"])
+    from oracle.interviews.public import new_token
+
+    raw, digest = new_token()
+    row.replaced_link_hashes = [*row.replaced_link_hashes, row.link_token_hash][
+        -REPLACED_LINKS_KEPT:
+    ]
+    row.link_token_hash = digest
+    row.link_created_at = _now()
+    row.link_expires_at = row.link_created_at + timedelta(days=LINK_DAYS)
+    row.link_opened_at = None
+    row.session_hash = None
+    await flush_or_conflict(db)
+    await audit.record(db, principal, "interview.link_replaced", "interview", row.id)
+    return _link(raw, row)
 
 
 async def revoke(db: AsyncSession, principal: Principal, interview_id: uuid.UUID) -> Interview:

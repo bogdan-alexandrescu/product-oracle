@@ -5,11 +5,11 @@ import { useId, useState, type ReactNode } from "react";
 
 import { usePolling } from "@/components/JobsPanel";
 import { peopleByIds } from "@/components/PersonPicker";
-import { Button, Chip, LinkButton, Notice, Page, PageHeader, Panel, type ChipKind } from "@/components/ds";
+import { Button, Chip, Icon, LinkButton, Notice, Page, PageHeader, Panel, useDocumentDestination, type ChipKind } from "@/components/ds";
 import { findingSentence, findingText, WarningTicks, type Places } from "@/components/share/PublicWarnings";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap, type LlmJob, type Schemas } from "@/lib/api/client";
-import { formatDateTime, NO_ACCOUNT_REASON } from "@/lib/format";
+import { formatDateTime, NO_ACCOUNT_REASON, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
@@ -59,7 +59,7 @@ type Refusal =
 const toApprove = (r: Row) => (r.state === "draft" || r.state === "missing" || r.state === "changed") && r.left_out_reason !== "no_goal";
 
 /** The 422 detail of PUT public-texts as a Refusal. */
-function refusal(error: unknown, status: number): Refusal {
+function refusal(error: unknown): Refusal {
   const detail = error && typeof error === "object" && "detail" in error ? (error as { detail: unknown }).detail : null;
   if (detail && typeof detail === "object") {
     const d = detail as { code?: string; message?: string; findings?: Finding[]; warnings?: string[] };
@@ -68,7 +68,7 @@ function refusal(error: unknown, status: number): Refusal {
     if (d.message) return { kind: "other", message: d.message };
   }
   if (typeof detail === "string") return { kind: "other", message: detail };
-  return { kind: "other", message: `Request failed (${status}).` };
+  return { kind: "other", message: "Something went wrong. Try again." };
 }
 
 /** Why Approve waits, beside the button. */
@@ -80,7 +80,7 @@ async function putText(doc: string, version: number, itemKey: string, body: Text
       params: { path: { doc, item_key: itemKey }, query: { version } },
       body,
     });
-    return response.ok ? null : refusal(error, response.status);
+    return response.ok ? null : refusal(error);
   } catch (e) {
     return { kind: "other", message: errorMessage(e) };
   }
@@ -108,7 +108,7 @@ function RefusalAlert({ refusal }: { refusal: Refusal }) {
 async function putPage(doc: string, body: PageIn): Promise<Refusal | null> {
   try {
     const { error, response } = await api.PUT("/v1/roadmaps/{doc}/public-page", { params: { path: { doc } }, body });
-    return response.ok ? null : refusal(error, response.status);
+    return response.ok ? null : refusal(error);
   } catch (e) {
     return { kind: "other", message: errorMessage(e) };
   }
@@ -429,15 +429,18 @@ function Radios<V extends string>({
 function Summary({ data }: { data: Texts }) {
   const { no_approved_text: noText = 0, excluded = 0, no_goal: noGoal = 0 } = data.left_out as Record<string, number>;
   const left = noText + excluded + noGoal;
+  // qa-docs-38: plain counts; only the reasons that apply.
+  const why = [
+    noText ? `${noText} without an approved public text` : null,
+    excluded ? `${excluded} excluded` : null,
+    noGoal ? `${noGoal} not tied to a confirmed company goal` : null,
+  ].filter(Boolean);
   return (
     <p data-testid="public-summary" className="text-sm">
       <span className="font-semibold">
-        {data.shown} shown · {left} left out
+        {plural(data.shown, "item")} on the public page{left ? ` · ${left} left out` : ""}
       </span>
-      <span className="text-text2">
-        {" "}
-        ({noText} without an approved text · {excluded} excluded · {noGoal} {noGoal === 1 ? "serves" : "serve"} no confirmed goal)
-      </span>
+      {why.length > 0 && <span className="text-text2">: {why.join(", ")}</span>}
     </p>
   );
 }
@@ -470,7 +473,8 @@ function CheckState({ doc, data, onChecked }: { doc: string; data: Texts; onChec
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <p data-testid="public-check" className="text-sm font-medium">
           {data.check.state === "none" || !check
-            ? "Not checked yet"
+            ? // qa-docs-38: what the check is and what to do.
+              "Nobody has checked this public page yet. Read it, then mark it as checked: a public link needs the check."
             : data.check.state === "checked"
               ? `Checked by ${who} on ${formatDateTime(check.checked_at)}`
               : `Changed since checked (checked by ${who} on ${formatDateTime(check.checked_at)})`}
@@ -657,6 +661,8 @@ function PageText({ doc, data, onSaved }: { doc: string; data: Texts; onSaved: (
 export function PublicCheck({ doc }: { doc: string }) {
   const { can, capsReady } = useMe();
   const allowed = capsReady && can("list_public_texts");
+  // qa-docs-63: a roadmap's page: the rail marks Plan, as on the roadmap's other pages.
+  useDocumentDestination(doc, "/plan");
   const texts = useQuery(
     `public-texts|${doc}|${allowed}`,
     () => (allowed ? unwrap(api.GET("/v1/roadmaps/{doc}/public-texts", { params: { path: { doc } } })) : Promise.resolve(undefined)),
@@ -676,7 +682,9 @@ export function PublicCheck({ doc }: { doc: string }) {
       title="Public version"
       suffix={texts.data ? `v${texts.data.version}` : undefined}
       back={
-        <Link href={`/documents/${doc}`} className="hover:underline">
+        // qa-docs-63: the same back link as the roadmap's own pages.
+        <Link href={`/documents/${doc}`} className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
+          <Icon name="back" size={16} />
           Back to the roadmap
         </Link>
       }

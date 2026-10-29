@@ -53,8 +53,12 @@ class RitualOut(BaseModel):
     # H5: "Weekly metrics review" on the goals check-in the review replaced (paused while
     # the review is active); null otherwise.
     replaced_by: str | None = None
-    # The newest occurrence with a pre-read: Company › Rituals' "Last pre-read".
+    # The newest occurrence with a pre-read whose meeting time has come: Company › Rituals'
+    # "Last pre-read".
     last_pre_read: "OccurrenceSummary | None" = None
+    # The next meeting's occurrence when its pre-read is ready ahead of it (Prepare now, or
+    # the ticker's lead time): Company › Rituals' Next links to it.
+    next_pre_read: "OccurrenceSummary | None" = None
 
 
 class Period(BaseModel):

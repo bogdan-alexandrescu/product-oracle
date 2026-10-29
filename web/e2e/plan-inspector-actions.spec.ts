@@ -192,7 +192,7 @@ test("Record a decision on a Plan item opens Propose decision about the item", a
   await dialog.getByLabel("Decision", { exact: true }).fill("Ship the digest after Beta");
   await dialog.getByLabel("Option 1", { exact: true }).fill("Move Beta to Dec 9");
   await dialog.getByLabel("Option 2", { exact: true }).fill("Ship Beta without the digest");
-  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: "approver@example.com" });
+  await dialog.getByLabel("Approver", { exact: true }).selectOption({ label: "Approver · approver@example.com" });
   await dialog.getByRole("button", { name: "Propose", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(page.getByTestId("decision-inspector").filter({ visible: true })).toContainText(`Roadmap item ${SLIP}`);

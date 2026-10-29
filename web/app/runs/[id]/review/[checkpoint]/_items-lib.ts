@@ -1,5 +1,5 @@
 import type { Schemas } from "@/lib/api/client";
-import { calendarDay } from "@/lib/dates";
+import { formatCount, formatDate, plural } from "@/lib/format";
 
 export type Review = Schemas["CheckpointReview"];
 export type Item = Schemas["ReviewItem"];
@@ -17,8 +17,72 @@ export const EDIT_KINDS = ["edit", "drop", "restore"];
 /** Actions only the agents can carry out (D7 needs_agents). */
 export const AGENT_KINDS = ["split", "merge"];
 
-export const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-export const day = (d: string) => calendarDay(d, { month: "short", day: "numeric", year: "numeric" });
+export { plural };
+/** "Nov 30, 2026". */
+export const day = (d: string) => formatDate(d);
+
+/** A calendar day as the API writes it ("2026-11-30", or "2026-11-30T…" with a time). */
+const ISO_DAY_SOURCE = String.raw`\d{4}-\d{2}-\d{2}(?:T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?)?`;
+/** Such a day standing alone in a sentence: never one inside a key, a slug or a path ("launch-2026-11-30"). */
+const ISO_DAY = new RegExp(String.raw`(?<![\w./-])${ISO_DAY_SOURCE}(?![\w/-])`, "g");
+/** A value that is a day and nothing else. */
+const ONLY_DAY = new RegExp(`^${ISO_DAY_SOURCE}$`);
+/**
+ * A sentence of the API's (a reason's text) with its dates in words: "… supports 2026-11-30."
+ * reads "… supports Nov 30, 2026." (qa-work-19). A date inside a key stays as it is:
+ * "launch-2026-11-30" is a name, not a date.
+ */
+export const datesInWords = (text: string) => text.replace(ISO_DAY, (d) => formatDate(d));
+
+/**
+ * Who decides a stop, in words: "Approvers and owners decide" (the role ladder: viewer < commenter < approver < owner).
+ * `approverRole` is the stop's least role to decide (the checkpoint's approver_role), not the signed-in role.
+ */
+export function decidersText(approverRole: string | null | undefined): string {
+  if (approverRole === "owner") return "Owners decide";
+  if (approverRole === "commenter") return "Commenters, approvers and owners decide";
+  if (approverRole === "viewer") return "Any member decides";
+  return "Approvers and owners decide";
+}
+
+/**
+ * The counts of a Roadmap items review, one definition for the review screen and the run page
+ * (qa-work-3, qa-work-4). Every number counts items (rows), never reasons:
+ * - `inFile`: the items in the checked file; `dropped`: the items only a reason or an action
+ *   names (in the base, not in this file: a dropped item is a decision too); `total` = both.
+ * - `needYou`: the items with at least one reason (handled or not), the "Needs you" filter;
+ *   `needYou` = `blocking` + `toConfirm` + `handled`.
+ * - `blocking`: the items with a blocking reason still open; `toConfirm`: the items with an open
+ *   reason, none of them blocking; `handled`: the items whose every reason is answered by a
+ *   staged action (the draft's, so a staged fix counts at once on both pages).
+ * - `waiting`: of the open ones, the items waiting on a teammate's answer.
+ */
+export type ReviewCounts = { inFile: number; dropped: number; total: number; needYou: number; blocking: number; toConfirm: number; handled: number; waiting: number };
+
+export function reviewCounts(review: Pick<Review, "items">): ReviewCounts {
+  const out: ReviewCounts = { inFile: 0, dropped: 0, total: 0, needYou: 0, blocking: 0, toConfirm: 0, handled: 0, waiting: 0 };
+  for (const it of review.items) {
+    out.total += 1;
+    if (it.position != null) out.inFile += 1;
+    else out.dropped += 1;
+    if (!it.reasons.length) continue;
+    out.needYou += 1;
+    const open = openReasons(it);
+    if (!open.length) out.handled += 1;
+    else if (open.some((r) => r.severity === "blocking")) out.blocking += 1;
+    else out.toConfirm += 1;
+    if (open.length && it.state === "waiting") out.waiting += 1;
+  }
+  return out;
+}
+
+/** "3 blocking · 7 to confirm" (both counts of items, as reviewCounts); "Nothing open" when both are 0. */
+export const openText = (c: Pick<ReviewCounts, "blocking" | "toConfirm">) =>
+  c.blocking || c.toConfirm ? `${formatCount(c.blocking)} blocking · ${formatCount(c.toConfirm)} to confirm` : "Nothing open";
+
+/** "9 items" or "9 items + 1 dropped": the rows of the review, the dropped ones apart. */
+export const itemsText = (c: Pick<ReviewCounts, "inFile" | "dropped">) =>
+  c.dropped ? `${plural(c.inFile, "item")} + ${formatCount(c.dropped)} dropped` : plural(c.inFile, "item");
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
@@ -91,3 +155,35 @@ const RESOLUTION: Record<string, string> = { done: "Done", declined: "Declined",
 export const resolutionText = (r: Schemas["ResolutionEntry"]) => (r.outcome === "declined" && r.note ? `Declined: ${r.note}` : RESOLUTION[r.outcome]);
 
 export const show = (v: unknown): string => (v == null ? "none" : Array.isArray(v) ? v.join(", ") || "none" : typeof v === "object" ? JSON.stringify(v) : String(v));
+
+const FIELD_WORDS: Record<string, string> = {
+  title: "Title",
+  outcome: "Outcome",
+  horizon: "Horizon",
+  milestone: "Milestone",
+  milestone_date: "Milestone date",
+  milestone_name: "Milestone name",
+  depends_on: "Depends on",
+  prd_section: "PRD section",
+  confidence: "Confidence",
+  priority: "Priority",
+  position: "Place in the file",
+};
+/** A changed field in words: "milestone_date" is "Milestone date". */
+export const fieldWords = (field: string) => {
+  const words = FIELD_WORDS[field] ?? field.replace(/[-_.]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+/** Fields whose values are keys or names (an item's key, a PRD section): shown as written. */
+const KEY_FIELDS = ["depends_on", "prd_section", "key", "id"];
+/**
+ * A changed field's value in words: a horizon by its name, a value that is a date as
+ * "Nov 30, 2026", the dates in a sentence (a title, an outcome) in words; a key is shown as
+ * written ("launch-2026-11-30" stays).
+ */
+export function showValue(field: string, v: unknown): string {
+  if (field === "horizon" && typeof v === "string") return horizonLabel(v);
+  const text = show(v);
+  if (ONLY_DAY.test(text)) return formatDate(text);
+  return KEY_FIELDS.includes(field) ? text : datesInWords(text);
+}

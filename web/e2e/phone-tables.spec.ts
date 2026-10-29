@@ -63,7 +63,7 @@ test("phone inbox: each row shows its item, kind and context, its action, and co
   const approval = page.getByTestId("inbox-approvals").locator("tr[data-row]").first();
   await expect(approval.locator('[data-cost="prominent"]')).toBeVisible();
   await expect(approval).toContainText("Cost approval");
-  await expect(approval).toContainText("usage-alerts-v2");
+  await expect(approval).toContainText("Usage alerts v2");
   await expect(approval.getByRole("button", { name: /^Approve \$/ })).toBeVisible();
 
   const overrun = page.getByTestId("inbox-overruns").locator("tr[data-row]").first();
@@ -82,9 +82,10 @@ test("phone runs: run names are whole, costs show on approvals and overruns, the
     await expectInViewport(page, row.locator('td[data-phone="title"]'));
   }
   const approval = rows.filter({ hasText: "Awaiting cost approval" });
-  await expect(approval.locator('td[data-phone="title"]')).toHaveText("usage-alerts-v2");
+  await expect(approval.locator('td[data-phone="title"]')).toHaveText(/^Usage alerts v2/);
   await expect(approval.locator('[data-cost="prominent"]')).toBeVisible();
-  await expect(approval.getByRole("button", { name: "Approve" })).toBeVisible();
+  // qa-work-17: the row's button says what it does (it opens the run, where Approve is).
+  await expect(approval.getByRole("button", { name: "Open" })).toBeVisible();
   const overrun = rows.filter({ hasText: "Paused" });
   await expect(overrun.locator('[data-cost="prominent"]')).toBeVisible();
   await expectNoSideScroll(page);
@@ -223,11 +224,16 @@ test("phone settings: the current tab is in full view, clear of the fades and ch
     const [box, item, more] = await Promise.all([
       strip.boundingBox(),
       current.boundingBox(),
-      strip.evaluate((el) => ({ left: el.hasAttribute("data-more-left"), right: el.hasAttribute("data-more-right") })),
+      strip.evaluate((el) => ({
+        left: el.hasAttribute("data-more-left"),
+        right: el.hasAttribute("data-more-right"),
+        // Where the first whole item starts from each edge: the fade hides up to there.
+        cutL: parseFloat(el.style.getPropertyValue("--cut-l")) || 0,
+        cutR: parseFloat(el.style.getPropertyValue("--cut-r")) || 0,
+      })),
     ]);
-    const fade = 32;
-    expect(item!.x, path).toBeGreaterThanOrEqual(box!.x + (more.left ? fade : 0) - 0.5);
-    expect(item!.x + item!.width, path).toBeLessThanOrEqual(box!.x + box!.width - (more.right ? fade : 0) + 0.5);
+    expect(item!.x, path).toBeGreaterThanOrEqual(box!.x + (more.left ? more.cutL : 0) - 0.5);
+    expect(item!.x + item!.width, path).toBeLessThanOrEqual(box!.x + box!.width - (more.right ? more.cutR : 0) + 0.5);
     // Nor under a chevron button.
     for (const chevron of await nav.locator('[data-testid^="strip-more-"]').all()) {
       const c = (await chevron.boundingBox())!;

@@ -17,7 +17,7 @@ test("send back with staged actions and no note, then view the review that was s
   await login(page);
   await seedRoadmapReview(page);
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "usage-alerts-roadmap" }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap"]').getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap from an approved PRD" })).toBeVisible();
 
   // D1 (#542): staged and decided on the Roadmap items review screen, not the run page; no note.
@@ -33,7 +33,7 @@ test("send back with staged actions and no note, then view the review that was s
   await bar.getByRole("button", { name: "Send back to agents" }).click();
   await page.getByTestId("sheet-send-back").getByRole("button", { name: "Send back", exact: true }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Sent back · 2 entries");
-  await page.getByRole("link", { name: /^Roadmap from an approved PRD from / }).click();
+  await page.getByRole("link", { name: /^(.+ · )?Roadmap from an approved PRD$/ }).click();
 
   const items = page.getByTestId("segment-roadmap_items");
   await expect(items).toContainText("attempt 2");

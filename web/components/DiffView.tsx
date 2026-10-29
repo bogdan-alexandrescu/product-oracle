@@ -13,6 +13,7 @@ import { VersionSwitcher } from "@/components/VersionSwitcher";
 import { ErrorNote, LayerBadge, Loading, SpecStateBadge } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas, type SectionDiff } from "@/lib/api/client";
 import { useQuery } from "@/lib/use-query";
+import { readableWords } from "@/lib/diff";
 import { useScreenSubject } from "@/lib/screen-subject";
 import { sectionHref } from "@/lib/section-link";
 
@@ -179,7 +180,7 @@ function DiffTable({ rows }: { rows: Line[][] }) {
 function Words({ words }: { words: NonNullable<SectionDiff["words"]> }) {
   return (
     <div className="text-[15px] leading-7 text-text" data-testid="word-diff">
-      {blocksOf(words).map((b, i) =>
+      {blocksOf(readableWords(words)).map((b, i) =>
         b.kind === "table" ? (
           <DiffTable key={i} rows={b.rows} />
         ) : (
@@ -226,12 +227,13 @@ function DiffSection({ d, doc, to, showLayer }: { d: SectionDiff; doc: string; t
   return (
     <li
       data-testid="diff-section"
+      data-section={d.section_key}
       data-status={d.status}
       className={`min-w-0 overflow-hidden rounded-panel border border-line bg-surface ${bar}`}
     >
       <div className="flex min-h-12 flex-wrap items-center gap-2 px-4 py-2">
         <h2
-          className={`min-w-0 truncate font-display text-lg leading-6 font-bold tracking-heading ${
+          className={`min-w-0 break-words font-display text-lg leading-6 font-bold tracking-heading ${
             d.status === "removed" ? "text-text2 line-through" : quiet ? "text-text2" : ""
           }`}
         >
@@ -246,18 +248,17 @@ function DiffSection({ d, doc, to, showLayer }: { d: SectionDiff; doc: string; t
             Moved
           </Chip>
         )}
-        {/* The anchor and View stay on one line: when the row wraps, they move down together. */}
-        <span className="ml-auto flex min-w-0 max-w-full items-center gap-2" data-testid="diff-anchor">
-          <span className="min-w-0 truncate font-mono text-[13px] text-text2">#{d.section_key}</span>
-          {d.status !== "removed" && (
-            <Link
-              href={sectionHref(doc, to, d.section_key)}
-              className="flex-none text-sm font-medium text-accent-ink hover:underline"
-            >
-              View
-            </Link>
-          )}
-        </span>
+        {/* The section by its heading only, never its anchor (qa-docs-28). */}
+        {d.status !== "removed" && (
+          <Link
+            href={sectionHref(doc, to, d.section_key)}
+            data-testid="diff-anchor"
+            aria-label={`View ${heading} in v${to}`}
+            className="ml-auto flex-none text-sm font-medium text-accent-ink hover:underline"
+          >
+            View
+          </Link>
+        )}
       </div>
       {(renamed || (d.words && d.words.length > 0)) && (
         <div className="border-t border-line px-4 py-3">
@@ -303,7 +304,9 @@ function DiffItems({ doc, kind, from, to }: { doc: string; kind: "prd" | "roadma
       const query = { head: `${doc}@${to}`, base: `${doc}@${from}` };
       return { diff: await unwrap(api.GET("/v1/roadmap-items/diff", { params: { query } })) };
     } catch (e) {
-      if (e instanceof ApiError && e.status === 409) return { notReady: e.message };
+      // qa-docs-28: in words, no status code; the screen says what will happen.
+      if (e instanceof ApiError && e.status === 409)
+        return { notReady: `Roadmap items for v${to} are not ready yet. They show here once Oracle drafts them.` };
       throw e;
     }
   });
@@ -323,7 +326,8 @@ function DiffItems({ doc, kind, from, to }: { doc: string; kind: "prd" | "roadma
           {diff?.base && (
             <Toggle label="Unchanged" name="Show unchanged items" checked={showUnchanged} onChange={setShowUnchanged} />
           )}
-          <LinkButton href={open}>Open items</LinkButton>
+          {/* Nothing to open until the items are drafted (qa-docs-28). */}
+          {diff && <LinkButton href={open}>Open items</LinkButton>}
         </>
       }
     >

@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import {
   Button,
   Chip,
   CodeTag,
+  confirmInPage,
   Icon,
   InfoTip,
   Inspector,
@@ -313,14 +314,14 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
                 />
                 <span className="min-w-0 flex-1">
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="truncate font-semibold text-text">{t.name}</span>
+                    <span className="min-w-0 font-semibold text-text [overflow-wrap:anywhere]">{t.name}</span>
                     {rec?.template.key === t.key && (
                       <Chip kind="pass" className="flex-none">
                         Recommended
                       </Chip>
                     )}
                   </span>
-                  {t.description && <span className="mt-0.5 block truncate text-sm text-text2">{t.description}</span>}
+                  {t.description && <span className="mt-0.5 block text-sm text-text2" data-testid="template-description">{t.description}</span>}
                 </span>
               </label>
             );
@@ -352,7 +353,8 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
                   checked ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line hover:border-line-strong"
                 }`}
               >
-                <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} />
+                {/* A 400 x 300 page at 0.4: the sample's words stay legible at 160 x 120 (QA docs-64). */}
+                <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} scale={0.4} page={{ width: 400, height: 300 }} />
                 <span className="flex min-w-0 items-center gap-1.5">
                   <input
                     type="radio"
@@ -361,7 +363,7 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
                     checked={checked}
                     onChange={() => setThemePick({ key: t.key, source: "user" })}
                   />
-                  <span className="truncate text-sm font-semibold text-text">{t.name}</span>
+                  <span className="min-w-0 text-sm font-semibold text-text [overflow-wrap:anywhere]">{t.name}</span>
                 </span>
               </label>
             );
@@ -379,23 +381,30 @@ function saveLastChoice(kind: Kind, template: string, theme: string | null) {
 
 // ---------------------------------------------------------------- recommendation inspector
 
+/** A roadmap recommendation's variant (the API's word) as people say it. */
+const VARIANT_NAME: Record<string, string> = {
+  board: "Board version",
+  engineering: "Engineering version",
+  public: "Public version",
+};
+
 /** The recommendation, the selected template and theme, and the company default (owners set it). */
 function RecommendationInspector({
   kind,
   choice,
   onError,
-  onNotice,
 }: {
   kind: Kind;
   choice: DraftChoice;
   onError: (e: string | null) => void;
-  onNotice: (n: string | null) => void;
 }) {
   const { can } = useMe();
   // #370: "Make company default" is PUT /v1/drafts/defaults.
   const canSetDefault = can("set_draft_defaults");
   const label = kind === "prd" ? "PRD" : "roadmap";
   const [busy, setBusy] = useState(false);
+  // QA docs-8: a saved company default says so and can be taken back (to the one before it).
+  const [saved, setSaved] = useState<{ before: Choice | null } | null>(null);
   const { live, rec, themes, templates, template, templateKey, themeKey, setTemplatePick, setThemePick } = choice;
   const defaults = useQuery("draft-defaults", () => unwrap(api.GET("/v1/drafts/defaults")));
   const company = defaults.data?.[kind] ?? null;
@@ -406,29 +415,46 @@ function RecommendationInspector({
     setThemePick({ key: company.theme ?? null, source: "company" });
   }
 
-  async function makeDefault() {
-    if (!templateKey) return;
+  const templateName = (key: string | null | undefined) => (key ? (templates.find((t) => t.key === key)?.name ?? null) : null);
+  const themeNameOf = (key: string | null | undefined) => (key ? (themes.data?.find((t) => t.key === key)?.name ?? null) : null);
+
+  async function putDefault(next: Choice | null): Promise<boolean> {
     setBusy(true);
     onError(null);
-    onNotice(null);
     try {
-      const next = await unwrapProblems(
-        api.PUT("/v1/drafts/defaults", {
-          body: { ...(defaults.data ?? {}), [kind]: { template: templateKey, theme: themeKey } },
-        }),
-      );
-      defaults.setData(() => next);
-      onNotice(`Company default for new ${label}s saved.`);
+      const out = await unwrapProblems(api.PUT("/v1/drafts/defaults", { body: { ...(defaults.data ?? {}), [kind]: next } }));
+      defaults.setData(() => out);
+      return true;
     } catch (e) {
       onError(e instanceof ProblemsError ? e.problems.map((p) => p.message).join(" ") : e instanceof Error && e.message ? e.message : errorMessage(e));
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
-  const companyTemplateName = company && templates.find((t) => t.key === company.template)?.name;
-  const companyThemeName = company?.theme && themes.data?.find((t) => t.key === company.theme)?.name;
-  const themeName = themeKey ? (themes.data?.find((t) => t.key === themeKey)?.name ?? themeKey) : null;
+  async function makeDefault() {
+    if (!templateKey) return;
+    const names = [templateName(templateKey) ?? "this template", themeNameOf(themeKey) ?? "no theme"].join(" with ");
+    const yes = await confirmInPage({
+      action: "Make company default",
+      message: `Every new ${label} in the company will start with ${names} unless someone picks another. You can undo this right after.`,
+    });
+    if (!yes) return;
+    const before = company;
+    if (await putDefault({ template: templateKey, theme: themeKey })) setSaved({ before });
+  }
+
+  async function undo() {
+    if (!saved) return;
+    if (await putDefault(saved.before)) setSaved(null);
+  }
+
+  const companyTemplateName = company ? templateName(company.template) : null;
+  const companyThemeName = company?.theme ? themeNameOf(company.theme) : null;
+  const themeName = themeNameOf(themeKey);
+  // The selection is the company default already: neither button has anything to do.
+  const selectedIsCompany = !!company && company.template === templateKey && (company.theme ?? null) === (themeKey ?? null);
 
   return (
     <div data-testid="recommendation-panel" aria-live="polite" className={live.pending ? "opacity-70" : ""}>
@@ -440,8 +466,10 @@ function RecommendationInspector({
           rec && (
             <>
               {rec.theme && <Chip hero>{rec.theme.name}</Chip>}
-              {rec.variant && rec.variant !== "team" && <Chip hero>{rec.variant}</Chip>}
-              {rec.group_by && rec.variant && rec.variant !== "team" && <Chip hero>by {rec.group_by}</Chip>}
+              {rec.variant && rec.variant !== "team" && <Chip hero>{VARIANT_NAME[rec.variant] ?? "Own version"}</Chip>}
+              {rec.group_by && rec.variant && rec.variant !== "team" && (
+                <Chip hero>{rec.group_by === "team" ? "Lanes by team" : "Grouped"}</Chip>
+              )}
             </>
           )
         }
@@ -484,24 +512,43 @@ function RecommendationInspector({
         </InspectorSection>
         {(company || canSetDefault) && (
           <InspectorSection label="Company default">
+            {saved && (
+              <Notice
+                tone="pass"
+                testId="company-default-saved"
+                action={
+                  <Button variant="ghost" onClick={undo} disabled={busy}>
+                    Undo
+                  </Button>
+                }
+              >
+                Company default for new {label}s saved.
+              </Notice>
+            )}
             {company && (
-              <div data-testid="company-default" className="flex flex-wrap items-center gap-2">
-                <span className="min-w-0 flex-1 truncate font-semibold">
-                  {companyTemplateName ?? company.template}
-                  {company.theme && <span className="font-normal text-text2"> · {companyThemeName ?? company.theme}</span>}
+              <div data-testid="company-default" className={`flex flex-wrap items-center gap-2 ${saved ? "mt-2.5" : ""}`}>
+                <span className="min-w-0 flex-1 font-semibold [overflow-wrap:anywhere]">
+                  {companyTemplateName ?? "A template no longer offered"}
+                  {companyThemeName && <span className="font-normal text-text2"> · {companyThemeName}</span>}
                 </span>
-                <Button variant="solid" onClick={applyCompany}>
-                  Use company default
-                </Button>
+                {selectedIsCompany ? (
+                  <Chip kind="acc">Selected</Chip>
+                ) : (
+                  <Button variant="solid" onClick={applyCompany}>
+                    Use company default
+                  </Button>
+                )}
               </div>
             )}
-            {canSetDefault && (
-              <div className={`flex items-center gap-2 ${company ? "mt-2.5" : ""}`}>
-                <Button onClick={makeDefault} disabled={busy || !templateKey}>
+            {!company && !saved && <p className="text-sm text-text2">None set. New {label}s start with the recommendation.</p>}
+            {canSetDefault && !selectedIsCompany && (
+              <div className="mt-2.5 flex items-center gap-2">
+                <Button variant="ghost" onClick={makeDefault} disabled={busy || !templateKey}>
                   {busy ? "Saving…" : "Make company default"}
                 </Button>
                 <InfoTip label="company default" align="start" side="bottom">
-                  New {label}s start with this template and theme unless someone picks another.
+                  Owners only. Makes the selected template and theme the start of every new {label} in the company; it asks
+                  first.
                 </InfoTip>
               </div>
             )}
@@ -517,13 +564,13 @@ function RecommendationInspector({
 /** New-draft picker: a few questions, the recommended template and theme, overrides, create. */
 export function NewDraft({ kind }: { kind: Kind }) {
   const router = useRouter();
+  const { can, capsReady } = useMe();
   const label = kind === "prd" ? "PRD" : "roadmap";
   const [prd, setPrd] = useState<PrdAnswers>({});
   const [roadmap, setRoadmap] = useState<RoadmapAnswers>({});
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
 
   const choice = useDraftChoice(kind === "prd" ? { kind, prd } : { kind, roadmap });
   const { rec, templateKey, themeKey } = choice;
@@ -536,7 +583,6 @@ export function NewDraft({ kind }: { kind: Kind }) {
     if (!templateKey || !title.trim()) return;
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       const out = await unwrapProblems(
         api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }),
@@ -550,22 +596,44 @@ export function NewDraft({ kind }: { kind: Kind }) {
   }
 
   const formId = `new-draft-${kind}`;
-  const inspector = <RecommendationInspector kind={kind} choice={choice} onError={setError} onNotice={setNotice} />;
+  const inspector = <RecommendationInspector kind={kind} choice={choice} onError={setError} />;
+  const backHref = kind === "roadmap" ? "/plan/documents" : "/documents";
+  const back = (
+    <Link href={backHref} className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
+      <Icon name="back" size={16} />
+      {kind === "roadmap" ? "Plan" : "PRDs"}
+    </Link>
+  );
+
+  // As New PRD (QA docs-10): a role that cannot start a draft is told so up front, with no form.
+  if (!capsReady || !can("start_draft", true)) {
+    return (
+      <Page>
+        <PageHeader back={back} title={`New ${label}`} />
+        {!capsReady ? (
+          <Loading />
+        ) : (
+          <Notice
+            testId="new-draft-not-allowed"
+            action={
+              <Link href={backHref} className="font-semibold underline-offset-2 hover:underline">
+                Back
+              </Link>
+            }
+          >
+            Only approvers and owners can start a {label}. Ask one of them to start it; you can read every {label}.
+          </Notice>
+        )}
+      </Page>
+    );
+  }
 
   return (
     <Page>
       <PageHeader
-        back={
-          <Link
-            href={kind === "roadmap" ? "/plan/documents" : "/documents"}
-            className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text"
-          >
-            <Icon name="back" size={16} />
-            {kind === "roadmap" ? "Plan" : "PRDs"}
-          </Link>
-        }
+        back={back}
         title={`New ${label}`}
-        status={
+        info={
           <InfoTip label={`new ${label}s`} align="start" side="bottom">
             Answer what you can; every question is optional. The template and theme follow your answers, and you can
             change either.
@@ -580,7 +648,6 @@ export function NewDraft({ kind }: { kind: Kind }) {
 
       <form id={formId} onSubmit={create}>
         <Split inspector={inspector}>
-          {notice && <Notice tone="pass">{notice}</Notice>}
           {error && <ErrorNote>{error}</ErrorNote>}
           <Panel bodyClassName="p-4">
             <label className="block">
@@ -720,7 +787,15 @@ export function GoalPicker({
                   />
                   {g.code && <CodeTag code={g.code} />}
                   <span className="min-w-0 flex-1 font-semibold text-text [overflow-wrap:anywhere]">{g.name}</span>
-                  {p.text && <span className="flex-none text-sm text-text2">{p.text}</span>}
+                  {p.text && (
+                    <span
+                      className="flex-none text-sm text-text2"
+                      title={g.currentText && g.targetText ? `Now ${g.currentText}; target ${g.targetText}` : undefined}
+                    >
+                      {/* "7 pts to go" read as a countdown: say what the distance is to (QA docs-64). */}
+                      {p.state === "togo" ? p.text.replace(/ to go$/, " from target") : p.text}
+                    </span>
+                  )}
                 </label>
                 {g.subgoals > 0 && (
                   <button
@@ -750,7 +825,7 @@ export function GoalPicker({
 export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   const kind = "prd" as const;
   const router = useRouter();
-  const { can } = useMe();
+  const { can, capsReady } = useMe();
   // #370: Continue creates an intake not linked to a PRD (the handler only asks an approver to link one).
   const canWrite = can("create_intake", true);
   const canSkeleton = can("start_draft", true);
@@ -763,7 +838,10 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   const [requests, setRequests] = useState<string[]>(requestIds);
   const [busy, setBusy] = useState<"continue" | "skeleton" | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // QA docs-9: Continue is always there to press; pressing it early says what is missing.
+  const [checked, setChecked] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
+  const problemRef = useRef<HTMLTextAreaElement>(null);
   const id = useId();
   // The router keeps this page's state when it is left (cacheComponents): one Continue that
   // went through must not leave it "Saving…" when Start a PRD opens it again (#599 review).
@@ -774,14 +852,25 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => setPrd((a) => ({ ...a, [k]: v }));
 
   const problemLength = problem.trim().length;
-  const ready = !!title.trim() && problemLength >= PROBLEM_MIN && problem.length <= PROBLEM_MAX;
+  const titleProblem = title.trim() ? null : "Give the PRD a title.";
+  const problemProblem =
+    problemLength === 0
+      ? "Say what problem it solves."
+      : problemLength < PROBLEM_MIN
+        ? `Say a little more: at least ${PROBLEM_MIN} characters (${problemLength} so far).`
+        : null;
+  const ready = !titleProblem && !problemProblem && problem.length <= PROBLEM_MAX;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
-    if (!ready || !canWrite) return;
+    if (!canWrite) return;
+    if (!ready) {
+      setChecked(true);
+      (titleProblem ? titleRef : problemRef).current?.focus();
+      return;
+    }
     setBusy("continue");
     setError(null);
-    setNotice(null);
     const answers = Object.fromEntries(Object.entries(prd).filter(([, v]) => v != null)) as PrdAnswers;
     const body: BriefIn = {
       title: title.trim(),
@@ -817,7 +906,6 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
     }
     setBusy("skeleton");
     setError(null);
-    setNotice(null);
     try {
       const out = await unwrapProblems(api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }));
       saveLastChoice(kind, templateKey, themeKey);
@@ -829,48 +917,88 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   }
 
   const formId = "new-prd";
-  const inspector = <RecommendationInspector kind={kind} choice={choice} onError={setError} onNotice={setNotice} />;
+  const inspector = <RecommendationInspector kind={kind} choice={choice} onError={setError} />;
+  const back = (
+    <Link href="/documents" className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
+      <Icon name="back" size={16} />
+      PRDs
+    </Link>
+  );
+
+  // QA docs-10: a viewer is told up front, and gets no form to fill in for nothing.
+  if (!capsReady || !canWrite) {
+    return (
+      <Page>
+        <PageHeader back={back} title="New PRD" />
+        {!capsReady ? (
+          <Loading />
+        ) : (
+          <Notice
+            testId="new-prd-not-allowed"
+            action={
+              <Link href="/documents" className="font-semibold underline-offset-2 hover:underline">
+                Back to PRDs
+              </Link>
+            }
+          >
+            Only commenters, approvers and owners can start a PRD. Ask one of them to start it; you can read every PRD.
+          </Notice>
+        )}
+      </Page>
+    );
+  }
+
+  const titleError = checked ? titleProblem : null;
+  const problemError = checked ? problemProblem : null;
 
   return (
     <Page>
       <PageHeader
-        back={
-          <Link href="/documents" className="inline-flex items-center gap-1 font-medium text-text2 hover:text-text">
-            <Icon name="back" size={16} />
-            PRDs
-          </Link>
-        }
+        back={back}
         title="New PRD"
-        status={
+        info={
           <InfoTip label="new PRDs" align="start" side="bottom">
             Say what problem it solves; the rest is optional. Continue and Oracle asks what it still needs to know before
             it drafts.
           </InfoTip>
         }
         action={
-          canWrite && (
-            <Button form={formId} type="submit" variant="primary" disabled={busy !== null || !ready}>
-              {busy === "continue" ? "Saving…" : "Continue"}
-            </Button>
-          )
+          <Button form={formId} type="submit" variant="primary" disabled={busy !== null}>
+            {busy === "continue" ? "Saving…" : "Continue"}
+          </Button>
         }
       />
 
-      <form id={formId} onSubmit={submit} className="min-w-0">
+      <form id={formId} onSubmit={submit} noValidate className="min-w-0">
         <Split inspector={inspector}>
-          {notice && <Notice tone="pass">{notice}</Notice>}
           {error && <ErrorNote>{error}</ErrorNote>}
+          {checked && !ready && (
+            <ErrorNote>
+              <span data-testid="new-prd-missing">
+                To continue,{" "}
+                {[titleProblem && "give it a title", problemProblem && "say what problem it solves"].filter(Boolean).join(" and ")}.
+              </span>
+            </ErrorNote>
+          )}
           <Panel bodyClassName="flex flex-col gap-4 p-4">
             <label className="block">
               <span className="mb-1.5 block text-[15px] font-semibold text-text">Title</span>
               <input
+                ref={titleRef}
                 className={INPUT}
                 value={title}
                 maxLength={200}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Saved addresses at checkout"
+                aria-invalid={titleError ? true : undefined}
+                aria-describedby={titleError ? `${id}-title-error` : undefined}
                 required
               />
+              {titleError && (
+                <span id={`${id}-title-error`} className="mt-1 block text-sm text-crit">
+                  {titleError}
+                </span>
+              )}
             </label>
             <label className="block">
               <span className="mb-1.5 block text-[15px] font-semibold text-text">What problem does it solve?</span>
@@ -880,13 +1008,14 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
                 value={problem}
                 maxLength={PROBLEM_MAX}
                 onChange={(e) => setProblem(e.target.value)}
+                ref={problemRef}
                 placeholder="Returning buyers retype their address at every checkout…"
                 aria-describedby={`${id}-problem-hint`}
+                aria-invalid={problemError ? true : undefined}
                 required
               />
-              <span id={`${id}-problem-hint`} className="mt-1 block text-sm text-text2">
-                A couple of sentences is enough.
-                {problemLength > 0 && problemLength < PROBLEM_MIN && ` At least ${PROBLEM_MIN} characters.`}
+              <span id={`${id}-problem-hint`} className={`mt-1 block text-sm ${problemError ? "text-crit" : "text-text2"}`}>
+                {problemError ?? `A couple of sentences is enough (at least ${PROBLEM_MIN} characters).`}
               </span>
             </label>
           </Panel>

@@ -88,8 +88,9 @@ test("withdraw: the impact sentence comes first; afterwards the roadmap marks th
   await confirm.click();
   await expect(dialog).toBeHidden();
   await page.getByTestId("dates-filter").getByRole("button", { name: "Withdrawn" }).click();
-  await expect(row(page, "ENG-412").getByTestId("withdrawn-reason")).toContainText("Withdrawn by Admin");
-  await expect(row(page, "ENG-412").getByTestId("withdrawn-reason")).toContainText("The team re-estimated");
+  await expect(row(page, "ENG-412")).toContainText("Withdrawn by Admin");
+  await expect(row(page, "ENG-412")).not.toContainText("Verified by");
+  await expect(page.getByTestId("dates-table").locator('[data-reason-for="ENG-412"]').filter({ visible: true })).toContainText("The team re-estimated");
 
   const item = await openItem(page);
   const mark = item.locator('[data-date-mark="withdrawn"]');
@@ -116,7 +117,7 @@ test("an unverified marker opens the popover; Record basis is pre-filled and ver
   const dialog = page.getByTestId("date-basis-dialog");
   await expect(dialog.getByLabel("Date it supports")).toHaveValue("2026-12-15");
   await expect(dialog.getByLabel("Reference")).toHaveValue("ENG-413");
-  await dialog.getByRole("button", { name: "Verify" }).click();
+  await dialog.getByRole("button", { name: "Record and verify" }).click();
   await expect(dialog).toBeHidden();
   await expect(item.locator("[data-date-mark]")).toHaveCount(0);
 });
@@ -194,7 +195,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await expect(dialog.getByLabel("Item")).toHaveValue("alert-digest");
   // ENG-450 supports Nov 30 for this item, but the roadmap's date names ENG-412: still withdrawn.
   await dialog.getByLabel("Reference").fill("ENG-450");
-  await dialog.getByRole("button", { name: "Verify" }).click();
+  await dialog.getByRole("button", { name: "Record and verify" }).click();
   await expect(dialog).toBeHidden();
   line = await selectPlanItem(page, "Daily alert digest email");
   await expect(line).toContainText("date withdrawn");
@@ -203,7 +204,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await line.getByRole("button", { name: "Re-verify date" }).click();
   await expect(dialog.getByLabel("Date it supports")).toHaveValue("2026-11-30");
   await dialog.getByLabel("Reference").fill("ENG-412");
-  await dialog.getByRole("button", { name: "Verify" }).click();
+  await dialog.getByRole("button", { name: "Record and verify" }).click();
   await expect(dialog).toBeHidden();
   await expect(line).toContainText("Nov 30 ✓ ENG-412, verified by Admin");
   // A later basis on the same date and item that the date does not name is not what it rests on.
@@ -214,7 +215,7 @@ test("plan inspector: a withdrawn date is struck through with its reason, and Re
   await dialog.getByLabel("Date it supports").fill("2026-11-30");
   await dialog.getByLabel("For").selectOption("item");
   await dialog.getByLabel("Item").selectOption("alert-digest");
-  await dialog.getByRole("button", { name: "Verify" }).click();
+  await dialog.getByRole("button", { name: "Record and verify" }).click();
   await expect(dialog).toBeHidden();
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
   await expect(row(page, "CAP-9")).toHaveAttribute("data-status", "verified");
@@ -235,7 +236,7 @@ test("plan inspector: an unverified date offers Verify date; the dialog picks th
   await line.getByRole("button", { name: "Verify date" }).click();
   const dialog = page.getByTestId("date-basis-dialog");
   await dialog.getByLabel("Reference").fill("CAP-9");
-  await dialog.getByRole("button", { name: "Verify" }).click();
+  await dialog.getByRole("button", { name: "Record and verify" }).click();
   await expect(dialog).toBeHidden();
   line = await selectPlanItem(page, "Alerts in the team chat");
   await expect(line).toContainText("Dec 15 · unverified");
@@ -252,13 +253,13 @@ test("plan inspector: an unverified date offers Verify date; the dialog picks th
   await expect(dialog.getByLabel("Date it supports")).toHaveValue("2026-12-15");
   // The record's own target is the date: another date is refused because the record is sent.
   await dialog.getByLabel("Date it supports").fill("2026-12-20");
-  await dialog.getByRole("button", { name: "Verify" }).click();
-  await expect(dialog).toContainText("tracker record ENG-431 targets 2026-12-15, not 2026-12-20");
+  await dialog.getByRole("button", { name: "Record and verify" }).click();
+  await expect(dialog).toContainText(/tracker record ENG-431 targets 2026-12-15, not 2026-12-20/i);
   await dialog.getByLabel("Date it supports").fill("2026-12-15");
-  await dialog.getByRole("button", { name: "Verify" }).click();
+  await dialog.getByRole("button", { name: "Record and verify" }).click();
   await expect(dialog).toBeHidden();
   await expect(line).toContainText("Dec 15 ✓ ENG-431, verified by Admin");
   await openDates(page);
   await page.getByTestId("dates-filter").getByRole("button", { name: "Verified" }).click();
-  await expect(row(page, "ENG-431")).toContainText("Item slack-alerts");
+  await expect(row(page, "ENG-431")).toContainText("Item: Alerts in the team chat");
 });

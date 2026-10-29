@@ -60,13 +60,26 @@ export function FromRunBand({ view }: { view: FromRunOut }) {
         </Link>{" "}
         · {formatDateTime(view.run.created_at)}
       </span>
-      <Chip kind="line">{plural(s.items, "item")}</Chip>
-      <Chip kind={s.need_you ? "warn" : "pass"} data-testid="band-need-you">
-        {s.need_you} need you
-      </Chip>
-      <Chip kind={s.not_decided ? "crit" : "pass"} data-testid="band-not-decided">
-        {s.not_decided} not decided
-      </Chip>
+      <Chip kind="line">{s.items === 0 ? "No items" : plural(s.items, "item")}</Chip>
+      {/* qa-company-12: what is left, or that every item is handled; never "0 need you", nor "All 0 items handled". */}
+      {s.items === 0 ? null : s.need_you === 0 && s.not_decided === 0 ? (
+        <Chip kind="pass" data-testid="band-all-handled">
+          {s.items === 1 ? "The item is handled" : `All ${plural(s.items, "item")} handled`}
+        </Chip>
+      ) : (
+        <>
+          {s.need_you > 0 && (
+            <Chip kind="warn" data-testid="band-need-you">
+              {s.need_you} need you
+            </Chip>
+          )}
+          {s.not_decided > 0 && (
+            <Chip kind="crit" data-testid="band-not-decided">
+              {s.not_decided} not decided
+            </Chip>
+          )}
+        </>
+      )}
       {decided && (
         <span className="text-text2" data-testid="band-decided">
           {cp.status === "approved" ? "Approved" : "Sent back"} by {cp.decided_by_name ?? "someone"}

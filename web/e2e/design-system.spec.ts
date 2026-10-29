@@ -14,7 +14,7 @@ test.describe.configure({ timeout: 60_000 });
 
 test("/design: an owner sees the kit, and it is not in the navigation", async ({ page }) => {
   await openKit(page);
-  await expect(page.getByRole("heading", { name: "Design", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Design system (developers)", exact: true })).toBeVisible();
   await expect(page.getByRole("group", { name: "Theme" })).toBeVisible();
   // Not in the navigation.
   await expect(page.getByRole("navigation", { name: "Oracle" }).locator('a[href="/design"]')).toHaveCount(0);
@@ -34,7 +34,7 @@ test("/design: the Brand card draws the mark, compact cut, tab icon and wordmark
 test("/design: a viewer sees only its title", async ({ page }) => {
   await login(page, "viewer@example.com");
   await page.goto("/design");
-  await expect(page.getByRole("heading", { name: "Design", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Design system (developers)", exact: true })).toBeVisible();
   await expect(page.getByTestId("design-gallery")).toHaveCount(0);
   await expect(page.getByRole("group", { name: "Theme" })).toHaveCount(0);
 });

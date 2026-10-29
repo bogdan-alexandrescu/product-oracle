@@ -35,7 +35,7 @@ async function discussProblem(page: Page, opts: { private?: string[]; first?: st
   const form = page.getByTestId("start-discussion").filter({ visible: true });
   await expect(form.getByRole("textbox", { name: "Title" })).toHaveValue("Checkout redesign PRD · 2. Problem");
   if (opts.private) {
-    await form.getByRole("group", { name: "Who can read it" }).getByRole("button", { name: "Private" }).click();
+    await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
     await expect(form).toContainText("Only the people you pick can read it. Everyone else sees that a private discussion exists.");
     for (const who of opts.private) {
       await form.getByRole("searchbox", { name: "Find a person" }).fill(who.toLowerCase());
@@ -165,7 +165,7 @@ test("an approver discusses a pending checkpoint in a sheet on the run page", as
   await withScenario(page);
   await login(page, APPROVER);
   await page.getByTestId("nav-runs").click();
-  await page.getByTestId("run-row").filter({ hasText: "team-onboarding" }).getByRole("link").click();
+  await page.locator('[data-testid="run-row"][data-document="team-onboarding"]').getByRole("link").click();
   const card = page.getByTestId("checkpoint-baseline_confirm");
   await card.getByRole("button", { name: "Discuss" }).click();
   const sheet = page.getByTestId("sheet-discuss");

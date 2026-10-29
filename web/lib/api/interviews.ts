@@ -49,6 +49,8 @@ export type InterviewOut = {
   interviewee_name: string | null;
   interviewee_company: string | null;
   link_expires_at: string | null;
+  /** When the current link was made (Make a new link replaces it, qa-work-43). */
+  link_created_at: string | null;
   link_opened_at: string | null;
   created_by: string;
   created_by_name: string | null;
@@ -80,7 +82,8 @@ export type InterviewPatch = {
   interviewee_name?: string;
   interviewee_company?: string | null;
 };
-export type InterviewLink = { url: string; expires_at: string };
+/** The private link, shown once: when it was made and when it expires. */
+export type InterviewLink = { url: string; expires_at: string; created_at: string };
 
 export type PublicMessage = { role: "oracle" | "customer"; body: string; at: string };
 export type PublicProgress = { asked: number; total: number };
@@ -147,7 +150,7 @@ export async function interviewsCall<T>(method: string, path: string, body?: unk
       ? "Your session has expired. Sign in again."
       : typeof detail === "string"
         ? detail
-        : `Request failed (${res.status}).`;
+        : "Something went wrong. Try again.";
   throw new ApiError(res.status, message);
 }
 

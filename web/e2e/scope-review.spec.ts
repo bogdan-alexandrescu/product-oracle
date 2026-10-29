@@ -24,7 +24,7 @@ async function seeded(page: Page, email = APPROVER) {
 /** From the runs list to the run, then its checkpoint row's Review feature set. */
 async function openReview(page: Page, slug: string) {
   await page.getByTestId("nav-runs").click();
-  await page.getByTestId("run-row").filter({ hasText: new RegExp(`${slug}(?!-)`) }).getByRole("link").first().click();
+  await page.locator(`[data-testid="run-row"][data-document="${slug}"]`).getByRole("link").first().click();
   await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
   await page.getByTestId("segment-feature_set").getByRole("link", { name: "Review feature set" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+\/review\/[0-9a-f-]+/);
@@ -54,7 +54,7 @@ test("a blocking dependency disables Approve until Include <dependency> fixes it
   await expect(bulk.getByTestId("row-reasons")).toContainText("Depends on a left-out feature");
   await bulk.getByRole("button", { name: "Include Address book export" }).click();
   await expect(bulk.getByTestId("row-done")).toContainText("✓");
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("0 blocking left");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("0 blocking problems left");
   await expect(bar(page).getByRole("button", { name: "Approve with 1 edit" })).toBeEnabled();
 });
 
@@ -236,7 +236,7 @@ test("at 390 px rows are cards, the inspector is a sheet, the bar collapses, no 
 test("a held console approval is confirmed once the blocking row is waived", async ({ page }) => {
   await seeded(page);
   await page.goto("/inbox");
-  const inboxRow = page.locator("tr[data-row]").filter({ hasText: "address-book" }).filter({ visible: true });
+  const inboxRow = page.locator("tr[data-row]").filter({ hasText: "Address book" }).filter({ visible: true });
   await expect(inboxRow).toHaveCount(1);
   await inboxRow.getByRole("link", { name: "Review" }).click();
   await expect(page).toHaveURL(/\/review\//);
@@ -290,7 +290,7 @@ for (const email of [APPROVER, COMMENTER]) {
   test(`the run page at the feature set renders for ${email.split("@")[0]} with one Review link`, async ({ page }) => {
     await seeded(page, email);
     await page.getByTestId("nav-runs").click();
-    await page.getByTestId("run-row").filter({ hasText: /saved-addresses(?!-)/ }).getByRole("link").first().click();
+    await page.locator('[data-testid="run-row"][data-document="saved-addresses"]').getByRole("link").first().click();
     await expect(page.getByRole("heading", { level: 1, name: "Baseline to PRD" })).toBeVisible();
     const segment = page.getByTestId("segment-feature_set");
     await expect(segment.getByRole("link", { name: "Review feature set" })).toHaveCount(1);

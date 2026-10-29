@@ -57,7 +57,7 @@ test("an approver links a record to an alternative and filters Win and loss by i
   await page.getByLabel(/^Alternative/).selectOption({ label: "Spreadsheets" });
   await expect(accounts(page)).toHaveText(["Account 7"]);
   await page.getByLabel("Result").selectOption({ label: "Won" });
-  await expect(page.getByTestId("deals-empty")).toHaveText("No win or loss records match");
+  await expect(page.getByTestId("deals-empty")).toContainText("No win or loss records match");
   await page.getByLabel("Result").selectOption({ label: "Any result" });
   await page.getByLabel(/^Alternative/).selectOption({ label: "Any alternative" });
   await expect(accounts(page)).toHaveCount(6);

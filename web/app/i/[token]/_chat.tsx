@@ -2,27 +2,31 @@
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
+import { confirmInPage } from "@/components/ds/ConfirmDialog";
 import { LIMITS, publicCall, type PublicInterview, type PublicMessage, type PublicProgress, type PublicTurn } from "@/lib/api/interviews";
 
-type Refusal = "used" | "expired" | "withdrawn" | "unreachable";
+type Refusal = "used" | "expired" | "withdrawn" | "replaced" | "unreachable";
 type Phase = { at: "loading" } | { at: "intro" } | { at: "chat" } | { at: "done" } | { at: "refused"; why: Refusal };
 
 const BUTTON =
   "inline-flex h-11 items-center justify-center rounded-button px-4 text-[15px] font-semibold whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-60";
 const PRIMARY = `${BUTTON} bg-accent text-on-accent hover:brightness-110`;
 const QUIET = `${BUTTON} border border-line-strong bg-surface text-text hover:bg-surface2`;
+/** The page's one column: the header, the conversation and the footer line up on it. */
+const COLUMN = "mx-auto w-full max-w-2xl min-w-0 px-4";
 
 /** The refusal of a public call's status and reason (404 reads as expired: a guess learns nothing). */
 function refusalOf(status: number, reason: string | null): Refusal | null {
   if (status === 404) return "expired";
   if (status !== 410) return null;
-  return reason === "used" || reason === "withdrawn" ? reason : "expired";
+  return reason === "used" || reason === "withdrawn" || reason === "replaced" ? reason : "expired";
 }
 
 /**
  * The customer's side of an interview: the company's name and the disclosure, Hi and the
- * intro, Start; then the conversation, one approved question at a time, with Skip this question
- * and Send my answers (finish) at any time; then the thank-you. A used, expired or withdrawn
+ * intro, Start; then the conversation, one approved question at a time, with one Send, Skip
+ * this question and Finish interview (asks first: it ends the interview) at any time; then the
+ * thank-you. A used, expired or withdrawn
  * link shows a one-line page. Phone first: the input is a sticky footer.
  */
 export function InterviewChat({ token }: { token: string }) {
@@ -96,7 +100,13 @@ export function InterviewChat({ token }: { token: string }) {
     await turn("messages", body);
   }
 
+  /** qa-docs-18: ending is its own, named action, and it asks first (the link stops working). */
   async function finish() {
+    const yes = await confirmInPage({
+      action: "Finish interview",
+      message: `Your answers so far go to ${company ?? "the team"}'s product team, and this link stops working. You can't add more after this.`,
+    });
+    if (!yes) return input.current?.focus();
     setNote(null);
     setWaiting(true);
     const res = await publicCall<{ done: boolean }>("POST", token, "finish");
@@ -126,9 +136,11 @@ export function InterviewChat({ token }: { token: string }) {
         ? `This link has already been used. ${company ? `Ask ${company} for a new one.` : "Ask the team that sent it for a new one."}`
         : phase.why === "withdrawn"
           ? "This link was withdrawn."
-          : phase.why === "expired"
-            ? "This link has expired."
-            : "We could not open this link. Check your connection and reload the page.";
+          : phase.why === "replaced"
+            ? `This link was replaced by a newer one. ${company ? `Ask ${company} for the new link.` : "Ask the team that sent it for the new link."}`
+            : phase.why === "expired"
+              ? "This link has expired."
+              : "We could not open this link. Check your connection and reload the page.";
     return (
       <Frame company={company}>
         <p data-testid="interview-refused" className="py-10 text-center text-lg font-semibold">
@@ -213,7 +225,7 @@ export function InterviewChat({ token }: { token: string }) {
               Skip this question
             </button>
             <button type="button" className={QUIET} disabled={waiting} onClick={finish}>
-              Send my answers
+              Finish interview
             </button>
           </div>
         </form>
@@ -256,22 +268,27 @@ export function InterviewChat({ token }: { token: string }) {
   );
 }
 
-/** The page frame: the company's name on top, the content, and an optional sticky footer. */
+/**
+ * The page frame: the company's name on top, the content, and an optional sticky footer. The
+ * header, the content and the footer share one column (the same width and inner padding), so
+ * their left edges line up on every screen (qa-docs-69).
+ */
 function Frame({ company, footer, children }: { company: string | null; footer?: ReactNode; children: ReactNode }) {
   return (
     <div className="flex min-h-dvh min-w-0 flex-col bg-bg text-text">
-      <header className="border-b border-line bg-surface px-4 py-3">
-        <h1 data-testid="interview-company" className="mx-auto max-w-2xl truncate font-display text-xl font-bold tracking-heading">
-          {company ?? "Interview"}
-        </h1>
+      <header className="border-b border-line bg-surface py-3">
+        <div className={COLUMN}>
+          <h1 data-testid="interview-company" title={company ?? undefined} className="truncate font-display text-xl font-bold tracking-heading">
+            {company ?? "Interview"}
+          </h1>
+        </div>
       </header>
-      <div className="mx-auto w-full max-w-2xl min-w-0 flex-1 px-4">{children}</div>
+      <div data-testid="interview-column" className={`${COLUMN} flex-1`}>
+        {children}
+      </div>
       {footer && (
-        <div
-          data-testid="interview-footer"
-          className="sticky bottom-0 border-t border-line bg-surface px-4 pt-3 pb-[calc(12px+env(safe-area-inset-bottom))]"
-        >
-          <div className="mx-auto w-full max-w-2xl min-w-0">{footer}</div>
+        <div data-testid="interview-footer" className="sticky bottom-0 border-t border-line bg-surface pt-3 pb-[calc(12px+env(safe-area-inset-bottom))]">
+          <div className={COLUMN}>{footer}</div>
         </div>
       )}
     </div>

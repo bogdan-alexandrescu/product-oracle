@@ -88,13 +88,15 @@ export function ClaudeAccounts() {
     <>
       <PageHeader
         title="Claude accounts"
+        info={
+          <InfoTip label="Claude accounts" align="start" side="bottom">
+            The Claude subscriptions Oracle&apos;s built-in jobs (review comments, reporting, refinement) run on.
+            Each call takes the account with the most headroom and moves to another when one runs out. Agent
+            workflows run in SwarmCloud on SwarmCloud&apos;s own accounts.
+          </InfoTip>
+        }
         status={
           <>
-            <InfoTip label="Claude accounts" align="start" side="bottom">
-              The Claude subscriptions Oracle&apos;s built-in jobs (review comments, reporting, refinement) run on.
-              Each call takes the account with the most headroom and moves to another when one runs out. Agent
-              workflows run in SwarmCloud on SwarmCloud&apos;s own accounts.
-            </InfoTip>
             {q.data && <SummaryChips page={q.data} />}
             {capsReady && !owner && <ViewOnly />}
           </>

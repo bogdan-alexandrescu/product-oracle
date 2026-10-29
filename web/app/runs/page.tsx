@@ -22,7 +22,8 @@ import {
 } from "@/components/ds";
 import { ErrorNote } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, plural } from "@/lib/format";
+import { docLabel, runLabel } from "@/lib/labels";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
@@ -38,20 +39,27 @@ import {
   RunsWhere,
   SENT_BACK_STATE,
   WAITING_STATUSES,
-  shortId,
   type RunSummary,
 } from "./_lib";
 import { NewRunDialog } from "./_new-run-dialog";
 import { QueueWaitNote } from "./_queue-wait";
 
-const ACTION: Partial<Record<RunSummary["status"], string>> = {
-  awaiting_checkpoint: "Decide",
-  awaiting_approval: "Approve",
-  paused_overrun: "Decide",
-};
+type DocNamed = Parameters<typeof docLabel>[0];
+
+/**
+ * What a run is for, by name (qa-shell-32), never its slug or short id: its document's title
+ * ("Usage alerts PRD"), else the run's document and flow in words (runLabel).
+ */
+function runTitle(r: RunSummary, docs: Map<string, DocNamed>): string {
+  const d = r.document_id ? docs.get(r.document_id) : undefined;
+  return d ? docLabel(d) : runLabel(r);
+}
 
 export default function RunsPage() {
   const q = useQuery("runs", () => unwrap(api.GET("/v1/runs")));
+  // Document titles, to name each run by its document; the slug in words until they load.
+  const docsQ = useQuery("runs|documents", () => unwrap(api.GET("/v1/documents")).catch(() => []));
+  const docs = new Map<string, DocNamed>((docsQ.data ?? []).map((d) => [d.id, d]));
   const { can } = useMe();
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -59,38 +67,77 @@ export default function RunsPage() {
   const runs = (q.data ?? []).filter((r) => r.status !== "draft");
   // A run delivering a decision recorded at its checkpoint waits on no one.
   const waiting = runs.filter((r) => WAITING_STATUSES.includes(r.status) && !isDelivering(r));
-  const checkpoints = runs.filter((r) => r.status === "awaiting_checkpoint" && !isDelivering(r)).length;
   const selected = runs.find((r) => r.id === picked) ?? waiting[0] ?? runs[0];
 
+  /**
+   * qa-work-1/17: a row's button says what it does, as the run page does, and shows only to
+   * whoever can act on it (a viewer gets none; the whole row opens the run). A checkpoint opens
+   * its decision: Review items for roadmap items, Decide for the rest; a cost approval and an
+   * overrun open the run, where Approve and Resume are. fix-work review: Decide is per item
+   * (an approver decides an approver's checkpoint), so the row passes its can_decide.
+   */
+  const rowAction = (r: RunSummary): { label: string; go: () => void } | null => {
+    if (isDelivering(r)) return null;
+    if (r.status === "awaiting_checkpoint" && can("decide_checkpoint", r.can_decide)) {
+      return {
+        label: r.waiting_on === "roadmap_items" ? "Review items" : "Decide",
+        go: () => {
+          // D10: a PRD or roadmap review opens its version, where it is decided.
+          if (r.review_link) return router.push(r.review_link);
+          // D1: Roadmap items open their review screen (the waiting checkpoint is the run's).
+          if (r.waiting_on === "roadmap_items") return void openItemsReview(r.id);
+          router.push(`/runs/${r.id}#decide`);
+        },
+      };
+    }
+    if ((r.status === "awaiting_approval" && can("approve_run")) || (r.status === "paused_overrun" && can("resume_run"))) {
+      return { label: "Open", go: () => router.push(`/runs/${r.id}`) };
+    }
+    return null;
+  };
+
   const columns: Column<RunSummary>[] = [
-    {
-      key: "id",
-      header: "Run",
-      width: "68px",
-      phone: "hide",
-      narrow: "hide",
-      cell: (r) => <span className="tnum font-mono text-sm text-accent-ink">{shortId(r.id)}</span>,
-    },
     {
       key: "for",
       header: "For",
       phone: "title",
+      cell: (r) => {
+        const name = runTitle(r, docs);
+        return (
+          // qa-work-29: on a phone the link is a 44 px target (and the whole row opens the run).
+          <Link
+            href={`/runs/${r.id}`}
+            title={name}
+            className="block truncate font-medium hover:underline max-[600px]:flex max-[600px]:min-h-11 max-[600px]:items-center max-[600px]:whitespace-normal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {name}
+          </Link>
+        );
+      },
+    },
+    {
+      key: "flow",
+      header: "Flow",
+      width: "180px",
+      phone: "meta",
+      narrow: "hide",
+      // qa-work-23: wide enough for the flows' names; one cut short shows in full on hover.
       cell: (r) => (
-        <Link href={`/runs/${r.id}`} className="font-medium hover:underline" onClick={(e) => e.stopPropagation()}>
-          {r.document_slug ?? r.flow_title}
-        </Link>
+        <span className="block truncate" title={r.flow_title}>
+          {r.flow_title}
+        </span>
       ),
     },
-    { key: "flow", header: "Flow", width: "150px", phone: "meta", narrow: "hide", cell: (r) => r.flow_title },
     {
       key: "state",
       header: "State",
-      width: "320px",
+      width: "350px",
       phone: "meta",
       cell: (r) => (
         <span className="flex min-w-0 flex-wrap items-center gap-2.5 gap-y-1">
           <RunStatusBadge run={r} />
-          {r.waiting_on && <span className="sr-only">: {CHECKPOINT_LABEL[r.waiting_on]}</span>}
+          {r.waiting_on && !isDelivering(r) && <span className="text-sm text-text2">{CHECKPOINT_LABEL[r.waiting_on]}</span>}
           {r.draft_rejected && <DraftRejectedChip summary={r.draft_rejected} />}
           {r.sent_back && <SentBackChip summary={r.sent_back} />}
           {r.queue_wait && <QueueWaitNote wait={r.queue_wait} testId="run-queue-wait" />}
@@ -102,24 +149,22 @@ export default function RunsPage() {
     {
       key: "act",
       header: <span className="sr-only">Action</span>,
-      width: "112px",
+      width: "120px",
       align: "right",
       phone: "action",
-      cell: (r) =>
-        ACTION[r.status] && !isDelivering(r) ? (
+      cell: (r) => {
+        const a = rowAction(r);
+        return a ? (
           <Button
             onClick={(e) => {
               e.stopPropagation();
-              // D10: a PRD or roadmap review opens its version, where it is decided.
-              if (r.status === "awaiting_checkpoint" && r.review_link) return router.push(r.review_link);
-              // D1: Roadmap items open their review screen (the waiting checkpoint is the run's).
-              if (r.status === "awaiting_checkpoint" && r.waiting_on === "roadmap_items") return void openItemsReview(r.id);
-              router.push(`/runs/${r.id}`);
+              a.go();
             }}
           >
-            {ACTION[r.status]}
+            {a.label}
           </Button>
-        ) : null,
+        ) : null;
+      },
     },
   ];
 
@@ -133,17 +178,18 @@ export default function RunsPage() {
     <Page>
       <PageHeader
         title="Runs"
+        info={
+          <InfoTip label="where runs execute" align="start" side="bottom">
+            <RunsWhere />
+          </InfoTip>
+        }
         status={
-          <>
-            {checkpoints > 0 && (
-              <Chip kind="warn">
-                {checkpoints} checkpoint{checkpoints === 1 ? "" : "s"}
-              </Chip>
-            )}
-            <InfoTip label="where runs execute" align="start" side="bottom">
-              <RunsWhere />
-            </InfoTip>
-          </>
+          // qa-work-10: one count, said once: the runs waiting on a person's decision.
+          waiting.length > 0 && (
+            <Chip kind="warn" data-testid="runs-waiting">
+              {plural(waiting.length, "run")} {waiting.length === 1 ? "needs" : "need"} a decision
+            </Chip>
+          )
         }
         action={
           // #370: an approver starts any run but an update draft (the run decides), as Plan does.
@@ -158,11 +204,10 @@ export default function RunsPage() {
       {/* byRoom: the inspector goes below when the Split is too narrow for it and the table,
           as with the Ask panel docked, so the table keeps its button column (its narrow columns
           go first, by the table's width); with the panel closed it sits beside over 1100 px. */}
-      <Split byRoom inspector={selected && <RunInspector run={selected} />}>
+      <Split byRoom inspector={selected && <RunInspector run={selected} name={runTitle(selected, docs)} />}>
         <Panel
           title="Runs"
           count={q.data ? runs.length : undefined}
-          tools={waiting.length > 0 && <Chip kind="warn">{waiting.length} waiting</Chip>}
         >
           {q.data && runs.length === 0 ? (
             <Empty>
@@ -183,7 +228,7 @@ export default function RunsPage() {
               selected={selected?.id ?? null}
               onSelect={(k) => setPicked(k)}
               onActivate={(k) => router.push(`/runs/${k}`)}
-              rowProps={() => ({ "data-testid": "run-row" })}
+              rowProps={(r) => ({ "data-testid": "run-row", "data-document": r.document_slug ?? undefined })}
             />
           )}
         </Panel>
@@ -193,24 +238,21 @@ export default function RunsPage() {
   );
 }
 
-function RunInspector({ run }: { run: RunSummary }) {
+function RunInspector({ run, name }: { run: RunSummary; name: string }) {
   return (
     <Inspector
       label="Run"
-      eyebrow={`Run ${shortId(run.id)} · selected`}
-      title={run.document_slug ?? run.flow_title}
+      eyebrow="Selected run"
+      title={name}
       action={
         <LinkButton variant="hero" href={`/runs/${run.id}`}>
           Open
         </LinkButton>
       }
       chips={
-        <>
-          <Chip hero kind={runStatusKind(run)}>
-            {runStatusLabel(run)}
-          </Chip>
-          <Chip hero>{run.flow_title}</Chip>
-        </>
+        <Chip hero kind={runStatusKind(run)}>
+          {runStatusLabel(run)}
+        </Chip>
       }
     >
       {run.draft_rejected && (
@@ -229,7 +271,7 @@ function RunInspector({ run }: { run: RunSummary }) {
         </InspectorSection>
       )}
       <InspectorSection label="Cost">
-        <InspectorRow value={<RunCost run={run} />}>{run.status === "awaiting_approval" ? "Estimate" : "Spent"}</InspectorRow>
+        <InspectorRow value={<RunCost run={run} />}>Cost</InspectorRow>
       </InspectorSection>
       <InspectorSection label="Dates">
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>

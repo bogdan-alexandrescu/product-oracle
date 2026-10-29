@@ -32,25 +32,24 @@ test("the run page and the Inbox open the review screen; Back returns to the run
   await openSeeded(page, seedRoadmapReview, `/runs/${RUN}`);
   // The run page shows a summary only: counts, Review items and the Raw file; no decision panel.
   const summary = page.getByTestId("items-review-line");
-  await expect(summary).toContainText("10 need you · 3 blocking");
+  await expect(summary.getByTestId("items-open")).toHaveText("3 blocking · 7 to confirm");
   await expect(page.getByRole("group", { name: "Decide: Roadmap items" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Approve and continue" })).toHaveCount(0);
   await expect(page.getByLabel("Note for the agents")).toHaveCount(0);
   await summary.getByRole("button", { name: "Raw file" }).click();
   await expect(page.getByTestId("sheet-raw-file").getByTestId("raw-file-content")).toContainText("slack-alerts");
   await page.getByTestId("sheet-raw-file").getByRole("button", { name: "Close" }).click();
-  // The header's Decide opens the review screen.
-  await page.getByRole("main").getByRole("link", { name: "Decide", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`${SCREEN}$`));
+  // qa-work-26: the header adds no second Decide to the same screen.
+  await expect(page.getByRole("main").getByRole("link", { name: "Decide", exact: true })).toHaveCount(0);
   await page.goto("/runs");
-  // The runs list's Decide opens it too.
-  await page.getByTestId("run-row").filter({ hasText: /usage-alerts-roadmap(?!-)/ }).getByRole("button", { name: "Decide" }).click();
+  // The runs list's Review items opens it too.
+  await page.locator('[data-testid="run-row"][data-document="usage-alerts-roadmap"]').getByRole("button", { name: "Review items" }).click();
   await expect(page).toHaveURL(new RegExp(`${SCREEN}$`));
   await page.goto(`/runs/${RUN}`);
   await page.getByTestId("items-review-line").getByRole("link", { name: "Review items" }).click();
   await expect(page).toHaveURL(new RegExp(`${SCREEN}$`));
   await expect(page.getByRole("heading", { level: 1, name: "Roadmap items" })).toBeVisible();
-  await page.getByRole("link", { name: "Roadmap from an approved PRD from Usage alerts PRD v1" }).click();
+  await page.getByRole("link", { name: "Usage alerts roadmap · Roadmap from an approved PRD", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${RUN}$`));
 
   await page.goto("/inbox");
@@ -67,7 +66,7 @@ test("Needs you lists the items with an open reason by horizon; All lists every 
   const keys = async () => page.getByTestId("roadmap-item-row").evaluateAll((els) => els.map((e) => e.getAttribute("data-key")));
   expect(await keys()).toEqual(["slack-alerts", "budget-caps", "usage-export", "webhooks", "cost-forecast", "sso-login", "anomaly-detection", "mobile-push", "invoice-pdf", "weekly-digest"]);
   await expect(page.getByTestId("group-head").first()).toHaveText("Now · 4 of 4 need you");
-  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 8 to confirm");
+  await expect(page.getByTestId("review-summary")).toHaveText("3 blocking · 7 to confirm");
   await expect(page.getByRole("group", { name: "Show" }).getByRole("button", { name: /Changed/ })).toHaveCount(0);
   await page.getByRole("group", { name: "Show" }).getByRole("button", { name: /^All/ }).click();
   await expect(page.getByTestId("roadmap-item-row")).toHaveCount(10);
@@ -102,7 +101,7 @@ test("Remove date stages the edit, survives a reload, and Undo restores the row"
   await expect(bar(page).getByTestId("staged-chip")).toHaveCount(0);
 });
 
-// Card gate: protects = criterion 6, Approve is disabled with "{b} blocking left" while blocking
+// Card gate: protects = criterion 6, Approve is disabled with "{b} blocking problems left" while blocking
 // reasons are open and reads "Approve with n edits" once each is fixed or waived; then criterion 7,
 // approving shows "Approved with n edits" and Agents' file the original; fails_when = Approve
 // enabled early, or a dialog/decision missing; no_claim = the real gate's computation.
@@ -110,7 +109,7 @@ test("blocking reasons hold Approve; fixed or waived it approves with edits", as
   await open(page);
   const approve = bar(page).getByRole("button", { name: /^Approve/ });
   await expect(approve).toBeDisabled();
-  await expect(bar(page).getByTestId("decision-tally")).toContainText("3 blocking left");
+  await expect(bar(page).getByTestId("decision-tally")).toContainText("3 blocking problems left");
   await row(page, "slack-alerts").getByRole("button", { name: "Remove date", exact: true }).click();
   await row(page, "budget-caps").getByRole("button", { name: "Move to Later", exact: true }).click();
   await row(page, "usage-export").getByRole("button", { name: "More actions for Usage export" }).click();
@@ -126,7 +125,7 @@ test("blocking reasons hold Approve; fixed or waived it approves with edits", as
   await expect(page.getByTestId("raw-file-content")).toContainText("date: 2026-11-30");
   await page.getByTestId("sheet-raw-file").getByRole("button", { name: "Close" }).click();
   // The run continues to the roadmap draft.
-  await page.getByRole("link", { name: "Roadmap from an approved PRD from Usage alerts PRD v1" }).click();
+  await page.getByRole("link", { name: "Usage alerts roadmap · Roadmap from an approved PRD", exact: true }).click();
   await expect(page.getByTestId("segment-roadmap_draft").getByTestId("segment-state")).toHaveText("Running");
 });
 
@@ -144,7 +143,7 @@ test("Send back lists its entries and shows the sent-back state", async ({ page 
   await sheet.getByRole("button", { name: "Send back", exact: true }).click();
   await expect(page.getByTestId("review-status")).toHaveText("Sent back · 2 entries");
   // The run re-runs the roadmap items: attempt 2 running.
-  await page.getByRole("link", { name: "Roadmap from an approved PRD from Usage alerts PRD v1" }).click();
+  await page.getByRole("link", { name: "Usage alerts roadmap · Roadmap from an approved PRD", exact: true }).click();
   const items = page.getByTestId("segment-roadmap_items");
   await expect(items).toContainText("attempt 2");
   await expect(items.getByTestId("segment-state")).toHaveText("Running");
@@ -157,7 +156,7 @@ test("the run page's summary counts only the items still needing a person", asyn
   await row(page, "slack-alerts").getByRole("button", { name: "Remove date", exact: true }).click();
   await expect(row(page, "slack-alerts").getByTestId("row-done")).toHaveText(/✓ Date removed/);
   await page.goto(`/runs/${RUN}`);
-  await expect(page.getByTestId("items-review-line")).toContainText("9 need you · 2 blocking");
+  await expect(page.getByTestId("items-review-line").getByTestId("items-open")).toHaveText("2 blocking · 7 to confirm");
 });
 
 // Card split: protects = criterion 9, a staged Split disables Approve with "Split needs the agents"
@@ -189,7 +188,7 @@ test("the inspector stages horizon, outcome and dependency edits", async ({ page
   await expect(bar(page).getByTestId("staged-chip")).toContainText(["Budget caps: outcome edited"]);
   await insp.getByRole("button", { name: "Remove dependency Anomaly detection" }).click();
   await expect(bar(page).getByTestId("staged-chip")).toContainText(["Budget caps: dependency removed"]);
-  await expect(insp.getByRole("link", { name: "alerts-caps" })).toHaveAttribute("href", "/documents/usage-alerts/v/1#alerts-caps");
+  await expect(insp.getByRole("link", { name: "Alerts caps" })).toHaveAttribute("href", "/documents/usage-alerts/v/1#alerts-caps");
 });
 
 // Card attempt-2: protects = criterion 13, Changed lists the diff items with the old value struck

@@ -1,11 +1,17 @@
 import Link from "next/link";
 
-import { JourneyTrack, LinkButton, Panel } from "@/components/ds";
+import { JOURNEY_STEPS, JourneyTrack, LinkButton, Panel } from "@/components/ds";
 
 import type { PlanPrd } from "./_lib";
 
 /** At most this many cards; past it, the last card is "+N more". */
 const MAX_CARDS = 6;
+
+/**
+ * Plan's own words for the journey's end (qa-plan-32): a PRD's roadmap is "Approved", not
+ * "Publish" (I3's word for the PRD itself, on its own review header and Inspector).
+ */
+const PLAN_JOURNEY_STEPS = [...JOURNEY_STEPS.slice(0, -1), "Approved"] as const;
 
 const FIGURE_TONE: Record<string, string> = { "At risk": "text-crit", "Off track": "text-crit", "On track": "text-pass" };
 
@@ -20,7 +26,7 @@ function PrdCard({ p }: { p: PlanPrd }) {
       <Link href={`/documents/${p.document.slug}`} className="truncate font-display text-[17px] font-bold tracking-heading hover:underline">
         {p.document.title}
       </Link>
-      <JourneyTrack current={p.journey_step} variant="bar" />
+      <JourneyTrack current={p.journey_step} variant="bar" steps={PLAN_JOURNEY_STEPS} />
       <div className="flex min-w-0 items-baseline justify-between gap-3 text-[15px]">
         <span data-testid="plan-prd-stage" className={`min-w-0 ${p.waiting_for_viewer ? "font-semibold text-accent-ink" : "text-text2"}`}>
           {p.stage_label}

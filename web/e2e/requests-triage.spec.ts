@@ -68,7 +68,7 @@ test("found in your sources: dismiss one, then the last; the panel goes", async 
 
 test("Classify now: an approver starts triage and sees it finish", async ({ page }) => {
   // protects=Classify now (approver+) and the header's status line ("Oracle is classifying ·
-  // started …", then "N suggestions, M found in your sources"); the found panel is absent for
+  // started …", then "left suggestions on N requests and found …", qa-work-5); the found panel is absent for
   // someone with no found items (criterion 16's second half); the daily-run tip; fails_when=the
   // button is missing for an approver, the status never changes, or another person's found items
   // show; no_claim=SwarmCloud (the mock finishes the run itself).
@@ -79,9 +79,11 @@ test("Classify now: an approver starts triage and sees it finish", async ({ page
   await expect(page.getByText("Oracle also classifies new requests every day at 07:00 PT")).toBeVisible();
   await page.getByRole("button", { name: "Classify now", exact: true }).click();
   const status = page.getByTestId("triage-status");
-  await expect(status).toContainText(/Oracle is classifying · started (just now|\d+ min ago)/);
+  await expect(status).toContainText(/Oracle is classifying · started (just now|\d+m ago)/);
   await expect(page.getByRole("button", { name: "Classify now", exact: true })).toBeDisabled();
-  await expect(status).toContainText("4 suggestions, 0 found in your sources", { timeout: 15_000 });
+  await expect(status).toContainText("Oracle's last triage left suggestions on 4 requests and found nothing new in your sources", {
+    timeout: 15_000,
+  });
   await expect(page.getByRole("button", { name: "Classify now", exact: true })).toBeEnabled();
 });
 
@@ -131,25 +133,24 @@ const dailySwitch = (page: Page) => page.getByRole("switch", { name: "Daily tria
 
 test("daily triage: an owner turns it on and sees who it runs as", async ({ page }) => {
   // protects=owner decision 2026-10-21 (the switch "Daily triage at 07:00 PT", off by default;
-  // the status says it is off, then who the run acts as); fails_when=the switch starts on, does
+  // the switch itself says it is off, then who the run acts as, qa-work-38); fails_when=the switch starts on, does
   // not change the status, or forgets its state on reload; no_claim=the ticker's run (the API's
   // tests/test_requests_triage.py).
   await login(page);
   await openRequests(page);
-  const status = page.getByTestId("triage-status");
+  const said = page.getByTestId("daily-triage-said");
   await expect(dailySwitch(page)).not.toBeChecked();
   await expect(dailySwitch(page)).toBeEnabled();
-  await expect(status).toContainText("Daily triage is off");
+  await expect(said).toHaveText(/· Off$/);
   await dailySwitch(page).click();
   await expect(dailySwitch(page)).toBeChecked();
-  await expect(status).toContainText("Daily triage at 07:00 PT runs as Admin");
-  await expect(status).not.toContainText("Daily triage is off");
+  await expect(said).toHaveText(/· On, runs as Admin$/);
   await page.reload();
   await expect(dailySwitch(page)).toBeChecked();
-  await expect(status).toContainText("runs as Admin");
+  await expect(said).toContainText("runs as Admin");
   await dailySwitch(page).click();
   await expect(dailySwitch(page)).not.toBeChecked();
-  await expect(status).toContainText("Daily triage is off");
+  await expect(said).toHaveText(/· Off$/);
 });
 
 test("daily triage: a commenter reads its state, with no switch to turn", async ({ page }) => {
@@ -160,7 +161,7 @@ test("daily triage: a commenter reads its state, with no switch to turn", async 
   await openRequests(page);
   await expect(dailySwitch(page)).toHaveCount(0);
   await expect(page.getByTestId("daily-triage-state")).toHaveText("Daily triage off");
-  await expect(page.getByTestId("triage-status")).toContainText("Daily triage is off");
+  await expect(page.getByTestId("daily-triage-said")).toHaveCount(0);
 });
 
 test("phone: the found panel and the filing dialog fit 390 px", async ({ page }) => {

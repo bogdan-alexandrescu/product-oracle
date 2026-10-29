@@ -59,8 +59,8 @@ test("answer, review, ready: answer my question, review the critical one, then d
   // Two batches, each a thread of Oracle's questions.
   const batches = thread(page).getByTestId("batch");
   await expect(batches).toHaveCount(2);
-  await expect(batches.nth(0)).toContainText("Batch 1 · 3 questions · asked 20 Oct");
-  await expect(batches.nth(1)).toContainText("Batch 2 · 2 questions · asked 21 Oct");
+  await expect(batches.nth(0)).toContainText("Batch 1 · 3 questions · asked Oct 20");
+  await expect(batches.nth(1)).toContainText("Batch 2 · 2 questions · asked Oct 21");
   await expect(bubble(page, WAITING_ON_APPROVER)).toContainText("Waiting on Approver");
   await expect(bubble(page, WAITING_ON_APPROVER).getByRole("button", { name: "Ask someone else" })).toBeVisible();
 

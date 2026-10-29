@@ -30,7 +30,10 @@ test("Draft public texts: Oracle drafts a text for each item with none, for a pe
   // The item that serves no confirmed goal gets none; every draft waits for a person.
   await expect(rows.getByTestId("public-state").filter({ hasText: "Draft" })).toHaveCount(4);
   await expect(rows.filter({ hasText: "Ops console cleanup" }).getByText("No public text yet.")).toBeVisible();
-  await expect(page.getByTestId("public-check")).toHaveText("Not checked yet");
+  // qa-docs-38: the not-checked state says what the check is and what to do.
+  await expect(page.getByTestId("public-check")).toHaveText(
+    "Nobody has checked this public page yet. Read it, then mark it as checked: a public link needs the check.",
+  );
   await expect(page.getByRole("button", { name: "Mark as checked" })).toBeDisabled();
 
   // Nothing left to draft: the job says so.

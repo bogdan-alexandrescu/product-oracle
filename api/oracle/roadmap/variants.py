@@ -54,6 +54,7 @@ refused (:class:`PublicNotReady`).
 import re
 import uuid
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any, Literal
 
 from oracle.docs.models import Section
@@ -570,11 +571,23 @@ def _effort(item: ItemView) -> list[str]:
     return lines
 
 
+def _shown_day(value: Any) -> str:
+    """A milestone's day as people read it (qa-docs-34): "Nov 3, 2026", never
+    "2026-11-03" (as oracle.roadmap.doc_dates.shown_day); anything else as written."""
+    try:
+        day = value if isinstance(value, date) else date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return str(value)
+    from oracle.roadmap.doc_dates import shown_day
+
+    return shown_day(day)
+
+
 def _milestone(item: ItemView) -> str | None:
     m = item.milestone or {}
     if not m.get("name"):
         return None
-    return f"{m['name']}, {m['date']}" if m.get("date") else str(m["name"])
+    return f"{m['name']}, {_shown_day(m['date'])}" if m.get("date") else str(m["name"])
 
 
 def _tracker_links(item: ItemView) -> str:

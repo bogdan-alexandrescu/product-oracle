@@ -4,7 +4,7 @@ import { Button, Chip, CodeChip, DataTable, type Column } from "@/components/ds"
 import { namedText } from "@/lib/codes";
 
 import type { GoalView } from "../home/_goals";
-import { driftMarker, engineeringLine, HORIZON_LABEL, HORIZONS, prdLabel, stateChip, whoLabel, type PlanItem } from "./_lib";
+import { driftMarker, engineeringLine, HORIZON_LABEL, HORIZONS, prdLabel, prdName, stateChip, whoLabel, type PlanItem } from "./_lib";
 
 export type GroupBy = "horizon" | "goal" | "prd";
 const NO_GOAL = "No goal";
@@ -14,19 +14,20 @@ function DriftMarker({ item }: { item: PlanItem }) {
   const m = driftMarker(item);
   if (!m) return null;
   return (
-    <Chip kind={m.kind} data-testid="plan-drift-marker">
+    <Chip kind={m.kind} wrap data-testid="plan-drift-marker">
       {m.label}
     </Chip>
   );
 }
 
 /** The state chip; a draft's item has a dashed outline. */
-export function StateChip({ item, hero = false }: { item: PlanItem; hero?: boolean }) {
+export function StateChip({ item, hero = false, wrap = false }: { item: PlanItem; hero?: boolean; wrap?: boolean }) {
   const s = stateChip(item);
   return (
     <Chip
       kind={s.kind}
       hero={hero}
+      wrap={wrap}
       data-testid="plan-state"
       data-state={item.state}
       data-dashed={s.dashed ? "true" : undefined}
@@ -42,11 +43,12 @@ function NextCell({ item, me, onLink }: { item: PlanItem; me: string | null | un
   if (!n.action) return <span data-testid="plan-next" className="text-text2">—</span>;
   const who = whoLabel(n.who, me);
   return (
-    <span data-testid="plan-next" className="inline-flex min-w-0 items-center gap-1.5">
+    // Wraps under the button rather than being cut: "Decide on slip" then "· owners" (qa-plan-4).
+    <span data-testid="plan-next" className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
       {/* A decision taken on a page the viewer may act on is a button; the rest name it (F2, F3 add theirs). */}
       {n.action === "link_issue" && onLink && item.prd ? (
         <Button
-          className="h-7 flex-none px-2"
+          className="h-7 flex-none px-2 whitespace-nowrap"
           onClick={(e) => {
             e.stopPropagation();
             onLink(item);
@@ -58,14 +60,14 @@ function NextCell({ item, me, onLink }: { item: PlanItem; me: string | null | un
         <Link
           href={n.href}
           onClick={(e) => e.stopPropagation()}
-          className="inline-flex h-7 flex-none items-center rounded-lg border border-line-strong px-2 text-sm font-semibold hover:bg-surface2"
+          className="inline-flex h-7 flex-none items-center rounded-lg border whitespace-nowrap border-line-strong px-2 text-sm font-semibold hover:bg-surface2"
         >
           {n.label}
         </Link>
       ) : (
         <span className="font-medium">{n.label}</span>
       )}
-      {who && <span className="truncate text-text2">{` · ${who}`}</span>}
+      {who && <span className="min-w-0 break-words text-text2">{` · ${who}`}</span>}
     </span>
   );
 }
@@ -122,8 +124,10 @@ export function PlanTable({
       key: "item",
       header: "Item",
       phone: "title",
+      wrap: true,
+      // Two lines before an ellipsis; the whole title on hover (qa-plan-5).
       cell: (i) => (
-        <span data-testid="plan-title" title={i.title} className="block truncate font-semibold">
+        <span data-testid="plan-title" title={i.title} className="line-clamp-2 font-semibold break-words max-[600px]:line-clamp-none">
           {i.title}
         </span>
       ),
@@ -132,22 +136,34 @@ export function PlanTable({
       key: "prd",
       header: "PRD",
       width: "120px",
+      wrap: true,
+      // The PRD by its name; its version is on hover and the state chip says a draft's (qa-plan-5).
       cell: (i) => (
-        <span data-testid="plan-prd" title={prdLabel(i)} className="truncate text-text2">
-          {prdLabel(i)}
+        <span data-testid="plan-prd" title={prdLabel(i)} className="line-clamp-2 break-words text-text2 max-[600px]:line-clamp-none">
+          {prdName(i)}
         </span>
       ),
     },
     {
       key: "goal",
       header: "Goal",
-      width: "112px",
+      width: "128px",
+      wrap: true,
+      // prod-4: the first goal in full (its name on two lines), "+N" for the rest, named on hover.
       cell: (i) => {
         const goals = i.goal_ids.map((id) => tags.get(id)).filter((g): g is GoalView => !!g);
+        const [first, ...rest] = goals;
         return (
-          <span data-testid="plan-goal" className="flex max-w-full min-w-0 items-center gap-1">
-            {goals.length ? (
-              goals.map((g) => <CodeChip key={g.id} kind="goal" entityId={g.id} title={g.title} proposed={g.proposed} />)
+          <span data-testid="plan-goal" className="flex max-w-full min-w-0 flex-wrap items-center gap-1">
+            {first ? (
+              <>
+                <CodeChip kind="goal" entityId={first.id} title={first.title} proposed={first.proposed} wrap />
+                {rest.length > 0 && (
+                  <span data-testid="plan-goal-more" title={rest.map((g) => namedText(g)).join(", ")} className="tnum flex-none text-sm font-semibold text-text2">
+                    +{rest.length}
+                  </span>
+                )}
+              </>
             ) : (
               <span className="text-sm font-semibold text-warn">{NO_GOAL}</span>
             )}
@@ -158,13 +174,14 @@ export function PlanTable({
     {
       key: "state",
       header: "State",
-      width: "168px",
+      width: "144px",
       phone: "action",
+      wrap: true,
       className: "overflow-visible",
       cell: (i) => (
-        <span className="inline-flex flex-wrap items-center gap-1.5">
-          <StateChip item={i} />
-          {i.change?.kind === "dropped" && <Chip kind="warn">Dropped in draft {i.change.draft_version}</Chip>}
+        <span className="inline-flex max-w-full flex-wrap items-center gap-1.5">
+          <StateChip item={i} wrap />
+          {i.change?.kind === "dropped" && <Chip kind="warn" wrap>Dropped in draft {i.change.draft_version}</Chip>}
           <DriftMarker item={i} />
         </span>
       ),
@@ -172,14 +189,17 @@ export function PlanTable({
     {
       key: "engineering",
       header: "Engineering",
-      width: "168px",
+      width: "128px",
+      wrap: true,
+      // Under 760 px (the Ask panel docked) the inspector says it; the other columns keep their room.
+      narrow: "hide",
       cell: (i) => (
-        <span data-testid="plan-engineering" className="tnum truncate">
+        <span data-testid="plan-engineering" className="tnum">
           {engineeringLine(i)}
         </span>
       ),
     },
-    { key: "next", header: "Next", width: "140px", cell: (i) => <NextCell item={i} me={me} onLink={onLink} /> },
+    { key: "next", header: "Next", width: "156px", wrap: true, cell: (i) => <NextCell item={i} me={me} onLink={onLink} /> },
   ];
   return (
     <DataTable<PlanItem>

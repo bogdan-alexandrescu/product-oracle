@@ -10,14 +10,13 @@ import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { CatalogFacts } from "./_catalog";
-import type { Module, Problem } from "./_lib";
+import { PACK_POLICY, type Module, type Problem } from "./_lib";
 
 type Entry = Schemas["CatalogModuleOut"];
 type Settings = Schemas["ModulePolicySettings"];
 type Lane = "required" | "optional" | "disabled" | "pack";
 
 const MAX_PACKS = 10;
-const MONO = "font-mono text-[13px]";
 
 const LANES: { lane: Lane; title: string; hint: string }[] = [
   { lane: "required", title: "Required", hint: "Mandatory in every PRD; overrides packs and templates." },
@@ -143,12 +142,13 @@ export function PolicyTab({ phone, onSaved, prdModules, prdTitle }: { phone: boo
     return (
       <Inspector
         testId="policy-inspector"
-        eyebrow={`Catalog module · ${selected.builtin ? "built-in" : "company"}`}
+        eyebrow={`Catalog module · ${selected.builtin ? "Built-in" : "Company module"}`}
         title={selected.title}
         chips={
           <>
-            <Chip kind="line" hero>v{selected.version}</Chip>
-            <Chip kind="line" hero>Pack: {selected.policy}</Chip>
+            <Chip kind="line" hero>
+              Pack policy: {PACK_POLICY[selected.policy] ?? selected.policy}
+            </Chip>
             {lane !== was && <Chip kind="warn" hero>Unsaved</Chip>}
           </>
         }
@@ -179,9 +179,7 @@ export function PolicyTab({ phone, onSaved, prdModules, prdTitle }: { phone: boo
           {e.required_review_role === "owner" && <Chip kind="na">Owner review</Chip>}
           {e.archived && <Chip kind="na">Archived</Chip>}
         </span>
-        <span className={`${MONO} text-text2 [overflow-wrap:anywhere]`}>
-          {e.key} · {e.version} · Pack: {e.policy}
-        </span>
+        <span className="text-sm text-text2">Pack policy: {PACK_POLICY[e.policy] ?? e.policy}</span>
         <span className="text-sm text-text2">
           {prdTitle}: {m ? (m.included ? "included" : "excluded") : "not offered"}
         </span>
@@ -224,9 +222,7 @@ export function PolicyTab({ phone, onSaved, prdModules, prdTitle }: { phone: boo
         {problems.length > 0 && (
           <div role="alert" className="space-y-1 rounded-button bg-crit-bg px-3 py-2 text-sm text-crit">
             {problems.map((p, i) => (
-              <p key={i}>
-                <span className={MONO}>{p.code}</span> {p.message}
-              </p>
+              <p key={i}>{p.message}</p>
             ))}
           </div>
         )}

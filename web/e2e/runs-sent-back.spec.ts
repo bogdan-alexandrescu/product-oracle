@@ -44,7 +44,7 @@ test("a draft Oracle sent back reads Revising on the run page and the runs list,
 
   // The runs list says Revising too, with the summary on hover, and no Draft rejected.
   await page.getByTestId("nav-runs").click();
-  const row = page.getByTestId("run-row").filter({ hasText: "guest-checkout" });
+  const row = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
   await expect(row.getByTestId("run-sent-back")).toHaveText("Revising");
   await expect(row.getByTestId("run-sent-back")).toHaveAttribute("title", `${REVISING}. ${SUMMARY}`);
   await expect(row.getByTestId("run-draft-rejected")).toHaveCount(0);
@@ -60,18 +60,18 @@ test("the Inbox shows a draft Oracle sent back as Revising, not a decision, and 
   await expect(page.getByText("11 waiting").filter({ visible: true })).toBeVisible();
   await expect(page.getByTestId("nav-inbox-badge")).toHaveText("11");
   await expect(tabs.getByRole("tab", { name: /^New/ })).toHaveText("New11");
-  await expect(page.getByTestId("inbox-checkpoints")).not.toContainText("guest-checkout");
+  await expect(page.getByTestId("inbox-checkpoints")).not.toContainText("Guest checkout");
   await expect(page.getByTestId("inbox-revising")).toHaveCount(0);
 
   // Under Open, shown and not counted, as the run page shows it.
-  await tabs.getByRole("tab", { name: /^Open/ }).click();
-  await expect(tabs.getByRole("tab", { name: /^Open/ })).toHaveText("Open0");
+  await tabs.getByRole("tab", { name: /^Seen/ }).click();
+  await expect(tabs.getByRole("tab", { name: /^Seen/ })).toHaveText("Seen");
   const revising = page.getByTestId("inbox-revising");
   await expect(revising.locator("tr[data-row]")).toHaveCount(1);
   const item = revising.getByTestId("inbox-revising-state");
   await expect(item).toHaveText(REVISING);
   await expect(item).toHaveAttribute("title", SUMMARY);
-  await expect(revising).toContainText("guest-checkout");
+  await expect(revising).toContainText("Guest checkout");
   await expect(revising.getByRole("button")).toHaveCount(0);
   await revising.getByRole("link", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/runs/${ID}$`));
@@ -101,13 +101,13 @@ test("a clean revision clears Revising: the draft is imported and the review wai
   // The Inbox: the review is a decision now, counted; the Revising row is gone.
   await page.goto("/inbox");
   await expect(page.getByText("12 waiting").filter({ visible: true })).toBeVisible();
-  await expect(page.getByTestId("inbox-checkpoints")).toContainText("guest-checkout");
-  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Open/ }).click();
+  await expect(page.getByTestId("inbox-checkpoints")).toContainText("Guest checkout");
+  await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Seen/ }).click();
   await expect(page.getByTestId("inbox-revising")).toHaveCount(0);
 
   // The runs list: neither Revising nor Draft rejected.
   await page.getByTestId("nav-runs").click();
-  const row = page.getByTestId("run-row").filter({ hasText: "guest-checkout" });
+  const row = page.locator('[data-testid="run-row"][data-document="guest-checkout"]');
   await expect(row).toBeVisible();
   await expect(row.getByTestId("run-sent-back")).toHaveCount(0);
   await expect(row.getByTestId("run-draft-rejected")).toHaveCount(0);

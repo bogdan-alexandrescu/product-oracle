@@ -46,7 +46,7 @@ test("baseline: an approver promotes an intake's suggested blocker from the pre-
   await expect(drawer).toContainText("Promoted to a blocker. The suggested-blocker mark is cleared.");
   await expect(drawer.getByRole("heading", { name: "Carrier terms cap address storage at 30 days" })).toBeVisible();
   await expect(drawer.getByTestId("suggested-blocker")).toHaveCount(0);
-  await expect(drawer.getByText("Blocker", { exact: true })).toBeVisible();
+  await expect(drawer.locator("span").filter({ hasText: /^Blocker$/ })).toBeVisible();
   await expect(drawer.getByRole("form", { name: "Promote to blocker" })).toHaveCount(0);
   await expect(page.getByTestId("suggested-blocker-row")).toHaveCount(0);
 });

@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
-import { DeleteMenu } from "@/components/ArtifactMenu";
+import { DeleteDialog, DeleteMenu } from "@/components/ArtifactMenu";
+import { runLabel } from "@/lib/labels";
 import { SourceLink } from "@/components/BuildRoadmap";
 import {
   Button,
@@ -33,8 +34,7 @@ import { RawFileSheet } from "@/components/review/RawFileSheet";
 import { StagingBar } from "@/components/staging/StagingBar";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, ApiError, unwrap, type Schemas } from "@/lib/api/client";
-import { displayZone, formatInZone } from "@/lib/dates";
-import { failedAt, formatDateTime, formatDay } from "@/lib/format";
+import { failedAt, formatDateTime, formatDay, formatTime, plural } from "@/lib/format";
 import { useMe, type Operation } from "@/lib/me";
 
 import { NewRunDialog, type RunStart } from "./_new-run-dialog";
@@ -62,8 +62,13 @@ import {
   SEGMENT_STATUS_LABEL,
   SENT_BACK_STATE,
   RunCost,
+  checkCounts,
+  costText,
   deliveryText,
-  shortId,
+  fileLabel,
+  runDocName,
+  useRoleNames,
+  useTemplateText,
   usd,
   type CheckpointChoice,
   type CheckpointOut,
@@ -71,6 +76,7 @@ import {
   type RunOut,
   type SegmentOut,
 } from "./_lib";
+import { openText, reviewCounts } from "./[id]/review/[checkpoint]/_items-lib";
 
 const POLL_MS = 5000;
 // D8: a pending checkpoint's shared draft is read again this often while the page shows.
@@ -99,6 +105,9 @@ type Decide = (
  * A console answer keeps its panel and Confirm here (W5), held to the same gate (D3).
  */
 const decidedOnScreen = (cp: CheckpointOut) => cp.kind === "roadmap_items" && !cp.console;
+
+/** qa-work-54: a run's depth in words. */
+const DEPTH_WORDS: Record<string, string> = { quick: "Quick pass", standard: "Standard", deep: "Deep dive", thorough: "Thorough" };
 
 /** The decision panel (#decide): scrolled to and focused, so the keyboard continues from it. */
 function toDecision() {
@@ -133,8 +142,15 @@ function LinkedDiscussion() {
   );
 }
 
+/** A run that is not there, said without its id (the API's 404 names it). */
+const RUN_MISSING = "This run doesn't exist or was deleted.";
+
 export function RunDetail({ id }: { id: string }) {
-  const q = useQuery(`run|${id}`, () => unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })));
+  const q = useQuery(`run|${id}`, () =>
+    unwrap(api.GET("/v1/runs/{run_id}", { params: { path: { run_id: id } } })).catch((e) => {
+      throw e instanceof ApiError && e.status === 404 ? new ApiError(404, RUN_MISSING) : e;
+    }),
+  );
   const { me, can } = useMe();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -187,6 +203,8 @@ export function RunDetail({ id }: { id: string }) {
     }
   }
 
+  // qa-work-8: the template and theme by their names (a hook: before the early return).
+  const templateText = useTemplateText(run?.template, run?.theme);
   const path = { params: { path: { run_id: id } } };
   // #370: the handlers let an owner manage any run, an approver only a run they created.
   const mayManage = (op: Operation) => can(op, run?.created_by === me?.user_id);
@@ -201,7 +219,18 @@ export function RunDetail({ id }: { id: string }) {
     return (
       <Page>
         <PageHeader back={back} title="Run" />
-        {q.error ? <ErrorNote>{q.error}</ErrorNote> : <Loading />}
+        {q.error === RUN_MISSING ? (
+          <ErrorNote>
+            {RUN_MISSING}{" "}
+            <Link href="/runs" className="underline">
+              Back to Runs
+            </Link>
+          </ErrorNote>
+        ) : q.error ? (
+          <ErrorNote>{q.error}</ErrorNote>
+        ) : (
+          <Loading />
+        )}
       </Page>
     );
   }
@@ -245,27 +274,34 @@ export function RunDetail({ id }: { id: string }) {
       <LinkedDiscussion />
       <PageHeader
         back={back}
-        title={run.flow_title}
+        // The run by its human name, never an id (qa-company-11).
+        title={
+          <span className="break-words" data-testid="run-name">
+            {runLabel(run)}
+          </span>
+        }
         status={
           <>
             <RunStatusBadge run={run} />
+            {/* qa-work-8: the document in words, never its slug. */}
             {run.document_slug &&
               (run.document_id ? (
-                <Link href={`/documents/${run.document_slug}`} className="font-mono text-sm text-accent-ink hover:underline">
-                  {run.document_slug}
+                <Link href={`/documents/${run.document_slug}`} className="text-sm font-medium text-accent-ink hover:underline" data-testid="run-document">
+                  {runDocName(run)}
                 </Link>
               ) : (
-                <span className="font-mono text-sm text-text2">{run.document_slug} (new)</span>
+                <span className="text-sm text-text2" data-testid="run-document">
+                  {runDocName(run)} (new)
+                </span>
               ))}
             {run.source && (
               <span className="text-sm text-text2">
                 <SourceLink source={run.source} />
               </span>
             )}
-            {run.template && (
-              <Chip kind="line">
-                template {run.template}
-                {run.theme && `, theme ${run.theme}`}
+            {templateText && (
+              <Chip kind="line" wrap data-testid="run-template">
+                {templateText}
               </Chip>
             )}
             {/* #260: the goals a PRD run serves. */}
@@ -289,9 +325,13 @@ export function RunDetail({ id }: { id: string }) {
             )}
             {deciding &&
               (decideHref ? (
-                <LinkButton href={decideHref} variant="primary" icon="flag">
-                  Decide
-                </LinkButton>
+                // qa-work-26: a stop decided on its review screen has one action, its line's
+                // Review items; the header adds no second Decide to the same screen.
+                decideCp?.kind === "roadmap_items" ? null : (
+                  <LinkButton href={decideHref} variant="primary" icon="flag">
+                    Decide
+                  </LinkButton>
+                )
               ) : (
                 // The run waits on a checkpoint this member decides: scroll to its decision and focus it.
                 <Button variant="primary" icon="flag" onClick={toDecision}>
@@ -303,8 +343,8 @@ export function RunDetail({ id }: { id: string }) {
                 Resume
               </Button>
             )}
-            {/* #482: a run alone goes to Trash (its document stays). */}
-            <DeleteMenu
+            {/* #482: a run alone goes to Trash (its document stays); qa-work-27: a plain Delete button. */}
+            <DeleteButton
               op="delete_run"
               title={run.flow_title}
               dependents={async () => ({ root: { type: "run", id: run.id, slug: null, title: run.flow_title, kind: run.flow }, items: [], published: false, working_runs: WORKING.has(run.status) ? [run.id] : [] })}
@@ -414,25 +454,22 @@ export function RunDetail({ id }: { id: string }) {
         )}
         {checked && <Notice testId="tick-result">{checked}</Notice>}
         <Panel
-          title={
-            <>
-              Run <span className="tnum font-mono text-base font-semibold">{shortId(run.id)}</span>
-            </>
-          }
+          // qa-work-9: no run id in the panel head; the page names the run.
+          title="Segments"
           tools={
             <>
-              <span className="tnum text-sm font-semibold text-text2">
-                {done}/{run.segments.length} segments
+              <span className="tnum text-sm font-semibold text-text2" data-testid="segments-done">
+                {done} of {run.segments.length} done
               </span>
+              {/* qa-work-28: an outlined button, like Cancel run next to it. */}
               {can("tick") && open && (
                 <Button
-                  variant="ghost"
                   disabled={busy}
                   onClick={() => {
                     setChecked(null);
                     void act(async () => {
                       const out = await unwrap(api.POST("/v1/internal/tick"));
-                      setChecked(tickResult(out));
+                      setChecked(tickResult(out, run, !!decideCp));
                       return out;
                     });
                   }}
@@ -494,11 +531,29 @@ export function RunDetail({ id }: { id: string }) {
   );
 }
 
-/** #258: what "Check agents now" checked: "Checked 1 active run at 9:24 AM: 1 segment finished." */
-function tickResult(out: Schemas["TickOut"]): string {
-  const at = formatInZone(new Date().toISOString(), displayZone(), { hour: "numeric", minute: "2-digit" });
-  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  if (out.runs_checked === 0 && out.errors.length === 0) return `Checked at ${at}: no run is active.`;
+/**
+ * #258: what "Check agents now" checked: "Checked 1 active run at 9:24 AM: 1 segment finished."
+ * qa-work-20: with no agent at work, why, from this run's state: "No agents are working right
+ * now; the run is waiting for your review." Runs the check could not read are still named.
+ */
+function tickResult(out: Schemas["TickOut"], run: RunOut, mine: boolean): string {
+  const at = formatTime(new Date().toISOString());
+  // This run is not at work (it waits on a person, or between segments): say so, whatever other runs the check read.
+  if (run.status !== "running" || (out.runs_checked === 0 && out.errors.length === 0)) {
+    const why =
+      run.status === "awaiting_checkpoint"
+        ? mine
+          ? "the run is waiting for your review"
+          : "the run is waiting for a review"
+        : run.status === "awaiting_approval"
+          ? "the run is waiting for its cost to be approved"
+          : run.status === "paused_overrun"
+            ? "the run is paused over its budget"
+            : "the run is between segments";
+    // fix-work review: the check's own trouble stays in view, whatever this run is waiting on.
+    const failed = out.errors.length ? ` ${plural(out.errors.length, "run")} could not be checked at ${at}.` : "";
+    return `No agents are working right now; ${why}.${failed}`;
+  }
   const parts = [out.segments_finished ? `${plural(out.segments_finished, "segment")} finished` : "no segment finished yet"];
   if (out.runs_paused) parts.push(`${plural(out.runs_paused, "run")} paused over budget`);
   if (out.errors.length) parts.push(`${plural(out.errors.length, "run")} could not be checked`);
@@ -518,23 +573,33 @@ function RunInspector({ run }: { run: RunOut }) {
   const waiting = run.waiting_on;
   const approval = run.status === "awaiting_approval";
   const overrun = run.status === "paused_overrun";
+  const roleName = useRoleNames();
+  // qa-work-27: a run no segment of which has started says so, not "Segment 1 of 4".
+  const started = run.segments.some((s) => s.status !== "pending");
   return (
     <Inspector
       label="Run"
       eyebrow={waiting ? "Checkpoint · waiting" : `Run · ${runStatusLabel(run).toLowerCase()}`}
-      title={waiting ? CHECKPOINT_LABEL[waiting] : (run.document_slug ?? run.flow_title)}
+      title={waiting ? CHECKPOINT_LABEL[waiting] : (runDocName(run) ?? run.flow_title)}
       chips={
         <>
-          {current && (
-            <Chip hero>
-              Segment {current.seq} of {run.segments.length}
+          {!started ? (
+            <Chip hero data-testid="run-progress">
+              Not started
             </Chip>
+          ) : (
+            current && (
+              <Chip hero data-testid="run-progress">
+                Segment {current.seq} of {run.segments.length}
+              </Chip>
+            )
           )}
-          {current?.roles.map((r) => (
-            <Chip hero key={r}>
-              {r}
-            </Chip>
-          ))}
+          {started &&
+            current?.roles.map((r) => (
+              <Chip hero key={r} data-testid="run-role">
+                {roleName(r)}
+              </Chip>
+            ))}
         </>
       }
     >
@@ -561,22 +626,29 @@ function RunInspector({ run }: { run: RunOut }) {
       <InspectorSection label="Details" testId="run-details">
         <InspectorRow
           value={
-            // CostFigure's small look, with the spent value marked.
-            <span data-testid="run-cost" data-cost="small" className="tnum font-mono text-[13px] leading-none font-medium whitespace-nowrap text-text2">
-              <span data-testid="run-spent">{usd(run.spent_usd)}</span> of {usd(run.estimate_usd)} est.
+            // qa-work-25: one format, in the normal font: "$4.90 of $14.50 estimated".
+            <span data-testid="run-cost" data-cost="small" className="tnum text-sm text-text2">
+              {run.estimate_usd == null ? (
+                costText(run)
+              ) : (
+                <>
+                  <span data-testid="run-spent">{usd(run.spent_usd)}</span> of {usd(run.estimate_usd)} estimated
+                </>
+              )}
             </span>
           }
         >
           Cost
         </InspectorRow>
-        <InspectorRow value={<span className="capitalize">{run.knobs.depth}</span>}>Depth</InspectorRow>
+        {/* qa-work-54: plain words for the run's depth, its proposals and where it runs. */}
+        <InspectorRow value={DEPTH_WORDS[run.knobs.depth] ?? run.knobs.depth}>How thorough</InspectorRow>
         <InspectorRow value={formatDateTime(run.created_at)}>Created</InspectorRow>
         <ProposalsRow run={run} />
         {run.snapshot_as_of && <InspectorRow value={formatDateTime(run.snapshot_as_of)}>Sources as of</InspectorRow>}
         <InspectorRow
           value={
             <span className="inline-flex items-center gap-2">
-              {run.runtime === "fake" ? "Local" : "SwarmCloud"}
+              {run.runtime === "fake" ? "This Oracle (test runtime)" : "SwarmCloud"}
               <InfoTip label="the runtime" side="top">
                 <RunsWhere runtime={run.runtime} />
                 {run.notes.length > 0 && (
@@ -590,7 +662,7 @@ function RunInspector({ run }: { run: RunOut }) {
             </span>
           }
         >
-          Runtime
+          Runs in
         </InspectorRow>
       </InspectorSection>
       <RunDecisions run={run} />
@@ -598,7 +670,7 @@ function RunInspector({ run }: { run: RunOut }) {
   );
 }
 
-/** "Baseline proposals: 2 open · Review": what the run proposed that still waits for a person. */
+/** "Changes it proposed: 2 to review · Review": what the run proposed that still waits for a person. */
 function ProposalsRow({ run }: { run: RunOut }) {
   const open = run.open_proposals ?? 0;
   // RunOut counts open proposals only: a run that has started says "none open" once all were decided.
@@ -610,18 +682,18 @@ function ProposalsRow({ run }: { run: RunOut }) {
           <span data-testid="run-proposals">
             {open > 0 ? (
               <>
-                {open} open ·{" "}
+                {open} to review ·{" "}
                 <Link href={`/baseline?tab=proposals&run=${run.id}`} className="text-accent-ink hover:underline">
                   Review
                 </Link>
               </>
             ) : (
-              "none open"
+              "None waiting"
             )}
           </span>
         }
       >
-        Baseline proposals
+        Changes it proposed
       </InspectorRow>
     </div>
   );
@@ -692,6 +764,7 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
     return () => clearInterval(t);
   }, []);
   const since = (at: string) => duration(now - new Date(at).getTime());
+  const roleName = useRoleNames();
   return (
     <div data-testid="segment-progress" className="space-y-1 text-text2">
       <p className="tnum">
@@ -704,7 +777,7 @@ function SegmentProgress({ segment: s }: { segment: SegmentOut }) {
             {s.agents.map((a, i) => (
               <li key={i} data-testid="segment-agent" className="tnum">
                 <span data-testid="agent-role" className="font-medium text-text">
-                  {a.role ?? "Agent"}
+                  {a.role ? roleName(a.role) : "Agent"}
                 </span>{" "}
                 · {a.state.charAt(0).toUpperCase() + a.state.slice(1)} ·{" "}
                 <span data-testid="agent-elapsed">{a.started_at ? `${since(a.started_at)} elapsed` : "start not read"}</span> ·{" "}
@@ -742,6 +815,7 @@ function SegmentItem({
 }) {
   const kind = s.checkpoint;
   const { me, can } = useMe();
+  const roleName = useRoleNames();
   // B6: once the baseline is approved, Oracle offers a goals interview on the goals still vague.
   const vague = can("start_goal_interview")
     ? (checkpoints.find((c) => c.kind === "baseline_confirm" && c.status === "approved") as { vague_goals?: number | null } | undefined)?.vague_goals ?? 0
@@ -868,16 +942,17 @@ function SegmentItem({
       <div className="grid min-h-12 grid-cols-[40px_minmax(0,1fr)_minmax(0,170px)_120px_minmax(0,240px)] items-center gap-2 px-4 py-1.5 max-[600px]:grid-cols-[28px_minmax(0,1fr)_auto] max-[600px]:px-3">
         <span className="tnum font-semibold">{s.seq}</span>
         <span className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-medium max-[600px]:whitespace-normal" title={s.title}>
+          {/* qa-work-24: the segment's name wraps rather than being cut. */}
+          <span className="min-w-0 font-medium break-words" title={s.title} data-testid="segment-title">
             {s.title}
           </span>
           {s.attempts.length > 1 && <Chip kind="na">attempt {s.attempts.length}</Chip>}
         </span>
-        <span className="flex min-w-0 gap-1.5 overflow-hidden max-[600px]:hidden">
+        <span className="flex min-w-0 flex-wrap gap-1.5 max-[600px]:hidden">
           {s.roles.map((r) => (
             // On the tinted waiting row an accent chip would vanish into the tint.
-            <Chip key={r} kind={waiting ? "line" : "acc"}>
-              {r}
+            <Chip key={r} kind={waiting ? "line" : "acc"} data-testid="segment-role">
+              {roleName(r)}
             </Chip>
           ))}
         </span>
@@ -921,18 +996,16 @@ function SegmentItem({
               </Chip>
             ))}
           {mine.length > 0 && (
-            // The decision panel below and the inspector name the checkpoint; the row shows its state.
-            <a
-              href="#decide"
-              data-testid="checkpoint-waiting"
-              className="inline-flex max-w-full rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
+            // The decision panel below and the inspector name the checkpoint; the row shows its
+            // state. qa-work-28: a label, not a link dressed as a button (the actions are below).
+            <span data-testid="checkpoint-waiting" className="inline-flex max-w-full">
               <Chip kind="warn" title={`Waiting: ${mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}`}>
                 <Icon name="clock" size={16} />
-                Waiting
-                <span className="sr-only">: {mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
+                <span>
+                  Waiting<span className="sr-only">: {mine.map((cp) => CHECKPOINT_LABEL[cp.kind]).join(", ")}</span>
+                </span>
               </Chip>
-            </a>
+            </span>
           )}
           {compact.map((cp) => (
             <span key={cp.id} data-testid={`checkpoint-${cp.kind}`} className="inline-flex max-w-full">
@@ -988,7 +1061,7 @@ function SegmentItem({
           {s.items_check &&
             (waitingCp && decidedOnScreen(waitingCp) ? (
               // D1 (#542): the items are decided on the review screen; here, the counts only.
-              <ItemsCheckLine check={s.items_check} summary />
+              <ItemsCheckLine check={s.items_check} summary open={shared ? reviewCounts(shared) : undefined} />
             ) : (
               <ItemsCheckLine check={s.items_check} draft={draftActs} />
             ))}
@@ -1006,8 +1079,7 @@ function SegmentItem({
             <ItemsReviewLine
               run={run}
               cp={waitingCp}
-              needYou={shared ? shared.tally.need_you : new Set(s.items_check?.reasons.map((x) => x.item)).size}
-              blocking={shared?.tally.blocking_open ?? s.items_check?.blocking ?? 0}
+              open={shared ? reviewCounts(shared) : checkCounts(s.items_check?.reasons ?? [])}
               anchor={deciding.includes(waitingCp) && decidedOnScreen(waitingCp)}
             />
           )}
@@ -1082,10 +1154,12 @@ function SegmentItem({
 }
 
 /**
- * D1: the Roadmap items stop on the run page: "{n} need you · {b} blocking" (the items still
- * needing a person), Review items (the review screen, where it is decided) and the Raw file.
+ * D1: the Roadmap items stop on the run page: "2 blocking · 7 to confirm" (qa-work-4: the review
+ * screen's counts and words, from its reviewCounts), Review items (the review screen, where it is
+ * decided) and the Raw file. qa-work-26: the one Review items action (the header adds no
+ * second Decide to the same screen).
  */
-function ItemsReviewLine({ run, cp, needYou, blocking, anchor }: { run: RunOut; cp: CheckpointOut; needYou: number; blocking: number; anchor: boolean }) {
+function ItemsReviewLine({ run, cp, open, anchor }: { run: RunOut; cp: CheckpointOut; open: { blocking: number; toConfirm: number }; anchor: boolean }) {
   const [raw, setRaw] = useState(false);
   return (
     <div
@@ -1094,8 +1168,8 @@ function ItemsReviewLine({ run, cp, needYou, blocking, anchor }: { run: RunOut; 
       className="mt-2 flex flex-wrap items-center gap-2"
       data-testid="items-review-line"
     >
-      <span className="font-semibold">
-        {needYou} need you · {blocking} blocking
+      <span className="font-semibold" data-testid="items-open">
+        {openText(open)}
       </span>
       <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} icon="flag" variant={cp.can_decide ? "primary" : "secondary"}>
         Review items
@@ -1438,17 +1512,27 @@ function actionLabel(a: DraftAction, reasons: ItemReason[]): string {
 }
 
 /** `summary`: the counts without the per-item reasons (a Roadmap items stop decided on its review screen). */
-function ItemsCheckLine({ check, draft, summary = false }: { check: ItemsCheck; draft?: DraftActs; summary?: boolean }) {
+function ItemsCheckLine({
+  check,
+  draft,
+  summary = false,
+  open,
+}: {
+  check: ItemsCheck;
+  draft?: DraftActs;
+  summary?: boolean;
+  /** qa-work-4: the review screen's open counts (items, from the shared draft), when read. */
+  open?: { blocking: number; toConfirm: number };
+}) {
   const horizons = Object.entries(check.by_horizon).map(([h, n]) => `${n} ${h}`);
   const reasons = check.reasons ?? [];
   // An item's problems read as its blocking reasons; the box keeps the file's own problems
   // (or every problem, for a check stored before reasons).
   const boxed = reasons.length > 0 ? check.problems.filter((p) => !p.item) : check.problems;
   const resolution = check.resolution ?? null;
-  const counts = [
-    check.blocking > 0 && `${check.blocking} blocking`,
-    check.to_confirm > 0 && `${check.to_confirm} to confirm`,
-  ].filter(Boolean);
+  // qa-work-4: on a stop decided on its review screen, its counts in its words (items, not reasons).
+  const tally = summary ? (open ?? checkCounts(reasons)) : { blocking: check.blocking, toConfirm: check.to_confirm };
+  const counts = [tally.blocking > 0 && `${tally.blocking} blocking`, tally.toConfirm > 0 && `${tally.toConfirm} to confirm`].filter(Boolean);
   return (
     <div data-testid="items-check">
       <p className="flex flex-wrap items-center gap-2">
@@ -1660,7 +1744,6 @@ function useDraft(runId: string, cpId: string | null) {
   return { review: q.data ?? null, accept, reload };
 }
 
-const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const FEATURE_FLAG_LABEL: Record<string, string> = {
   serves_no_goal: "serves no goal",
   low_confidence: "low confidence",
@@ -1776,7 +1859,7 @@ function SentReviewLine({ runId, cp }: { runId: string; cp: CheckpointOut }) {
       params: { path: { run_id: runId, checkpoint_id: cp.id } },
       parseAs: "text",
     });
-    setText(response.ok ? (data as string) : `Could not load the review (${response.status}).`);
+    setText(response.ok ? (data as string) : "Could not load the review. Try again.");
   }
   return (
     <div data-testid="sent-review">
@@ -1829,7 +1912,7 @@ function Artifacts({
       params: { path: { run_id: runId, seq, name }, query },
       parseAs: "text",
     });
-    setContent(response.ok ? (data as string) : `Could not load ${name} (${response.status}).`);
+    setContent(response.ok ? (data as string) : `Could not load ${fileLabel(name)}. Try again.`);
   }
   const file = (name: string, attempt: number | null) => {
     const on = isOpen(name, attempt);
@@ -1839,12 +1922,14 @@ function Artifacts({
         type="button"
         onClick={() => void show(name, attempt)}
         aria-expanded={on}
-        className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 font-mono text-[13px] ${
+        // qa-work-8: the file in words ("Roadmap items"); its name on hover.
+        title={name}
+        className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
           on ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
         }`}
       >
         <Icon name="doc" size={16} />
-        {name}
+        {fileLabel(name)}
       </button>
     );
   };
@@ -1860,7 +1945,7 @@ function Artifacts({
               type="button"
               onClick={() => void show(n, null, true)}
               aria-expanded={isOpen(n, null, true)}
-              title={`${n} as the agents wrote it, before the approver's edits`}
+              title={`${fileLabel(n)} as the agents wrote it, before the approver's edits`}
               className={`inline-flex h-7 items-center gap-1.5 rounded-lg border px-2 text-[13px] ${
                 isOpen(n, null, true) ? "border-accent bg-accent-soft text-accent-ink" : "border-line-strong bg-surface text-text hover:bg-surface2"
               }`}
@@ -2256,5 +2341,27 @@ function ConsolePanel({ answer: c, held = false }: { answer: ConsoleAnswer; held
       {c.reason && c.counted === false && <p className="mt-1">Not counted: {c.reason}.</p>}
       {held && <p className="mt-1">Blocking problems are open: fix or waive them, then confirm</p>}
     </div>
+  );
+}
+
+/**
+ * qa-work-27: a run's only page action besides deciding is Delete, so it is a plain button (not a
+ * menu holding one item); shown only to roles that may delete (#370), the dialog DeleteMenu's.
+ */
+function DeleteButton(props: Parameters<typeof DeleteMenu>[0]) {
+  const { can } = useMe();
+  const [open, setOpen] = useState(false);
+  if (!can(props.op)) return null;
+  return (
+    <>
+      <Button onClick={() => setOpen(true)} data-testid="run-delete">
+        Delete
+      </Button>
+      {open &&
+        createPortal(
+          <DeleteDialog title={props.title} dependents={props.dependents} remove={props.remove} onClose={() => setOpen(false)} onDeleted={props.onDeleted} />,
+          document.body,
+        )}
+    </>
   );
 }

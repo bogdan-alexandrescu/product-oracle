@@ -7,6 +7,10 @@ import uuid
 from sqlalchemy import select
 
 from oracle import changes
+from oracle.baseline.models import Entity
+from oracle.docs.models import Document, DocumentVersion
+from oracle.docs.visibility import Hidden
+from oracle.roadmap import staleness
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
 from oracle.v2.models import ChangeEvent
@@ -22,6 +26,7 @@ from tests.test_roadmap import (  # noqa: F401 - fixtures
     runtime,
     seed_baseline,
 )
+from tests.trace_helpers import link_section
 
 URL = f"/v1/roadmaps/{ROADMAP}/items"
 SHIPPING_V1 = "Show the shipping cost on the cart page, before the shopper enters an address."
@@ -213,3 +218,88 @@ async def test_bulk_changes_name_the_count_that_applies_to_the_item_once(
     reasons = (await items(client, auth))["payment-step"]["stale_reasons"]
     # Only the requirement of the 42 and of the 11 is the payment step's: it is named, once.
     assert reasons == ["requirement:saved-cards changed"], reasons
+
+
+async def test_a_section_link_names_the_section_and_the_feature_it_links(
+    client,
+    owner,  # noqa: F811
+    runtime,  # noqa: F811
+):
+    """prod-6: an item whose PRD section links a changed entity (not its own feature,
+    requirement or blocker) names the section by its title and the entity by its name,
+    never "PRD section s-5-1 links feature:promo-codes, which changed"."""
+    tenant_id, auth = owner
+    await approved_prd(client, auth)
+    await seed_baseline(tenant_id)
+    await built_roadmap(client, auth, runtime)
+
+    async with tenant_session(tenant_id) as s:
+        promo = Entity(
+            type="feature", key="promo-codes", title="Promo codes",
+            status="confirmed", origin="user",
+        )  # fmt: skip
+        s.add(promo)
+        await s.flush()
+        promo_id = promo.id
+        doc_id = await s.scalar(select(Document.id).where(Document.slug == PRD))
+        version_id = await s.scalar(
+            select(DocumentVersion.id).where(
+                DocumentVersion.document_id == doc_id, DocumentVersion.number == 1
+            )
+        )
+        await s.commit()
+    # The payment step's own section (s-5-1) links a feature that is not its own.
+    await link_section(tenant_id, doc_id, version_id, "s-5-1", entity_id=promo_id)
+
+    resp = await client.patch(
+        f"/v1/baseline/entities/{promo_id}", json={"title": "Promo codes v2"}, headers=auth
+    )
+    assert resp.status_code == 200, resp.text
+
+    got = await items(client, auth)
+    assert got["payment-step"]["freshness"] == "potentially_stale"
+    assert got["payment-step"]["stale_reasons"] == [
+        "PRD section 5.1 Payment step links Promo codes v2, which changed"
+    ]
+    assert got["shipping-step"]["freshness"] == "fresh"
+
+
+def test_an_old_literal_section_link_reason_is_reworded_when_read():
+    """prod-6: a reason stored before the fix named the linked item by its bare ref
+    ("PRD section s-5-1 links feature:promo-codes, which changed"); the read path
+    (:func:`staleness.for_reader`, :func:`staleness.stale_why`) puts it in words
+    without a migration, the same as a freshly written reason would read."""
+    old = "PRD section s-5-1 links feature:promo-codes, which changed"
+    reworded = "PRD section s-5-1 links the feature, which changed"
+    assert staleness.for_reader([old], None) == [reworded]
+    assert staleness.stale_why([old], "default") == reworded
+    # Read back from a stored TrackAlert.detail (hidden=None: nothing masked, but still
+    # put into words - the only read path for an alert opened before the fix).
+    assert staleness.detail_for_reader(old, None) == reworded
+    # Already-worded (new-form) reasons, and counted ones, pass through unchanged.
+    new = "PRD section s-5-1 links Promo codes, which changed"
+    counted = "PRD section s-5-1 links 3 baseline items, which changed"
+    assert staleness.for_reader([new, counted], None) == [new, counted]
+
+
+def test_an_old_literal_reason_naming_a_hidden_decision_is_hidden_before_it_is_reworded():
+    """#541 with prod-6 (the train AA stale-alert review): an old literal reason names the
+    linked item by its ref ("PRD section s-5-1 links decision:d-7, which changed"); a reader
+    who may not see D-7 reads the hidden-reason line, never "links a decision, which
+    changed" (rewording first would drop the ref the hidden check looks for), in the
+    item's reasons, the at-risk why and an alert's detail; fails_when=the reworded line
+    reaches a reader D-7 is hidden from; no_claim=how Hidden is built (visibility tests)."""
+    hidden = Hidden(decision_ids=frozenset(), document_ids=frozenset(), ids=frozenset(),
+                    numbers=frozenset({7}), words=frozenset())  # fmt: skip
+    old = "PRD section s-5-1 links decision:d-7, which changed"
+    assert staleness.for_reader([old, "requirement:x changed"], hidden) == [
+        staleness.HIDDEN_REASON,
+        "requirement:x changed",
+    ]
+    detail = staleness.detail_for_reader(f"{old}; requirement:x changed", hidden)
+    assert detail == f"{staleness.HIDDEN_REASON}; a requirement changed", detail
+    assert "decision" not in detail
+    # Who may see D-7 reads it in words.
+    assert staleness.for_reader([old], None) == [
+        "PRD section s-5-1 links a decision, which changed"
+    ]

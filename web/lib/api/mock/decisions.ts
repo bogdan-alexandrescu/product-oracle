@@ -134,7 +134,11 @@ function blank(ctx: DecisionsContext, db: DecisionsDb, fields: Partial<Row> & Pi
     context: null,
     options: [],
     rationale: null,
-    driver: "oracle",
+    // As capture.capture: a call a person made is driven by them; Oracle drives its own.
+    driver:
+      fields.status === "decided" && fields.decided_actor === "user" && fields.origin !== "oracle" && fields.origin !== "autonomy"
+        ? `user:${fields.decided_by ?? fields.approver_id}`
+        : "oracle",
     contributor_ids: [],
     informed_ids: [],
     evidence_ids: [],
@@ -551,6 +555,7 @@ export async function routeDecisions(ctx: DecisionsContext, db: DecisionsDb, req
     const approver = q.get("approver");
     if (approver) rows = rows.filter((d) => d.approver_id === (approver === "me" ? me.id : approver));
     if (q.get("due") === "true") rows = rows.filter((d) => stateOf(d) === "review_due");
+    else if (q.get("due") === "false") rows = rows.filter((d) => stateOf(d) !== "review_due");
     const origin = q.get("origin");
     if (origin) rows = rows.filter((d) => origin.split(",").includes(d.origin));
     const chosen = q.get("chosen");

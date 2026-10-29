@@ -8,13 +8,14 @@ import { api, unwrap } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 
 // O1f: Full (as before), Brief and Deck. Full keeps its labels ("Export PDF").
+// qa-docs-53: one order on every row: PDF, then HTML, then the row's own (MD, PPTX).
 const GROUPS = [
   {
     layer: "full",
     label: "Full",
     formats: [
-      { format: "html", label: "HTML" },
       { format: "pdf", label: "PDF" },
+      { format: "html", label: "HTML" },
       { format: "md", label: "MD" },
     ],
   },
@@ -150,7 +151,7 @@ export function ApproveButton({
 
   if (blockedReason) {
     return (
-      <div className="flex w-full min-w-0 max-w-[min(28rem,calc(100vw-2.5rem))] flex-col items-end gap-1 max-[600px]:items-start" data-testid="approve-blocked">
+      <div className="flex min-w-0 max-w-[min(28rem,calc(100vw-2.5rem))] flex-col items-end gap-1 max-[600px]:w-full max-[600px]:items-start" data-testid="approve-blocked">
         <Button variant="primary" icon="check" disabled aria-describedby="approve-blocked-reason" title={blockedReason}>
           Approve version
         </Button>
@@ -162,8 +163,15 @@ export function ApproveButton({
   }
 
   if (!confirming) {
+    // qa-docs-66: an earlier version does not push its approval: a quiet button, saying which.
     return (
-      <Button variant="primary" icon="check" onClick={() => setConfirming(true)}>
+      <Button
+        variant={isLatest ? "primary" : "secondary"}
+        icon="check"
+        data-testid="approve-version"
+        aria-description={isLatest ? undefined : `v${n} is an earlier version`}
+        onClick={() => setConfirming(true)}
+      >
         Approve version
       </Button>
     );

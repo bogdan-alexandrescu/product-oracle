@@ -83,7 +83,11 @@ function ShadowHtml({
   return <div ref={host} className={className} style={style} aria-label={label} role={label ? "region" : undefined} />;
 }
 
-/** One slide, scaled to fit its box at 16:9. */
+/**
+ * One slide, scaled to fit its box at 16:9 (letterboxed). The boxes around it are min-w-0
+ * (qa-docs-6): a flex item's automatic minimum would otherwise grow to the slide's 960 px and
+ * a phone would show its left part only.
+ */
 function SlideCanvas({
   deck,
   index,
@@ -110,7 +114,7 @@ function SlideCanvas({
   }, []);
   const slide = deck.slides[index];
   return (
-    <div ref={outer} className="flex h-full w-full items-center justify-center overflow-hidden">
+    <div ref={outer} className="flex h-full w-full min-w-0 items-center justify-center overflow-hidden" data-testid={`${testId}-box`}>
       {slide && (
         <div style={{ width: SLIDE_W * scale, height: SLIDE_H * scale }} className="shadow-[0_24px_64px_rgba(0,0,0,0.45)]">
           <ShadowHtml
@@ -331,9 +335,9 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
           <p className="sr-only" aria-live="polite">
             Slide {index + 1} of {total}: {current.heading}
           </p>
-          <div className="relative flex min-h-0 flex-1">
+          <div className="relative flex min-h-0 min-w-0 flex-1">
             {presenter ? (
-              <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 p-4 max-[800px]:grid-cols-1 max-[800px]:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] max-[600px]:gap-3 max-[600px]:p-2.5" data-testid="presenter-view">
+              <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[minmax(0,2fr)_minmax(0,1fr)] gap-4 p-4 max-[800px]:grid-cols-1 max-[800px]:grid-rows-[minmax(0,1fr)_minmax(0,1fr)] max-[600px]:gap-3 max-[600px]:p-2.5" data-testid="presenter-view">
                 <section aria-label="Current slide" className="flex min-h-0 flex-col">
                   <h2 className="tnum mb-2 text-[13px] leading-4 font-semibold tracking-[0.02em] text-hero-text2">
                     Current · {counter}
@@ -367,7 +371,7 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
                 </div>
               </div>
             ) : (
-              <div className="min-h-0 flex-1 cursor-pointer p-4 max-[600px]:p-2.5" onClick={() => go(index + 1)} data-testid="audience-view">
+              <div className="min-h-0 min-w-0 flex-1 cursor-pointer p-4 max-[600px]:p-2.5" onClick={() => go(index + 1)} data-testid="audience-view">
                 <SlideCanvas deck={deck} index={index} onExpand={showOverlay} onLink={onLink} testId="current-slide" />
               </div>
             )}
@@ -385,7 +389,7 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
               <span className="max-[600px]:sr-only">Next</span>
               <Icon name="arrow" size={16} />
             </button>
-            <span className="mx-2 min-w-0 truncate text-[13px] text-hero-text2 max-[800px]:hidden">{deck.banner}</span>
+            {/* The banner (status, imported) is in the slide's own footer; not again here (qa-docs-30). */}
             <span className="ml-auto flex flex-wrap items-center gap-1">
               <button type="button" className={BAR_BTN} onClick={() => setPresenter((p) => !p)} aria-pressed={presenter}>
                 {presenter ? "Audience view" : "Presenter view"}

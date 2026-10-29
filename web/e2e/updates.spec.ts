@@ -182,8 +182,8 @@ test("10d: an approver sees and comments on updates without verdicts or Approve;
   await expect(page.getByTestId("search-hit")).toHaveCount(0);
 });
 
-test("10f: ⋯ › Open to the company, with a reason: the row's chip reads Company", async ({ page }) => {
-  // protects=an owner opens a row's ⋯ menu, picks Open to the company, gives a reason, and the
+test("10f: ⋯ › Share with the whole company, with a reason: the row's chip reads Company", async ({ page }) => {
+  // protects=an owner opens a row's ⋯ menu, picks Share with the whole company, gives a reason, and the
   // row's chip reads "Company" (and still does after a reload); a commenter can then open that
   // update; fails_when=the menu item is missing, no reason is asked, the chip does not change,
   // or the update stays hidden from the company; no_claim=the audit event (the API records it).
@@ -192,12 +192,12 @@ test("10f: ⋯ › Open to the company, with a reason: the row's chip reads Comp
   const row = page.getByTestId("update-row").filter({ hasText: "Investor update · September 2026" });
   await expect(row.getByTestId("update-visibility")).toHaveText("Owners and approvers");
   await row.getByRole("button", { name: "Actions for Investor update · September 2026" }).click();
-  await page.getByRole("menuitem", { name: "Open to the company" }).click();
-  const dialog = page.getByRole("dialog", { name: "Open to the company" });
-  await dialog.getByRole("button", { name: "Open to the company" }).click();
+  await page.getByRole("menuitem", { name: "Share with the whole company…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Share with the whole company" });
+  await dialog.getByRole("button", { name: "Share", exact: true }).click();
   await expect(dialog.getByText("Say why")).toBeVisible();
   await dialog.getByLabel("Reason").fill("The team asked to read the September numbers.");
-  await dialog.getByRole("button", { name: "Open to the company" }).click();
+  await dialog.getByRole("button", { name: "Share", exact: true }).click();
   await expect(dialog).toBeHidden();
   await expect(row.getByTestId("update-visibility")).toHaveText("Company");
   await page.reload();
@@ -209,7 +209,7 @@ test("10f: ⋯ › Open to the company, with a reason: the row's chip reads Comp
     "Owners and approvers",
   );
   await row.getByRole("button", { name: "Actions for Investor update · September 2026" }).click();
-  await expect(page.getByRole("menuitem", { name: "Limit to owners and approvers" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Limit to owners and approvers…" })).toBeVisible();
   await page.keyboard.press("Escape");
 
   await signOut(page);

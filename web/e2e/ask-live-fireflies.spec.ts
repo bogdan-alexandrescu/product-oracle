@@ -107,7 +107,7 @@ test("with others in the chat live reads are off, and a chat holding live reads 
   const s = await openSection(page, "problem");
   await sectionAction(s, "2. Problem", "Discuss this section");
   const form = page.getByTestId("start-discussion").filter({ visible: true });
-  await form.getByRole("group", { name: "Who can read it" }).getByRole("button", { name: "Private" }).click();
+  await form.getByRole("group", { name: "Visible to" }).getByRole("button", { name: "Only people I pick" }).click();
   await form.getByRole("searchbox", { name: "Find a person" }).fill("approver");
   await form.getByRole("option", { name: /Approver/ }).click();
   await form.getByRole("button", { name: "Start discussion" }).click();

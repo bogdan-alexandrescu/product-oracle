@@ -39,7 +39,7 @@ async function answer(page: Page, text: string) {
 
 /**
  * The customer's whole interview on the fixture's link: three questions answered (the short
- * answer gets one follow-up, answered), one skipped, then Send my answers. `midway` runs
+ * answer gets one follow-up, answered), one skipped, then Finish interview (confirmed). `midway` runs
  * after the first answer.
  */
 async function completeInterview(page: Page, midway?: () => Promise<void>) {
@@ -70,7 +70,8 @@ async function completeInterview(page: Page, midway?: () => Promise<void>) {
 
   await answer(page, ANSWERS.last);
   await expect(lastOracle(page)).toHaveText(MOCK_CLOSING);
-  await page.getByRole("button", { name: "Send my answers" }).click();
+  await page.getByTestId("interview-footer").getByRole("button", { name: "Finish interview" }).click();
+  await page.getByRole("alertdialog", { name: "Finish interview" }).getByRole("button", { name: "Finish interview" }).click();
   await expect(page.getByTestId("interview-thanks")).toHaveText(THANKS);
 }
 
@@ -138,7 +139,7 @@ test("criterion 12: a commenter drafts questions, edits them and creates the lin
 
 test("customer completes an interview", async ({ page, context }) => {
   // protects=criterion 13 (no sign-in: the disclosure line and Start; one follow-up on a thin
-  // answer, Skip this question, Send my answers, the thank-you; the link works in one browser
+  // answer, Skip this question, Finish interview (confirmed), the thank-you; the link works in one browser
   // only and not at all once finished); fails_when=the disclosure is missing or reworded, a
   // second follow-up is asked, Skip or Finish fail, the page sends the visitor to sign-in, or
   // a second browser can continue or reopen the link; no_claim=the real model, the API's

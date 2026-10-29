@@ -28,7 +28,7 @@ test.beforeEach(async ({ page }) => {
 
 test("a failed run and its segment say when they failed, the refusal in the past", async ({ page }) => {
   await page.goto("/runs");
-  await page.getByTestId("run-row").filter({ hasText: "checkout-redesign" }).filter({ hasText: "Failed" }).getByRole("link").first().click();
+  await page.locator('[data-testid="run-row"][data-document="checkout-redesign"]').filter({ hasText: "Failed" }).getByRole("link").first().click();
 
   const notes = page.getByTestId("failed-at");
   await expect(notes).toHaveCount(2);
@@ -43,7 +43,7 @@ test("roadmap items that failed say when, the refusal in the past", async ({ pag
   const status = page.getByTestId("draft-roadmap-status").filter({ visible: true });
   await expect(status).toHaveAttribute("data-status", "failed");
   await expect(status.getByTestId("failed-at")).toHaveText(`${FAILED}.`);
-  await expect(status).toContainText(`Oracle could not derive roadmap items: ${THEN}`);
+  await expect(status).toContainText(`Oracle could not build the draft roadmap: ${THEN}`);
   await noCurrentRefusal(page);
 });
 
