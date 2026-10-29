@@ -852,7 +852,7 @@ export function SimpleRoadmap() {
       <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
       <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setF({ ...f, from })} />
       <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setF({ ...f, to })} />
-      <span className="flex items-center gap-1.5 text-sm text-text2">
+      <span className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5 text-sm text-text2">
         Group by
         <SegmentedControl<Lane>
           label="Group by"
