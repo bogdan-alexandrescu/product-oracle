@@ -453,16 +453,16 @@ async def test_the_ritual_list_reads_the_summary_settings_once(client, ctx, at, 
         calls["mode"] += 1
         return await mode(db)
 
-    async def counted_allows(db, *a, **k):
-        calls["allows"] += 1
-        return await allows(db, *a, **k)
+    async def counted_allows(db, key, *a, **k):
+        calls["allows"] += key == "rituals"
+        return await allows(db, key, *a, **k)
 
     monkeypatch.setattr(summaries, "mode", counted_mode)
     monkeypatch.setattr(autonomy, "allows", counted_allows)
     rows = (await client.get("/v1/rituals", headers=ctx.as_("viewer"))).json()
     assert len(rows) > 2
     assert calls["mode"] == 1
-    assert calls["allows"] <= 2
+    assert calls["allows"] == 1
 
 
 async def test_pre_read_and_record_notes_rows_in_the_inbox(client, ctx, at):
