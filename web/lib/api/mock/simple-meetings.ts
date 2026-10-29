@@ -747,7 +747,9 @@ function decisionsPage(ctx: MeetingsCtx, db: MeetingsDb, q: URLSearchParams): Re
     const ids = questionsOfMeeting(qd, meetingQ);
     qs = qs.filter((x) => ids.has(x.id));
   }
-  const others = meetingQ ? [] : db.decisions.filter((d) => !d.meeting_id && product(d) && keep(d)).sort((a, b) => b.number - a.number);
+  // qa-simple-decide-20 (as decisions_page): an open decision a shown meeting lists as its open question ("D-3: ...") is not listed again.
+  const asked = new Set(shown.flatMap((m) => (m.minutes?.open_questions ?? []).map((x) => /^D-(\d+):/.exec(x)?.[1]).filter(Boolean)));
+  const others = meetingQ ? [] : db.decisions.filter((d) => !d.meeting_id && product(d) && keep(d) && !(d.status !== "decided" && asked.has(String(d.number)))).sort((a, b) => b.number - a.number);
   const out: Schemas["SimpleDecisionsOut"] = {
     meetings: shown.map((m) => {
       const whole = !!prd && !goal && m.prd === prd.slug;
