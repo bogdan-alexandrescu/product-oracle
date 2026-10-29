@@ -37,6 +37,7 @@ export function ChatThreadView({
   onThread,
   typed,
   note,
+  scroll,
 }: {
   thread: Thread | null;
   send: (text: string) => Promise<unknown>;
@@ -51,6 +52,8 @@ export function ChatThreadView({
   typed?: Typed;
   /** A line under the message box (the item's talk: "Just you and Oracle · kept with this item"). */
   note?: string;
+  /** qa-simple-decide-12: the lines scroll in their own area (this class sets its height); the box stays under them. */
+  scroll?: string;
 }) {
   const end = useRef<HTMLDivElement>(null);
   const count = thread?.messages.length ?? 0;
@@ -60,12 +63,14 @@ export function ChatThreadView({
 
   return (
     <div className="flex min-h-0 flex-col gap-3" data-testid={testId}>
-      <ChatMessages
-        messages={thread?.messages ?? []}
-        onCardChanged={onCardChanged}
-        onThread={onThread}
-      />
-      <div ref={end} />
+      <div className={scroll ? `flex min-h-0 flex-col gap-3 overflow-y-auto ${scroll}` : "contents"} data-testid={scroll ? `${testId}-scroll` : undefined}>
+        <ChatMessages
+          messages={thread?.messages ?? []}
+          onCardChanged={onCardChanged}
+          onThread={onThread}
+        />
+        <div ref={end} />
+      </div>
       <ChatComposer
         send={send}
         placeholder={placeholder}
@@ -508,7 +513,8 @@ function LineActions({
               })
             }
           >
-            Apply all
+            {/* qa-simple-decide-13: a person who proposes proposes them all. */}
+            {open.every((c) => c.may === "propose") ? "Propose all" : "Apply all"}
           </button>
         </div>
       )}

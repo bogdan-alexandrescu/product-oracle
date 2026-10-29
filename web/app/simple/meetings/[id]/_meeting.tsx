@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, confirmInPage, toast } from "@/components/ds";
 import { MeetingChat } from "@/components/simple/chat/MeetingChat";
 import { OnePager } from "@/components/simple/OnePager";
 import { QuestionRow, sourceName, useQuestionActions } from "@/components/simple/questions/Questions";
@@ -16,13 +16,20 @@ import { errorMessage, useQuery } from "@/lib/use-query";
 
 import { opWords } from "../../roadmap/_card";
 import { DecidedItem } from "../_flow";
+import { SimpleSelect } from "@/components/simple/meetings/SimpleSelect";
 
 // Chat actions (notes, open questions, the agenda's next and skipped items): optional until schema.d.ts carries them.
 type Meeting = Schemas["SimpleMeetingOut"] & { notes?: MeetingNote[]; agenda?: MeetingAgenda };
 type Mode = Meeting["change_mode"];
 
 const STEPS = ["One-pager", "Roadmap", "Decisions"] as const;
-const MODE_WORDS: Record<Mode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter plus named people" };
+// qa-simple-decide-7: one wording everywhere (the start sheet, this header, the chat's rules line).
+const MODE_WORDS: Record<Mode, string> = { everyone: "Everyone", presenter: "Only the presenter", named: "Presenter plus one or two people" };
+/** qa-simple-decide-48: a 44 px target on a phone. */
+const PHONE_TAP = "max-[600px]:min-h-11";
+const cap = (h: string) => (h ? h[0]!.toUpperCase() + h.slice(1) : h);
+/** qa-simple-decide-17: a calendar day ("2026-11-05") as "Thu Nov 5". */
+const dayWords = (day: string) => `${calendarDay(day, { weekday: "short" })} ${calendarDay(day)}`;
 
 function clock(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -59,7 +66,9 @@ export function MeetingScreen({ id }: { id: string }) {
   if (q.loading && !q.data) return <div className="px-6 py-8"><Loading /></div>;
   if (q.error || !q.data) return <div className="px-6 py-8"><ErrorNote>{q.error ?? "Not found"}</ErrorNote></div>;
   return (
-    <div className="fixed inset-0 z-40 overflow-auto bg-bg text-[length:var(--simple-body)] text-text" data-testid="meeting-screen">
+    // qa-simple-decide-40: a stable gutter, so the header does not shift when a step is taller than the screen.
+    // qa-simple-decide-48: on a phone the page itself scrolls (no inner scrolling layer), still over the shell.
+    <div className="fixed inset-0 z-40 overflow-auto max-[600px]:absolute max-[600px]:bottom-auto max-[600px]:z-50 max-[600px]:min-h-dvh max-[600px]:overflow-visible bg-bg text-[length:var(--simple-body)] text-text [scrollbar-gutter:stable]" data-testid="meeting-screen">
       {q.data.status === "ended" ? <EndScreen m={q.data} reload={q.reload} /> : <LiveScreen m={q.data} reload={q.reload} />}
     </div>
   );
@@ -106,9 +115,25 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
   const name = namer(m);
   const { me, can } = useMe();
   const joined = m.attendees.some((a) => a.id === me?.user_id);
+  // qa-simple-decide-2: Approve says what it approves (the one-pager's edits in this meeting); none: no button.
+  // Approve approves every draft the meeting worked on: the label names them all.
+  const toApprove = m.drafts.filter((d) => !d.decider_approved && d.changes > 0);
+  const edits = toApprove.reduce((n, d) => n + d.changes, 0);
+  const approveLabel = toApprove.every((d) => d.document.id === m.prd.id) ? `Approve one-pager edits (${edits})` : `Approve edits to ${toApprove.map((d) => d.document.title).join(", ")} (${edits})`;
+  // qa-simple-decide-1: ending closes the meeting for everyone: ask first.
+  const end = async () => {
+    const yes = await confirmInPage({ action: "End meeting", message: "End the review for everyone? Oracle then drafts the minutes, and no one can change things in this meeting any more.", destructive: true });
+    if (yes) await act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/end", path)));
+  };
+  // qa-simple-decide-42: a change applied in the chat shows at once in the stage and All decisions (read now and once the chat has settled).
+  const changed = () => {
+    void reload();
+    window.setTimeout(() => void reload(), 800);
+  };
   return (
     <div className="flex min-h-full flex-col">
-      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-4 py-3" aria-label="Meeting">
+      {/* qa-simple-decide-48: on a phone the header scrolls away with the page (not sticky). */}
+      <header className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-4 py-3 max-[600px]:static max-[600px]:gap-y-1 max-[600px]:py-2" aria-label="Meeting">
         <Link href="/simple/meetings" className="text-base underline">Meetings</Link>
         <h1 className="text-xl font-semibold">{m.title}</h1>
         <nav aria-label="Steps" className="flex flex-wrap gap-1">
@@ -118,7 +143,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               type="button"
               aria-pressed={step === i}
               onClick={() => setStep(i)}
-              className={`rounded-full border px-3 py-1 text-base ${step === i ? "border-accent bg-accent text-white" : "border-border"}`}
+              className={`rounded-full border px-3 py-1 text-base max-[600px]:min-h-11 ${step === i ? "border-accent bg-accent text-white" : "border-border"}`}
             >
               {i + 1} {s}
             </button>
@@ -127,11 +152,12 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
         <span role="timer" aria-label="Meeting clock" className="font-semibold tabular-nums">
           {clock(now - Date.parse(m.started_at))} / {m.length_min}:00
         </span>
-        <div className="ml-auto flex flex-wrap gap-2">
-          {!joined && can("join_simple_meeting") && <Button variant="primary" disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/join", path)))}>Join</Button>}
-          {m.can.approve && (
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          {!joined && can("join_simple_meeting") && <Button variant="primary" className={PHONE_TAP} disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/join", path)))}>Join</Button>}
+          {m.can.approve && edits > 0 && (
             <Button
               variant="primary"
+              className={PHONE_TAP}
               disabled={busy}
               onClick={() =>
                 act(async () => {
@@ -140,40 +166,45 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                 })
               }
             >
-              Approve
+              {approveLabel}
             </Button>
           )}
-          {m.can.end && <Button disabled={busy} onClick={() => act(() => unwrap(api.POST("/v1/simple/meetings/{meeting_id}/end", path)))}>End meeting</Button>}
+          {m.can.end && <Button className={PHONE_TAP} disabled={busy} onClick={() => void end()}>End meeting</Button>}
         </div>
       </header>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border px-4 py-2 text-base">
         <ul aria-label="Attendees" className="flex flex-wrap gap-2">
           {m.attendees.map((a) => (
-            <li key={a.id} data-present={a.present ? "true" : "false"} className={`rounded-full border border-border px-3 py-0.5 ${a.present ? "" : "opacity-60 line-through"}`}>
+            // qa-simple-decide-41: an absent attendee reads "away" with a grey dot, never struck through.
+            <li key={a.id} data-present={a.present ? "true" : "false"} className={`flex items-center rounded-full border border-border px-3 py-0.5 max-[600px]:min-h-11 ${a.present ? "" : "text-text2"}`}>
               {m.can.set_rules && a.id !== m.presenter.id ? (
                 <button
                   type="button"
                   aria-pressed={a.present}
                   disabled={busy}
                   aria-label={`${a.name} is here`}
+                  className="flex items-center max-[600px]:min-h-11"
                   title={a.present ? "Here: press to mark absent" : "Absent: press to mark here"}
                   onClick={() => rules({ absent_ids: a.present ? [...absent, a.id] : absent.filter((x) => x !== a.id) })}
                 >
-                  <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${a.present ? "bg-accent" : "border border-text-faint"}`} />
+                  <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${a.present ? "bg-accent" : "bg-text-faint"}`} />
                   {a.name}
                 </button>
               ) : (
-                <span>{a.name}</span>
+                <span>
+                  <span aria-hidden className={`mr-1 inline-block h-2.5 w-2.5 rounded-full ${a.present ? "bg-accent" : "bg-text-faint"}`} />
+                  {a.name}
+                </span>
               )}
-              {a.roles.length > 0 && <span className="text-sm text-text-faint"> · {a.roles.join(", ")}</span>}
-              {!a.present && <span className="sr-only"> (absent)</span>}
+              {a.roles.length > 0 && <span className="text-sm text-text-faint">&nbsp;· {a.roles.join(", ")}</span>}
+              {!a.present && <span className="text-sm text-text-faint" data-testid="attendee-away">&nbsp;· away</span>}
             </li>
           ))}
         </ul>
         {m.can.set_rules ? (
           <ChangeMode m={m} busy={busy} onSave={rules} />
         ) : (
-          <p data-testid="change-mode">Changes: {MODE_WORDS[m.change_mode]}{m.change_mode === "named" ? ` (${m.change_people.map((p) => p.name).join(", ")})` : ""}</p>
+          <p data-testid="change-mode">Who changes things: {MODE_WORDS[m.change_mode]}{m.change_mode === "named" ? ` (${m.change_people.map((p) => p.name).join(", ")})` : ""}</p>
         )}
       </div>
       {m.drafts.filter((d) => d.decider_approved).map((d) => (
@@ -189,7 +220,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
       {error && <div className="px-4 pt-2"><ErrorNote>{error}</ErrorNote></div>}
       <AgendaStrip agenda={m.agenda} />
       <div className="grid flex-1 gap-4 p-4 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <main aria-label="Stage" className="min-w-0">
+        {/* qa-simple-decide-49: the app has the one <main>; the stage is a section. */}
+        <section aria-label="Stage" className="min-w-0">
           {/* Read again whenever the meeting moves on (Approve, Undo, a change by chat): its
               version and its draft bar follow what was published. */}
           {step === 0 && (
@@ -202,9 +234,13 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
           )}
           {step === 1 && <RoadmapSlice m={m} reload={reload} />}
           {step === 2 && <DecisionsStep m={m} reload={reload} />}
-        </main>
+        </section>
         <aside aria-label="Chat column" className="flex min-w-0 flex-col gap-4">
-          <MeetingChat meetingId={m.id} sessionId={m.session_id} onCardChanged={() => void reload()} />
+          {/* qa-simple-decide-7: who changes things is set once, in the attendee bar above. */}
+          <MeetingChat meetingId={m.id} sessionId={m.session_id} onCardChanged={changed} rulesControl={false} scroll />
+          <Link className="simple-small font-semibold text-accent-ink hover:underline" href={`/simple/meetings/${m.id}/chat?session=${m.session_id}`} data-testid="meeting-chat-page-link">
+            Open chat on its own page
+          </Link>
           <NotesSoFar notes={m.notes ?? []} />
           <section aria-label="All decisions" className="simple-card">
             <h2 className="simple-h2">All decisions</h2>
@@ -215,7 +251,8 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
                 {m.meeting_decisions.map((d) => (
                   <li key={d.id} data-testid="meeting-decision">
                     <strong>D-{d.number}</strong> {d.title}
-                    <span className="block text-sm text-text-faint">{d.approver.name} · {formatInZone(d.at, zone, { hour: "numeric", minute: "2-digit" })}</span>
+                    {/* qa-simple-decide-50: the day too, as elsewhere in Simple. */}
+                    <span className="block text-sm text-text-faint">{d.approver.name} · {formatInZone(d.at, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
                   </li>
                 ))}
               </ul>
@@ -252,7 +289,7 @@ function NotesSoFar({ notes }: { notes: MeetingNote[] }) {
     <section aria-label="Notes so far" className="simple-card" data-testid="meeting-notes">
       <h2 className="simple-h2">Notes so far</h2>
       {notes.length === 0 ? (
-        <p className="simple-small">None yet. Type “note: …” or “open question: …” in the chat.</p>
+        <p className="simple-small">None yet. Type “note: …” or “open question: …” in the chat, then press Apply on Oracle&apos;s card.</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {notes.map((n) => (
@@ -274,8 +311,7 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
     <div className="flex flex-wrap items-center gap-2" data-testid="change-mode">
       <label className="flex items-center gap-2">
         <span>Who changes things</span>
-        <select
-          className="rounded border border-border bg-transparent p-1"
+        <SimpleSelect
           value={m.change_mode}
           disabled={busy}
           onChange={(e) => {
@@ -286,7 +322,7 @@ function ChangeMode({ m, busy, onSave }: { m: Meeting; busy: boolean; onSave: (b
           }}
         >
           {(Object.keys(MODE_WORDS) as Mode[]).map((k) => <option key={k} value={k}>{MODE_WORDS[k]}</option>)}
-        </select>
+        </SimpleSelect>
       </label>
       {m.change_mode === "named" &&
         others.map((a) => {
@@ -335,16 +371,20 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
         {items.map((i) => (
           <li key={i.id} data-item={i.key} className="flex flex-wrap items-center justify-between gap-2 py-2">
             <span>
-              <strong>{i.title}</strong> · {i.status === "cut" ? "Cut" : i.horizon[0].toUpperCase() + i.horizon.slice(1)} · {i.start.date} – {i.end.date}
+              <strong>{i.title}</strong> · {i.status === "cut" ? "Cut" : cap(i.horizon)} · {dayWords(i.start.date)} – {dayWords(i.end.date)}
             </span>
+            {/* qa-simple-decide-45: a cut item comes back with Restore. */}
+            {m.can.change && i.status === "cut" && (
+              <Button className={PHONE_TAP} disabled={busy} aria-label={`Restore ${i.title}`} onClick={() => change({ op: "restore", target: { item_id: i.id }, before: { cut: true }, after: {} })}>Restore</Button>
+            )}
             {m.can.change && i.status !== "cut" && (
               <span className="flex flex-wrap gap-2">
                 {HORIZONS.filter((h) => h !== i.horizon).map((h) => (
-                  <Button key={h} disabled={busy} aria-label={`Move ${i.title} to ${h[0].toUpperCase() + h.slice(1)}`} onClick={() => change({ op: "change_horizon", target: { item_id: i.id }, before: { horizon: i.horizon }, after: { horizon: h } })}>
+                  <Button key={h} className={PHONE_TAP} disabled={busy} aria-label={`Move ${i.title} to ${h[0].toUpperCase() + h.slice(1)}`} onClick={() => change({ op: "change_horizon", target: { item_id: i.id }, before: { horizon: i.horizon }, after: { horizon: h } })}>
                     Move to {h[0].toUpperCase() + h.slice(1)}
                   </Button>
                 ))}
-                <Button variant="ghost" disabled={busy} aria-label={`Cut ${i.title}`} onClick={() => change({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: {} })}>Cut</Button>
+                <Button className={PHONE_TAP} disabled={busy} aria-label={`Cut ${i.title}`} onClick={() => change({ op: "cut", target: { item_id: i.id }, before: { cut: false }, after: {} })}>Cut</Button>
               </span>
             )}
           </li>
@@ -356,6 +396,20 @@ function RoadmapSlice({ m, reload }: { m: Meeting; reload: () => Promise<unknown
 
 function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
   const { busy, error, act } = useAct(reload);
+  // qa-simple-decide-18: a proposal names its item ("move Sample data import to Now").
+  const roadmap = useQuery(`simple-meeting-roadmap|${m.prd.slug}`, () => unwrap(api.GET("/v1/simple/roadmap", { params: { query: { prd: m.prd.slug } } })));
+  const itemTitle = (c: Meeting["pending_proposals"][number]) => {
+    const id = (c.target as { item_id?: unknown }).item_id;
+    return roadmap.data?.items.find((i) => i.id === id)?.title ?? null;
+  };
+  const proposalWords = (c: Meeting["pending_proposals"][number]) => {
+    const t = itemTitle(c);
+    if (c.op === "change_horizon") return c.after.horizon ? `move ${t ?? "an item"} to ${cap(String(c.after.horizon))}` : `move ${t ?? "an item"}`;
+    if (c.op === "cut") return `cut ${t ?? "an item"}`;
+    if (c.op === "restore") return `restore ${t ?? "an item"}`;
+    const w = opWords(c.op);
+    return `${w[0]!.toLowerCase()}${w.slice(1)}${t ? ` (${t})` : ""}${c.op === "edit_line" ? ` “${String(c.after.line ?? "")}”` : ""}`;
+  };
   const [text, setText] = useState("");
   const decide = (id: string, how: "accept" | "decline") =>
     act(() =>
@@ -387,8 +441,7 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
           {m.pending_proposals.map((c) => (
             <li key={c.id} data-change={c.id} className="flex flex-wrap items-center justify-between gap-2">
               <span>
-                {c.by_name} proposes: {opWords(c.op)}
-                {c.op === "change_horizon" ? ` to ${String(c.after.horizon)}` : c.op === "edit_line" ? ` “${String(c.after.line ?? "")}”` : ""}
+                {c.by_name} proposes: {proposalWords(c)}
               </span>
               {c.can_decide && (
                 <span className="flex gap-2">
@@ -471,14 +524,31 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
     open_questions: questions.split("\n").map((x) => x.trim()).filter(Boolean),
     action_items: actions.filter((a) => a.title.trim()).map((a) => ({ title: a.title.trim(), owner_id: a.owner_id || null, due_date: a.due_date || null, action_item_id: a.action_item_id ?? null })),
   });
-  const save = () => act(async () => {
-    await unwrap(api.PUT("/v1/simple/meetings/{meeting_id}/minutes", { ...path, body: minutesIn() }));
-    setDirty(false);
-  });
-  const send = () => act(async () => {
+  // qa-simple-decide-46: an action item with no words is not dropped silently.
+  const [emptyItem, setEmptyItem] = useState(false);
+  const save = () => {
+    if (actions.some((a) => !a.title.trim())) {
+      setEmptyItem(true);
+      return;
+    }
+    setEmptyItem(false);
+    return act(async () => {
+      await unwrap(api.PUT("/v1/simple/meetings/{meeting_id}/minutes", { ...path, body: minutesIn() }));
+      setDirty(false);
+      toast({ message: "Minutes saved" });
+    });
+  };
+  const send = () => {
+    // qa-simple-decide-46: Send keeps an action item with no words too: it says so first.
+    if (actions.some((a) => !a.title.trim())) {
+      setEmptyItem(true);
+      return;
+    }
+    return act(async () => {
     if (dirty) await unwrap(api.PUT("/v1/simple/meetings/{meeting_id}/minutes", { ...path, body: minutesIn() }));
     await unwrap(api.POST("/v1/simple/meetings/{meeting_id}/send", { ...path, body: { email, slack } }));
-  });
+    });
+  };
   const edit = <T,>(set: (v: T) => void) => (v: T) => {
     set(v);
     setDirty(true);
@@ -523,28 +593,48 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
               <fieldset className="space-y-2">
                 <legend className="font-semibold">Action items</legend>
                 {actions.map((a, i) => (
-                  <div key={i} className="flex flex-wrap gap-2" data-testid="action-item">
-                    <input aria-label={`Action item ${i + 1}`} value={a.title} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} className="min-w-0 flex-1 rounded border border-border bg-transparent p-2" />
-                    <select aria-label={`Owner of action item ${i + 1}`} value={a.owner_id} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, owner_id: e.target.value } : x)))} className="rounded border border-border bg-transparent p-2">
+                  <div key={i} className="flex flex-wrap items-center gap-2" data-testid="action-item">
+                    <input aria-label={`Action item ${i + 1}`} placeholder="What needs doing" value={a.title} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} className="min-w-0 flex-1 rounded border border-border bg-transparent p-2" />
+                    <SimpleSelect aria-label={`Owner of action item ${i + 1}`} value={a.owner_id} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, owner_id: e.target.value } : x)))}>
                       <option value="">Who?</option>
                       {m.attendees.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                    </select>
-                    <input type="date" aria-label={`Due date of action item ${i + 1}`} value={a.due_date} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, due_date: e.target.value } : x)))} className="rounded border border-border bg-transparent p-2" />
+                    </SimpleSelect>
+                    <input type="date" aria-label={`Due date of action item ${i + 1}`} value={a.due_date} onChange={(e) => edit(setActions)(actions.map((x, j) => (j === i ? { ...x, due_date: e.target.value } : x)))} className="h-10 rounded-button border border-line-strong bg-surface px-2 text-text [color-scheme:light_dark]" />
+                    <button type="button" className="simple-button max-[600px]:!min-h-11 max-[600px]:!min-w-11" aria-label={`Remove action item ${i + 1}`} onClick={() => edit(setActions)(actions.filter((_, j) => j !== i))}>
+                      ×
+                    </button>
                   </div>
                 ))}
                 <Button onClick={() => edit(setActions)([...actions, { title: "", owner_id: "", due_date: "" }])}>Add action item</Button>
               </fieldset>
-              <Button disabled={busy || !dirty} onClick={save}>Save minutes</Button>
+              {emptyItem && actions.some((a) => !a.title.trim()) && <p role="alert" className="simple-small text-crit">Type what the action item is, or remove it.</p>}
+              <div className="flex flex-wrap items-center gap-3">
+                <button type="button" className="simple-button simple-button-primary" disabled={busy || !dirty} onClick={() => void save()}>
+                  Save minutes
+                </button>
+                {!dirty && <span className="simple-small">All changes saved</span>}
+              </div>
             </>
           ) : (
             <>
               <p data-testid="minutes-summary">{minutes?.summary || "No summary."}</p>
               <h3 className="font-semibold">Open questions</h3>
-              {minutes?.open_questions.length ? <ul className="list-disc pl-5">{minutes.open_questions.map((x) => <li key={x}>{x}</li>)}</ul> : <p className="simple-small">None.</p>}
+              {/* qa-simple-decide-52: each open question leads to where it is decided. */}
+              {minutes?.open_questions.length ? (
+                <ul className="list-disc pl-5">
+                  {minutes.open_questions.map((x) => (
+                    <li key={x}>
+                      <Link className="text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>{x}</Link>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="simple-small">None.</p>
+              )}
               <h3 className="font-semibold">Action items</h3>
               {minutes?.action_items.length ? (
                 <ul className="list-disc pl-5">
-                  {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? owner(a.owner_id) ?? "no owner"}{a.due_date ? ` · by ${a.due_date}` : ""}</li>)}
+                  {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? owner(a.owner_id) ?? "no owner"}{a.due_date ? ` · by ${dayWords(a.due_date)}` : ""}</li>)}
                 </ul>
               ) : (
                 <p className="simple-small">None.</p>
@@ -556,7 +646,9 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
             <ul aria-label="Decisions taken" className="space-y-1">
               {m.meeting_decisions.map((x) => (
                 <DecidedItem key={x.id} flow={x.flow}>
-                  <span><strong>D-{x.number}</strong> {x.title} · {x.approver.name}</span>
+                  <span>
+                    <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions#d-${x.number}`}>D-{x.number}</Link> {x.title} · {x.approver.name}
+                  </span>
                 </DecidedItem>
               ))}
             </ul>
@@ -572,7 +664,10 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                 {minutes.waits.map((w, i) => <li key={i}>{w.what}{w.on.length ? ` · on ${w.on.map((p) => p.name).join(", ")}` : ""}</li>)}
               </ul>
             ) : (
-              <p className="simple-small">Nothing waits.</p>
+              // qa-simple-decide-47: no person's approval waits; the open questions still do.
+              <p className="simple-small">
+                {minutes?.open_questions.length ? `No approval waits. ${minutes.open_questions.length} open ${minutes.open_questions.length === 1 ? "question waits" : "questions wait"} for a decision.` : "Nothing waits."}
+              </p>
             )}
           </section>
           <section aria-label="Delivery" className="simple-card space-y-2">
@@ -583,8 +678,8 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                 <ul className="space-y-1">
                   <li>Decisions page · posted</li>
                   <li>Each attendee&apos;s Inbox · posted</li>
-                  <li>Email · {d.email ? (d.email_status ?? "queued") : "not chosen"}</li>
-                  <li>Slack · {d.slack ? `${d.slack_status ?? "queued"}${d.slack_channel ? ` to ${d.slack_channel}` : ""}` : "not chosen"}</li>
+                  <li>Email · {d.email ? deliveryWords(d.email_status ?? "queued") : "not sent (not picked)"}</li>
+                  <li>Slack · {d.slack ? `${deliveryWords(d.slack_status ?? "queued")}${d.slack_channel ? ` to ${d.slack_channel}` : ""}` : "not posted (not picked)"}</li>
                 </ul>
                 <Link className="font-semibold text-accent-ink hover:underline" href={`/simple/decisions?meeting=${m.id}`}>Open the Decisions page</Link>
               </div>
@@ -599,7 +694,11 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
                 {slackReady ? (
                   <label className="flex items-center gap-2"><input type="checkbox" checked={slack} onChange={(e) => setSlack(e.target.checked)} /> Post to {m.slack.channel}</label>
                 ) : (
-                  <label className="flex items-center gap-2"><input type="checkbox" disabled checked={false} onChange={() => undefined} /> Post to Slack <span className="simple-small"> · {m.slack.connected ? "No channel set" : "Not connected"}</span></label>
+                  <p className="flex flex-wrap items-center gap-2">
+                    <input type="checkbox" disabled checked={false} onChange={() => undefined} aria-label="Post to Slack" /> Post to Slack
+                    <span className="simple-small"> · {m.slack.connected ? "Slack has no channel for minutes yet." : "Slack is not connected yet."}</span>
+                    <Link className="simple-small font-semibold text-accent-ink hover:underline" href="/settings/connections">{m.slack.connected ? "Pick a channel" : "Connect Slack"}</Link>
+                  </p>
                 )}
                 <Button variant="primary" disabled={busy} onClick={send}>Send</Button>
               </>
@@ -613,11 +712,14 @@ function EndScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }
   );
 }
 
+/** qa-simple-decide-47: a delivery's state in plain words. */
+function deliveryWords(status: string): string {
+  return ({ queued: "on its way", sent: "sent", delivered: "sent", posted: "posted", failed: "could not be sent", not_sent: "not sent: no sender is set up" } as Record<string, string>)[status] ?? "not known yet";
+}
+
 /** The agenda shows this many questions before "N more: <codes>". */
 const AGENDA_FIRST = 4;
 
-/** A calendar day ("2026-11-13") as "Fri Nov 13". */
-const dayWords = (day: string) => `${calendarDay(day, { weekday: "short" })} ${calendarDay(day)}`;
 
 /**
  * prd-questions, kept to the owner's pick A (frame A3): the Decisions step's "On the agenda":

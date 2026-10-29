@@ -2841,11 +2841,14 @@ export interface paths {
          * @description The company's active members for a person picker, matched on email (``q``):
          *     each one's name (from their email), email, role and whether they can write
          *     (commenter or above: answer, comment, be asked). Disabled members are not listed;
-         *     the full member list (``GET /v1/members``) stays the owner's.
+         *     the full member list (``GET /v1/members``) stays the owner's. ``decides`` lists only
+         *     the members whose role may decide a PRD question (approvers and owners). The list
+         *     is ordered by email and paged with ``limit`` and ``offset``.
          *
          *     ``ids`` names people instead ("Waiting on <name>", "Answered by <name>"): the
          *     company's members with those ids, however many the company has, a disabled one too
-         *     (it keeps its name and cannot write); ``q`` and ``limit`` do not apply.
+         *     (it keeps its name and cannot write); ``q``, ``decides``, ``limit`` and ``offset`` do
+         *     not apply.
          */
         get: operations["list_people"];
         put?: never;
@@ -50720,6 +50723,8 @@ export interface operations {
                 q?: string | null;
                 limit?: number;
                 ids?: string[] | null;
+                decides?: boolean;
+                offset?: number;
             };
             header?: never;
             path?: never;

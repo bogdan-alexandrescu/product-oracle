@@ -46,6 +46,11 @@ Test cards (protects / fails_when / no_claim):
   decisions under it with its minutes, keeps decisions outside meetings apart, filters
   by PRD, goal and meeting (an unknown one is 404); fails_when=a decision lands in the
   wrong group or a filter leaks; no_claim=Detailed's decision log.
+- test_an_open_decision_named_in_minutes_is_not_listed_twice: protects=an open decision
+  the shown meeting's minutes name as an open question ("D-<n>: ...") is left out of the
+  decisions outside meetings, and is listed there again once decided; fails_when=it shows
+  twice (under the meeting's open questions and in "other") or never comes back;
+  no_claim=the minutes' wording.
 """
 
 import uuid
@@ -471,3 +476,39 @@ async def test_decisions_page_grouping_and_filters(client):
         r = await client.get("/v1/simple/decisions", params={key: value},
                              headers=w.ctx.as_("viewer"))  # fmt: skip
         assert r.status_code == 404, (key, r.text)
+
+
+async def test_an_open_decision_named_in_minutes_is_not_listed_twice(client):
+    w = await world()
+    m = await start(client, w)
+    await end(client, w, m["id"])
+    async with tenant_session(w.ctx.tenant_id) as s:
+        from oracle.decisions import capture
+
+        open_one = await capture.capture(
+            s, None, origin="version_approval", source_kind="test", source_id=uuid.uuid4(),
+            title="Pick the ledger", options=[{"key": "a"}], chosen_option="a",
+            rationale="Later", approver_id=w.ctx.users["owner"].id,
+            subjects=[{"kind": "document", "id": str(uuid.uuid4())}],
+        )  # fmt: skip
+        open_one.status = "proposed"
+        await s.commit()
+        number, decision_id = open_one.number, open_one.id
+
+    async def other() -> list[str]:
+        r = await client.get("/v1/simple/decisions", headers=w.ctx.as_("viewer"))
+        assert r.status_code == 200, r.text
+        assert [g["meeting"]["id"] for g in r.json()["meetings"]] == [m["id"]]
+        return [d["title"] for d in r.json()["other"]]
+
+    # Not named in the minutes yet: listed outside meetings.
+    assert "Pick the ledger" in await other()
+    body = {"summary": "We talked.", "open_questions": [f"D-{number}: Pick the ledger"]}
+    r = await client.put(f"{MEETINGS}/{m['id']}/minutes", json=body,
+                         headers=w.ctx.as_("decider"))  # fmt: skip
+    assert r.status_code == 200, r.text
+    assert "Pick the ledger" not in await other()
+    async with tenant_session(w.ctx.tenant_id) as s:
+        (await s.get(Decision, decision_id)).status = "decided"
+        await s.commit()
+    assert "Pick the ledger" in await other()

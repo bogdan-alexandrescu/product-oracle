@@ -771,6 +771,45 @@ async def test_people_resolves_named_ids_beyond_the_first_page(client):
     assert resp.status_code == 422
 
 
+async def test_people_who_decide_page_past_the_first_twenty(client):
+    """protects=a PRD question's decider picker in a big company; fails_when=the picker
+    lists commenters or viewers, or cannot reach approvers past the first page;
+    no_claim=who may write."""
+    ctx = await company()
+    async with tenant_session(ctx.tenant_id) as s:
+        for n in range(24):
+            role = ("approver", "commenter", "owner", "viewer")[n % 4]
+            s.add(User(email=f"member.{n:02d}@example.com", password_hash="x", role=role))
+        gone = User(email="ada.gone@example.com", password_hash="x", role="approver")
+        s.add(gone)
+        await s.commit()
+    resp = await client.post(f"/v1/members/{gone.id}/disable", headers=ctx.as_("owner"))
+    assert resp.status_code == 200, resp.text
+    everyone = await client.get("/v1/people", params={"limit": 500}, headers=ctx.as_("viewer"))
+    assert len(everyone.json()) == 28
+    deciders = sorted(p["email"] for p in everyone.json() if p["role"] in ("approver", "owner"))
+    assert len(deciders) == 14
+    seen: list[str] = []
+    for offset in range(0, 20, 5):
+        resp = await client.get(
+            "/v1/people",
+            params={"decides": "true", "limit": 5, "offset": offset},
+            headers=ctx.as_("viewer"),
+        )
+        assert resp.status_code == 200, resp.text
+        page = resp.json()
+        assert all(p["role"] in ("approver", "owner") for p in page), page
+        seen += [p["email"] for p in page]
+    assert seen == deciders
+    # Without decides, offset still pages everyone.
+    second = await client.get(
+        "/v1/people", params={"limit": 20, "offset": 20}, headers=ctx.as_("viewer")
+    )
+    assert [p["email"] for p in second.json()] == [p["email"] for p in everyone.json()][20:]
+    bad = await client.get("/v1/people", params={"offset": -1}, headers=ctx.as_("viewer"))
+    assert bad.status_code == 422
+
+
 async def test_reassigning_a_deferred_question_asks_the_new_person(client):
     """protects=a reassigned question reaches the new person's Inbox; fails_when=a deferred
     question stays deferred after a reassign; no_claim=answered or withdrawn ones (final)."""

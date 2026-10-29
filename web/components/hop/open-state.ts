@@ -43,7 +43,10 @@ function openFor(who: string | null): boolean {
   return !!s && !!who && (s === "1" || s === who);
 }
 
-export function setPanelOpen(next: boolean) {
+/** `remember` false: opened for one question (Simple's Ask Oracle): not reopened on the next page load (qa-simple-decide-10). */
+let transient = false;
+export function setPanelOpen(next: boolean, remember = true) {
+  transient = next && !remember;
   if (next && !openFor(user)) focusAsk = true;
   stored = next ? (user ?? "1") : null;
   // Words no box took while it was open are dropped, never shown typed in later.
@@ -52,7 +55,7 @@ export function setPanelOpen(next: boolean) {
     draftListeners.forEach((l) => l());
   }
   try {
-    window.localStorage.setItem(OPEN_KEY, stored ?? "0");
+    window.localStorage.setItem(OPEN_KEY, next && remember ? (stored ?? "0") : "0");
   } catch {
     // Not remembered; the panel still opens.
   }
@@ -89,7 +92,13 @@ export function usePanelOpen(): boolean {
 export function askWith(text: string) {
   draft = text;
   draftListeners.forEach((l) => l());
-  setPanelOpen(true);
+  // A panel the person had open on purpose stays remembered; one opened only for these words is not.
+  setPanelOpen(true, !!readStored() && !transient);
+}
+
+/** Leaving the page that opened the panel for one question (Simple's Ask Oracle, a goal's Suggest) closes it (the shell, on every page change). */
+export function closeTransientPanel() {
+  if (transient && readStored()) setPanelOpen(false);
 }
 
 /** Takes the typed-in words (they are cleared). */

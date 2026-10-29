@@ -66,9 +66,8 @@ for (const phone of [false, true]) {
         await expect(region(page, "Waiting for others")).toContainText("No decider yet");
         await expect(outside(page, "Q1")).toContainText("Q1 Data retention period");
         await expect(outside(page, "Q1")).toContainText("Keep 90 days · Admin");
-        await expect(page.getByTestId("decisions-approvals")).toContainText("Oracle's own run approvals (1, such as");
-        await expect(page.getByTestId("decisions-approvals")).toContainText("are not product decisions: they are not listed or counted here.");
-        await expect(page.getByTestId("decisions-approvals").getByRole("link", { name: "Open them in Detailed" })).toBeVisible();
+        await expect(page.getByTestId("decisions-approvals")).toContainText("1 approval for Oracle's own work waits in your Inbox.");
+        await expect(page.getByTestId("decisions-approvals").getByRole("link", { name: "Open the Inbox" })).toBeVisible();
         await expect(region(page, "Review: Usage alerts")).toBeVisible();
         // Ask Oracle opens Simple's Ask panel with the question in its box.
         await row(page, "Q5").getByRole("button", { name: "Ask Oracle" }).click();
@@ -102,17 +101,17 @@ for (const phone of [false, true]) {
           await page.getByTestId("board-tab-needs_input").click();
         } else {
           await expect(recommended).toContainText("Recommended 12");
-          await expect(decided).toContainText("Decided 1");
+          await expect(decided).toContainText("Decided questions 1");
           await expect(needs).toBeVisible();
           await expect(recommended).toBeVisible();
           await expect(decided).toBeVisible();
         }
         const q2 = needs.locator('[data-code="Q2"]');
         const q3 = needs.locator('[data-code="Q3"]');
-        await q3.getByRole("button", { name: "Name a person" }).click();
-        await q3.getByRole("group", { name: "Who answers Q3" }).getByRole("button", { name: "Commenter", exact: true }).click();
-        await expect(page.getByText("Commenter decides Q3")).toBeVisible();
-        await expect(needs.locator('[data-code="Q3"]')).toContainText("Commenter decides");
+        await q3.getByRole("button", { name: "Ask someone to answer" }).click();
+        await q3.getByRole("group", { name: "Who answers Q3" }).getByRole("button", { name: "Approver", exact: true }).click();
+        await expect(page.getByText("Approver decides Q3")).toBeVisible();
+        await expect(needs.locator('[data-code="Q3"]')).toContainText("Approver decides");
         await q2.getByRole("button", { name: "Name a decider" }).click();
         await q2.getByRole("group", { name: "Who decides Q2" }).getByRole("button", { name: "Approver" }).click();
         await expect(page.getByText("Approver decides Q2")).toBeVisible();
@@ -244,7 +243,7 @@ for (const phone of [false, true]) {
         await due.getByTestId("question-row").first().getByRole("button", { name: "Decide as recommended" }).click();
         await expect(region(page, "All decisions")).toContainText("Decided Q5 Reminder default time: 9:00 in each person's zone");
         const q5 = due.locator('[data-code="Q5"]');
-        await expect(q5.getByTestId("question-decided")).toContainText("Decided in this meeting: as recommended · Admin ·");
+        await expect(q5.getByTestId("question-decided")).toContainText("Decided in this meeting: 9:00 in each person's zone · Admin ·");
         await q5.getByRole("button", { name: "Undo" }).click();
         await expect(q5.getByRole("button", { name: "Decide as recommended" })).toBeVisible();
         await expect(q5.getByTestId("question-due")).toHaveText("Late · due Fri Oct 16");
@@ -283,7 +282,8 @@ for (const phone of [false, true]) {
         const firstBox = (await first.boundingBox())!;
         if (phone) {
           expect(decide.y).toBeGreaterThan(title.y + title.height);
-          expect(decide.width).toBeGreaterThan(firstBox.width - 4);
+          // qa-simple-decide-23: a compact row on a phone, not full-width buttons.
+          expect(decide.width).toBeLessThan(firstBox.width - 4);
         } else {
           expect(decide.x).toBeGreaterThan(title.x + title.width);
           expect(Math.abs(decide.y - title.y)).toBeLessThan(24);
@@ -293,7 +293,7 @@ for (const phone of [false, true]) {
         const note = page.getByTestId("decisions-approvals");
         const outsideBox = (await region(page, "Outside meetings").boundingBox())!;
         expect((await note.boundingBox())!.y).toBeGreaterThan(outsideBox.y + outsideBox.height);
-        await expect(note.getByRole("link", { name: "Open them in Detailed" })).toBeVisible();
+        await expect(note.getByRole("link", { name: "Open the Inbox" })).toBeVisible();
 
         await page.goto("/simple");
         const card = page.getByTestId("home-decisions");

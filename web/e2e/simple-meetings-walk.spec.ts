@@ -74,7 +74,7 @@ const delivery = (page: Page) => page.getByRole("region", { name: "Delivery" });
 async function endOne(page: Page) {
   await login(page);
   await page.goto("/simple/meetings");
-  await page.getByRole("button", { name: "Start a review" }).click();
+  await page.getByRole("button", { name: "Start review" }).first().click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
@@ -83,6 +83,7 @@ async function endOne(page: Page) {
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
   await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
   await page.getByRole("button", { name: "End meeting" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByTestId("end-screen")).toBeVisible();
 }
 
@@ -140,7 +141,8 @@ for (const phone of [false, true]) {
         await expect(minutesRegion(page).getByRole("button", { name: "Draft again" })).toHaveCount(0);
         await delivery(page).getByRole("button", { name: "Send" }).click();
         await expect(delivery(page).getByRole("status", { name: "Sent" })).toBeVisible();
-        await expect(page.getByTestId("minutes-summary")).toContainText("1 decision in Review: Guided setup");
+        // qa-simple-decide-32: the summary does not repeat the title and count.
+        await expect(page.getByTestId("minutes-summary")).toContainText("Moved Setup checklist.");
       });
 
       test("Upcoming lists what Home shows; the rail counts what the page lists; Home's Start opens the sheet", async ({ page }) => {
@@ -161,7 +163,7 @@ for (const phone of [false, true]) {
         // Home's next review is Upcoming's first row; its Start meeting opens the sheet on it.
         await page.goto("/simple");
         await expect(page.getByTestId("home-meeting-next")).toContainText(firstTitle);
-        await page.getByTestId("home-meeting-next").getByRole("link", { name: "Start meeting" }).click();
+        await page.getByTestId("home-meeting-next").getByRole("link", { name: "Start review" }).click();
         const sheet = page.getByRole("dialog", { name: "Start a review" });
         await expect(sheet.getByTestId("start-occurrence")).toContainText(firstTitle);
         const ritual = firstTitle;
@@ -171,15 +173,18 @@ for (const phone of [false, true]) {
         await page.goto("/simple/meetings");
         const live = page.getByRole("region", { name: "Live" });
         await expect(live).toContainText(`${ritual}: Guided setup`);
-        await expect(upcoming.getByTestId("meetings-upcoming-row").filter({ hasText: ritual }).first().getByRole("link", { name: "Open" })).toBeVisible();
+        // qa-simple-decide-34: a live review is listed under Live only.
+        await expect(upcoming.getByRole("link", { name: "Open" })).toHaveCount(0);
         const after = await upcoming.getByRole("button", { name: "Start review" }).count();
         if (!phone) await expect(page.getByTestId("simple-nav-meetings-count")).toHaveText(String(after + 1));
         // A viewer reads the same list, and Home's next is its first row.
         await switchTo(page, "viewer@example.com");
         await page.goto("/simple/meetings");
-        const firstRow = (await upcoming.getByTestId("meetings-upcoming-row").first().locator("strong").innerText()).trim();
+        // qa-simple-decide-34: the live review is under Live, not Upcoming; Home's next opens it.
+        await expect(page.getByRole("region", { name: "Live" })).toContainText(`${ritual}: Guided setup`);
         await page.goto("/simple");
-        await expect(page.getByTestId("home-meeting-next")).toContainText(firstRow);
+        await expect(page.getByTestId("home-meeting-next")).toContainText(ritual);
+        await expect(page.getByTestId("home-meeting-next").getByRole("link", { name: "Open meeting" })).toBeVisible();
       });
 
       test("Approve and Undo in a meeting: the one-pager reads its new version, no stale draft bar", async ({ page }) => {
@@ -202,7 +207,7 @@ for (const phone of [false, true]) {
         await page.getByLabel("New wording for").fill("A checklist that names the next step");
         await page.getByRole("button", { name: "Save" }).click();
         await expect(bar).toContainText("1 change");
-        await page.getByRole("button", { name: "Approve", exact: true }).click();
+        await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
         await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
         await expect(onePager).toContainText("Version 4");
         await expect(onePager).not.toContainText("Version 3");
@@ -226,7 +231,7 @@ for (const phone of [false, true]) {
         await expect(otherPager).toContainText("Version 3");
         await expect(other.getByRole("status", { name: "Working draft" })).toContainText("1 change");
         await page.bringToFront();
-        await page.getByRole("button", { name: "Approve", exact: true }).click();
+        await page.getByRole("button", { name: /^Approve one-pager edits/ }).click();
         await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Approved Guided setup (published)");
         await other.bringToFront();
         await other.clock.runFor(6_000);
@@ -245,7 +250,7 @@ for (const phone of [false, true]) {
         await page.goto("/simple");
         const next = page.getByTestId("home-meeting-next");
         await expect(next).toBeVisible();
-        await expect(next.getByRole("link", { name: "Start meeting" })).toHaveCount(0);
+        await expect(next.getByRole("link", { name: "Start review" })).toHaveCount(0);
         await expect(next.getByText(/Pre-read not ready yet|Open pre-read/)).toBeVisible();
       });
 

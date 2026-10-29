@@ -333,6 +333,46 @@ async def test_reader_roles_in_a_meeting(client, meetings):  # noqa: F811
     assert (await w.item("Partner API")).horizon == "next"
 
 
+async def test_a_meeting_question_is_kept_for_the_minutes(client, meetings):  # noqa: F811
+    """qa-simple-decide-3: a question in a meeting's chat is not refused: it is kept for the
+    minutes and pointed to Ask Oracle; outside a meeting the line is still refused."""
+    ctx = await make_people()
+    await World(ctx).build()
+    mid = _meeting(ctx, meetings)
+    nothing = {"actions": [], "clarify": None, "answer": None}
+    await post(client, ctx, "owner", "what is blocking M1?", mid)
+    await read(ctx, nothing)
+    m = await last(client, ctx, "owner", mid)
+    assert m["kind"] == "note" and m["body"] == chat.MEETING_ASK
+    await post(client, ctx, "owner", "do the thing with the thing", mid)
+    await read(ctx, nothing)
+    m = await last(client, ctx, "owner", mid)
+    assert m["body"] == "I could not tell what to change. Say it another way."
+    await post(client, ctx, "owner", "what is blocking M1?")
+    await read(ctx, nothing)
+    m = await last(client, ctx, "owner")
+    assert m["body"] == "I could not tell what to change. Say it another way."
+
+
+async def test_a_meeting_change_ending_in_a_question_mark_keeps_its_reply(client, meetings):  # noqa: F811
+    """protects=only a line the reader saw nothing to change in (the mock's question
+    branch) is kept for the minutes; fails_when=a change request ending in "?" that the
+    reader could not build gets the minutes note instead of "Say it another way";
+    no_claim=the reader's wording."""
+    ctx = await make_people()
+    await World(ctx).build()
+    mid = _meeting(ctx, meetings)
+    refused = {"actions": ["not an action"], "clarify": None, "answer": None}
+    unbuilt = {"actions": [], "clarify": {"question": "Which?", "choices": [{"op": "nope"}]},
+               "answer": None}  # fmt: skip
+    for answer in (refused, unbuilt):
+        await post(client, ctx, "owner", "could we sort out the partner thing?", mid)
+        await read(ctx, answer)
+        m = await last(client, ctx, "owner", mid)
+        assert m["kind"] == "note", answer
+        assert m["body"] == "I could not tell what to change. Say it another way.", answer
+
+
 async def test_reader_roles_on_ask(client):
     ctx = await make_people()
     w = await World(ctx).build()

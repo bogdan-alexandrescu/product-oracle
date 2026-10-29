@@ -32,7 +32,7 @@ for (const phone of [false, true]) {
         await login(page, "viewer@example.com");
         await page.goto("/simple/decisions");
         const past = group(page, "Review: Usage alerts");
-        await expect(past).toContainText("2 decisions in Review: Usage alerts");
+        await expect(past).toContainText("Comment: keep quiet hours on by default.");
         await expect(past).toContainText("Attendees: Admin, Approver, Commenter");
         await expect(past).toContainText("D-3: Should muted teams still get the weekly digest?");
         await expect(past).toContainText("Draft the quiet hours copy · Commenter · by");
@@ -44,10 +44,11 @@ for (const phone of [false, true]) {
         await expect(rows.nth(1)).toContainText("D-4 Moved Weekly alert digest");
         const outside = group(page, "Outside meetings");
         // prd-decisions A1: a PRD's decided question sits here too, with its code and answer.
-        await expect(outside.getByTestId("decision-row")).toHaveCount(4);
+        // qa-simple-decide-20: D-3 is listed once, beside its meeting, not here as well.
+        await expect(outside.getByTestId("decision-row")).toHaveCount(3);
         await expect(outside.getByTestId("decision-row").first()).toContainText("Q1 Data retention period");
         await expect(outside.getByTestId("decision-row").first()).toContainText("Keep 90 days · Admin");
-        await expect(outside.getByTestId("decision-row").nth(1)).toContainText("D-3");
+        await expect(outside).not.toContainText("D-3");
         await expect(outside).toContainText("D-1 Start guided setup with the checklist");
 
         await page.getByRole("combobox", { name: "PRD", exact: true }).selectOption({ label: "Guided setup" });

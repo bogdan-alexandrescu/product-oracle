@@ -41,6 +41,7 @@ for (const [phone, scheme] of [[false, "light"], [false, "dark"], [true, "light"
       await row.getByRole("button", { name: "Start review" }).click();
       await page.getByRole("dialog", { name: "Start a review" }).getByRole("button", { name: "Start", exact: true }).click();
       await page.getByRole("button", { name: "End meeting" }).click();
+      await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
       await expect(page.getByRole("button", { name: "End meeting" })).toHaveCount(0);
 
       // Back on the occurrence page: the notes are still the owner's to record.

@@ -47,6 +47,7 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   const pathname = usePathname();
   const [counts, setCounts] = useState<Record<string, number> | null>(null);
   const [meetings, setMeetings] = useState<number | null>(null);
+  const [live, setLive] = useState(0);
   const [changes, setChanges] = useState(0);
   useEffect(() => onWaitingChanged(() => setChanges((c) => c + 1)), []);
   useEffect(() => {
@@ -71,13 +72,18 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
     if (!enabled) return;
     let alive = true;
     unwrap(api.GET("/v1/simple/meetings"))
-      .then((m) => alive && setMeetings(m.live.length + m.upcoming.filter((o) => !o.meeting_id).length))
+      .then((m) => {
+        if (!alive) return;
+        setMeetings(m.live.length + m.upcoming.filter((o) => !o.meeting_id).length);
+        setLive(m.live.length);
+      })
       .catch(() => undefined);
     return () => {
       alive = false;
     };
   }, [enabled, changes, meetingsPath]);
-  return counts && { ...counts, Meetings: meetings ?? 0 };
+  // qa-simple-decide-51: "Meetings live": the yellow count only when one is on now (else the count is neutral).
+  return counts && { ...counts, Meetings: meetings ?? 0, "Meetings live": live };
 }
 
 /** What a rail count counts, said in words (its label and tooltip). */
@@ -220,7 +226,7 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
               <Icon name={d.icon} stroke={1.7} />
               <span className="min-w-0 flex-1 truncate">{d.label}</span>
               {n > 0 && (
-                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className="simple-count tnum">
+                <span id={`${d.testId}-count`} data-testid={`${d.testId}-count`} aria-label={countWords(d.label, n)} title={countWords(d.label, n)} className={`simple-count tnum ${d.label === "Meetings" && !counts?.["Meetings live"] ? "simple-count-quiet" : ""}`}>
                   {n}
                 </span>
               )}

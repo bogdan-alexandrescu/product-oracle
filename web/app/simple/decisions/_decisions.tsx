@@ -10,7 +10,7 @@ import { QuestionRow, useQuestionActions, useSourceLine, type Question } from "@
 import { SimpleEmpty, SimplePage } from "@/components/simple/SimplePage";
 import { ErrorNote, Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
-import { formatInZone, useCompanyZone } from "@/lib/dates";
+import { calendarDay, formatInZone, useCompanyZone } from "@/lib/dates";
 import { useQuery } from "@/lib/use-query";
 
 import { DecidedItem } from "../meetings/_flow";
@@ -78,6 +78,12 @@ export function SimpleDecisions() {
   };
   const actions = useQuestionActions(() => q.reload());
   const questions = d?.questions ?? [];
+  const filtered = !!(prd || goal || meeting);
+  const clear = () => {
+    window.history.replaceState(null, "", pathname);
+  };
+  // qa-simple-decide-20: the API leaves out an open decision a shown meeting lists as its open question.
+  const other = d?.other ?? [];
   return (
     <SimplePage title="Decisions" lead="What waits for you, soonest first. Then every decision, beside the meeting that took it.">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -90,16 +96,21 @@ export function SimpleDecisions() {
       </div>
       {q.loading && !d && <Loading />}
       {q.error && <ErrorNote>{q.error}</ErrorNote>}
-      {d && view === "list" && <QuestionList d={d} actions={actions} />}
+      {d && view === "list" && <QuestionList d={d} actions={actions} filtered={filtered} onClear={clear} />}
       {d && view === "board" && <Board questions={questions} actions={actions} />}
       {d && view !== "board" && (
         <>
-          {d.meetings.length === 0 && d.other.length === 0 && <SimpleEmpty testId="decisions-empty">No decision matches.</SimpleEmpty>}
-          {d.meetings.map((g) => <MeetingGroup key={g.meeting.id} g={g} />)}
-          {d.other.length > 0 && (
+          {d.meetings.length === 0 && other.length === 0 && (
+            <SimpleEmpty testId="decisions-empty">
+              No decision matches.{" "}
+              {filtered && <ClearFilters onClear={clear} />}
+            </SimpleEmpty>
+          )}
+          {d.meetings.map((g) => <MeetingGroup key={g.meeting.id} g={g} filtered={!!(prd || goal)} />)}
+          {other.length > 0 && (
             <section className="simple-card" aria-label="Outside meetings">
               <h2 className="simple-h2">Outside meetings</h2>
-              <Rows rows={d.other} />
+              <Rows rows={other} />
             </section>
           )}
         </>
@@ -107,16 +118,25 @@ export function SimpleDecisions() {
       {d && d.approvals_waiting > 0 && (
         <p className="simple-plumb" data-testid="decisions-approvals">
           <Icon name="flag" size={16} stroke={1.7} />
+          {/* qa-simple-decide-29: plain words, no internal terms. */}
           <span>
-            Oracle&apos;s own run approvals ({d.approvals_waiting}
-            {d.approvals_example ? <>, such as “{d.approvals_example}”</> : null}) are not product decisions: they are not listed or counted here.{" "}
+            {d.approvals_waiting === 1 ? "1 approval for Oracle's own work waits" : `${d.approvals_waiting} approvals for Oracle's own work wait`} in your Inbox. They are not product decisions, so they are not listed or counted here.{" "}
             <Link href="/inbox" className="font-[650] text-accent-ink hover:underline">
-              Open them in Detailed
+              Open the Inbox (it leaves Simple)
             </Link>
           </span>
         </p>
       )}
     </SimplePage>
+  );
+}
+
+/** qa-simple-decide-26: the empty message's way out when the filters match nothing. */
+function ClearFilters({ onClear }: { onClear: () => void }) {
+  return (
+    <button type="button" className="simple-button" data-testid="decisions-clear-filters" onClick={onClear}>
+      Clear filters
+    </button>
   );
 }
 
@@ -168,25 +188,28 @@ function QuestionCard({ label, testId, questions, count, source, children }: { l
 }
 
 /** List: waiting for you (first five, then Show N more), then waiting for others; decided ones sit with the meeting that took them, or outside meetings. */
-function QuestionList({ d, actions }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions }) {
+function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDecisionsOut"]; actions: Actions; filtered: boolean; onClear: () => void }) {
   const [all, setAll] = useState(false);
   const open = d.questions.filter((x) => x.column !== "decided");
-  const mine = open.filter((x) => x.waiting_for_me && x.status === "proposed");
+  // qa-simple-decide-15: only what the person can act on waits for them (a viewer: nothing).
+  const mine = open.filter((x) => x.waiting_for_me && x.status === "proposed" && (x.can.decide || x.can.propose));
   const others = open.filter((x) => !mine.includes(x));
   const shown = all ? mine : mine.slice(0, FIRST);
   return (
     <>
-      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={d.waiting_count} source>
+      <QuestionCard label="Waiting for you" testId="questions-mine" questions={mine.length ? mine : open} count={Math.min(d.waiting_count, mine.length)} source>
         {mine.length === 0 ? (
-          <p className="simple-meta">Nothing waits on you.</p>
+          <p className="simple-meta">
+            Nothing waits on you. {filtered && <ClearFilters onClear={onClear} />}
+          </p>
         ) : (
           <ul>
             {shown.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} />)}
           </ul>
         )}
-        {!all && mine.length > FIRST && (
-          <button type="button" className="simple-more" onClick={() => setAll(true)}>
-            Show {mine.length - FIRST} more
+        {mine.length > FIRST && (
+          <button type="button" className="simple-more" aria-expanded={all} onClick={() => setAll((x) => !x)}>
+            {all ? "Show fewer" : `Show ${mine.length - FIRST} more`}
           </button>
         )}
       </QuestionCard>
@@ -202,7 +225,8 @@ function QuestionList({ d, actions }: { d: Schemas["SimpleDecisionsOut"]; action
 const COLUMNS: { key: Question["column"]; title: string }[] = [
   { key: "needs_input", title: "Needs input" },
   { key: "recommended", title: "Recommended" },
-  { key: "decided", title: "Decided" },
+  // qa-simple-decide-21: the Board holds the PRDs' questions; decisions taken elsewhere are under By meeting.
+  { key: "decided", title: "Decided questions" },
 ];
 
 /** Board: three columns by `column`, soonest first (the API's order); on a phone, one column at a time behind tabs. */
@@ -214,12 +238,14 @@ function Board({ questions, actions }: { questions: Question[]; actions: Actions
       <div className="hidden max-[600px]:block">
         <Seg label="Column" value={tab} onChange={setTab} items={COLUMNS.map((c) => ({ value: c.key, label: c.title, count: of(c.key).length, testId: `board-tab-${c.key}` }))} />
       </div>
-      <div className="grid grid-cols-3 items-start gap-4 max-[900px]:grid-cols-1">
+      {/* qa-simple-decide-22: two wider columns below 1600 px, three above. */}
+      <div className="grid grid-cols-2 items-start gap-4 max-[900px]:grid-cols-1 min-[1600px]:grid-cols-3">
         {COLUMNS.map((c) => (
           // The wrapper hides a column on a phone (.simple-card sets its own display).
           <div key={c.key} className={`min-w-0 ${tab === c.key ? "" : "max-[600px]:hidden"}`}>
             <section aria-label={c.title} data-testid={`board-${c.key}`} className="simple-card simple-narrow min-w-0">
-              <header className="flex items-center gap-3">
+              {/* qa-simple-decide-33: on a phone the tab above already names the column and its count. */}
+              <header className="flex items-center gap-3 max-[600px]:hidden">
                 <h2 className="simple-h2 min-w-0 flex-1">{c.title}</h2>{" "}
                 <span className="simple-count tnum">{of(c.key).length}</span>
               </header>
@@ -256,7 +282,7 @@ function Filter({ label, value, options, onChange, all }: { label: string; value
   );
 }
 
-function MeetingGroup({ g }: { g: Group }) {
+function MeetingGroup({ g, filtered }: { g: Group; filtered: boolean }) {
   const zone = useCompanyZone();
   const m = g.meeting;
   const minutes = g.minutes;
@@ -264,11 +290,16 @@ function MeetingGroup({ g }: { g: Group }) {
     <section className="simple-card" aria-label={m.title} data-testid="meeting-group">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="simple-h2 min-w-0 flex-1">
-          <Link href={`/simple/meetings/${m.id}`} className="hover:underline">{m.title}</Link>
+          <Link href={`/simple/meetings/${m.id}`} className="text-accent-ink hover:underline">{m.title}</Link>
         </h2>
         <span className="simple-meta">{formatInZone(m.started_at, zone, { month: "short", day: "numeric" })} · {m.prd.title}</span>
       </div>
       {minutes?.summary && <p>{minutes.summary}</p>}
+      {filtered && (
+        <p className="simple-meta" data-testid="meeting-group-filtered">
+          Filtered: {g.decisions.length} {g.decisions.length === 1 ? "decision" : "decisions"} of this meeting match.
+        </p>
+      )}
       <p className="simple-meta">Attendees: {m.attendees.map((a) => a.name).join(", ")}</p>
       {minutes && minutes.open_questions.length > 0 && (
         <div>
@@ -280,7 +311,7 @@ function MeetingGroup({ g }: { g: Group }) {
         <div>
           <h3 className="text-[18px] leading-[26px] font-[650]">Action items</h3>
           <ul className="list-disc pl-5">
-            {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${a.due_date}` : ""}</li>)}
+            {minutes.action_items.map((a, i) => <li key={i}>{a.title} · {a.owner_name ?? "no owner"}{a.due_date ? ` · by ${calendarDay(a.due_date, { weekday: "short" })} ${calendarDay(a.due_date)}` : ""}</li>)}
           </ul>
         </div>
       )}
@@ -295,6 +326,9 @@ function MeetingGroup({ g }: { g: Group }) {
     </section>
   );
 }
+
+/** qa-simple-decide-19: a decision's state in plain words. */
+const STATUS_WORDS: Record<string, string> = { proposed: "waiting for a decider", superseded: "replaced", rejected: "declined", withdrawn: "withdrawn" };
 
 /** Decisions taken: the round check (an open one, the flag), "<code> <title>" (a PRD's question keeps its code), then its answer, who decides and the day. */
 function Rows({ rows }: { rows: Row[] }) {
@@ -319,7 +353,7 @@ function Rows({ rows }: { rows: Row[] }) {
                 <span className="simple-code">{r.code ?? `D-${r.number}`}</span> <b className="font-[650]">{r.title}</b>
               </span>
               <span className="simple-meta">
-                {[r.chosen, r.approver?.name ?? "No approver", formatInZone(r.decided_at ?? r.created_at, zone, { month: "short", day: "numeric" }), done ? null : r.status]
+                {[r.chosen, r.approver?.name ?? "No approver", formatInZone(r.decided_at ?? r.created_at, zone, { month: "short", day: "numeric" }), done ? null : STATUS_WORDS[r.status] ?? "open"]
                   .filter(Boolean)
                   .join(" · ")}
               </span>

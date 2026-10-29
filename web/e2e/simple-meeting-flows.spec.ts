@@ -22,7 +22,7 @@ async function flags(context: BrowserContext, value: string) {
 async function decideAndEnd(page: Page) {
   await login(page);
   await page.goto("/simple/meetings");
-  await page.getByRole("button", { name: "Start a review" }).click();
+  await page.getByRole("button", { name: "Start review" }).first().click();
   const sheet = page.getByRole("dialog", { name: "Start a review" });
   await sheet.getByLabel("PRD").selectOption({ label: "Guided setup" });
   await sheet.getByRole("button", { name: "Start", exact: true }).click();
@@ -33,6 +33,7 @@ async function decideAndEnd(page: Page) {
   await page.getByRole("button", { name: "Move Setup checklist to Next" }).click();
   await expect(page.getByRole("region", { name: "All decisions" })).toContainText("Moved Setup checklist");
   await page.getByRole("button", { name: "End meeting" }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "End meeting" }).click();
   await expect(page.getByTestId("end-screen")).toBeVisible();
 }
 

@@ -416,7 +416,9 @@ async def rows(
             decided_by=SimplePersonRef(id=d.decided_by, name=names.get(d.decided_by, "someone"))
             if d.decided_by else None,
             decided_label=decided_label,
-            waiting_for_me=open_ and me is not None and me == d.approver_id,
+            # qa-simple-decide-15: nothing waits on a person whose role cannot decide (a viewer).
+            waiting_for_me=open_ and me is not None and me == d.approver_id
+            and has_role(principal.role, "approver"),
             pending=SimpleQuestionPending(change_id=c.id, by=SimplePersonRef(
                 id=c.by, name=names.get(c.by, "someone")), answer=_answer_of(d, c.after))
             if c is not None and open_ else None,
