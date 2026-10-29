@@ -1033,6 +1033,20 @@ function OwnerView({ selfId, manage = true }: { selfId: string | null; manage?: 
                 </span>
               )}
               <FindPerson value={find} onChange={setFind} />
+              {/* Under 1100 px the invite form sits below this table: a way down to it. */}
+              {!inspected && (
+                <a
+                  href={`#${INVITE_FORM}`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    emailRef.current?.scrollIntoView({ block: "center" });
+                    emailRef.current?.focus({ preventScroll: true });
+                  }}
+                  className="hidden min-h-11 items-center text-sm font-semibold text-accent-ink hover:underline max-[1100px]:inline-flex"
+                >
+                  Invite someone
+                </a>
+              )}
             </span>
           }
         >

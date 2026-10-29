@@ -10,7 +10,7 @@ import { zoneName } from "@/lib/format";
 import { displayName } from "@/lib/names";
 import { useMe } from "@/lib/me";
 import { errorMessage, useQuery } from "@/lib/use-query";
-import { DEFAULT_ZONE, ZONE_NOT_SET } from "@/lib/zone";
+import { ZONE_NOT_SET } from "@/lib/zone";
 
 import { INPUT, SELECT_FIELD } from "../_components/fields";
 import { BrandingPanel } from "./BrandingPanel";
@@ -293,7 +293,7 @@ function zoneOptions(): { common: ZoneOption[]; rest: ZoneOption[] } {
 const matches = (o: ZoneOption, q: string) => !q || o.label.toLowerCase().includes(q) || o.zone.toLowerCase().replace(/_/g, " ").includes(q);
 
 /**
- * The Company time zone (one setting, America/Los_Angeles by default): every date and time on screen, goals' today, the weekly report and rituals.
+ * The Company time zone (one setting; unset, America/Los_Angeles is used): every date and time on screen, goals' today, the weekly report and rituals.
  * #370: only a role that can change it (owners) gets the form; others read the zone.
  */
 function TimezonePanel({ canChange }: { canChange: boolean }) {
@@ -318,9 +318,9 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
   const rest = pick(options.rest);
 
   async function save() {
-    if (zone === null) return;
-    // Saving with none chosen keeps Pacific, the zone used meanwhile.
-    const value = zone || DEFAULT_ZONE;
+    // With none chosen there is nothing to save: the zone stays unset (Pacific is used meanwhile).
+    if (!zone) return;
+    const value = zone;
     setBusy(true);
     setError(null);
     setSaved(false);
@@ -421,9 +421,14 @@ function TimezonePanel({ canChange }: { canChange: boolean }) {
               </div>
             )}
             <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-3 max-[600px]:px-3">
-              <Button type="submit" variant="solid" disabled={busy}>
+              <Button type="submit" variant="solid" disabled={busy || !zone}>
                 Save
               </Button>
+              {!zone && (
+                <span data-testid="timezone-save-reason" className="text-sm text-text2">
+                  Pick a time zone to save it.
+                </span>
+              )}
               {saved && (
                 <span role="status" className="text-sm font-semibold text-pass">
                   Saved
