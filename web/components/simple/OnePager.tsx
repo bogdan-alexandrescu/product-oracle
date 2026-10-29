@@ -258,9 +258,11 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
           {error && <div className="mx-auto max-w-[1180px] px-4"><ErrorNote>{error}</ErrorNote></div>}
         </>
       )}
-      {/* With a plan the page ends with the milestone's card (pick D); inside a review meeting
-          the one-pager's lines stay under it, so the meeting can still edit them. */}
-      {(!planShown || sessionId) && (
+      {/* With a plan the page ends with the milestone's card (pick D). The one-pager's lines and
+          margin stay under it inside a review meeting, and whenever there is something to review
+          (a working draft, changes in review or margin notes; BGD 2026-10-28), so the people
+          Remind sends here can read and decide them. */}
+      {(!planShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-6 md:grid-cols-[minmax(0,820px)_var(--simple-margin)]">
         <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
           {!planShown && (
