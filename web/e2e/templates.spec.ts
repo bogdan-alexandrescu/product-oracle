@@ -31,7 +31,7 @@ test("templates: view a version, live validation, save a new version, archive an
   const problems = page.getByTestId("problems");
   await expect(problems).toContainText("Line 3: The heading 'Problem' (level 2) must end with {#section-id}.");
   await expect(problems).toContainText("Sources and data points");
-  await expect(problems).toContainText("Line 5: citation [c:c1]");
+  await expect(problems).toContainText("Line 5: The citation [c:c1]");
   const save = page.getByRole("button", { name: "Save as new version" });
   await expect(save).toBeDisabled();
 

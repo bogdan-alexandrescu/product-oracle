@@ -137,7 +137,7 @@ export function WebhooksSettings() {
                   <span>No webhooks yet. Add one to tell Slack, Zapier or your own tools when runs change.</span>
                   {can("create_webhook") && (
                     <Button icon="plus" onClick={() => setCreating(true)}>
-                      New webhook
+                      Add your first webhook
                     </Button>
                   )}
                 </span>

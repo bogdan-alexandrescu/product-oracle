@@ -127,7 +127,7 @@ test("webhooks and trash: their empty states explain themselves", async ({ page 
   await settings(page, "webhooks");
   const empty = page.getByTestId("webhooks-empty");
   await expect(empty).toContainText("No webhooks yet. Add one to tell Slack, Zapier or your own tools when runs change.");
-  await empty.getByRole("button", { name: "New webhook" }).click();
+  await empty.getByRole("button", { name: "Add your first webhook" }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 
   await page.goto("/settings");
