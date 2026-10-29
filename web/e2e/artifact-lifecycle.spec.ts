@@ -79,7 +79,9 @@ async function deleteAndRestore(page: Page) {
 
   // Settings › Trash: one entry for the three, with its days left.
   await page.goto("/settings");
-  await page.getByTestId("nav-trash").filter({ visible: true }).click();
+  // qa-settings-41: a phone picks the Settings page from a select.
+  if (page.viewportSize()!.width <= 600) await page.getByRole("combobox", { name: "Settings page" }).selectOption({ label: "Trash" });
+  else await page.getByTestId("nav-trash").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/settings\/trash$/);
   const entries = page.getByTestId("trash-entry");
   await expect(entries).toHaveCount(1);

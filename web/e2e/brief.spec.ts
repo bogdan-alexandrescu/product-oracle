@@ -311,7 +311,7 @@ test("templates: the editor shows the brief sections and refuses a template with
   await page.getByLabel("Name").fill("No brief");
   const body = page.getByLabel("Body");
   const create = page.getByRole("button", { name: "Create template" });
-  await expect(page.getByTestId("brief-sections")).toHaveText("problem, solution");
+  await expect(page.getByTestId("brief-sections")).toHaveText("Problem, Solution");
   await expect(create).toBeEnabled();
   await body.fill((await body.inputValue()).replace("brief: [problem, solution]\n", ""));
   // O1g: a template without brief sections is refused, and the editor says how to fix it.
@@ -323,7 +323,7 @@ test("templates: the editor shows the brief sections and refuses a template with
   await expect(create).toBeDisabled();
   // Either fix works: a heading after the brief sections...
   await body.fill((await body.inputValue()).replace("## Solution {#solution}", "# Full version {#full}\n\n## Solution {#solution}"));
-  await expect(page.getByTestId("brief-sections")).toHaveText("problem");
+  await expect(page.getByTestId("brief-sections")).toHaveText("Problem");
   await expect(page.getByTestId("brief-fix")).toHaveCount(0);
   await expect(create).toBeEnabled();
   await create.click();

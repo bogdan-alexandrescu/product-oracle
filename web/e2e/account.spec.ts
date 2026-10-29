@@ -115,7 +115,7 @@ test("api tokens: every kind, filter by kind and member, revoke with confirm", a
 
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: "Run" }).click();
   await expect(rows).toHaveCount(1);
-  await expect(rows.first()).toContainText("Run · baseline to prd");
+  await expect(rows.first()).toContainText("Run · Baseline to PRD");
   await page.getByRole("group", { name: "Kind" }).getByRole("button", { name: "All" }).click();
   await page.getByLabel("Member").selectOption({ label: "approver@example.com" });
   await expect(rows).toHaveCount(1);
@@ -162,7 +162,7 @@ test("my account: from the user menu; a personal token's secret is shown once", 
   await expect(secret).toHaveText(/^po_/);
   await expect(page.getByTestId("new-token")).toContainText("Shown once");
   await expect(page.getByTestId("new-token-expiry")).toHaveText(`Expires ${inDays(90)}`);
-  await expect(page.getByTestId("my-token-row").filter({ hasText: "laptop script" })).toContainText("oracle:read");
+  await expect(page.getByTestId("my-token-row").filter({ hasText: "laptop script" })).toContainText("Read");
   const value = await secret.textContent();
 
   // Gone once dismissed, and never shown again after a reload.
@@ -275,7 +275,7 @@ test("my account: sign out everywhere ends the session, personal tokens, MCP cli
   // Already expired: stays Expired, not Revoked.
   await expect(page.getByTestId("my-token-row").filter({ hasText: "staging sync" })).toContainText("Expired");
   await page.goto("/settings/api-tokens");
-  await expect(tokenRow(page, "Run · baseline to prd")).toContainText("Revoked");
+  await expect(tokenRow(page, "Run · Baseline to PRD")).toContainText("Revoked");
 });
 
 test("my account: a read-only credential sees Name disabled, with the reason", async ({ page }) => {

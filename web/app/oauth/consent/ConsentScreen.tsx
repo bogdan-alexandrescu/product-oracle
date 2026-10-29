@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 
 import { AuthCard } from "@/app/login/_components/AuthCard";
 import { Button, Chip, InfoTip, Label, Notice } from "@/components/ds";
+import { scopeLabel } from "@/components/account/scopes";
 import { Loading } from "@/components/ui";
 import { ApiError, MOCK_MODE, unwrap, type Schemas } from "@/lib/api/client";
 import type { paths } from "@/lib/api/schema";
@@ -90,9 +91,9 @@ export function ConsentScreen() {
             <ul className="overflow-hidden rounded-button border border-line">
               {detail.scopes.map((s) => (
                 <li key={s.name} className="border-t border-line px-3 py-2.5 first:border-t-0">
-                  <span className="inline-block rounded-goal bg-accent-soft px-1.5 font-mono text-[13px] leading-6 text-accent-ink">
-                    {s.name}
-                  </span>
+                  <Chip kind="acc" data-scope={s.name}>
+                    {scopeLabel(s.name)}
+                  </Chip>
                   <p className="mt-1 text-sm text-text">{s.description}</p>
                 </li>
               ))}

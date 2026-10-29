@@ -1098,25 +1098,25 @@ export function checkTemplate(body: string, required?: string[] | null, themeKey
   const problems: Problem[] = [];
   const text = body.replace(/\r\n/g, "\n");
   const { fm, rest, offset, open } = frontMatter(text);
-  if (open) problems.push({ code: "invalid_front_matter", message: "front matter starts with '---' but never ends", line: 1 });
+  if (open) problems.push({ code: "invalid_front_matter", message: "The front matter starts with '---' but never ends.", line: 1 });
   const theme = fm?.theme;
   if (theme && themeKeys && !themeKeys.has(theme)) {
-    problems.push({ code: "unknown_theme", message: `suggested theme '${theme}' does not exist`, line: null });
+    problems.push({ code: "unknown_theme", message: `The suggested theme ${theme} does not exist.`, line: null });
   }
   const hs = headings(rest, offset);
-  if (!hs.length) problems.push({ code: "no_sections", message: "the template has no level 1-3 headings", line: null });
+  if (!hs.length) problems.push({ code: "no_sections", message: "The template has no headings (levels 1 to 3).", line: null });
   const seen = new Set<string>();
   for (const h of hs) {
     if (!h.key) {
       problems.push({
         code: "missing_section_id",
-        message: `heading '${h.text}' (level ${h.level}) must end with {#section-id}`,
+        message: `The heading '${h.text}' (level ${h.level}) must end with {#section-id}.`,
         line: h.line,
       });
     } else if (seen.has(h.key)) {
       problems.push({
         code: "duplicate_section_id",
-        message: `section id '${h.key}' is used more than once`,
+        message: `The section id ${h.key} is used more than once.`,
         line: h.line,
         section_key: h.key,
       });
@@ -1127,14 +1127,14 @@ export function checkTemplate(body: string, required?: string[] | null, themeKey
     problems.push({
       code: "missing_sources_section",
       message:
-        "the template must end with a '## Sources and data points {#sources}' section: sources, data points and evidence live there, not in the body",
+        "The template must end with a '## Sources and data points {#sources}' section. Sources, data points and evidence live there, not in the body.",
       line: null,
     });
   } else {
     if (sources.level > 2) {
       problems.push({
         code: "sources_section_level",
-        message: "'Sources and data points' must be a level 1 or 2 heading",
+        message: "'Sources and data points' must be a level 1 or 2 heading.",
         line: sources.line,
         section_key: "sources",
       });
@@ -1143,7 +1143,7 @@ export function checkTemplate(body: string, required?: string[] | null, themeKey
     if (later) {
       problems.push({
         code: "sources_section_not_last",
-        message: `'Sources and data points' must be the final section; '${later.text}' comes after it`,
+        message: `'Sources and data points' must be the final section, but '${later.text}' comes after it.`,
         line: later.line,
         section_key: later.key,
       });
@@ -1158,7 +1158,7 @@ export function checkTemplate(body: string, required?: string[] | null, themeKey
     for (const m of lines[i - 1].matchAll(/\[c:([^\]\s]+)\]/g)) {
       problems.push({
         code: "citation_in_body",
-        message: `citation [c:${m[1]}] is outside 'Sources and data points': the body states conclusions only`,
+        message: `The citation [c:${m[1]}] is outside 'Sources and data points'. The body states conclusions only.`,
         line: i + offset,
         section_key: current,
       });
@@ -1166,7 +1166,7 @@ export function checkTemplate(body: string, required?: string[] | null, themeKey
   }
   const keys = hs.map((h) => h.key).filter((k): k is string => !!k);
   for (const k of required ?? []) {
-    if (!keys.includes(k)) problems.push({ code: "unknown_required_section", message: `required section '${k}' is not in the body`, line: null });
+    if (!keys.includes(k)) problems.push({ code: "unknown_required_section", message: `The required section ${k} is not in the body.`, line: null });
   }
   // O1f: front matter `brief: [ids]`, else the sections before "# Full version {#full}".
   const marked = fm?.brief ? fm.brief.replace(/^\[|\]$/g, "").split(",").map((k) => k.trim().replace(/^["']|["']$/g, "")).filter(Boolean) : null;
@@ -1184,7 +1184,7 @@ export function checkTemplate(body: string, required?: string[] | null, themeKey
     problems.push({
       code: "no_brief_sections",
       message:
-        "the template marks no brief sections: add 'brief: [section ids]' to its front matter, or a level-1 '# Full version {#full}' heading after the brief sections",
+        "The template marks no brief sections. Add 'brief: [section ids]' to its front matter, or a level-1 '# Full version {#full}' heading after the brief sections.",
       line: null,
     });
   }
@@ -1405,11 +1405,34 @@ export function contrast(a: string, b: string): number {
 export const builtinThemeBackgrounds = () =>
   THEME_SEEDS.map((t) => ({ key: t.key, name: t.name, background: t.tokens.colors?.background ?? "#ffffff" }));
 
+/** As the theme editor names each colour, font and spacing (the API's labels in oracle.templates.validation). */
+const COLOUR_LABELS: Record<string, string> = {
+  text: "Text",
+  heading: "Heading",
+  muted: "Muted",
+  accent: "Accent",
+  background: "Background",
+  rule: "Rule",
+  surface: "Surface",
+};
+const FONT_LABELS: Record<string, string> = { body: "Body", heading: "Heading", mono: "Monospace" };
+const SPACING_LABELS: Record<string, string> = {
+  base_size_pt: "Base size (pt)",
+  line_height: "Line height",
+  page_margin_mm: "Page margin (mm)",
+  section_gap_rem: "Section gap (rem)",
+};
+const cap = (name: string) => {
+  const s = name.replace(/_/g, " ");
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+};
+const colourLabel = (name: string) => COLOUR_LABELS[name] ?? cap(name);
+
 export function checkTheme(t: Tokens | null | undefined, css: string, slideCss?: string | null): Problem[] {
   const problems: Problem[] = [];
   const colours = t?.colors ?? {};
   for (const [name, value] of Object.entries(colours)) {
-    if (!HEX.test(value)) problems.push({ code: "invalid_color", message: `colors.${name} must be a hex colour like #1f2933`, line: null });
+    if (!HEX.test(value)) problems.push({ code: "invalid_color", message: `${colourLabel(name)} colour must be a hex colour like #1f2933.`, line: null });
   }
   const bg = colours.background;
   if (bg && HEX.test(bg)) {
@@ -1420,7 +1443,7 @@ export function checkTheme(t: Tokens | null | undefined, css: string, slideCss?:
       if (ratio < 4.5) {
         problems.push({
           code: "insufficient_contrast",
-          message: `colors.${name} ${value} on colors.background ${bg} has a contrast of ${ratio.toFixed(2)}:1; WCAG AA needs at least 4.5:1 for body text. Darken the text colour or lighten the background.`,
+          message: `${colourLabel(name)} colour ${value} on the background ${bg} has a contrast of ${ratio.toFixed(2)}:1; WCAG AA needs at least 4.5:1 for body text. Darken the text colour or lighten the background.`,
           line: null,
         });
       }
@@ -1428,7 +1451,7 @@ export function checkTheme(t: Tokens | null | undefined, css: string, slideCss?:
   }
   for (const [name, value] of Object.entries(t?.fonts ?? {})) {
     if (value != null && !FONT.test(value)) {
-      problems.push({ code: "invalid_font", message: `fonts.${name} must be a font stack (letters, digits, spaces, commas, quotes)`, line: null });
+      problems.push({ code: "invalid_font", message: `${FONT_LABELS[name] ?? cap(name)} font must be a list of font names (letters, digits, spaces, commas and quotes).`, line: null });
     }
   }
   const ranges: Record<string, [number, number]> = {
@@ -1441,7 +1464,7 @@ export function checkTheme(t: Tokens | null | undefined, css: string, slideCss?:
     const v = (t?.spacing as Record<string, number | null | undefined> | undefined)?.[name];
     if (v == null) continue;
     if (typeof v !== "number" || Number.isNaN(v) || v < lo || v > hi) {
-      problems.push({ code: "invalid_spacing", message: `spacing.${name} must be a number from ${lo} to ${hi}`, line: null });
+      problems.push({ code: "invalid_spacing", message: `${SPACING_LABELS[name] ?? cap(name)} must be a number from ${lo} to ${hi}.`, line: null });
     }
   }
   problems.push(...checkCss(css));
@@ -1474,7 +1497,7 @@ function checkCss(css: string): Problem[] {
 
 function rejectTheme(problems: Problem[], what: string): Response {
   const contrastProblem = problems.find((p) => p.code === "insufficient_contrast");
-  return json(422, { detail: contrastProblem ? contrastProblem.message : `${what} rejected: ${problems[0].message}`, problems });
+  return json(422, { detail: contrastProblem ? contrastProblem.message : `The ${what} was not saved. ${problems[0].message}`, problems });
 }
 
 function esc(s: string) {
@@ -2046,13 +2069,13 @@ export async function laneF(
       const input = await body<Schemas["TemplateCreate"]>();
       if (!KEY_RE.test(input.key ?? "")) {
         return json(422, {
-          detail: "key must be lowercase letters, digits and hyphens",
-          problems: [{ code: "invalid_key", message: "key must be lowercase letters, digits and hyphens" }],
+          detail: "A key may contain only lowercase letters, digits and hyphens.",
+          problems: [{ code: "invalid_key", message: "A key may contain only lowercase letters, digits and hyphens." }],
         });
       }
-      if (st.templates.some((t) => t.key === input.key)) return json(409, { detail: `template '${input.key}' already exists` });
+      if (st.templates.some((t) => t.key === input.key)) return json(409, { detail: `A template with key ${input.key} already exists. Archived templates keep their keys.` });
       const check = checkTemplate(input.body, input.required_sections, new Set(st.themes.map((t) => t.key)));
-      if (!check.valid) return json(422, { detail: `template rejected: ${check.problems[0].message}`, problems: check.problems });
+      if (!check.valid) return json(422, { detail: `The template was not saved: it has ${check.problems.length} problem${check.problems.length === 1 ? "" : "s"}.`, problems: check.problems });
       const t: TemplateRow = {
         id: uuid(),
         key: input.key,
@@ -2102,7 +2125,7 @@ export async function laneF(
       const required = input.required_sections;
       if (nextBody !== last.body || (required != null && required.join() !== last.required_sections.join())) {
         const check = checkTemplate(nextBody, required, new Set(st.themes.map((x) => x.key)));
-        if (!check.valid) return json(422, { detail: `template rejected: ${check.problems[0].message}`, problems: check.problems });
+        if (!check.valid) return json(422, { detail: `The template was not saved: it has ${check.problems.length} problem${check.problems.length === 1 ? "" : "s"}.`, problems: check.problems });
         t.versions.push(newVersion(last.version + 1, nextBody, required, db.user_id));
       }
       if (input.name != null) t.name = input.name;
@@ -2125,11 +2148,11 @@ export async function laneF(
       const input = await body<Schemas["ThemeCreate"]>();
       if (!KEY_RE.test(input.key ?? "")) {
         return json(422, {
-          detail: "key must be lowercase letters, digits and hyphens",
-          problems: [{ code: "invalid_key", message: "key must be lowercase letters, digits and hyphens" }],
+          detail: "A key may contain only lowercase letters, digits and hyphens.",
+          problems: [{ code: "invalid_key", message: "A key may contain only lowercase letters, digits and hyphens." }],
         });
       }
-      if (st.themes.some((t) => t.key === input.key)) return json(409, { detail: `theme '${input.key}' already exists` });
+      if (st.themes.some((t) => t.key === input.key)) return json(409, { detail: `A theme with key ${input.key} already exists. Archived themes keep their keys.` });
       const tk = tokens(input.tokens ?? {});
       const problems = checkTheme(tk, input.css ?? "", input.slide_css);
       if (problems.length) return rejectTheme(problems, "theme");

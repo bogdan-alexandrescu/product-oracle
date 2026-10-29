@@ -294,6 +294,8 @@ async def test_api_tokens_lists_every_kind(client):
     assert kinds["service"]["owner_email"] is None and kinds["service"]["role"] == "owner"
     assert kinds["run"]["owner_email"] == ADMIN and kinds["run"]["scopes"] == ["read:documents"]
     assert kinds["run"]["expires_at"] is not None
+    # The flow's title, not its key (qa-settings-29).
+    assert kinds["run"]["name"] == "Run · Baseline to PRD"
     client_row = kinds["mcp_client"]
     assert client_row["name"] == reg["client_name"] and client_row["owner_email"] == ADMIN
     assert client_row["scopes"] == ["oracle:read", "oracle:write"]

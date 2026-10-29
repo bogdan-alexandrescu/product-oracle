@@ -23,7 +23,7 @@ test("claude accounts: rows carry the em dash, the ~ and CLEARS; the pane opens 
   await openAccounts(page);
   await expect(page.getByTestId("accounts-summary")).toContainText("4 accounts · 2 available");
   await expect(page.getByTestId("accounts-summary")).toContainText("1 needs a sign-in");
-  await expect(page.getByTestId("refresh-sweep")).toContainText("refresh sweep ran");
+  await expect(page.getByTestId("refresh-sweep")).toContainText("Last checked");
   await expect(page.getByRole("status").filter({ hasText: "old-laptop needs someone to sign in again" })).toBeVisible();
 
   // Measured and current: a plain figure with the window it is about.
@@ -106,9 +106,9 @@ test("claude accounts: an owner drains with a reason, refreshes, and removes onl
 
   const remove = pane.getByRole("button", { name: "Remove", exact: true });
   await expect(remove).toBeDisabled();
-  await pane.getByLabel("Type personal to confirm removal").fill("persona");
+  await pane.getByLabel("Type personal to confirm").fill("persona");
   await expect(remove).toBeDisabled();
-  await pane.getByLabel("Type personal to confirm removal").fill("personal");
+  await pane.getByLabel("Type personal to confirm").fill("personal");
   await remove.click();
   await expect(row(page, "personal")).toHaveCount(0);
   await expect(page.getByTestId("accounts-summary")).toContainText("3 accounts");

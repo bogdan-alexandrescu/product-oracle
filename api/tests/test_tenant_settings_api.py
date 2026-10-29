@@ -239,13 +239,16 @@ async def test_planning_horizons_confirm_and_reset(client, tenant_id, owner):
 @pytest.mark.parametrize(
     "change, message",
     [
-        ({"short_quarters": 3}, "short_quarters must be 1 or 2"),
-        ({"medium_quarters": 0}, "medium_quarters must be between 1 and 4"),
+        (
+            {"short_quarters": 3},
+            "'Now' must be the current quarter, or the current and next quarter.",
+        ),
+        ({"medium_quarters": 0}, "'Next' must be 1 to 4 quarters."),
         (
             {"long_from_months": 6},
-            "long_from_months must start after Next ends (at least 9 months) and be at most 36",
+            "'From' must start after Next ends (at least 9 months) and be at most 36 months.",
         ),
-        ({"long_to_months": 12}, "long_to_months must be after long_from_months and at most 60"),
+        ({"long_to_months": 12}, "'To' must be after 'From' and at most 60 months."),
         ({"extra": 1}, SHAPE),
         ({"short_quarters": True}, SHAPE),
     ],

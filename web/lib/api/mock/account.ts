@@ -106,7 +106,7 @@ export function seedAccount(members: Member[], uuid: () => string): AccountDb {
       created_at: "2026-09-10T08:00:00Z",
       last_used_at: "2026-10-20T06:00:00Z",
     },
-    personal(admin, "Run · baseline to prd", {
+    personal(admin, "Run · Baseline to PRD", {
       kind: "run",
       scopes: ["read:baseline", "read:documents", "read:sources", "write:drafts"],
       created_at: "2026-10-20T08:00:00Z",

@@ -90,10 +90,14 @@ export function LoginForm() {
         body: { email, password },
       });
       if (err || !response.ok) {
+        // qa-onboarding-14: a refused invite (withdrawn, expired) says why, in the API's words.
+        const detail = (err as { detail?: unknown } | undefined)?.detail;
         setError(
           response.status === 401
             ? "Invalid email or password."
-            : "Login failed.",
+            : response.status === 403 && typeof detail === "string"
+              ? detail
+              : "Login failed.",
         );
         return;
       }

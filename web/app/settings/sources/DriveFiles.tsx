@@ -345,15 +345,17 @@ export function DriveNotes({
                 {nameOf(n)}
               </span>
             </span>
-            {folder && <span className="text-text2">its docs are hidden until Oracle can read it again</span>}
+            {folder && <span className="text-text2">— its docs are hidden until Oracle can read it again</span>}
           </li>
         );
       })}
       {skipped.map(([reason, names]) => (
         <li key={reason} className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-sm">
-          <Chip kind="na" title={skippedTitle(reason)}>
-            {reason}
+          {/* A short "Skipped" chip that never wraps, then why in plain text (qa-settings-45). */}
+          <Chip kind="line" title={skippedTitle(reason)}>
+            Skipped
           </Chip>
+          <span className="min-w-0 text-text2">{reason.replace(/^Skipped:\s*/, "")}</span>
           <span className="tnum flex-none font-medium">{names.length === 1 ? "1 doc" : `${names.length} docs`}</span>
           <NameList names={names} />
         </li>

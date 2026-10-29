@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 
 import { ActedCell, SETTLING, useActed } from "@/components/account/acted";
 import { ConfirmDialog } from "@/components/account/ConfirmDialog";
+import { scopeLabel } from "@/components/account/scopes";
 import { SlackPingsPanel } from "@/components/account/SlackPingsPanel";
 import { Expiry, expiryText, Scopes, TokenStatus, tokenState, when } from "@/components/ApiTokensSettings";
 import { ROLE_LABEL } from "@/components/MembersSettings";
@@ -44,6 +45,21 @@ const LIFETIMES: { value: Lifetime; label: string }[] = [
 const lifetimeDays = (l: Lifetime) => (l === "never" ? null : (Number(l) as 30 | 90 | 365));
 /** What a password change and Sign out everywhere also revoke (AC1). */
 const REVOKES_TOO = "your personal API tokens, every MCP client you authorized and the current tokens of runs you started that are still going (those runs keep running; their next segment gets a new token)";
+
+/**
+ * A panel head's count that agrees with its table: "1 active · 2 total" when some rows
+ * are expired or revoked, just the number when every row is active (qa-settings-30).
+ */
+function ActiveOfTotal({ rows }: { rows?: Pick<ApiToken, "revoked_at" | "expires_at">[] }) {
+  if (!rows) return null;
+  const active = rows.filter((r) => tokenState(r) === "active").length;
+  if (active === rows.length) return <>{active}</>;
+  return (
+    <span className="text-[15px] font-semibold whitespace-nowrap">
+      {active} active · {rows.length} total
+    </span>
+  );
+}
 
 /** My account: every signed-in member's own sign-in, password, personal tokens, MCP clients, Slack pings. */
 export function MyAccount() {
@@ -391,8 +407,8 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
         </span>
       ),
     },
-    { key: "scopes", header: "Scopes", width: "20%", hideOnPhone: true, cell: (t) => <Scopes scopes={t.scopes} /> },
-    { key: "used", header: "Last used", width: "104px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
+    { key: "scopes", header: "Scopes", width: "128px", hideOnPhone: true, wrap: true, cell: (t) => <Scopes scopes={t.scopes} /> },
+    { key: "used", header: "Last used", width: "124px", phoneLabel: "Used ", cell: (t) => when(t.last_used_at) },
     // Created is in the name's title: the expiry matters more on one line.
     { key: "expires", header: "Expiry", width: "164px", cell: (t) => <Expiry t={t} /> },
     { key: "status", header: "Status", width: "128px", cell: (t) => <TokenStatus t={t} /> },
@@ -423,7 +439,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
   return (
     <Panel
       title="Personal API tokens"
-      count={query.data?.filter((t) => tokenState(t) === "active").length}
+      count={<ActiveOfTotal rows={query.data} />}
       testId="tokens-panel"
       tools={
         <InfoTip label="personal tokens" align="end">
@@ -442,7 +458,7 @@ function TokensPanel({ query }: { query: ReturnType<typeof useQuery<ApiToken[]>>
             {(["oracle:read", "oracle:write"] as const).map((s) => (
               <label key={s} className="inline-flex items-center gap-2 text-[15px]">
                 <input type="checkbox" checked={scopes.includes(s)} onChange={() => toggle(s)} className="size-4 accent-[var(--accent)]" />
-                <span className="font-mono text-[13px]">{s}</span>
+                <span>{scopeLabel(s)}</span>
               </label>
             ))}
           </div>
@@ -555,13 +571,15 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
       header: "Client",
       cell: (c) => (
         <span className="flex min-w-0 flex-col">
-          <span className="truncate font-medium">{c.client_name}</span>
+          <span className="truncate font-medium" title={c.client_name}>
+            {c.client_name}
+          </span>
         </span>
       ),
     },
-    { key: "scopes", header: "Scopes", width: "22%", hideOnPhone: true, cell: (c) => <Scopes scopes={c.scopes} /> },
-    { key: "authorized", header: "Authorized", width: "104px", hideOnPhone: true, cell: (c) => when(c.authorized_at) },
-    { key: "used", header: "Last used", width: "104px", phoneLabel: "Used ", cell: (c) => when(c.last_used_at) },
+    { key: "scopes", header: "Scopes", width: "128px", hideOnPhone: true, wrap: true, cell: (c) => <Scopes scopes={c.scopes} /> },
+    { key: "authorized", header: "Authorized", width: "124px", hideOnPhone: true, cell: (c) => when(c.authorized_at) },
+    { key: "used", header: "Last used", width: "124px", phoneLabel: "Used ", cell: (c) => when(c.last_used_at) },
     { key: "status", header: "Status", width: "140px", cell: (c) => <TokenStatus t={c} /> },
     {
       key: "action",
@@ -590,7 +608,7 @@ function ClientsPanel({ query }: { query: ReturnType<typeof useQuery<McpClient[]
   return (
     <Panel
       title="MCP clients"
-      count={query.data?.filter((c) => tokenState(c) === "active").length}
+      count={<ActiveOfTotal rows={query.data} />}
       testId="clients-panel"
       tools={
         <InfoTip label="MCP clients" align="end">

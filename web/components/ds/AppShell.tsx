@@ -557,14 +557,15 @@ function fallbackTitle(pathname: string): string {
 
 /**
  * qa-shell-23: the phone header's one rule. A tab of a section (Plan's tabs and the Roadmap's,
- * Company's, Settings' and /sources, one level below the section) shows the section's name, as
+ * Company's, one level below the section) shows the section's name, as
  * the rail names it; every other page (a document, a run, a report, a template) shows its H1.
  * The browser tab always names the page itself ("Dates · Product Oracle").
  */
 function sectionOf(pathname: string): string | null {
   if (/^\/(plan|roadmap)(\/[^/]+)?\/?$/.test(pathname)) return "Plan";
   if (/^\/company(\/[^/]+)?\/?$/.test(pathname)) return "Company";
-  if (/^\/settings(\/[^/]+)?\/?$/.test(pathname) || /^\/sources(\/|$)/.test(pathname)) return SETTINGS.label;
+  // qa-settings-40: Settings' pages name themselves ("Connections"); the phone's page picker
+  // under it (settings/_nav.tsx) already says they are Settings.
   return null;
 }
 

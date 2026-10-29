@@ -337,7 +337,10 @@ function DraftSheetBody({ summary, run, onClose }: { summary: Summary; run: Run 
               {estimate.needs_approval && <span className="text-text2"> · Needs an owner&apos;s approval before it starts</span>}
             </p>
           ) : (
-            <span className="min-w-0 flex-1" />
+            // qa-onboarding-17: why Start drafting waits.
+            <p data-testid="draft-start-reason" className="min-w-0 flex-1 text-sm text-text2">
+              Estimate the cost first.
+            </p>
           )}
           {!estimate && (
             <Button onClick={() => void runEstimate(knobs)} disabled={busy || !flow || !status || !templateKey}>

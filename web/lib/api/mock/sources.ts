@@ -151,7 +151,8 @@ function seed(): SourcesDb {
     kind: "slack",
     name: "Product chat",
     connection_id: CONNECTIONS.slack[0].id,
-    config: { channels: ["C0123PRODUCT", "C0456FEEDBACK"] },
+    // Saved with the channels' names, as the picker saves them: the row reads "#product", not an id.
+    config: { channels: ["C0123PRODUCT", "C0456FEEDBACK"], labels: { C0123PRODUCT: "#product", C0456FEEDBACK: "#customer-feedback" } },
     status: "active",
     last_error: null,
     last_synced_at: "2026-10-17T08:00:00Z",
@@ -416,8 +417,11 @@ export function itemsChangedSince(since: string, owner: string, me: string): num
 }
 
 /** How many sources there are (A1's Pick sources step). */
+/** The sources holding at least one live item, as oracle.setup's Pick sources step counts
+ * them: an empty source (an Uploads source with no files) gives the baseline nothing. */
 export function sourceCount(): number {
-  return load().sources.length;
+  const db = load();
+  return db.sources.filter((s) => db.items.some((i) => i.source_id === s.id && !i.deleted_at)).length;
 }
 
 function json(status: number, body: unknown): Response {

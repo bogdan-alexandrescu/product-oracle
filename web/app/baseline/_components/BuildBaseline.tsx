@@ -7,7 +7,7 @@ import { usd, type EstimateOut } from "@/app/runs/_lib";
 import { Button, Chip, Icon, Notice, SegmentedControl } from "@/components/ds";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format";
-import { errorMessage } from "@/lib/use-query";
+import { errorMessage, useQuery } from "@/lib/use-query";
 
 type RunSummary = Schemas["RunSummary"];
 type Depth = Schemas["KnobsIn"]["depth"];
@@ -118,6 +118,10 @@ export function BuildBaselineSheet({ onClose, onStarted }: { onClose: () => void
   const [error, setError] = useState<string | null>(null);
   // The latest choice wins when estimates cross.
   const asked = useRef(0);
+  // Sources with nothing in them give the build nothing to read: say so before Start
+  // (qa-onboarding-11). A failed list says nothing.
+  const sources = useQuery("sources", () => unwrap(api.GET("/v1/sources")));
+  const nothingToRead = !!sources.data && sources.data.every((s) => s.item_count === 0);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
@@ -214,6 +218,16 @@ export function BuildBaselineSheet({ onClose, onStarted }: { onClose: () => void
           <p className="tnum text-sm text-text2" data-testid="build-estimate" aria-live="polite">
             {estimate ? estimateLine(estimate) : busy ? "Estimating…" : ""}
           </p>
+          {nothingToRead && (
+            <Notice tone="warn" testId="build-no-items">
+              {sources.data!.length === 0 ? "You have no sources yet" : "Your sources have no items yet"}, so the build has
+              nothing to read.{" "}
+              <Link href="/settings/sources" className="font-semibold underline underline-offset-2">
+                Add files or sync a source
+              </Link>{" "}
+              first.
+            </Notice>
+          )}
           {estimate?.needs_approval && (
             <Notice tone="warn">
               Over {usd(estimate.approval_threshold_usd)}: an owner approves the cost before the build starts.

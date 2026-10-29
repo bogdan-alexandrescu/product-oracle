@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type ReactNode } from "react";
 
+import { GrowingTextarea } from "@/app/settings/_components/GrowingTextarea";
 import { Field, INPUT, SELECT, TEXTAREA } from "@/app/settings/_components/fields";
 import {
   Button,
@@ -86,6 +87,14 @@ function formOf(t: ThemeOut): Form {
   };
 }
 
+/** The family names of a CSS font stack, without quotes: "'Inter', Arial" → Inter, Arial. */
+function fontFamilies(stack: string): string[] {
+  return stack
+    .split(",")
+    .map((f) => f.trim().replace(/^['"]|['"]$/g, "").trim())
+    .filter(Boolean);
+}
+
 /** #abc → #aabbcc; anything that is not a hex colour → black (for <input type="color">). */
 function pickerValue(v: string | undefined): string {
   if (!v || !/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v)) return "#000000";
@@ -107,7 +116,7 @@ function Group({ title, tools, children }: { title: string; tools?: ReactNode; c
 const SELECT_FULL = `${SELECT} h-9 w-full`;
 
 const BACK = (
-  <Link href="/settings/themes" className="hover:text-text hover:underline">
+  <Link href="/settings/themes" className="inline-flex items-center hover:text-text hover:underline max-[600px]:min-h-11">
     ← Themes
   </Link>
 );
@@ -158,7 +167,18 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
   const changed = JSON.stringify(form) !== JSON.stringify(formOf(t));
   const problems = live.data?.problems ?? [];
   const contrast = problems.filter((p) => p.code === "insufficient_contrast");
-  const other = problems.filter((p) => p.code !== "insufficient_contrast");
+  // A malformed colour or font is said under its own field (the message starts with the
+  // field's label, as oracle.templates.validation writes it); the rest are listed above.
+  const fieldProblem = (code: string, label: string) =>
+    problems.find((p) => p.code === code && p.message.startsWith(`${label} `))?.message;
+  const atField = new Set(
+    problems.filter(
+      (p) =>
+        (p.code === "invalid_color" && COLOURS.some((c) => p.message.startsWith(`${c.label} colour `))) ||
+        (p.code === "invalid_font" && FONTS.some((f) => p.message.startsWith(`${f.label} `))),
+    ),
+  );
+  const other = problems.filter((p) => p.code !== "insufficient_contrast" && !atField.has(p));
   const invalid = live.data ? !live.data.valid : false;
 
   const set = (patch: Partial<Form>) => {
@@ -252,7 +272,7 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
               </select>
             </Field>
             <Field label="Description">
-              <input className={INPUT} value={form.description} onChange={(e) => set({ description: e.target.value })} />
+              <GrowingTextarea value={form.description} onChange={(e) => set({ description: e.target.value })} />
             </Field>
           </div>
         </InspectorSection>
@@ -361,28 +381,41 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
               <Group title="Colours">
                 <div className="grid gap-3 sm:grid-cols-2">
                   {COLOURS.map((c) => {
-                    const bad = contrast.some((p) => p.message.startsWith(`colors.${c.name} `));
+                    const malformed = fieldProblem("invalid_color", `${c.label} colour`);
+                    const bad = !!malformed || contrast.some((p) => p.message.startsWith(`${c.label} colour `));
                     return (
-                      <div key={c.name} className="flex items-end gap-2">
-                        <input
-                          type="color"
-                          aria-label={`${c.label} colour picker`}
-                          value={pickerValue(colors[c.name])}
-                          onChange={(e) => setTokens("colors", { [c.name]: e.target.value })}
-                          className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-line-strong bg-surface p-0.5"
-                        />
-                        <label className="flex min-w-0 flex-1 flex-col gap-1.5">
-                          <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2" title={c.hint}>
-                            {c.label}
-                          </span>
+                      <div key={c.name} className="flex flex-col gap-1">
+                        <div className="flex items-end gap-2">
                           <input
-                            aria-label={c.label}
-                            aria-invalid={bad || undefined}
-                            value={colors[c.name] ?? ""}
-                            onChange={(e) => setTokens("colors", { [c.name]: e.target.value.trim() })}
-                            className={`${INPUT} font-mono ${bad ? "border-crit ring-1 ring-crit" : ""}`}
+                            type="color"
+                            aria-label={`${c.label} colour picker`}
+                            value={pickerValue(colors[c.name])}
+                            onChange={(e) => setTokens("colors", { [c.name]: e.target.value })}
+                            className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-line-strong bg-surface p-0.5"
                           />
-                        </label>
+                          <label className="flex min-w-0 flex-1 flex-col gap-1.5">
+                            <span className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2" title={c.hint}>
+                              {c.label}
+                            </span>
+                            <input
+                              aria-label={c.label}
+                              aria-invalid={bad || undefined}
+                              aria-describedby={malformed ? `colour-${c.name}-problem` : undefined}
+                              value={colors[c.name] ?? ""}
+                              onChange={(e) => setTokens("colors", { [c.name]: e.target.value.trim() })}
+                              className={`${INPUT} font-mono ${bad ? "border-crit ring-1 ring-crit" : ""}`}
+                            />
+                          </label>
+                        </div>
+                        {malformed && (
+                          <p
+                            id={`colour-${c.name}-problem`}
+                            data-testid={`colour-${c.name}-problem`}
+                            className="text-[13px] leading-[18px] text-crit"
+                          >
+                            {malformed}
+                          </p>
+                        )}
                       </div>
                     );
                   })}
@@ -391,15 +424,42 @@ export function ThemeDetail({ themeKey: key }: { themeKey: string }) {
 
               <Group title="Type">
                 <div className="flex flex-col gap-3">
-                  {FONTS.map((f) => (
-                    <Field key={f.name} label={f.label}>
-                      <input
-                        className={`${INPUT} font-mono text-sm`}
-                        value={tokens.fonts?.[f.name] ?? ""}
-                        onChange={(e) => setTokens("fonts", { [f.name]: e.target.value || null })}
-                      />
-                    </Field>
-                  ))}
+                  {FONTS.map((f) => {
+                    const stack = tokens.fonts?.[f.name] ?? "";
+                    const families = fontFamilies(stack);
+                    const malformed = fieldProblem("invalid_font", f.label);
+                    return (
+                      <div key={f.name} className="flex min-w-0 flex-col gap-1.5">
+                        <label
+                          htmlFor={`font-${f.name}`}
+                          className="text-[13px] leading-4 font-semibold tracking-[0.02em] text-text2"
+                        >
+                          {f.label}
+                        </label>
+                        <GrowingTextarea
+                          id={`font-${f.name}`}
+                          value={stack}
+                          title={stack || undefined}
+                          aria-invalid={!!malformed || undefined}
+                          aria-describedby={`font-${f.name}-hint`}
+                          onChange={(e) => setTokens("fonts", { [f.name]: e.target.value.replace(/\n/g, " ") || null })}
+                          className={malformed ? "border-crit ring-1 ring-crit" : ""}
+                        />
+                        <p
+                          id={`font-${f.name}-hint`}
+                          data-testid={`font-${f.name}-hint`}
+                          className={`text-[13px] leading-[18px] ${malformed ? "text-crit" : "text-text2"}`}
+                        >
+                          {malformed ??
+                            (families.length === 0
+                              ? "The theme's default font."
+                              : families.length === 1
+                                ? `Uses ${families[0]}.`
+                                : `Uses ${families[0]}; without it, ${families.slice(1).join(", then ")}.`)}
+                        </p>
+                      </div>
+                    );
+                  })}
                 </div>
               </Group>
 

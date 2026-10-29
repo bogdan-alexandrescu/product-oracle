@@ -10,14 +10,14 @@ test("settings › sources: my sources, status and last error, sync, allowlist, 
   const chat = page.getByRole("listitem", { name: "Product chat" });
   await expect(chat).toContainText("Slack");
   await expect(chat).toContainText("Active");
-  await expect(chat).toContainText("C0123PRODUCT, C0456FEEDBACK");
+  await expect(chat).toContainText("#product, #customer-feedback");
 
   const repo = page.getByRole("listitem", { name: "Example repo" });
   await expect(repo).toContainText("Error");
   await expect(repo.getByTestId("last-error")).toHaveText("The connection was rejected: token expired");
 
   await chat.getByRole("button", { name: "Sync now" }).click();
-  await expect(chat.getByRole("status")).toContainText("Synced: 2 item(s) seen, 1 new version(s)");
+  await expect(chat.getByRole("status")).toContainText("Synced: 2 items seen, 1 new version");
 
   // Edit channels and Delete sit in the row's More menu.
   await chat.getByRole("button", { name: "More actions for Product chat" }).click();
@@ -61,14 +61,14 @@ test("settings › sources: add from my connections, upload files, delete", asyn
   await form.getByLabel("Name").fill("Research notes");
   await form.getByRole("button", { name: "Add source" }).click();
   const notes = page.getByRole("listitem", { name: "Research notes" });
-  await expect(notes).toContainText("0 item(s)");
+  await expect(notes).toContainText("No items yet — upload files to add some");
 
   await notes.getByLabel("Upload files to Research notes").setInputFiles([
     { name: "interview.md", mimeType: "text/markdown", buffer: Buffer.from("# Interview\nThe export button is hard to find.") },
     { name: "brief.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 mock") },
   ]);
-  await expect(notes.getByRole("status")).toHaveText("Uploaded 2 file(s).");
-  await expect(notes).toContainText("2 item(s)");
+  await expect(notes.getByRole("status")).toHaveText("Uploaded 2 files.");
+  await expect(notes).toContainText("2 items");
 
   await notes.getByLabel("Upload files to Research notes").setInputFiles([
     { name: "deck.pptx", mimeType: "application/octet-stream", buffer: Buffer.from("x") },

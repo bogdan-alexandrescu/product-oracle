@@ -29,7 +29,7 @@ from oracle.connections.models import Connection
 from oracle.members.models import Invite
 from oracle.preferences.models import UserPreference
 from oracle.runs.models import Run
-from oracle.sources.models import Source
+from oracle.sources.models import Source, SourceItem
 from oracle.sources.service import company_domains
 from oracle.tenant_settings import TenantSetting
 
@@ -92,8 +92,14 @@ async def _connect(db: AsyncSession, principal: Principal) -> SetupStep:
 
 
 async def _sources(db: AsyncSession, principal: Principal) -> SetupStep:
+    """Done once a source of the person's holds something to read: an empty source (an
+    Uploads source with no files, a source never synced) gives the baseline nothing, so
+    it does not tick the step (qa-onboarding-11). Counts those sources."""
     n = await db.scalar(
-        select(func.count()).select_from(Source).where(Source.owner_user_id == principal.user_id)
+        select(func.count(func.distinct(Source.id)))
+        .select_from(Source)
+        .join(SourceItem, SourceItem.source_id == Source.id)
+        .where(Source.owner_user_id == principal.user_id, SourceItem.deleted_at.is_(None))
     )
     return SetupStep(key="sources", done=bool(n), count=n)
 
