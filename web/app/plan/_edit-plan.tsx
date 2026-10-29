@@ -190,9 +190,10 @@ function Editor({ set, doc, onChange }: { set: ChangeSet; doc: DocumentSummary |
                         </option>
                       ))}
                     </select>
+                    {/* qa-plan-34: dimmer than a ghost's own disabled 50%, so ! wins over it. */}
                     <Button
                       variant="ghost"
-                      className="w-[3.75rem] flex-none disabled:opacity-40"
+                      className="w-[3.75rem] flex-none disabled:opacity-40!"
                       aria-label={`Move ${i.title} up`}
                       disabled={at === 0}
                       title={at === 0 ? `Already first in ${HORIZON_LABEL[h]}` : undefined}
@@ -202,7 +203,7 @@ function Editor({ set, doc, onChange }: { set: ChangeSet; doc: DocumentSummary |
                     </Button>
                     <Button
                       variant="ghost"
-                      className="w-[3.75rem] flex-none disabled:opacity-40"
+                      className="w-[3.75rem] flex-none disabled:opacity-40!"
                       aria-label={`Move ${i.title} down`}
                       disabled={at === lane.length - 1}
                       title={at === lane.length - 1 ? `Already last in ${HORIZON_LABEL[h]}` : undefined}

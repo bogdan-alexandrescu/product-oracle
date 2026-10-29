@@ -34,11 +34,14 @@ const ONLY_DAY = new RegExp(`^${ISO_DAY_SOURCE}$`);
  */
 export const datesInWords = (text: string) => text.replace(ISO_DAY, (d) => formatDate(d));
 
-/** Who decides a stop, in words: "Approvers and owners decide" (the role ladder: viewer < commenter < approver < owner). */
-export function decidersText(role: string | null | undefined): string {
-  if (role === "owner") return "Owners decide";
-  if (role === "commenter") return "Commenters, approvers and owners decide";
-  if (role === "viewer") return "Any member decides";
+/**
+ * Who decides a stop, in words: "Approvers and owners decide" (the role ladder: viewer < commenter < approver < owner).
+ * `approverRole` is the stop's least role to decide (the checkpoint's approver_role), not the signed-in role.
+ */
+export function decidersText(approverRole: string | null | undefined): string {
+  if (approverRole === "owner") return "Owners decide";
+  if (approverRole === "commenter") return "Commenters, approvers and owners decide";
+  if (approverRole === "viewer") return "Any member decides";
   return "Approvers and owners decide";
 }
 

@@ -32,7 +32,9 @@ async function finishInterview(page: Page) {
   await page.getByRole("button", { name: "Skip this question" }).click();
   await expect(page.getByTestId("interview-progress")).toHaveText("4 of 4");
   await answer("In September a typo sent a payment to the wrong supplier and it took two weeks to recover.");
-  await page.getByRole("button", { name: "Send my answers" }).click();
+  // Ending is its own button, and it asks first (qa-docs-18).
+  await page.getByTestId("interview-footer").getByRole("button", { name: "Finish interview" }).click();
+  await page.getByRole("alertdialog", { name: "Finish interview" }).getByRole("button", { name: "Finish interview" }).click();
   await expect(page.getByTestId("interview-thanks")).toBeVisible();
 }
 

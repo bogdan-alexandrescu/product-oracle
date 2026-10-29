@@ -32,10 +32,11 @@ test("open a version: sections in order with citation chips", async ({ page }) =
 
   // One section at a time: the outline lists them in order, the first unreviewed one is open.
   const headings = page.locator("section[data-section-key] :is(h1,h2,h3)").filter({ visible: true });
-  await expect(headings).toHaveText(["Checkout redesign PRD"]);
+  // The opening section, titled with the document's own title, reads as the Introduction (qa-docs-50).
+  await expect(headings).toHaveText(["Introduction"]);
   await sectionStrip(page).getByRole("button", { name: "Unfold 5. Proposed flow" }).click();
   await expect(sectionStrip(page).getByTestId("outline-name")).toHaveText([
-    "Checkout redesign PRD",
+    "Introduction",
     "1. Goal trace",
     "2. Problem",
     "3. Users and jobs",
@@ -182,7 +183,18 @@ test("open the diff: section badges and word-level changes", async ({ page }) =>
   await expect(page).toHaveURL(/\/diff\?from=1&to=2$/);
   await expect(page.getByRole("heading", { name: "Changes from v1 to v2" })).toBeVisible();
 
-  const byKey = (k: string) => page.getByTestId("diff-section").filter({ hasText: `#${k}` });
+  // A section is named by its heading, never its #anchor (qa-docs-28).
+  const HEADINGS: Record<string, string> = {
+    "goal-trace": "1. Goal trace",
+    problem: "2. Problem",
+    "s-5-2": "5.2 Shipping step",
+    "s-5-3": "5.3 Saved addresses",
+    risks: "6. Risks and open questions",
+    metrics: "7. Success metrics",
+    rollout: "8. Rollout",
+  };
+  const byKey = (k: string) =>
+    page.getByTestId("diff-section").filter({ has: page.getByRole("heading", { name: HEADINGS[k], exact: true }) });
   await expect(byKey("s-5-3")).toHaveAttribute("data-status", "added");
   await expect(byKey("rollout")).toHaveAttribute("data-status", "removed");
   await expect(byKey("problem")).toHaveAttribute("data-status", "changed");

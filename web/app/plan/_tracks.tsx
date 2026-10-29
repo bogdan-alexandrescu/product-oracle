@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { peopleByIds, PersonPicker } from "@/components/PersonPicker";
 import { FIELD_LABEL, InlineError } from "@/components/review/parts";
@@ -148,6 +148,23 @@ export function TrackPanel({
   const router = useRouter();
   const [renaming, setRenaming] = useState(false);
   const [title, setTitle] = useState(track.title);
+  // qa-plan-30: Escape cancels the rename and goes no further. React listens on the document
+  // itself, so a React handler's stopPropagation still lets the document's other listeners
+  // (InfoTip's, the Ask panel's) see the key: the form stops it natively, before the document.
+  const renameForm = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    const form = renameForm.current;
+    if (!renaming || !form) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      setTitle(track.title);
+      setRenaming(false);
+    };
+    form.addEventListener("keydown", onKey);
+    return () => form.removeEventListener("keydown", onKey);
+  }, [renaming, track.title]);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -244,19 +261,12 @@ export function TrackPanel({
       <div className="flex flex-col gap-3 px-4 py-3 text-[15px] max-[600px]:px-3">
         {renaming && may.edit && (
           <form
+            ref={renameForm}
             className="flex flex-wrap items-end gap-2"
             onSubmit={(e) => {
               e.preventDefault();
               if (title.trim())
                 void patch({ title: title.trim() }, () => setRenaming(false));
-            }}
-            onKeyDown={(e) => {
-              // qa-plan-30: Escape cancels the rename.
-              if (e.key !== "Escape") return;
-              e.preventDefault();
-              e.stopPropagation();
-              setTitle(track.title);
-              setRenaming(false);
             }}
           >
             <label className={`${FIELD_LABEL} min-w-0 flex-1`}>

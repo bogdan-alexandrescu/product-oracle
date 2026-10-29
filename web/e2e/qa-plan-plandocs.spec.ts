@@ -173,5 +173,7 @@ test("qa-plan-30: Escape cancels the Track outcome and Add learning forms", asyn
   const learning = page.getByTestId("learning-form");
   await learning.getByLabel("Learning").fill("Something learnt");
   await page.keyboard.press("Escape");
+  // A typed learning asks before it is dropped (fix-plan review: nothing lost by a stray key).
+  await page.getByRole("alertdialog").getByRole("button", { name: "Discard learning" }).click();
   await expect(learning).toHaveCount(0);
 });

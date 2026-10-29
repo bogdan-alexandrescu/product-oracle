@@ -138,8 +138,8 @@ test("an owner deletes a brief from its page, then restores it from Settings ›
   await page.addInitScript(([key]) => localStorage.setItem(key, "before-drafting"), [MOCK_SCENARIO_KEY] as const);
   await login(page);
   await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
-  // qa-work-11: Delete sits in the brief's one overflow menu.
-  await page.getByRole("button", { name: "More actions" }).click();
+  // qa-work-11: Delete sits in the brief's one overflow menu, "Actions for <title>" (qa-docs-65).
+  await page.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Delete…" }).click();
   await page.getByRole("dialog", { name: `Delete ${BEFORE_DRAFTING.title}` }).getByRole("button", { name: "Move to Trash" }).click();
   await expect(page).toHaveURL(/\/documents$/);

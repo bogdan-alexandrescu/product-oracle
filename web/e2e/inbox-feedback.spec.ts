@@ -31,8 +31,10 @@ test("inbox: one feedback row per item, saying what waits and linking to its sec
   // One row per open item, no per-document count.
   await expect(fleet).toHaveCount(3);
   await expect(page.getByTestId("inbox-needs")).not.toContainText("to accept or dismiss");
-  const row = fleet.filter({ hasText: "#f-33" });
-  await expect(row).toContainText("Say what happens when the customer is not home");
+  // The row names no section key (qa-company-11): its summary and its link to f-33 say which.
+  const row = fleet.filter({ hasText: "Say what happens when the customer is not home" });
+  await expect(row).toHaveCount(1);
+  await expect(row).not.toContainText("#f-33");
   // D14: Oracle's suggestion is decided here (Accept, Decline); Open goes to the item.
   await expect(row.getByRole("button", { name: "Accept", exact: true })).toBeVisible();
   const action = row.getByRole("link", { name: /^Open Say what happens/ });
@@ -48,11 +50,11 @@ test("inbox: one feedback row per item, saying what waits and linking to its sec
     "/documents/checkout-redesign/v/2?feedback=open#s-5-3",
   );
 
-  // Home's Needs you rows are the same rows.
+  // Home's Needs you rows are the same rows, each one Open to where it is decided (qa-company-10).
   await page.goto("/home");
   const home = page.getByTestId("home-needs-table").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
-  await expect(home.first()).toContainText("#f-3");
-  await expect(home.first().getByRole("button", { name: "Accept", exact: true })).toBeVisible();
+  await expect(home.first()).toContainText(/Say what happens|Limit how many times|Depot handover/);
+  await expect(home.first().getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
   await expect(home.first().getByRole("link", { name: /^Open / })).toHaveAttribute("href", /^\/documents\/fleet-next\/v\/2\?feedback=open#f-3\d$/);
 });
 
@@ -129,8 +131,8 @@ test("feedback items: long text collapsed, Accept, Edit and accept, Dismiss, and
   const rows = page.getByTestId("inbox-feedback").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
   // C1e: the two accepted suggestions are staged for the next draft, not open feedback.
   await expect(rows).toHaveCount(1);
-  const left = rows.filter({ hasText: "#f-36" });
-  await expect(left).toContainText("Depot handover needs a count check");
+  const left = rows.filter({ hasText: "Depot handover needs a count check" });
+  await expect(left).toHaveCount(1);
   // Its suggestion dismissed, the item waits on a person: Decline or Open (D14).
   await expect(left.getByRole("button", { name: "Decline", exact: true })).toBeVisible();
   await expect(left.getByRole("button", { name: "Accept", exact: true })).toHaveCount(0);
@@ -138,8 +140,8 @@ test("feedback items: long text collapsed, Accept, Edit and accept, Dismiss, and
   await page.getByTestId("inbox-state-tabs").getByRole("tab", { name: /^Staged/ }).click();
   const staged = page.getByTestId("inbox-tab-staged").locator("tr[data-row]").filter({ hasText: "Fleet next version" });
   await expect(staged.getByTestId("staged-row-label")).toHaveText("2 changes staged for draft 3");
-  await expect(staged.filter({ hasText: "#f-33" })).toContainText("Draft 3");
-  await expect(staged.filter({ hasText: "#f-34" })).toContainText("Draft 3");
+  await expect(staged.filter({ hasText: "Say what happens when the customer is not home" })).toContainText("Draft 3");
+  await expect(staged.filter({ hasText: "Limit how many times a customer can move" })).toContainText("Draft 3");
 });
 
 test("Feedback tab: counts open items, and shows All when the open section has none", async ({ page }) => {

@@ -319,17 +319,6 @@ export function BeforeDrafting({ id }: { id: string }) {
           document.body,
         )}
       {drafting && <DraftSheet summary={s} onClose={() => (setDrafting(false), changed())} />}
-      {deleting &&
-        createPortal(
-          <DeleteDialog
-            title={s.intake.title}
-            dependents={() => unwrap(api.GET("/v1/intakes/{intake_id}/dependents", { params: { path: { intake_id: id } } }))}
-            remove={(query) => unwrap(api.DELETE("/v1/intakes/{intake_id}", { params: { path: { intake_id: id }, query } }))}
-            onClose={() => setDeleting(false)}
-            onDeleted={() => router.push("/documents")}
-          />,
-          document.body,
-        )}
       {phone && (
         <Sheet open={sheet} title="Before drafting" onClose={() => setSheet(false)} testId="intake-sheet">
           <div className="p-2">{inspector}</div>

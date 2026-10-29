@@ -56,9 +56,9 @@ async function retire(row: Locator) {
   await expect(row.getByTestId("learning-status")).toHaveText("Retired");
 }
 
-/** More actions > Re-analyse: Oracle ranks the questions not asked yet again. */
+/** Actions for <title> > Re-analyse: Oracle ranks the questions not asked yet again. */
 async function reanalyse(page: Page) {
-  await page.getByRole("button", { name: "More actions" }).click();
+  await page.getByRole("button", { name: /^Actions for / }).click();
   await page.getByRole("menuitem", { name: "Re-analyse" }).click();
 }
 
