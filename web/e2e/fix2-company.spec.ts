@@ -219,3 +219,23 @@ test.describe("phone", () => {
     await expect(check).toBeChecked({ checked: !before });
   });
 });
+
+// protects: fix2-settings review: Save with the time zone "Not set" pinned Los Angeles as if
+// an owner had picked it; now Save waits for a pick and says so, and the zone stays unset.
+// fails_when: Save is offered with no zone chosen, or the zone reads set afterwards.
+test("time zone: with none chosen, Save waits for a pick and the zone stays unset", async ({ page }) => {
+  await login(page);
+  await page.goto("/settings/company");
+  const panel = page.getByTestId("timezone-panel");
+  await expect(panel.getByLabel("Company time zone")).toHaveValue("");
+  await expect(panel.getByRole("button", { name: "Save" })).toBeDisabled();
+  await expect(panel.getByTestId("timezone-save-reason")).toHaveText("Pick a time zone to save it.");
+  await page.goto("/settings/notifications");
+  await expect(page.getByTestId("report-zone")).toHaveText("Not set · Pacific is used");
+
+  await page.goto("/settings/company");
+  await panel.getByLabel("Company time zone").selectOption("Asia/Tokyo");
+  await expect(panel.getByTestId("timezone-save-reason")).toHaveCount(0);
+  await panel.getByRole("button", { name: "Save" }).click();
+  await expect(panel.getByRole("status")).toHaveText("Saved");
+});

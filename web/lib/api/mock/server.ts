@@ -532,6 +532,7 @@ export const MOCK_DENY_KEY = "po-mock-deny";
  * ./discussions.ts);
  * "mail-off" as the default company with no invite sender configured (invites are not
  * emailed); "mail-fails" where every first invite email fails (Resend sends it);
+ * "mail-stalls" where invite emails stay queued (the mail sender never gets to them);
  * "iap-pending" where an invite's Google IAP access is not granted until Retry (#242; a plus
  * address never gets it, in any scenario: Google answers 400, #330);
  * "iap-revoke-fails" where removing a member leaves their Google IAP access to remove (the
@@ -3732,7 +3733,9 @@ const expired = (i: InviteRow) => i.status === "open" && !!i.expires_at && Date.
 
 /** The background send: queued invite emails whose time has come are sent, or fail. */
 function settleInviteEmails(db: Db) {
-  const fails = localStorage.getItem(MOCK_SCENARIO_KEY) === "mail-fails";
+  const scenario = localStorage.getItem(MOCK_SCENARIO_KEY);
+  if (scenario === "mail-stalls") return;
+  const fails = scenario === "mail-fails";
   for (const i of db.invites) {
     if (i.email_status !== "queued" || Date.now() - Date.parse(i.email_at ?? "") < MAIL_DELAY_MS) continue;
     const resent = (db.invites_resent ??= []).includes(i.id);

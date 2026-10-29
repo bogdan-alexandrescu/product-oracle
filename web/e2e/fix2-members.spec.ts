@@ -116,6 +116,24 @@ test("qa-onboarding-19: after Send invite the outcome says it was sent", async (
   await expect(inviteRow(page, "pat@example.com").getByTestId("invite-email")).not.toContainText("Sending");
 });
 
+// fix2-settings review (qa-onboarding-19): an email Oracle never gets out stops saying
+// "Sending" after the page's 30 looks and hands over the sign-in link instead.
+test("qa-onboarding-19: an invite email that stalls hands over the sign-in link after 30 s", async ({ page }) => {
+  test.setTimeout(90_000);
+  await scenario(page, "mail-stalls");
+  await login(page);
+  await page.goto("/settings/members");
+  await page.getByPlaceholder("name@company.com").fill("pat@example.com");
+  await page.getByRole("button", { name: "Send invite", exact: true }).click();
+  const outcome = page.getByTestId("invite-outcome");
+  await expect(outcome).toHaveText("Sending the invite to pat@example.com…");
+  await expect(outcome).toContainText("Oracle hasn't emailed pat@example.com yet. Send them this link yourself:", { timeout: 60_000 });
+  await expect(outcome).not.toContainText("Sending the invite");
+  await expect(outcome.getByTestId("invite-link")).toContainText("http");
+  await outcome.getByRole("button", { name: "Copy sign-in link" }).click();
+  await expect(outcome.getByRole("button", { name: "Copied" })).toBeVisible();
+});
+
 test("qa-onboarding-21: #engineering-lead marks the column, says what to pick and says Saved", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members#engineering-lead");
@@ -150,6 +168,30 @@ test("qa-settings-43: the panel's dates read like the table's", async ({ page })
   const panel = page.getByTestId("member-inspector");
   await expect(panel.getByTestId("member-last-sign-in")).toHaveText(tableDate);
   await expect(panel.getByTestId("member-joined")).toHaveText(/^\w{3} \d{1,2}, \d{4}/);
+});
+
+// fix2-settings review: with the header's "+ Invite" gone, a window under 1100 px puts the
+// invite form below the People table; the People panel offers a jump to it.
+test.describe("under 1100 px", () => {
+  test.use({ viewport: { width: 1000, height: 800 } });
+
+  test("the People panel's Invite someone jumps to the invite form", async ({ page }) => {
+    await login(page);
+    await page.goto("/settings/members");
+    const email = page.getByPlaceholder("name@company.com");
+    await expect(email).not.toBeInViewport();
+    await page.getByRole("link", { name: "Invite someone" }).click();
+    await expect(email).toBeFocused();
+    await expect(email).toBeInViewport();
+  });
+});
+
+test("beside the table, at 1512 px, the jump to the invite form is not shown", async ({ page }) => {
+  await page.setViewportSize({ width: 1512, height: 900 });
+  await login(page);
+  await page.goto("/settings/members");
+  await expect(page.getByPlaceholder("name@company.com")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Invite someone" })).toBeHidden();
 });
 
 test.describe("on a phone, dark", () => {
