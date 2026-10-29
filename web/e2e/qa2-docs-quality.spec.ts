@@ -117,7 +117,7 @@ test.describe("desktop", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Composition" })).toBeVisible();
     const modules = page.getByTestId("composition-modules");
     await expect(modules).toBeVisible();
-    await expect(page.getByText("No composition yet")).toBeVisible();
+    await expect(page.getByText("No composition yet", { exact: true })).toBeVisible();
 
     const body = page.locator("body");
     for (const raw of ["Pack policy", "Condition holds", "Decided by"]) await expect(body).not.toContainText(raw);

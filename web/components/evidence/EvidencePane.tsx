@@ -484,7 +484,7 @@ function CoverageView(props: Shared & { links: number; citations: number; stale:
                         scope="col"
                         data-section={s.section_key}
                         data-gap={gap ? "true" : undefined}
-                        className={`w-[96px] min-w-[96px] px-1 py-2 text-center align-bottom text-[13px] leading-4 font-semibold ${gap ? "bg-crit-bg text-crit" : "text-text2"}`}
+                        className={`relative w-[96px] min-w-[96px] px-1 py-2 text-center align-bottom text-[13px] leading-4 font-semibold ${gap ? "bg-crit-bg text-crit" : "text-text2"}`}
                       >
                         {/* qa-docs-7: a red column needs no repeated word under its name; the
                             note under the table says what red means (screen readers hear it). */}
