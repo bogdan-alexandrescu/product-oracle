@@ -94,7 +94,7 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("simple-roadmap")).toBeVisible();
         await openRoadmapItem(page, "setup-import");
         const card = page.getByTestId("floating-card");
-        await expect(card.getByTestId("card-decided-in")).toContainText(`Decided in ${itemNo} Moved Sample data import`);
+        await expect(card.getByTestId("card-decided-in")).toContainText(`Decided in ${itemNo}: Moved Sample data import`);
         await card.getByTestId("card-decided-in").getByRole("link", { name: itemNo }).click();
         await expect(page).toHaveURL(new RegExp(`/simple/decisions#d-${itemNo.slice(2)}$`));
         await expect(page.locator(`#d-${itemNo.slice(2)}`)).toContainText("Moved Sample data import");

@@ -92,7 +92,8 @@ for (const [where, use] of [
         const full = await openComments(page, opened);
         await expect(full.getByRole("heading", { name: "Finish setup from the checklist", level: 2 })).toBeVisible();
         await expect(full.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · PRD § build, requirement R1");
+        // qa-simple-roadmap-31: plain words, not the internal "PRD §"/"requirement" jargon.
+        await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · From the PRD: Build section, Requirement R1");
         // Roles: a viewer reads, with no comment box and no Revise.
         await expect(full.getByLabel("Comment on the flow")).toHaveCount(0);
         await expect(full.getByRole("button", { name: "Revise" })).toHaveCount(0);
