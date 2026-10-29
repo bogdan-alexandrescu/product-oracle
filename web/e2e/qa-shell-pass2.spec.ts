@@ -106,7 +106,7 @@ for (const phone of [false, true]) {
       }
     });
 
-    test("qa-shell-17, 18: Home's PRD stats fit, and on a phone one goal per row", async ({ page }) => {
+    test("qa-shell-16, 17, 18: Home says what Needs you counts, its PRD stats fit, and on a phone one goal per row", async ({ page }) => {
       await page.getByTestId("home-needs").getByRole("button", { name: "About Needs you" }).click();
       await expect(page.getByText("Simple's Home counts something else")).toBeVisible();
       await page.keyboard.press("Escape");
