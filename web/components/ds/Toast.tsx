@@ -36,7 +36,11 @@ export function ToastHost() {
     return () => window.clearTimeout(t);
   }, [shown]);
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20">
+    // #34: the toast is one host for the whole app (no per-page position prop), so it
+    // centred over whatever page is open, including a wide chart; a minimal, global change
+    // moves it to the bottom-right corner on desktop (a phone keeps the centred strip,
+    // clear of the tab bar) rather than sitting mid-chart.
+    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex justify-center px-3 max-[600px]:bottom-20 min-[601px]:inset-x-auto min-[601px]:right-4 min-[601px]:justify-end min-[601px]:px-0">
       {shown && (
         <div
           key={shown.id}

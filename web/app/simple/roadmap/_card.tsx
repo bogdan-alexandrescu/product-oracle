@@ -175,6 +175,7 @@ export function Callout({
   y,
   h,
   compact,
+  maxX,
 }: {
   item: Item;
   flag: Flag;
@@ -185,16 +186,27 @@ export function Callout({
   y: number;
   h: number;
   compact: boolean;
+  /** #4, #5: the chart's own drawn width, so the callout (and its buttons) stay inside it
+   * rather than run past the right edge or start cut off the left. */
+  maxX: number;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [left, setLeft] = useState(Math.max(4, x));
+  useLayoutEffect(() => {
+    const w = ref.current?.offsetWidth ?? 0;
+    // Fits to the right of the bar when it can; otherwise slides left, never past either edge.
+    setLeft(Math.max(4, Math.min(x, maxX - w - 4)));
+  }, [x, maxX, flag.reason, compact]);
   return (
     <div
+      ref={ref}
       data-testid="broken-callout"
       data-item={item.key}
-      style={{ left: Math.max(4, x), top: y + 3, height: h - 6 }}
-      className="absolute z-10 flex items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 whitespace-nowrap"
+      style={{ left, top: y + 3, minHeight: h - 6, maxWidth: Math.max(160, maxX - 8) }}
+      className="absolute z-10 flex flex-wrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1"
     >
       <span
-        className={`truncate text-sm text-crit ${compact ? "max-w-[220px]" : "max-w-[360px]"}`}
+        className={`text-sm text-crit ${compact ? "max-w-[220px]" : "max-w-[360px]"} whitespace-normal break-words`}
         title={flag.reason}
       >
         ⚠ {flag.reason}
@@ -947,19 +959,24 @@ export function FloatingCard({
   );
 
   return (
-    <div
-      ref={ref}
-      tabIndex={-1}
-      role="dialog"
-      aria-label={item.title}
-      data-testid="floating-card"
-      data-sheet={phone ? "bottom" : "float"}
-      data-wide={wide ? "true" : "false"}
-      data-talk={talk ? "true" : "false"}
-      data-flow-open={flowOpen ? "true" : "false"}
-      style={placeStyle}
-      className={`${place} max-w-[calc(100vw-16px)] border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
-    >
+    <>
+      {/* #47: the card floats over the chart with nothing to say it has the page's
+       * attention; a dimmed backdrop on desktop (a phone's sheet already reads as modal),
+       * clicking it closes the card like the close button. */}
+      {!phone && <div aria-hidden data-testid="floating-card-backdrop" className="fixed inset-0 z-[35] bg-black/30" onClick={onClose} />}
+      <div
+        ref={ref}
+        tabIndex={-1}
+        role="dialog"
+        aria-label={item.title}
+        data-testid="floating-card"
+        data-sheet={phone ? "bottom" : "float"}
+        data-wide={wide ? "true" : "false"}
+        data-talk={talk ? "true" : "false"}
+        data-flow-open={flowOpen ? "true" : "false"}
+        style={placeStyle}
+        className={`${place} max-w-[calc(100vw-16px)] border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
+      >
       {phone ? (
         <>
           {!wide && (
@@ -1020,5 +1037,6 @@ export function FloatingCard({
         </>
       )}
     </div>
+    </>
   );
 }

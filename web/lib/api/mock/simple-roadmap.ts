@@ -562,7 +562,8 @@ function regenerate(db: SimpleDb, today: string): number {
     const same = [...(durations.get(s.confidence ?? "") ?? [])].sort((a, b) => a - b);
     const mid = same.length ? (same.length % 2 ? same[(same.length - 1) / 2] : Math.floor((same[same.length / 2 - 1] + same[same.length / 2]) / 2 + 0.5)) : 42;
     const conf = s.confidence ? `${s.confidence}-confidence` : "unrated";
-    const how = same.length ? `${mid} days, the median of ${same.length} dated ${conf} items` : `${mid} days, the default with no dated ${conf} items`;
+    // finding 30: plain words, not statistics jargon ("median").
+    const how = same.length ? `${mid} days, about the same as ${same.length} similar ${conf} item${same.length === 1 ? "" : "s"}` : `${mid} days, typical with no dated ${conf} items yet`;
     let end = addDays(start, mid - 1);
     let tail = "";
     if (start <= window[1] && window[1] < end) {

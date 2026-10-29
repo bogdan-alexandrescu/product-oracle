@@ -18,11 +18,13 @@ import {
   planMilestones,
   planPrds,
   currentMilestone,
+  phaseWord,
   quarters,
   rephase,
   quarterValue,
   scale,
   shortDay,
+  sourceWord,
   type Format,
   type GanttUnit,
   type Item,
@@ -51,6 +53,9 @@ const MARK_ROW = 16;
 const headerHeight = (markRows: number) => TICK_H + Math.max(1, markRows) * MARK_ROW + 8;
 const AXIS_H = headerHeight(1);
 const LONG_PRESS_MS = 450;
+/** A bar's narrowest width, however short its span or far the scale is zoomed out: it stays a
+ * visible, clickable shape beside its label rather than a blob a few pixels wide (finding 11). */
+const MIN_BAR_W = 24;
 
 /** The rows: each group with its items (cut items below the line, in their return-queue order). */
 export function layout(data: Roadmap, compact: boolean, lane: Lane = data.group, top = AXIS_H): Layout {
@@ -75,7 +80,9 @@ export function layout(data: Roadmap, compact: boolean, lane: Lane = data.group,
   rows.forEach((r, n) => {
     if (r.kind === "item") y.set(r.item.id, top + n * rowH);
   });
-  return { rows, rowH, labelW: compact ? 116 : 248, top, height: top + rows.length * rowH + 8, y };
+  // fix2-simple-roadmap-gantt: a phone's label column is wide enough for a name, its chips and
+  // a return place without squeezing the name to nothing (findings 6, 7).
+  return { rows, rowH, labelW: compact ? 152 : 248, top, height: top + rows.length * rowH + 8, y };
 }
 
 /** A label's width in the chart's type (a canvas measures it; an estimate before there is one). */
@@ -300,10 +307,21 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     }
     for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!), words: m.name, side: "after" });
     for (const k of data.key_dates ?? []) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
-    return placeMarks(list, chartW, flags);
+    // finding 18: pack rows in date order left to right, so a later mark never takes a lower
+    // row an earlier one needed (the list above is built milestone-ends, then tracks, then key
+    // dates, not by date).
+    return placeMarks([...list].sort((a, b) => a.x - b.x), chartW, flags);
   }, [data, sc, chartW, compact, flags]);
   const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1)));
   const l = useMemo(() => layout(data, compact, lane, top), [data, compact, lane, top]);
+  // findings 15/16: a row's code is a tooltip, not a visible prefix (some items have none, and
+  // a repeated code on two items would read as the same thing twice); it only ever shows when
+  // every row's code is its own.
+  const codeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const r of l.rows) if (r.kind === "item" && r.item.code) counts.set(r.item.code, (counts.get(r.item.code) ?? 0) + 1);
+    return counts;
+  }, [l.rows]);
   // D3: on a phone, which milestone ends off screen to the right ("Swipe sideways for M3").
   useEffect(() => {
     const el = box.current;
@@ -314,13 +332,15 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     el.addEventListener("scroll", tell, { passive: true });
     return () => el.removeEventListener("scroll", tell);
   }, [data, sc, compact, onOffscreen, width]);
-  // The current milestone scrolled into view once per format (where the chart scrolls).
+  // The current milestone scrolled into view once per format (where the chart scrolls). A
+  // desktop Gantt also opens scrolled here (finding 8/38): its day scale spans every item's
+  // whole date range, so without this it can open on a window where most rows show no bar.
   const scrolled = useRef("");
   const current = currentMilestone(data);
   useEffect(() => {
     const el = box.current;
     const key = `${format}:${unit}:${weeks}`;
-    if (!el || !current?.start_date || scrolled.current === key || !(weeks || format === "gantt") || !compact) return;
+    if (!el || !current?.start_date || scrolled.current === key || !(weeks || format === "gantt")) return;
     scrolled.current = key;
     el.scrollLeft = Math.max(0, sc.x(current.start_date) - 16);
   }, [format, unit, weeks, compact, current, sc]);
@@ -344,7 +364,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     const s = start > end ? end : start;
     const e = end < start ? start : end;
     const x = sc.x(s);
-    const w = Math.max(sc.px, sc.x(e) - x + sc.px);
+    const w = Math.max(MIN_BAR_W, sc.x(e) - x + sc.px);
     const rect = g.querySelector<SVGRectElement>("rect[data-body]");
     rect?.setAttribute("x", String(x));
     rect?.setAttribute("width", String(w));
@@ -454,7 +474,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
       // Back where it was: redraw it from its dates.
       const rect = g.querySelector<SVGRectElement>("rect[data-body]");
       const x0 = sc.x(d.start);
-      const w0 = Math.max(sc.px, sc.x(d.end) - x0 + sc.px);
+      const w0 = Math.max(MIN_BAR_W, sc.x(d.end) - x0 + sc.px);
       rect?.setAttribute("x", String(x0));
       rect?.setAttribute("width", String(w0));
       if (format === "waterfall") drawPhases(g, moved[item.id] ? rephase(item, d.start, d.end) : item.phases, sc, x0, w0);
@@ -519,11 +539,15 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               className={`flex min-w-0 flex-col justify-center bg-surface2 px-3 ${r.below ? "text-text2" : ""}`}
             >
               {gantt ? (
-                // D: the goal's name and, under it, its metric.
+                // D: the goal's name and, under it, its metric. The row's height must fit both
+                // lines (finding 6): a phone's tighter leading keeps the subtitle from being
+                // painted over by the next row.
                 <>
-                  <span className={`truncate leading-[18px] font-semibold ${compact ? "text-sm" : "text-[15px]"}`}>{r.title}</span>
+                  <span className={`truncate font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-[18px]"}`} title={r.title}>
+                    {r.title}
+                  </span>
                   {r.metric && (
-                    <span className="truncate text-xs leading-[15px] text-text2" data-testid="group-metric">
+                    <span className={`truncate text-text2 ${compact ? "text-[11px] leading-[13px]" : "text-xs leading-[15px]"}`} data-testid="group-metric" title={r.metric}>
                       {r.metric}
                     </span>
                   )}
@@ -531,7 +555,9 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               ) : (
                 <>
                   <span className="flex min-w-0 items-baseline gap-2">
-                    <span className="truncate text-[15px] leading-tight font-semibold">{r.title}</span>
+                    <span className={`truncate font-semibold ${compact ? "text-sm leading-[16px]" : "text-[15px] leading-tight"}`} title={r.title}>
+                      {r.title}
+                    </span>
                     {r.count != null && !r.below && (
                       <span className="tnum flex-none text-xs text-text2" data-testid="lane-count">
                         {r.count} {r.count === 1 ? "item" : "items"}
@@ -539,7 +565,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                     )}
                   </span>
                   {r.metric && (
-                    <span className="truncate text-xs text-text2" data-testid="group-metric">
+                    <span className={`truncate text-text2 ${compact ? "text-[11px] leading-[13px]" : "text-xs"}`} data-testid="group-metric" title={r.metric}>
                       {r.metric}
                     </span>
                   )}
@@ -554,34 +580,36 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               data-open={open === r.item.id ? "true" : undefined}
               style={{ height: l.rowH }}
               onClick={() => onOpen(r.item, { x: sc.x((moved[r.item.id] ?? barSpan(r.item))[0]), y: (l.y.get(r.item.id) ?? 0) + l.rowH })}
-              className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? "gap-1.5 px-2 text-[13px]" : "gap-2 px-3 text-[15px]"} ${open === r.item.id ? "bg-accent-soft" : ""}`}
+              className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? "gap-1 px-2 text-[13px]" : "gap-2 px-3 text-[15px]"} ${open === r.item.id ? "bg-accent-soft" : ""}`}
             >
               {r.place != null && (
                 <span className="tnum flex-none text-xs text-text2" data-testid="return-place" title="Its place in the return queue">
                   #{r.place}
                 </span>
               )}
-              {/* D: the item's code first (F-01), in the code type; one line of text, so the export reads "F-01 Setup checklist". */}
-              <span className="min-w-0 truncate">
-                {r.item.code && (
-                  <>
-                    <span className={`mr-1 font-mono text-text2 ${compact ? "text-[11px]" : "text-xs"}`} data-testid="label-code">
-                      {r.item.code}
-                    </span>{" "}
-                  </>
-                )}
-                <span data-testid="label-title" className={closedItem(r.item) ? "text-text2 line-through" : ""}>
-                  {r.item.title}
-                </span>
+              {/* findings 15/16: every row shows its name, in full width; a code (F-01) sits only
+                  in the tooltip, and only when it is this row's alone (some rows have none, and
+                  the mock has repeated one by mistake). The name always gets the row's space
+                  first; the chips after it shrink instead of squeezing it to nothing (finding 7). */}
+              <span
+                data-testid="label-title"
+                title={r.item.code && codeCounts.get(r.item.code) === 1 ? `${r.item.code} ${r.item.title}` : r.item.title}
+                className={`min-w-0 flex-1 truncate ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
+              >
+                {r.item.title}
               </span>
               {r.item.draft && !closedItem(r.item) && (
-                <span className="flex-none rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">
+                <span className="max-w-[48px] flex-none truncate rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag" title="Draft">
                   Draft
                 </span>
               )}
               {gantt && pulled?.has(r.item.id) && (
-                <span className="flex h-5 flex-none items-center rounded-full bg-warn-bg px-2 text-xs font-semibold text-warn" data-testid="pending-tag">
-                  pending
+                <span
+                  className="flex h-5 max-w-[104px] flex-none items-center truncate rounded-full bg-warn-bg px-2 text-xs font-semibold text-warn"
+                  data-testid="pending-tag"
+                  title="Pending decision"
+                >
+                  Pending decision
                 </span>
               )}
             </button>
@@ -735,13 +763,15 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             <Arrows data={data} l={l} sc={sc} moved={moved} />
             {l.rows.map((r) =>
               r.kind === "item" ? (
-                <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} flash={flash.has(r.item.id)} canDrag={canDrag} phased={format === "waterfall"} gantt={gantt} compact={compact} pulled={gantt && !!pulled?.has(r.item.id)} {...bars} />
+                <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} flash={flash.has(r.item.id)} canDrag={canDrag} phased={format === "waterfall"} gantt={gantt} compact={compact} pulled={gantt && !!pulled?.has(r.item.id)} width={chartW} {...bars} />
               ) : null,
             )}
             <PreviewGhost l={l} sc={sc} items={items} />
             {/* D: Today is a red line with a red "Today" pill under the ticks (D3: the line only on a phone). */}
             <g data-testid="today-mark" pointerEvents="none">
-              <line x1={today} x2={today} y1={compact ? l.top - 4 : lineTop(today, 0, baseline(0) - 25)} y2={l.height} stroke="var(--crit)" strokeWidth={1.5} data-testid="today-line" />
+              {/* finding 18: the line starts below the axis's own tick labels (never above
+                  TICK_H), so it never draws through them on its way down to the Today pill. */}
+              <line x1={today} x2={today} y1={compact ? l.top - 4 : lineTop(today, 0, Math.max(TICK_H + 2, baseline(0) - 25))} y2={l.height} stroke="var(--crit)" strokeWidth={1.5} data-testid="today-line" />
               {todayMark?.words && (
                 <>
                   <rect x={todayMark.side === "after" ? today + 2 : today - 40} y={baseline(0) - 17} width={38} height={14} rx={7} fill="var(--crit)" />
@@ -792,14 +822,31 @@ function Axis({ ticks, sc, height, format, drop, compact }: { ticks: { day: stri
         const x = sc.x(t.day);
         const next = ticks[n + 1] ? sc.x(ticks[n + 1].day) : sc.width;
         const labelled = format !== "gantt" || (weekly ? !everyOther || n % 2 === 0 : t.major || sc.px >= 20);
+        // finding 28: a narrow quarter header still names its year ("Q4 '26"), not just "Q4".
+        const [qWord, qYear] = t.label.split(" ");
+        const text = format !== "gantt" && next - x < 64 ? `${qWord}${qYear ? ` '${qYear.slice(-2)}` : ""}` : t.label;
+        const size = format !== "gantt" ? 13 : 11;
+        const weight = format !== "gantt" ? 600 : 400;
+        // finding 19: the right-most ticks keep their whole label inside the chart instead of
+        // running past its edge (where the svg clips them): they anchor from their end once
+        // they would otherwise overflow.
+        const clipped = x + 3 + textWidth(text, size, weight) > sc.width;
         return (
           <g key={t.day}>
             {format !== "gantt" && n % 2 === 1 && <rect x={x} y={0} width={next - x} height={height} fill="var(--bg)" opacity={0.5} />}
             {drop && <rect data-testid="quarter-drop" data-add-where={whereAttr("quarter", quarterValue(t.day))} data-add-label={t.label} x={x} y={0} width={next - x} height={height} fill="transparent" />}
             <line x1={x} x2={x} y1={0} y2={height} stroke="var(--line)" strokeWidth={t.major ? 1 : 0.5} />
             {labelled && (
-              <text x={x + 3} y={format !== "gantt" ? 24 : 22} fontSize={format !== "gantt" ? 13 : 11} fontWeight={format !== "gantt" ? 600 : 400} fill="var(--text2)" data-testid="axis-tick">
-                {format !== "gantt" && next - x < 64 ? t.label.split(" ")[0] : t.label}
+              <text
+                x={clipped ? Math.max(0, sc.width - 2) : x + 3}
+                y={format !== "gantt" ? 24 : 22}
+                fontSize={size}
+                fontWeight={weight}
+                fill="var(--text2)"
+                textAnchor={clipped ? "end" : "start"}
+                data-testid="axis-tick"
+              >
+                {text}
               </text>
             )}
           </g>
@@ -825,7 +872,9 @@ function Arrows({ data, l, sc, moved }: { data: Roadmap; l: Layout; sc: Scale; m
       const [itStart] = moved[it.id] ?? barSpan(it);
       const x1 = sc.x(depEnd) + sc.px;
       const y1 = dy + l.rowH / 2;
-      const x2 = sc.x(itStart);
+      // finding 40: the arrow's head sits beside the bar it points to, not drawn over its own
+      // edge and outline.
+      const x2 = sc.x(itStart) - 2;
       const y2 = y + l.rowH / 2;
       const mid = Math.max(x1 + 8, x2 - 8);
       out.push(
@@ -866,6 +915,9 @@ type BarProps = {
   compact?: boolean;
   /** D: pulled in by a change waiting for its decider (amber hatch). */
   pulled?: boolean;
+  /** finding 49: the chart's pixel width, so a suggestion's outline (its dates need not sit
+   * inside the chart's own span) is drawn no wider than the chart itself. */
+  width: number;
   onDown: (e: ReactPointerEvent<SVGGElement>, item: Item) => void;
   onKeyOpen: (item: Item) => void;
   onKeyMove: (item: Item, dir: 1 | -1, resize: boolean) => void;
@@ -874,26 +926,37 @@ type BarProps = {
   onSuggestion: (item: Item, anchor: { x: number; y: number }) => void;
 };
 
-const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phased, gantt = false, compact = false, pulled = false, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: BarProps) {
+const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phased, gantt = false, compact = false, pulled = false, width, onDown, onKeyOpen, onKeyMove, onKeyEnd, onKeyCancel, onSuggestion }: BarProps) {
   const [start, end] = span ?? barSpan(item);
   const kind = barKind(item);
   const red = broken(item).length > 0;
   const amber = !red && item.flags.length > 0;
   const x = sc.x(start);
-  const w = Math.max(sc.px, sc.x(end) - x + sc.px);
+  // finding 11: a bar never draws thinner than MIN_BAR_W, so a short slice at a zoomed-out
+  // scale stays a real, clickable shape rather than a few-pixel blob.
+  const w = Math.max(MIN_BAR_W, sc.x(end) - x + sc.px);
   const pad = Math.round(h * 0.2);
   const fill = closedItem(item) ? "var(--na-bg)" : pulled ? "url(#simple-pulled)" : kind === "estimated" ? "url(#simple-hatch)" : kind === "draft" ? "var(--surface)" : "var(--accent)";
-  const stroke = red ? "var(--crit)" : amber || pulled ? "var(--warn)" : kind === "dated" ? "var(--accent-ink)" : "var(--accent)";
+  // finding 17: an undated (draft/estimated) bar's outline uses the line token, not the accent,
+  // so it keeps contrast against a dark background the way a dated bar's accent-ink does.
+  const stroke = red ? "var(--crit)" : amber || pulled ? "var(--warn)" : kind === "dated" ? "var(--accent-ink)" : "var(--line-strong)";
   const s = item.suggestion;
   // The suggestion's handle sits left of the bar (a broken link's callout is on its right).
   const left = Math.min(x, s ? sc.x(s.start_date) : x) - 14;
   const mark = left >= 10 ? left : Math.max(sc.x(s?.end_date ?? end), x + w) + sc.px + 12;
   // A moved bar's phases as the API will work them out again (dated gates stay).
   const phases = phased && span ? rephase(item, start, end) : item.phases;
-  const phaseWords = phased ? `, ${phases.map((p) => `${p.key} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
+  // finding 14: plain words for a screen reader, not the API's enum values.
+  const phaseWords = phased ? `, ${phases.map((p) => `${phaseWord(p.key)} to ${shortDay(p.end)}${p.estimated ? " (estimated)" : ""}`).join(", ")}` : "";
   const sliced = !phased && planned(item);
   const fixed = closedItem(item) || planned(item);
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${phaseWords}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "Estimated by Oracle" : sourceWord(item.source)}${phaseWords}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && planned(item) && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? (phased ? ". Arrows move the whole item" : ". Arrows move it, Shift+arrows its end") + ", sent when you pause; Escape cancels" : ""}`;
+  // finding 49: the suggestion's dashed outline is clamped to the chart's own width (its dates
+  // can run past the chart's span); a small arrow says it continues past the edge.
+  const sx = sc.x(s?.start_date ?? start);
+  const sRawW = s ? Math.max(MIN_BAR_W, sc.x(s.end_date) - sx + sc.px) : 0;
+  const sClampedW = Math.max(MIN_BAR_W, Math.min(sRawW, width - sx));
+  const sOverflows = s != null && sx + sRawW > width + 0.5;
   return (
     <g>
       <g
@@ -981,9 +1044,10 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
           <rect
             data-testid="suggestion-outline"
             data-item={item.key}
-            x={sc.x(s.start_date)}
+            data-clamped={sOverflows ? "true" : undefined}
+            x={sx}
             y={y + pad - 3}
-            width={Math.max(sc.px, sc.x(s.end_date) - sc.x(s.start_date) + sc.px)}
+            width={sClampedW}
             height={h - 2 * pad + 6}
             rx={6}
             fill="none"
@@ -992,12 +1056,23 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
             strokeDasharray="2 3"
             pointerEvents="none"
           />
+          {/* finding 49: a small arrow says the suggested span keeps going past the chart's edge. */}
+          {sOverflows && (
+            <path
+              data-testid="suggestion-continues"
+              d={`M${sx + sClampedW - 7},${y + h / 2 - 5} l7,5 l-7,5`}
+              fill="none"
+              stroke="var(--accent-ink)"
+              strokeWidth={1.5}
+              pointerEvents="none"
+            />
+          )}
           <g
             data-testid="suggestion-open"
             data-item={item.key}
             role="button"
             tabIndex={0}
-            aria-label={`Oracle's date suggestion for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}
+            aria-label={`Oracle suggests dates for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}
             className="cursor-pointer"
             transform={`translate(${mark}, ${y + h / 2})`}
             onClick={() => onSuggestion(item, { x: sc.x(s.start_date), y: y + h })}
@@ -1005,6 +1080,7 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
               if (e.key === "Enter" || e.key === " ") onSuggestion(item, { x: sc.x(s.start_date), y: y + h });
             }}
           >
+            <title>{`Oracle suggests dates for ${item.title}`}</title>
             <circle r={9} fill="var(--surface)" stroke="var(--accent-ink)" strokeDasharray="2 2" />
             <text textAnchor="middle" y={4} fontSize={11} fontWeight={700} fill="var(--accent-ink)">
               ?
@@ -1023,7 +1099,8 @@ const Bar = memo(function Bar({ item, y, h, sc, span, open, flash, canDrag, phas
 function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: number; h: number; sc: Scale; gantt: boolean; open: boolean; compact: boolean }) {
   const dated = item.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : 1));
   const feature = dated[0]?.feature_code ?? item.code ?? item.key;
-  const box = (x: (typeof dated)[number]) => ({ x: sc.x(x.start_date!), w: Math.max(sc.px, sc.x(x.end_date!) - sc.x(x.start_date!) + sc.px) });
+  // finding 11: a slice is never a sub-24px blob, even a one-day slice at a zoomed-out scale.
+  const box = (x: (typeof dated)[number]) => ({ x: sc.x(x.start_date!), w: Math.max(MIN_BAR_W, sc.x(x.end_date!) - sc.x(x.start_date!) + sc.px) });
   const size = compact ? 10.5 : 11;
   return (
     <g>
@@ -1077,7 +1154,7 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
               height={h}
               rx={4}
               fill={fill}
-              stroke={pm && gantt ? "var(--accent)" : edge}
+              stroke={pm && gantt ? "var(--line-strong)" : edge}
               strokeWidth={gantt && open ? 2.5 : 1}
               strokeDasharray={pm ? "3 2" : undefined}
             />

@@ -21,6 +21,7 @@ import {
   quarterValue,
   scale,
   shortDay,
+  sourceWord,
   whereAttr,
   type Item,
   type Lane,
@@ -54,6 +55,11 @@ const MARK_ROW = 20;
 /** A lane's row pitch and its pills' height (B2: 28 and 20); a lane is its rows plus 8 px. */
 const RH = 28;
 const BAR_H = 20;
+/** QA2 finding 11: a slice or bar is never drawn narrower than this, so a short run of work
+ * still reads as a pill, not an unreadable blob, at a coarse scale. */
+const MIN_PILL_W = 28;
+/** The phone's lane runs carry no text, so a smaller floor (near B3's bar height) is enough. */
+const MIN_RUN_W = 12;
 const LONG_PRESS_MS = 450;
 /** B3: the Today row, the month row, the flags row; each lane's name line, gap and bar row. */
 const P_TODAY_H = 22;
@@ -109,7 +115,7 @@ export type LaneModel = { key: string; title: string; kind: "group" | "pm" | "be
 const datedSlices = (i: Item): Slice[] => i.slices.filter((x) => x.start_date && x.end_date).sort((a, b) => (a.start_date! < b.start_date! ? -1 : a.start_date! > b.start_date! ? 1 : 0));
 const pmSlice = (x: Slice) => x.pm_owned || x.effort_weeks == null;
 /** Work the PM does with no engineering: every dated slice of the item is PM-owned. */
-const pmItem = (i: Item) => {
+export const pmItem = (i: Item) => {
   const d = datedSlices(i);
   return d.length > 0 && d.every(pmSlice);
 };
@@ -199,8 +205,11 @@ function look(p: Pick<Piece, "milestone" | "pm">, item: Item | null, cut: boolea
   if (p.milestone) return { fill: mBg(p.milestone), stroke: mLine(p.milestone), ink: mLine(p.milestone) };
   const kind = item ? barKind(item) : "dated";
   if (kind === "draft") return { fill: "var(--simple-paper)", stroke: "var(--line-strong)", dash: "6 4", ink: "var(--text2)" };
-  if (kind === "estimated") return { fill: "url(#lanes-estimated)", stroke: "var(--line-strong)", ink: "var(--text)" };
-  return { fill: "var(--na-bg)", stroke: "var(--line-strong)", ink: "var(--text)" };
+  // QA2 finding 17: --line-strong on --na-bg reads near 3:1 in dark mode (barely a UI-component
+  // minimum, too faint for a border meant to carry the pill's whole shape); --text2 keeps a
+  // readable line in both themes.
+  if (kind === "estimated") return { fill: "url(#lanes-estimated)", stroke: "var(--text2)", ink: "var(--text)" };
+  return { fill: "var(--na-bg)", stroke: "var(--text2)", ink: "var(--text)" };
 }
 
 /** The days the chart spans: every piece, milestone, key date, suggestion and today, two days either side (B2: 17 Oct to 31 Jan for 19 Oct to 29 Jan). */
@@ -408,20 +417,28 @@ function useMarks(data: Roadmap, sc: Scale, width: number, compact: boolean, fon
     }
     for (const m of data.milestones.filter((x) => x.date && !(x.start_date && x.end_date))) list.push({ key: `track-${m.id}`, kind: "track", x: sc.x(m.date!) + sc.px / 2, words: m.name, side: "after" });
     for (const k of data.key_dates ?? []) list.push({ key: `key-${k.id}`, kind: "key", x: sc.x(k.date) + sc.px / 2, words: k.name, side: "after" });
+    // QA2 finding 18: milestone ends, tracks and key dates are built in that fixed order above,
+    // not by date; placeMarks fills rows in list order, so sort by x first (its rows, and so its
+    // labels, then read left to right, earliest date first, instead of by category).
+    list.sort((a, b) => a.x - b.x);
     return placeMarks(list, width, compact ? 11.5 : 12.5);
   }, [data, sc, width, compact, fonts]);
 }
 
 /** The marks drawn: B2's flags ("M1 ends 13 Nov") right of the line's top, the key dates' and tracks' diamonds; `rowY` is a mark row's middle. */
-function Marks({ data, marks, sc, rowY, size, height, poleTop }: { data: Roadmap; marks: Mark[]; sc: Scale; rowY: (row: number) => number; size: number; height: number; poleTop: number }) {
+function Marks({ data, marks, sc, rowY, size, height, poleTop, width }: { data: Roadmap; marks: Mark[]; sc: Scale; rowY: (row: number) => number; size: number; height: number; poleTop: number; width: number }) {
   const many = planPrds(data).size > 1;
+  // QA2 finding 19: the last day's column can sit a hair past `width` (its pixel cell runs to
+  // the next, off-chart day); clamp every mark's x so its flag/diamond and label never draw
+  // past the chart's own right edge.
+  const clampX = (v: number) => Math.min(v, width);
   return (
     <>
       {planMilestones(data).map((m) => {
         const mk = marks.find((x) => x.key === `end-${m.id}`);
         const code = m.name.split(/[\s·]/)[0];
         const prd = many ? milestonePrd(data, m) : null;
-        const x = sc.x(m.end_date!) + sc.px;
+        const x = clampX(sc.x(m.end_date!) + sc.px);
         const name = `${m.name.replace(/\s*·\s*/, " ")}${prd ? ` (${prd.title})` : ""} ends ${dm(m.end_date!)}`;
         const cy = rowY(mk?.row ?? 0);
         const after = mk?.side === "after";
@@ -450,7 +467,7 @@ function Marks({ data, marks, sc, rowY, size, height, poleTop }: { data: Roadmap
           if (!mk) return null;
           const cy = rowY(mk.row);
           return (
-            <g key={m.id} data-testid="track-milestone" data-row={mk.row} transform={`translate(${mk.x}, ${cy})`}>
+            <g key={m.id} data-testid="track-milestone" data-row={mk.row} transform={`translate(${clampX(mk.x)}, ${cy})`}>
               <rect x={-5} y={-5} width={10} height={10} transform="rotate(45)" fill="var(--warn)" />
               <text x={mk.side === "after" ? 9 : -9} dominantBaseline="central" fontSize={size} fontWeight={700} fill="var(--text2)" textAnchor={mk.side === "after" ? "start" : "end"}>
                 {m.name}
@@ -462,7 +479,7 @@ function Marks({ data, marks, sc, rowY, size, height, poleTop }: { data: Roadmap
         const mk = marks.find((x) => x.key === `key-${k.id}`);
         if (!mk) return null;
         const cy = rowY(mk.row);
-        const kx = mk.x;
+        const kx = clampX(mk.x);
         return (
           <g key={k.id} data-testid="key-date-marker" data-name={k.name} data-date={k.date} data-draft={k.in_draft ? "true" : undefined} data-row={mk.row} pointerEvents="none">
             <title>{`${k.name} · ${shortDay(k.date)}${k.note ? ` · ${k.note}` : ""} (${k.roadmap.title})`}</title>
@@ -783,7 +800,7 @@ function DesktopLanes({ data, lane, canDrag, moved, open, onOpen, onMove, onKeyM
               <g data-testid="today-mark" pointerEvents="none">
                 <line data-testid="today-line" x1={xt} x2={xt} y1={MONTH_H + WEEK_H - 2} y2={height} stroke="var(--crit)" strokeWidth={2} />
               </g>
-              <Marks data={data} marks={marks} sc={sc} rowY={rowY} size={12.5} height={height} poleTop={MONTH_H + WEEK_H + 6} />
+              <Marks data={data} marks={marks} sc={sc} rowY={rowY} size={12.5} height={height} poleTop={MONTH_H + WEEK_H + 6} width={W} />
               <Arrows data={data} units={units} y={layout.y} sc={sc} moved={moved} />
               {lanes.map((l, n) =>
                 l.units.map((u) => (
@@ -858,7 +875,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   const fixed = closedItem(item) || sliced;
   const box = (p: Piece) => {
     const x = sc.x(p.start);
-    return { x, w: Math.max(sc.px, sc.x(p.end) - x + sc.px) };
+    return { x, w: Math.max(MIN_PILL_W, sc.px, sc.x(p.end) - x + sc.px) };
   };
   const all = pieces.map(box);
   const x0 = Math.min(...all.map((b) => b.x));
@@ -866,7 +883,8 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   const s = item.suggestion;
   const left = Math.min(x0, s ? sc.x(s.start_date) : x0) - 14;
   const mark = left >= 10 ? left : Math.min(width - 10, Math.max(sc.x(s?.end_date ?? end), x1) + sc.px + 12);
-  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${item.estimated ? "estimated" : item.source}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
+  // QA2 finding 14: a reader's words, not the API's raw enum (sourceWord, from ./_lib).
+  const label = `${item.title}: ${shortDay(start)} to ${shortDay(end)}, ${sourceWord(item.estimated ? "estimated" : item.source)}${red ? ", a broken link" : ""}${sliced ? `, ${item.slices.map((x) => `${x.code} in ${x.milestone} ${x.milestone_name}`).join(", ")}` : ""}${canDrag && sliced && !closedItem(item) ? ". Its dates follow the PRD's plan: change them in the PRD" : ""}${canDrag && !fixed ? ". Arrows move it, Shift+arrows its end, sent when you pause; Escape cancels" : ""}`;
   const strokeOf = (base: string) => (red ? "var(--crit)" : amber ? "var(--warn)" : base);
   const strokeW = red || amber || open ? 2.5 : 1.5;
   return (
@@ -902,6 +920,11 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
         data-end={end}
         data-row={unit.row}
         data-lane={lane}
+        /* The pill's own drawn bounds in chart pixels (x0/x1 can differ from start/end's scale
+         * position once slices are stacked and widened to MIN_PILL_W): a broken-link callout
+         * placed beside this bar reads these instead of redoing the scale math. */
+        data-x0={x0}
+        data-x1={x1}
         data-open={open ? "true" : undefined}
         data-flash={flash ? "true" : undefined}
         role="button"
@@ -983,20 +1006,31 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
       </g>
       {s && (
         <g>
-          <rect
-            data-testid="suggestion-outline"
-            data-item={item.key}
-            x={sc.x(s.start_date)}
-            y={y - 3}
-            width={Math.max(sc.px, sc.x(s.end_date) - sc.x(s.start_date) + sc.px)}
-            height={BAR_H + 6}
-            rx={(BAR_H + 6) / 2}
-            fill="none"
-            stroke="var(--accent-ink)"
-            strokeWidth={1.5}
-            strokeDasharray="2 3"
-            pointerEvents="none"
-          />
+          {/* QA2 finding 49: clamped to the chart's own width, belt-and-braces alongside
+           * spanOf (which already grows the chart to fit every suggestion). */}
+          {(() => {
+            const sx0 = Math.max(0, sc.x(s.start_date));
+            const sx1 = Math.min(width, Math.max(sc.x(s.end_date) + sc.px, sx0 + MIN_PILL_W));
+            return (
+              <rect
+                data-testid="suggestion-outline"
+                data-item={item.key}
+                x={sx0}
+                y={y - 3}
+                width={Math.max(1, sx1 - sx0)}
+                height={BAR_H + 6}
+                rx={(BAR_H + 6) / 2}
+                fill="none"
+                stroke="var(--accent-ink)"
+                strokeWidth={1.5}
+                strokeDasharray="2 3"
+                pointerEvents="none"
+              >
+                {/* QA2 finding 21: an empty dashed box says what it is on hover. */}
+                <title>{`Oracle suggests dates for ${item.title}: ${shortDay(s.start_date)} to ${shortDay(s.end_date)}`}</title>
+              </rect>
+            );
+          })()}
           <g
             data-testid="suggestion-open"
             data-item={item.key}
@@ -1010,6 +1044,8 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
               if (e.key === "Enter" || e.key === " ") onSuggestion(item, { x: sc.x(s.start_date), y: y + BAR_H });
             }}
           >
+            {/* QA2 finding 21: the lone "?" says what it is on hover, not just to a screen reader. */}
+            <title>Oracle suggests dates</title>
             <circle r={9} fill="var(--simple-paper)" stroke="var(--accent-ink)" strokeDasharray="2 2" />
             <text textAnchor="middle" y={4} fontSize={11} fontWeight={700} fill="var(--accent-ink)">
               ?
@@ -1079,7 +1115,9 @@ function Arrows({ data, units, y, sc, moved }: { data: Roadmap; units: Map<strin
       const tone = flag ? (flag.state === "red" ? "red" : "amber") : "ok";
       const x1 = sc.x(theirs[1]) + sc.px;
       const y1 = dy + 4 + BAR_H / 2;
-      const x2 = sc.x(mine[0]);
+      // QA2 finding 40: the arrow used to land exactly on the dependent bar's left edge, its
+      // head sitting on top of the pill; stop a few px short so it reads beside the bar.
+      const x2 = sc.x(mine[0]) - 3;
       const y2 = ty + 4 + BAR_H / 2;
       const mid = Math.max(x1 + 8, x2 - 8);
       out.push(
@@ -1120,9 +1158,9 @@ function LanesLegend({ data, lanes, noWork }: { data: Roadmap; lanes: LaneModel[
     <div data-testid="legend" className="flex flex-wrap gap-x-4 gap-y-1.5 px-4 pt-2 text-[13px] leading-[18px] text-text-faint">
       {codes.map((c) => item(c, <i aria-hidden className={sw} style={{ background: mBg(c), borderColor: mLine(c) }} />, c))}
       {pieces.some(({ p }) => p.pm) && item("pm", <i aria-hidden className={`${sw} border-dashed`} style={{ borderColor: "var(--prd-pm)" }} />, "PM-owned, no engineering")}
-      {plain.some((i) => barKind(i) === "dated") && item("plain", <i aria-hidden className={sw} style={{ background: "var(--na-bg)", borderColor: "var(--line-strong)" }} />, "Not in a milestone")}
+      {plain.some((i) => barKind(i) === "dated") && item("plain", <i aria-hidden className={sw} style={{ background: "var(--na-bg)", borderColor: "var(--text2)" }} />, "Not in a milestone")}
       {plain.some((i) => barKind(i) === "estimated") &&
-        item("estimated", <i aria-hidden className={sw} style={{ background: "repeating-linear-gradient(135deg, var(--line-strong) 0 1.5px, var(--na-bg) 1.5px 5px)", borderColor: "var(--line-strong)" }} />, "Estimated (the horizon’s window)")}
+        item("estimated", <i aria-hidden className={sw} style={{ background: "repeating-linear-gradient(135deg, var(--line-strong) 0 1.5px, var(--na-bg) 1.5px 5px)", borderColor: "var(--text2)" }} />, "Estimated (the horizon’s window)")}
       {plain.some((i) => barKind(i) === "draft") && item("draft", <i aria-hidden className={`${sw} border-dashed`} style={{ borderColor: "var(--line-strong)" }} />, "Draft")}
       {item("today", <i aria-hidden className="inline-block h-3.5 w-0.5 flex-none bg-crit" />, `Today ${dm(data.today)}`)}
       {noWork.length > 0 &&
@@ -1133,6 +1171,9 @@ function LanesLegend({ data, lanes, noWork }: { data: Roadmap; lanes: LaneModel[
       {(data.key_dates?.length ?? 0) > 0 && item("key", <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, "Key date")}
       {data.milestones.some((m) => m.date && !(m.start_date && m.end_date)) && item("track", <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-warn" />, "A track’s milestone")}
       {data.items.some((i) => broken(i).length && !closedItem(i)) && item("broken", <i aria-hidden className={sw} style={{ borderColor: "var(--crit)", borderWidth: 2 }} />, "A broken link")}
+      {/* QA2 finding 40: the amber dependency arrow (accepted as a risk) had no legend entry of its own. */}
+      {data.items.some((i) => i.flags.some((f) => f.kind === "dependency_order" && f.state !== "red")) &&
+        item("dep-amber", <i aria-hidden className="inline-block h-0.5 w-[18px] flex-none bg-warn" />, "Dependency order accepted as a risk (amber arrow)")}
     </div>
   );
 }
@@ -1244,9 +1285,12 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
             </g>
             <Grid months={months} mondays={[]} sc={sc} top={axisH} height={height} weeks={false} noWork={noWork} />
             <g data-testid="today-mark" pointerEvents="none">
-              <line data-testid="today-line" x1={xt} x2={xt} y1={20} y2={height} stroke="var(--crit)" strokeWidth={2} />
+              {/* QA2 finding 18: the line used to start inside the month row (y=20), drawing
+               * straight through the month label's text; B2's own line only starts once its
+               * header rows are behind it, so B3's does too. */}
+              <line data-testid="today-line" x1={xt} x2={xt} y1={axisH} y2={height} stroke="var(--crit)" strokeWidth={2} />
             </g>
-            <Marks data={data} marks={marks} sc={sc} rowY={rowY} size={11.5} height={height} poleTop={axisH + 4} />
+            <Marks data={data} marks={marks} sc={sc} rowY={rowY} size={11.5} height={height} poleTop={axisH + 4} width={W} />
             {lanes.map((l, n) => {
               const g = geo[n];
               const on = l.key === openKey;
@@ -1275,6 +1319,9 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                     }
                   }}
                 >
+                  {/* QA2 finding 6: a hover/long-press title carries the lane's full name even
+                   * if a very narrow phone ever squeezes the drawn text against its neighbours. */}
+                  <title>{l.title}</title>
                   <rect x={0} y={g.top} width={W} height={g.height} fill="transparent" />
                   {/* The lane's name on the paper (the lines run behind it, B3). */}
                   <rect x={0} y={midY - 9} width={words + 4} height={18} rx={4} fill="var(--simple-paper)" />
@@ -1297,7 +1344,7 @@ function PhoneLanes({ data, lane, open, onOpen, chartRef, noWork = [], moved }: 
                   {runs[n].runs.map((r) => {
                     const c = look(r, r.plain, l.kind === "below");
                     const x = sc.x(r.start);
-                    const w = Math.max(sc.px, sc.x(r.end) - x + sc.px);
+                    const w = Math.max(MIN_RUN_W, sc.px, sc.x(r.end) - x + sc.px);
                     return (
                       <rect
                         key={r.key}

@@ -444,10 +444,19 @@ def _fix_plan(
         new_end = entry.resolved.start.date - one
         shift = new_end - dep.resolved.end.date
         return {dep.row.id: (dep.resolved.start.date + shift, new_end)}
+    # #9: every direct dependent of `dep` that starts too early moves, not only the one
+    # whose callout was clicked (two items can share a dependency, each estimated or
+    # slice-dated); the move then walks forward transitively through each moved item's
+    # own dependents.
     moves: dict[uuid.UUID, tuple[date, date]] = {}
-    shift = dep.resolved.end.date + one - entry.resolved.start.date
-    moves[entry.row.id] = (entry.resolved.start.date + shift, entry.resolved.end.date + shift)
-    queue = deque([entry.row.id])
+    queue: deque[uuid.UUID] = deque()
+    for nid in dep.needed_by:
+        n = by_id.get(nid)
+        if n is None or n.status == "cut" or n.resolved.start.date > dep.resolved.end.date:
+            continue
+        delta = dep.resolved.end.date + one - n.resolved.start.date
+        moves[nid] = (n.resolved.start.date + delta, n.resolved.end.date + delta)
+        queue.append(nid)
     while queue:
         cur = queue.popleft()
         end = moves[cur][1]
