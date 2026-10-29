@@ -480,6 +480,11 @@ export function SimpleRoadmap() {
   );
   const proposals = useQuery("simple-proposals", () => unwrap(api.GET("/v1/simple/changes", { params: { query: { status: "proposed" } } })));
   const drafts = useQuery("simple-drafts", () => unwrap(api.GET("/v1/simple/drafts")));
+  // Who may start a review is the start sheet's own per-PRD answer (meetings.may_start: an owner,
+  // or a PRD's decider), not who decides this roadmap's items; the same read the sheet makes.
+  const startOptions = useQuery("simple-meeting-options||", () =>
+    unwrap(api.GET("/v1/simple/meetings/options", { params: { query: { prd: undefined, occurrence: undefined } } })),
+  );
   const reload = useCallback(async () => {
     await Promise.all([roadmap.reload(), proposals.reload(), drafts.reload()]);
   }, [roadmap, proposals, drafts]);
@@ -729,7 +734,7 @@ export function SimpleRoadmap() {
   // does, per_item "owner" on start_simple_meeting); gate the button here too, not only
   // inside the sheet, so it reads as disabled rather than silently failing once opened.
   // Below an owner, deciding an item on this view is the item answer.
-  const mayStartReview = can("start_simple_meeting", data.items.some((i) => i.can_decide));
+  const mayStartReview = can("start_simple_meeting", !!startOptions.data?.prds.some((p) => p.can_start));
   const waiting =
     data.items.filter((i) => i.can_decide && broken(i).length).length + data.items.filter((i) => i.suggestion?.can_decide).length + allProposals.filter((c) => c.can_decide).length;
   const qList = quarters(data.windows.now.start, data.windows.later.end);

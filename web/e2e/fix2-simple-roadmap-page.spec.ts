@@ -45,17 +45,28 @@ test.describe("desktop", () => {
   });
 
   /**
-   * fix2 review (major): start_simple_meeting is per item: an approver who decides an item on
-   * the Roadmap (Avery Lane owns the alerts track in "simple-deciders") may start its review,
-   * so the button stays enabled for them, not only for an owner.
+   * fix2 review (major, re-review): who may start a review is the start sheet's own answer per
+   * PRD (meetings.may_start: an owner, or the PRD's decider), not who decides this roadmap's
+   * items. In "simple-deciders" Dana Decider (an approver) decides Guided setup, so she may start
+   * one; Avery Lane owns the alerts track but decides no PRD, so the button is off for him, with
+   * the reason, instead of opening a sheet that turns him away.
    */
-  test("Start review is enabled for an approver who decides an item here", async ({ page, context }) => {
+  test("Start review is enabled for a PRD's decider below owner", async ({ page, context }) => {
     await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
-    await open(page, "avery.lane@example.com");
+    await open(page, "dana.decider@example.com");
     const btn = page.getByRole("button", { name: "Start review" });
     await expect(btn).toBeEnabled();
     await btn.click();
     await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByTestId("start-not-allowed")).toHaveCount(0);
+  });
+
+  test("Start review is off for a track owner who decides no PRD", async ({ page, context }) => {
+    await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
+    await open(page, "avery.lane@example.com");
+    const btn = page.getByRole("button", { name: "Start review" });
+    await expect(btn).toBeDisabled();
+    await expect(page.getByTestId("start-review-reason")).toHaveText("Only an owner or the PRD's decider can start a review");
   });
 
   for (const email of ["commenter@example.com", "viewer@example.com"]) {
