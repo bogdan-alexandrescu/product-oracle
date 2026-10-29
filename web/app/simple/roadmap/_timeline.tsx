@@ -1105,7 +1105,7 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
 const FLASH_MS = 2500;
 
 /** roadmap-talk: the items chat cards just applied to ("simple:applied"; Apply all sends several), each for ~2.5 s. */
-function useAppliedFlash(): ReadonlySet<string> {
+export function useAppliedFlash(): ReadonlySet<string> {
   const [flash, setFlash] = useState<ReadonlySet<string>>(() => new Set());
   useEffect(() => {
     let timer = 0;
@@ -1126,7 +1126,7 @@ function useAppliedFlash(): ReadonlySet<string> {
 }
 
 /** S9: a chat card's Preview, ghosted on its bar ("simple:preview"): new dates, horizon, title, milestone, or a cut strike. */
-function PreviewGhost({ l, sc, items }: { l: Layout; sc: Scale; items: Map<string, Item> }) {
+export function PreviewGhost({ l, sc, items }: { l: Pick<Layout, "y" | "rowH">; sc: Scale; items: Map<string, Item> }) {
   const [preview, setPreview] = useState<ChatPreview>(() => lastPreview()?.preview ?? null);
   useEffect(() => {
     const on = (e: Event) => setPreview((e as CustomEvent<PreviewDetail>).detail?.preview ?? null);

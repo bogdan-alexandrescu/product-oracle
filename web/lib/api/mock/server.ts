@@ -952,7 +952,7 @@ function seedSimpleWalkScenario(): Db {
  */
 const UNDATED_PLAN_FEATURE = "F-11";
 
-function seedSimplePlanScenario(): Db {
+function seedSimplePlanScenario(datedAll = false): Db {
   const db = seedSimpleHomeOnePrdScenario();
   const rm = db.simple_roadmap!;
   rm.plan = seedPlan();
@@ -977,7 +977,7 @@ function seedSimplePlanScenario(): Db {
     const name = planFeatureName(code) ?? of[0].name;
     // Team invites (F-05, a slice in M1 and one in M2) and Self-serve checkout (F-11, roadmap-gantt) have no dates of their own:
     // Oracle's date suggestions for them, in the tray's "Dates to confirm", are their slices'.
-    const dated = code === "F-05" || code === UNDATED_PLAN_FEATURE ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
+    const dated = !datedAll && (code === "F-05" || code === UNDATED_PLAN_FEATURE) ? {} : { start: days(from, start), end: days(from, end), source: "typed" as const };
     rm.items.push({ key: k, title: name, horizon, roadmap: "onboarding-roadmap", track: "onboarding", confidence: "medium", ...dated, section, heading: `${code} ${name}` });
     rm.ids[k] = stableUuid(`simple-item/${k}`);
   }
@@ -989,6 +989,30 @@ function seedSimplePlanScenario(): Db {
     id: db.simple_one_pager.doc.id, slug: PLAN_PRD_SLUG, title: db.simple_one_pager.doc.title, status: "draft", kind: "prd",
     template: null, template_version: null, theme: null, created_at: at, updated_at: at,
   });
+  return db;
+}
+
+/**
+ * timeline-overlap B2, the "simple-plan-lanes" scenario: "simple-plan" whose onboarding roadmap
+ * holds only the plan's work, as the owner's picked frame draws it (every piece planned, nothing
+ * broken or waiting): the cut tour, the welcome video and the draft nudges gone, the checklist's
+ * gate and the import's dependency dropped, Team invites and Self-serve checkout dated like the
+ * rest, and no key dates on it. Invented data.
+ */
+function seedSimplePlanLanesScenario(): Db {
+  const db = seedSimplePlanScenario(true);
+  const rm = db.simple_roadmap!;
+  const gone = new Set(rm.items.filter((x) => x.roadmap === "onboarding-roadmap" && x.key !== "setup-checklist" && x.key !== "setup-import" && !x.key.startsWith("plan-")).map((x) => x.key));
+  rm.items = rm.items.filter((x) => !gone.has(x.key));
+  for (const k of gone) delete rm.ids[k];
+  for (const x of rm.items) {
+    if (x.key === "setup-checklist") delete x.gates;
+    if (x.key === "setup-import") {
+      delete x.depends;
+      delete x.risks;
+    }
+  }
+  if (rm.key_dates) rm.key_dates = { ...rm.key_dates, "onboarding-roadmap": [] };
   return db;
 }
 
@@ -2739,7 +2763,9 @@ function load(): Db {
               : scenario === "simple-walk"
                 ? seedSimpleWalkScenario
               : scenario === "simple-plan"
-                ? seedSimplePlanScenario
+                ? () => seedSimplePlanScenario()
+              : scenario === "simple-plan-lanes"
+                ? seedSimplePlanLanesScenario
               : scenario === "simple-plan-two"
                 ? seedSimplePlanTwoScenario
               : scenario === "simple-plan-undated"
