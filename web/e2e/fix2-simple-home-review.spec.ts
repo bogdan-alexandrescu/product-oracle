@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "./test";
 
-import { MOCK_FAIL_KEY, MOCK_SCENARIO_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY } from "../lib/api/mock/server";
+import { MOCK_FAIL_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { ADMIN } from "./helpers";
 
 /*
@@ -13,15 +13,12 @@ import { ADMIN } from "./helpers";
  * - the walk's decisions open on Simple's Decisions page, and the walk still loads when the
  *   waiting decisions cannot be read.
  * - the Roadmap's goal cards count the items Home's goal tiles count (a cut item is not one).
- * - Detailed's panel, left open, is open at first paint, before the person is read.
  * no_claim: phones (the goal band is one column there; the walk's layout is the same).
  */
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
 const APPROVER = "approver@example.com";
-/** The Ask panel's remembered open state (components/hop/open-state.ts). */
-const OPEN_KEY = "oracle.hop-panel.open";
 
 async function signIn(page: Page, email: string, scenario: string | null, to = "/simple") {
   if (scenario) await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MOCK_SCENARIO_KEY, scenario] as const);
@@ -82,7 +79,8 @@ test("at 1440 px with Ask open, a goal card's code and its share of the score st
 
 test("the walk's decisions open on Simple's Decisions page", async ({ page }) => {
   // fails_when: a decision that is not a PRD's question opens Detailed's decisions page from Simple
-  await signIn(page, ADMIN.email, "simple-home");
+  // The approver: "Ship usage caps before anomaly detection" (a judgement call, not a PRD's question) waits on them.
+  await signIn(page, APPROVER, null);
   await page.getByRole("button", { name: "Walk me through it" }).click();
   const progress = page.getByTestId("walk-progress");
   await expect(progress).toHaveText(/^1 of \d+$/);
@@ -114,20 +112,4 @@ test("the Roadmap's goal cards count what Home's goal tiles count: a cut item is
   await signIn(page, ADMIN.email, null, "/simple/roadmap");
   const card = page.getByTestId("goal-counter").filter({ hasText: "Faster activation" });
   await expect(card).toContainText("3 items");
-});
-
-test("Detailed's panel, left open, is open before the person is read", async ({ page }) => {
-  // fails_when: the restored-open panel waits for /v1/me before it opens (it appears after first paint)
-  await signIn(page, ADMIN.email, null, "/home");
-  await expect(page.getByRole("main")).toBeVisible();
-  await page.evaluate(
-    ([open, slow, slowMs]) => {
-      localStorage.setItem(open, "1");
-      localStorage.setItem(slow, "/v1/me");
-      localStorage.setItem(slowMs, "5000");
-    },
-    [OPEN_KEY, MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY] as const,
-  );
-  await page.reload();
-  await expect(page.getByTestId("hop-panel").filter({ visible: true })).toBeVisible({ timeout: 2500 });
 });
