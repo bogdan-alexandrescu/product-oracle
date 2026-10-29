@@ -14,6 +14,7 @@ import type { EntityOut, Schemas } from "@/lib/api/client";
 import { formatDate } from "@/lib/format";
 
 import { companyStamp } from "./connections";
+import { newCompany } from "./ids";
 
 type RitualOut = Schemas["RitualOut"];
 type OccurrenceOut = Schemas["OccurrenceOut"];
@@ -348,6 +349,9 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
   const t = now();
   const zone = ctx.companyTimezone();
   const db: RitualsDb = { rituals: [], occurrences: [], mode: "on_demand", zone };
+  // A new company's built-ins wait paused (nothing to review yet): Simple's Home lists no
+  // meeting and its rail counts none, as Detailed's Home says no goals.
+  const fresh = newCompany();
   for (const b of BUILTINS) {
     db.rituals.push({
       id: ctx.uuid(),
@@ -359,7 +363,7 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
       prep_hours: b.prep_hours,
       owner_id: owner.id,
       attendee_ids: attendees,
-      status: b.on ? "active" : "paused",
+      status: b.on && !fresh ? "active" : "paused",
       next_due_at: nextOccurrence({ ...b.schedule, timezone: zone }, t).toISOString(),
       lock_version: 1,
       created_at: t.toISOString(),

@@ -118,7 +118,8 @@ function GoalCounters({ items, suggestions, onGoal }: { items: Item[]; suggestio
   const empty = (suggestions.data?.goals ?? []).filter((g) => g.empty && !items.some((i) => i.goal?.id === g.goal.id));
   const goals = new Map<string, { title: string; metric: string | null; items: number; broken: number }>();
   for (const i of items) {
-    if (!i.goal) continue;
+    // As Home's goal tiles (goalTiles): a cut item is not one of the goal's items.
+    if (!i.goal || i.status === "cut") continue;
     const g = goals.get(i.goal.id) ?? { title: i.goal.title, metric: i.goal.metric ?? null, items: 0, broken: 0 };
     g.items += 1;
     if (broken(i).length) g.broken += 1;
@@ -420,7 +421,8 @@ export function SimpleRoadmap() {
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ id: string; left: number; top: number } | null>(null);
-  const [tray, setTray] = useState(false);
+  // Home's "All proposals" opens the roadmap with its Needs-a-decision tray open (?review=1).
+  const [tray, setTray] = useState(() => params.get("review") === "1");
   const [keyDates, setKeyDates] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [starting, setStarting] = useState(false);

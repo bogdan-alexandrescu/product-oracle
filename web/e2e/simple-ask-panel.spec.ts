@@ -116,7 +116,7 @@ for (const [phone, dark] of [
       await send.click();
       const asked = panel.locator('[data-testid="chat-message"][data-author="person"]').last();
       await expect(asked.getByTestId("chat-message-body")).toHaveText(Q);
-      await expect(asked.getByTestId("chat-who")).toHaveText(new RegExp(`^Admin · ${TIME}$`));
+      await expect(asked.getByTestId("chat-who")).toHaveText(new RegExp(`^You · ${TIME}$`));
       const answer = panel.getByTestId("ask-answer").last();
       await expect(answer.getByTestId("answer-title")).toHaveText("Weekly alert digest");
       await expect(answer.getByTestId("chat-who")).toHaveText(new RegExp(`^Oracle · ${TIME}$`));
@@ -124,8 +124,8 @@ for (const [phone, dark] of [
       await expect(answer.getByTestId("answer-label")).not.toHaveCount(0);
       await expect(answer.getByTestId("answer-label").first()).toHaveCSS("text-transform", "uppercase");
       await expect(answer.getByTestId("answer-source").filter({ hasText: "Open Weekly alert digest on the roadmap" })).toBeVisible();
-      // Still the same rows: the answered chat is "New chat about Home"; the box stays at the bottom.
-      await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Home");
+      // Still the same rows: the answered chat is titled by its question; the box stays at the bottom.
+      await expect(panel.getByTestId("ask-about")).toHaveText(Q);
       expect((await box(input)).y).toBeGreaterThan((await box(answer)).y);
       // The page itself never scrolled with the chat.
       expect(await page.evaluate(() => window.scrollY)).toBe(0);
@@ -154,7 +154,7 @@ for (const [phone, dark] of [
       await recent.click();
       await menu.getByTestId("ask-recent-row").first().click();
       await expect(menu).toHaveCount(0);
-      await expect(panel.getByTestId("ask-about")).toHaveText("Chat about Home");
+      await expect(panel.getByTestId("ask-about")).toHaveText(Q);
       await expect(panel.getByTestId("answer-title")).toHaveText("Weekly alert digest");
 
       if (phone) {

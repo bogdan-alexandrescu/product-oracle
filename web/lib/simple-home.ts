@@ -106,15 +106,23 @@ export function goalTiles(goals: Entity[], roadmap: Roadmap | undefined, waiting
     });
 }
 
-/** The broken links on the roadmap: one row per red dependency flag. */
+/**
+ * The broken links on the roadmap: one row per red flag that has a one-click fix (a
+ * dependency out of order, a blocker due late, an end past its milestone, a cut item others
+ * depend on; a draft with no owner has no fix, so it is not one), on every item, whoever
+ * decides it (its fixes say Propose for the others). The one definition: "Walk me through
+ * it" (GET /v1/simple/walk, oracle.simple.chat.broken_links, and its mock) walks the same.
+ */
 export type BrokenLink = { item: Item; flag: Schemas["SimpleFlag"]; dependency: Item | undefined };
+
+export const isBrokenLink = (f: Schemas["SimpleFlag"]): boolean => f.state === "red" && f.fixes.length > 0;
 
 export function brokenLinks(roadmap: Roadmap | undefined): BrokenLink[] {
   if (!roadmap) return [];
   const byId = new Map(roadmap.items.map((i) => [i.id, i]));
   return roadmap.items.flatMap((item) =>
     item.flags
-      .filter((f) => f.state === "red" && f.kind === "dependency_order")
+      .filter(isBrokenLink)
       .map((flag) => ({ item, flag, dependency: flag.subject ? byId.get(flag.subject) : undefined })),
   );
 }

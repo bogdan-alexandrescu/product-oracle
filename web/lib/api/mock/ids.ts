@@ -4,6 +4,12 @@
  * rows created later take random ones and so never collide with the seed.
  */
 
+/**
+ * A new company (the "empty" scenario, server.ts's MOCK_SCENARIO_KEY): every seed Simple
+ * reads (its roadmap, plan, meetings, reviews, chat, suggestions) starts empty, as Detailed's.
+ */
+export const newCompany = (): boolean => typeof localStorage !== "undefined" && localStorage.getItem("po-mock-scenario") === "empty";
+
 let scope: { label: string; seq: number } | null = null;
 
 function fnv(text: string, basis: number): number {

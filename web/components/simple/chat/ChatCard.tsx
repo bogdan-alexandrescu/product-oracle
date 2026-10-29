@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { FlowDetail, FlowThumb } from "@/components/simple/Flow";
 import { api, unwrap } from "@/lib/api/client";
 import { applyCard, CORRECT_FIELDS, discardCard, FLOW_OPS, isActionPreview, sendApplied, sendCardChanged, sendPreview, undoCard, type ActionPreview, type ChatCard as Card } from "@/lib/api/simple-chat";
+import { OP_WORDS } from "@/lib/simple-home";
 import { errorMessage } from "@/lib/use-query";
 
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
@@ -45,17 +46,21 @@ export function actionWords(p: ActionPreview): string[] {
  * each one-line reason), its one-click fixes, and Preview / Apply (or Propose) / Discard by the
  * reader's own rights (`may`; null: disabled, with why). Preview ghosts the change on the
  * roadmap (the "simple:preview" event); after Apply the card says who applied or proposed it,
- * with Undo while applied.
+ * with Undo while applied. `actionsOnly` (the walk, whose step says the item and its problem
+ * once above the card): the card holds just its actions, no summary, item line or red reasons,
+ * and no Apply or Discard a fix or Skip already offers.
  */
 export function ChatCard({
   card: initial,
   onChanged,
   onCorrecting,
+  actionsOnly = false,
 }: {
   card: Card;
   onChanged?: (card: Card) => void;
   /** roadmap-talk: the values typed into this card's open Correct form (null: closed), for its line's Apply all. */
   onCorrecting?: (cardId: string, values: Record<string, string | null> | null) => void;
+  actionsOnly?: boolean;
 }) {
   // The thread polls: a newer copy of the card (another tab applied it) replaces ours.
   const [local, setLocal] = useState<{ from: Card; card: Card } | null>(null);
@@ -127,15 +132,21 @@ export function ChatCard({
   const correct = card.correct ?? null;
   const shown = correct ? CORRECT_FIELDS.filter((f) => correct.fields.includes(f)) : [];
   const startCorrect = () => setFields(fields ? null : Object.fromEntries(shown.map((f) => [f, correct?.values[f] ?? ""])));
-  const red = card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red").map((x) => ({ item: f.item_id, ...x })));
+  const red = actionsOnly ? [] : card.flags.flatMap((f) => f.flags.filter((x) => x.state === "red").map((x) => ({ item: f.item_id, ...x })));
+  // The walk: Apply when no fix makes the card's own change, named by what it does.
+  const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+  const applyShown = !actionsOnly || !card.fixes.some((f) => f.op === card.op && same(f.target, card.target));
+  const applyLabel = actionsOnly && OP_WORDS[card.op] ? (card.may === "propose" ? `Propose: ${OP_WORDS[card.op]}` : OP_WORDS[card.op]) : label;
 
   return (
     <div data-testid="chat-card" data-status={card.status} data-card-id={card.id} className="flex min-w-0 flex-col gap-2 rounded-xl border border-line bg-surface p-3 text-text">
-      <p className="font-semibold" data-testid="chat-card-summary">
-        {card.summary}
-      </p>
-      {card.item_title && <p className="simple-small text-text2">Item: {card.item_title}</p>}
-      {card.change_words && (
+      {!actionsOnly && (
+        <p className="font-semibold" data-testid="chat-card-summary">
+          {card.summary}
+        </p>
+      )}
+      {!actionsOnly && card.item_title && <p className="simple-small text-text2">Item: {card.item_title}</p>}
+      {!actionsOnly && card.change_words && (
         <p className="simple-small [overflow-wrap:anywhere]" data-testid="chat-card-change">
           <span className="text-text2">Before:</span> {card.change_words.before} → <span className="text-text2">After:</span> {card.change_words.after}
         </p>
@@ -225,22 +236,26 @@ export function ChatCard({
               </button>
             )
           )}
-          <button type="button" className="simple-button simple-button-primary" disabled={busy || !card.may} onClick={() => void apply()} title={card.why_not ?? undefined}>
-            {label}
-          </button>
-          <button
-            type="button"
-            className="simple-button"
-            disabled={busy || !card.may}
-            onClick={() =>
-              void run(async () => {
-                stopPreview();
-                return discardCard(card.id);
-              })
-            }
-          >
-            {correct ? "Reject" : "Discard"}
-          </button>
+          {applyShown && (
+            <button type="button" className="simple-button simple-button-primary" disabled={busy || !card.may} onClick={() => void apply()} title={card.why_not ?? undefined}>
+              {applyLabel}
+            </button>
+          )}
+          {!actionsOnly && (
+            <button
+              type="button"
+              className="simple-button"
+              disabled={busy || !card.may}
+              onClick={() =>
+                void run(async () => {
+                  stopPreview();
+                  return discardCard(card.id);
+                })
+              }
+            >
+              {correct ? "Reject" : "Discard"}
+            </button>
+          )}
           {correct && shown.length > 0 && (
             <button type="button" className="simple-button" aria-expanded={!!fields} disabled={busy || !card.may} onClick={startCorrect}>
               {fields ? "Keep Oracle's reading" : "Correct"}

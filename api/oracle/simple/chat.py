@@ -46,7 +46,7 @@ from oracle.authz import has_role
 from oracle.decisions.models import Decision, DecisionReview
 from oracle.discussions.models import Discussion, DiscussionMessage, DiscussionParticipant
 from oracle.members.names import display_name
-from oracle.simple import changes, drafts, service, targets
+from oracle.simple import changes, constraints, drafts, service, targets
 from oracle.simple.changes import ChangeError
 from oracle.simple.models import SimpleChange, SimpleChatCard, SimpleChatRead
 from oracle.simple.schemas import (
@@ -1671,29 +1671,43 @@ def _as_if(card: SimpleChatCard, read_: service.Read, overlays: dict) -> dict:
     return out
 
 
+def _flag_fixes(
+    e: service.Entry, f: constraints.Flag, by_id: dict[uuid.UUID, service.Entry]
+) -> list[ChatFix]:
+    """One red flag's one-click fixes (constraints.FIXES): a dependency's move the
+    dependents, move the dependency or accept as a risk (D14); the other kinds' accept as a
+    risk; none for a draft without an owner."""
+    risk = ChatFix(label="Accept as a risk", op="accept_risk",
+                   target={"item_id": str(e.row.id), "flag": f.kind, "subject": f.subject},
+                   before={"risk": None},
+                   after={"risk": {"note": "Accepted in the chat"}})  # fmt: skip
+    if f.kind != "dependency_order":
+        return [risk] if "accept_risk" in f.fixes else []
+    dep = by_id.get(uuid.UUID(f.subject)) if f.subject else None
+    if dep is None:
+        return []
+    before = {str(x.row.id): _dates(x) for x in (e, dep)}
+    target = {"item_id": str(e.row.id), "subject": f.subject}
+    return [
+        ChatFix(label=f"Start {e.row.title} after {dep.row.title} ends",
+                op="shift_dependents", target=target, before=before),
+        ChatFix(label=f"End {dep.row.title} before {e.row.title} starts",
+                op="move_dependency", target=target, before=before),
+        risk,
+    ]  # fmt: skip
+
+
+def broken_links(e: service.Entry) -> list[constraints.Flag]:
+    """The item's broken links, as Home counts them (web/lib/simple-home.ts brokenLinks):
+    its red flags that have a one-click fix (a draft without an owner has none)."""
+    return [f for f in e.flags if f.state == "red" and f.fixes]
+
+
 def _fixes(e: service.Entry, by_id: dict[uuid.UUID, service.Entry]) -> list[ChatFix]:
     """One-click fixes of the item's red dependency flags: move the dependents, move the
     dependency, or accept as a risk (D14)."""
-    out: list[ChatFix] = []
-    for f in e.flags:
-        if f.state != "red" or f.kind != "dependency_order" or not f.subject:
-            continue
-        dep = by_id.get(uuid.UUID(f.subject))
-        if dep is None:
-            continue
-        before = {str(x.row.id): _dates(x) for x in (e, dep)}
-        target = {"item_id": str(e.row.id), "subject": f.subject}
-        out += [
-            ChatFix(label=f"Start {e.row.title} after {dep.row.title} ends",
-                    op="shift_dependents", target=target, before=before),
-            ChatFix(label=f"End {dep.row.title} before {e.row.title} starts",
-                    op="move_dependency", target=target, before=before),
-            ChatFix(label="Accept as a risk", op="accept_risk",
-                    target={"item_id": str(e.row.id), "flag": f.kind, "subject": f.subject},
-                    before={"risk": None},
-                    after={"risk": {"note": "Accepted in the chat"}}),
-        ]  # fmt: skip
-    return out
+    return [x for f in e.flags if f.state == "red" and f.kind == "dependency_order"
+            for x in _flag_fixes(e, f, by_id)]  # fmt: skip
 
 
 async def cards_out(
@@ -1954,8 +1968,11 @@ async def _next_agenda(db: AsyncSession, principal: Any) -> tuple[str, list[Any]
 
 
 async def walk(db: AsyncSession, principal: Any) -> WalkOut:
-    """What waits for the person, one card at a time: the broken links they decide first,
-    then the decisions on the next meeting's agenda, then the proposals waiting on them."""
+    """What waits for the person, one card at a time: the broken links first (every red flag
+    with a fix, as Home counts and lists them: broken_links; the card applies what the
+    person decides and proposes the rest, as Home's own fixes), then the decisions on the
+    next meeting's agenda, then the proposals waiting on them. Home's walk puts the
+    decisions waiting for them (GET /v1/simple/decisions/waiting) after the broken links."""
     me = _me(principal)
     overlays = await drafts.overlays_for(db, principal)
     read_ = await service.load(db, overlays)
@@ -1964,19 +1981,16 @@ async def walk(db: AsyncSession, principal: Any) -> WalkOut:
     cards: list[tuple[int, SimpleChatCard]] = []
     if has_role(principal.role, "commenter"):
         for e in sorted(read_.entries, key=lambda x: (x.roadmap.title, x.row.position)):
-            if not service.can_decide(principal, e, read_.deciders):
-                continue
-            fixes = _fixes(e, by_id)
-            for f in e.flags:
-                if f.state != "red" or f.kind != "dependency_order" or not fixes:
+            for f in broken_links(e):
+                fixes = _flag_fixes(e, f, by_id)
+                if not fixes:
                     continue
-                dep = by_id.get(uuid.UUID(f.subject)) if f.subject else None
-                what = dep.row.title if dep else "its dependency"
-                title = f"{e.row.title} starts before {what} ends"
-                card = await _walk_card(db, me, title, fixes[0], e)
+                # The problem said once (the step's why), under the item's name.
+                card = await _walk_card(db, me, f"{e.row.title}: {f.reason}", fixes[0], e)
                 cards.append((len(steps), card))
-                steps.append(WalkStepOut(id=f"link:{e.row.id}:{f.subject}", kind="broken_link",
-                                         title=title, why=f.reason))  # fmt: skip
+                steps.append(WalkStepOut(id=f"link:{e.row.id}:{f.kind}:{f.subject}",
+                                         kind="broken_link", title=e.row.title,
+                                         why=f.reason))  # fmt: skip
     meeting, agenda = await _next_agenda(db, principal)
     for d in agenda:
         steps.append(WalkStepOut(

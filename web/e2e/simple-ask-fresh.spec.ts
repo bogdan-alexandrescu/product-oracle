@@ -105,8 +105,8 @@ for (const [phone, dark] of [
         await expect(panel.getByText(gone, { exact: false })).toHaveCount(0);
       await expect(panel.getByRole("checkbox")).toHaveCount(0);
       await say(panel, "who owns Weekly alert digest?");
-      // The pick's frame "Home, a fresh chat answered": still "New chat about Home".
-      await expect(panel.getByTestId("ask-about")).toHaveText("New chat about Home");
+      // qa-simple-home-16: once asked, the chat is titled by its question.
+      await expect(panel.getByTestId("ask-about")).toHaveText("who owns Weekly alert digest?");
 
       // Opened again: a new, empty chat.
       await closeAsk(page, phone);
@@ -137,7 +137,7 @@ for (const [phone, dark] of [
 
       // Choosing Home's chat (from the Roadmap page) reopens it and continues it.
       await tap(rows.nth(1));
-      await expect(panel.getByTestId("ask-about")).toHaveText("Chat about Home");
+      await expect(panel.getByTestId("ask-about")).toHaveText("who owns Weekly alert digest?");
       await expect(panel.getByTestId("chat-message-body").filter({ hasText: "who owns Weekly alert digest?" })).toBeVisible();
       await say(panel, "when is Weekly alert digest?");
       await expect(panel.locator('[data-testid="chat-message"][data-author="person"]')).toHaveCount(2);
@@ -150,6 +150,9 @@ for (const [phone, dark] of [
       await expect(panel.getByTestId("ask-about")).toHaveText("New chat about General");
       await say(panel, "who owns Weekly alert digest?");
       await tap(panel.getByRole("button", { name: "New chat" }));
+      // New chat keeps the scope the reader chose (qa-simple-home-18): back to the page by hand.
+      await expect(panel.getByRole("button", { name: "General", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await tap(panel.getByRole("button", { name: "This page", exact: true }));
       await say(panel, "when is Alert rules engine?");
       await tap(panel.getByRole("button", { name: "Recent chats" }));
       const rows = panel.getByTestId("ask-recent-row");
@@ -158,7 +161,8 @@ for (const [phone, dark] of [
       await expect(rows.nth(1).getByTestId("ask-recent-when")).toHaveText(new RegExp(`^General · ${WHEN}$`));
       await expect(rows.nth(1).getByTestId("ask-recent-question")).toHaveText("who owns Weekly alert digest?");
       await tap(rows.nth(1));
-      await expect(panel.getByTestId("ask-about")).toHaveText("Chat about General");
+      await expect(panel.getByTestId("ask-about")).toHaveText("who owns Weekly alert digest?");
+      await expect(panel.getByRole("button", { name: "General", exact: true })).toHaveAttribute("aria-pressed", "true");
       await expect(panel.getByTestId("chat-message-body").filter({ hasText: "who owns Weekly alert digest?" })).toBeVisible();
     });
 

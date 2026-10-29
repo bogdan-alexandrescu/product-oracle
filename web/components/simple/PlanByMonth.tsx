@@ -36,6 +36,10 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
   const today = plan.today ? pct(plan.today) : null;
   const shown = plan.rows.slice(0, PLAN_ROWS);
   const more = plan.rows.length - shown.length;
+  // qa-simple-home-12: each month's line runs down through the rows, so a bar reads against the axis above it.
+  const grid = plan.months.map((m) => (
+    <span key={m} aria-hidden data-testid={`${testId}-gridline`} className="pointer-events-none absolute inset-y-0 w-0 border-l border-line" style={{ left: `${pct(m)}%` }} />
+  ));
   const line = today != null && (
     <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0 border-l-2 border-crit" style={{ left: `${today}%` }} />
   );
@@ -82,6 +86,7 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
                   {when && <span className="simple-small tnum">{when}{r.past_edge ? `, after ${calendarDay(plan.end, { month: "short" })}` : ""}</span>}
                 </span>
                 <span className="relative h-7">
+                  {grid}
                   <span
                     aria-hidden
                     data-estimated={r.estimated ? "true" : undefined}

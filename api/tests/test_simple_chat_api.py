@@ -64,11 +64,16 @@ Test cards (protects / fails_when / no_claim):
   is proposed by approvers and commenters (nothing written); add_feature_ask files a
   request for every commenter and up, its undo removes it; viewers get 403;
   fails_when=a role does more than its gesture; no_claim=Requests' triage.
-- test_walk_order_undo_and_fixes: protects=Walk me through it lists the broken links the
-  person decides first, then the next meeting's agenda, then the proposals waiting on
-  them; a broken link's card applies a one-click fix and undoes; a commenter has no broken
-  links to fix; fails_when=the order differs, or a step is someone else's;
-  no_claim=progress and Done (web spec).
+- test_walk_order_undo_and_fixes: protects=Walk me through it lists the broken links
+  first, then the next meeting's agenda, then the proposals waiting on them; a broken
+  link's card applies a one-click fix and undoes; a commenter's walk has the same broken
+  link (as Home lists it), its card proposing; fails_when=the order differs, a step is
+  someone else's, or a commenter applies; no_claim=progress and Done (web spec).
+- test_walk_lists_every_broken_link_home_counts: protects=the walk's broken links are every
+  red flag with a fix (as Home's brokenLinks counts them), a cut item with a dependent too,
+  each under the item's name with an accept-as-risk card that clears it;
+  fails_when=the walk lists only dependency flags, or repeats the reason as its title;
+  no_claim=Home's own count (web spec).
 - test_meeting_apply_with_a_meeting_error_at_decision_writes_nothing (u-followups 4):
   protects=when recording an Apply's meeting decision raises a MeetingError (faked here:
   the refusal a change mode makes) the answer is that HTTP error and neither the change nor
@@ -702,6 +707,9 @@ async def test_walk_order_undo_and_fixes(client, meetings):
     assert r.status_code == 200, r.text
     steps = r.json()["steps"]
     assert [s["kind"] for s in steps] == ["broken_link", "agenda_decision", "proposal"]
+    # The problem said once: the item's name, then its one line.
+    assert steps[0]["title"] == "Bulk import"
+    assert steps[0]["why"].startswith("'Bulk import' starts")
     link = steps[0]["card"]
     assert link["op"] == "shift_dependents" and link["may"] == "apply"
     assert [f["op"] for f in link["fixes"]] == ["shift_dependents", "move_dependency",
@@ -719,6 +727,30 @@ async def test_walk_order_undo_and_fixes(client, meetings):
     r = await client.post(f"{CARDS}/{link['id']}/undo", headers=ctx.as_("decider"))
     assert r.status_code == 200, r.text
     assert (await w.item("Bulk import")).start_date == date(2026, 11, 10)
-    # A commenter decides nothing here: only the agenda of the meeting they attend.
+    # A commenter decides nothing here: the same broken link (as Home lists it), proposed,
+    # and the agenda of the meeting they attend (their own proposal is not theirs to decide).
     r = await client.get("/v1/simple/walk", headers=ctx.as_("commenter"))
-    assert [s["kind"] for s in r.json()["steps"]] == ["agenda_decision"]
+    steps = r.json()["steps"]
+    assert [s["kind"] for s in steps] == ["broken_link", "agenda_decision"]
+    assert steps[0]["title"] == "Bulk import" and steps[0]["card"]["may"] == "propose"
+
+
+async def test_walk_lists_every_broken_link_home_counts(client):
+    ctx = await make_people()
+    w = await World(ctx).build()
+    card = (await say(client, ctx, "owner", "cut Ledger v2"))["cards"][0]
+    r = await client.post(f"{CARDS}/{card['id']}/apply", headers=ctx.as_("owner"))
+    assert r.status_code == 200, r.text
+    assert (await w.item("Ledger v2")).cut
+    # Cut with a dependent is a red flag with a fix (accept as a risk): Home counts it, so
+    # the walk lists it, under the item's name.
+    steps = (await client.get("/v1/simple/walk", headers=ctx.as_("decider"))).json()["steps"]
+    links = [s for s in steps if s["kind"] == "broken_link"]
+    assert [s["title"] for s in links] == ["Ledger v2"]
+    assert links[0]["why"] == "Cut, but 'Bulk import' depends on it"
+    assert links[0]["card"]["op"] == "accept_risk"
+    assert links[0]["card"]["target"]["flag"] == "cut_with_dependents"
+    r = await client.post(f"{CARDS}/{links[0]['card']['id']}/apply", headers=ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    steps = (await client.get("/v1/simple/walk", headers=ctx.as_("decider"))).json()["steps"]
+    assert [s for s in steps if s["kind"] == "broken_link"] == []
