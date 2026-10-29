@@ -83,8 +83,8 @@ def test_tables_give_kind_what_decisions_and_risks():
     m1, m2 = view.milestones
     assert [(d.code, d.title) for d in m1.decisions] == [("Q7", "Legal input on the sample data")]
     assert [(d.code, d.title) for d in m2.decisions] == [("Q9", "Which plans get bulk import")]
-    assert m1.risks == ["Pilot teams may be too busy to try it"]
-    assert m2.risks == ["Big files may time out"]
+    assert [r.title for r in m1.risks] == ["Pilot teams may be too busy to try it"]
+    assert [r.title for r in m2.risks] == ["Big files may time out"]
 
 
 def test_job_answer_gives_kind_what_decisions_and_risks():
@@ -103,7 +103,7 @@ def test_job_answer_gives_kind_what_decisions_and_risks():
     view = plan.compute(plan.clean(answer))
     (m1,) = view.milestones
     assert [(d.code, d.title) for d in m1.decisions] == [("Q7", "Legal input")]
-    assert m1.risks == ["Pilot teams may be busy"]
+    assert [r.title for r in m1.risks] == ["Pilot teams may be busy"]
     (s,) = view.slices
     assert (s.kind, s.what) == ("New for people", "Shows each setup step")
 
@@ -111,7 +111,16 @@ def test_job_answer_gives_kind_what_decisions_and_risks():
 def test_prompt_asks_for_the_part():
     name, text = prompting.current("prd_plan")
     assert name != "prd_plan.v1"
-    for word in ('"kind"', '"what"', '"decisions"', '"risks"'):
+    for word in (
+        '"kind"',
+        '"what"',
+        '"decisions"',
+        '"risks"',
+        '"why"',
+        '"recommendation"',
+        '"what_we_do"',
+        '"summary"',
+    ):
         assert word in text
 
 

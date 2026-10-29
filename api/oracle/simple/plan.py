@@ -46,6 +46,7 @@ from oracle.simple.schemas import (
     SimplePlanGoalTarget,
     SimplePlanMilestone,
     SimplePlanOut,
+    SimplePlanRisk,
     SimplePlanSpan,
     SimpleSlice,
 )
@@ -63,6 +64,10 @@ _CODE = re.compile(r"\b([A-Z]{1,3}-\d{1,3})\b")
 # An open decision's code ("Q7").
 _QCODE = re.compile(r"\b([A-Z]{1,2}-?\d{1,3})\b")
 _NUM = re.compile(r"\d+(?:\.\d+)?")
+# A risk's code ("R-3").
+_RCODE = re.compile(r"\bR-?\d{1,3}\b")
+# fidelity prd: the PRD's summary section (its bullets lead the timeline).
+_SUMMARY = re.compile(r"(?im)^#{1,6}\s*(summary|tl;?dr|in short|at a glance)\b.*$")
 _MONTHS = {
     m: i + 1 for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split())
 }
@@ -174,6 +179,7 @@ def _milestones(header: list[str], rows: list[list[str]], ref: date) -> list[dic
     c_start, c_end = _col(header, "start", "from", "begin"), _col(header, "end", "finish", "due")
     c_eff = _col(header, "effort", "capacity", "eng", contains="week")
     c_done = _col(header, "done")
+    c_why = _col(header, "why")
     out = []
     for r in rows:
         head = _cell(r, c_code)
@@ -192,6 +198,7 @@ def _milestones(header: list[str], rows: list[list[str]], ref: date) -> list[dic
             "end": end.isoformat() if end else None,
             "effort_weeks": _number(_cell(r, c_eff)) if c_eff is not None else None,
             "done_when": _list(_cell(r, c_done)), "targets": [],
+            "why": _cell(r, c_why)[:300] or None,
         })  # fmt: skip
     return out
 
@@ -237,28 +244,74 @@ def _features(header: list[str], rows: list[list[str]], known: set[str]) -> list
     return out
 
 
-def _part(header: list[str], rows: list[list[str]], by_code: dict[str, Any]) -> None:
+def _part(header: list[str], rows: list[list[str]], by_code: dict[str, Any], ref: date) -> None:
     """prd-timeline: a milestone's open decisions (a questions / decisions table: its code,
-    "Q7", and title) and its risks (a risks table), each row under the milestones it names."""
+    "Q7", title, the PRD's recommendation and due day) and its risks (a risks table: its
+    code, the risk, how likely, its impact and what we do), each row under the milestones it
+    names."""
     c_ms, c_q = _col(header, "milestone"), _part_col(header)
     risk = header[c_q].startswith("risk")  # type: ignore[index]
-    c_title = _col(header, "title", "name", "what", "description")
+    c_do = _col(header, "what we do", "mitigation", "response", "we do", "action")
+    c_title = next(
+        (i for i, h in enumerate(header)
+         if h.startswith(("title", "name", "what", "description")) and i not in (c_q, c_do)),
+        None,
+    )  # fmt: skip
     for r in rows:
         codes = [f"M{int(x)}" for x in _MS.findall(_cell(r, c_ms))]
         text = _cell(r, c_q)
         if risk:
-            item: Any = (_cell(r, c_title) if c_title not in (None, c_q) else "") or text
+            item: Any = _risk_row(header, r, text, _cell(r, c_title), _cell(r, c_do))
             key = "risks"
         else:
             m = _QCODE.search(text)
-            title = _cell(r, c_title) if c_title not in (None, c_q) else ""
+            title = _cell(r, c_title)
             title = title or (text[m.end() :].strip(" ·:-–—") if m else "")
             if not m or not title:
                 continue
-            item, key = {"code": m[1], "title": title[:200]}, "decisions"
+            due = parse_day(_cell(r, _col(header, "due")), ref)
+            item, key = {"code": m[1], "title": title[:200],
+                         "recommendation": _cell(r, _col(header, "recommend"))[:500] or None,
+                         "due": due.isoformat() if due else None}, "decisions"  # fmt: skip
         for code in dict.fromkeys(codes):
             if code in by_code and item:
                 by_code[code].setdefault(key, []).append(item)
+
+
+def _risk_row(
+    header: list[str], r: list[str], text: str, title: str, do: str
+) -> dict[str, Any] | None:
+    """One risks table row: its code (a Code / ID column, else "R-3" in the risk's words),
+    the risk, how likely, its impact and what we do."""
+    code = _cell(r, _col(header, "code", "id"))
+    m = _RCODE.search(code or text)
+    words = title or (_RCODE.sub("", text, count=1).strip(" ·:-–—") if m and not code else text)
+    if not words:
+        return None
+    return {"code": m[0] if m else (code or None), "title": words[:200],
+            "likelihood": _cell(r, _col(header, "likelihood", "probability", "chance"))[:40]
+            or None,
+            "impact": _cell(r, _col(header, "impact", "severity"))[:40] or None,
+            "what_we_do": do[:300] or None}  # fmt: skip
+
+
+def _summary(text: str) -> list[str]:
+    """fidelity prd: the PRD's summary lines: the bullets right under its Summary heading
+    (at most three), else none."""
+    m = _SUMMARY.search(text or "")
+    if not m:
+        return []
+    out: list[str] = []
+    for line in text[m.end() :].splitlines():
+        t = line.strip()
+        if t.startswith("#") or (out and not t):
+            break
+        b = re.match(r"^[-*•]\s+(.+)$", t)
+        if b:
+            out.append(b[1].strip()[:300])
+        if len(out) == 3:
+            break
+    return out
 
 
 def _holidays(text: str, ref: date) -> list[dict[str, Any]]:
@@ -293,7 +346,7 @@ def parse(text: str, ref: date) -> dict[str, Any] | None:
     goals: list[str] = []
     for h, rows in found:
         if _part_col(h) is not None and _col(h, "milestone") is not None:
-            _part(h, rows, by_code)
+            _part(h, rows, by_code, ref)
         elif _col(h, "feature") is not None and _col(h, "milestone") is not None:
             features += _features(h, rows, known)
         elif h and h[0].startswith("goal"):
@@ -320,7 +373,7 @@ def parse(text: str, ref: date) -> dict[str, Any] | None:
             if g not in goals:
                 goals.append(g)
     return {"milestones": milestones, "features": features, "goals": goals,
-            "holidays": _holidays(text, ref)}  # fmt: skip
+            "holidays": _holidays(text, ref), "summary": _summary(text)}  # fmt: skip
 
 
 def clean(answer: Any) -> dict[str, Any] | None:
@@ -341,11 +394,15 @@ def clean(answer: Any) -> dict[str, Any] | None:
             "targets": [{"goal": str(t["goal"])[:80], "target": str(t["target"])[:160]}
                         for t in m.get("targets") or []
                         if isinstance(t, dict) and t.get("goal") and t.get("target")],
-            "decisions": [{"code": str(d["code"]).strip()[:12], "title": str(d["title"])[:200]}
+            "decisions": [{"code": str(d["code"]).strip()[:12], "title": str(d["title"])[:200],
+                           "recommendation": (str(d["recommendation"])[:500]
+                                              if d.get("recommendation") else None),
+                           "due": _iso(d.get("due"))}
                           for d in m.get("decisions") or []
                           if isinstance(d, dict) and str(d.get("code") or "").strip()
                           and str(d.get("title") or "").strip()][:8],
-            "risks": [str(x)[:200] for x in m.get("risks") or [] if str(x).strip()][:8],
+            "risks": [x for x in (_risk(r) for r in m.get("risks") or []) if x][:8],
+            "why": str(m["why"])[:300] if m.get("why") else None,
         })  # fmt: skip
     if not milestones:
         return None
@@ -376,7 +433,22 @@ def clean(answer: Any) -> dict[str, Any] | None:
         for h in answer.get("holidays") or []
         if isinstance(h, dict) and (s := _iso(h.get("start"))) and (e := _iso(h.get("end")))
     ]
-    return {"milestones": milestones, "features": features, "goals": goals, "holidays": holidays}
+    summary = [str(x)[:300] for x in answer.get("summary") or [] if str(x).strip()][:3]
+    return {"milestones": milestones, "features": features, "goals": goals, "holidays": holidays,
+            "summary": summary}  # fmt: skip
+
+
+def _risk(v: Any) -> dict[str, Any] | None:
+    """A risk as stored: a plan read before risks had fields holds the risk's words only."""
+    if isinstance(v, dict):
+        title = str(v.get("title") or "").strip()
+        if not title:
+            return None
+        return {"code": str(v["code"])[:12] if v.get("code") else None, "title": title[:200],
+                **{k: str(v[k])[:300] if v.get(k) else None
+                   for k in ("likelihood", "impact", "what_we_do")}}  # fmt: skip
+    words = str(v or "").strip()
+    return {"code": None, "title": words[:200]} if words else None
 
 
 def _iso(v: Any) -> str | None:
@@ -406,6 +478,7 @@ class View:
     span: SimplePlanSpan | None = None
     dated: bool = False
     message: str | None = None
+    summary: list[str] = field(default_factory=list)
 
     def milestone(self, code: str | None) -> SimplePlanMilestone | None:
         return next((m for m in self.milestones if m.code == code), None)
@@ -460,6 +533,7 @@ def compute(data: dict[str, Any] | None) -> View:
     if not data or not data.get("milestones"):
         view.message = NO_PLAN
         return view
+    view.summary = [str(x) for x in data.get("summary") or [] if str(x).strip()][:3]
     view.holidays = [
         SimpleHoliday(
             start=date.fromisoformat(h["start"]),
@@ -477,8 +551,14 @@ def compute(data: dict[str, Any] | None) -> View:
             effort_weeks=m.get("effort_weeks"), done_when=list(m.get("done_when") or []),
             targets=[SimpleMilestoneTarget(**t) for t in m.get("targets") or []],
             source=data.get("source") or "prd",
-            decisions=[SimplePlanDecision(**d) for d in m.get("decisions") or []],
-            risks=list(m.get("risks") or []),
+            decisions=[
+                SimplePlanDecision(code=d["code"], title=d["title"],
+                                   recommendation=d.get("recommendation"),
+                                   due_on=_iso(d.get("due")))
+                for d in m.get("decisions") or []
+            ],
+            risks=[SimplePlanRisk(**x) for x in (_risk(r) for r in m.get("risks") or []) if x],
+            why=m.get("why"),
         ))  # fmt: skip
     by = {m.code: m for m in view.milestones}
     weeks = {
@@ -617,6 +697,47 @@ def _current_milestone(view: View, today: date) -> SimplePlanMilestone | None:
     )
 
 
+async def _questions(db: AsyncSession, document_id: uuid.UUID, view: View) -> None:
+    """fidelity prd: each milestone's decisions as the PRD's questions are read
+    (oracle.simple.questions): a listed one takes the question's recommendation and due day
+    when the plan's table gives none, and leaves once decided; a question still open that
+    blocks the milestone and is not listed joins it."""
+    from oracle.decisions.models import Decision
+
+    rows = [
+        d
+        for d in await db.scalars(
+            select(Decision).where(
+                Decision.origin == "prd",
+                Decision.prd_question["document_id"].astext == str(document_id),
+            )
+        )
+        if not (d.prd_question or {}).get("removed")
+    ]
+    if not rows:
+        return
+    by_code = {str(d.prd_question["code"]).upper(): d for d in rows if d.prd_question.get("code")}
+    for m in view.milestones:
+        kept: list[SimplePlanDecision] = []
+        for x in m.decisions:
+            d = by_code.get(x.code.upper())
+            if d is not None and d.status != "proposed":
+                continue
+            if d is not None:
+                x.recommendation = x.recommendation or d.prd_question.get("recommendation")
+                x.due_on = x.due_on or d.due_on
+            kept.append(x)
+        listed = {x.code.upper() for x in kept}
+        for code, d in by_code.items():
+            if (d.status == "proposed" and code not in listed
+                    and d.prd_question.get("milestone") == m.code):  # fmt: skip
+                kept.append(SimplePlanDecision(
+                    code=str(d.prd_question["code"]), title=d.title,
+                    recommendation=d.prd_question.get("recommendation"), due_on=d.due_on,
+                ))  # fmt: skip
+        m.decisions = kept
+
+
 def _measure(value: float, unit: str | None) -> str:
     v = f"{value:,.0f}" if value == int(value) else f"{value:,g}"
     return f"{v}%" if unit == "%" else f"{v} {unit}".strip()
@@ -646,6 +767,7 @@ async def enrich(db: AsyncSession, document_id: uuid.UUID, view: View) -> View:
         for s in view.slices:
             if not s.flow_steps and s.feature_code in steps:
                 s.flow_steps = list(steps[s.feature_code])
+    await _questions(db, document_id, view)
     if not view.goals:
         return view
     names = {g.name.strip().lower() for g in view.goals}
@@ -795,7 +917,8 @@ async def plan_out(
     return SimplePlanOut(
         status="ready", source=row.source, dated=view.dated, message=view.message,  # type: ignore[arg-type]
         milestones=view.milestones, slices=view.slices, goals=view.goals,
-        goal_weeks=view.goal_weeks, span=view.span, holidays=view.holidays, **base,
+        goal_weeks=view.goal_weeks, span=view.span, holidays=view.holidays,
+        summary=view.summary, **base,
     )  # fmt: skip
 
 

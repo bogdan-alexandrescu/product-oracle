@@ -115817,6 +115817,29 @@
           "title": {
             "type": "string",
             "title": "Title"
+          },
+          "recommendation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation"
+          },
+          "due_on": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due On"
           }
         },
         "type": "object",
@@ -115825,7 +115848,7 @@
           "title"
         ],
         "title": "SimplePlanDecision",
-        "description": "prd-timeline: an open decision a milestone waits on (\"Q7 Legal input\")."
+        "description": "prd-timeline: an open decision a milestone waits on (\"Q7 Legal input\"), with the\nPRD's recommendation and its due day (the PRD's, else the PRD question's as Oracle reads\nit; null: no day yet)."
       },
       "SimplePlanGoal": {
         "properties": {
@@ -115981,11 +116004,22 @@
           },
           "risks": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/SimplePlanRisk"
             },
             "type": "array",
             "title": "Risks",
             "default": []
+          },
+          "why": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Why"
           }
         },
         "type": "object",
@@ -116118,6 +116152,14 @@
               }
             ],
             "title": "Read At"
+          },
+          "summary": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Summary",
+            "default": []
           }
         },
         "type": "object",
@@ -116126,6 +116168,64 @@
           "status"
         ],
         "title": "SimplePlanOut"
+      },
+      "SimplePlanRisk": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "likelihood": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Likelihood"
+          },
+          "impact": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Impact"
+          },
+          "what_we_do": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "What We Do"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "title": "SimplePlanRisk",
+        "description": "fidelity prd: a risk a milestone carries, as the PRD's risks table states it: its\ncode (\"R-3\"), the risk in one sentence, how likely and how big (the PRD's words, \"medium\",\n\"high\") and what we do about it."
       },
       "SimplePlanRow": {
         "properties": {

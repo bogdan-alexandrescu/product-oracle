@@ -25,11 +25,43 @@ const addDays = (day: string, n: number): string => iso(ms(day) + n * DAY);
 const minOf = (xs: string[]) => xs.reduce((a, b) => (b < a ? b : a));
 const maxOf = (xs: string[]) => xs.reduce((a, b) => (b > a ? b : a));
 
-type Milestone = { code: string; name: string; start: string; end: string; capacity: number; done_when: string[]; decisions?: { code: string; title: string }[]; risks?: string[] };
+type Decision = Schemas["SimplePlanDecision"];
+type Risk = Schemas["SimplePlanRisk"];
+type Milestone = { code: string; name: string; start: string; end: string; capacity: number; why?: string; done_when: string[]; decisions?: Decision[]; risks?: Risk[] };
 const MILESTONES: Milestone[] = [
-  { code: "M1", name: "Prove it", start: "2026-11-02", end: "2026-11-27", capacity: 16, done_when: ["Ten pilot teams finish setup in a day", "Setup errors are alerted within five minutes"], decisions: [{ code: "Q3", title: "Which sample data to ship" }], risks: ["Pilot teams may not have time to try setup before December"] },
-  { code: "M2", name: "Scale volume", start: "2026-11-30", end: "2026-12-25", capacity: 16, done_when: ["Bulk import handles 10,000 rows", "Invites come back from 40% of new admins"], decisions: [{ code: "Q7", title: "Legal input on invite emails" }, { code: "Q8", title: "The bulk import row limit" }], risks: ["Large imports could slow setup for everyone", "Checkout needs the payment provider's review first"] },
-  { code: "M3", name: "Open to all", start: "2026-12-28", end: "2027-02-12", capacity: 24, done_when: ["Anyone can sign up without a sales call", "Annual billing is live"], risks: ["The year-end break leaves seven weeks for the most work"] },
+  {
+    code: "M1", name: "Prove it", start: "2026-11-02", end: "2026-11-27", capacity: 16,
+    why: "No team can set up without help yet, and setup errors go unseen. Prove setup works for pilot teams before inviting more.",
+    done_when: ["Ten pilot teams finish setup in a day", "Setup errors are alerted within five minutes"],
+    decisions: [{ code: "Q3", title: "Which sample data to ship", recommendation: "Three sample projects: a launch plan, a bug tracker and a team wiki.", due_on: "2026-10-20" }],
+    risks: [{ code: "R-1", title: "Pilot teams may not have time to try setup before December", likelihood: "medium", impact: "high", what_we_do: "Book a setup hour with each pilot team in week 1." }],
+  },
+  {
+    code: "M2", name: "Scale volume", start: "2026-11-30", end: "2026-12-25", capacity: 16,
+    why: "Setup works for pilot teams. Now bring in whole teams at once and learn who invites others.",
+    done_when: ["Bulk import handles 10,000 rows", "Invites come back from 40% of new admins"],
+    decisions: [
+      { code: "Q7", title: "Legal input on invite emails", recommendation: "Legal reads the invite email once, before it goes out.", due_on: "2026-11-30" },
+      { code: "Q8", title: "The bulk import row limit", recommendation: "10,000 rows a file, the most a pilot team has asked for.", due_on: "2026-11-27" },
+    ],
+    risks: [
+      { code: "R-2", title: "Large imports could slow setup for everyone", likelihood: "medium", impact: "medium", what_we_do: "F-09 moves big imports to a queue." },
+      { code: "R-3", title: "Checkout needs the payment provider's review first", likelihood: "low", impact: "high", what_we_do: "Ask for the review in M1, so it is done before M2." },
+    ],
+  },
+  {
+    code: "M3", name: "Open to all", start: "2026-12-28", end: "2027-02-12", capacity: 24,
+    why: "With setup and invites proven, open signup to everyone and start charging.",
+    done_when: ["Anyone can sign up without a sales call", "Annual billing is live"],
+    decisions: [{ code: "Q9", title: "Which plans get annual billing", recommendation: "Every paid plan, with two months free.", due_on: null }],
+    risks: [{ code: "R-4", title: "The year-end break leaves seven weeks for the most work", likelihood: "high", impact: "medium", what_we_do: "Finish F-13 and F-15 before the break." }],
+  },
+];
+
+/** The PRD's summary lines (its Summary section's bullets), above the timeline. */
+const SUMMARY = [
+  "**Goal: setup in a day.** This quarter builds what new teams need to get going on their own.",
+  "**M1** proves setup works for pilot teams; **M2** brings in whole teams with invites and imports; **M3** opens signup and paid plans to everyone.",
 ];
 
 const HOLIDAYS = [{ start: "2026-12-28", end: "2027-01-01", label: "Year-end break" }];
@@ -39,7 +71,7 @@ const GOALS: { name: string; targets: [string, string][]; measured?: string; on_
   { name: "Reliability", measured: "99.6% setup success", on_track: true, targets: [["M1", "99.5% setup success"], ["M2", "99.7% setup success"], ["M3", "99.9% setup success"]] },
   { name: "Growth", measured: "40 weekly active teams", on_track: false, targets: [["M1", "100 weekly active teams"], ["M2", "250 weekly active teams"], ["M3", "600 weekly active teams"]] },
   { name: "Activation", targets: [["M1", "50% finish setup in a day"], ["M2", "60% finish setup in a day"], ["M3", "65% finish setup in a day"]] },
-  { name: "Revenue", targets: [["M1", "$0 (no paid plan yet)"], ["M2", "$5,000 monthly recurring revenue"], ["M3", "$20,000 monthly recurring revenue"]] },
+  { name: "Revenue", targets: [["M1", "$0 monthly recurring revenue"], ["M2", "$5,000 monthly recurring revenue"], ["M3", "$20,000 monthly recurring revenue"]] },
 ];
 
 /**
@@ -162,7 +194,8 @@ export const planMilestones = () =>
     done_when: [...m.done_when],
     targets: GOALS.flatMap((g) => g.targets.filter(([c]) => c === m.code).map(([, target]) => ({ goal: g.name, target }))),
     decisions: (m.decisions ?? []).map((d) => ({ ...d })),
-    risks: [...(m.risks ?? [])],
+    risks: (m.risks ?? []).map((r) => ({ ...r })),
+    why: m.why ?? null,
   }));
 
 function json(status: number, body: unknown): Response {
@@ -181,6 +214,8 @@ export interface PlanDb {
   undated?: boolean;
   /** prd-timeline review ("simple-plan-goalless"): F-21 in M2 names no goal. */
   goalless?: boolean;
+  /** fidelity prd ("simple-plan-partly-dated", frame D3): only M1 has dates. */
+  partly_dated?: boolean;
 }
 
 export const seedPlan = (): PlanDb => ({ read_at: "2026-10-20T15:05:00Z", version: 3 });
@@ -188,13 +223,15 @@ export const seedPlan = (): PlanDb => ({ read_at: "2026-10-20T15:05:00Z", versio
 export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], role: Role): PlanOut {
   const can = role === "owner";
   if (!plan) {
-    return { prd, version: null, status: "none", source: null, dated: false, message: "This PRD has no approved version yet.", milestones: [], slices: [], goals: [], goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: null };
+    return { prd, version: null, status: "none", source: null, dated: false, message: "This PRD has no approved version yet.", milestones: [], slices: [], goals: [], goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: null, summary: [] };
   }
   if (plan.undated) {
     const ms = planMilestones().map((m) => ({ ...m, start_date: null, end_date: null, planned_weeks: 0, feature_codes: [], source: "prd" as const }));
-    return { prd, version: plan.version, status: "ready", source: "prd", dated: false, message: "This PRD's milestones have no dates.", milestones: ms, slices: [], goals: GOALS.map((g) => ({ name: g.name, targets: g.targets.map(([milestone, target]) => ({ milestone, target })), measured: null, on_track: null })), goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: plan.read_at };
+    return { prd, version: plan.version, status: "ready", source: "prd", dated: false, message: "This PRD's milestones have no dates.", milestones: ms, slices: [], goals: GOALS.map((g) => ({ name: g.name, targets: g.targets.map(([milestone, target]) => ({ milestone, target })), measured: null, on_track: null })), goal_weeks: [], span: null, holidays: [], can_read_again: can, read_at: plan.read_at, summary: [...SUMMARY] };
   }
-  const slices = planSlices();
+  // D3: M2 and M3 without dates: their slices have none either, and the plan has no span.
+  const undatedCodes = plan.partly_dated ? ["M2", "M3"] : [];
+  const slices = planSlices().map((s) => (undatedCodes.includes(s.milestone) ? { ...s, milestone_start: null, milestone_end: null, start_date: null, end_date: null } : s));
   if (plan.goalless) {
     const m = MILESTONES.find((x) => x.code === "M2")!;
     const at = placed(m, 1, 1);
@@ -215,10 +252,11 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
     version: plan.version,
     status: "ready",
     source: "prd",
-    dated: true,
-    message: null,
+    dated: !undatedCodes.length,
+    message: undatedCodes.length ? "This PRD's milestones have no dates." : null,
     milestones: planMilestones().map((m) => ({
       ...m,
+      ...(undatedCodes.includes(m.code) ? { start_date: null, end_date: null } : {}),
       planned_weeks: slices.filter((s) => s.milestone === m.code).reduce((n, s) => n + (s.effort_weeks ?? 0), 0),
       feature_codes: [...new Set(slices.filter((s) => s.milestone === m.code).map((s) => s.feature_code))],
       source: "prd" as const,
@@ -229,10 +267,11 @@ export function planOut(plan: PlanDb | undefined, prd: Schemas["SimpleDocRef"], 
       const w = weeks.get(`${g.name}|${m.code}`);
       return w ? [{ goal: g.name, milestone: m.code, weeks: w }] : [];
     })),
-    span: planSpan(),
+    span: undatedCodes.length ? null : planSpan(),
     holidays: HOLIDAYS.map((h) => ({ ...h })),
     can_read_again: can,
     read_at: plan.read_at,
+    summary: [...SUMMARY],
   };
 }
 

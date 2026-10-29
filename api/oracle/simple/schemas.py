@@ -154,14 +154,33 @@ class SimplePlanMilestone(BaseModel):
     source: Literal["prd", "oracle"] = "prd"
     # prd-timeline: its open decisions and its risks in plain words, as the PRD states them.
     decisions: list["SimplePlanDecision"] = []
-    risks: list[str] = []
+    risks: list["SimplePlanRisk"] = []
+    # fidelity prd (the owner's pick D, 2026-10-28): why this milestone comes now, in the
+    # PRD's words (null: the PRD does not say).
+    why: str | None = None
 
 
 class SimplePlanDecision(BaseModel):
-    """prd-timeline: an open decision a milestone waits on ("Q7 Legal input")."""
+    """prd-timeline: an open decision a milestone waits on ("Q7 Legal input"), with the
+    PRD's recommendation and its due day (the PRD's, else the PRD question's as Oracle reads
+    it; null: no day yet)."""
 
     code: str
     title: str
+    recommendation: str | None = None
+    due_on: dt.date | None = None
+
+
+class SimplePlanRisk(BaseModel):
+    """fidelity prd: a risk a milestone carries, as the PRD's risks table states it: its
+    code ("R-3"), the risk in one sentence, how likely and how big (the PRD's words, "medium",
+    "high") and what we do about it."""
+
+    code: str | None = None
+    title: str
+    likelihood: str | None = None
+    impact: str | None = None
+    what_we_do: str | None = None
 
 
 class SimplePlanGoalTarget(BaseModel):
@@ -210,6 +229,9 @@ class SimplePlanOut(BaseModel):
     holidays: list[SimpleHoliday] = []
     can_read_again: bool = False
     read_at: dt.datetime | None = None
+    # fidelity prd (the owner's pick B, the When strip): the PRD's summary lines (its
+    # Summary section's bullets, "**Goal: ...** ..."), shown above the timeline.
+    summary: list[str] = []
 
 
 class SimpleOpenDecision(BaseModel):

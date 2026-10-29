@@ -1817,7 +1817,7 @@ def _part_html(view: Any, m: Any) -> str:
         "<li>No open decisions</li>"
     ]
     out.append("</ul><h2>Risks</h2><ul>")
-    out += [f"<li>{escape(r)}</li>" for r in m.risks] or ["<li>No risks written yet</li>"]
+    out += [f"<li>{escape(r.title)}</li>" for r in m.risks] or ["<li>No risks written yet</li>"]
     out.append("</ul></section>")
     return "".join(out)
 
