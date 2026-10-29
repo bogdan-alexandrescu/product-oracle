@@ -1,6 +1,6 @@
 import { Chip, type ChipKind } from "@/components/ds";
 import type { Schemas } from "@/lib/api/client";
-import { zoneDateTime, zoneDay, zoneTime } from "@/lib/dates";
+import { dayIn, zoneDateTime, zoneDay, zoneInstant } from "@/lib/dates";
 import { formatDateTime } from "@/lib/format";
 
 export type Report = Schemas["AlignmentReportOut"];
@@ -38,7 +38,8 @@ export const HORIZON_LABEL: Record<string, string> = { now: "Now", next: "Next",
 /** "Oct 29, 4:09 AM": an instant in `zone`, without the zone's name (said once beside it, qa-plan-44). */
 export const zoneMoment = (iso: string, zone: string) => zoneDateTime(iso, zone).replace(/\s+\S+$/, "");
 
-const midnight = (iso: string, zone: string) => zoneTime(iso, zone).startsWith("00:00");
+// A bound at midnight in `zone`: the start of its own day there (shown times are 12-hour, qa-shell-19).
+const midnight = (iso: string, zone: string) => Date.parse(zoneInstant(dayIn(iso, zone), "00:00", zone)) === Date.parse(iso);
 
 /**
  * The bounds of the week a report covers (qa-plan-44), in the zone the report was made in:
