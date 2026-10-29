@@ -1461,8 +1461,12 @@ async def run_reader(s: AsyncSession, job: Any, ask: Any) -> dict[str, Any]:
     await c.load()
     answer = await ask(READER_JOB, await _payload(c, read))
     reply = _talk().restate(c, interpret(c, answer, read.ask_box))
-    if read.meeting_id is not None and reply.kind == "note" and read.line.rstrip().endswith("?") \
-            and reply.body == f"I could not tell what to change. {SAY_AGAIN}":
+    if (
+        read.meeting_id is not None
+        and reply.kind == "note"
+        and read.line.rstrip().endswith("?")
+        and reply.body == f"I could not tell what to change. {SAY_AGAIN}"
+    ):
         reply = Reply("note", MEETING_ASK)
     msg.body, msg.prompt, msg.status = reply.body, reply.kind, "complete"
     if reply.kind == "answer" and isinstance(answer, dict):

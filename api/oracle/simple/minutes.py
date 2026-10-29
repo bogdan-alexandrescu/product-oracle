@@ -87,7 +87,9 @@ class Record:
         # the notes already; each question once, whatever its case or spacing.
         out: list[str] = []
         seen: set[str] = set()
-        chat = [c.text for c in self.chat if c.text.rstrip().endswith("?") and not COMMAND.match(c.text)]
+        chat = [
+            c.text for c in self.chat if c.text.rstrip().endswith("?") and not COMMAND.match(c.text)
+        ]
         for q in [*self.asked, *chat]:
             key = " ".join(q.lower().split())
             if key not in seen:
