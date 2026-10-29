@@ -258,7 +258,7 @@ for (const [where, use] of [
         await expect(page.getByTestId("simple-priorities")).toBeVisible();
         const select = page.getByTestId("line-picker").getByLabel("Line", { exact: true });
         await expect(select).toHaveValue("now");
-        await expect(page.getByTestId("line-caption").first()).toContainText("miss This quarter (Now)");
+        await expect(page.getByTestId("line-caption").first()).toContainText("miss this quarter");
         const options = await select.locator("option").allTextContents();
         expect(options).toEqual(expect.arrayContaining([expect.stringMatching(/^Key date: Customer conference · Nov 14, 2026$/), expect.stringMatching(/^Milestone: Beta · /), "Pick a date…"]));
         const kd = (await select.locator("option", { hasText: "Customer conference" }).getAttribute("value"))!;
@@ -280,7 +280,7 @@ for (const [where, use] of [
         await select.selectOption("pick");
         await page.getByLabel("The line's date").fill("2026-12-31");
         await expect(page).toHaveURL(/line=date(:|%3A)2026-12-31/);
-        await expect(page.getByTestId("line-caption").first()).toContainText("miss By Dec 31, 2026");
+        await expect(page.getByTestId("line-caption").first()).toContainText("miss Dec 31, 2026");
         await page.getByRole("tab", { name: "Value / effort" }).click();
         const points = page.getByTestId("vxe-point");
         await expect(points.first()).toBeVisible();

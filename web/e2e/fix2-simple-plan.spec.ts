@@ -106,11 +106,11 @@ test.describe("QA pass 2: simple-plan, the Ranked list", () => {
       expect(await chip.evaluate((e) => parseFloat(getComputedStyle(e).borderTopWidth))).toBeGreaterThan(0);
       expect(await chip.evaluate((e) => getComputedStyle(e).fontFamily)).not.toMatch(/mono/i);
       await expect(page.getByTestId("prio-misses").first()).toHaveText("Misses this quarter");
-      await expect(page.getByTestId("prio-subtitle")).toContainText("dependency order");
+      await expect(page.getByTestId("prio-subtitle")).toContainText("depends on");
       await page.getByRole("tab", { name: "Goal buckets" }).click();
-      await expect(page.getByTestId("prio-subtitle")).not.toContainText("dependency order");
+      await expect(page.getByTestId("prio-subtitle")).not.toContainText("depends on");
       await page.getByRole("tab", { name: "Value / effort" }).click();
-      await expect(page.getByTestId("prio-subtitle")).not.toContainText("dependency order");
+      await expect(page.getByTestId("prio-subtitle")).not.toContainText("depends on");
     });
 
   test("picking a date is one control, and the caption reads the day", async ({ page }) => {
