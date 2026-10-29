@@ -1,3 +1,4 @@
+import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
@@ -41,6 +42,20 @@ test.describe("desktop", () => {
   test("Start review is enabled for an owner", async ({ page }) => {
     await open(page);
     await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
+  });
+
+  /**
+   * fix2 review (major): start_simple_meeting is per item: an approver who decides an item on
+   * the Roadmap (Avery Lane owns the alerts track in "simple-deciders") may start its review,
+   * so the button stays enabled for them, not only for an owner.
+   */
+  test("Start review is enabled for an approver who decides an item here", async ({ page, context }) => {
+    await context.addInitScript((key) => localStorage.setItem(key, "simple-deciders"), MOCK_SCENARIO_KEY);
+    await open(page, "avery.lane@example.com");
+    const btn = page.getByRole("button", { name: "Start review" });
+    await expect(btn).toBeEnabled();
+    await btn.click();
+    await expect(page.getByRole("dialog")).toBeVisible();
   });
 
   for (const email of ["commenter@example.com", "viewer@example.com"]) {
