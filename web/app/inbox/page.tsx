@@ -220,14 +220,11 @@ function InboxTabs({
   const count = (st: InboxState) => rows.filter((r) => r.counted && r.state === st).length;
   // qa-company-2: the Inbox opens on the tab that holds what waits: New when it has items,
   // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
-  const [tab, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));
+  const [chosen, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));
   // Until the person picks a tab, the rule holds on every visit: a page kept from an earlier
-  // visit and shown again, whose New has emptied into Seen, moves to Seen too.
+  // visit and shown again, whose New has emptied into Seen, shows Seen too.
   const [picked, setPicked] = useState(false);
-  const opensOnSeen = !picked && tab === "new" && count("new") === 0 && count("open") > 0;
-  useEffect(() => {
-    if (opensOnSeen) setTab("open");
-  }, [opensOnSeen]);
+  const tab: InboxState = !picked && chosen === "new" && count("new") === 0 && count("open") > 0 ? "open" : chosen;
   const pick = (t: InboxState) => {
     setPicked(true);
     setTab(t);
