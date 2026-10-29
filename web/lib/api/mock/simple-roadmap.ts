@@ -168,9 +168,13 @@ export const GOALS: Record<string, string> = { "grow-retention": "Grow retention
 /** roadmap-talk's goals (the "roadmap-talk" scenario's items name them); known once such an item is seeded. */
 export const TALK_GOALS: Record<string, string> = { reliability: "Reliability", growth: "Growth", activation: "Activation", revenue: "Revenue" };
 const TALK_ITEM = "adaptive-pacing";
-/** The goals TALK_GOALS adds, when the roadmap holds roadmap-talk's items (the scenario's seed, or a reload of it). */
-export function knowTalkGoals(db: { items: { key: string }[] }): void {
-  if (!(TALK_ITEM in GOALS_KNOWN) && db.items.some((x) => x.key === TALK_ITEM)) {
+/**
+ * The goals TALK_GOALS adds, when the roadmap holds roadmap-talk's items (the scenario's seed, or
+ * a reload of it), or a PRD's dated plan ("simple-plan"...: its goals are these four, so people
+ * suggest features under them from Priorities' Goal buckets).
+ */
+export function knowTalkGoals(db: { items: { key: string }[]; plan?: unknown }): void {
+  if (!(TALK_ITEM in GOALS_KNOWN) && (db.items.some((x) => x.key === TALK_ITEM) || !!db.plan)) {
     Object.assign(GOALS, TALK_GOALS);
     GOALS_KNOWN[TALK_ITEM] = true;
   }
