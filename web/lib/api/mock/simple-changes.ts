@@ -431,6 +431,8 @@ function fixPlan(db: SimpleDb, op: string, itemId: string, depId: string): Recor
   for (const n of dep.needed_by) {
     const next = items.get(n);
     if (!next || next.status === "cut" || next.start.date > dep.end.date) continue;
+    // A sibling whose order on dep was accepted as a risk stays where it is (as the API).
+    if (n !== itemId && next.flags.some((f) => f.kind === "dependency_order" && f.state === "amber" && f.subject === depId)) continue;
     const delta = days(next.start.date, addDays(dep.end.date, 1));
     moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
     queue.push(n);

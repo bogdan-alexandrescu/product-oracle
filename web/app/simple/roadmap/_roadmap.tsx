@@ -718,7 +718,8 @@ export function SimpleRoadmap() {
   // #13: viewers and commenters never start a review (the PRD's own decider or an owner
   // does, per_item "owner" on start_simple_meeting); gate the button here too, not only
   // inside the sheet, so it reads as disabled rather than silently failing once opened.
-  const mayStartReview = can("start_simple_meeting");
+  // Below an owner, deciding an item on this view is the item answer.
+  const mayStartReview = can("start_simple_meeting", data.items.some((i) => i.can_decide));
   const waiting =
     data.items.filter((i) => i.can_decide && broken(i).length).length + data.items.filter((i) => i.suggestion?.can_decide).length + allProposals.filter((c) => c.can_decide).length;
   const qList = quarters(data.windows.now.start, data.windows.later.end);

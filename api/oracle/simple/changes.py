@@ -435,6 +435,13 @@ def _uuid(value: Any, name: str) -> uuid.UUID:
         raise ChangeError(422, f"target.{name}: an id") from e
 
 
+def _accepted_order(n: service.Entry, dep: service.Entry) -> bool:
+    return any(
+        f.kind == "dependency_order" and f.state == "amber" and str(f.subject) == str(dep.row.id)
+        for f in n.flags
+    )
+
+
 def _fix_plan(
     op: str, entry: service.Entry, dep: service.Entry, by_id: dict[uuid.UUID, service.Entry]
 ) -> dict[uuid.UUID, tuple[date, date]]:
@@ -453,6 +460,9 @@ def _fix_plan(
     for nid in dep.needed_by:
         n = by_id.get(nid)
         if n is None or n.status == "cut" or n.resolved.start.date > dep.resolved.end.date:
+            continue
+        # A sibling whose order on `dep` was accepted as a risk stays where it is.
+        if nid != entry.row.id and _accepted_order(n, dep):
             continue
         delta = dep.resolved.end.date + one - n.resolved.start.date
         moves[nid] = (n.resolved.start.date + delta, n.resolved.end.date + delta)
