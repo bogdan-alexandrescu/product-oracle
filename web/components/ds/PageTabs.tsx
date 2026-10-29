@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { createContext, useContext, type ReactNode } from "react";
 
 const TabsContext = createContext<ReactNode>(null);
@@ -25,7 +26,9 @@ export function PageTabsProvider({ tabs, section, children }: { tabs: ReactNode;
  */
 export function SectionTitle({ children }: { children: ReactNode }) {
   const section = useContext(SectionContext);
-  return <>{section ?? children}</>;
+  // Only the section's own tabs (/settings/members); a page inside a tab (a template) keeps its title.
+  const tab = /^\/[^/]+(\/[^/]+)?\/?$/.test(usePathname() ?? "");
+  return <>{section && tab ? section : children}</>;
 }
 
 /** The tabs of the enclosing PageTabsProvider, if any, as the header's last line. */
