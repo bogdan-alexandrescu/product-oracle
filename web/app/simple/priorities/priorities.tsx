@@ -160,7 +160,7 @@ export function Priorities() {
           <p className="text-text2" data-testid="prio-subtitle">
             {SUBTITLE[tab]}
             {data ? ` ${data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}.` : ""}
-            {data && tab === "ranked" && regrouped(data.rows) ? " The plan's dates decide what makes the line, so what makes it is listed first." : ""}
+            {data && tab === "ranked" && data.plan?.span && regrouped(data.rows) ? " The plan's dates decide what makes the line, so what makes it is listed first." : ""}
           </p>
         </div>
         <Link href="/priorities" className="text-[length:var(--simple-small)] font-medium text-accent-ink underline">
@@ -299,7 +299,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
 }
 
 function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
-  const rows = byLine(data.rows);
+  const rows = byLine(data);
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const maxValue = Math.max(1, ...rows.map((r) => r.goal_value ?? 0));
@@ -1048,7 +1048,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   ]);
   const effortLabel = (w && effortSpots.find((s) => free(s.box))) || effortSpots[0];
   const valueLabel = (w && valueSpots.find((s) => free(s.box))) || valueSpots[0];
-  const listed = byLine(rows);
+  const listed = byLine(data);
   const split = lineSplit(listed);
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
@@ -1295,7 +1295,9 @@ const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now"
  * decide what makes the line, so what makes it comes first and what misses it after (each
  * part by rank, every row keeping its #), and the line is drawn once between them.
  */
-function byLine(rows: Row[]): Row[] {
+function byLine(data: Out): Row[] {
+  const rows = data.rows;
+  if (!data.plan?.span) return rows;
   return [...rows.filter((r) => r.above_line), ...rows.filter((r) => !r.above_line)];
 }
 
