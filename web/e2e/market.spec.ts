@@ -296,7 +296,7 @@ test("at Observe the digest occurrence does not offer Write the digest with Orac
   const level = async (label: string) => {
     await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
     await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
     const market = page.getByTestId("autonomy-row-market");
     await expect(market).toContainText("Watch the market");
     await market.getByRole("group").getByRole("button", { name: label, exact: true }).click();

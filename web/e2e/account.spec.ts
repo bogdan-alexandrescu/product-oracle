@@ -95,7 +95,7 @@ test("members: you cannot remove yourself or the last owner, and the control say
 test("api tokens: every kind, filter by kind and member, revoke with confirm", async ({ page }) => {
   await login(page);
   await page.goto("/settings/api-tokens");
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "API tokens" })).toBeVisible();
   const rows = page.getByTestId("token-row");
   await expect(rows).toHaveCount(9);
   for (const kind of ["personal", "service", "run", "mcp_client"]) {

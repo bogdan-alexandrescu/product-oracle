@@ -56,7 +56,7 @@ test("asking while another tab's digest is being written says so, even at Observ
   await c.goto("/home");
   await c.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await c.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(c.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(c.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
   const market = c.getByTestId("autonomy-row-market");
   await market.getByRole("group").getByRole("button", { name: "Observe", exact: true }).click();
   const sheet = c.getByRole("dialog", { name: "Change Watch the market" });

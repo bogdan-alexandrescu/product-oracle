@@ -11,7 +11,7 @@ async function openAdd(page: Page) {
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-claude-accounts").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Claude accounts" })).toBeVisible();
   await page.getByRole("button", { name: "+ Add account" }).click();
   return page.getByTestId("add-account");
 }

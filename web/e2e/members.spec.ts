@@ -7,7 +7,7 @@ const memberRow = (page: Page, email: string) => page.getByTestId("member-row").
 test("members: an owner changes a role, and the last owner is protected", async ({ page }) => {
   await login(page);
   await page.goto("/settings/members");
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Members" })).toBeVisible();
   // Four active members and one removed one (kept: history keeps the name).
   await expect(page.getByTestId("member-row")).toHaveCount(5);
   await expect(memberRow(page, "admin@example.com")).toContainText("(you)");

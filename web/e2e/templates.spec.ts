@@ -5,7 +5,7 @@ import { login } from "./helpers";
 test("templates: listed by kind, with built-in badges and an archived toggle", async ({ page }) => {
   await login(page);
   await page.goto("/settings/templates");
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Templates" })).toBeVisible();
   const prd = page.getByTestId("templates-prd");
   const roadmap = page.getByTestId("templates-roadmap");
   await expect(prd.locator('tr[data-testid^="template-row-"]')).toHaveCount(7);

@@ -18,7 +18,7 @@ const rail = (page: Page) => page.getByRole("navigation", { name: "Oracle" });
 async function openAutonomy(page: Page) {
   await rail(page).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
 }
 
 // protects=the four shipped responsibilities show no "Takes effect when <pick> ships" chip, and

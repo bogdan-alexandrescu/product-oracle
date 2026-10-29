@@ -34,7 +34,7 @@ async function openWebhooks(page: Page, email?: string) {
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-webhooks").click();
   await expect(page).toHaveURL(/\/settings\/webhooks$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Webhooks" })).toBeVisible();
 }
 
 async function createWebhook(page: Page, name: string, url: string, groups: string[] = ["Runs"]) {

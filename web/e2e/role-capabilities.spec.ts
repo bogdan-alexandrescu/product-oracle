@@ -73,7 +73,7 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
 
     // Claude accounts: read the pool, no controls, View only.
     await settingsNav(page).getByTestId("nav-claude-accounts").click();
-    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Claude accounts" })).toBeVisible();
     await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
     await expect(page.getByRole("button", { name: "+ Add account" })).toHaveCount(0);
     // BGD 2026-10-25: the pool reads without who holds each account (owners alone see it).
@@ -91,7 +91,7 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
 
     // Templates and themes: approvers make them; below that, View only and no New button.
     await settingsNav(page).getByTestId("nav-templates").click();
-    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Templates" })).toBeVisible();
     if (role === "approver") {
       await expect(page.getByRole("link", { name: "New template" })).toBeVisible();
       await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveCount(0);
@@ -100,7 +100,7 @@ for (const role of ["approver", "commenter", "viewer"] as const) {
       await expect(page.getByRole("link", { name: "New template" })).toHaveCount(0);
     }
     await settingsNav(page).getByTestId("nav-themes").click();
-    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Themes" })).toBeVisible();
     if (role === "approver") await expect(page.getByRole("link", { name: "New theme" })).toBeVisible();
     else await expect(page.getByRole("link", { name: "New theme" })).toHaveCount(0);
   });
@@ -154,6 +154,6 @@ test("when the capabilities cannot be read, Settings says so and Retry reads the
   await page.evaluate(() => localStorage.removeItem("po-mock-fail"));
   await failed.getByRole("button", { name: "Retry" }).click();
   await expect(page.getByTestId("caps-error")).toHaveCount(0);
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Templates" })).toBeVisible();
   await expect(page.getByTestId("view-only").filter({ visible: true })).toHaveText("View only");
 });

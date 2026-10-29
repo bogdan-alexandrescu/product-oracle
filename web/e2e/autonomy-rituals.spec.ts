@@ -20,7 +20,7 @@ test("autonomy: Run rituals at Act within $5 a run is in effect, with no pending
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
   const rituals = row(page, "rituals");
   await expect(rituals).toContainText("Run rituals");
   await expect(rituals.getByTestId("autonomy-pending")).toHaveCount(0);

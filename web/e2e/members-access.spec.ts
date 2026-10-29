@@ -63,7 +63,7 @@ for (const role of ["owner", "approver", "commenter", "viewer"] as const) {
   test(`${role}: Members shows access requests and their controls only to a role that can decide them`, async ({ page }) => {
     await login(page, role === "owner" ? "admin@example.com" : `${role}@example.com`);
     await page.goto("/settings/members");
-    await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Members" })).toBeVisible();
     // A5: approvers decide requests too, with their own roles (viewer and commenter).
     const decides = role === "owner" || role === "approver";
     await expect(page.getByTestId("access-requests")).toHaveCount(decides ? 1 : 0);

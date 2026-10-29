@@ -18,7 +18,7 @@ const step = (page: Page, key: string, label: string) => row(page, key).getByRol
 async function openAutonomy(page: Page) {
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
 }
 
 /** An owner sets one responsibility to Observe on Settings › Autonomy, with a reason. */

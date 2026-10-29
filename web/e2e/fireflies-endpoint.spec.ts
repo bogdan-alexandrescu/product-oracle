@@ -12,7 +12,7 @@ async function openConnections(page: Page) {
   // page shows would be that hidden one for good, so the click waits for the page it opens.
   await page.waitForURL((u) => (href === "/settings" ? u.pathname.startsWith("/settings/") : u.pathname === href));
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-connections").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Connections" })).toBeVisible();
   return page.getByTestId("connection-card-fireflies");
 }
 

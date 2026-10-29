@@ -25,7 +25,7 @@ test("autonomy: Triage requests at Act is in effect at 90% confidence or more", 
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
   const requests = row(page, "requests");
   await expect(requests).toContainText("Triage requests");
   await step(page, "requests", "Act").click();
@@ -59,7 +59,7 @@ test("autonomy: an Oracle did row of a merged request opens the request", async 
 async function setRequests(page: Page, label: "Observe" | "Draft" | "Recommend", why: string) {
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
   await step(page, "requests", label).click();
   const sheet = page.getByRole("dialog", { name: "Change Triage requests" });
   await sheet.getByLabel("Why").fill(why);

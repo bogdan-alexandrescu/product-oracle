@@ -7,7 +7,7 @@ async function openConnections(page: Page) {
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-connections").click();
   await expect(page).toHaveURL(/\/settings\/connections$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Connections" })).toBeVisible();
 }
 
 test("connections: a card per data provider, and Claude is not one of them", async ({ page }) => {
