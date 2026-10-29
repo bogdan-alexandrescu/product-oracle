@@ -239,6 +239,7 @@ export function SuggestionPopover({
   onDismiss,
   onClose,
   style,
+  above,
 }: {
   item: Item;
   canAct: boolean;
@@ -247,17 +248,32 @@ export function SuggestionPopover({
   onDismiss: () => void;
   onClose: () => void;
   style: React.CSSProperties;
+  /** qa-simple-roadmap-29: the bar's top in the chart (px): with no room below the bar
+   * inside the chart, the popover opens above it, clear of the chart's foot and legend. */
+  above?: number;
 }) {
   const s = item.suggestion!;
   const [editing, setEditing] = useState(false);
   const [start, setStart] = useState(s.start_date);
   const [end, setEnd] = useState(s.end_date);
+  const box = useRef<HTMLDivElement>(null);
+  const [flip, setFlip] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent || above == null) return setFlip(null);
+    const top = Number(style.top ?? 0);
+    const h = el.offsetHeight;
+    setFlip(top + h > parent.clientHeight && above - h >= 0 ? above - h : null);
+  }, [above, style.top, editing]);
   return (
     <div
+      ref={box}
       role="dialog"
       aria-label="Oracle's date suggestion"
       data-testid="suggestion-popover"
-      style={style}
+      data-side={flip != null ? "above" : "below"}
+      style={flip != null ? { ...style, top: flip } : style}
       className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
     >
       <p className="text-sm font-semibold">

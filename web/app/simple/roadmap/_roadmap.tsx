@@ -449,7 +449,7 @@ export function SimpleRoadmap() {
   const [format, setFormat] = useState<Format>("timeline");
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
-  const [pop, setPop] = useState<{ id: string; left: number; top: number } | null>(null);
+  const [pop, setPop] = useState<{ id: string; left: number; top: number; above: number } | null>(null);
   const [tray, setTray] = useState(false);
   const [keyDates, setKeyDates] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -649,12 +649,12 @@ export function SimpleRoadmap() {
     [horizons],
   );
 
-  const anchorOf = (id: string): { left: number; top: number } => {
+  const anchorOf = (id: string): { left: number; top: number; above: number } => {
     const el = wrap.current?.querySelector(`[data-bar-id="${id}"]`);
     const box = wrap.current?.getBoundingClientRect();
     const r = el?.getBoundingClientRect();
-    if (!r || !box) return { left: 0, top: 0 };
-    return { left: Math.max(0, Math.min(r.left - box.left, box.width - 390)), top: r.bottom - box.top + 6 };
+    if (!r || !box) return { left: 0, top: 0, above: 0 };
+    return { left: Math.max(0, Math.min(r.left - box.left, box.width - 390)), top: r.bottom - box.top + 6, above: r.top - box.top - 6 };
   };
 
   const onDecide = useCallback(
@@ -1113,6 +1113,7 @@ export function SimpleRoadmap() {
             item={popItem}
             canAct={can("accept_date_suggestion")}
             style={{ left: pop.left, top: pop.top }}
+            above={pop.above}
             onAccept={() => void onSuggestion(popItem, "accept")}
             onEdit={(s, e) => void onSuggestion(popItem, "edit", { start_date: s, end_date: e })}
             onDismiss={() => void onSuggestion(popItem, "dismiss")}
