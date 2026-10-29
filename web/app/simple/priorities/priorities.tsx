@@ -160,6 +160,7 @@ export function Priorities() {
           <p className="text-text2" data-testid="prio-subtitle">
             {SUBTITLE[tab]}
             {data ? ` ${data.plan?.span ? `This plan, ${planSpan(data.plan.span)}` : data.quarter.label}.` : ""}
+            {data && tab === "ranked" && regrouped(data.rows) ? " The plan's dates decide what makes the line, so what makes it is listed first." : ""}
           </p>
         </div>
         <Link href="/priorities" className="text-[length:var(--simple-small)] font-medium text-accent-ink underline">
@@ -298,7 +299,7 @@ function Ranked({ data, phone, compare, mayChange, changed, moved }: { data: Out
 }
 
 function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayChange: boolean; onMove: (row: Row, position: number) => void; changed: Changed; moved: Moved | null }) {
-  const rows = data.rows;
+  const rows = byLine(data.rows);
   const refs = useRef<(HTMLLIElement | null)[]>([]);
   const [drag, setDrag] = useState<{ from: number; to: number } | null>(null);
   const maxValue = Math.max(1, ...rows.map((r) => r.goal_value ?? 0));
@@ -323,16 +324,16 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
     if (!drag) return;
     const to = targetIndex(e.clientY);
     setDrag(null);
-    if (to !== drag.from) onMove(rows[drag.from], to + 1);
+    if (to !== drag.from) onMove(rows[drag.from], rows[to].rank);
   }
 
   function key(e: KeyboardEvent, i: number) {
     if (e.key === "ArrowUp" && i > 0) {
       e.preventDefault();
-      onMove(rows[i], i);
+      onMove(rows[i], rows[i - 1].rank);
     } else if (e.key === "ArrowDown" && i < rows.length - 1) {
       e.preventDefault();
-      onMove(rows[i], i + 2);
+      onMove(rows[i], rows[i + 1].rank);
     }
   }
 
@@ -1047,7 +1048,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
   ]);
   const effortLabel = (w && effortSpots.find((s) => free(s.box))) || effortSpots[0];
   const valueLabel = (w && valueSpots.find((s) => free(s.box))) || valueSpots[0];
-  const split = lineSplit(rows);
+  const listed = byLine(rows);
+  const split = lineSplit(listed);
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
       <section aria-label="Value / effort" className="min-w-0">
@@ -1168,7 +1170,7 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
         <h2 className="mb-2 text-[21px] font-[650] leading-7">Ranked</h2>
         <LineCaption data={data} compact />
         <ol className="flex flex-col gap-1">
-          {rows.flatMap((r, i) => {
+          {listed.flatMap((r, i) => {
             const words = movedWords(moved, r);
             const isSelected = selected === r.feature_id;
             return [
@@ -1191,8 +1193,8 @@ function ValueEffort({ data, shapes, mayChange, changed, moved }: { data: Out; s
                   <span className="w-5 flex-none text-right font-[650] tabular-nums" data-testid="side-rank">
                     {r.rank}
                   </span>
-                  <span className="flex-none font-mono text-[13px]" data-testid="side-code" title={r.code}>
-                    {r.short_code || r.code}
+                  <span className="flex-none whitespace-nowrap rounded-md border border-line-strong bg-surface px-1 text-[13px] font-semibold tabular-nums text-text" data-testid="side-code" title={r.title}>
+                    {r.short_code || r.title}
                   </span>
                   <span className="min-w-0 flex-1 truncate" data-testid="prio-title" title={r.title}>
                     {r.title}
@@ -1288,6 +1290,20 @@ const lineLabel = (data: Out): string => (!data.line || data.line.kind === "now"
  * row after it misses it too (rank order is dependency order and stays; otherwise each row
  * that misses is marked on its own and there is no divider). -1: no divider.
  */
+/**
+ * The rows as the list shows them: by rank, except that with a dated plan the plan's dates
+ * decide what makes the line, so what makes it comes first and what misses it after (each
+ * part by rank, every row keeping its #), and the line is drawn once between them.
+ */
+function byLine(rows: Row[]): Row[] {
+  return [...rows.filter((r) => r.above_line), ...rows.filter((r) => !r.above_line)];
+}
+
+/** True when the plan's dates put rows that make the line below rows that miss it. */
+function regrouped(rows: Row[]): boolean {
+  return rows.some((r, i) => r.above_line && rows.slice(0, i).some((x) => !x.above_line));
+}
+
 function lineSplit(rows: Row[]): number {
   const first = rows.findIndex((r) => !r.above_line);
   return first >= 0 && rows.slice(first).every((r) => !r.above_line) ? first : -1;
