@@ -20,6 +20,8 @@ async function signIn(page: Page, email: string, to: string) {
   await tap(page.getByRole("button", { name: "Sign in" }));
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto(to);
+  // A phone's Timeline (timeline-overlap B3) draws thin lanes with no bars: a phone reads the bar's dates on the Gantt.
+  if (to === "/simple/roadmap" && (page.viewportSize()?.width ?? 1366) <= 640) await tap(page.getByTestId("format-gantt"));
 }
 
 /** Opens Ask Oracle (the rail's button; the header's Ask on a phone) and answers its change-by-chat section. */

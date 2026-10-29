@@ -31,6 +31,8 @@ async function signIn(page: Page, email: string, to: string) {
   await tap(page.getByRole("button", { name: "Sign in" }));
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto(to);
+  // A phone's Timeline (timeline-overlap B3) draws thin lanes with no bars: a phone opens the card from the Gantt's bars.
+  if (to === "/simple/roadmap" && (page.viewportSize()?.width ?? 1366) <= 640) await tap(page.getByTestId("format-gantt"));
 }
 
 const bar = (page: Page, key: string) => page.locator(`[data-testid="bar"][data-item="${key}"]`);
