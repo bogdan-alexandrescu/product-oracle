@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-
 import { AnalyticsSettings } from "./AnalyticsSettings";
 import { PageSkeleton } from "@/components/ds";
 

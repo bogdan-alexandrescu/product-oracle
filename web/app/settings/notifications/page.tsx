@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-
 import { NotificationsSettings } from "./NotificationsSettings";
 import { PageSkeleton } from "@/components/ds";
 

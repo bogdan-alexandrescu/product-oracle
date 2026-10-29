@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-
 import { BriefDetail } from "../_brief-detail";
 import { PageSkeleton } from "@/components/ds";
 

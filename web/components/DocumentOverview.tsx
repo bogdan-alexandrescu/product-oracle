@@ -21,6 +21,7 @@ import {
   LinkButton,
   Page,
   PageHeader,
+  PageSkeleton,
   Panel,
   Split,
   type Column,
@@ -339,7 +340,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
       <DocToolbar doc={d} />
       <Page>
         {q.error && <ErrorNote>{q.error}</ErrorNote>}
-        {!d && !q.error && <Loading />}
+        {!d && !q.error && <PageSkeleton bare />}
         {d && (
           <>
             <PageHeader

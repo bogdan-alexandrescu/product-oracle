@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-
 import { ReportDetail } from "../_report";
 import { PageSkeleton } from "@/components/ds";
 

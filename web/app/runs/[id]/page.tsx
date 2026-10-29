@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-
 import { RunDetail } from "../_run-detail";
 import type { RouteProps } from "@/lib/route-props";
 import { PageSkeleton } from "@/components/ds";

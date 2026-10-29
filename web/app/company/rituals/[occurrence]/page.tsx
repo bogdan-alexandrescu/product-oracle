@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-
 import { OccurrenceDetail } from "../_components/OccurrenceDetail";
 import { PageSkeleton } from "@/components/ds";
 

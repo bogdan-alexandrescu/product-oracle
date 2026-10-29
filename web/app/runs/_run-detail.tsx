@@ -23,6 +23,7 @@ import {
   Notice,
   Page,
   PageHeader,
+  PageSkeleton,
   Panel,
   Sheet,
   Split,
@@ -238,11 +239,7 @@ export function RunDetail({ id }: { id: string }) {
     return (
       <Page>
         <PageHeader back={back} title="Run" />
-        {q.error ? (
-          <ErrorNote>{q.error}</ErrorNote>
-        ) : (
-          <Loading />
-        )}
+        {q.error ? <ErrorNote>{q.error}</ErrorNote> : <PageSkeleton bare />}
       </Page>
     );
   }

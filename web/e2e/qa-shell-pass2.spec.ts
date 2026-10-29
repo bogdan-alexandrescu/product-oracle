@@ -88,7 +88,7 @@ for (const phone of [false, true]) {
       const reset = menu.getByRole("button", { name: /Reset/ });
       await expect(reset).toHaveAttribute("title", "Restore the sample data and sign out");
       await reset.click();
-      const ask = page.getByRole("dialog", { name: "Reset sample data" });
+      const ask = page.getByRole("alertdialog", { name: "Reset sample data" });
       await expect(ask).toContainText("Every change made in this browser is lost.");
       await ask.getByRole("button", { name: "Back" }).click();
       await expect(ask).toHaveCount(0);
@@ -218,11 +218,12 @@ test("qa-shell-12: signed out, the form shows once the check answers", async ({ 
 test("qa-shell-10: a page that is still loading draws its skeleton, not a bare Loading line", async ({ page }) => {
   await login(page);
   // Hold the page's scripts: what shows is the server's first paint, the Suspense fallback.
-  await page.route("**/_next/static/chunks/**", async (route) => {
+  // Scripts only: the stylesheets block the first paint.
+  await page.route(/\/_next\/static\/chunks\/.*\.js$/, async (route) => {
     await new Promise((r) => setTimeout(r, 4_000));
     await route.continue();
   });
-  await page.goto("/settings/webhooks", { waitUntil: "commit" });
+  await page.goto("/settings/analytics", { waitUntil: "commit" });
   await expect(page.getByTestId("page-skeleton")).toBeVisible();
   await expect(page.getByText("Loading…", { exact: true })).toHaveCount(0);
 });

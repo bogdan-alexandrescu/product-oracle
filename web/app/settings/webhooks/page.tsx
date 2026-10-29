@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 
-
 import { WebhooksSettings } from "./WebhooksSettings";
 import { PageSkeleton } from "@/components/ds";
 
