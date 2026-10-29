@@ -6,12 +6,13 @@ import { expect, test, type Locator, type Page } from "./test";
 /*
  * roadmap-milestones, BGD's pick D "Gantt with milestone diamonds and per-slice bars" (fidelity
  * pass, 2026-10-28: "fix the two differences and make it match with the mockup"): the Gantt's
- * rows start with the item's code (F-05 Team invites), a split item's bars carry their slice
- * codes (F-05a, F-05b) while a one-piece bar has none, each milestone's end is a diamond with
- * "M1 ends Nov 27" and a dashed line down the chart in the milestone's colour, the axis's
- * labels (milestone ends, key dates, track milestones, Today) never overlap, the goal rows
- * carry their metric, holidays are grey columns, an item pulled in by a waiting change reads
- * "pending"; on a phone (D3) the chart comes first, under the switch and the scale with
+ * rows name the item (its code, when unique, only in the tooltip: fix2-simple-roadmap-gantt
+ * finding 15/16), a split item's bars carry their slice codes (F-05a, F-05b) while a one-piece
+ * bar has none, each milestone's end is a diamond with "M1 ends Nov 27" and a dashed line down
+ * the chart in the milestone's colour, the axis's labels (milestone ends, key dates, track
+ * milestones, Today) never overlap, the goal rows carry their metric, holidays are grey
+ * columns, an item pulled in by a waiting change reads "Pending decision"; on a phone (D3) the
+ * chart comes first, under the switch and the scale with
  * "Swipe sideways for M…". Driven through the UI against the mock's "simple-plan" scenario
  * (invented data: Guided setup's plan, M1 Prove it ends 27 Nov, M2 Scale volume 25 Dec, M3
  * Open to all 12 Feb, a year-end break) and the default one (two key dates, a track's Beta).
@@ -59,16 +60,17 @@ for (const phone of [false, true]) {
 
       /**
        * Card milestones-d-gantt: protects = on the Gantt grouped by goal, Team invites' row
-       * reads "F-05" then "Team invites" (the code first, in the code type), its two bars are
-       * labelled F-05a and F-05b while Usage dashboard's one bar has no label, each milestone
-       * end is a diamond with "M1 ends Nov 27" (a phone: "M1 ends") and a dashed line in the
-       * milestone's colour, the Faster activation row carries its metric and no count or
-       * button, the year-end break is a grey column, Team invite nudges (pulled in, waiting
-       * for its decider) reads "pending" with an amber bar, the legend says what each mark
-       * means; fails_when = a row lacks its code, a split bar lacks its slice code or a single
-       * bar gains one, a milestone end is a bare code ("M2"), its line is not dashed in its
-       * colour, two axis labels overlap, or the pending item is not marked; no_claim = pixel
-       * colours, the card (the card lane's specs).
+       * reads "Team invites" with its code (F-05, unique) only in its tooltip (fix2-simple-
+       * roadmap-gantt finding 15/16: a visible code is dropped since the mock repeats one on
+       * two items), its two bars are labelled F-05a and F-05b while Usage dashboard's one bar
+       * has no label, each milestone end is a diamond with "M1 ends Nov 27" (a phone: "M1
+       * ends") and a dashed line in the milestone's colour, the Faster activation row carries
+       * its metric and no count or button, the year-end break is a grey column, Team invite
+       * nudges (pulled in, waiting for its decider) reads "Pending decision" with an amber bar,
+       * the legend says what each mark means; fails_when = a split bar lacks its slice code or
+       * a single bar gains one, a milestone end is a bare code ("M2"), its line is not dashed
+       * in its colour, two axis labels overlap, or the pending item is not marked; no_claim =
+       * pixel colours, the card (the card lane's specs).
        */
       test(`the Gantt: codes, slice codes, milestone ends, labels apart (${where})`, async ({ page }) => {
         await open(page, scheme);
@@ -76,10 +78,12 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
         await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
 
+        // fix2-simple-roadmap-gantt finding 15/16: the row's name is all that shows; its code
+        // (unique here) is only in the tooltip, so a reader never sees a bare code like "F-06"
+        // on two different items.
         const invites = row(page, "Team invites");
-        await expect(invites.getByTestId("label-code")).toHaveText("F-05");
-        const [code, name] = [(await invites.getByTestId("label-code").boundingBox())!, (await invites.getByTestId("label-title").boundingBox())!];
-        expect(code.x + code.width).toBeLessThanOrEqual(name.x);
+        await expect(invites.getByTestId("label-code")).toHaveCount(0);
+        await expect(invites.getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
 
         await slice(page, "F-05a").scrollIntoViewIfNeeded();
         await expect(slice(page, "F-05a").getByTestId("slice-label")).toHaveText("F-05a");
@@ -100,7 +104,7 @@ for (const phone of [false, true]) {
         await expect(activation.getByRole("button")).toHaveCount(0);
 
         await expect(page.getByTestId("no-work")).toHaveAttribute("fill", "var(--na-bg)");
-        await expect(row(page, "Team invite nudges").getByTestId("pending-tag")).toHaveText("pending");
+        await expect(row(page, "Team invite nudges").getByTestId("pending-tag")).toHaveText("Pending decision");
         await expect(page.locator('g[data-testid="bar"][data-item="setup-ideas"]')).toHaveAttribute("data-pulled", "true");
         await expect(page.getByTestId("today-mark")).toContainText(phone ? "" : "Today");
         if (phone) await expect(page.getByTestId("today-mark").locator("text")).toHaveCount(0);

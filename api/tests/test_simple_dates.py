@@ -25,10 +25,10 @@ Test cards (protects / fails_when / no_claim):
   estimated; fails_when=a named date is ignored; no_claim=gates without a phase name.
 - test_suggestion_* (dependencies, median, fallback, clipping, no clip past the window):
   protects=start = the later of the window start and the day after the dependencies'
-  latest end; duration = the median of same-confidence dated items, else 42 days; end
-  clipped to the window's end when the start is inside it; one-sentence basis;
-  fails_when=any of these rules is not the one applied; no_claim=the daily regeneration
-  (API tests).
+  latest end; duration = the median of same-confidence dated items, else 42 days, put in
+  plain words ("about the same as N similar items"), not "median"; end clipped to the
+  window's end when the start is inside it; one-sentence basis; fails_when=any of these
+  rules is not the one applied; no_claim=the daily regeneration (API tests).
 """
 
 from datetime import UTC, date, datetime
@@ -139,7 +139,8 @@ def test_suggestion_dependencies_push_the_start():
 def test_suggestion_without_dependencies_starts_with_the_window():
     s = dates.suggest(WINDOW, [], [10, 20, 60], "medium", "now")
     assert (s.start, s.end) == (date(2026, 10, 1), date(2026, 10, 20))
-    assert "median" in s.basis
+    # fix2-simple-roadmap-gantt finding 30: plain words, not "median".
+    assert "similar" in s.basis and "median" not in s.basis
 
 
 def test_suggestion_falls_back_to_42_days():
