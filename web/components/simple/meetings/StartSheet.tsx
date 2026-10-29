@@ -177,7 +177,7 @@ function Form({ options, fixed, occurrence, ritual, origin, live, onClose }: { o
       ) : (
         <>
           <fieldset>
-            <legend className="font-semibold">Attendees</legend>
+            <legend className="font-semibold">Invite people with these roles</legend>
             <div className="mt-1 grid gap-1 sm:grid-cols-2">
               {options.members.map((m) => (
                 <label key={m.id} className={CHOICE}>

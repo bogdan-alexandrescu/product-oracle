@@ -423,9 +423,20 @@ function fixPlan(db: SimpleDb, op: string, itemId: string, depId: string): Recor
     const end = addDays(item.start.date, -1);
     return { [depId]: [addDays(dep.start.date, days(dep.end.date, end)), end] };
   }
-  const shift = days(item.start.date, addDays(dep.end.date, 1));
-  const moves: Record<string, [string, string]> = { [itemId]: [addDays(item.start.date, shift), addDays(item.end.date, shift)] };
-  const queue = [itemId];
+  // #9: every direct dependent of `dep` that starts too early moves, not only the one whose
+  // callout was clicked (two items can share a dependency, each estimated or slice-dated);
+  // then the move walks forward transitively through each moved item's own dependents.
+  const moves: Record<string, [string, string]> = {};
+  const queue: string[] = [];
+  for (const n of dep.needed_by) {
+    const next = items.get(n);
+    if (!next || next.status === "cut" || next.start.date > dep.end.date) continue;
+    // A sibling whose order on dep was accepted as a risk stays where it is (as the API).
+    if (n !== itemId && next.flags.some((f) => f.kind === "dependency_order" && f.state === "amber" && f.subject === depId)) continue;
+    const delta = days(next.start.date, addDays(dep.end.date, 1));
+    moves[n] = [addDays(next.start.date, delta), addDays(next.end.date, delta)];
+    queue.push(n);
+  }
   while (queue.length) {
     const cur = queue.shift()!;
     for (const n of items.get(cur)!.needed_by) {

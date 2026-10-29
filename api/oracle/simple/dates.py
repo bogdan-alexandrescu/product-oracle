@@ -241,10 +241,12 @@ def suggest(
             start, why = latest + DAY, f"starts the day after '{title[:60]}' ends"
     days = median_days(durations)
     conf = f"{confidence}-confidence" if confidence else "unrated"
+    # finding 30: plain words, not statistics jargon ("median").
     how = (
-        f"{days} days, the median of {len(durations)} dated {conf} items"
+        f"{days} days, about the same as {len(durations)} similar {conf} "
+        f"item{'' if len(durations) == 1 else 's'}"
         if durations
-        else f"{days} days, the default with no dated {conf} items"
+        else f"{days} days, typical with no dated {conf} items yet"
     )
     end = start + timedelta(days=days - 1)
     tail = ""

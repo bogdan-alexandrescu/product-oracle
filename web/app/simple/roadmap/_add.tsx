@@ -2,17 +2,18 @@
 
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { Button, Sheet } from "@/components/ds";
+import { Button, Icon, Sheet } from "@/components/ds";
 
 import type { Where } from "./_lib";
 
 type Ref = { id: string; title: string };
 
 /**
- * S7's quick add. A desktop types a title, then drags its chip onto a quarter column of the
- * timeline, a Now / Next / Later column of the board or a goal's header (any element with
- * data-add-where="kind:value"); Enter opens the same choice as a form. A phone taps Add: a
- * sheet with the title and where. The page sends the add_item change (editors apply,
+ * S7's quick add. A desktop types a title, then either drags its chip onto a quarter column
+ * of the timeline, a Now / Next / Later column of the board or a goal's header (any element
+ * with data-add-where="kind:value"), or presses Enter to add it straight away, as a draft,
+ * to the first of those places; it can be dragged to the right place after. A phone taps
+ * Add: a sheet with the title and where. The page sends the add_item change (editors apply,
  * others propose). The Roadmap filter decides which roadmap: one chosen (`target`) is named
  * in the field; with all roadmaps and more than one (`roadmaps`), the field and the sheet
  * ask which (a select), and nothing is sent until one is chosen.
@@ -68,6 +69,12 @@ export function QuickAdd({
     const t = title.trim();
     if (!t || (ask && !chosen)) return;
     if (await onAdd(t, where, chosen)) setTitle("");
+  };
+
+  /** Enter, on a desktop: add it straight away (as a draft) to the first available place,
+   * same as dropping the chip there — no sheet repeating the title and roadmap it already has. */
+  const sendDefault = () => {
+    if (ready && options[0]) void send(options[0]);
   };
 
   const onDown = (e: ReactPointerEvent<HTMLElement>) => {
@@ -173,10 +180,9 @@ export function QuickAdd({
         placeholder="Type a title, then drag it onto a quarter, a column or a goal"
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && title.trim()) {
-            e.preventDefault();
-            setSheet(true);
-          }
+          if (e.key !== "Enter" || !title.trim()) return;
+          e.preventDefault();
+          sendDefault();
         }}
         className="h-9 min-w-[16rem] flex-1 rounded-lg border border-line-strong bg-surface px-3 text-[15px] text-text"
       />
@@ -185,28 +191,30 @@ export function QuickAdd({
         tabIndex={ready ? 0 : -1}
         aria-disabled={!ready}
         data-testid="quick-add-chip"
-        aria-label={ready ? `Drag '${title.trim()}' onto a quarter, a column or a goal (Enter chooses where)` : title.trim() ? "Choose a roadmap first" : "Type a title first"}
+        aria-label={ready ? "Drag to place on a quarter, a column or a goal (Enter adds it now)" : title.trim() ? "Choose a roadmap first" : "Type a title first"}
         onPointerDown={onDown}
         onPointerMove={onMove}
         onPointerUp={(e) => end(e, true)}
         onPointerCancel={(e) => end(e, false)}
         onKeyDown={(e) => {
-          if ((e.key === "Enter" || e.key === " ") && ready) {
-            e.preventDefault();
-            setSheet(true);
-          }
+          if ((e.key !== "Enter" && e.key !== " ") || !ready) return;
+          e.preventDefault();
+          sendDefault();
         }}
         style={{ touchAction: "none" }}
         className={`inline-flex h-9 max-w-[18rem] items-center gap-1.5 rounded-full border px-3 text-sm font-semibold select-none ${
           ready ? "cursor-grab border-accent bg-accent-soft text-accent-ink" : "cursor-not-allowed border-line text-text2"
         }`}
       >
-        <span aria-hidden>⠿</span>
+        <Icon name="grip" size={16} />
         <span className="truncate">{title.trim() || "New item"}</span>
       </span>
-      <Sheet open={sheet} title="Add an item" onClose={() => setSheet(false)} testId="quick-add-sheet">
-        {form}
-      </Sheet>
+      {/* qa-simple-roadmap-10: where Enter puts it, said before it is pressed. */}
+      {ready && options[0] && (
+        <span data-testid="quick-add-enter-hint" className="text-sm text-text2">
+          Enter adds it to {options[0].label}
+        </span>
+      )}
     </section>
   );
 }

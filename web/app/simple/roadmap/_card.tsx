@@ -12,9 +12,11 @@ import { useScreenSubject } from "@/lib/screen-subject";
 
 import { HORIZONS, type Horizon } from "./_board";
 import {
+  confidenceWord,
   milestoneInk,
   shortDay,
   sourceWord,
+  statusWord,
   storedDates,
   type Change,
   type Flag,
@@ -173,6 +175,8 @@ export function Callout({
   y,
   h,
   compact,
+  maxX,
+  before,
 }: {
   item: Item;
   flag: Flag;
@@ -183,16 +187,31 @@ export function Callout({
   y: number;
   h: number;
   compact: boolean;
+  /** #4, #5: the chart's own drawn width, so the callout (and its buttons) stay inside it
+   * rather than run past the right edge or start cut off the left. */
+  maxX: number;
+  /** Where the bar starts, less a gap: a callout with no room on the right sits left of the bar. */
+  before?: number;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [left, setLeft] = useState(Math.max(4, x));
+  useLayoutEffect(() => {
+    const w = ref.current?.offsetWidth ?? 0;
+    // Right of the bar when it fits; else left of the bar; else slid inside, never past either edge.
+    if (x + w + 4 <= maxX) setLeft(Math.max(4, x));
+    else if (before != null && before - w >= 4) setLeft(before - w);
+    else setLeft(Math.max(4, Math.min(x, maxX - w - 4)));
+  }, [x, before, maxX, flag.reason, compact]);
   return (
     <div
+      ref={ref}
       data-testid="broken-callout"
       data-item={item.key}
-      style={{ left: Math.max(4, x), top: y + 3, height: h - 6 }}
-      className="absolute z-10 flex items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 whitespace-nowrap"
+      style={{ left, top: y + 3, minHeight: h - 6, maxWidth: Math.max(160, maxX - 8) }}
+      className="pointer-events-none absolute z-10 flex flex-nowrap items-center gap-2 rounded-lg border border-crit bg-crit-bg px-2 py-1 [&_button]:pointer-events-auto"
     >
       <span
-        className={`truncate text-sm text-crit ${compact ? "max-w-[220px]" : "max-w-[360px]"}`}
+        className={`min-w-0 truncate text-sm text-crit ${compact ? "max-w-[220px]" : "max-w-[360px]"}`}
         title={flag.reason}
       >
         ⚠ {flag.reason}
@@ -220,6 +239,7 @@ export function SuggestionPopover({
   onDismiss,
   onClose,
   style,
+  above,
 }: {
   item: Item;
   canAct: boolean;
@@ -228,17 +248,32 @@ export function SuggestionPopover({
   onDismiss: () => void;
   onClose: () => void;
   style: React.CSSProperties;
+  /** qa-simple-roadmap-29: the bar's top in the chart (px): with no room below the bar
+   * inside the chart, the popover opens above it, clear of the chart's foot and legend. */
+  above?: number;
 }) {
   const s = item.suggestion!;
   const [editing, setEditing] = useState(false);
   const [start, setStart] = useState(s.start_date);
   const [end, setEnd] = useState(s.end_date);
+  const box = useRef<HTMLDivElement>(null);
+  const [flip, setFlip] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const el = box.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent || above == null) return setFlip(null);
+    const top = Number(style.top ?? 0);
+    const h = el.offsetHeight;
+    setFlip(top + h > parent.clientHeight && above - h >= 0 ? above - h : null);
+  }, [above, style.top, editing]);
   return (
     <div
+      ref={box}
       role="dialog"
       aria-label="Oracle's date suggestion"
       data-testid="suggestion-popover"
-      style={style}
+      data-side={flip != null ? "above" : "below"}
+      style={flip != null ? { ...style, top: flip } : style}
       className="absolute z-30 w-[340px] max-w-[92vw] rounded-xl border border-line bg-surface p-3 shadow-tip"
     >
       <p className="text-sm font-semibold">
@@ -305,7 +340,7 @@ export function SuggestionPopover({
 
 function names(ids: string[], items: Map<string, Item>): string {
   const t = ids.map((id) => items.get(id)?.title).filter(Boolean);
-  return t.length ? t.join(", ") : "Nothing";
+  return t.length ? t.join(", ") : "no other items";
 }
 
 const OP_WORDS: Record<string, string> = {
@@ -546,7 +581,7 @@ export function FloatingCard({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   const dates = item.estimated
-    ? `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · estimated (the ${item.horizon} window)`
+    ? `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · Estimated by Oracle (the ${item.horizon} window)`
     : `${shortDay(item.start.date)} – ${shortDay(item.end.date)} · ${sourceWord(item.source)}`;
   const beside = talk && !phone;
   const talkRight = useTalkPlace(beside);
@@ -760,9 +795,9 @@ export function FloatingCard({
             </>
           )}
           <dt className="text-text2">Status</dt>
-          <dd data-testid="card-status">{item.status.replace("_", " ")}</dd>
+          <dd data-testid="card-status">{statusWord(item.status)}</dd>
           <dt className="text-text2">Confidence</dt>
-          <dd>{item.confidence ?? "Not rated"}</dd>
+          <dd data-testid="card-confidence">{item.confidence ? confidenceWord(item.confidence) : "Not rated"}</dd>
           <dt className="text-text2">Depends on</dt>
           <dd data-testid="card-depends">{names(item.depends_on, items)}</dd>
           <dt className="text-text2">Needed by</dt>
@@ -831,8 +866,8 @@ export function FloatingCard({
                       className="text-accent-ink hover:underline"
                     >
                       D-{d.number}
-                    </Link>{" "}
-                    {d.title}
+                    </Link>
+                    : {d.title}
                   </li>
                 ))}
               </ul>
@@ -945,19 +980,24 @@ export function FloatingCard({
   );
 
   return (
-    <div
-      ref={ref}
-      tabIndex={-1}
-      role="dialog"
-      aria-label={item.title}
-      data-testid="floating-card"
-      data-sheet={phone ? "bottom" : "float"}
-      data-wide={wide ? "true" : "false"}
-      data-talk={talk ? "true" : "false"}
-      data-flow-open={flowOpen ? "true" : "false"}
-      style={placeStyle}
-      className={`${place} max-w-[calc(100vw-16px)] border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
-    >
+    <>
+      {/* #47: the card floats over the chart with nothing to say it has the page's
+       * attention; a dimmed backdrop on desktop (a phone's sheet already reads as modal),
+       * clicking it closes the card like the close button. */}
+      {!phone && <div aria-hidden data-testid="floating-card-backdrop" className="fixed inset-0 z-[35] bg-black/30" onClick={onClose} />}
+      <div
+        ref={ref}
+        tabIndex={-1}
+        role="dialog"
+        aria-label={item.title}
+        data-testid="floating-card"
+        data-sheet={phone ? "bottom" : "float"}
+        data-wide={wide ? "true" : "false"}
+        data-talk={talk ? "true" : "false"}
+        data-flow-open={flowOpen ? "true" : "false"}
+        style={placeStyle}
+        className={`${place} max-w-[calc(100vw-16px)] border-line bg-surface text-[15px] leading-[22px] text-text shadow-tip outline-none ${!phone && !beside ? "overflow-y-auto" : ""} ${flowOpen && !phone ? "pointer-events-none opacity-0" : ""}`}
+      >
       {phone ? (
         <>
           {!wide && (
@@ -1018,5 +1058,6 @@ export function FloatingCard({
         </>
       )}
     </div>
+    </>
   );
 }

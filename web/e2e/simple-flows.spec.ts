@@ -1,5 +1,5 @@
 import { MOCK_VISUAL_FAIL_KEY, MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -56,7 +56,6 @@ const DESKTOP = { width: 1366, height: 820 };
 const PHONE = { width: 390, height: 844 };
 const JOB_MS = 4000;
 
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 
 async function tap(l: Locator) {
   await l.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -66,8 +65,7 @@ async function tap(l: Locator) {
 async function openCard(page: Page, key: string): Promise<Locator> {
   await login(page);
   await page.goto("/simple/roadmap");
-  await expect(bar(page, key)).toBeVisible();
-  await bar(page, key).click();
+  await openRoadmapItem(page, key);
   const card = page.getByTestId("floating-card");
   await expect(card.getByTestId("card-flow")).toBeVisible();
   return card;
@@ -336,7 +334,7 @@ for (const phone of [false, true]) {
         await tap(card.getByRole("button", { name: "Close" }).first());
         await expect(card).toHaveCount(0);
         await page.waitForTimeout(JOB_MS + 1000);
-        await bar(page, "alert-digest").click();
+        await openRoadmapItem(page, "alert-digest");
         const again = page.getByTestId("floating-card").getByTestId("flow-row");
         await expect(again.getByTestId("flow-drawn")).toContainText("Version 1");
         await expect(again.getByTestId("flow-new")).toHaveText("New");

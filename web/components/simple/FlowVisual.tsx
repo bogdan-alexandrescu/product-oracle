@@ -50,9 +50,13 @@ export function flowMeta(flow: Flow, zone: string): string {
 /** A subject's name starting with its code ("F-06 Weekly alert digest"): its code alone, as the stages say it. */
 const codeOf = (name: string): string | null => /^([A-Z][A-Z0-9]*-\d+[a-z]?)\b/.exec(name)?.[1] ?? null;
 
+/** "build" -> "Build": a PRD section's key, in plain words. */
+const capSection = (key: string): string => key.charAt(0).toUpperCase() + key.slice(1);
+
 // The mock-ups' buttons: .btn (32 px, 8 px corners) and .sbtn.sm (34 px, 10 px corners).
 const BTN = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-text hover:bg-surface2 disabled:opacity-60";
-const BTN_SOLID = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink";
+// qa-simple-roadmap-32: disabled must look disabled too (Revise reads enabled otherwise).
+const BTN_SOLID = "inline-flex h-8 items-center gap-1.5 rounded-lg border border-accent bg-accent px-3 text-[14px] leading-none font-semibold whitespace-nowrap text-on-accent hover:bg-accent-ink disabled:cursor-not-allowed disabled:border-line-strong disabled:bg-surface2 disabled:text-text2 disabled:hover:bg-surface2";
 const BTN_GHOST = "inline-flex h-8 items-center gap-1.5 rounded-lg px-1.5 text-[14px] leading-none font-semibold whitespace-nowrap text-accent-ink hover:bg-surface2";
 const SBTN = "simple-button !min-h-[34px] gap-1.5 !px-3 !text-[14px]";
 const META = "text-[13px] leading-[18px] text-text2";
@@ -488,9 +492,9 @@ export function FlowPanel({
               {(a.section_key || a.requirement) && (
                 <span className="text-text2">
                   {" "}
-                  · {a.section_key ? `PRD § ${a.section_key}` : ""}
+                  · {a.section_key ? `From the PRD: ${capSection(a.section_key)} section` : ""}
                   {a.section_key && a.requirement ? ", " : ""}
-                  {a.requirement ? `requirement ${a.requirement}` : ""}
+                  {a.requirement ? <span className="whitespace-nowrap">{`Requirement ${a.requirement}`}</span> : ""}
                 </span>
               )}
             </li>
@@ -676,7 +680,9 @@ export function FlowPanel({
           </div>
         )}
         <div className="relative min-h-0 flex-1">
-          <div className="h-full overflow-y-auto">
+          {/* qa-simple-roadmap-12: the comments panel is an overlay (`absolute right-0 w-[420px]`);
+              while it is open, this pane keeps clear of it so the Steps list is not covered. */}
+          <div className={`h-full overflow-y-auto ${commenting && !phone ? "pr-[420px]" : ""}`}>
             {phone ? (
               <div className="px-4 py-3">
                 <Tabs

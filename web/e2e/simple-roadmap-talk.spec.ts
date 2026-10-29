@@ -31,6 +31,8 @@ async function signIn(page: Page, email: string, to: string) {
   await tap(page.getByRole("button", { name: "Sign in" }));
   await expect(page).not.toHaveURL(/\/login/);
   await page.goto(to);
+  // A phone's Timeline (timeline-overlap B3) draws thin lanes with no bars: a phone opens the card from the Gantt's bars.
+  if (to === "/simple/roadmap" && (page.viewportSize()?.width ?? 1366) <= 640) await tap(page.getByTestId("format-gantt"));
 }
 
 const bar = (page: Page, key: string) => page.locator(`[data-testid="bar"][data-item="${key}"]`);
@@ -175,7 +177,8 @@ for (const [phone, dark] of [
       const c = talk.getByTestId("chat-card");
       await expect(c).toHaveCount(1);
       await expect(c.getByTestId("chat-card-summary")).toHaveText("Move F-16 Adaptive pacing two weeks later, to 30 Nov – 11 Dec");
-      await expect(c.getByTestId("chat-card-change")).toHaveText("Before: 16 Nov – 27 Nov → After: 30 Nov – 11 Dec");
+      // qa-simple-roadmap-26: the card's own Before/After reads month-first, like the rest of the app.
+      await expect(c.getByTestId("chat-card-change")).toHaveText("Before: Nov 16 – Nov 27 → After: Nov 30 – Dec 11");
       await expect(c.getByTestId("chat-card-flag").first()).toContainText("M1 Launch prep");
       await expect(c.getByRole("button", { name: "Reject" })).toBeVisible();
       await expect(c.getByRole("button", { name: "Correct" })).toBeVisible();

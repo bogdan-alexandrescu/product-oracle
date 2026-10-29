@@ -1,5 +1,5 @@
 import { MOCK_VISUAL_JOB_MS_KEY } from "../lib/api/mock/simple-visuals";
-import { login } from "./helpers";
+import { login, openRoadmapItem } from "./helpers";
 import { expect, test, type Locator, type Page } from "./test";
 
 /**
@@ -52,7 +52,6 @@ const ROADMAP = "/simple/roadmap";
 const DESKTOP = { viewport: { width: 1366, height: 820 } };
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
-const bar = (page: Page, key: string): Locator => page.locator(`g[data-testid="bar"][data-item="${key}"]`);
 
 /** Opens bet 2's flow across the page: the opened view. */
 async function openBet(page: Page, email?: string): Promise<Locator> {
@@ -93,7 +92,8 @@ for (const [where, use] of [
         const full = await openComments(page, opened);
         await expect(full.getByRole("heading", { name: "Finish setup from the checklist", level: 2 })).toBeVisible();
         await expect(full.getByTestId("flow-version")).toHaveText("Version 1 of 1");
-        await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · PRD § build, requirement R1");
+        // qa-simple-roadmap-31: plain words, not the internal "PRD §"/"requirement" jargon.
+        await expect(full.getByTestId("flow-annotations")).toContainText("The checklist shows the next step · From the PRD: Build section, Requirement R1");
         // Roles: a viewer reads, with no comment box and no Revise.
         await expect(full.getByLabel("Comment on the flow")).toHaveCount(0);
         await expect(full.getByRole("button", { name: "Revise" })).toHaveCount(0);
@@ -184,8 +184,7 @@ for (const [where, use] of [
       test("a roadmap item's card opens its flow across the page; an owner asks Oracle for one", async ({ page }) => {
         await login(page);
         await page.goto(ROADMAP);
-        await expect(bar(page, "alert-mobile")).toBeVisible();
-        await bar(page, "alert-mobile").click();
+        await openRoadmapItem(page, "alert-mobile");
         const card = page.getByTestId("floating-card");
         await expect(card.getByTestId("card-flow")).toContainText("Act on a pushed alert");
         await card.getByRole("button", { name: "Open the item's flow" }).click();
@@ -200,7 +199,7 @@ for (const [where, use] of [
         await view.getByRole("button", { name: where === "phone" ? "Back" : "Close" }).click();
         await expect(card).toHaveAttribute("data-flow-open", "false");
         await card.getByRole("button", { name: "Close", exact: true }).click();
-        await bar(page, "alert-digest").click();
+        await openRoadmapItem(page, "alert-digest");
         await expect(card.getByTestId("card-flow")).toContainText("No flow yet");
         await expect(card.getByTestId("flow-empty")).toContainText("No flow yet");
         await card.getByRole("button", { name: "Ask Oracle to draw it" }).click();
@@ -229,7 +228,7 @@ test.describe("a drawing that takes a while lands without a reload", () => {
   test("a roadmap item's card: drawing, then version 1", async ({ page }) => {
     await login(page);
     await page.goto(ROADMAP);
-    await bar(page, "alert-digest").click();
+    await openRoadmapItem(page, "alert-digest");
     const card = page.getByTestId("floating-card");
     const loads = await noReloads(page);
     await card.getByRole("button", { name: "Ask Oracle to draw it" }).click();

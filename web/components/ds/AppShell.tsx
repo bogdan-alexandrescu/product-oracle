@@ -222,6 +222,9 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
   const root = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
   const email = me?.email ?? me?.token_name ?? "";
+  // qa-simple-roadmap-46: the panel truncates this line; the full address (and the name,
+  // when there is one) still reads on hover/focus.
+  const name = me && me.kind === "user" ? (me.name ?? null) : null;
 
   useEffect(() => {
     if (!open) return;
@@ -294,7 +297,11 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
           : "absolute top-[calc(100%+8px)] right-0 z-50 w-72 max-w-[calc(100vw-20px)] rounded-panel border border-line bg-surface p-3 text-left text-text shadow-tip [--focus-ring:var(--accent)]"
       }
     >
-      <p className="mb-3 truncate px-1 text-sm font-medium">{email}</p>
+      {/* qa-simple-roadmap-46: the name and the whole email, each on its own line and wrapped, never cut off. */}
+      <p className="mb-3 px-1 text-sm font-medium" data-testid="account-who">
+        {name && <span className="block break-words">{name}</span>}
+        <span className={`block break-all ${name ? "font-normal text-text2" : ""}`}>{email}</span>
+      </p>
       <div
         role="radiogroup"
         aria-label="Theme"

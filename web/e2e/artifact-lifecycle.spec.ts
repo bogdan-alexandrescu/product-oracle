@@ -297,3 +297,19 @@ test.describe("light", () => {
     await expect(page.getByRole("status").filter({ hasText: "Moved to Trash" })).toBeVisible();
   });
 });
+
+test.describe("desktop toast", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  // fix2-simple-roadmap review (#34): only Simple's Roadmap moves its toasts to a corner;
+  // every other page's toast stays centred at the bottom of the window.
+  test("the Moved to Trash toast stays centred on a desktop", async ({ page }) => {
+    await withFamily(page);
+    await login(page);
+    await deleteFamily(page);
+    const toast = page.getByRole("status").filter({ hasText: "Moved to Trash" });
+    await expect(toast).toBeVisible();
+    const box = (await toast.boundingBox())!;
+    expect(Math.abs(box.x + box.width / 2 - 720)).toBeLessThan(4);
+  });
+});

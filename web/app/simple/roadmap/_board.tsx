@@ -12,6 +12,16 @@ export const HORIZONS: { key: Horizon; label: string }[] = [
   { key: "later", label: "Later" },
 ];
 
+/** qa-simple-roadmap-27: each end of a span shows its year only when it isn't this year's. */
+const boardSpanWords = (start: string, end: string, today: string): string => spanWords(start, end, today, true);
+
+/** qa-simple-roadmap-3: whether an item's own dates fall outside its column's window (a
+ * moved card's horizon changes while its own dates stay put); the column keeps its range
+ * and the card says its dates sit outside it. */
+function outsideWindow(i: Item, window: { start: string; end: string }): boolean {
+  return i.start.date > window.end || i.end.date < window.start;
+}
+
 const LONG_PRESS_MS = 450;
 /** A held card this close to the screen's top or bottom scrolls the page (px), this far a frame. */
 const EDGE = 64;
@@ -306,11 +316,16 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-text2">
             <span
               data-testid="board-dates"
-              className={kind === "estimated" ? "rounded bg-[repeating-linear-gradient(45deg,var(--accent-soft)_0_4px,var(--accent-mid)_4px_6px)] px-1 text-accent-ink" : ""}
+              className={kind === "estimated" ? "rounded border border-dashed border-accent-mid px-1 text-accent-ink" : ""}
             >
-              {spanWords(item.start.date, item.end.date, data.today)}
+              {boardSpanWords(item.start.date, item.end.date, data.today)}
               {kind === "estimated" && " · estimated"}
             </span>
+            {!closedItem(item) && data.windows[item.horizon] && outsideWindow(item, data.windows[item.horizon]) && (
+              <span className="rounded-full bg-warn-bg px-1.5 text-xs text-warn" data-testid="outside-column">
+                Dates outside {HORIZONS.find((h) => h.key === item.horizon)?.label ?? item.horizon}
+              </span>
+            )}
             {kind === "draft" && (
               <span className="rounded-full bg-na-bg px-1.5 text-xs text-na" data-testid="draft-tag">
                 Draft
@@ -341,7 +356,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
           )}
           {pending && (
             <p className="mt-1 text-sm text-accent-ink" data-testid="board-pending">
-              Proposed: move to {HORIZONS.find((h) => h.key === pending.after.horizon)?.label ?? String(pending.after.horizon)} · {pending.by_name}
+              Proposed by {pending.by_name || "a commenter"}: move to {HORIZONS.find((h) => h.key === pending.after.horizon)?.label ?? String(pending.after.horizon)}
             </p>
           )}
         </div>
@@ -363,8 +378,8 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
         >
           <header className="flex items-baseline gap-2 px-1 pb-2">
             <h2 className="text-lg font-semibold">{c.label}</h2>
-            <span className="text-sm text-text2">
-              {spanWords(c.window.start, c.window.end, data.today)}
+            <span className="text-sm text-text2" data-testid="column-window">
+              {boardSpanWords(c.window.start, c.window.end, data.today)}
             </span>
             <span className="tnum ml-auto text-sm text-text2" data-testid="column-count">
               {c.groups.reduce((n, g) => n + g.items.length, 0)}
@@ -378,7 +393,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
                 data-add-label={g.title}
               >
                 <span className="min-w-0 flex-1 truncate">{g.title}</span>
-                {onGoal && data.group === "goal" && g.key !== "none" && (
+                {onGoal && data.group === "goal" && g.key !== "none" && !!goalSuggestions?.get(g.key) && (
                   <button
                     type="button"
                     data-testid="goal-suggestions-open"
@@ -387,7 +402,7 @@ export function Board({ data, phone, canDrag, proposals, open, onOpen, onMove, p
                     onClick={() => onGoal(g.key, g.title)}
                     className="flex h-6 flex-none items-center gap-0.5 rounded-full border border-accent-mid bg-surface px-1.5 text-xs font-semibold text-accent-ink hover:bg-accent-soft"
                   >
-                    ✦<span className="tnum">{goalSuggestions?.get(g.key) ?? 0}</span>
+                    ✦<span className="tnum">{goalSuggestions?.get(g.key)}</span>
                   </button>
                 )}
               </h3>

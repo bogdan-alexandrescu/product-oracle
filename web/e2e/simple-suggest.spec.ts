@@ -74,7 +74,7 @@ for (const phone of [false, true]) {
       /**
        * Card simple-suggest-drawer: protects = a commenter's goal card has ONE "Suggestions · N"
        * button; its drawer has the form (Feature name, What it does and for whom, the goal set,
-       * "<decider> decides.") and the People / ✦ Oracle tabs; Send suggestion lands under People
+       * "<decider> will review your suggestion.") and the People / ✦ Oracle tabs; Send suggestion lands under People
        * with who sent it; "✦ Ask Oracle for more" makes the button say "Oracle is suggesting..."
        * and the count changes only once it is done; the commenter sees no Accept / Reject; the
        * owner (the decider) sees the form folded to one line and accepts the person's suggestion;
@@ -93,7 +93,7 @@ for (const phone of [false, true]) {
         let drawer = await openDrawer(page);
         const form = drawer.getByTestId("suggest-form");
         await expect(form.getByText("Goal: Grow retention")).toBeVisible();
-        await expect(drawer.getByTestId("suggest-decider")).toHaveText(/ decides\.$/);
+        await expect(drawer.getByTestId("suggest-decider")).toHaveText(/ will review your suggestion\.$/);
         await expect(drawer.getByRole("tab", { name: "People · 0" })).toHaveAttribute("aria-selected", "true");
         await expect(drawer.getByRole("tab", { name: "✦ Oracle · 1" })).toBeVisible();
         await form.getByLabel("Feature name").fill("Shared alert notes");
@@ -233,7 +233,7 @@ for (const phone of [false, true]) {
       /**
        * Card simple-suggest-approver-decider: protects = with no named decider, the approver who
        * owns the goal roadmap's track decides its suggestions (as the API's drafts.can_edit):
-       * the drawer names them ("Avery Lane decides."), they see Accept / Reject with the form
+       * the drawer names them ("Avery Lane will review your suggestion."), they see Accept / Reject with the form
        * folded and accept a commenter's suggestion; an owner who is not that decider still sees
        * Accept / Reject; a goal whose metric has no unit reads each figure with the metric
        * ("From 12 teams muting alerts · target 10 teams muting alerts", H1); fails_when = the
@@ -246,7 +246,7 @@ for (const phone of [false, true]) {
         const quiet = page.getByTestId("home-goal").filter({ hasText: "Keep alerts quiet" });
         await expect(quiet.getByTestId("home-goal-path")).toHaveText("From 12 teams muting alerts · target 10 teams muting alerts");
         let drawer = await openDrawer(page);
-        await expect(drawer.getByTestId("suggest-decider")).toHaveText("Avery Lane decides.");
+        await expect(drawer.getByTestId("suggest-decider")).toHaveText("Avery Lane will review your suggestion.");
         const form = drawer.getByTestId("suggest-form");
         await form.getByLabel("Feature name").fill("Shared alert notes");
         await form.getByLabel("What it does, and for whom").fill("Leads leave a note on an alert so the next person on call knows what was tried");
