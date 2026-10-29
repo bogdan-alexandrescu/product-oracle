@@ -46,15 +46,16 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(panel(page)).toHaveCount(0);
     });
 
-    test("a panel opened on purpose stays open after a row's Ask Oracle and the next load", async ({ page }) => {
+    test("a panel opened on purpose stays open after a row's Ask Oracle; the next visit starts with a clean slate", async ({ page }) => {
       await decisions(page);
       await page.getByTestId("simple-ask").click();
       await expect(panel(page)).toBeVisible();
       await row(page, "Q6").getByRole("button", { name: "Ask Oracle" }).click();
       await expect(panel(page)).toBeVisible();
+      // The owner's Ask pick C (qa-simple-home-21): each visit to Simple starts with Ask closed.
       await page.reload();
       await expect(page.getByTestId("question-row").first()).toBeVisible();
-      await expect(panel(page)).toBeVisible();
+      await expect(panel(page)).toHaveCount(0);
     });
 
     test("Name a decider and Ask someone to answer: the picker takes the focus, Cancel gives it back", async ({ page }) => {
@@ -81,5 +82,28 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(foot).toContainText("They are not product decisions, so they are not listed or counted here.");
       await expect(foot.getByRole("link", { name: "Open the Inbox (it leaves Simple)" })).toBeVisible();
     });
+  });
+}
+
+/*
+ * qa-simple-decide-10 (re-review): below 1240 px a docked panel squeezed the page to a column of
+ * single words (168 px at 800). There the panel is a drawer over the page with a backdrop that
+ * closes it; the page keeps its width. fails_when=the page narrows when the panel opens, or the
+ * backdrop does not close it; no_claim=Detailed's pages (their own strip and 1600 px rule).
+ */
+for (const width of [800, 1024] as const) {
+  test(`${width} px: a row's Ask Oracle opens a drawer over the page, which keeps its width`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await decisions(page);
+    const main = page.locator("main").first();
+    const before = (await main.boundingBox())!.width;
+    await row(page, "Q2").getByRole("button", { name: "Ask Oracle" }).click();
+    await expect(panel(page)).toBeVisible();
+    expect(Math.abs((await main.boundingBox())!.width - before)).toBeLessThan(2);
+    await expect(page.getByRole("heading", { level: 1, name: "Decisions" })).toBeVisible();
+    const backdrop = page.getByTestId("hop-backdrop");
+    await expect(backdrop).toBeVisible();
+    await backdrop.click({ position: { x: 20, y: 450 } });
+    await expect(panel(page)).toHaveCount(0);
   });
 }

@@ -169,7 +169,7 @@ function LiveScreen({ m, reload }: { m: Meeting; reload: () => Promise<unknown> 
               {approveLabel}
             </Button>
           )}
-          {m.can.end && <Button className={PHONE_TAP} disabled={busy} onClick={() => void end()}>End meeting</Button>}
+          {m.can.end && <Button className={`h-10 ${PHONE_TAP}`} disabled={busy} onClick={() => void end()}>End meeting</Button>}
         </div>
       </header>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-border px-4 py-2 text-base">

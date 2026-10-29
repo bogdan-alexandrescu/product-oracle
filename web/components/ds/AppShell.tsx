@@ -808,9 +808,11 @@ function HopDock() {
   // the page below 1600 px) above anything in the page that sets its own z-index.
   // The strip is 44 px and the dock's left border 1 px more: a 44 px dock would push the
   // strip 1 px past the right edge (sideways scroll).
-  // qa-simple-decide-10: on Simple's pages the open panel pushes the page aside at every desktop
-  // width (never over a row's buttons); elsewhere it overlays below 1600 px, beside its strip.
-  const width = simple ? "w-[400px] border-l" : open ? "w-[45px] border-l min-[1600px]:w-[400px]" : "w-[45px] border-l";
+  // qa-simple-decide-10: on Simple's pages the open panel pushes the page aside from 1240 px, where
+  // about 600 px of page is left beside it (never over a row's buttons); narrower, it is a drawer
+  // over the page with a backdrop that closes it (docked there, it squeezed the page to a column
+  // of single words). Elsewhere it overlays below 1600 px, beside its strip.
+  const width = simple ? "w-0 min-[1240px]:w-[400px] min-[1240px]:border-l" : open ? "w-[45px] border-l min-[1600px]:w-[400px]" : "w-[45px] border-l";
   return (
     <aside
       aria-label="Ask Oracle"
@@ -833,13 +835,16 @@ function HopDock() {
           <span className="text-[15px] font-semibold [writing-mode:vertical-rl]">Ask</span>
         </button>
       )}
+      {open && simple && (
+        <div aria-hidden data-testid="hop-backdrop" className="fixed inset-0 z-40 bg-hero/30 min-[1240px]:hidden" onClick={() => setPanelOpen(false)} />
+      )}
       {open && (
         <div
           ref={drawer}
           data-testid="hop-drawer"
           className={
             simple
-              ? "h-full w-full"
+              ? "fixed inset-y-0 right-0 z-40 w-[400px] max-w-[100vw] border-l border-line bg-surface shadow-tip min-[1240px]:static min-[1240px]:h-full min-[1240px]:w-full min-[1240px]:max-w-none min-[1240px]:border-l-0 min-[1240px]:shadow-none"
               : "fixed inset-y-0 right-11 z-40 w-[400px] max-w-[calc(100vw-44px)] border-l border-line shadow-tip min-[1600px]:static min-[1600px]:h-full min-[1600px]:w-full min-[1600px]:max-w-none min-[1600px]:border-l-0 min-[1600px]:shadow-none"
           }
         >
