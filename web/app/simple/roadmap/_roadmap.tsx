@@ -20,6 +20,7 @@ import { useKeyBurst } from "./_burst";
 import { Callout, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
+import { Lanes } from "./_lanes";
 import {
   broken,
   ChangeFailed,
@@ -833,6 +834,12 @@ export function SimpleRoadmap() {
           {scaleSwitch}
         </span>
       )}
+      {/* timeline-overlap B2: the Group by's line says how the lanes stack. */}
+      {format === "timeline" && !phone && (
+        <span className="ml-auto text-[15px] text-text-faint" data-testid="lanes-hint">
+          Pieces stack inside a lane when they run at once
+        </span>
+      )}
     </div>
   );
   const goalCounters = <GoalCounters items={data.items} suggestions={suggestions} onGoal={setGoalPanel} />;
@@ -939,6 +946,43 @@ export function SimpleRoadmap() {
             goalSuggestions={goalCounts}
             onGoal={openGoal}
           />
+        ) : format === "timeline" ? (
+          // timeline-overlap B: the Timeline is goal lanes (B2 on a desktop, B3 on a phone).
+          <Lanes
+            data={laned ?? data}
+            lane={f.group}
+            noWork={noWork}
+            compact={phone}
+            canDrag={canChange}
+            moved={moved}
+            open={card?.id ?? null}
+            chartRef={(el) => {
+              svg.current = el;
+            }}
+            dropTargets={canChange}
+            onOpen={(item) => {
+              setPop(null);
+              setCard({ id: item.id, ...anchorOf(item.id) });
+            }}
+            onMove={onMove}
+            onKeyMove={onKeyMove}
+            onKeyEnd={(item) => dates.flush(item.id)}
+            onKeyCancel={onKeyCancel(dates)}
+            onSuggestion={(item) => {
+              setCard(null);
+              setPop({ id: item.id, ...anchorOf(item.id) });
+            }}
+            overlay={(l, sc) =>
+              data.items.flatMap((i) => {
+                const y = l.y.get(i.id);
+                if (y == null || closedItem(i)) return [];
+                const f0 = broken(i).find((x) => x.kind === "dependency_order");
+                if (!f0) return [];
+                const [, end] = moved[i.id] ?? [i.start.date, i.end.date];
+                return [<Callout key={i.id} item={i} flag={f0} items={byId} act={act} canChange={canChange} x={sc.x(end) + sc.px + 14} y={y} h={l.rowH} compact={phone} />];
+              })
+            }
+          />
         ) : (
           <Chart
             data={laned ?? data}
@@ -1033,12 +1077,7 @@ export function SimpleRoadmap() {
         <p className="text-sm text-text2" data-testid="legend">
           {ganttLegend(laned ?? data, noWork, pulledIn.size)}
         </p>
-      ) : (
-        <p className="text-sm text-text2" data-testid="legend">
-          Solid: dated · hatched: estimated (the horizon&rsquo;s window) · dashed: draft · dotted outline: Oracle&rsquo;s date suggestion (? opens it) ·{" "}
-          {data.milestones.some((m) => m.start_date && m.end_date) && "flag and dashed line: a milestone ends · "}diamond: a milestone · diamond and thin line: a key date · red: a broken link
-        </p>
-      )}
+      ) : null}
       {/* D3: on a phone the chart comes first; the actions, the goals and the filters follow it. */}
       {phone && actions}
       {phone && goalCounters}

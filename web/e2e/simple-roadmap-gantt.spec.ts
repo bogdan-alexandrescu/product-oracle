@@ -33,7 +33,27 @@ async function open(page: Page, scheme: "light" | "dark", email = ADMIN.email) {
   await login(page, email);
   await page.goto("/simple/roadmap");
   await expect(page.getByTestId("simple-roadmap")).toBeVisible();
-  await expect(slice(page, "F-05a")).toBeAttached();
+  await expect(page.getByTestId("simple-chart")).toBeVisible();
+}
+
+/**
+ * Opens a planned piece's item card: its pill on a desktop; on a phone (timeline-overlap B3,
+ * no pills) its row in the lane's list, the lane opened first.
+ */
+async function openPiece(page: Page, phone: boolean, code: string, laneTitle: string) {
+  if (!phone) {
+    await slice(page, code).scrollIntoViewIfNeeded();
+    await slice(page, code).click();
+    return;
+  }
+  await page.getByTestId("phone-lane").filter({ has: page.locator('[data-testid="phone-lane-name"]', { hasText: new RegExp(`^${laneTitle}$`) }) }).click();
+  await page.locator(`[data-testid="lane-row"][data-code="${code}"]`).click();
+}
+
+/** The lane (its key) an item's pills sit in, and their row there (timeline-overlap B2). */
+async function placeOf(page: Page, key: string) {
+  const b = page.locator(`g[data-testid="bar"][data-item="${key}"]`);
+  return { lane: await b.getAttribute("data-lane"), row: Number(await b.getAttribute("data-row")) };
 }
 
 /** The row (y) and the span (x) a slice's bar takes on screen. */
@@ -42,28 +62,14 @@ async function boxOf(l: Locator) {
   return { x: b.x, right: b.x + b.width, mid: b.y + b.height / 2 };
 }
 
-/** The item names listed under a lane's header, up to the next lane. */
-async function rowsUnder(labels: Locator, title: string): Promise<string[]> {
-  // An item row's name (its code, F-08, sits before it: roadmap-milestones D).
-  const rows = await labels
-    .locator('[data-testid="chart-group"], [data-testid="chart-label"]')
-    .evaluateAll((els) => els.map((e) => [e.getAttribute("data-testid"), ((e.querySelector('[data-testid="label-title"]') ?? e) as HTMLElement).innerText.trim()]));
-  const at = rows.findIndex(([id, t]) => id === "chart-group" && t!.startsWith(title));
-  const out: string[] = [];
-  for (const [id, t] of rows.slice(at + 1)) {
-    if (id === "chart-group") break;
-    out.push(t!);
-  }
-  return out;
-}
-
 for (const phone of [false, true]) {
   for (const scheme of ["light", "dark"] as const) {
     const where = `${phone ? "phone" : "desktop"}, ${scheme}`;
     test.describe(where, () => {
       test.use({ ...(phone ? PHONE : DESKTOP), colorScheme: scheme });
 
-      for (const format of ["timeline", "gantt"] as const) {
+      // A phone's Timeline is timeline-overlap B3 (thin lanes, no pills): simple-roadmap-lanes.spec.
+      for (const format of phone ? (["gantt"] as const) : (["timeline", "gantt"] as const)) {
         /**
          * Card gantt-slices: protects = Team invites (F-05) is drawn as two bars on ONE row,
          * F-05a inside M1 (9 Nov - 27 Nov) and F-05b inside M2 (30 Nov - 11 Dec); on the
@@ -101,7 +107,10 @@ for (const phone of [false, true]) {
           expect(ba.right).toBeLessThanOrEqual(bb.x + 1);
           const link = page.locator('[data-testid="slice-connector"][data-feature="F-05"]');
           if (format === "gantt") await expect(link).toHaveCount(0);
-          else {
+          else if (bb.x - ba.right < 10) {
+            // timeline-overlap B2: a gap too short to show the dotted line draws none.
+            await expect(link).toHaveCount(0);
+          } else {
             await expect(link).toHaveAttribute("stroke-dasharray", /\d/);
             const lb = (await link.boundingBox())!;
             expect(Math.abs(lb.y + lb.height / 2 - ba.mid)).toBeLessThan(2);
@@ -120,41 +129,45 @@ for (const phone of [false, true]) {
         });
       }
 
-      /**
-       * Card gantt-goal-lanes: protects = by default rows sit under goal lanes whose header
-       * names the goal and its item count ("Growth", "5 items"), the plan's features in the
-       * lane of the goal they move most; inside the Growth lane Usage dashboard (F-08) and
-       * Referral link (F-12) run at the same time and stack on two rows; Group by Milestone
-       * puts Team invites under "M1 Prove it" (its first slice) with a count, still drawn as
-       * its two slices; fails_when = the plan's features fall under "No goal", a lane has no
-       * count, overlapping items share a row, or Group by Milestone is missing; no_claim =
-       * the lanes' order beyond the API's, Track and PRD grouping (simple-roadmap specs).
-       */
-      test(`goal lanes stack parallel work, and Group by Milestone (${where})`, async ({ page }) => {
-        await open(page, scheme);
-        const growth = lane(page, "Growth");
-        await expect(growth).toHaveCount(1);
-        await expect(growth.getByTestId("lane-count")).toHaveText("5 items");
-        const f08 = await boxOf(slice(page, "F-08"));
-        const f12 = await boxOf(slice(page, "F-12a"));
-        expect(Math.abs(f08.mid - f12.mid), "two rows").toBeGreaterThan(10);
-        expect(f08.x < f12.right && f12.x < f08.right, "they overlap in time").toBe(true);
-        // Both rows sit under the Growth header, before the next lane.
-        const labels = page.getByTestId("chart-labels");
-        const rows = await rowsUnder(labels, "Growth");
-        expect(rows).toContain("Usage dashboard");
-        expect(rows).toContain("Referral link");
+      if (!phone) {
+        /**
+         * Card gantt-goal-lanes: protects = by default the Timeline's lanes are the goals, each
+         * header naming the goal and its item count ("Growth", "4 items": its PM-owned Launch
+         * email sits in the PM-owned lane, timeline-overlap B2), the plan's features in the lane
+         * of the goal they move most; inside the Growth lane Usage dashboard (F-08) and Referral
+         * link (F-12) run at the same time and stack on two rows; Group by Milestone puts Team
+         * invites in "M1 Prove it" (its first slice) with a count, still drawn as its two
+         * slices; fails_when = the plan's features fall under "No goal", a lane has no count,
+         * overlapping items share a row, or Group by Milestone is missing; no_claim = the lanes'
+         * order beyond the API's (simple-roadmap-lanes.spec: Track, PRD and the phone's lanes).
+         */
+        test(`goal lanes stack parallel work, and Group by Milestone (${where})`, async ({ page }) => {
+          await open(page, scheme);
+          const growth = lane(page, "Growth");
+          await expect(growth).toHaveCount(1);
+          await expect(growth.getByTestId("lane-count")).toHaveText("4 items");
+          const f08 = await boxOf(slice(page, "F-08"));
+          const f12 = await boxOf(slice(page, "F-12a"));
+          expect(Math.abs(f08.mid - f12.mid), "two rows").toBeGreaterThan(10);
+          expect(f08.x < f12.right && f12.x < f08.right, "they overlap in time").toBe(true);
+          // Both sit in the Growth lane, on two of its rows.
+          const growthKey = await growth.getAttribute("data-lane");
+          const [usage, referral] = [await placeOf(page, "plan-f-08"), await placeOf(page, "plan-f-12")];
+          expect(usage.lane).toBe(growthKey);
+          expect(referral.lane).toBe(growthKey);
+          expect(usage.row).not.toBe(referral.row);
 
-        await page.getByTestId("group-milestone").click();
-        const m1 = lane(page, "M1 Prove it");
-        await expect(m1).toHaveCount(1);
-        await expect(m1.getByTestId("lane-count")).toHaveText(/^\d+ items?$/);
-        await expect(lane(page, "M2 Scale volume")).toHaveCount(1);
-        await expect(lane(page, "M3 Open to all")).toHaveCount(1);
-        await expect(slice(page, "F-05b")).toBeAttached();
-        expect(await rowsUnder(labels, "M1 Prove it")).toContain("Team invites");
-        expect(await rowsUnder(labels, "M2 Scale volume")).not.toContain("Team invites");
-      });
+          await page.getByTestId("group-milestone").click();
+          const m1 = lane(page, "M1 Prove it");
+          await expect(m1).toHaveCount(1);
+          await expect(m1.getByTestId("lane-count")).toHaveText(/^\d+ items?$/);
+          await expect(lane(page, "M2 Scale volume")).toHaveCount(1);
+          await expect(lane(page, "M3 Open to all")).toHaveCount(1);
+          await expect(slice(page, "F-05b")).toBeAttached();
+          expect((await placeOf(page, "plan-f-05")).lane).toBe(await m1.getAttribute("data-lane"));
+          expect((await placeOf(page, "plan-f-05")).lane).not.toBe(await lane(page, "M2 Scale volume").getAttribute("data-lane"));
+        });
+      }
 
       /**
        * Card gantt-card-slices: protects = opening Team invites (its bar) shows a Milestone
@@ -166,8 +179,7 @@ for (const phone of [false, true]) {
        */
       test(`the item card lists its slices (${where})`, async ({ page }) => {
         await open(page, scheme);
-        await slice(page, "F-05a").scrollIntoViewIfNeeded();
-        await slice(page, "F-05a").click();
+        await openPiece(page, phone, "F-05a", "Growth");
         const card = page.getByTestId("floating-card");
         await expect(card).toBeVisible();
         await expect(card.getByTestId("card-milestone")).toHaveText("M1 Prove it, M2 Scale volume");
@@ -182,8 +194,7 @@ for (const phone of [false, true]) {
         await expect(rows.nth(1)).toContainText("2 engineer-weeks");
         await card.getByRole("button", { name: "Close" }).click();
 
-        await slice(page, "F-10").scrollIntoViewIfNeeded();
-        await slice(page, "F-10").click();
+        await openPiece(page, phone, "F-10", "PM-owned");
         await expect(page.getByTestId("card-slice")).toHaveCount(1);
         await expect(page.getByTestId("card-slice")).toContainText("PM-owned");
       });
@@ -215,21 +226,21 @@ for (const phone of [false, true]) {
         await row.getByRole("button", { name: "Accept" }).click();
         await expect(row).toHaveCount(0);
         await tray.getByRole("button", { name: "Close" }).click();
-        await slice(page, "F-11a").scrollIntoViewIfNeeded();
-        await slice(page, "F-11a").click();
+        await openPiece(page, phone, "F-11a", "Revenue");
         await expect(page.getByTestId("card-dates")).toContainText(/Dec 14 – Jan 22|14 Dec – 22 Jan/);
       });
 
       if (phone) {
         /**
-         * Card gantt-phone-scroll: protects = on a phone the weeks scroll sideways inside the
-         * chart with the item names pinned on the left, and the current milestone (M1 Prove
-         * it, the next to run on 22 Oct) is scrolled into view; fails_when = the page itself
-         * scrolls sideways, the names scroll away, or M1's start is off screen; no_claim =
-         * the exact scroll offset.
+         * Card gantt-phone-scroll: protects = on a phone the Gantt's weeks (roadmap-milestones
+         * D3) scroll sideways inside the chart with the item names pinned on the left, and the
+         * current milestone (M1 Prove it, the next to run on 22 Oct) is scrolled into view;
+         * fails_when = the page itself scrolls sideways, the names scroll away, or M1's start
+         * is off screen; no_claim = the exact scroll offset.
          */
         test(`phone: weeks scroll with names pinned, the current milestone in view (${where})`, async ({ page }) => {
           await open(page, scheme);
+          await page.getByTestId("format-gantt").click();
           const scroller = page.getByTestId("chart-scroll");
           await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-weeks", "true");
           await expect.poll(async () => scroller.evaluate((el) => el.scrollLeft)).toBeGreaterThan(0);
