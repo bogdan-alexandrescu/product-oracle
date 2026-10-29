@@ -105,7 +105,8 @@ test.describe("LoginForm without JavaScript", () => {
   test.use({ javaScriptEnabled: false });
   test("says sign-in needs JavaScript instead of a blank card", async ({ page }) => {
     await page.goto("/login");
-    await expect(page.getByText("Signing in needs JavaScript")).toBeVisible();
+    // Playwright's text locators skip <noscript>; the page's own words show it.
+    await expect.poll(() => page.evaluate(() => document.body.innerText)).toContain("Signing in needs JavaScript.");
   });
 });
 
