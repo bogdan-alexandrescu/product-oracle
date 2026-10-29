@@ -1,8 +1,9 @@
 import { expect, test, type Page } from "./test";
 
+import { CONSOLE_HELD_RUN_ID } from "../lib/api/mock/runs";
 import { MOCK_ROLE_KEY } from "../lib/api/mock/server";
 
-import { login } from "./helpers";
+import { login, openSeeded, seedConsoleHeld } from "./helpers";
 
 /*
  * QA pass 2 on /runs and a run's page (qa-onboarding-13, 16, 30, 31, 49; rirs-6, 7, 8, 15, 16,
@@ -189,5 +190,21 @@ test.describe("phone", () => {
       const box = (await target.boundingBox())!;
       expect(box.height).toBeGreaterThanOrEqual(24);
     }
+  });
+});
+
+test.describe("phone Waive", () => {
+  test.use({ viewport: { width: 390, height: 844 } });
+
+  test("rirs-25: the run page's Waive… is a full-size tap target", async ({ page }) => {
+    await login(page);
+    await openSeeded(page, seedConsoleHeld, `/runs/${CONSOLE_HELD_RUN_ID}`);
+    const waive = page
+      .getByRole("group", { name: "Decide: Roadmap items" })
+      .getByTestId("gate-reason")
+      .filter({ hasText: "Usage export" })
+      .getByRole("button", { name: "Waive…" });
+    await expect(waive).toBeVisible();
+    expect((await waive.boundingBox())!.height).toBeGreaterThanOrEqual(24);
   });
 });

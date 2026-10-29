@@ -2351,7 +2351,7 @@ function GateList({ gate, message, onWaive }: { gate: NonNullable<CheckpointOut[
               {x.waivable && onWaive && waiving !== key(x) && (
                 <button
                   type="button"
-                  className="font-medium text-accent-ink underline"
+                  className="inline-flex min-h-6 items-center font-medium text-accent-ink underline max-[600px]:min-h-11"
                   onClick={() => {
                     setWaiving(key(x));
                     setReason("");

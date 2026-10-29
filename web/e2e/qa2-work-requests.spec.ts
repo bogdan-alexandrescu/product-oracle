@@ -158,4 +158,37 @@ test.describe("phone", () => {
     );
     expect(cut).toEqual([]);
   });
+
+  // rirs-37: the strip's scroll arrows never sit on a tab label, at either end.
+  for (const path of ["/requests", "/requests/interviews", "/sources"]) {
+    test(`rirs-37: the tab strip's arrows do not cover a tab on ${path}`, async ({ page }) => {
+      await login(page);
+      await page.goto(path);
+      await expect(page.getByRole("button", { name: /^Scroll (tabs )?(left|right)$/ }).filter({ visible: true }).first()).toBeVisible();
+      // At the start, and after swiping the strip to its end: no arrow on a tab's visible part.
+      for (const end of [false, true]) {
+        const overlaps = await page.evaluate((end) => {
+          const out: string[] = [];
+          for (const btn of document.querySelectorAll<HTMLElement>('button[aria-label^="Scroll"]')) {
+            if (!btn.offsetWidth) continue;
+            const wrap = btn.parentElement!;
+            const strip = [...wrap.querySelectorAll<HTMLElement>("*")].find((e) => /auto|scroll/.test(getComputedStyle(e).overflowX));
+            if (!strip) continue;
+            if (end) strip.scrollLeft = strip.scrollWidth;
+            const s = strip.getBoundingClientRect();
+            const b = btn.getBoundingClientRect();
+            for (const t of strip.querySelectorAll<HTMLElement>("a, [role=tab]")) {
+              const r = t.getBoundingClientRect();
+              const left = Math.max(r.left, s.left);
+              const right = Math.min(r.right, s.right);
+              if (right - left < 2) continue;
+              if (b.left < right - 1 && b.right > left + 1 && b.top < r.bottom - 1 && b.bottom > r.top + 1) out.push(t.textContent ?? "");
+            }
+          }
+          return out;
+        }, end);
+        expect(overlaps).toEqual([]);
+      }
+    });
+  }
 });
