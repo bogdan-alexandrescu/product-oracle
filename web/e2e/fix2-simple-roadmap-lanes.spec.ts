@@ -79,12 +79,14 @@ test.describe("desktop", () => {
     await openDefault(page, "light");
     const arrow = page.locator('[data-testid="dep-arrow"][data-from="setup-checklist"][data-to="setup-import"]');
     await expect(arrow).toHaveAttribute("data-state", "amber");
-    // The arrow's path ends (its head) beside the bar's left edge, not on it.
-    const d = (await arrow.evaluate((el) => (el.tagName === "path" ? el : el.querySelector("path"))?.getAttribute("d") ?? ""));
-    const nums = (d.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
-    const endX = nums[nums.length - 2];
-    const barX = Number(await bar(page, "setup-import").locator("rect[data-body]").getAttribute("x"));
-    // Beside the bar, not landing on (or into) its left edge.
+    // The arrow's path ends (its head) beside the bar's left edge, not on it (screen pixels).
+    const endX = await arrow.evaluate((el) => {
+      const p = (el.tagName === "path" ? el : el.querySelector("path")) as SVGPathElement;
+      const pt = p.getPointAtLength(p.getTotalLength());
+      const m = p.getScreenCTM()!;
+      return pt.x * m.a + pt.y * m.c + m.e;
+    });
+    const barX = (await bar(page, "setup-import").locator("rect[data-body]").boundingBox())!.x;
     expect(endX).toBeLessThan(barX);
     const legend = page.getByTestId("simple-chart").getByTestId("legend");
     await expect(legend.getByTestId("legend-item").filter({ hasText: "Dependency order accepted as a risk" })).toHaveCount(1);

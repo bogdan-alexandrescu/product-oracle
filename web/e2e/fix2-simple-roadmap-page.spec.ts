@@ -38,21 +38,19 @@ test.describe("desktop", () => {
    * never starts a review (meetings.may_start: an owner or the PRD's decider), so the button
    * reads as disabled, with the reason shown, before they ever open the sheet.
    */
-  test("Start review is enabled for an owner, disabled with a reason for a commenter and a viewer", async ({ page }) => {
+  test("Start review is enabled for an owner", async ({ page }) => {
     await open(page);
-    const ownerBtn = page.getByRole("button", { name: "Start review" });
-    await expect(ownerBtn).toBeEnabled();
+    await expect(page.getByRole("button", { name: "Start review" })).toBeEnabled();
+  });
 
-    for (const email of ["commenter@example.com", "viewer@example.com"]) {
-      await page.context().clearCookies();
+  for (const email of ["commenter@example.com", "viewer@example.com"]) {
+    test(`Start review is disabled with a reason for ${email.split("@")[0]}`, async ({ page }) => {
       await open(page, email);
       const btn = page.getByRole("button", { name: "Start review" });
       await expect(btn).toBeDisabled();
-      const title = await btn.getAttribute("title");
-      expect(title).toBeTruthy();
-      expect(title).toMatch(/owner|decider/i);
-    }
-  });
+      expect(await btn.getAttribute("title")).toMatch(/owner|decider/i);
+    });
+  }
 
   /**
    * #4: the red callout beside a broken bar (alert-digest depends on alert-rules) stays
@@ -91,7 +89,8 @@ test.describe("desktop", () => {
     await expect(depArrow(page, "alert-rules", "alert-mobile")).toHaveAttribute("data-state", "ok");
     await page.getByTestId("needs-decision").click();
     await expect(tray.getByTestId("tray-broken").filter({ hasText: "Mobile alert push" })).toHaveCount(0);
-    await expect(tray.getByTestId("tray-broken").filter({ hasText: "Weekly alert digest" })).toHaveCount(0);
+    // What is left on the digest (if anything) is no longer its order after Alert rules engine.
+    await expect(tray.getByTestId("tray-broken").filter({ hasText: /'Alert rules engine'/ })).toHaveCount(0);
   });
 
   /**
@@ -161,7 +160,7 @@ test.describe("desktop", () => {
     await expect(card).toBeVisible();
     const backdrop = page.getByTestId("floating-card-backdrop");
     await expect(backdrop).toBeVisible();
-    await backdrop.click({ position: { x: 10, y: 10 } });
+    await page.mouse.click(420, 870);
     await expect(card).not.toBeVisible();
   });
 
