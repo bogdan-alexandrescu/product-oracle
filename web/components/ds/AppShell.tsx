@@ -264,7 +264,7 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
       }
     >
       <p className="mb-3 truncate px-1 text-sm font-medium">{email}</p>
-      <div role="radiogroup" aria-label="Theme" className="mb-3 grid grid-cols-3 overflow-hidden rounded-button border border-line-strong">
+      <div role="radiogroup" aria-label="Theme" data-testid="theme-switch" className={`mb-3 grid grid-cols-3 ${SEGMENTED.track}`}>
         {THEMES.map((t) => (
           <button
             key={t.value}
@@ -273,9 +273,8 @@ function UserMenu({ placement }: { placement: "rail" | "header" }) {
             aria-checked={theme === t.value}
             data-testid={`theme-${t.value}`}
             onClick={() => setTheme(t.value)}
-            className={`flex h-9 items-center justify-center gap-1.5 border-r border-line text-sm font-medium last:border-r-0 ${
-              theme === t.value ? "bg-accent text-on-accent" : "text-text hover:bg-surface2"
-            }`}
+            // qa-simple-home-31: the one segmented control, as the rail's Simple | Detailed.
+            className={`flex items-center justify-center gap-1 ${SEGMENTED.option} ${theme === t.value ? SEGMENTED.on : SEGMENTED.off}`}
           >
             <Icon name={t.icon} size={16} />
             {t.label}
@@ -638,7 +637,8 @@ function PhoneHeader() {
       data-testid="phone-header"
       className="sticky top-0 z-30 hidden h-[var(--phone-top-bar)] items-center gap-2.5 bg-rail-top pt-[env(safe-area-inset-top)] pr-2.5 pl-3 [--focus-ring:var(--rail-bar)] max-[600px]:flex"
     >
-      <Link href={homeOf(modeOf(pathname))} aria-label="Product Oracle" data-testid="phone-brand" className="flex-none rounded-md">
+      {/* qa-simple-home-32: a 44 px hit area around the 22 px mark; the negative margin keeps the mark where it was. */}
+      <Link href={homeOf(modeOf(pathname))} aria-label="Product Oracle" data-testid="phone-brand" className="-m-[11px] flex size-11 flex-none items-center justify-center rounded-md">
         {/* ask-fresh: Simple's light header draws the mark in the accent ink, as its rail does; Detailed's navy keeps the sky mark. */}
         {pathname.startsWith("/simple") ? <Mark size={22} tone="current" className="block text-accent-ink" /> : <Mark size={22} tone="sky" className="block" />}
       </Link>

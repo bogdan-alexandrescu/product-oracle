@@ -420,7 +420,8 @@ export function SimpleRoadmap() {
   const [unit, setUnit] = useState<GanttUnit>("week");
   const [card, setCard] = useState<{ id: string; left: number; top: number } | null>(null);
   const [pop, setPop] = useState<{ id: string; left: number; top: number } | null>(null);
-  const [tray, setTray] = useState(false);
+  // Home's "All proposals" opens the roadmap with its Needs-a-decision tray open (?review=1).
+  const [tray, setTray] = useState(() => params.get("review") === "1");
   const [keyDates, setKeyDates] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [starting, setStarting] = useState(false);

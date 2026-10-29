@@ -15,6 +15,7 @@ import {
   type ChatThread as Thread,
 } from "@/lib/api/simple-chat";
 import { useCompanyZone } from "@/lib/dates";
+import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
 import { AnswerSources, Who } from "./AskAnswer";
@@ -329,7 +330,10 @@ export function ChatLine({
   ask?: boolean;
 }) {
   const zone = useCompanyZone();
+  const { me } = useMe();
   const mine = m.author_kind === "person";
+  // qa-simple-home-16: the reader's own lines say "You".
+  const you = mine && !!m.author_id && m.author_id === me?.user_id;
   return (
     <li
       data-testid="chat-message"
@@ -344,7 +348,7 @@ export function ChatLine({
             : `max-w-[95%] rounded-xl px-3 py-2 ${mine ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`
         }
       >
-        {ask ? <Who name={m.author_name} at={m.at} zone={zone} mine={mine} /> : <p className="simple-small font-semibold">{m.author_name}</p>}
+        {ask ? <Who name={you ? "You" : m.author_name} at={m.at} zone={zone} mine={mine} /> : <p className="simple-small font-semibold">{m.author_name}</p>}
         {m.kind === "pending" ? (
           <p
             className="whitespace-pre-wrap text-text2"

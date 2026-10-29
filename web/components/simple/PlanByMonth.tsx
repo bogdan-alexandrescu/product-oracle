@@ -23,6 +23,10 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
   const today = plan.today ? pct(plan.today) : null;
   const shown = plan.rows.slice(0, PLAN_ROWS);
   const more = plan.rows.length - shown.length;
+  // qa-simple-home-12: each month's line runs down through the rows, so a bar reads against the axis above it.
+  const grid = plan.months.map((m) => (
+    <span key={m} aria-hidden data-testid={`${testId}-gridline`} className="pointer-events-none absolute inset-y-0 w-0 border-l border-line" style={{ left: `${pct(m)}%` }} />
+  ));
   const line = today != null && (
     <span aria-hidden className="pointer-events-none absolute inset-y-0 w-0 border-l-2 border-crit" style={{ left: `${today}%` }} />
   );
@@ -57,14 +61,16 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
                 className="grid grid-cols-[minmax(7.5rem,38%)_1fr] items-center gap-2 rounded-md py-1 hover:bg-surface2 md:grid-cols-[minmax(10rem,32%)_1fr]"
               >
                 <span className="flex min-w-0 flex-col leading-tight">
-                  <span className="truncate font-semibold" data-testid={`${testId}-label`}>{`${r.name} · ${n}`}</span>
+                  <span className="font-semibold [overflow-wrap:anywhere]" data-testid={`${testId}-label`}>{`${r.name} · ${n}`}</span>
                   {when && <span className="simple-small tnum">{when}{r.past_edge ? " →" : ""}</span>}
                 </span>
                 <span className="relative h-7">
+                  {grid}
                   <span
                     aria-hidden
                     data-estimated={r.estimated ? "true" : undefined}
-                    className={`absolute top-2 h-3 rounded ${r.estimated ? "simple-bar-estimated border border-dashed border-line-strong" : "bg-accent-soft"}`}
+                    data-testid={`${testId}-span`}
+                    className={`simple-plan-bar absolute top-2 h-3 rounded ${r.estimated ? "simple-bar-estimated border border-dashed border-line-strong" : ""}`}
                     style={{ left: `${left}%`, width: `${Math.min(width, 100 - left)}%` }}
                   />
                   {r.date && !r.past_edge && (

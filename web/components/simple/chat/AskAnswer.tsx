@@ -12,7 +12,8 @@ import { isSafeHref, parseBlocks, type Block, type Inline } from "@/lib/markdown
  * 2026-10-28): its title, its lines, short labelled lists ("DONE WHEN", "TARGETS"…) and,
  * under them, where it comes from as links ("From the PRD · Roadmap", "Open M2 on the
  * roadmap"). The answer's text is the small markdown Oracle writes (lib/markdown); its
- * `[c:n]` markers are not drawn in the text: the cited sources are the links under it.
+ * `[c:n]` markers are a small raised number (a footnote, drawn by CSS so the line's words stay
+ * as written) against the word before them: the cited sources are the links under it.
  */
 
 /** "7:42 PM": a line's time in the company's time zone, with no zone after it. */
@@ -52,8 +53,15 @@ function titleOf(b: Block | undefined): Inline[] | null {
 function inline(nodes: Inline[]): ReactNode {
   return nodes.map((n, i) => {
     switch (n.t) {
-      case "text":
-        return <Fragment key={i}>{n.v}</Fragment>;
+      case "text": {
+        // qa-simple-home-17: no space left between a word and its marker ("only [c:1]." reads "only¹.").
+        const v = nodes[i + 1]?.t === "cite" ? n.v.replace(/\s+$/, "") : n.v;
+        return <Fragment key={i}>{v}</Fragment>;
+      }
+      case "cite": {
+        const num = /\d+/.exec(n.key)?.[0];
+        return num ? <sup key={i} aria-hidden data-testid="answer-cite" data-n={num} className="ml-px text-[11px] leading-none font-semibold text-text2 after:content-[attr(data-n)]" /> : null;
+      }
       case "code":
         return <code key={i}>{n.v}</code>;
       case "strong":

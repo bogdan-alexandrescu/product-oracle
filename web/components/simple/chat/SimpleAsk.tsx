@@ -54,6 +54,33 @@ function aboutWords(name: string): string {
   return the[name] ?? name;
 }
 
+/**
+ * qa-simple-home-22: a one-pager's chat is about its document ("Ask about Checkout redesign"):
+ * the shown page's heading names it (the page says no subject of its own). Null elsewhere.
+ */
+function useShownHeading(on: boolean): string | null {
+  const [text, setText] = useState<string | null>(null);
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (!on || !main) return;
+    const update = () => {
+      // Next keeps recently visited routes mounted but hidden: the shown page's H1.
+      const h1s = [...main.querySelectorAll("h1")];
+      const h1 = h1s.find((h) => h.checkVisibility?.() !== false && h.getClientRects().length > 0) ?? h1s.find((h) => h.closest("[hidden]") === null);
+      const t = h1?.textContent?.trim() || null;
+      setText(t && t !== "One-pager" ? t : null);
+    };
+    update();
+    const watch = new MutationObserver(update);
+    watch.observe(main, { subtree: true, childList: true, characterData: true });
+    return () => {
+      watch.disconnect();
+      setText(null);
+    };
+  }, [on]);
+  return on ? text : null;
+}
+
 /** The pick's history mark beside "Recent chats" (a clock with its arrow back). */
 function History() {
   return (
@@ -94,7 +121,9 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
   // An empty chat is about the page shown; a chat started stays about its own page.
   const fresh = !chat.id && !chat.askId;
   if (fresh && chat.page !== pathname) setChat({ ...chat, page: pathname });
-  const name = chat.general ? "General" : chat.page === pathname && screen.label && !screen.label.startsWith("/") ? screen.label : pageName(chat.page);
+  const onePager = !chat.general && chat.page === pathname && pageName(pathname) === "One-pager" && screen.kind === "screen";
+  const heading = useShownHeading(onePager);
+  const name = chat.general ? "General" : heading ?? (chat.page === pathname && screen.label && !screen.label.startsWith("/") ? screen.label : pageName(chat.page));
   const begin = (general: boolean) => {
     setChat({ id: null, askId: null, page: pathname, general });
     setSession((n) => n + 1);
@@ -110,9 +139,24 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
     }
   };
   const changes = can("create_simple_change");
+  // qa-simple-home-20: closed, the panel gives focus back to what opened it (Ask Oracle, a decision's Ask Oracle).
+  const root = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const at = document.activeElement;
+    const opener = at instanceof HTMLElement && at !== document.body && !root.current?.contains(at) ? at : null;
+    return () => {
+      if (!opener) return;
+      window.setTimeout(() => {
+        const now = document.activeElement;
+        if (opener.isConnected && (!now || now === document.body)) opener.focus();
+      }, 0);
+    };
+  }, []);
+  // qa-simple-home-19: a chat from another page says that page on the switch, not "This page".
+  const herePage = !chat.general && chat.page !== pathname ? pageName(chat.page) : "This page";
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-col bg-surface text-[15px] leading-[22px] text-text" data-testid="hop-panel">
+    <div ref={root} className="flex h-full min-h-0 min-w-0 flex-col bg-surface text-[15px] leading-[22px] text-text" data-testid="hop-panel">
       {showHeader && (
         <div className="flex min-h-14 flex-none items-center gap-2 border-b border-line pr-3 pl-4">
           {mark && <Mark size={22} tone="current" className="flex-none text-accent" />}
@@ -120,7 +164,7 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
           <button
             type="button"
             data-testid="ask-new-chat"
-            onClick={() => begin(false)}
+            onClick={() => begin(chat.general)}
             className="inline-flex h-8 flex-none items-center gap-1.5 rounded-lg border border-line-strong bg-surface px-3 text-sm leading-none font-semibold whitespace-nowrap text-text hover:bg-surface2"
           >
             <Icon name="plus" size={16} stroke={2} />
@@ -137,14 +181,14 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
         <div role="group" aria-label="About" className="inline-flex flex-none gap-0.5 rounded-[10px] bg-surface2 p-[3px]">
           {(
             [
-              [false, "This page"],
+              [false, herePage],
               [true, "General"],
             ] as const
           ).map(([general, label]) => {
             const on = chat.general === general;
             return (
               <button
-                key={label}
+                key={String(general)}
                 type="button"
                 aria-pressed={on}
                 onClick={() => {
@@ -176,10 +220,10 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
         asks={can("create_discussion")}
         changes={changes}
         onChat={(c) => setChat((was) => ({ ...was, ...c }))}
-        top={
+        top={(question) => (
           <p className="mb-3 flex items-center gap-2 text-sm text-text2">
-            <span className="min-w-0 truncate" data-testid="ask-about">
-              {chat.reopened ? `Chat about ${name}` : `New chat about ${name}`}
+            <span className="min-w-0 truncate" data-testid="ask-about" title={question ?? undefined}>
+              {question ?? (chat.reopened ? `Chat about ${name}` : `New chat about ${name}`)}
             </span>
             <button
               ref={trigger}
@@ -195,7 +239,7 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
               <Icon name="chevron-down" size={16} stroke={2} className="size-3.5" />
             </button>
           </p>
-        }
+        )}
         overlay={
           recent !== null && (
             <RecentMenu
@@ -328,8 +372,8 @@ function ChatView({
   asks: boolean;
   changes: boolean;
   onChat: (c: Partial<Chat>) => void;
-  /** "New chat about Home" and the Recent chats trigger, over the lines. */
-  top: ReactNode;
+  /** "New chat about Home" (or the chat's first question) and the Recent chats trigger, over the lines. */
+  top: (question: string | null) => ReactNode;
   /** The Recent chats menu, over the lines. */
   overlay: ReactNode;
 }) {
@@ -343,6 +387,8 @@ function ChatView({
     ids.current = { id: chat.id ?? thread?.id ?? ids.current.id, askId: chat.askId ?? ids.current.askId };
   });
   const page = chat.page;
+  // qa-simple-home-22: one wording for the box and the empty chat ("Ask about the roadmap").
+  const about = aboutWords(name);
 
   const load = useCallback(async () => {
     const id = ids.current.id;
@@ -427,6 +473,9 @@ function ChatView({
     ...shownLines(thread?.messages ?? []).map((m) => ({ at: m.at, plan: m })),
     ...ask.map((m) => ({ at: m.created_at, ask: m })),
   ].sort((a, b) => a.at.localeCompare(b.at));
+  // qa-simple-home-16: once asked, the chat is titled by its first question.
+  const firstAsked = lines.find((l) => (l.plan ? l.plan.author_kind === "person" : l.ask?.author_kind === "person"));
+  const question = (firstAsked?.plan?.body ?? firstAsked?.ask?.body ?? "").trim() || null;
   // The newest question at the top of the conversation, its answer reading down from it (the
   // panel's own scroll; the page never moves). The first question leaves the chat at its top.
   const scroller = useRef<HTMLDivElement>(null);
@@ -455,7 +504,7 @@ function ChatView({
     <section ref={here} aria-label="Ask or change the plan" data-testid="ask-chat" className="flex min-h-0 flex-1 flex-col">
       <div className="relative min-h-0 flex-1">
         <div ref={scroller} className="relative h-full overflow-y-auto px-4 py-3">
-          {top}
+          {top(question)}
           {error && (
             <p role="alert" className="mb-3 text-sm text-crit">
               {error}
@@ -473,7 +522,7 @@ function ChatView({
           {lines.length === 0 && (
             <p className="px-2 pt-7 pb-3 text-center text-text2" data-testid="hop-empty">
               <b className="mb-1 block text-[17px] leading-6 font-[650] text-text">Nothing yet</b>
-              {changes ? `Ask about ${aboutWords(name)}, or ask for a change.` : `Ask about ${aboutWords(name)}.`}
+              {changes ? `Ask about ${about}, or ask for a change.` : `Ask about ${about}.`}
             </p>
           )}
         </div>
@@ -485,8 +534,8 @@ function ChatView({
         <ChatComposer
           row
           send={send}
-          placeholder={changes ? `Ask about ${name}, or ask for a change…` : `Ask about ${name}…`}
-          hint={changes ? undefined : "You can ask questions; changes need a commenter or above."}
+          placeholder={changes ? `Ask about ${about}, or ask for a change…` : `Ask about ${about}…`}
+          hint={changes ? undefined : "You can ask questions. To suggest a change, ask an owner for comment access."}
           typed={typed}
         />
       </div>
@@ -538,7 +587,7 @@ function AskLine({ message: m, askId, onEnded }: { message: AskMessage; askId: s
         className={`max-w-[94%] rounded-[14px] px-3 py-2 ${person ? "bg-accent-soft text-accent-ink" : "bg-surface2 text-text"}`}
         {...(person ? {} : { "data-testid": "ask-answer", "data-status": live && !text ? "pending" : m.status })}
       >
-        <Who name={person ? (m.author?.name ?? "You") : "Oracle"} at={m.created_at} zone={zone} mine={person} />
+        <Who name={person ? "You" : "Oracle"} at={m.created_at} zone={zone} mine={person} />
         {failed ? (
           <p role="alert" className="text-crit">
             {failed}
