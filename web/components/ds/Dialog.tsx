@@ -69,7 +69,12 @@ export function Dialog({
   const keepEditing = () => {
     setAsking(false);
     const back = before.current;
-    requestAnimationFrame(() => (back?.isConnected ? back : panel.current)?.focus());
+    const refocus = () => (back?.isConnected ? back : panel.current)?.focus();
+    // Focus goes back at once (the pressed Keep editing button is about to go, which would
+    // leave focus on the page for a frame, where a sheet under the dialog takes the next
+    // Escape), and again after the question has gone.
+    refocus();
+    requestAnimationFrame(refocus);
   };
   /** Escape, the X or the backdrop: asks first while there are changes. */
   const requestClose = () => {
