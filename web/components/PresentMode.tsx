@@ -332,10 +332,12 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
       )}
       {deck && current && (
         <>
-          {/* qa-docs-24: a page heading per slide for screen readers (the slide's own heading follows). */}
-          <h1 className="sr-only" data-testid="present-heading">
-            Slide {index + 1} of {total}
-          </h1>
+          {/* qa-docs-24: a page heading per slide for screen readers, unless the slide has its own h1. */}
+          {!/<h1[\s>]/i.test(current.html) && (
+            <h1 className="sr-only" data-testid="present-heading">
+              Slide {index + 1} of {total}
+            </h1>
+          )}
           <p className="sr-only" aria-live="polite">
             Slide {index + 1} of {total}: {current.heading}
           </p>

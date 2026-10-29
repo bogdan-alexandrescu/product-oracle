@@ -59,8 +59,8 @@ export function PlanByMonth({ plan, prd, testId = "plan-strip" }: { plan: PlanSt
                 className="grid grid-cols-[minmax(7.5rem,38%)_1fr] items-center gap-2 rounded-md py-1 hover:bg-surface2 md:grid-cols-[minmax(10rem,32%)_1fr]"
               >
                 <span className="flex min-w-0 flex-col leading-tight">
-                  {/* qa-docs-10: on a narrow screen the label wraps to two lines, never cutting off the count. */}
-                  <span className="line-clamp-2 font-semibold [overflow-wrap:anywhere]" title={`${r.name} · ${n}`} data-testid={`${testId}-label`}>{`${r.name} · ${n}`}</span>
+                  {/* qa-docs-10: on a narrow screen the label wraps in full, never cutting the name or its count. */}
+                  <span className="font-semibold [overflow-wrap:anywhere]" data-testid={`${testId}-label`}>{`${r.name} · ${n}`}</span>
                   {when && <span className="simple-small tnum">{when}{r.past_edge ? " →" : ""}</span>}
                 </span>
                 <span className="relative h-7">

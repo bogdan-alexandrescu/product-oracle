@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent } from "react";
 
 import {
   Button,
@@ -278,7 +278,8 @@ const TILE_GAP = 12;
 function useBalancedColumns(count: number) {
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
-  useEffect(() => {
+  // Measured before the first paint, so the tiles never show in one column first.
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
     const read = () => setWidth(el.clientWidth);

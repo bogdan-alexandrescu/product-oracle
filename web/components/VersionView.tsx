@@ -757,6 +757,15 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
           .map((m) => `${formatDate(m.date)} (${m.label})`)
           .join(", ")}. Record a basis or import a draft without ${flaggedDates.length === 1 ? "it" : "them"}.`
       : undefined;
+  // Review of qa-docs-3: a reviewer who cannot approve reads why, not the approver's next step.
+  const approveBlockedNote =
+    flaggedDates.length > 0 && isUpdate
+      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " is" : "s are"} not verified yet, so this update cannot be approved.`
+      : flaggedDates.length > 0
+      ? `${flaggedDates.length} date${flaggedDates.length === 1 ? " is" : "s are"} not backed by a confirmed schedule: ${flaggedDates
+          .map((m) => `${formatDate(m.date)} (${m.label})`)
+          .join(", ")}. The version cannot be approved until ${flaggedDates.length === 1 ? "it is" : "they are"} resolved.`
+      : undefined;
   // H4: a vision or a product strategy is an owner's to approve; approvers still set
   // section verdicts and comment.
   const ownerApproves = document_ ? OWNER_APPROVES[document_.kind] : undefined;
@@ -1202,12 +1211,12 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 ))}
               {/* qa-docs-3: a reviewer who cannot approve still sees why the version cannot be
                   approved (the marked dates); only the Approve button is the approver's. */}
-              {version && !version.approved_at && !canApprove && capsReady && approveBlocked && (
+              {version && !version.approved_at && !canApprove && capsReady && approveBlockedNote && (
                 <span
                   data-testid="approve-blocked-note"
                   className="block max-w-[min(28rem,calc(100vw-2.5rem))] text-right text-sm font-medium break-words text-warn max-[600px]:text-left"
                 >
-                  {approveBlocked}
+                  {approveBlockedNote}
                 </span>
               )}
             </>
