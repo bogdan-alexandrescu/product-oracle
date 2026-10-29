@@ -3,7 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState, type KeyboardEvent } from "react";
 
-import { Button, ScrollStrip, ViewOnly } from "@/components/ds";
+import { Button, PageSkeleton, ScrollStrip, ViewOnly } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { useMe } from "@/lib/me";
 import { useSetParams } from "@/lib/use-set-params";
@@ -27,7 +27,7 @@ const TABS: { value: Tab; label: string; testId: string }[] = [
 
 export default function MarketPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton bare />}>
       <Market />
     </Suspense>
   );

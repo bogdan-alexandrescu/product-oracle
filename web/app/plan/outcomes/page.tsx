@@ -3,25 +3,7 @@
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
-import {
-  Button,
-  Chip,
-  confirmInPage,
-  DataTable,
-  FilterChips,
-  InfoTip,
-  Inspector,
-  InspectorRow,
-  InspectorSection,
-  Notice,
-  Page,
-  PageHeader,
-  Panel,
-  Sheet,
-  Split,
-  type ChipKind,
-  type Column,
-} from "@/components/ds";
+import { Button, Chip, type ChipKind, type Column, confirmInPage, DataTable, FilterChips, InfoTip, Inspector, InspectorRow, InspectorSection, Notice, Page, PageHeader, PageSkeleton, Panel, Sheet, Split } from "@/components/ds";
 import { Loading } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CATEGORY_LABEL } from "@/app/intakes/[id]/_lib";
@@ -141,7 +123,7 @@ function StateChip({ o, hero = false }: { o: Outcome; hero?: boolean }) {
  */
 export default function OutcomesPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton />}>
       <Outcomes />
     </Suspense>
   );

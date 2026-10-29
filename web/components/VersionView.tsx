@@ -9,7 +9,8 @@ import { CommentPopover, SelectionButton, type PageRect } from "@/components/Com
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
 import { PricingDecide } from "@/components/PricingDecide";
-import { Button, Chip, Empty, Icon, InfoTip, LinkButton, Page, PageHeader, Panel, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
+import { Button, Chip, Empty, Icon, InfoTip, LinkButton, NotFoundPanel, Page, PageHeader, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
+import { DocumentNotFound } from "@/components/DocumentNotFound";
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
 import { SectionQuestions, type GoTo } from "@/components/FeedbackPanel";
@@ -1100,25 +1101,26 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
 
   // The evidence pane says itself when the version is not found.
   if (missing === "doc" || (missing === "version" && pane !== "evidence")) {
-    return (
-      <Page>
-        <PageHeader title={missing === "doc" ? "Document not found" : "Version not found"} />
-        <Panel testId="doc-not-found" bodyClassName="flex flex-col items-center gap-3 pb-8">
-          <Empty icon="doc">
-            {missing === "doc" ? "This document doesn't exist or was deleted." : `Version ${n} of this document doesn't exist.`}
-          </Empty>
-          <div className="flex flex-wrap justify-center gap-2">
-            {missing === "version" && (
-              <LinkButton href={`/documents/${doc}`} variant="ghost">
-                Open the document
-              </LinkButton>
-            )}
-            <LinkButton href="/documents" variant="ghost" icon="back">
+    return missing === "doc" ? (
+      <DocumentNotFound />
+    ) : (
+      <NotFoundPanel
+        title="Version not found"
+        icon="doc"
+        testId="doc-not-found"
+        actions={
+          <>
+            <LinkButton href={`/documents/${doc}`} variant="secondary" className="h-10">
+              Open the document
+            </LinkButton>
+            <LinkButton href="/documents" variant="secondary" icon="back" className="h-10">
               Back to PRDs
             </LinkButton>
-          </div>
-        </Panel>
-      </Page>
+          </>
+        }
+      >
+        <p>Version {n} of this document doesn&apos;t exist.</p>
+      </NotFoundPanel>
     );
   }
 

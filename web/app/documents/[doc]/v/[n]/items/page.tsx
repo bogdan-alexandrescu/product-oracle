@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 
 import { VersionView } from "@/components/VersionView";
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
+import { PageSkeleton } from "@/components/ds";
 
 /** A roadmap version's Items tab (E2); a PRD version's /items opens the version itself. */
 async function Items({ params }: { params: RouteProps<{ doc: string; n: string }>["params"] }) {
@@ -12,7 +12,7 @@ async function Items({ params }: { params: RouteProps<{ doc: string; n: string }
 
 export default function VersionItemsPage({ params }: RouteProps<{ doc: string; n: string }>) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Items params={params} />
     </Suspense>
   );

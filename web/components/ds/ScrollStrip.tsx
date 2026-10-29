@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type HTMLAttributes, type ReactNode, type Ref } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties, type HTMLAttributes, type ReactNode, type Ref } from "react";
 
 import { Icon } from "./Icon";
 
@@ -228,12 +228,18 @@ function ScrollingStrip({
     );
   };
 
+  // cld-2: the spacer's own gap is taken back (a negative start margin as wide as the strip's
+  // gap-N, a quarter rem each), so it adds its 1 px only.
+  const gap = /(?:^|\s)gap(?:-x)?-(\d+(?:\.\d+)?)(?=\s|$)/.exec(stripClassName)?.[1];
+  const spacer = { "--strip-gap": gap ? `${Number(gap) * 0.25}rem` : "0px" } as CSSProperties;
+
   return (
     <div className={`flex min-w-0 items-stretch ${className}`}>
       {overflow && button(-1)}
       <div
         ref={setRef}
         {...rest}
+        style={{ ...spacer, ...rest.style }}
         id={id}
         data-more-left={more.left || undefined}
         data-more-right={more.right || undefined}
@@ -243,7 +249,7 @@ function ScrollingStrip({
         // The 1 px spacer after the last item: items have fractional widths while the scroll
         // range is whole pixels, so without it the last item ends up to a pixel past the
         // strip's edge at the end of the scroll, clipped there.
-        className={`relative flex min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto scroll-fade after:w-px after:flex-none after:content-[''] [&>*]:snap-start ${stripClassName}`}
+        className={`relative flex min-w-0 flex-1 snap-x snap-mandatory overflow-x-auto scroll-fade after:-ms-[var(--strip-gap)] after:w-px after:flex-none after:content-[''] [&>*]:snap-start ${stripClassName}`}
       >
         {children}
       </div>

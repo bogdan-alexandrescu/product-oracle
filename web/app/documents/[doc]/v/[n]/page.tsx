@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 
 import { VersionView } from "@/components/VersionView";
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
+import { PageSkeleton } from "@/components/ds";
 
 async function Version({ params }: { params: RouteProps<{ doc: string; n: string }>["params"] }) {
   const { doc, n } = await params;
@@ -11,7 +11,7 @@ async function Version({ params }: { params: RouteProps<{ doc: string; n: string
 
 export default function VersionPage({ params }: RouteProps<{ doc: string; n: string }>) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Version params={params} />
     </Suspense>
   );

@@ -1,4 +1,4 @@
-import { calendarDay, dayIn, displayZone, formatInZone, shownDay, zoneDateTime } from "@/lib/dates";
+import { calendarDay, dayIn, displayZone, formatInZone, shownDay, zoneDateTime, zoneInstant, zoneTime } from "@/lib/dates";
 import type { CitationOut, FeedbackStatus, JobSettings, LlmJob, LlmJobKind, Suggestion, Verdict } from "@/lib/api/client";
 
 // #447: display dates in the Company time zone (lib/dates.ts), not the browser's.
@@ -11,6 +11,14 @@ export const formatDay = (iso: string) => shownDay(iso, { month: "short", day: "
 export const formatDateTime = (iso: string) => zoneDateTime(iso, displayZone());
 
 export { inWords } from "@/lib/dates";
+
+/**
+ * A job's daily time, set as a wall time in the zone it runs in ("07:00" Pacific), in the
+ * Company time zone and written as every time is (qa-shell-19): "7:00 AM PDT".
+ */
+export function dailyTime(time: string, runZone: string, zone = displayZone(), now: number = Date.now()): string {
+  return zoneTime(zoneInstant(dayIn(now, runZone), time, runZone), zone);
+}
 
 /*
  * One way to write each value (#QA): dates, times, ranges and ages in the Company time zone,

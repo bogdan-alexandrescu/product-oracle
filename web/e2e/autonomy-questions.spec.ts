@@ -30,7 +30,7 @@ test("autonomy: at Observe the brief's Next questions says Oracle asks no one", 
   await login(page);
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   await expect(row(page, "questions")).toContainText("Ask people questions");
   await step(page, "questions", "Observe").click();
   const sheet = page.getByRole("dialog", { name: "Change Ask people questions" });

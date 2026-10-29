@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 
-import { Button } from "@/components/ds";
+import { Button, PageSkeleton } from "@/components/ds";
 import { PreRead } from "@/components/simple/meetings/PreRead";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { SimpleEmpty, SimplePage, SimpleSection } from "@/components/simple/SimplePage";
@@ -26,7 +26,7 @@ import { SIMPLE_MODE } from "../_flag";
  */
 export default function SimpleMeetings() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton />}>
       <Meetings />
     </Suspense>
   );

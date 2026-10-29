@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 
 import { PresentMode } from "@/components/PresentMode";
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
+import { PageSkeleton } from "@/components/ds";
 
 type Props = RouteProps<{ doc: string; n: string }>;
 
@@ -26,7 +26,7 @@ async function Present({ params, searchParams }: Pick<Props, "params" | "searchP
 
 export default function PresentPage({ params, searchParams }: Props) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Present params={params} searchParams={searchParams} />
     </Suspense>
   );

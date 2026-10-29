@@ -5,7 +5,7 @@ import { login } from "./helpers";
 test("themes: list, live preview, a low-contrast colour blocks saving", async ({ page }) => {
   await login(page);
   await page.goto("/settings/themes");
-  await expect(page.getByRole("heading", { level: 1, name: "Themes" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   await expect(page.locator('tr[data-testid^="theme-row-"]')).toHaveCount(6);
   await expect(page.getByTestId("theme-row-roadmap-board")).toContainText("Built-in");
 

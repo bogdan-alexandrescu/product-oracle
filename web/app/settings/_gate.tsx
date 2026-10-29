@@ -3,8 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 
-import { Empty, LinkButton, PageHeader, Panel } from "@/components/ds";
-import { Loading } from "@/components/ui";
+import { Empty, LinkButton, PageHeader, PageSkeleton, Panel } from "@/components/ds";
 import { useMe } from "@/lib/me";
 import { SETTINGS_WRITES, settingsTabOf, useSettingsTabs } from "@/lib/settings-tabs";
 
@@ -21,7 +20,8 @@ export function SettingsGate({ children }: { children: ReactNode }) {
   if (!tab || (tabs.includes(tab) && (!write || can(write)))) return children;
   // A failed read says so in the shell, with Retry (#370 fixes 4); no Loading forever.
   if (capsError) return null;
-  if (!ready) return <Loading />;
+  // qa-shell-10: while the tabs load, the page's shapes, not a bare Loading line.
+  if (!ready) return <PageSkeleton bare />;
   return (
     <>
       <PageHeader title={tab.label} />

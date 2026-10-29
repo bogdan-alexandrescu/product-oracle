@@ -57,7 +57,7 @@ test("app shell: each destination routes to its page", async ({ page }) => {
     ["nav-priorities", "Priorities", "/priorities"],
     ["nav-plan", "Plan", "/plan"],
     ["nav-inbox", "Inbox", "/inbox"],
-    ["nav-settings", "Members", "/settings/members"],
+    ["nav-settings", "Settings", "/settings/members"],
     ["nav-prds", "PRDs", "/documents"],
   ]) {
     await nav.getByTestId(id).click();
@@ -77,6 +77,7 @@ test("settings: its own strip routes to each section, Settings stays active", as
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
   const strip = page.getByRole("navigation", { name: "Settings" });
   for (const [id, path, heading] of [
+    // qa-shell-20: every tab is headed "Settings"; the browser tab names the tab.
     ["nav-members", "/settings/members", "Members"],
     ["nav-api-tokens", "/settings/api-tokens", "API tokens"],
     ["nav-connections", "/settings/connections", "Connections"],
@@ -87,7 +88,8 @@ test("settings: its own strip routes to each section, Settings stays active", as
   ]) {
     await strip.getByTestId(id).click();
     await expect(page).toHaveURL(new RegExp(`${path}$`));
-    await expect(page.getByRole("heading", { level: 1, name: heading, exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Settings", exact: true })).toBeVisible();
+    await expect(page).toHaveTitle(`${heading} · Settings · Product Oracle`);
     await expect(strip.getByTestId(id)).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings")).toHaveAttribute(
       "aria-current",
@@ -123,7 +125,7 @@ test("/settings redirects to members", async ({ page }) => {
   await login(page);
   await page.goto("/settings");
   await expect(page).toHaveURL(/\/settings\/members$/);
-  await expect(page.getByRole("heading", { level: 1, name: "Members" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 });
 
 test("user menu: the theme switch overrides the system setting and is remembered", async ({ page }) => {
@@ -217,7 +219,7 @@ test("phone header (I3): navy bar, compact mark to Home, the page's title once, 
   await expect(title).toHaveCSS("color", "rgb(255, 255, 255)");
   await expect(title).toHaveCSS("font-weight", "600");
   // The page's H1 stays for screen readers but is not drawn a second time.
-  const h1 = page.getByRole("heading", { level: 1, name: "Members" });
+  const h1 = page.getByRole("heading", { level: 1, name: "Settings" });
   await expect(h1).toHaveCount(1);
   expect((await h1.boundingBox())!.height).toBeLessThanOrEqual(1);
 

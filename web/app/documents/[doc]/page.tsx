@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 
 import { DocumentOverview } from "@/components/DocumentOverview";
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
+import { PageSkeleton } from "@/components/ds";
 
 async function Overview({ params }: { params: RouteProps<{ doc: string }>["params"] }) {
   const { doc } = await params;
@@ -11,7 +11,7 @@ async function Overview({ params }: { params: RouteProps<{ doc: string }>["param
 
 export default function DocumentPage({ params }: RouteProps<{ doc: string }>) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Overview params={params} />
     </Suspense>
   );

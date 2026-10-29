@@ -3,8 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState, useSyncExternalStore } from "react";
 
-import { Button, Chip, DataTable, InfoTip, Panel, Sheet, Sparkline, Split, ViewOnly, type Column } from "@/components/ds";
-import { ErrorNote, Loading } from "@/components/ui";
+import { Button, Chip, type Column, DataTable, InfoTip, PageSkeleton, Panel, Sheet, Sparkline, Split, ViewOnly } from "@/components/ds";
+import { ErrorNote } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
@@ -33,7 +33,7 @@ function useIsPhone(): boolean {
 
 export default function MetricsPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton bare />}>
       <Metrics />
     </Suspense>
   );

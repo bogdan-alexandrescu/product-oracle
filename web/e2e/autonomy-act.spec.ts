@@ -18,7 +18,7 @@ const rail = (page: Page) => page.getByRole("navigation", { name: "Oracle" });
 async function setLevel(page: Page, key: string, title: string, label: string) {
   await rail(page).getByTestId("nav-settings").click();
   await page.getByRole("navigation", { name: "Settings" }).getByTestId("nav-autonomy").click();
-  await expect(page.getByRole("heading", { level: 1, name: "Autonomy" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   await step(page, key, label).click();
   const sheet = page.getByRole("dialog", { name: `Change ${title}` });
   await sheet.getByLabel("Why").fill("Trying it for a month");

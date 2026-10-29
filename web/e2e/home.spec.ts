@@ -102,6 +102,10 @@ test("Home on a phone: stacked blocks under the phone header, inspector below, n
   await page.setViewportSize({ width: 390, height: 844 });
   await openHome(page);
   await expect(page.getByTestId("home-goal-G1")).toBeVisible();
+  // Every block loaded before measuring: a block still loading moves those below it (it was
+  // flaky under two workers).
+  await expect(page.getByTestId("home-in-flight-phone-title")).toHaveText("In flight6");
+  await expect(page.getByTestId("home-inspector").getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
   // Page offsets, so scrolling does not move them.
   const top = (id: string) =>
     page.getByTestId(id).evaluate((el) => {

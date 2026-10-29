@@ -74,7 +74,7 @@ test("settings › sources › Google Drive: owners only", async ({ page }) => {
   await page.addInitScript((key) => localStorage.setItem(key, "approver"), MOCK_ROLE_KEY);
   await login(page);
   await page.goto("/settings/sources");
-  await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
   await expect(page.getByRole("list", { name: "My sources" })).toBeVisible();
   await expect(page.getByTestId("company-drive")).toHaveCount(0);
   await expect(page.getByText("Company email domains")).toHaveCount(0);

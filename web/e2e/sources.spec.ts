@@ -5,7 +5,7 @@ import { login } from "./helpers";
 test("settings › sources: my sources, status and last error, sync, allowlist, pause", async ({ page }) => {
   await login(page);
   await page.goto("/settings/sources");
-  await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 
   const chat = page.getByRole("listitem", { name: "Product chat" });
   await expect(chat).toContainText("Slack");
@@ -98,7 +98,7 @@ test("settings › sources: add from my connections, upload files, delete", asyn
 test("/sources: search ranks by confidence and explains the badge", async ({ page }) => {
   await login(page);
   await page.goto("/sources");
-  await expect(page.getByRole("heading", { level: 1, name: "Sources" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Settings" })).toBeVisible();
 
   await page.getByLabel("Search", { exact: true }).fill("onboarding checklist");
   await page.getByRole("button", { name: "Search" }).click();

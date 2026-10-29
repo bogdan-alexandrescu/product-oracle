@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 
-import { Loading } from "@/components/ui";
 import type { RouteProps } from "@/lib/route-props";
 
 import { OnePager } from "./_one-pager";
+import { PageSkeleton } from "@/components/ds";
 
 async function Doc({ params }: { params: RouteProps<{ doc: string }>["params"] }) {
   const { doc } = await params;
@@ -12,7 +12,7 @@ async function Doc({ params }: { params: RouteProps<{ doc: string }>["params"] }
 
 export default function OnePagerPage({ params }: RouteProps<{ doc: string }>) {
   return (
-    <Suspense fallback={<div className="px-6 py-8"><Loading /></div>}>
+    <Suspense fallback={<PageSkeleton />}>
       <Doc params={params} />
     </Suspense>
   );

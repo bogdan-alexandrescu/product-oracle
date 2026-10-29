@@ -14,6 +14,7 @@ import {
   CodeText,
   confirmInPage,
   LinkButton,
+  NotFoundPanel,
   Icon,
   InfoTip,
   Inspector,
@@ -22,6 +23,7 @@ import {
   Notice,
   Page,
   PageHeader,
+  PageSkeleton,
   Panel,
   Sheet,
   Split,
@@ -217,22 +219,29 @@ export function RunDetail({ id }: { id: string }) {
     </Link>
   );
 
+  // qa-shell-8: a missing run in the app's one not-found pattern.
+  if (!run && q.error === RUN_MISSING) {
+    return (
+      <NotFoundPanel
+        title="Run not found"
+        icon="search"
+        testId="run-not-found"
+        back={back}
+        actions={
+          <LinkButton href="/runs" variant="primary" icon="back">
+            Back to Runs
+          </LinkButton>
+        }
+      >
+        <p>{RUN_MISSING}</p>
+      </NotFoundPanel>
+    );
+  }
   if (!run) {
     return (
       <Page>
         <PageHeader back={back} title="Run" />
-        {q.error === RUN_MISSING ? (
-          <ErrorNote>
-            {RUN_MISSING}{" "}
-            <Link href="/runs" className="underline">
-              Back to Runs
-            </Link>
-          </ErrorNote>
-        ) : q.error ? (
-          <ErrorNote>{q.error}</ErrorNote>
-        ) : (
-          <Loading />
-        )}
+        {q.error ? <ErrorNote>{q.error}</ErrorNote> : <PageSkeleton bare />}
       </Page>
     );
   }

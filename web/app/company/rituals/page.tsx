@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { Suspense, useState } from "react";
 
-import { Button, Chip, DataTable, Empty, InfoTip, Panel, SegmentedControl, Split, type Column } from "@/components/ds";
-import { ErrorNote, INPUT, Loading } from "@/components/ui";
+import { Button, Chip, type Column, DataTable, Empty, InfoTip, PageSkeleton, Panel, SegmentedControl, Split } from "@/components/ds";
+import { ErrorNote, INPUT } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
 import { formatMoney } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -28,7 +28,7 @@ import {
 
 export default function RitualsPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<PageSkeleton bare />}>
       <Rituals />
     </Suspense>
   );

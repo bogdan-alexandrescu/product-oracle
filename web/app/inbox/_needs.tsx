@@ -163,9 +163,12 @@ export const NEED_COLUMNS: Column<Need>[] = [
 ];
 
 /** Home's narrower lines: one action each. */
-export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) =>
-  c.key === "kind" ? { ...c, width: "150px" } : c.key === "context" ? { ...c, width: "22%", narrow: undefined } : c.key === "act" ? { ...c, width: "180px" } : c,
-);
+/** qa-shell-17: Home's few rows wrap at word ends instead of cutting a label short. */
+const WRAP_ALL = "[&_.truncate]:overflow-visible [&_.truncate]:whitespace-normal [&_.truncate]:break-words";
+export const NEED_COLUMNS_COMPACT: Column<Need>[] = NEED_COLUMNS.map((c) => {
+  const sized = c.key === "kind" ? { ...c, width: "150px" } : c.key === "context" ? { ...c, width: "22%", narrow: undefined } : c.key === "act" ? { ...c, width: "180px" } : c;
+  return c.key === "act" ? sized : { ...sized, wrap: true, className: `${sized.className ?? ""} ${WRAP_ALL}` };
+});
 
 export function NeedTable({
   title,

@@ -66,8 +66,8 @@ export const zoneWeekday = (iso: string, zone: string) => formatInZone(iso, zone
 export const zoneDateTime = (iso: string, zone: string) =>
   formatInZone(iso, zone, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).replace(/ at /, ", ");
 
-/** "09:00 PDT" (24-hour). */
-export const zoneTime = (iso: string, zone: string) => formatInZone(iso, zone, { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }, "en-GB");
+/** "9:00 AM PDT": the one way a time is written (12-hour, the zone's short name, qa-shell-19). */
+export const zoneTime = (iso: string, zone: string) => formatInZone(iso, zone, { hour: "numeric", minute: "2-digit" });
 
 /** The calendar day (YYYY-MM-DD) of an instant in `zone`. */
 export function dayIn(at: Date | number | string, zone: string): string {
