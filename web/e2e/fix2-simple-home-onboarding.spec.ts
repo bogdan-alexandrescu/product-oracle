@@ -30,15 +30,16 @@ async function scenario(page: Page, name: string) {
   );
 }
 
-const setupCard = (page: Page) => page.getByTestId("home-setup");
-const progress = (page: Page) => page.getByTestId("home-setup-progress");
+// Detailed Home stays mounted behind Simple (ModeRoot), with its own "home-setup": read Simple's page only.
+const setupCard = (page: Page) => page.getByTestId("simple-page").getByTestId("home-setup");
+const progress = (page: Page) => setupCard(page).getByTestId("home-setup-progress");
 const step = (page: Page, label: string) => setupCard(page).getByTestId("home-setup-step").filter({ hasText: label });
 
 /** The Detailed rail's Mode switch: Simple, landing on Simple's Home. */
 async function toSimple(page: Page) {
   await page.getByRole("navigation", { name: "Oracle" }).getByRole("radiogroup", { name: "Mode" }).getByRole("radio", { name: "Simple" }).click();
   await expect(page).toHaveURL(/\/simple$/);
-  await expect(page.getByTestId("home-sentence")).toBeVisible();
+  await expect(page.getByTestId("simple-page").getByTestId("home-sentence")).toBeVisible();
 }
 
 /** Opens a step from Simple's Home by its name. */
@@ -101,17 +102,17 @@ test("qa-onboarding-48: a new company's owner switches to Simple, sees the setup
     "Build the baseline",
   ]);
   const card = (await setupCard(page).boundingBox())!;
-  const goals = (await page.getByTestId("home-goals").boundingBox())!;
+  const goals = (await page.getByTestId("simple-page").getByTestId("home-goals").boundingBox())!;
   expect(card.y + card.height).toBeLessThanOrEqual(goals.y);
 
   // A new company has nothing planned yet: no goals, plan, meeting, decisions or broken links.
-  await expect(page.getByTestId("home-goals-empty")).toHaveText("No confirmed company goals yet.");
-  await expect(page.getByTestId("home-plan-empty")).toHaveText("Nothing planned this quarter yet.");
-  await expect(page.getByTestId("home-meeting-empty")).toHaveText("No review meeting scheduled.");
-  await expect(page.getByTestId("home-decisions-empty")).toBeVisible();
-  await expect(page.getByTestId("home-summary-broken-links").locator(".simple-number")).toHaveText("0");
-  await expect(page.getByTestId("home-broken")).toHaveCount(0);
-  await expect(page.getByTestId("home-sentence")).toHaveText("Nothing waits on you today.");
+  await expect(page.getByTestId("simple-page").getByTestId("home-goals-empty")).toHaveText("No confirmed company goals yet.");
+  await expect(page.getByTestId("simple-page").getByTestId("home-plan-empty")).toHaveText("Nothing planned this quarter yet.");
+  await expect(page.getByTestId("simple-page").getByTestId("home-meeting-empty")).toHaveText("No review meeting scheduled.");
+  await expect(page.getByTestId("simple-page").getByTestId("home-decisions-empty")).toBeVisible();
+  await expect(page.getByTestId("simple-page").getByTestId("home-summary-broken-links").locator(".simple-number")).toHaveText("0");
+  await expect(page.getByTestId("simple-page").getByTestId("home-broken")).toHaveCount(0);
+  await expect(page.getByTestId("simple-page").getByTestId("home-sentence")).toHaveText("Nothing waits on you today.");
 
   // Each step from Simple's Home and back through the rail: the card counts it done.
   await connectTools(page);
@@ -142,7 +143,7 @@ test("qa-onboarding-4: once every step is done the setup card goes away", async 
   await checkHorizons(page);
   await expect(progress(page)).toHaveText("7 of 8 done");
   await setZone(page);
-  await expect(page.getByTestId("home-goal").first()).toBeVisible();
+  await expect(page.getByTestId("simple-page").getByTestId("home-goal").first()).toBeVisible();
   await expect(setupCard(page)).toHaveCount(0);
 });
 
@@ -158,7 +159,7 @@ test("qa-onboarding-4: a viewer gets no setup card", async ({ page }) => {
   await scenario(page, "empty");
   await login(page, "viewer@example.com");
   await page.goto("/simple");
-  await expect(page.getByTestId("home-sentence")).toBeVisible();
-  await expect(page.getByTestId("home-goals-empty")).toBeVisible();
+  await expect(page.getByTestId("simple-page").getByTestId("home-sentence")).toBeVisible();
+  await expect(page.getByTestId("simple-page").getByTestId("home-goals-empty")).toBeVisible();
   await expect(setupCard(page)).toHaveCount(0);
 });
