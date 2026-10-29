@@ -210,10 +210,13 @@ def for_reader(reasons: Iterable[str] | None, hidden: Any) -> list[str]:
     reader may not see (``hidden``, :func:`oracle.docs.visibility.hidden_for_reader`;
     None sees all) is said as :data:`HIDDEN_REASON`, once. A reason stored in the old
     literal form (prod-6) is put into words (:func:`_reworded`), with no migration."""
-    out = [_reworded(r) for r in (reasons or [])]
     if hidden is None:
-        return out
-    return list(dict.fromkeys(HIDDEN_REASON if hidden.names(r) else r for r in out))
+        return [_reworded(r) for r in (reasons or [])]
+    # Hidden is judged on the stored text: rewording an old literal reason ("... links
+    # decision:d-7, which changed") would drop the ref the check looks for.
+    return list(
+        dict.fromkeys(HIDDEN_REASON if hidden.names(r) else _reworded(r) for r in (reasons or []))
+    )
 
 
 def detail_for_reader(detail: str | None, hidden: Any) -> str | None:

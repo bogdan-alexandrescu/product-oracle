@@ -9,6 +9,7 @@ from sqlalchemy import select
 from oracle import changes
 from oracle.baseline.models import Entity
 from oracle.docs.models import Document, DocumentVersion
+from oracle.docs.visibility import Hidden
 from oracle.roadmap import staleness
 from oracle.roadmap.models import RoadmapItem
 from oracle.tenancy import tenant_session
@@ -279,3 +280,26 @@ def test_an_old_literal_section_link_reason_is_reworded_when_read():
     new = "PRD section s-5-1 links Promo codes, which changed"
     counted = "PRD section s-5-1 links 3 baseline items, which changed"
     assert staleness.for_reader([new, counted], None) == [new, counted]
+
+
+def test_an_old_literal_reason_naming_a_hidden_decision_is_hidden_before_it_is_reworded():
+    """#541 with prod-6 (the train AA stale-alert review): an old literal reason names the
+    linked item by its ref ("PRD section s-5-1 links decision:d-7, which changed"); a reader
+    who may not see D-7 reads the hidden-reason line, never "links a decision, which
+    changed" (rewording first would drop the ref the hidden check looks for), in the
+    item's reasons, the at-risk why and an alert's detail; fails_when=the reworded line
+    reaches a reader D-7 is hidden from; no_claim=how Hidden is built (visibility tests)."""
+    hidden = Hidden(decision_ids=frozenset(), document_ids=frozenset(), ids=frozenset(),
+                    numbers=frozenset({7}), words=frozenset())  # fmt: skip
+    old = "PRD section s-5-1 links decision:d-7, which changed"
+    assert staleness.for_reader([old, "requirement:x changed"], hidden) == [
+        staleness.HIDDEN_REASON,
+        "requirement:x changed",
+    ]
+    detail = staleness.detail_for_reader(f"{old}; requirement:x changed", hidden)
+    assert detail == f"{staleness.HIDDEN_REASON}; a requirement changed", detail
+    assert "decision" not in detail
+    # Who may see D-7 reads it in words.
+    assert staleness.for_reader([old], None) == [
+        "PRD section s-5-1 links a decision, which changed"
+    ]
