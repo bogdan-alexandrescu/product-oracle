@@ -156,9 +156,6 @@ export default function SimpleHome() {
     }
     void setupQ.reload();
   }
-  // A new company (no goals yet) leads with its setup; otherwise it closes Home, so nothing above moves.
-  const setupCard = setup ? <SetupCard setup={setup} onHide={() => void hideSetup()} /> : null;
-  const setupFirst = !!setup && tiles !== undefined && tiles.length === 0;
   const decidedLately = useQuery(k("decided"), () => unwrap(api.GET("/v1/decisions", { params: { query: { status: "decided" } } })));
   const onePagers = useQuery(k("one-pagers"), () => unwrap(api.GET("/v1/documents", { params: { query: { kind: "prd" } } })));
 
@@ -180,6 +177,9 @@ export default function SimpleHome() {
     return ids;
   }, [toDecide, broken]);
   const tiles = useMemo(() => (goals.data ? goalTiles(goals.data, roadmap.data, waitingItems) : undefined), [goals.data, roadmap.data, waitingItems]);
+  // A new company (no goals yet) leads with its setup; otherwise it closes Home, so nothing above moves.
+  const setupCard = setup ? <SetupCard setup={setup} onHide={() => void hideSetup()} /> : null;
+  const setupFirst = !!setup && tiles !== undefined && tiles.length === 0;
   // The plan this quarter: the PRD in play (the top PRD by priority when several) by month.
   const priorities = useQuery(k("priorities"), () => unwrap(api.GET("/v1/simple/priorities")), { keepPrevious: true });
   // With several PRDs in play, chosen once the ranking answered (or failed), so the strip never

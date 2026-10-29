@@ -23,7 +23,7 @@ import { initialsOf } from "./Figures";
 import { Button } from "./Button";
 import { Icon, type IconName } from "./Icon";
 import { Notice } from "./Layout";
-import { ModeRoot, ModeSwitch } from "./ModeSwitch";
+import { ModeRoot, ModeSwitch, SEGMENTED } from "./ModeSwitch";
 import { usePageInfo } from "./page-info";
 import { RAIL_SELECTED, TAB_BAR } from "./rail";
 import { Sheet } from "./Sheet";
