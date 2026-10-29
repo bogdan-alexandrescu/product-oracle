@@ -30,7 +30,7 @@ async function signIn(page: Page, scenario: string, email: string) {
   await expect(page.getByTestId("home-greeting")).toBeVisible();
 }
 
-const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" });
+const digest = (page: Page) => page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
 
 test("an approver who decides the item applies its fixes", async ({ page }) => {
   await signIn(page, "simple-home-deciders", "avery.lane@example.com");
@@ -38,7 +38,7 @@ test("an approver who decides the item applies its fixes", async ({ page }) => {
   await expect(digest(page)).not.toContainText("decides");
   await expect(digest(page).getByRole("button", { name: /^Propose/ })).toHaveCount(0);
   await digest(page).getByRole("button", { name: "Move dependents", exact: true }).click();
-  await expect(page.getByText("Move dependents: applied to your working draft")).toBeVisible();
+  await expect(page.getByText("Dependents moved in your working draft")).toBeVisible();
 });
 
 test("a commenter's fix row and toast name who decides", async ({ page }) => {

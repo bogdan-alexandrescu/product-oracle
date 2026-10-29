@@ -157,7 +157,10 @@ for (const [where, size] of [
           await expect(page.getByTestId("home-goal").first()).toBeVisible();
           await expect(page.getByTestId("simple-nav-skeleton")).toHaveCount(0);
           const after = (await goals.boundingBox())!;
-          expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
+          // qa-simple-home-36: a viewer known has no "Walk me through it" and no slot for it: the
+          // band moves up by that slot once (never down); an owner's band stays where it stood.
+          if (role === "viewer") expect(after.y).toBeLessThanOrEqual(before.y + 1);
+          else expect(Math.abs(after.y - before.y)).toBeLessThanOrEqual(1);
           expect(Math.abs(after.x - before.x)).toBeLessThanOrEqual(1);
           const filledFoot = await foot();
           for (const [name, top] of named) {
@@ -239,7 +242,7 @@ test("the changes-in-review notice never pushes the goal band down", async ({ pa
   // A commenter proposes a fix on the plan: a viewer reads the published plan, the change in review.
   await login(page, "commenter@example.com");
   await page.goto("/simple");
-  const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" });
+  const broken = page.getByTestId("home-plan").getByTestId("home-broken").filter({ hasText: "Weekly alert digest" }).filter({ hasText: "which it depends on" });
   await broken.getByRole("button", { name: "Propose: Move dependents" }).click();
   await expect(page.getByText(/^Proposed: .+ decides?$/)).toBeVisible();
   await signOut(page);
@@ -261,7 +264,7 @@ test("the changes-in-review notice never pushes the goal band down", async ({ pa
   await expect(page.getByTestId("home-in-review")).toHaveCount(0);
   const before = (await goals.boundingBox())!;
   await expect(page.getByTestId("home-in-review")).toBeVisible({ timeout: 8000 });
-  await expect(page.getByTestId("home-in-review")).toContainText("in review. You see the published plan until they are approved.");
+  await expect(page.getByTestId("home-in-review")).toHaveText(/^(1 change is in review\. You see the published plan until it is approved\.|\d+ changes are in review\. You see the published plan until they are approved\.)$/);
   expect(Math.abs((await goals.boundingBox())!.y - before.y)).toBeLessThanOrEqual(1);
   await page.evaluate(([slow, ms]) => [slow, ms].forEach((k) => localStorage.removeItem(k)), [MOCK_SLOW_KEY, MOCK_SLOW_MS_KEY]);
 });
