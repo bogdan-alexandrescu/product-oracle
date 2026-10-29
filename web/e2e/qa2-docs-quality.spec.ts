@@ -139,11 +139,26 @@ test.describe("desktop", () => {
     const present = page.getByTestId("present-mode");
     await expect(page.getByTestId("slide-counter")).toHaveText("1 / 10");
     // The slides' own headings sit in their shadow roots; the page heading is the deck's.
+    // Level-one headings on the page, the slides' shadow roots included.
+    const h1s = () =>
+      page.evaluate(() => {
+        const out: string[] = [];
+        const walk = (root: Document | ShadowRoot) => {
+          root.querySelectorAll("h1").forEach((h) => out.push(h.textContent ?? ""));
+          root.querySelectorAll("*").forEach((el) => el.shadowRoot && walk(el.shadowRoot));
+        };
+        walk(document);
+        return out;
+      });
     const heading = present.getByTestId("present-heading");
-    await expect(heading).toHaveText("Slide 1 of 10");
-    expect(await heading.evaluate((el) => el.tagName)).toBe("H1");
+    // The title slide has its own h1: no second one is added beside it.
+    await expect(present.getByTestId("current-slide")).toBeVisible();
+    await expect.poll(async () => (await h1s()).length).toBe(1);
+    await expect(heading).toHaveCount(0);
     await page.keyboard.press("ArrowRight");
     await expect(heading).toHaveText("Slide 2 of 10");
+    expect(await heading.evaluate((el) => el.tagName)).toBe("H1");
+    await expect.poll(async () => (await h1s()).length).toBe(1);
 
     const keys = page.getByTestId("present-keys");
     await expect(keys).toBeVisible();
@@ -193,7 +208,14 @@ test.describe("phone", () => {
         .map((el) => el.textContent),
     );
     expect(cut).toEqual([]);
-    for (const label of await labels.all()) await expect(label).toHaveAttribute("title", (await label.textContent())!);
+    // Never clamped: a long milestone name wraps in full (a hover tooltip does nothing on a phone).
+    const clamped = await labels.evaluateAll((els) =>
+      els.filter((el) => {
+        const s = getComputedStyle(el);
+        return s.webkitLineClamp !== "none" || s.overflow === "hidden" || el.hasAttribute("title");
+      }).length,
+    );
+    expect(clamped).toBe(0);
     // No sideways scroll on the page.
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });

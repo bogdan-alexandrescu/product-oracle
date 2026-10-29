@@ -179,6 +179,29 @@ test.describe("desktop", () => {
     const counts = await rows();
     expect(Math.max(...counts) - Math.min(...counts)).toBeLessThanOrEqual(1);
   });
+
+  // Review of qa-docs-22: the tiles are laid out before the first paint, never one column first.
+  test("qa-docs-22: the Theme grid paints in its final columns, with no shift", async ({ page }) => {
+    // Before every frame, note how many columns the Theme grid has (once it holds tiles).
+    await page.addInitScript(() => {
+      const seen: number[] = [];
+      (window as unknown as { __themeCols: number[] }).__themeCols = seen;
+      const frame = () => {
+        const group = document.querySelector('[role="radiogroup"] [data-testid^="theme-option-"]')?.parentElement;
+        if (group) {
+          const n = getComputedStyle(group).gridTemplateColumns.split(" ").filter(Boolean).length;
+          if (seen[seen.length - 1] !== n) seen.push(n);
+        }
+        requestAnimationFrame(frame);
+      };
+      requestAnimationFrame(frame);
+    });
+    await openNew(page, "prd");
+    await thumbnails(page);
+    const seen = await page.evaluate(() => (window as unknown as { __themeCols: number[] }).__themeCols);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every((n) => n > 1)).toBe(true);
+  });
 });
 
 test.describe("phone", () => {

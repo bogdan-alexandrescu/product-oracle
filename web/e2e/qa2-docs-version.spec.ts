@@ -41,6 +41,8 @@ for (const scheme of ["light", "dark"] as const) {
           await page.goto(url);
           const note = visible(page, "approve-blocked-note");
           await expect(note).toContainText("1 date is not backed by a confirmed schedule");
+          // The owner's next step (record a basis, import a draft) is not theirs to take.
+          await expect(note).not.toContainText(/record a basis|import a draft/i);
           await expect(page.getByRole("button", { name: "Approve version" })).toHaveCount(0);
         }
       });
@@ -50,6 +52,7 @@ for (const scheme of ["light", "dark"] as const) {
       await login(page);
       await page.goto(ITEMS);
       await expect(visible(page, "approve-blocked")).toContainText("1 date is not backed by a confirmed schedule");
+      await expect(visible(page, "approve-blocked")).toContainText("Record a basis or import a draft without it.");
       await expect(page.getByTestId("approve-blocked-note")).toHaveCount(0);
     });
 
@@ -169,6 +172,7 @@ for (const scheme of ["light", "dark"] as const) {
       await login(page, "commenter@example.com");
       await page.goto(ITEMS);
       await expect(visible(page, "approve-blocked-note")).toContainText("1 date is not backed by a confirmed schedule");
+      await expect(visible(page, "approve-blocked-note")).not.toContainText(/record a basis|import a draft/i);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     });
 
@@ -196,7 +200,8 @@ for (const scheme of ["light", "dark"] as const) {
           const b = (await bar.boundingBox())!;
           return b.y - (n.y + n.height);
         })
-        .toBeGreaterThanOrEqual(0);
+        // Scrolled by hand to the end, the page leaves a clear gap above the bar, not just no overlap.
+        .toBeGreaterThanOrEqual(12);
       const tabs = (await page.getByTestId("tab-bar").boundingBox())!;
       const b = (await bar.boundingBox())!;
       expect(b.y + b.height).toBeLessThanOrEqual(tabs.y + 1);
