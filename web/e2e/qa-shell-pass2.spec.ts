@@ -120,18 +120,22 @@ for (const phone of [false, true]) {
   });
 }
 
-test("qa-shell-2: on a short window the rail scrolls, so Settings and the account menu stay reachable", async ({ page }) => {
-  await login(page);
-  await page.setViewportSize({ width: 1366, height: 600 });
-  const rail = page.getByTestId("app-nav");
-  const scrolls = await rail.evaluate((el) => getComputedStyle(el).overflowY);
-  expect(scrolls).toBe("auto");
-  await rail.getByTestId("nav-settings").scrollIntoViewIfNeeded();
-  await expect(rail.getByTestId("nav-settings")).toBeInViewport();
-  await page.getByTestId("user-menu").click();
-  const menu = page.getByRole("dialog", { name: "Account" });
-  await expect(menu).toBeInViewport({ ratio: 1 });
-  await expect(menu.getByRole("button", { name: "Sign out" })).toBeVisible();
+test.describe("a short window", () => {
+  // The window is short from the start: a resize after sign-in left the rail's height behind
+  // when the test scrolled it (fix2-shell review).
+  test.use({ viewport: { width: 1366, height: 600 } });
+  test("qa-shell-2: on a short window the rail scrolls, so Settings and the account menu stay reachable", async ({ page }) => {
+    await login(page);
+    const rail = page.getByTestId("app-nav");
+    const scrolls = await rail.evaluate((el) => getComputedStyle(el).overflowY);
+    expect(scrolls).toBe("auto");
+    await rail.getByTestId("nav-settings").scrollIntoViewIfNeeded();
+    await expect(rail.getByTestId("nav-settings")).toBeInViewport();
+    await page.getByTestId("user-menu").click();
+    const menu = page.getByRole("dialog", { name: "Account" });
+    await expect(menu).toBeInViewport({ ratio: 1 });
+    await expect(menu.getByRole("button", { name: "Sign out" })).toBeVisible();
+  });
 });
 
 test("qa-shell-7: the theme and mode switches are radio groups with one Tab stop and the arrow keys", async ({ page }) => {
@@ -152,6 +156,8 @@ test("qa-shell-7: the theme and mode switches are radio groups with one Tab stop
   await expect(mode.locator('[role="radio"][tabindex="0"]')).toHaveCount(1);
   await mode.getByRole("radio", { name: "Detailed" }).focus();
   await page.keyboard.press("ArrowUp");
+  await expect(mode.getByRole("radio", { name: "Simple" })).toBeFocused();
+  await page.keyboard.press("Enter");
   await expect(page).toHaveURL(/\/simple$/);
 });
 
@@ -171,7 +177,7 @@ test("qa-shell-15: Simple's rail names the product as Detailed and the browser t
 
 test("qa-shell-4, 5: the switch maps an old one-pager link and the Roadmap's own tabs", async ({ page }) => {
   await login(page);
-  await page.goto("/simple/prds/checkout-redesign");
+  await page.goto("/simple/one-pagers/checkout-redesign");
   await expect(page.getByTestId("one-pager-meta")).toBeVisible();
   await page.getByRole("radiogroup", { name: "Mode" }).filter({ visible: true }).getByRole("radio", { name: "Detailed" }).click();
   await expect(page).toHaveURL(/\/documents\/checkout-redesign$/);
@@ -242,7 +248,10 @@ test("cld-2: the strip's end spacer adds its 1 px only, not the gap too", async 
   const strip = page.getByTestId("settings-nav").locator(".scroll-fade").first();
   const after = await strip.evaluate((el) => {
     const s = getComputedStyle(el, "::after");
-    return { margin: parseFloat(s.marginInlineStart), gap: parseFloat(getComputedStyle(el).columnGap) };
+    return {
+      margin: parseFloat(s.marginInlineStart),
+      gap: parseFloat(getComputedStyle(el).columnGap),
+    };
   });
   expect(after.gap).toBeGreaterThan(0);
   expect(after.margin).toBe(-after.gap);

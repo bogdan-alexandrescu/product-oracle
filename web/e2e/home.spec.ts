@@ -80,7 +80,7 @@ test("Home: in flight rows select into the inspector", async ({ page }) => {
   await expect(inspector.getByTestId("row-goals")).toHaveText("Raise activationGrow paid conversion");
   await expect(inspector).toContainText("PRD · selected");
   await expect(inspector.getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
-  await expect(inspector.getByTestId("stat-sections")).toContainText("Approved");
+  await expect(inspector.getByTestId("stat-sections")).toContainText("Sections approved");
   await expect(inspector.getByRole("link", { name: "Open" })).toHaveAttribute("href", "/documents/checkout-redesign");
 
   // A run: its segments and what comes next.
@@ -102,6 +102,10 @@ test("Home on a phone: stacked blocks under the phone header, inspector below, n
   await page.setViewportSize({ width: 390, height: 844 });
   await openHome(page);
   await expect(page.getByTestId("home-goal-G1")).toBeVisible();
+  // Every block loaded before measuring: a block still loading moves those below it (it was
+  // flaky under two workers).
+  await expect(page.getByTestId("home-in-flight-phone-title")).toHaveText("In flight6");
+  await expect(page.getByTestId("home-inspector").getByRole("heading", { name: "Checkout redesign PRD" })).toBeVisible();
   // Page offsets, so scrolling does not move them.
   const top = (id: string) =>
     page.getByTestId(id).evaluate((el) => {
