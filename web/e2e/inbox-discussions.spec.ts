@@ -48,9 +48,12 @@ test("an invited viewer reads the discussion and the row moves to Done", async (
   await expect(page).toHaveURL(/\/documents\/saved-carts\/v\/2\?discussion=/);
   await expect(thread(page)).toContainText(TITLE);
   // The thread marks itself read once drawn; the rail's badge dropping is the sign it was.
-  await expect(badge(page)).toHaveText(String(before - 1));
+  // qa-company-4: the viewer's only counted item is this one, so the badge goes once it is read.
+  const after = async () =>
+    before - 1 > 0 ? expect(badge(page)).toHaveText(String(before - 1)) : expect(badge(page)).toHaveCount(0);
+  await after();
   await page.goto("/inbox");
-  await expect(badge(page)).toHaveText(String(before - 1));
+  await after();
   await tab(page, "Done").click();
   await expect(group(page, "done").locator("tr[data-row]").filter({ hasText: TITLE })).toContainText("Invited");
 });

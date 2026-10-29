@@ -14,7 +14,9 @@ async function openHome(page: Page, role?: "viewer" | "commenter" | "approver") 
   await login(page, role ? `${role}@example.com` : undefined);
   await page.goto("/home");
   await expect(page.getByRole("heading", { level: 1, name: "Home" })).toBeAttached();
-  await expect(page.getByTestId("home-needs-table").locator("tr[data-row]").first()).toBeVisible();
+  // qa-company-4: a viewer or commenter may have nothing waiting at all, so only an owner's rows are awaited.
+  if (!role || role === "approver")
+    await expect(page.getByTestId("home-needs-table").locator("tr[data-row]").first()).toBeVisible();
 }
 
 const lines = (page: Page) => page.getByTestId("home-needs-table").locator("tr[data-row]");
