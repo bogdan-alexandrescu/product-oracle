@@ -448,9 +448,10 @@ export const opWords = (op: string): string =>
 
 /** fix5-cut-dependents: a draft's change-list row; a cut with its dependents names every item it cut
  * ("Cut Alert rules engine and its dependents Weekly alert digest and Mobile alert push"). */
-export function changeRowWords(c: { op: string; titles?: string[] }): string {
+export function changeRowWords(c: { op: string; titles?: string[] }, title?: string): string {
   const [first, ...rest] = c.titles ?? [];
-  if (c.op !== "cut_with_dependents" || !first) return opWords(c.op);
+  // dod-actions-plan: a row names the item it changed, so Undo's next step reads from the list.
+  if (c.op !== "cut_with_dependents" || !first) return title ? `${opWords(c.op)}: ${title}` : opWords(c.op);
   const names = rest.length > 1 ? `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}` : (rest[0] ?? "");
   return `Cut ${first} and its dependents${names ? ` ${names}` : ""}`;
 }
