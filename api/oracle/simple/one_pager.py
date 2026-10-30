@@ -1102,7 +1102,9 @@ def patch_all(bodies: dict[str, str], old: str, new: str) -> dict[str, str] | No
 # --------------------------------------------------------------------------- the read
 
 
-async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
+async def read(db: AsyncSession, principal: Any, doc: str, *, held: bool = True) -> OnePagerOut:
+    """The one-pager as ``principal`` reads it; ``held`` false (the PDF, which is shared): the
+    last good version, never a build held for owners."""
     from oracle.simple import service
 
     document = await _document(db, principal, doc)
@@ -1113,7 +1115,7 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
         await db.commit()
     # oracle.simple.quality: a build that failed its checks twice is read by owners, with a
     # note naming them; people below owner read the last good version.
-    owner_reads = has_role(principal.role, "owner") and bool(b.row.held)
+    owner_reads = held and has_role(principal.role, "owner") and bool(b.row.held)
     page = b.row.held if owner_reads else b.row.blocks
     w = await who(db, document)
     d = await _open_draft(db, document)
@@ -1959,7 +1961,7 @@ async def pdf_html(db: AsyncSession, principal: Any, doc: str) -> tuple[str, str
     stem."""
     from oracle.branding import BRAND_CSS, accent_css, load_brand, render_brand_header
 
-    out = await read(db, principal, doc)
+    out = await read(db, principal, doc, held=False)
     brand = await load_brand(db)
     # prd-timeline: a PRD with a dated plan prints its timeline page, then a page per milestone.
     view = (await plan_model.views(db, {out.document.id})).get(out.document.id)
