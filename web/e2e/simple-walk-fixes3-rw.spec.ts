@@ -7,11 +7,10 @@ import { expect, test, type Locator, type Page } from "./test";
  * day is MOCK_NOW, Oct 22, 2026), on desktop (1366x820) and phone (390x844), light and dark.
  *
  * Card walk3-why-provenance: protects = an item card's "Why" line names where the item came
- * from as "From <PRD> (draft N): <code> <feature name>." ("From Usage alerts (draft 5): F-06
- * Weekly digest of fired alerts."), and an item imported from a section with no code reads
- * its own name ("From Usage alerts: Alert rules engine."), never a lowercase
- * section anchor; fails_when = the line reads "section bets" / "section f-06", or misses the
- * PRD draft's number; no_claim = the other reasons (rationale, goal) and the API's rule
+ * from as "From <PRD>: <feature name>." ("From Usage alerts: Weekly digest of fired alerts."),
+ * with no draft number or code, and an item imported from a section with no code reads its
+ * own name ("From Usage alerts: Alert rules engine."), never a lowercase section anchor;
+ * fails_when = the line reads "section bets" / "section f-06"; no_claim = the other reasons (rationale, goal) and the API's rule
  * (api/tests/test_simple_walk_fixes3_rw_api.py).
  *
  * Card walk3-later-window: protects = on the Now / Next / Later board, Later's window starts

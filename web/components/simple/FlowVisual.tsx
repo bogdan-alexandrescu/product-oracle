@@ -286,6 +286,7 @@ export function FlowPanel({
   code,
   name,
   backLabel,
+  inlineComments = false,
   showHint,
 }: {
   subject: FlowSubject;
@@ -305,6 +306,9 @@ export function FlowPanel({
   name?: string;
   /** The Roadmap card's viewer: a back link to it ("Roadmap"); unset, none (the one-pager's, qa-simple-prd-p3-22). */
   backLabel?: string;
+  /** The Roadmap card's Comment opens the comments in the opened view (fix4 qa-simple-roadmap-47);
+   * unset, it opens them full screen (qa-simple-prd-p3-22). */
+  inlineComments?: boolean;
   /** With no flow yet, the hint under "No flow yet" ("Oracle draws the steps..."). Unset: it
    * shows on the first row of a list only; false: never; true: on this row (bar the CSS rule). */
   showHint?: boolean;
@@ -597,8 +601,7 @@ export function FlowPanel({
   // The opened view's one Comment (the comments, notes, versions and Revise), as each page's own
   // lane built it: on the Roadmap card (fix4 qa-simple-roadmap-47) it opens them in the opened
   // view, after the screen on a phone; elsewhere (qa-simple-prd-p3-22) it opens them full screen.
-  const onCard = !!backLabel;
-  const commentButton = onCard ? (
+  const commentButton = inlineComments ? (
     <button type="button" className={BTN} aria-expanded={commenting} onClick={() => setCommenting((c) => !c)}>
       Comment
     </button>
@@ -639,7 +642,7 @@ export function FlowPanel({
             {phoneMeta(f)}
             {older}
           </p>
-          {!onCard && commentButton}
+          {!inlineComments && commentButton}
         </div>
         <div className="mt-2">
           <FlowDiagram flow={f} layout="down" width={352} testId="flow-svg" />
@@ -649,7 +652,7 @@ export function FlowPanel({
         <p className={`mt-2 ${SUB}`}>Screen: {f.touches_screen ? f.screen.title : "none (it touches no screen)"}</p>
         <FlowScreen flow={f} size={12} />
         {/* The header has no room on a phone: Comment follows the screen. */}
-        {onCard && <div className="mt-3">{commentButton}</div>}
+        {inlineComments && <div className="mt-3">{commentButton}</div>}
         {commenting && !full && <div className="mt-3 border-t border-line pt-3">{commentsPanel(f, true)}</div>}
       </div>
     </div>
@@ -673,12 +676,12 @@ export function FlowPanel({
           {flowDrawn(f, zone)}
           {older}
         </span>
-        {onCard && commentButton}
+        {inlineComments && commentButton}
         <button type="button" className={BTN} data-first onClick={() => setFull(true)}>
           <Icon d={ICONS.expand} />
           Full screen
         </button>
-        {!onCard && commentButton}
+        {!inlineComments && commentButton}
         <button type="button" className={BTN} onClick={() => setView(null)}>
           Close
         </button>
