@@ -58,7 +58,10 @@ test("qa-plan-56: the report's totals match the items it lists, and say where th
   // Now items without an issue: no more than the tracks' untracked items listed.
   let untracked = 0;
   for (const t of await tracks.all()) untracked += Number((await t.innerText()).match(/(\d+) untracked/)![1]);
-  expect(await figure("Now items without an issue")).toBe(untracked);
+  // A track's untracked items include Next and Later ones (the API's untracked_now counts Now
+  // only), so the figure is at most what the tracks list, never more (fix4).
+  expect(await figure("Now items without an issue")).toBeLessThanOrEqual(untracked);
+  expect(await figure("Now items without an issue")).toBeGreaterThan(0);
   await expect(page.getByTestId("report-figures-note").filter({ visible: true })).toContainText("listed under each track's Needs attention");
 });
 

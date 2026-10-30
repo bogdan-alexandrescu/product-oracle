@@ -204,7 +204,7 @@ test("priorities: with a track record, the confidence step and the formula read 
   await pickMethod(page, "RICE");
   expect(await stepsOf(page, "F-1", "Saved addresses at checkout")).toEqual([
     "Confidence = 75% × track record 0.77 = 57.8%",
-    "Score = 4,000 × 2 × 57.8% ÷ 2 = 2,312.00",
+    "Score = 4,000 × 2 × 57.8% ÷ 2 = 2,312",
   ]);
 
   await stepsAddUp(page);

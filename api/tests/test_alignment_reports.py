@@ -1329,3 +1329,24 @@ def test_markdown_for_a_moved_prd_without_its_version():
     link = "[Build the roadmap from it](/plan/documents?prd=prd-0)"
     assert f"- A newer version of the PRD is approved · {link}" in md
     assert "vNone" not in md
+
+
+def test_markdown_lists_an_item_with_two_reasons_once():
+    """fix4. protects=an item at risk for two reasons is one Needs attention line with both,
+    slipping first; fails_when=it is listed twice; no_claim=the stored rows (one per reason)."""
+    content = _content(1)
+    SLIP = "ENG-405 targets Dec 9, after the milestone date Nov 30."  # noqa: N806
+    base = {
+        "item_key": "item-x",
+        "title": "Item X",
+        "horizon": "now",
+        "alert_id": None,
+        "link": "/plan?item=prd-0:item-x",
+    }
+    content["tracks"][0]["needs_attention"] = [
+        {**base, "kind": "stale", "detail": "Its PRD section changed."},
+        {**base, "kind": "slipping", "detail": SLIP},
+    ]
+    md = alignment.markdown(content)
+    assert md.count("(/plan?item=prd-0:item-x)") == 1
+    assert f"- [Item X](/plan?item=prd-0:item-x) · Now: {SLIP} Its PRD section changed." in md

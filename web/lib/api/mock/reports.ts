@@ -101,6 +101,15 @@ const prdMovedText = (t: Track) => (t.prd_moved_to ? `v${t.prd_moved_to} of the 
 /** As oracle.reports.alignment.rebuild_link (fix4 qa-plan-3): the PRD's Build roadmap, on Plan › Roadmap documents. */
 export const rebuildLink = (slug: string) => `/plan/documents?prd=${encodeURIComponent(slug)}`;
 
+type Need = Track["needs_attention"][number];
+const REASON_ORDER: Record<string, number> = { slipping: 0, blocked: 1, stale: 2 };
+/** As oracle.reports.alignment.needs_by_item: one entry per item, its reasons slipping first. */
+function needsByItem(needs: Need[]): [Need, Need[]][] {
+  const out = new Map<string, Need[]>();
+  for (const n of needs) out.set(n.item_key, [...(out.get(n.item_key) ?? []), n]);
+  return [...out.values()].map((rs) => [rs[0]!, [...rs].sort((a, b) => (REASON_ORDER[a.kind] ?? 9) - (REASON_ORDER[b.kind] ?? 9))]);
+}
+
 function markdown(r: Omit<Report, "read" | "markdown">): string {
   const parts = r.tracks.map((t) =>
     [
@@ -108,7 +117,7 @@ function markdown(r: Omit<Report, "read" | "markdown">): string {
       "",
       t.headline,
       ...(t.prd_moved ? [`- ${prdMovedText(t)} · [Build the roadmap from it](${rebuildLink(t.prd.slug)})`] : []),
-      ...t.needs_attention.map((n) => `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${n.detail}`),
+      ...needsByItem(t.needs_attention).map(([n, rs]) => `- [${n.title}](${n.link}) · ${n.horizon[0]!.toUpperCase()}${n.horizon.slice(1)}: ${rs.map((r) => r.detail).join(" ")}`),
     ].join("\n"),
   );
   return [`# ${r.title}`, "", r.headline, "", ...parts].join("\n") + "\n";
