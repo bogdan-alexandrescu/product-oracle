@@ -1249,7 +1249,8 @@ function ItemsReviewLine({ run, cp, open, anchor }: { run: RunOut; cp: Checkpoin
       <span className="font-semibold" data-testid="items-open">
         {openText(open)}
       </span>
-      <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} icon="flag" variant={cp.can_decide ? "primary" : "secondary"}>
+      {/* A console answer is decided in the row below, whose button is then the page's one primary. */}
+      <LinkButton href={reviewHref({ ...cp, run_id: run.id })!} icon="flag" variant={cp.can_decide && decidedOnScreen(cp) ? "primary" : "secondary"}>
         Review items
       </LinkButton>
       <Button icon="doc" onClick={() => setRaw(true)}>
