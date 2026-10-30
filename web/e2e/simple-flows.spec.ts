@@ -254,7 +254,7 @@ for (const phone of [false, true]) {
 
       test(`a PRD bet line is the same row, opened the same (${where})`, async ({ page }) => {
         await login(page);
-        await page.goto("/simple/prds/guided-setup");
+        await page.goto("/simple/one-pagers/guided-setup");
         const line = page.getByRole("group", { name: "User flow of “A setup checklist that shows" });
         await expect(line.getByTestId("flow-meta")).toHaveText("5 steps · 1 screen");
         await expect(line.getByTestId("flow-drawn")).toContainText("Version 1 · drawn");
@@ -278,7 +278,7 @@ for (const phone of [false, true]) {
         await page.addInitScript(([key, ms]) => localStorage.setItem(key, ms), [MOCK_VISUAL_JOB_MS_KEY, String(JOB_MS)] as const);
         await page.addInitScript(([key, bet]) => localStorage.setItem(key, bet), [MOCK_VISUAL_FAIL_KEY, "bets-2"] as const);
         await login(page);
-        await page.goto("/simple/prds/guided-setup");
+        await page.goto("/simple/one-pagers/guided-setup");
         let loads = 0;
         page.on("framenavigated", (f) => {
           if (f === page.mainFrame()) loads += 1;
