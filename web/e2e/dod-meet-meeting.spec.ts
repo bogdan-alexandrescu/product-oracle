@@ -16,7 +16,8 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card dod-meet-cut-draft: protects = Cut in the meeting on a draft item (Team invite
  * nudges, not confirmed yet) shows it cut with Restore, as any cut item; fails_when = the
  * item keeps its horizon and its Cut button though the cut is recorded (its status read
- * "draft" over "cut"); no_claim = merged drafts.
+ * "draft" over "cut"), or Restore does not bring it back with its Cut; no_claim = merged
+ * drafts.
  *
  * Card dod-meet-decider-approve: protects = the PRD's decider (Dana Decider, who owns
  * nothing) starts the review, edits a line and approves in the meeting, and that Approve is
@@ -95,7 +96,9 @@ for (const phone of [false, true]) {
       await tap(page.getByRole("alertdialog").getByRole("button", { name: "Cut", exact: true }));
       await expect(allDecisions(page)).toContainText("Cut Team invite nudges");
       await expect(slice.getByRole("listitem").filter({ hasText: "Team invite nudges" })).toContainText("· Cut ·");
-      await expect(slice.getByRole("button", { name: "Restore Team invite nudges" })).toBeVisible();
+      await tap(slice.getByRole("button", { name: "Restore Team invite nudges" }));
+      await expect(slice.getByRole("button", { name: "Cut Team invite nudges", exact: true })).toBeVisible();
+      await expect(slice.getByRole("listitem").filter({ hasText: "Team invite nudges" })).not.toContainText("· Cut ·");
     });
   });
 }

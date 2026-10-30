@@ -18,6 +18,10 @@ import { expect, test, type Locator, type Page } from "./test";
  * only; fails_when = a view drops the minutes; no_claim = the Board's columns
  * (qa2-simple-decisions.spec.ts).
  *
+ * Card dod-meet-minutes-age: protects = the minutes' Inbox row is aged from when they were
+ * sent, the same moment that makes it new; fails_when = minutes sent three hours after the
+ * meeting ended read "3h" in the Inbox; no_claim = the row's new/open state.
+ *
  * Card dod-meet-end-no-email: protects = whoever ends the meeting cannot pick email when
  * email is not set up, on a phone too; fails_when = the box is enabled; no_claim = Slack.
  */
@@ -76,6 +80,21 @@ for (const phone of [false, true]) {
       await tap(row.getByRole("link", { name: "Open" }));
       await expect(page).toHaveURL(/\/simple\/decisions\?meeting=/);
       await expect(page.getByRole("region", { name: "Review: Guided setup" })).toContainText("We moved the checklist to Next.");
+    });
+
+    // card: dod-meet-minutes-age
+    test(`minutes sent hours after the meeting read as just sent in the Inbox (${where})`, async ({ page }) => {
+      await endOne(page);
+      await page.clock.fastForward("03:00:00");
+      await tap(delivery(page).getByRole("button", { name: "Send" }));
+      await expect(page.getByRole("status", { name: "Sent" })).toBeVisible();
+      await page.goto("/simple/meetings");
+      await switchTo(page, "approver@example.com");
+      await page.goto("/inbox");
+      const row = page.getByRole("row").filter({ hasText: "Review: Guided setup" });
+      await expect(row).toContainText("Meeting minutes");
+      await expect(row).toContainText(/\b(now|\d{1,2}m)\b/);
+      await expect(row).not.toContainText(/\b3h\b/);
     });
 
     // card: dod-meet-minutes-views

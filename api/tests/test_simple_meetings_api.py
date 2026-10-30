@@ -59,7 +59,9 @@ Test cards (protects / fails_when / no_claim):
   suffix is missing or shown once ended; no_claim=the web's filter control.
 """
 
+import datetime as dt
 import uuid
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import select
@@ -439,6 +441,24 @@ async def test_delivery_choices(client, monkeypatch):
     emails = {w.ctx.users[x].email for x in ("decider", "approver", "commenter")}
     assert sorted(x.to for x in fake.sent) == sorted(emails)
     assert all(x.subject == "Minutes: Second review" for x in fake.sent)
+
+
+async def test_minutes_inbox_row_is_dated_by_its_send(client, clock):
+    """dod-actions-meet review: the Inbox's minutes row carries when they were sent, so its
+    age and its new/open read from the same moment.
+    protects = ``simple_minutes`` rows have ``sent_at``, the send's time; fails_when = the
+    row has only the meeting's end, so minutes sent hours after it read hours old; no_claim =
+    the 30-day window."""
+    w = await world()
+    m = await start(client, w)
+    assert (await edit_title(client, w, "decider", m["session_id"])).status_code == 201
+    await end(client, w, m["id"])
+    ended = clock["now"]
+    clock["now"] = ended + timedelta(hours=3)
+    r = await client.post(f"{MEETINGS}/{m['id']}/send", json={}, headers=w.ctx.as_("decider"))
+    assert r.status_code == 200, r.text
+    [row] = (await inbox(client, w, "approver"))["simple_minutes"]
+    assert dt.datetime.fromisoformat(row["sent_at"]) == ended + timedelta(hours=3)
 
 
 async def test_decisions_page_grouping_and_filters(client):

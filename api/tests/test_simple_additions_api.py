@@ -544,6 +544,25 @@ async def test_a_cut_draft_item_reads_cut(client):
     assert (await w.items(client))[draft]["status"] == "draft"
 
 
+async def test_a_cut_draft_item_gets_no_looks_like(client):
+    """dod-actions-meet review: a cut draft is out of the plan, so it gets no "looks like"
+    suggestions; Restore (Undo) brings them back.
+    protects = looks_like keys on a draft's status, not its draft flag; fails_when = a cut
+    draft still lists the items it looks like; no_claim = merged or kept-both drafts
+    (test_reconcile_and_keep_both)."""
+    w = await World().build()
+    draft = (await w.add(client, "owner", "Bulk import"))["change"]["target"]["item_id"]
+    assert (await w.items(client))[draft]["looks_like"] != []
+    r = await client.post(CHANGES, headers=w.as_("owner"), json={
+        "op": "cut", "target": {"item_id": draft}, "before": {"cut": False},
+        "after": {}})  # fmt: skip
+    assert r.status_code == 201, r.text
+    assert (await w.items(client))[draft]["looks_like"] == []
+    r = await client.post(f"{CHANGES}/{r.json()['change']['id']}/undo", headers=w.as_("owner"))
+    assert r.status_code == 201, r.text
+    assert (await w.items(client))[draft]["looks_like"] != []
+
+
 async def test_a_goal_with_a_working_draft_item_is_not_empty(client):
     """Review: a goal whose only item is a quick add in the working draft is not empty, so
     the automatic suggestions do not run for it."""
