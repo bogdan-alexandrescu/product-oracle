@@ -497,13 +497,14 @@ async def test_links_carry_forward_and_still_reach_a_reconciled_dependency(clien
 
 
 def test_a_title_less_item_is_named_by_its_kind_never_its_key():
-    # protects=the review's staleness _label note: stored review bodies name items by title, and
-    # an item with a blank title by its kind in words; fails_when=the baseline key ("f.guided-setup")
-    # shows; no_claim=how the bodies are composed (tested above).
+    # protects=the review's staleness _label note: stored review bodies name items by title,
+    # and an item with a blank title by its kind in words; fails_when=the baseline key
+    # ("p.slow-setup") shows; no_claim=how the bodies are composed (tested above).
     from oracle.baseline.models import Entity
     from oracle.trace.staleness import _label
 
-    assert _label(Entity(type="feature", key="f.guided-setup", title="Guided setup")) == "Guided setup"
+    named = Entity(type="feature", key="f.guided-setup", title="Guided setup")
+    assert _label(named) == "Guided setup"
     blank = _label(Entity(type="user_problem", key="p.slow-setup", title="  "))
     assert blank == "an unnamed user problem"
     assert "p.slow-setup" not in blank
