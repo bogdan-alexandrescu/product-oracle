@@ -186,40 +186,29 @@ function RowMenu({ label, items }: { label: string; items: { label: string; onSe
 /** Picks shown on a row: at most this many names, then "and N more". */
 const PICKS_SHOWN = 5;
 
-/**
- * A row's picks in words (qa-work-46): "#product, #design, #eng and 40 more"; picks saved
- * before names were kept are counted as unknown ("120 unknown channels", qa-settings-23),
- * never listed by id: the ids only in the title.
- */
-function picksSummary(names: string[], unnamedIds: string[], unknown: [string, string]): { text: string; title: string } {
-  const unnamed = unnamedIds.length;
-  const unknownText = unnamed === 0 ? "" : unnamed === 1 ? unknown[0] : `${unnamed} ${unknown[1]}`;
-  const title = [names.join(", "), unnamed ? `No name saved for ${unnamedIds.join(", ")}` : ""].filter(Boolean).join(". ");
-  const extra = names.length - Math.min(names.length, PICKS_SHOWN);
-  const shown = names.slice(0, PICKS_SHOWN).join(", ");
-  if (!extra) return { text: [shown, unknownText].filter(Boolean).join(", "), title };
-  return { text: `${shown} and ${extra + unnamed} more`, title };
-}
-
-/** What a pick without a saved name reads as: "Unknown channel", "3 unknown channels". */
+/** What a pick without a saved name reads as: "unknown channel", "3 unknown channels". */
 const UNKNOWN: Partial<Record<Kind | "folder", [string, string]>> = {
-  slack: ["Unknown channel", "unknown channels"],
-  google_docs: ["Unknown file", "unknown files"],
-  folder: ["Unknown folder", "unknown folders"],
+  slack: ["unknown channel", "unknown channels"],
+  google_docs: ["unknown file", "unknown files"],
+  folder: ["unknown folder", "unknown folders"],
 };
 
 /**
- * Picks in words: their saved names, those without one counted as unknown (never their raw
- * ids, qa-settings-23), and a title naming everything, the unnamed ones by id.
+ * Picks in words (qa-work-46): their saved names, "#product, #design, #eng and 40 more" past
+ * `shown`; those without a saved name are counted as unknown ("120 unknown channels",
+ * qa-settings-23), never listed by id: the ids only in the title.
  */
-function pickWords(picks: { id: string; name?: string }[], unknown?: [string, string]): { text: string; title: string } {
+function pickWords(picks: { id: string; name?: string }[], unknown?: [string, string], shown = Infinity): { text: string; title: string } {
   const named = picks.flatMap((p) => (p.name ? [p.name] : unknown ? [] : [p.id]));
   const unnamed = unknown ? picks.filter((p) => !p.name).map((p) => p.id) : [];
-  const rest = unnamed.length === 0 ? [] : unnamed.length === 1 ? [unknown![0]] : [`${unnamed.length} ${unknown![1]}`];
-  return {
-    text: [...named, ...rest].join(", "),
-    title: [named.join(", "), unnamed.length ? `No name saved for ${unnamed.join(", ")}` : ""].filter(Boolean).join(". "),
-  };
+  const title = [named.join(", "), unnamed.length ? `No name saved for ${unnamed.join(", ")}` : ""].filter(Boolean).join(". ");
+  const extra = named.length - Math.min(named.length, shown);
+  if (extra) return { text: `${named.slice(0, shown).join(", ")} and ${extra + unnamed.length} more`, title };
+  // One unknown pick reads "Unknown channel" alone, "#product, unknown channel" after names.
+  const one = unknown?.[0] ?? "";
+  const rest =
+    unnamed.length === 0 ? [] : unnamed.length > 1 ? [`${unnamed.length} ${unknown![1]}`] : [named.length ? one : one.charAt(0).toUpperCase() + one.slice(1)];
+  return { text: [...named, ...rest].join(", "), title };
 }
 
 function entries(config: Record<string, unknown>, key: string): string[] {
@@ -584,17 +573,14 @@ function SourceRow({
   const pickIds = drive || !allowlist ? [] : entries(source.config, allowlist.key);
   // qa-work-46: Slack and Notion picks are opaque ids; one with no saved name is counted, not shown by id.
   const opaqueIds = source.kind === "slack" || source.kind === "notion";
-  // A Drive pick without a saved name carries its id as its name (driveFiles).
-  const docs = picked.filter((f) => f.kind === "doc");
-  const items = drive
-    ? docs.filter((f) => f.name !== f.id).map((f) => f.name)
-    : opaqueIds
-      ? pickIds.filter((id) => names[id]).map((id) => names[id])
-      : pickIds.map((id) => names[id] ?? id);
-  const unnamedIds = drive ? docs.filter((f) => f.name === f.id).map((f) => f.id) : opaqueIds ? pickIds.filter((id) => !names[id]) : [];
-  const unnamed = unnamedIds.length;
-  const unknown: [string, string] = UNKNOWN[source.kind] ?? (allowlist ? [`Unknown ${allowlist.noun.replace(/s$/, "")}`, `unknown ${allowlist.noun}`] : ["", ""]);
-  const picks = allowlist ? picksSummary(items, unnamedIds, unknown) : { text: "", title: "" };
+  const rowPicks = drive
+    ? picked.filter((f) => f.kind === "doc").map((f) => ({ id: f.id, name: f.name !== f.id ? f.name : undefined }))
+    : pickIds.map((id) => ({ id, name: opaqueIds ? names[id] : (names[id] ?? id) }));
+  const items = rowPicks.flatMap((p) => (p.name ? [p.name] : []));
+  const unnamed = rowPicks.length - items.length;
+  const unknown: [string, string] | undefined =
+    UNKNOWN[source.kind] ?? (allowlist ? [`unknown ${allowlist.noun.replace(/s$/, "")}`, `unknown ${allowlist.noun}`] : undefined);
+  const picks = allowlist ? pickWords(rowPicks, unknown, PICKS_SHOWN) : { text: "", title: "" };
   // GitHub's include: what the source reads, when it reads only some kinds.
   const reads = source.kind === "github" ? githubReads(source.config) : null;
   const attention = source.status === "needs_attention";

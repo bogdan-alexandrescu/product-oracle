@@ -98,7 +98,7 @@ test("slack picker: edit a source's channels, load more, paste ids", async ({ pa
   await expect(picker.getByRole("checkbox", { name: "C0999UNLISTED" })).toBeChecked();
   await chat.getByRole("button", { name: "Save channels" }).click();
   // A pick no list has named reads as unknown, never by its id (qa-work-46, in Settings' words, qa-settings-23).
-  await expect(chat.getByTestId("source-picks")).toHaveText("#product, Unknown channel");
+  await expect(chat.getByTestId("source-picks")).toHaveText("#product, unknown channel");
 });
 
 test("slack picker: a rate limit reads as a retry", async ({ page }) => {

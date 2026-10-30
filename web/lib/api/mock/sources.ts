@@ -736,6 +736,7 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     // A sync also deletes what left the picks (sources narrowed before narrowing took
     // effect on save).
     const deleted = s.kind === "google_docs" ? hideOutsidePicks(db, s) : 0;
+    const before = db.items.length;
     // S4 "draft-new-items" scenario: Product chat's sync brings in one new message.
     if (ctx.scenario === DRAFT_NEW_ITEMS_SCENARIO && s.id === PRODUCT_CHAT_ID && !db.items.some((i) => i.external_id === "m-new")) {
       db.items.push({
@@ -786,7 +787,9 @@ async function route(db: SourcesDb, req: Request, p: string[], q: URLSearchParam
     // What it saw is what the source holds, so the result and the row agree (qa-onboarding-4).
     const out = counted(db, s);
     const seen = out.item_count;
-    return json(200, { source_id: s.id, outcome: "completed", upserted: seen, versions_written: seen ? 1 : 0, deleted, checkpoints: 1, retry_after: null, error: null, source: out });
+    // Each item read for the first time is a new version, as the API counts them.
+    const written = db.items.length - before || (seen ? 1 : 0);
+    return json(200, { source_id: s.id, outcome: "completed", upserted: seen, versions_written: written, deleted, checkpoints: 1, retry_after: null, error: null, source: out });
   }
   if (sub === "coverage" && m === "GET") {
     const limit = Number(q.get("limit") ?? 50);
