@@ -705,7 +705,9 @@ def prd_provenance(e: Entry) -> str | None:
     title alone (qa-simple-roadmap-3), so neither the code ("F-01") nor a section anchor shows."""
     if e.prd is None or not e.row.prd_section_key:
         return None
-    label = _LEADING_CODE.sub("", prd_section_label(e.row.prd_section_key, e.prd_heading, e.row.title or ""))
+    label = _LEADING_CODE.sub(
+        "", prd_section_label(e.row.prd_section_key, e.prd_heading, e.row.title or "")
+    )
     if not label:
         return None
     draft = f" (draft {e.prd_draft})" if e.prd_draft else ""
