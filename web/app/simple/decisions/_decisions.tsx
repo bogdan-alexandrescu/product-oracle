@@ -229,7 +229,7 @@ function QuestionList({ d, actions, filtered, onClear }: { d: Schemas["SimpleDec
       </QuestionCard>
       {others.length > 0 && (
         <QuestionCard label="Waiting for others" testId="questions-others" questions={others} count={others.length}>
-          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} />)}</ul>
+          <ul>{others.map((x) => <QuestionRow key={x.id} q={x} mode="list" actions={actions} forOthers />)}</ul>
         </QuestionCard>
       )}
     </>

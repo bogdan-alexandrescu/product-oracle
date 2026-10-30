@@ -244,12 +244,15 @@ export function QuestionRow({
   actions,
   as: Tag = "li",
   testId = "question-row",
+  forOthers = false,
 }: {
   q: Question;
   mode: Mode;
   actions: ReturnType<typeof useQuestionActions>;
   as?: "li" | "div";
   testId?: string;
+  /** Listed under "Waiting for others": an owner's Decide is an override for the decider. */
+  forOthers?: boolean;
 }) {
   const zone = useCompanyZone();
   const { me } = useMe();
@@ -291,7 +294,7 @@ export function QuestionRow({
     const nameIt = q.missing === "decider" && q.can.name_decider;
     const askSomeone = q.missing === "recommendation" && writes;
     // qa-simple-decide-14: someone else's call (an owner may still decide it): secondary, and it says for whom.
-    const forOther = q.can.decide && !q.waiting_for_me && !!q.decider && q.decider.id !== me?.user_id;
+    const forOther = forOthers && q.can.decide && !!q.decider && q.decider.id !== me?.user_id;
     // qa-simple-decide-17: your proposal is sent: no second one.
     const proposed = !q.can.decide && !!q.pending && q.pending.by.id === me?.user_id;
     const primary = recommended && open !== "answers" && !proposed;

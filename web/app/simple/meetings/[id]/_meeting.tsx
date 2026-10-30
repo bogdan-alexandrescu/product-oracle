@@ -501,11 +501,12 @@ function DecisionsStep({ m, reload }: { m: Meeting; reload: () => Promise<unknow
 /** qa-simple-decide-1/2: a comment stays a comment of the meeting (never a decision) and shows under the box with who and when. */
 function Comments({ m, reload }: { m: Meeting; reload: () => Promise<unknown> }) {
   const zone = useCompanyZone();
-  const { can } = useMe();
+  const { me, can } = useMe();
   const { busy, error, act } = useAct(reload);
   const [text, setText] = useState("");
   const comments = (m.notes ?? []).filter((n) => n.kind === "comment");
-  const may = can("comment_in_simple_meeting");
+  // The API lets an attendee or one who may change things comment (the item's own rule).
+  const may = can("comment_in_simple_meeting", m.can.change || m.attendees.some((a) => a.id === me?.user_id));
   return (
       <section aria-label="Comment in the meeting" className="simple-card" data-testid="meeting-comments">
         {error && <ErrorNote>{error}</ErrorNote>}
