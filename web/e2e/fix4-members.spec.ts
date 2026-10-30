@@ -207,8 +207,11 @@ test("qa-settings-9: a sign-in rule says Saved when it lands", async ({ page }) 
   await rules.getByRole("button", { name: "Join at once" }).click();
   await expect(rules.getByTestId("sign-in-saved")).toHaveText("Saved");
   await expect(rules.getByRole("button", { name: "Join at once" })).toHaveAttribute("aria-pressed", "true");
+  // The first Saved goes after a moment, so the second one is the second save's own.
+  await expect(rules.getByTestId("sign-in-saved")).toHaveCount(0, { timeout: 8000 });
   await rules.getByLabel("Default role").selectOption("viewer");
   await expect(rules.getByTestId("sign-in-saved")).toHaveText("Saved");
+  await expect(rules.getByTestId("sign-in-saved")).toHaveCount(1);
 });
 
 test.describe("on a phone", () => {

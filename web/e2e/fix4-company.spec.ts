@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "./test";
 
-import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { MOCK_FAIL_ONCE_KEY, MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
 import { login } from "./helpers";
 
 /*
@@ -138,6 +138,22 @@ test("qa-settings-14: a bad accent is reported once, next to its field", async (
   await card.getByRole("button", { name: "Save branding" }).click();
   await expect(card.getByRole("status")).toHaveText("Saved");
   await expect(card.getByRole("alert")).toHaveCount(0);
+});
+
+// protects: qa-settings-14 for Horizons: a refused save's message goes once the horizons
+// change again. fails_when: the old message stays beside the new values.
+test("qa-settings-14: a refused Horizons save's message goes when a horizon changes", async ({ page }) => {
+  await page.addInitScript(([key, call]) => localStorage.setItem(key, call), [MOCK_FAIL_ONCE_KEY, "PUT /v1/settings/planning_horizons"]);
+  await login(page);
+  await page.goto("/settings/company");
+  const horizons = page.locator("#horizons");
+  await horizons.getByLabel("Now").selectOption("2");
+  await horizons.getByRole("button", { name: "Save" }).click();
+  await expect(horizons.getByRole("alert")).toHaveCount(1);
+  await horizons.getByLabel("To").fill("30");
+  await expect(horizons.getByRole("alert")).toHaveCount(0);
+  await horizons.getByRole("button", { name: "Save" }).click();
+  await expect(horizons.getByRole("status")).toHaveText("Saved");
 });
 
 // protects: qa-settings-15: the Accent row in the form's own sizes.
