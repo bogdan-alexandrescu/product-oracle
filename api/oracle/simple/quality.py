@@ -2,8 +2,9 @@
 point on generation quality). Deterministic: no model call.
 
 - :func:`one_pager`: a one-pager answer fills every block it was given (or marks one
-  :data:`NOT_IN_PRD`), has 3 to 5 bets, every line links a section of its block and draws on
-  it (shares a word with it), and no line holds a placeholder or model chatter.
+  :data:`NOT_IN_PRD` when nothing of the PRD maps to it), has 3 to 5 bets, every line
+  links a section of its block and draws on it (shares a word with it), and no line holds
+  a placeholder or model chatter (a quote of the PRD's own words is neither).
 - :func:`suggestion`: a goal suggestion names its goal (``goal_key``), is not a duplicate of
   a roadmap item or a baseline feature (oracle.simple.additions.reconcile, the matcher
   people see as "Looks like"), has a title a person reads in one line, and holds no
@@ -49,17 +50,29 @@ def _q(text: str, n: int = 6) -> str:
     return " ".join(words[:n]) + ("…" if len(words) > n else "")
 
 
-def words(text: str) -> list[dict[str, str]]:
-    """The placeholder and chatter checks of one piece of text (``where`` names it)."""
+def _flat(text: str) -> str:
+    return " ".join(str(text or "").replace("’", "'").split()).casefold()
+
+
+def _found(rx: re.Pattern[str], raw: str, quoted: str) -> bool:
+    """``rx`` matches words of ``raw`` that ``quoted`` (the PRD it draws on) does not hold."""
+    q = _flat(quoted)
+    return any(not q or _flat(m.group(0)) not in q for m in rx.finditer(raw))
+
+
+def words(text: str, quoted: str = "") -> list[dict[str, str]]:
+    """The placeholder and chatter checks of one piece of text (``where`` names it);
+    ``quoted``: the PRD text it draws on, whose own words ("TODO lists", "I can't find…")
+    are not TBD or chatter."""
     raw = str(text or "")
     out: list[dict[str, str]] = []
     if _EMPTY.match(raw):
         return [{"check": "empty", "say": "is empty"}]
-    if _TBD.search(raw):
+    if _found(_TBD, raw, quoted):
         out.append({"check": "tbd", "say": "says “TBD”"})
     if _LOREM.search(raw):
         out.append({"check": "lorem", "say": "holds placeholder text (lorem ipsum)"})
-    if _CHATTER.search(raw.strip()):
+    if _found(_CHATTER, raw.strip(), quoted):
         out.append({"check": "chatter", "say": "holds the model's chatter (“As an AI…”)"})
     if _BRACES.search(raw):
         out.append({"check": "braces", "say": "has an unfilled {placeholder}"})
@@ -85,6 +98,13 @@ def marked(block: dict[str, Any]) -> bool:
     return len(texts) == 1 and texts[0].rstrip(".").casefold() == NOT_IN_PRD.casefold()
 
 
+def has_facts(sections: list[Any]) -> bool:
+    """Something of the PRD maps to a block (it may not be marked :data:`NOT_IN_PRD`)."""
+    from oracle.simple.one_pager import _facts
+
+    return any(_facts(x) for x in sections)
+
+
 def one_pager(answer: Any, specs: tuple[Any, ...], mapped: dict[str, list[Any]]) -> list[dict]:
     """The failed checks of a ``one_pager`` answer ([] when it passes)."""
     given = {
@@ -98,6 +118,12 @@ def one_pager(answer: Any, specs: tuple[Any, ...], mapped: dict[str, list[Any]])
         title = f"“{spec.title}”"
         lines = [x for x in block.get("lines") or [] if isinstance(x, dict)]
         if marked(block):
+            if not has_facts(mapped.get(spec.key, [])):
+                continue
+            # The PRD has this block: marking it would blank the page everyone reads.
+            _add(out, "empty_block", f"{title} is marked “{NOT_IN_PRD}” but the PRD has it")
+            if spec.key == "bets":
+                _add(out, "bets", "0 bets; a one-pager has 3 to 5")
             continue
         if not lines:
             _add(out, "empty_block", f"{title} is empty and not marked “{NOT_IN_PRD}”")
@@ -116,7 +142,8 @@ def one_pager(answer: Any, specs: tuple[Any, ...], mapped: dict[str, list[Any]])
                 *(_stems(f"{s.heading or ''} {s.body_text or ''}") for s in linked)
             ):
                 _add(out, "unsourced", f"“{_q(text)}” does not draw on the section it links")
-            for f in words(text):
+            quoted = " ".join(f"{s.heading or ''} {s.body_text or ''}" for s in linked)
+            for f in words(text, quoted):
                 _add(out, f["check"], f"A line in {title} {f['say']}")
             m = raw.get("metric")
             if isinstance(m, dict):

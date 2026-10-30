@@ -192,10 +192,10 @@ def test_good_one_pager_answer_passes_its_checks():
     assert quality.one_pager(good(), one_pager.FALLBACK, MAPPED) == []
     # A block with nothing in the PRD is marked, not filled.
     bare = {**MAPPED, "not_doing": []}
-    for edit in (lambda b: b[3].update(lines=[{"text": "Not in the PRD yet"}]),
+    for mark in (lambda b: b[3].update(lines=[{"text": "Not in the PRD yet"}]),
                  lambda b: b[3].update(lines=[], missing=True)):  # fmt: skip
         a = good()
-        edit(a["blocks"])
+        mark(a["blocks"])
         assert quality.one_pager(a, one_pager.FALLBACK, bare) == []
 
 
@@ -206,8 +206,8 @@ def _all_missing() -> dict:
 def test_a_block_the_prd_has_is_never_marked_missing():
     out = quality.one_pager(_all_missing(), one_pager.FALLBACK, MAPPED)
     for title in ("Problem and who has it", "What we will build", "Not doing"):
-        assert {"check": "empty_block",
-                "say": f"“{title}” is marked “Not in the PRD yet” but the PRD has it"} in out, out  # fmt: skip
+        say = f"“{title}” is marked “Not in the PRD yet” but the PRD has it"
+        assert {"check": "empty_block", "say": say} in out, out
     assert {"check": "bets", "say": "0 bets; a one-pager has 3 to 5"} in out
     noted = _checks(lambda b: b[1].update(lines=[{"text": "Not in the PRD yet."}]))
     assert {"check": "bets", "say": "0 bets; a one-pager has 3 to 5"} in noted

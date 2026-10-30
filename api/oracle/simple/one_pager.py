@@ -524,8 +524,9 @@ def clean_answer(
     for spec in specs:
         allowed = {s.section_key for s in mapped.get(spec.key, [])}
         lines = []
-        if quality.marked(given.get(spec.key) or {}):
-            out.append({"key": spec.key, "lines": []})  # "Not in the PRD yet"
+        marked = quality.marked(given.get(spec.key) or {})
+        if marked and not quality.has_facts(mapped.get(spec.key, [])):
+            out.append({"key": spec.key, "lines": [], "missing": True})  # "Not in the PRD yet"
             continue
         for raw in (given.get(spec.key) or {}).get("lines") or []:
             if not isinstance(raw, dict):
@@ -548,8 +549,8 @@ def clean_answer(
             lines.append(line)
         lines = lines[: spec.max_lines]
         facts = sum(len(_facts(x)) for x in mapped.get(spec.key, []))
-        if strict and len(lines) < min(spec.min_lines, facts):
-            return None
+        if strict and len(lines) < min(max(spec.min_lines, marked), facts):
+            return None  # a block marked "Not in the PRD yet" that the PRD has: not usable
         out.append({"key": spec.key, "lines": lines})
     return _numbered(out)
 
@@ -774,16 +775,21 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
     if row is None:
         quick = _numbered(extract(specs, mapped))
         row = SimpleOnePager(
-            document_id=document.id, version_id=v.id, sections_hash=h, blocks=quick
+            document_id=document.id,
+            version_id=v.id,
+            sections_hash=h,
+            blocks=quick,
+            built_at=company_time.now(),
         )
         s.add(row)
-    row.job_id, row.built_at = job.id, company_time.now()
+    row.job_id = job.id
     if checks:
         row.held, row.checks = blocks, checks
         await s.flush()
         # Held for owners, not built: the shown page and its visuals stay the last good.
         return {"built": False, "held": True, "sections_hash": h, "checks": quality.said(checks)}
     row.blocks, row.built_by, row.held, row.checks = blocks, "oracle", None, None
+    row.built_at = company_time.now()  # a held run leaves the last good page's time
     await s.flush()
     # S10: Oracle drafts each bet's visual with the page (once per bet: a bet keeps its flow
     # when its words change).
@@ -1508,6 +1514,13 @@ async def create(db: AsyncSession, principal: Any, body: SimpleChangeIn) -> Simp
     sees = d is not None and sees_draft(principal, d, w)
     text, bodies = await _current(db, b, line_id, d if sees else None)
     if text != old:
+        held = (b.row.held or []) if has_role(principal.role, "owner") else []
+        if old in (x["text"] for blk in held for x in blk["lines"] if x["id"] == line_id):
+            # Owners read a held build ("Needs a look"); edits act on the last good line.
+            raise _conflict(
+                "This line is from Oracle's draft that needs a look; edit the last good line",
+                text,
+            )
         raise _conflict("This line changed since you read it", text)
     if not bodies:
         raise ChangeError(409, "This line rests on no section of the PRD")

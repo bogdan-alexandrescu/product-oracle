@@ -1118,13 +1118,16 @@ async def file_suggestion(
         raise ChangeError(422, f"title: 1 to {changes.TITLE_MAX} characters")
     if not outcome or len(outcome) > TEXT_MAX:
         raise ChangeError(422, f"outcome: 1 to {TEXT_MAX} characters")
-    taken = await db.scalars(
-        select(SimpleGoalSuggestion.title).where(
+    taken = await db.execute(
+        select(SimpleGoalSuggestion.title, SimpleGoalSuggestion.checks).where(
             SimpleGoalSuggestion.goal_id == goal.id,
             SimpleGoalSuggestion.status.in_(("open", "rejected")),
         )
     )
-    if _norm(title) in {_norm(t) for t in taken}:
+    # A held suggestion (failed its checks twice) is the owners' only: no one else is
+    # refused for a title they cannot see.
+    owner = has_role(principal.role, "owner")
+    if _norm(title) in {_norm(t) for t, checks in taken if owner or not checks}:
         raise ChangeError(409, "This goal has that suggestion already")
     row = SimpleGoalSuggestion(goal_id=goal.id, title=title, outcome=outcome, why=None,
                                evidence=[], origin="person", proposed_by=me)  # fmt: skip
