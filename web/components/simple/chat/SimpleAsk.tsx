@@ -28,6 +28,19 @@ type Chat = { id: string | null; askId: string | null; page: string; general: bo
 const detail = (e: unknown) => errorMessage(e).replace(/ \(\d{3}\)$/, "");
 
 /** "Today, 7:42 PM" for today's chats, else "Oct 26": in the company's time zone (the pick's Recent menu). */
+/** fix4 qa-simple-roadmap-50: a chat titled by its first question reads as a title: trimmed,
+ * one line, its first letter capitalised, its quotes curly (“ ” and ‘ ’) like the chat's cards. */
+export function tidyTitle(q: string): string {
+  const t = q
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/(^|[\s(\[])"/g, "$1“")
+    .replace(/"/g, "”")
+    .replace(/(^|[\s(\[])'/g, "$1‘")
+    .replace(/'/g, "’");
+  return t ? t[0].toUpperCase() + t.slice(1) : t;
+}
+
 export function chatWhen(iso: string, zone: string, now: number = Date.now()): string {
   if (dayIn(iso, zone) === todayIn(zone, now)) return `Today, ${chatTime(iso, zone)}`;
   return formatInZone(iso, zone, { month: "short", day: "numeric" });
@@ -230,9 +243,17 @@ export function SimpleAskPanel({ onClose, closeLabel = "Close Ask Oracle", showH
         onChat={(c) => setChat((was) => ({ ...was, ...c }))}
         top={(question) => (
           <p className="mb-3 flex items-center gap-2 text-sm text-text2">
-            <span className="min-w-0 truncate" data-testid="ask-about" title={question ?? undefined}>
+            <span className="min-w-0 truncate" data-testid="ask-about" title={question ? tidyTitle(question) : undefined}>
               {/* qa-simple-home-23: "New general chat", not "New chat about General". */}
-              {question ?? (chat.general ? (chat.reopened ? "General chat" : "New general chat") : chat.reopened ? `Chat about ${name}` : `New chat about ${name}`)}
+              {question
+                ? tidyTitle(question)
+                : chat.general
+                  ? chat.reopened
+                    ? "General chat"
+                    : "New general chat"
+                  : chat.reopened
+                    ? `Chat about ${name}`
+                    : `New chat about ${name}`}
             </span>
             <button
               ref={trigger}
@@ -346,7 +367,7 @@ function RecentMenu({
                 className="flex w-full flex-col rounded-lg p-2 text-left outline-none hover:bg-surface2 focus:bg-surface2 focus-visible:ring-2 focus-visible:ring-[var(--focus-ring,var(--accent))]"
               >
                 <b className="text-[15px] leading-[21px] font-semibold text-text [overflow-wrap:anywhere]" data-testid="ask-recent-question">
-                  {c.question ?? `Chat about ${c.page_name}`}
+                  {(c.question && tidyTitle(c.question)) || `Chat about ${c.page_name}`}
                 </b>
                 <span className="text-[13px] leading-[18px] text-text2" data-testid="ask-recent-when">
                   {c.page_name} · {chatWhen(c.last_at, zone)}

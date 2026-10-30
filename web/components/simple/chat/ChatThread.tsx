@@ -82,6 +82,13 @@ export function ChatThreadView({
   );
 }
 
+/** fix4 qa-simple-roadmap-41: an empty box's Send reads disabled the same in both themes, its
+ * words legible (the secondary text on the raised surface, not a half-faded accent). */
+const SEND = "simple-button simple-button-primary disabled:!border-line-strong disabled:!bg-surface2 disabled:!text-text2 disabled:!opacity-100";
+/** The box's focus: one ring (the outline drawn over its own border, not a second ring outside it). */
+// Important: the global :focus-visible rule is unlayered and would win over a layered utility.
+const BOX_FOCUS = "focus-visible:!outline-offset-[-1px]";
+
 /** The chat's box and Send (Enter sends, Shift+Enter a new line); `send` failing keeps the text and says why. */
 export function ChatComposer({
   send,
@@ -179,9 +186,9 @@ export function ChatComposer({
             placeholder={placeholder}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={keys}
-            className="max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-[15px] leading-[22px] text-text [field-sizing:content] placeholder:text-text-faint"
+            className={`max-h-40 min-h-11 min-w-0 flex-1 resize-none rounded-[10px] border border-line-strong bg-surface px-3 py-2.5 text-[15px] leading-[22px] text-text [field-sizing:content] placeholder:text-text-faint ${BOX_FOCUS}`}
           />
-          <button type="submit" className="simple-button simple-button-primary flex-none" disabled={busy || !text.trim()}>
+          <button type="submit" className={`${SEND} flex-none`} disabled={busy || !text.trim()}>
             Send
           </button>
         </div>
@@ -215,7 +222,7 @@ export function ChatComposer({
         placeholder={placeholder}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={keys}
-        className="min-h-16 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-text"
+        className={`min-h-16 w-full rounded-lg border border-line-strong bg-surface px-3 py-2 text-text ${BOX_FOCUS}`}
       />
       {error && (
         <p role="alert" className="simple-small text-crit">
@@ -223,11 +230,7 @@ export function ChatComposer({
         </p>
       )}
       <div>
-        <button
-          type="submit"
-          className="simple-button simple-button-primary"
-          disabled={busy || !text.trim()}
-        >
+        <button type="submit" className={SEND} disabled={busy || !text.trim()}>
           Send
         </button>
       </div>

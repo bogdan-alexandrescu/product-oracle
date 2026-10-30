@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Icon, ICONS } from "@/components/simple/FlowViews";
-import { askSay, askThread, itemTalkPage, type ChatThread } from "@/lib/api/simple-chat";
+import { askSay, askThread, itemTalkPage, type ChatCard as ChatCardData, type ChatThread } from "@/lib/api/simple-chat";
 import { useMe } from "@/lib/me";
 import { errorMessage } from "@/lib/use-query";
 
@@ -17,7 +17,18 @@ import { ChatComposer, ChatMessages, usePendingPoll } from "./ChatThread";
  * oldest first, and the message box pinned to the foot with "Just you and Oracle · kept with this
  * item" under it. Questions get Oracle's answer with its source; changes get action cards.
  */
-export function ItemTalk({ itemId, about, code, phone = false }: { itemId: string; about: string; code?: string | null; phone?: boolean }) {
+export function ItemTalk({
+  itemId,
+  about,
+  phone = false,
+  onCards,
+}: {
+  itemId: string;
+  about: string;
+  phone?: boolean;
+  /** fix4 qa-simple-roadmap-16: the talk's cards as they change (the card's "Proposals on it" counts the open ones). */
+  onCards?: (cards: ChatCardData[]) => void;
+}) {
   const page = itemTalkPage(itemId);
   const { can } = useMe();
   const [held, setHeld] = useState<{ page: string; thread: ChatThread } | null>(null);
@@ -41,6 +52,9 @@ export function ItemTalk({ itemId, about, code, phone = false }: { itemId: strin
     };
   }, [page, setThread]);
   usePendingPoll(thread, load);
+  useEffect(() => {
+    if (thread) onCards?.(thread.messages.flatMap((m) => m.cards ?? []));
+  }, [thread, onCards]);
   // The newest line in view: the talk scrolls to its end as lines arrive (only the talk, never the page).
   const scroller = useRef<HTMLDivElement>(null);
   const count = thread?.messages.length ?? 0;
@@ -49,13 +63,19 @@ export function ItemTalk({ itemId, about, code, phone = false }: { itemId: strin
     if (el) el.scrollTop = el.scrollHeight;
   }, [count]);
   const changes = can("create_simple_change");
-  const short = code || "it";
+  // fix4 qa-simple-roadmap-3: the item by its title, no code.
+  const short = about;
   return (
     <section aria-label={`Talk about ${about}`} data-testid="item-talk" className="flex min-h-0 min-w-0 flex-1 flex-col">
       {!phone && (
-        <h3 data-testid="item-talk-title" className="mx-4 mt-3.5 flex flex-none items-center gap-2 text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase before:h-px before:flex-1 before:bg-line after:h-px after:flex-1 after:bg-line">
-          Talk about {code || about}
-        </h3>
+        // fix4 qa-simple-roadmap-40: an opaque header with a divider under it; nothing of the lines shows through.
+        <div className="relative z-[1] flex-none border-b border-line bg-surface px-4 pt-3.5 pb-2.5">
+          <h3 data-testid="item-talk-title" className="flex min-w-0 items-center gap-2 text-[12px] leading-4 font-semibold tracking-[.06em] text-text2 uppercase before:h-px before:min-w-4 before:flex-1 before:bg-line after:h-px after:min-w-4 after:flex-1 after:bg-line">
+            <span className="min-w-0 truncate" title={about}>
+              Talk about {about}
+            </span>
+          </h3>
+        </div>
       )}
       <div ref={scroller} data-testid="item-talk-thread" className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {error && (

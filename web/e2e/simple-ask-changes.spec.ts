@@ -74,7 +74,7 @@ for (const phone of [false, true]) {
       await say(ask, "rename Weekly alert digest to Weekly alert summary");
       const rename = ask.getByTestId("chat-card").filter({ hasText: "Rename Weekly alert digest" });
       await tap(rename.getByRole("button", { name: "Apply" }));
-      await expect(rename.getByTestId("chat-card-outcome")).toContainText("Applied by Admin");
+      await expect(rename.getByTestId("chat-card-outcome")).toContainText("Applied by you");
       await expect(rename.getByTestId("chat-card-decision")).toHaveCount(0);
       await tap(rename.getByRole("button", { name: "Undo" }));
       await expect(rename.getByTestId("chat-card-outcome")).toContainText("Undone");
@@ -89,7 +89,7 @@ for (const phone of [false, true]) {
       await say(ask, "rename Setup checklist to First-run checklist");
       const card = ask.getByTestId("chat-card").filter({ hasText: "Rename Setup checklist" });
       await tap(card.getByRole("button", { name: "Propose" }));
-      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by Commenter");
+      await expect(card.getByTestId("chat-card-outcome")).toContainText("Proposed to Admin by you");
 
       await say(ask, "feature ask from Rosa Imani: Snooze alerts for a day");
       const askCard = ask.getByTestId("chat-card").filter({ hasText: "New feature ask from Rosa Imani: Snooze alerts for a day" });
@@ -131,7 +131,8 @@ test.describe("desktop, dark", () => {
     await expect(ask.getByTestId("chat-hint")).toContainText("You can ask questions");
     await say(ask, "cut Alert history export");
     const card = ask.getByTestId("chat-card").filter({ hasText: "Cut Alert history export" });
-    await expect(card.getByRole("button", { name: "Apply" })).toBeDisabled();
+    // fix4 qa-simple-roadmap-24: a cut whose dependents stay red names that on its button.
+    await expect(card.getByRole("button", { name: "Cut it, keep the dependents" })).toBeDisabled();
     await expect(card.getByTestId("chat-card-why-not")).toHaveText("Viewers read the plan; they don't change it");
     await page.goto("/home");
     // The panel's open state carries over from Simple; open it only if it is closed.

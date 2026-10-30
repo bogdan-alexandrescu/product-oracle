@@ -114,10 +114,10 @@ test.describe("desktop", () => {
 
   test("qa-20: a flow's time carries the company zone and its day, day first", async ({ page }) => {
     await open(page);
-    // Drawn Oct 26 (the mock's today is Oct 22): the day, day first, and the zone (qa-simple-prd-p3-14).
-    await expect(bet(page, 2).getByTestId("flow-drawn")).toHaveText("Version 1 · drawn 26 Oct, 8:00 AM PT");
+    // Drawn Oct 26 (the mock's today is Oct 22): the day, month first, and the friendly zone (qa-simple-prd-p3-14, qa-simple-roadmap-29).
+    await expect(bet(page, 2).getByTestId("flow-drawn")).toHaveText("Version 1 · drawn Oct 26, 8:00 AM PT");
     await bet(page, 2).getByRole("button", { name: "Open the flow", exact: true }).click();
-    await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toHaveText("Version 1 · drawn 26 Oct, 8:00 AM PT");
+    await expect(page.getByTestId("flow-detail").getByTestId("flow-drawn")).toHaveText("Version 1 · drawn Oct 26, 8:00 AM PT");
   });
 
   test("qa-21: Ask Oracle to draw it titles the flow from the bet's words; drawn today, its day and time with its zone", async ({ page }) => {
@@ -128,7 +128,7 @@ test.describe("desktop", () => {
     await expect(row.getByTestId("flow-row-drawn")).toBeVisible({ timeout: 15_000 });
     await expect(row.getByTestId("flow-row-drawn").locator("b").first()).toHaveText("Invite suggestions from the admin's calendar");
     await expect(row).not.toContainText("A bet of the one-pager");
-    await expect(row.getByTestId("flow-drawn")).toHaveText(/^Version 1 · drawn \d{1,2} [A-Z][a-z]{2,3}, \d{1,2}:\d{2} [AP]M PT$/);
+    await expect(row.getByTestId("flow-drawn")).toHaveText(/^Version 1 · drawn [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} [AP]M PT$/);
   });
 
   test("qa-22: the opened flow and the storyboard dim the page behind; a click on it closes them", async ({ page }) => {

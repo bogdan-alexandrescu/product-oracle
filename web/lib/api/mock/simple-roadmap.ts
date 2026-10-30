@@ -401,7 +401,7 @@ const short = (t: string): string => (t.length <= 40 ? t : `${t.slice(0, 39)}…
 function dependencyLine(title: string, start: string, depTitle: string, end: string): string {
   const years = start.slice(0, 4) !== end.slice(0, 4);
   const day = (d: string) => `${word(d)}${years ? ` ${d.slice(0, 4)}` : ""}`;
-  return `'${short(title)}' starts ${day(start)}, but '${short(depTitle)}', which it depends on, ends ${day(end)}`;
+  return `“${short(title)}” starts ${day(start)}, but “${short(depTitle)}”, which it depends on, ends ${day(end)}`;
 }
 
 function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, { s: SeedItem; r: { start: Dated; end: Dated } }>, w: [string, string]): Flag[] {
@@ -418,13 +418,13 @@ function flagsOf(s: SeedItem, r: { start: Dated; end: Dated }, all: Map<string, 
   }
   if (s.milestone) {
     const day = addDays(w[0], s.milestone.day);
-    if (r.end.date > day) flag("outside_milestone", `'${short(s.title)}' ends ${word(r.end.date)}, after its milestone '${s.milestone.name}' (${word(day)})`, ["accept_risk"], s.milestone.name);
+    if (r.end.date > day) flag("outside_milestone", `“${short(s.title)}” ends ${word(r.end.date)}, after its milestone “${s.milestone.name}” (${word(day)})`, ["accept_risk"], s.milestone.name);
   }
   if (s.status === "cut") {
     const live = [...all.values()].filter((x) => x.s.status !== "cut" && x.s.depends?.includes(s.key));
     if (live.length) {
       const more = live.length > 1 ? ` and ${live.length - 1} other${live.length > 2 ? "s" : ""}` : "";
-      flag("cut_with_dependents", `Cut, but '${short(live[0].s.title)}'${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["accept_risk"]);
+      flag("cut_with_dependents", `Cut, but “${short(live[0].s.title)}”${more} ${live.length > 1 ? "depend" : "depends"} on it`, ["accept_risk"]);
     }
   }
   if (s.draft && !s.track && !closed(s)) flag("draft_without_owner", "Draft with no owner to confirm it", []);
@@ -664,6 +664,12 @@ function readerView(db: SimpleDb, me: { id: string; role: Role }): { db: SimpleD
   return { db: { ...db, items, own, key_dates: keyDates }, hidden, visible };
 }
 
+/** fix4 qa-simple-roadmap-9: the items one reader reads (the API's drafts.overlays_for): a
+ * change's stale check and a fix's plan read them, so a commenter acts on what they see. */
+export function readerDb(db: SimpleDb, me: { id: string; role: Role }): SimpleDb {
+  return readerView(db, me).db;
+}
+
 export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Who): Schemas["SimpleRoadmapOut"] | null {
   knowTalkGoals(db);
   const decides = (s: SeedItem) => canDecideItem(db, s, me ?? { id: "", role });
@@ -720,7 +726,7 @@ export function roadmapOut(db: SimpleDb, role: Role, q: URLSearchParams, me?: Wh
         ...(s.notes ?? []),
         ...(s.why ? [s.why] : []),
         ...(s.goal ? [`Serves the goal ${GOALS[s.goal]}.`] : []),
-        ...(s.section ? [`From ${rm.prd} (draft ${rm.draft}): ${sectionLabel(s.section, s.heading, s.title)}.`] : []),
+        ...(s.section ? [`From ${rm.prd}: ${sectionLabel(s.section, s.heading, s.title).replace(/^[A-Z][A-Z0-9]*-\d+[a-z]?\s+/, "")}.`] : []),
       ].slice(0, 3),
       open_decisions: (db.decisions?.[s.key] ?? []).map((d) => ({ id: stableUuid(`simple-decision/${d.number}`), number: d.number, title: d.title })),
       looks_like: s.draft && !s.kept_both && !closed(s) ? matchesOf(db, s.looks_like ?? []) : [],

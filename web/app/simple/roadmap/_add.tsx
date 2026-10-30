@@ -42,6 +42,10 @@ export function QuickAdd({
   const ask = roadmaps.length > 0;
   const chosen = ask ? roadmaps.find((r) => r.id === rm)?.id : undefined;
   const ready = !!title.trim() && (!ask || !!chosen);
+  // fix4 qa-simple-roadmap-14: an add tried with something missing says what, beside it.
+  const [tried, setTried] = useState(false);
+  const noTitle = tried && !title.trim();
+  const noRoadmap = tried && ask && !chosen;
   const drag = useRef<{ pointer: number; ghost: HTMLElement; x0: number; y0: number; over: HTMLElement | null } | null>(null);
 
   const whereAt = (x: number, y: number): HTMLElement | null => {
@@ -68,17 +72,25 @@ export function QuickAdd({
   const send = async (where: Where) => {
     const t = title.trim();
     if (!t || (ask && !chosen)) return;
-    if (await onAdd(t, where, chosen)) setTitle("");
+    if (await onAdd(t, where, chosen)) {
+      setTitle("");
+      setTried(false);
+    }
   };
 
   /** Enter, on a desktop: add it straight away (as a draft) to the first available place,
    * same as dropping the chip there — no sheet repeating the title and roadmap it already has. */
   const sendDefault = () => {
+    setTried(!ready);
     if (ready && options[0]) void send(options[0]);
   };
 
   const onDown = (e: ReactPointerEvent<HTMLElement>) => {
-    if (e.button !== 0 || !ready) return;
+    if (e.button !== 0) return;
+    if (!ready) {
+      setTried(true);
+      return;
+    }
     e.preventDefault();
     const chip = e.currentTarget;
     try {
@@ -163,7 +175,9 @@ export function QuickAdd({
           data-testid="quick-add-roadmap"
           value={rm}
           onChange={(e) => setRm(e.target.value)}
-          className={`h-9 rounded-lg border bg-surface px-2 text-[15px] text-text ${title.trim() && !chosen ? "border-accent" : "border-line-strong"}`}
+          aria-invalid={noRoadmap || undefined}
+          aria-describedby={noRoadmap ? "quick-add-roadmap-error" : undefined}
+          className={`h-9 rounded-lg border bg-surface px-2 text-[15px] text-text ${noRoadmap ? "border-crit" : title.trim() && !chosen ? "border-accent" : "border-line-strong"}`}
         >
           <option value="">Which roadmap?</option>
           {roadmaps.map((r) => (
@@ -177,16 +191,18 @@ export function QuickAdd({
         id="quick-add-title"
         value={title}
         maxLength={200}
-        // qa-shell-24: a placeholder that fits the box's narrowest width; the full words in its title.
-        placeholder="Type a title, then drag it"
+        // qa-shell-24, fix4 qa-simple-roadmap-49: short enough to show whole with Ask open; the full words in its title.
+        placeholder="Type a title, then drag it into place"
         title="Type a title, then drag it onto a quarter, a column or a goal"
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key !== "Enter" || !title.trim()) return;
+          if (e.key !== "Enter") return;
           e.preventDefault();
           sendDefault();
         }}
-        className="h-9 min-w-[16rem] flex-1 rounded-lg border border-line-strong bg-surface px-3 text-[15px] text-text"
+        aria-invalid={noTitle || undefined}
+        aria-describedby={noTitle ? "quick-add-title-error" : undefined}
+        className={`h-9 min-w-[16rem] flex-1 rounded-lg border bg-surface px-3 text-[15px] text-text ${noTitle ? "border-crit" : "border-line-strong"}`}
       />
       <span
         role="button"
@@ -199,7 +215,7 @@ export function QuickAdd({
         onPointerUp={(e) => end(e, true)}
         onPointerCancel={(e) => end(e, false)}
         onKeyDown={(e) => {
-          if ((e.key !== "Enter" && e.key !== " ") || !ready) return;
+          if (e.key !== "Enter" && e.key !== " ") return;
           e.preventDefault();
           sendDefault();
         }}
@@ -209,13 +225,23 @@ export function QuickAdd({
         }`}
       >
         <Icon name="grip" size={16} />
-        <span className="truncate">{title.trim() || "New item"}</span>
+        {/* fix4 qa-simple-roadmap-49: the chip keeps saying what it is (the title is in the box beside it). */}
+        <span className="truncate" title={title.trim() || undefined}>
+          New item
+        </span>
       </span>
       {/* qa-simple-roadmap-10: where Enter puts it, said before it is pressed. */}
       {ready && options[0] && (
         <span data-testid="quick-add-enter-hint" className="text-sm text-text2">
           Enter adds it to {options[0].label}
         </span>
+      )}
+      {(noTitle || noRoadmap) && (
+        <p role="alert" data-testid="quick-add-error" className="w-full text-sm text-crit">
+          {noTitle && <span id="quick-add-title-error">Type a title</span>}
+          {noTitle && noRoadmap && " · "}
+          {noRoadmap && <span id="quick-add-roadmap-error">Pick the roadmap it goes on</span>}
+        </p>
       )}
     </section>
   );
@@ -245,6 +271,10 @@ function AddForm({
   const [where, setWhere] = useState(options[0] ? `${options[0].kind}:${options[0].value}` : "");
   const [busy, setBusy] = useState(false);
   const chosen = options.find((o) => `${o.kind}:${o.value}` === where);
+  // fix4 qa-simple-roadmap-14: Add pressed with something missing says what, under its field.
+  const [tried, setTried] = useState(false);
+  const noTitle = tried && !title.trim();
+  const noRoadmap = tried && ask && !roadmap;
   const groups: [string, Where["kind"]][] = [
     ["Quarters", "quarter"],
     ["Now / Next / Later", "horizon"],
@@ -255,6 +285,7 @@ function AddForm({
       className="flex flex-col gap-3 p-4"
       onSubmit={async (e) => {
         e.preventDefault();
+        setTried(true);
         if (!title.trim() || !chosen || (ask && !roadmap)) return;
         setBusy(true);
         try {
@@ -271,8 +302,14 @@ function AddForm({
           value={title}
           maxLength={200}
           onChange={(e) => setTitle(e.target.value)}
-          className="h-11 rounded-lg border border-line-strong bg-surface px-3 text-[16px] font-normal text-text"
+          aria-invalid={noTitle || undefined}
+          className={`h-11 rounded-lg border bg-surface px-3 text-[16px] font-normal text-text ${noTitle ? "border-crit" : "border-line-strong"}`}
         />
+        {noTitle && (
+          <span role="alert" data-testid="quick-add-error" className="text-sm font-normal text-crit">
+            Type a title
+          </span>
+        )}
       </label>
       {target && (
         <p className="text-sm text-text2" data-testid="quick-add-target">
@@ -282,7 +319,12 @@ function AddForm({
       {ask && (
         <label className="flex flex-col gap-1 text-sm font-semibold">
           Roadmap
-          <select value={rm} onChange={(e) => setRm(e.target.value)} className="h-11 rounded-lg border border-line-strong bg-surface px-2 text-[16px] font-normal text-text">
+          <select
+            value={rm}
+            onChange={(e) => setRm(e.target.value)}
+            aria-invalid={noRoadmap || undefined}
+            className={`h-11 rounded-lg border bg-surface px-2 text-[16px] font-normal text-text ${noRoadmap ? "border-crit" : "border-line-strong"}`}
+          >
             <option value="">Which roadmap?</option>
             {roadmaps.map((r) => (
               <option key={r.id} value={r.id}>
@@ -290,6 +332,11 @@ function AddForm({
               </option>
             ))}
           </select>
+          {noRoadmap && (
+            <span role="alert" data-testid="quick-add-error" className="text-sm font-normal text-crit">
+              Pick the roadmap it goes on
+            </span>
+          )}
         </label>
       )}
       <label className="flex flex-col gap-1 text-sm font-semibold">
@@ -308,7 +355,7 @@ function AddForm({
           ))}
         </select>
       </label>
-      <Button type="submit" variant="solid" disabled={busy || !title.trim() || !chosen || (ask && !roadmap)}>
+      <Button type="submit" variant="solid" disabled={busy || !chosen}>
         {chosen ? verb(chosen, roadmap) : "Add"}
       </Button>
     </form>

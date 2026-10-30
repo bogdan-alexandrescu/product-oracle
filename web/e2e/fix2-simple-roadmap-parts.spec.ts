@@ -118,11 +118,11 @@ test.describe("ChatCard", () => {
 
   test("qa-simple-roadmap-35: Correct's close reads 'Undo my edits', not 'Keep Oracle's reading'", async ({ page }) => {
     const card = await moveCard(page);
-    await card.getByRole("button", { name: "Correct", exact: true }).click();
+    await card.getByRole("button", { name: "Change it…", exact: true }).click();
     await expect(card.getByRole("button", { name: "Undo my edits" })).toBeVisible();
     await expect(card.getByText("Keep Oracle's reading")).toHaveCount(0);
     await card.getByRole("button", { name: "Undo my edits" }).click();
-    await expect(card.getByRole("button", { name: "Correct", exact: true })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Change it…", exact: true })).toBeVisible();
   });
 
   test("qa-simple-roadmap-45: the four action buttons form a balanced 2-column grid on a phone", async ({ page }) => {
@@ -131,7 +131,7 @@ test.describe("ChatCard", () => {
     const preview = card.getByRole("button", { name: "Preview" });
     const apply = card.getByRole("button", { name: "Apply" });
     const reject = card.getByRole("button", { name: "Reject" });
-    const correct = card.getByRole("button", { name: "Correct", exact: true });
+    const correct = card.getByRole("button", { name: "Change it…", exact: true });
     for (const b of [preview, apply, reject, correct]) await expect(b).toBeVisible();
     const box = async (l: Locator) => {
       await l.scrollIntoViewIfNeeded();

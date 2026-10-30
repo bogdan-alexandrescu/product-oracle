@@ -78,15 +78,14 @@ for (const phone of [false, true]) {
         await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", "gantt");
         await expect(page.getByTestId("group-goal")).toHaveAttribute("aria-pressed", "true");
 
-        // fix2-simple-roadmap-gantt finding 15/16 (review): design D's code first when it is
-        // the row's alone (unique here), and in the tooltip with the name.
+        // fix4 qa-simple-roadmap-3: a row and a slice read by name, never by code ("F-05", "F-05a").
         const invites = row(page, "Team invites");
-        await expect(invites.getByTestId("label-code")).toHaveText("F-05");
-        await expect(invites.getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
+        await expect(invites.getByTestId("label-code")).toHaveCount(0);
+        await expect(invites.getByTestId("label-title")).toHaveAttribute("title", "Team invites");
 
         await slice(page, "F-05a").scrollIntoViewIfNeeded();
-        await expect(slice(page, "F-05a").getByTestId("slice-label")).toHaveText("F-05a");
-        await expect(slice(page, "F-05b").getByTestId("slice-label")).toHaveText("F-05b");
+        await expect(slice(page, "F-05a").getByTestId("slice-label")).toHaveText(/^Team/);
+        await expect(slice(page, "F-05b").getByTestId("slice-label")).toHaveText(/^Team/);
         await expect(slice(page, "F-08").getByTestId("slice-label")).toHaveCount(0);
         await expect(page.getByTestId("slice-connector")).toHaveCount(0);
 
@@ -109,11 +108,11 @@ for (const phone of [false, true]) {
         if (phone) await expect(page.getByTestId("today-mark").locator("text")).toHaveCount(0);
 
         const legend = page.getByTestId("legend");
-        await expect(legend).toContainText("One bar per part of a feature (F-");
-        await expect(legend).toContainText("diamond and dashed line: a milestone ends");
-        await expect(legend).toContainText("grey columns: year-end break");
-        await expect(legend).toContainText("amber: pulled in, pending");
-        await expect(legend).toContainText("red line: today");
+        await expect(legend).toContainText("One bar per part of a feature");
+        await expect(legend).toContainText("Milestone ends (dashed line)");
+        await expect(legend).toContainText("Holidays year-end break");
+        await expect(legend).toContainText("Pulled in, pending");
+        await expect(legend.getByTestId("legend-item").filter({ hasText: /^Today$/ })).toHaveCount(1);
       });
 
       /**
@@ -159,7 +158,8 @@ for (const phone of [false, true]) {
           ];
           expect(sw).toBeLessThan(scale);
           expect(scale).toBeLessThan(chart);
-          expect(chart).toBeLessThan(actions);
+          // fix4 qa-simple-roadmap-44: a phone's page actions sit near the top, before the chart, as a desktop's do.
+          expect(actions).toBeLessThan(chart);
           // QA2 qa-simple-roadmap-36: the filters sit above the chart they control.
           expect(filters).toBeLessThan(chart);
           await page.getByTestId("group-milestone").click();
@@ -168,7 +168,7 @@ for (const phone of [false, true]) {
       } else {
         /**
          * Card milestones-d-filters: protects = the filter row reads PRD, Goal, Track, From,
-         * To, "Group by" Goal | Track | PRD | Milestone and, on the Gantt, "Gantt scale" Day |
+         * To, "Group by" Goal | Track | PRD | Milestone and, on the Gantt, "Scale" Day |
          * Week, each select as wide as its choice ("All"); fails_when = a label is missing,
          * the grouping's order differs, or a select stays as wide as its longest choice;
          * no_claim = the Roadmap filter (simple-roadmap-filter specs).
@@ -178,12 +178,12 @@ for (const phone of [false, true]) {
           await page.getByTestId("format-gantt").click();
           const filters = page.getByTestId("filters");
           await expect(filters).toContainText("Group by");
-          await expect(filters).toContainText("Gantt scale");
+          await expect(filters).toContainText("Scale");
           await expect(filters.getByRole("group", { name: "Group by" }).getByRole("button")).toHaveText(["Goal", "Track", "PRD", "Milestone"]);
           const prd = (await filters.locator("label", { hasText: /^PRD/ }).locator("select").boundingBox())!;
           expect(prd.width).toBeLessThan(90);
           await page.getByTestId("format-timeline").click();
-          await expect(filters).not.toContainText("Gantt scale");
+          await expect(filters).not.toContainText("Scale");
         });
       }
     });

@@ -94,6 +94,9 @@ function useSimpleCounts(enabled: boolean): Record<string, number> | null {
   return counts && { ...counts, Meetings: meetings ?? 0, "Meetings live": live };
 }
 
+/** fix4 qa-simple-roadmap-51: an email with a line break allowed after its "@", so it wraps
+ * between its parts ("viewer@" / "example.com"), not inside one. */
+
 /** What a rail count counts, said in words (its label and tooltip). */
 function countWords(label: string, n: number): string {
   if (label === "Meetings") return `${n} ${n === 1 ? "review" : "reviews"} live or coming up`;
@@ -240,10 +243,13 @@ export function SimpleNavs({ account }: { account: (placement: "rail" | "sheet")
     <>
       {/* qa-simple-home-6: from 1200 px the open Ask panel sits beside the page (it keeps the shell's third column), not over it. */}
       {askOpen && me && !/\/present\/?$/.test(pathname) && <span aria-hidden data-testid="simple-ask-room" className="col-start-3 row-start-1 hidden w-[400px] min-[1200px]:block" />}
+      {/* fix4 qa-simple-roadmap-46: the rail's colour runs the page's full height (the sticky rail is one
+       * screen tall), and the rail sits under a page's dimmed backdrop (z-35) like the page. */}
+      <span aria-hidden data-testid="simple-nav-underlay" className="col-start-1 row-start-1 self-stretch bg-rail [border-right:var(--simple-rail-border)] max-[600px]:hidden" />
       <nav
         aria-label="Simple"
         data-testid="simple-nav"
-        className="sticky top-0 z-40 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden"
+        className="sticky top-0 z-30 col-start-1 row-start-1 flex h-dvh w-[var(--simple-rail-width)] flex-col gap-1 bg-rail px-4 py-5 [--focus-ring:var(--accent)] [border-right:var(--simple-rail-border)] max-[600px]:hidden"
       >
         <Link href={SIMPLE_HOME} aria-label="Product Oracle" data-testid="simple-nav-brand" className="mb-4 flex flex-none items-center gap-2.5 rounded-xl px-2">
           <Mark size={32} tone="current" className="block text-accent-ink" />

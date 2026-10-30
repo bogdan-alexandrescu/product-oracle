@@ -12,6 +12,9 @@ const EMPTY: Draft = { name: "", date: "", note: "" };
 
 const value = (k: KeyDate) => ({ name: k.name, date: k.date, note: k.note ?? null });
 
+/** fix4 qa-simple-roadmap-28: "Nov 14", with its year when not this year's ("Jan 9, 2027"). */
+const dayWords = (day: string, today: string) => (day.slice(0, 4) === today.slice(0, 4) ? shortDay(day) : `${shortDay(day)}, ${day.slice(0, 4)}`);
+
 /**
  * Roadmap-plus: the roadmap header's small "Key dates" editor (a conference, a product launch,
  * a board meeting). Every edit is a change through the engine (add_key_date, edit_key_date,
@@ -75,7 +78,10 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
     });
   };
 
-  const field = "rounded-lg border border-line bg-bg px-2 py-1 text-[15px]";
+  const field = "h-8 rounded-lg border border-line bg-bg px-2 text-[15px]";
+  // fix4 qa-simple-roadmap-36: each field has its label in view (the date field's own format
+  // is the browser's: a native date input writes the day its own way).
+  const labelled = "flex min-w-0 flex-col gap-0.5 text-xs font-semibold text-text2";
   return (
     <div
       ref={ref}
@@ -84,7 +90,7 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
       aria-label="Key dates"
       data-testid="key-dates-editor"
       data-sheet={phone ? "bottom" : "float"}
-      className={`${phone ? "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl" : "absolute top-12 right-0 z-40 w-[440px] rounded-xl"} max-w-[calc(100vw-16px)] overflow-y-auto border border-line bg-surface p-4 shadow-tip outline-none`}
+      className={`${phone ? "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl" : "absolute top-full right-0 z-40 mt-2 w-[440px] rounded-xl"} max-w-[calc(100vw-16px)] overflow-y-auto border border-line bg-surface p-4 shadow-tip outline-none`}
     >
       <div className="flex items-start gap-2">
         <h2 className="flex-1 text-lg font-semibold">
@@ -111,14 +117,24 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
         {list.map((k) =>
           editing === k.id ? (
             <li key={k.id} className="space-y-2 rounded-lg border border-accent p-2" data-testid="key-date-edit">
-              <input aria-label="Name" className={`${field} w-full`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <label className={labelled}>
+                Name
+                <input className={`${field} w-full font-normal text-text`} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </label>
               <div className="flex gap-2">
-                <input aria-label="Date" type="date" className={field} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
-                <input aria-label="Note" className={`${field} min-w-0 flex-1`} placeholder="Note (optional)" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+                <label className={labelled}>
+                  Date
+                  <input type="date" className={`${field} font-normal text-text`} value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
+                </label>
+                <label className={`${labelled} flex-1`}>
+                  Note
+                  <input className={`${field} w-full font-normal text-text`} placeholder="Optional" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
+                </label>
               </div>
+              {/* fix4 qa-simple-roadmap-36: Cancel and Save the same height (row size). */}
               <div className="flex justify-end gap-2">
                 <Button onClick={() => setEditing(null)}>Cancel</Button>
-                <Button variant="primary" disabled={!form.name.trim() || !form.date} onClick={() => void save(k)}>
+                <Button variant="solid" disabled={!form.name.trim() || !form.date} onClick={() => void save(k)}>
                   {of(k.roadmap.id)?.applies ? "Save" : "Propose"}
                 </Button>
               </div>
@@ -127,10 +143,16 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
             <li key={k.id} className="flex items-start gap-2 rounded-lg border border-line p-2" data-testid="key-date-row" data-name={k.name}>
               <span aria-hidden className="mt-1.5 inline-block h-2.5 w-2.5 flex-none rotate-45 bg-accent-ink" />
               <div className="min-w-0 flex-1">
-                <div className="font-medium">
-                  {k.name} <span className="whitespace-nowrap text-text2">· {shortDay(k.date)}</span>
+                {/* fix4 qa-simple-roadmap-36: one line: the name (its whole in title= when cut), its day and the badge, each kept whole. */}
+                <div className="flex min-w-0 items-baseline gap-x-1.5 font-medium">
+                  <span className="min-w-0 truncate" title={k.name}>
+                    {k.name}
+                  </span>
+                  <span className="flex-none whitespace-nowrap text-text2" data-testid="key-date-day">
+                    · {dayWords(k.date, data.today)}
+                  </span>
                   {k.in_draft && (
-                    <span className="ml-2 rounded-full bg-surface2 px-2 text-xs text-text2" data-testid="key-date-in-draft">
+                    <span className="ml-1 flex-none rounded-full bg-surface2 px-2 text-xs whitespace-nowrap text-text2" data-testid="key-date-in-draft">
                       in the draft
                     </span>
                   )}
@@ -182,13 +204,23 @@ export function KeyDatesEditor({ data, act, mayChange, phone, onClose }: { data:
               </select>
             </label>
           )}
-          <input aria-label="New key date's name" className={`${field} w-full`} placeholder="A conference, a launch, a board meeting" value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} />
+          {/* The fields keep their own names ("New key date's day"); the words above them are what shows. */}
+          <div className={labelled}>
+            <span aria-hidden>Name</span>
+            <input aria-label="New key date's name" className={`${field} w-full font-normal text-text`} placeholder="A conference, a launch, a board meeting" value={adding.name} onChange={(e) => setAdding({ ...adding, name: e.target.value })} />
+          </div>
           <div className="flex gap-2">
-            <input aria-label="New key date's day" type="date" className={field} value={adding.date} onChange={(e) => setAdding({ ...adding, date: e.target.value })} />
-            <input aria-label="New key date's note" className={`${field} min-w-0 flex-1`} placeholder="Note (optional)" value={adding.note} onChange={(e) => setAdding({ ...adding, note: e.target.value })} />
+            <div className={labelled}>
+              <span aria-hidden>Date</span>
+              <input aria-label="New key date's day" type="date" className={`${field} font-normal text-text`} value={adding.date} onChange={(e) => setAdding({ ...adding, date: e.target.value })} />
+            </div>
+            <div className={`${labelled} flex-1`}>
+              <span aria-hidden>Note</span>
+              <input aria-label="New key date's note" className={`${field} w-full font-normal text-text`} placeholder="Optional" value={adding.note} onChange={(e) => setAdding({ ...adding, note: e.target.value })} />
+            </div>
           </div>
           <div className="flex justify-end">
-            <Button type="submit" variant="primary" disabled={!adding.name.trim() || !adding.date || !addable.some((r) => r.roadmap.id === rm)}>
+            <Button type="submit" variant="solid" disabled={!adding.name.trim() || !adding.date || !addable.some((r) => r.roadmap.id === rm)}>
               {applies ? "Add" : "Propose"}
             </Button>
           </div>

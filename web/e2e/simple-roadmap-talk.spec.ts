@@ -11,8 +11,8 @@ import { ADMIN } from "./helpers";
  * close; a phone's sheet gets two tabs, Details | Talk to Oracle) with the item's own talk (one thread per
  * item and person, "it" means the item); Oracle answers with its source and restates each
  * change as an action card with Before → After, Apply, Reject and Correct. The "roadmap-talk"
- * mock scenario (the mock's today: 22 Oct 2026) with its invented F-16 Adaptive pacing
- * (16 Nov – 27 Nov, on M1 Launch prep), F-17 Sign-up work and F-18 Reliability work; the
+ * mock scenario (the mock's today: 22 Oct 2026) with its invented Adaptive pacing
+ * (16 Nov – 27 Nov, on M1 Launch prep), F-17 Sign-up work and Reliability work; the
  * mock's reader is deterministic. Desktop (1366x820) and phone (390x844), light and dark.
  */
 
@@ -55,16 +55,17 @@ async function openTalk(page: Page, key: string, phone: boolean): Promise<{ card
     expect((await card.boundingBox())!.width).toBeGreaterThan(800);
   }
   const talk = card.getByTestId("item-talk");
-  await expect(card.getByRole("heading", { name: "F-16 Adaptive pacing", level: 2 })).toBeVisible();
+  // fix4 qa-simple-roadmap-3: the item by its title alone, no code.
+  await expect(card.getByRole("heading", { name: "Adaptive pacing", level: 2, exact: true })).toBeVisible();
   if (phone) {
     // A phone's tab is the talk itself: no heading over it, Details goes back.
     await expect(card.getByRole("tab", { name: "Details" })).toBeVisible();
   } else {
-    await expect(talk.getByRole("heading", { name: "Talk about F-16", exact: true })).toBeVisible();
+    await expect(talk.getByRole("heading", { name: "Talk about Adaptive pacing", exact: true })).toBeVisible();
     await expect(card.getByRole("button", { name: "Hide the talk" })).toBeVisible();
   }
-  // A viewer asks questions only: "Ask about F-16…".
-  await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about F-16(, or ask for a change)?…$/);
+  // A viewer asks questions only: "Ask about Adaptive pacing…".
+  await expect(talk.getByRole("textbox", { name: "Message Oracle" })).toHaveAttribute("placeholder", /^Ask about Adaptive pacing(, or ask for a change)?…$/);
   await expect(talk.getByTestId("chat-note")).toHaveText("Just you and Oracle · kept with this item");
   // The message box sits at the foot of the talk, under the lines.
   const box = (await talk.getByRole("textbox", { name: "Message Oracle" }).boundingBox())!;
@@ -124,16 +125,16 @@ for (const [phone, dark] of [
       await expect(answer).toHaveAttribute("data-kind", "answer");
       await expect(answer.getByTestId("chat-message-body")).toContainText("Adaptive pacing runs Nov 16 – Nov 27");
       // The source is the Ask chat's link line (pick C: "From the PRD · …" in accent ink with its icon).
-      await expect(answer.getByTestId("answer-source")).toHaveText("From the PRD · F-16 Adaptive pacing");
+      await expect(answer.getByTestId("answer-source")).toHaveText("From the PRD · Adaptive pacing");
       await expect(talk.getByTestId("chat-card")).toHaveCount(0);
       // A question about its days is read from the roadmap, and says so.
       await say(talk, "When is it?");
-      await expect(last(talk).getByTestId("answer-source")).toHaveText("From the roadmap · F-16 Adaptive pacing");
+      await expect(last(talk).getByTestId("answer-source")).toHaveText("From the roadmap · Adaptive pacing");
     });
 
     /**
      * Card roadmap-talk-pick-c: protects = the card as pick C draws it: the title with its
-     * code chip ("F-16 Adaptive pacing"), the details in C's order (Outcome … Needed by, then
+     * code chip ("Adaptive pacing"), the details in C's order (Outcome … Needed by, then
      * WHY, OPEN DECISIONS, FLOW, PROPOSALS ON IT, Open the detailed view), and with the talk
      * open and empty its message box at the foot of the card (not under the heading), the
      * details still beside it on a desktop with the flow as one line; fails_when = FLOW comes
@@ -145,7 +146,7 @@ for (const [phone, dark] of [
       await expect(bar(page, "adaptive-pacing")).toBeVisible();
       await bar(page, "adaptive-pacing").click();
       const floating = page.getByTestId("floating-card");
-      await expect(floating.getByRole("heading", { level: 2 })).toHaveText("F-16 Adaptive pacing");
+      await expect(floating.getByRole("heading", { level: 2 })).toHaveText("Adaptive pacing");
       await expect(floating.getByRole("heading", { level: 3 })).toHaveText(["Why", "Open decisions", "Flow", "Proposals on it"]);
       await tap(floating.getByRole(phone ? "tab" : "button", { name: "Talk to Oracle" }));
       const c = floating;
@@ -154,8 +155,9 @@ for (const [phone, dark] of [
       const sheet = (await c.boundingBox())!;
       expect(sheet.y + sheet.height - (box.y + box.height)).toBeLessThan(60);
       if (!phone) {
-        // The details stay on the left, the flow as one line.
-        await expect(c.getByTestId("card-flow").getByTestId("flow-row")).toHaveText("No flow yet");
+        // The details stay on the left; fix4 qa-simple-roadmap-39: the flow keeps its row and its action.
+        await expect(c.getByTestId("card-flow").getByTestId("flow-row")).toContainText("No flow yet");
+        await expect(c.getByTestId("card-flow").getByRole("button", { name: "Ask Oracle to draw it" })).toBeVisible();
         await expect(c.getByRole("link", { name: "Open the detailed view" })).toBeVisible();
         await expect(c.getByRole("button", { name: "Talk to Oracle" })).toHaveCount(0);
       }
@@ -163,7 +165,7 @@ for (const [phone, dark] of [
 
     /**
      * Card roadmap-talk-move: protects = "move it two weeks later" in the item's talk is
-     * restated ("I understood: move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11,
+     * restated ("I understood: move Adaptive pacing two weeks later, to Nov 30 – Dec 11,
      * 2026.") with one card showing Before → After and its red reason; Apply applies it, the
      * item's bar flashes on the timeline and the card's dates change; fails_when = no
      * restatement, no Before/After, Apply does not change the dates or the bar does not
@@ -173,15 +175,15 @@ for (const [phone, dark] of [
       await signIn(page, EMAILS.owner, "/simple/roadmap");
       const { card: floating, talk } = await openTalk(page, "adaptive-pacing", phone);
       await say(talk, "move it two weeks later");
-      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11.");
+      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move Adaptive pacing two weeks later, to Nov 30 – Dec 11.");
       const c = talk.getByTestId("chat-card");
       await expect(c).toHaveCount(1);
-      await expect(c.getByTestId("chat-card-summary")).toHaveText("Move F-16 Adaptive pacing two weeks later, to Nov 30 – Dec 11");
+      await expect(c.getByTestId("chat-card-summary")).toHaveText("Move Adaptive pacing two weeks later, to Nov 30 – Dec 11");
       // qa-simple-roadmap-26: the card's own Before/After reads month-first, like the rest of the app.
       await expect(c.getByTestId("chat-card-change")).toHaveText("Before: Nov 16 – Nov 27 → After: Nov 30 – Dec 11");
       await expect(c.getByTestId("chat-card-flag").first()).toContainText("M1 Launch prep");
       await expect(c.getByRole("button", { name: "Reject" })).toBeVisible();
-      await expect(c.getByRole("button", { name: "Correct" })).toBeVisible();
+      await expect(c.getByRole("button", { name: "Change it…" })).toBeVisible();
       await tap(c.getByRole("button", { name: "Apply" }));
       await expect(c).toHaveAttribute("data-status", "applied");
       await expect(bar(page, "adaptive-pacing")).toHaveAttribute("data-flash", "true");
@@ -209,10 +211,10 @@ for (const [phone, dark] of [
       await expect(panel.getByRole("button", { name: "Apply all" })).toBeVisible();
       const move = card(panel, "Reliability work");
       const add = card(panel, "Add Dashboard");
-      await expect(move.getByTestId("chat-card-summary")).toHaveText("Move F-18 Reliability work after Sign-up work, to Nov 11 – Dec 1");
+      await expect(move.getByTestId("chat-card-summary")).toHaveText("Move Reliability work after Sign-up work, to Nov 11 – Dec 1");
       await expect(add.getByTestId("chat-card-summary")).toHaveText("Add Dashboard under Growth to M2 Scale volume, Dec 5 – Dec 18");
 
-      await tap(add.getByRole("button", { name: "Correct" }));
+      await tap(add.getByRole("button", { name: "Change it…" }));
       const fields = add.getByTestId("chat-card-correct");
       await expect(fields.getByLabel("Title")).toHaveValue("Dashboard");
       await expect(fields.getByLabel("Goal")).toHaveValue("Growth");
@@ -243,13 +245,13 @@ for (const [phone, dark] of [
       await say(talk, "move it two weeks later");
       const c = talk.getByTestId("chat-card");
       await expect(c).toHaveCount(1);
-      await tap(c.getByRole("button", { name: "Correct" }));
+      await tap(c.getByRole("button", { name: "Change it…" }));
       const fields = c.getByTestId("chat-card-correct");
       await fields.getByLabel("Start").fill("2026-12-07");
       await fields.getByLabel("End").fill("2026-12-16");
       await tap(c.getByRole("button", { name: "Apply" }));
       await expect(c).toHaveAttribute("data-status", "applied");
-      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move F-16 Adaptive pacing to Dec 7 – Dec 16.");
+      await expect(last(talk).getByTestId("chat-message-body")).toHaveText("I understood: move Adaptive pacing to Dec 7 – Dec 16.");
       await expect(bar(page, "adaptive-pacing")).toHaveAttribute("data-start", "2026-12-07");
     });
 
@@ -264,7 +266,7 @@ for (const [phone, dark] of [
       await say(talk, "split it into two slices");
       await expect(card(talk, "Adaptive pacing: slice 2")).toHaveCount(1);
       await say(talk, "cut it");
-      const cut = card(talk, "Cut F-16");
+      const cut = card(talk, "Cut Adaptive pacing");
       await expect(cut.getByRole("button", { name: "Reject" })).toBeVisible();
       await expect(cut.getByRole("button", { name: "Discard" })).toHaveCount(0);
     });
@@ -283,7 +285,7 @@ for (const [phone, dark] of [
       await say(panel, "push the reliability work after the sign-up work and add a dashboard item to M2 under Growth");
       await expect(panel.getByTestId("chat-message-body").filter({ hasText: "I understood two changes:" })).toBeVisible({ timeout: 10_000 });
       const add = card(panel, "Add Dashboard");
-      await tap(add.getByRole("button", { name: "Correct" }));
+      await tap(add.getByRole("button", { name: "Change it…" }));
       const fields = add.getByTestId("chat-card-correct");
       await fields.getByLabel("Start").fill("2026-12-07");
       await fields.getByLabel("End").fill("2026-12-16");

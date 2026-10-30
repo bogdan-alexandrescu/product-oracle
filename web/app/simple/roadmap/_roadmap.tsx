@@ -5,35 +5,43 @@ import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
 import { Button, Notice, SegmentedControl, toast as dsToast, type ToastAsk } from "@/components/ds";
-import { GoalPanel, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
+import { GoalPanel, goalRows, SuggestionCard, useGoalSuggestions, type GoalBrief, type GoalPanelStart, type GoalSuggestionsApi } from "@/components/simple/GoalSuggestions";
 import { StartSheet } from "@/components/simple/meetings/StartSheet";
 import { Loading } from "@/components/ui";
 import { getBranding, logoDataUrl } from "@/lib/api/branding";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
 import { CARD_CHANGED_EVENT } from "@/lib/api/simple-chat";
-import { shownDay } from "@/lib/dates";
+import { displayZone, plainClock } from "@/lib/dates";
 import { useMe } from "@/lib/me";
 import { useQuery } from "@/lib/use-query";
 
 import { QuickAdd } from "./_add";
-import { Board, boardColumns, HORIZONS, type Horizon } from "./_board";
+import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
 import { Callout, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
 import { Lanes, pmItem } from "./_lanes";
 import {
+  addDays,
   broken,
+  brokenLinks,
   ChangeFailed,
+  changedWords,
   closedItem,
   decide,
+  decisionCounts,
+  deciderWords,
   lanes,
   nearWords,
+  nextQuarter,
   propose,
+  quarterOf,
   quarters,
   quarterValue,
   resultWords,
   shortDay,
+  spanWords,
   storedDates,
   suggestion,
   undo,
@@ -51,8 +59,6 @@ import { Chart, PHASES } from "./_timeline";
 
 /** #34: the Roadmap's toasts sit in the bottom-right corner on a desktop, clear of the chart. */
 const toast = (ask: ToastAsk) => dsToast({ place: "corner", ...ask });
-
-const START_REVIEW_REASON = "Only an owner or the PRD's decider can start a review";
 
 const FORMAT_WORDS: Record<Format, string> = { timeline: "Timeline", gantt: "Gantt", board: "Now / Next / Later", waterfall: "Waterfall" };
 
@@ -90,33 +96,49 @@ type Dates = ReturnType<typeof storedDates>;
 const sameDates = (a: Dates, b: Dates) => a.start_date === b.start_date && a.end_date === b.end_date;
 const sameHorizon = (a: Horizon, b: Horizon) => a === b;
 
-const time = (at: string) => shownDay(at, { hour: "numeric", minute: "2-digit" });
+// fix4 qa-simple-roadmap-29: "since 7:02 PM" (its day when not today), no zone name.
+const time = (at: string) => plainClock(at, displayZone());
 
-/** The Gantt's legend (roadmap-milestones D), naming only what the chart draws. */
-function ganttLegend(data: Roadmap, noWork: { start: string; end: string; label?: string | null }[], pulled: number): string {
-  const parts: string[] = [];
+/** fix4 qa-simple-roadmap-35: a key date's two marks: filled, and hollow while it is only in the draft. */
+function keyDateEntries(data: Roadmap): LegendEntry[] {
+  const kds = data.key_dates ?? [];
+  const out: LegendEntry[] = [];
+  if (kds.some((k) => !k.in_draft)) out.push({ key: "key", swatch: <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, words: "Key date" });
+  if (kds.some((k) => k.in_draft))
+    out.push({ key: "key-draft", swatch: <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 border border-accent-ink bg-surface" />, words: "Key date in the draft" });
+  return out;
+}
+
+const TODAY_ENTRY: LegendEntry = { key: "today", swatch: <i aria-hidden className="inline-block h-3.5 w-0.5 flex-none bg-crit" />, words: "Today" };
+
+/** The Gantt's legend (roadmap-milestones D), naming only what the chart draws. fix4
+ * qa-simple-roadmap-34: the Timeline's style (a swatch, then short words). */
+function ganttLegend(data: Roadmap, noWork: { start: string; end: string; label?: string | null }[], pulled: number): LegendEntry[] {
+  const parts: LegendEntry[] = [];
+  const add = (key: string, swatch: LegendEntry["swatch"], words: string) => parts.push({ key, swatch, words });
+  const sw = LEGEND_SWATCH;
   const dated = (i: Item) => i.slices.filter((x) => x.start_date && x.end_date);
-  const split = data.items.find((i) => dated(i).length > 1);
-  if (split) {
-    const codes = dated(split).map((x) => x.code);
-    parts.push(`One bar per part of a feature (${codes.slice(0, 2).join(", ")}${codes.length > 2 ? ", …" : " …"}), dated by the PRD's order inside each milestone`);
-  }
-  if (data.milestones.some((m) => m.start_date && m.end_date)) parts.push("diamond and dashed line: a milestone ends");
-  // #22: a mid-sentence label starts lowercase; "grey columns" leads this one, so "year-end
-  // break" (not "Year-end break") even though the API's own label is capitalized.
-  if (noWork.length) parts.push(`grey columns: ${noWork.map((h) => h.label || `${shortDay(h.start)} – ${shortDay(h.end)}`).join(", ")}`.replace(/: ([A-Z])/, (_, c) => `: ${c.toLowerCase()}`));
-  if (data.items.some((i) => dated(i).some((x) => x.pm_owned || x.effort_weeks == null))) parts.push("dashed outline: no engineering work");
-  if (pulled) parts.push("amber: pulled in, pending");
+  if (data.items.some((i) => dated(i).length > 1)) add("slices", <i aria-hidden className="inline-block w-[18px] flex-none border-t-2 border-dotted border-line-strong" />, "One bar per part of a feature");
+  if (data.milestones.some((m) => m.start_date && m.end_date)) add("milestone", <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-accent-ink" />, "Milestone ends (dashed line)");
+  // #22: the API's own label, as the Timeline says it ("Holidays year-end break").
+  if (noWork.length) add("holidays", <i aria-hidden className="inline-block h-2.5 w-[18px] flex-none rounded-[2px] bg-na-bg" />, `Holidays ${noWork.map((h) => h.label ? h.label.charAt(0).toLowerCase() + h.label.slice(1) : spanWords(h.start, h.end, data.today, true)).join(", ")}`);
+  if (data.items.some((i) => dated(i).some((x) => x.pm_owned || x.effort_weeks == null))) add("pm", <i aria-hidden className={`${sw} border-dashed border-line-strong`} />, "No engineering work");
+  if (pulled) add("pulled", <i aria-hidden className={sw} style={{ background: "var(--warn-bg)", borderColor: "var(--warn)" }} />, "Pulled in, pending");
   const plain = data.items.filter((i) => !dated(i).length && !closedItem(i));
-  if (plain.some((i) => !i.draft && !i.estimated)) parts.push("solid: dated");
-  if (plain.some((i) => !i.draft && i.estimated)) parts.push("hatched: estimated (the horizon’s window)");
-  if (plain.some((i) => i.draft)) parts.push("dashed: draft");
-  if (data.items.some((i) => i.suggestion)) parts.push("dotted outline: dates Oracle suggests (? opens them)");
-  if (data.milestones.some((m) => m.date && !(m.start_date && m.end_date))) parts.push("small amber diamond: a track’s milestone");
-  if (data.key_dates?.length) parts.push("diamond and thin line: a key date");
-  if (data.items.some((i) => broken(i).length)) parts.push("red outline: a broken link");
-  parts.push("red line: today");
-  return parts.join(" · ");
+  if (plain.some((i) => !i.draft && !i.estimated)) add("dated", <i aria-hidden className={sw} style={{ background: "var(--accent)", borderColor: "var(--accent-ink)" }} />, "Dated");
+  if (plain.some((i) => !i.draft && i.estimated))
+    add("estimated", <i aria-hidden className={sw} style={{ background: "repeating-linear-gradient(135deg, var(--accent-mid) 0 2px, var(--accent-soft) 2px 5px)", borderColor: "var(--line-strong)" }} />, "Estimated");
+  if (plain.some((i) => i.draft)) add("draft", <i aria-hidden className={`${sw} border-dashed border-line-strong`} />, "Draft");
+  if (data.items.some((i) => i.suggestion)) add("suggestion", <i aria-hidden className={`${sw} border-dotted border-accent-ink`} />, "Dates Oracle suggests (? opens them)");
+  if (data.milestones.some((m) => m.date && !(m.start_date && m.end_date))) add("track", <i aria-hidden className="inline-block h-2 w-2 flex-none rotate-45 bg-warn" />, "A track’s milestone");
+  parts.push(...keyDateEntries(data));
+  // The Gantt's bar draws every red flag red: the words name the ones shown.
+  const links = data.items.some((i) => brokenLinks(i).length > 0);
+  const other = data.items.some((i) => broken(i).length > brokenLinks(i).length);
+  if (links || other)
+    add("broken", <i aria-hidden className={sw} style={{ borderColor: "var(--crit)", borderWidth: 2 }} />, links && other ? "A broken link, or a problem to fix" : links ? "A broken link" : "A problem to fix");
+  parts.push(TODAY_ENTRY);
+  return parts;
 }
 
 /** The goal counters (each goal's metric line): items, and how many need a decision. S7:
@@ -124,7 +146,7 @@ function ganttLegend(data: Roadmap, noWork: { start: string; end: string; label?
  * QA2 cld-1: a goal's tile counts the items its lane shows: the chart's goal grouping (lanes(),
  * an item with no goal of its own under the goal its plan moves), live work only, PM-owned
  * work in its own lane as the chart draws it. */
-function GoalCounters({ data, byGoal, suggestions, onGoal }: { data: Roadmap; byGoal: boolean; suggestions: GoalSuggestionsApi; onGoal: (g: GoalBrief) => void }) {
+function GoalCounters({ data, byGoal, suggestions, onGoal, only }: { data: Roadmap; byGoal: boolean; suggestions: GoalSuggestionsApi; onGoal: (g: GoalBrief) => void; only: { key: string; title: string } | null }) {
   const count = (id: string) => (suggestions.data?.suggestions ?? []).filter((s) => s.goal.id === id).length;
   const known = (id: string) => suggestions.data?.goals.find((g) => g.goal.id === id)?.goal;
   const byId = new Map(data.items.map((i) => [i.id, i]));
@@ -133,7 +155,8 @@ function GoalCounters({ data, byGoal, suggestions, onGoal }: { data: Roadmap; by
   const add = (key: string, title: string, i: Item) => {
     const g = goals.get(key) ?? { title, metric: i.goal?.metric ?? null, items: 0, broken: 0 };
     g.items += 1;
-    if (broken(i).length) g.broken += 1;
+    // fix4 qa-simple-roadmap-8: "broken" is a broken link only (a draft with no owner is not one).
+    if (brokenLinks(i).length) g.broken += 1;
     goals.set(key, g);
   };
   if (byGoal) {
@@ -146,8 +169,18 @@ function GoalCounters({ data, byGoal, suggestions, onGoal }: { data: Roadmap; by
       else if (planGoal) add(suggestions.data?.goals.find((g) => g.goal.title === planGoal)?.goal.id ?? `plan-goal:${planGoal}`, planGoal, i);
     }
   const titles = new Set([...goals.values()].map((g) => g.title));
-  const empty = (suggestions.data?.goals ?? []).filter((g) => g.empty && !goals.has(g.goal.id) && !titles.has(g.goal.title));
-  if (!goals.size && !empty.length) return null;
+  // fix4 qa-simple-roadmap-13: with a Goal filter, only that goal's card shows (an empty card
+  // when the other filters leave it no items), never another goal's.
+  const picked = (id: string, title: string, key?: string) => !only || title === only.title || key === only.key || id === only.key;
+  const empty = (suggestions.data?.goals ?? []).filter((g) => (g.empty || only) && !goals.has(g.goal.id) && !titles.has(g.goal.title) && picked(g.goal.id, g.goal.title, g.goal.key));
+  // fix4 qa-simple-roadmap-33: one order whatever the grouping: the company's goal order, then by title.
+  const rank = (id: string, title: string) => {
+    const n = (suggestions.data?.goals ?? []).findIndex((g) => g.goal.id === id || g.goal.title === title);
+    return n < 0 ? Number.MAX_SAFE_INTEGER : n;
+  };
+  const cards = [...goals.entries()].filter(([id, g]) => picked(id, g.title)).sort(([a, x], [b, y]) => rank(a, x.title) - rank(b, y.title) || x.title.localeCompare(y.title));
+  const filteredOut = only && !cards.length && !empty.length;
+  if (!cards.length && !empty.length && !filteredOut) return null;
   const open = (id: string, title: string) => {
     const g = known(id);
     return g ? (
@@ -160,10 +193,15 @@ function GoalCounters({ data, byGoal, suggestions, onGoal }: { data: Roadmap; by
   };
   return (
     <ul className="grid grid-cols-2 gap-2 min-[900px]:grid-cols-4" data-testid="goal-counters">
-      {[...goals.entries()].slice(0, 4).map(([id, g]) => (
+      {cards.slice(0, 4).map(([id, g]) => (
         <li key={id} data-testid="goal-counter" className="rounded-xl border border-line bg-surface px-3 py-2">
-          <p className="truncate text-[15px] font-semibold">{g.title}</p>
-          <p className="truncate text-sm text-text2">{g.metric ?? "No metric yet"}</p>
+          <p className="truncate text-[15px] font-semibold" title={g.title}>
+            {g.title}
+          </p>
+          {/* fix4 qa-simple-roadmap-49: the metric wraps to a second line, its full words on hover past that. */}
+          <p className="line-clamp-2 text-sm break-words text-text2" title={g.metric ?? undefined} data-testid="goal-counter-metric">
+            {g.metric ?? "No metric yet"}
+          </p>
           <p className="mt-0.5 text-sm">
             <b className="tnum">{g.items}</b> items
             {g.broken > 0 && (
@@ -178,11 +216,21 @@ function GoalCounters({ data, byGoal, suggestions, onGoal }: { data: Roadmap; by
       ))}
       {empty.map((g) => (
         <li key={g.goal.id} data-testid="goal-counter-empty" className="rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2">
-          <p className="truncate text-[15px] font-semibold">{g.goal.title}</p>
-          <p className="truncate text-sm text-text2">No items yet</p>
+          <p className="truncate text-[15px] font-semibold" title={g.goal.title}>
+            {g.goal.title}
+          </p>
+          <p className="truncate text-sm text-text2">{g.empty ? "No items yet" : "No items in these filters"}</p>
           {open(g.goal.id, g.goal.title)}
         </li>
       ))}
+      {filteredOut && (
+        <li data-testid="goal-counter-empty" className="rounded-xl border border-dashed border-line-strong bg-surface px-3 py-2">
+          <p className="truncate text-[15px] font-semibold" title={only?.title}>
+            {only?.title}
+          </p>
+          <p className="truncate text-sm text-text2">No items in these filters</p>
+        </li>
+      )}
     </ul>
   );
 }
@@ -224,7 +272,8 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit }: { drafts: Dra
   return (
     <section data-testid="draft-banner" className="rounded-xl border border-accent-mid bg-accent-soft px-4 py-2.5 text-accent-ink">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <p className="min-w-0 flex-1 text-[15px]">
+        {/* fix4 qa-simple-roadmap-19: on a phone the sentence takes its own line(s), the three buttons a row under it. */}
+        <p className="min-w-0 flex-1 text-[15px] max-[640px]:basis-full" data-testid="draft-words">
           <b>Your working draft</b> · <span data-testid="draft-count">{changes}</span> {changes === 1 ? "change" : "changes"} since {time(since)} · the approved roadmap stays published until review passes
         </p>
         <Button variant="ghost" disabled={!last} onClick={() => last && onUndo(last.id)}>
@@ -264,6 +313,7 @@ function DecisionTray({
   onClose,
   phone,
   suggestions,
+  top,
 }: {
   items: Item[];
   byId: Map<string, Item>;
@@ -275,6 +325,8 @@ function DecisionTray({
   onClose: () => void;
   phone: boolean;
   suggestions: GoalSuggestionsApi;
+  /** Where the desktop panel starts: under the toolbar's button. */
+  top: number;
 }) {
   const twins = items.filter((i) => i.can_decide && i.looks_like.length > 0);
   // qa-simple-home-14: Home's "All proposals" (?review=proposals) lands on the Proposals part.
@@ -284,8 +336,12 @@ function DecisionTray({
     if (atProposals) proposalsRef.current?.scrollIntoView({ block: "start" });
   }, [atProposals]);
   const suggested = (suggestions.data?.suggestions ?? []).filter((s) => s.can_accept || s.can_reject);
-  const brokenItems = items.filter((i) => i.can_decide && broken(i).length);
-  const dates = items.filter((i) => i.suggestion?.can_decide);
+  // fix4 qa-simple-roadmap-8: the same counts the toolbar button reads (decisionCounts).
+  const counts = decisionCounts(items, proposals);
+  const brokenItems = counts.broken;
+  // The other red flags (a draft with no owner, an end past its milestone): listed, not broken links.
+  const flagged = items.filter((i) => i.can_decide && broken(i).some((f) => !brokenLinks(i).includes(f)));
+  const dates = counts.dates;
   // One row per item (BGD, 2026-10-28): its suggestion (for a planned item, the span of its open slices, which Accept applies
   // whole), with a muted line per slice inside its milestone, from the open per-slice suggestions.
   const open = useQuery(`simple-date-suggestions:${dates.map((i) => i.suggestion!.id).join(",")}`, () =>
@@ -299,9 +355,8 @@ function DecisionTray({
     });
     return { item: i, s: i.suggestion!, parts: parts.length > 1 ? parts : [] };
   });
-  const mine = proposals.filter((c) => c.can_decide);
-  const pulled = mine.filter((c) => c.op === "change_horizon");
-  const others = mine.filter((c) => c.op !== "change_horizon");
+  const pulled = counts.pulled;
+  const others = counts.proposals;
   const counters: [string, number][] = [
     ["Broken links", brokenItems.length],
     ["Dates to confirm", dateRows.length],
@@ -327,7 +382,9 @@ function DecisionTray({
       aria-label="Needs a decision"
       data-testid="decision-tray"
       data-sheet={phone ? "bottom" : "side"}
-      className={`${phone ? "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl border-t border-line" : "fixed top-0 right-0 bottom-0 z-50 w-[440px] border-l border-line"} overflow-y-auto bg-surface p-4 shadow-tip`}
+      // fix4 qa-simple-roadmap-37: on a desktop the panel opens below its button, not over it.
+      style={phone ? undefined : { top }}
+      className={`${phone ? "fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] rounded-t-2xl border-t border-line" : "fixed right-0 bottom-0 z-50 w-[440px] rounded-tl-xl border-t border-l border-line"} overflow-y-auto bg-surface p-4 shadow-tip`}
     >
       {phone && <div aria-hidden className="mx-auto -mt-1 mb-2 h-1 w-10 rounded-full bg-line-strong" />}
       <div className="flex items-center gap-2">
@@ -338,16 +395,18 @@ function DecisionTray({
       </div>
       {/* #37: what the button's count is, on screen: this view's own, not the side menu's badges. */}
       <p className="mt-1 text-sm text-text2" data-testid="tray-scope">
-        {counters.reduce((n, [, c]) => n + c, 0)} on this roadmap view. The side menu&apos;s Decisions and Roadmap counts cover other things, so they can differ.
+        {counts.total} on this roadmap view. The side menu&apos;s Decisions and Roadmap counts cover other things, so they can differ.
       </p>
       <ul className="mt-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-4" data-testid="tray-counters">
         {counters.map(([label, n]) => (
-          <li key={label} className="rounded-lg border border-line px-2 py-1.5 text-center">
-            <b className="tnum block text-xl">{n}</b>
+          // fix4 qa-simple-roadmap-38: equal tiles (each as tall as the tallest, its label on two
+          // lines at most); a tile at 0 is muted, plain text, not something to press.
+          <li key={label} data-testid="tray-counter" data-zero={n === 0 ? "true" : undefined} className={`flex flex-col items-center justify-start rounded-lg px-1 py-1.5 text-center ${n ? "border border-line" : "bg-surface2 text-text-faint"}`}>
+            <b className={`tnum block text-xl ${n ? "" : "font-medium"}`}>{n}</b>
             {/* #43: every tile's label sits at the same height with tight spacing, so
              * "Dates to confirm" wrapping to two lines doesn't push its number apart from
              * the one-line labels beside it. */}
-            <span className="block min-h-[2lh] text-xs leading-tight text-text2">{label}</span>
+            <span className={`block min-h-[2lh] text-xs leading-tight [text-wrap:balance] ${n ? "text-text2" : ""}`}>{label}</span>
           </li>
         ))}
       </ul>
@@ -371,6 +430,26 @@ function DecisionTray({
           <p className="text-sm text-text2">Nothing broken.</p>
         )}
       </section>
+      {flagged.length > 0 && (
+        <section className="mt-4" data-testid="tray-flagged">
+          <h3 className="font-semibold">Other flags</h3>
+          <ul>
+            {flagged.map((i) => (
+              <li key={i.id} className="border-b border-line py-2" data-testid="tray-flag">
+                <p className="text-[15px] font-medium">{i.title}</p>
+                {broken(i)
+                  .filter((f) => !brokenLinks(i).includes(f))
+                  .map((f) => (
+                    <div key={`${f.kind}-${f.subject}`}>
+                      <FlagLine flag={f} />
+                      <FixButtons item={i} flag={f} items={byId} act={act} canChange={canChange} />
+                    </div>
+                  ))}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <section className="mt-4">
         <h3 className="font-semibold">Dates to confirm</h3>
         {dateRows.length ? (
@@ -460,6 +539,16 @@ export function SimpleRoadmap() {
   // Home's "All proposals" opens the roadmap with its Needs-a-decision tray open (?review=1).
   // qa-simple-home-14: ?review=proposals opens it at its Proposals part.
   const [tray, setTray] = useState(() => params.get("review") === "1" || params.get("review") === "proposals");
+  // fix4 qa-simple-roadmap-37: the desktop tray starts under its toolbar button (measured as it opens).
+  const [trayTop, setTrayTop] = useState(0);
+  useEffect(() => {
+    if (!tray) return;
+    const id = requestAnimationFrame(() => {
+      const r = document.querySelector('[data-testid="needs-decision"]')?.getBoundingClientRect();
+      setTrayTop(r ? Math.max(0, Math.round(r.bottom + 8)) : 0);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [tray]);
   const [keyDates, setKeyDates] = useState(false);
   const [exporting, setExporting] = useState(false);
   // qa-shell-24: a phone's pickers sit behind one Filters button.
@@ -525,6 +614,7 @@ export function SimpleRoadmap() {
   // S7: Oracle's suggested features by goal; an accept (or its undo) changes the roadmap.
   const suggestions = useGoalSuggestions(reload);
   const [goalPanel, setGoalPanel] = useState<GoalBrief | null>(null);
+  const [goalStart, setGoalStart] = useState<GoalPanelStart | undefined>(undefined);
   // S7: while Oracle drafts a quick-added item, the roadmap reads again until it is done.
   const drafting = !!roadmap.data?.items.some((i) => i.drafting);
   const { reload: reloadRoadmap } = roadmap;
@@ -605,13 +695,19 @@ export function SimpleRoadmap() {
     async (what: string, body: Parameters<Act>[1]): Promise<ChangeResult | null> => {
       try {
         const r = await propose(body);
+        const target = latest.current.get(String(body.target?.item_id ?? ""));
         toast({
-          message: resultWords(r, what),
+          message: resultWords(r, what, target?.deciders),
           action: r.change.status === "applied" && r.change.can_undo ? { label: "Undo", onClick: () => void undo(r.change.id).then(reload, (e) => toast({ message: String(e.message) })) } : undefined,
         });
         return r;
       } catch (e) {
-        toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
+        // fix4 qa-simple-roadmap-21: someone else's change since the page read it: what changed,
+        // and Reload (the latest is read again either way).
+        if (e instanceof ChangeFailed && e.status === 409) {
+          const what = changedWords(e.changed);
+          toast({ message: `${e.message}${what.length ? ` (its ${what.join(" and ")})` : ""}. Reload to see the latest, then try again.`, action: { label: "Reload", onClick: () => void reload() } });
+        } else toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not make this change" });
         return null;
       } finally {
         await reload();
@@ -709,7 +805,7 @@ export function SimpleRoadmap() {
       if (!i.suggestion) return;
       try {
         await suggestion(id ?? i.suggestion.id, how, dates);
-        const words = how === "dismiss" ? "Dismissed Oracle's dates" : i.suggestion.can_decide ? "Dates accepted in your working draft" : "Dates proposed: they wait for the decider";
+        const words = how === "dismiss" ? "Dismissed Oracle's dates" : i.suggestion.can_decide ? "Dates accepted in your working draft" : `Dates proposed: they wait for ${deciderWords(i.deciders)} in Needs a decision`;
         toast({ message: words });
       } catch (e) {
         toast({ message: e instanceof ChangeFailed ? e.message : "Oracle could not do that" });
@@ -763,8 +859,11 @@ export function SimpleRoadmap() {
   // inside the sheet, so it reads as disabled rather than silently failing once opened.
   // Below an owner, deciding an item on this view is the item answer.
   const mayStartReview = can("start_simple_meeting", !!startOptions.data?.prds.some((p) => p.can_start));
-  const waiting =
-    data.items.filter((i) => i.can_decide && broken(i).length).length + data.items.filter((i) => i.suggestion?.can_decide).length + allProposals.filter((c) => c.can_decide).length;
+  // fix4 qa-simple-roadmap-22: someone who may not start one (a viewer; a commenter who decides
+  // no PRD) sees no Start review at all, once the start options say so (busy until then).
+  const startsReviews = mayStartReview || (!startOptions.data && !startOptions.error);
+  // fix4 qa-simple-roadmap-8: the tray's own counts (one helper), so the button and its tiles agree.
+  const waiting = decisionCounts(data.items, allProposals).total;
   const qList = quarters(data.windows.now.start, data.windows.later.end);
   // qa-shell-8: a new company's roadmap has nothing on it (no item, milestone or key date, and
   // no filter narrowing it): one line on what shows here and the next step, no empty chart and
@@ -821,7 +920,8 @@ export function SimpleRoadmap() {
               }
             : undefined,
         });
-      else toast({ message: `Proposed ${title} (${w.label}): it waits for the decider` });
+      // fix4 qa-simple-roadmap-21: who decides, and where the proposal shows.
+      else toast({ message: `Proposed ${title} (${w.label}): it waits for ${deciderWords(undefined)} in Needs a decision` });
       await reload();
       return true;
     } catch (e) {
@@ -829,9 +929,16 @@ export function SimpleRoadmap() {
       return false;
     }
   };
+  // fix4 qa-simple-roadmap-23: Start review opens on the working draft: the PRD of the items it
+  // changed (when the reader may start that one), named in the sheet.
+  const workingDrafts = (drafts.data ?? []).filter((d) => d.status === "working" && d.changes > 0);
+  const draftItems = workingDrafts.flatMap((d) => d.change_log.flatMap((c) => (c.item_id ? [byId.get(c.item_id)] : [])));
+  const reviewPrd = draftItems.find((i) => i?.prd)?.prd?.slug;
+  const draftChanges = workingDrafts.reduce((n, d) => n + d.changes, 0);
+  const reviewFrom = workingDrafts.length ? `Your roadmap's working draft · ${draftChanges} ${draftChanges === 1 ? "change" : "changes"}` : undefined;
   const goalCounts = new Map<string, number>();
   for (const s of suggestions.data?.suggestions ?? []) goalCounts.set(s.goal.id, (goalCounts.get(s.goal.id) ?? 0) + 1);
-  const openGoal = (id: string, title: string) => setGoalPanel(suggestions.data?.goals.find((g) => g.goal.id === id)?.goal ?? { id, key: id, title });
+  const openGoal = (id: string, title: string) => openCounted(suggestions.data?.goals.find((g) => g.goal.id === id)?.goal ?? { id, key: id, title });
 
   // D: the items a change waiting for its decider pulls into another horizon ("pending").
   const pulledIn = new Set(allProposals.filter((c) => c.op === "change_horizon" && c.target.item_id).map((c) => String(c.target.item_id)));
@@ -848,7 +955,9 @@ export function SimpleRoadmap() {
           data-testid="needs-decision"
           title="Broken dates, date suggestions and proposals on this roadmap view (not the same count as Decisions or Roadmap in the side menu)"
           onClick={() => setTray(true)}
-          className={waiting ? "border-warn" : ""}
+          data-zero={waiting ? undefined : "true"}
+          // fix4 qa-simple-roadmap-38: at 0 the button is muted (nothing waits), still opens the tray.
+          className={waiting ? "border-warn" : "border-line text-text2"}
         >
           Needs a decision · {waiting}
         </Button>
@@ -864,23 +973,18 @@ export function SimpleRoadmap() {
       >
         Key dates · {data.key_dates?.length ?? 0}
       </Button>
-      {!blank && (
+      {/* fix4 qa-simple-roadmap-22 (was #13's disabled button with a reason): shown only to whom
+       * may start one; busy, disabled, until the start options answer. */}
+      {startsReviews && !blank && (
         <Button
+          data-testid="start-review"
           disabled={!mayStartReview}
           // Busy until the start options say who may start (an owner's answer needs no wait).
           aria-busy={!startOptions.data && !startOptions.error && !can("start_simple_meeting") ? true : undefined}
-          title={mayStartReview ? undefined : START_REVIEW_REASON}
-          aria-describedby={mayStartReview ? undefined : "start-review-reason"}
           onClick={() => setStarting(true)}
         >
           Start review
         </Button>
-      )}
-      {/* #13: the reason is on screen, not only a hover title (touch and keyboard read it too). */}
-      {!mayStartReview && !blank && (
-        <span id="start-review-reason" data-testid="start-review-reason" className="self-center text-sm text-text2">
-          {START_REVIEW_REASON}
-        </span>
       )}
       {!blank && (
         <>
@@ -896,7 +1000,7 @@ export function SimpleRoadmap() {
   );
   const scaleSwitch = (
     <SegmentedControl<GanttUnit>
-      label="Gantt scale"
+      label="Scale"
       size="sm"
       value={unit}
       onChange={setUnit}
@@ -906,6 +1010,20 @@ export function SimpleRoadmap() {
       ]}
     />
   );
+  // fix4 qa-simple-roadmap-12: a From after the To swaps them (the quarters the two name, in
+  // order), said in a toast, never an inverted range drawn as an empty chart.
+  const setRange = (from: string, to: string) => {
+    if (from && to && from > to) {
+      setF({ ...f, from: quarterOf(to).start, to: addDays(nextQuarter(quarterOf(from).start), -1) });
+      toast({ message: `From was after To, so they were swapped: ${quarterOf(to).label} to ${quarterOf(from).label}` });
+    } else setF({ ...f, from, to });
+  };
+  const filtered = !!(f.prd || f.goal || f.track || f.from || f.to);
+  const clearFilters = () => {
+    setRestored(true);
+    setF({ ...NO_FILTERS, group: f.group, roadmap: f.roadmap });
+    void remember({ simple_filters: { prd: "", goal: "", track: "" } }, "Could not remember these filters for next time");
+  };
   // D1: PRD, Goal, Track, From, To, Group by and the Gantt's scale on one line (each select as wide as its choice).
   const pickers = (
     <>
@@ -915,8 +1033,8 @@ export function SimpleRoadmap() {
       <Select label="PRD" value={f.prd} options={seen.prd} onChange={(prd) => pickFilter("prd", prd)} />
       <Select label="Goal" value={f.goal} options={seen.goal} onChange={(goal) => pickFilter("goal", goal)} />
       <Select label="Track" value={f.track} options={seen.track} onChange={(track) => pickFilter("track", track)} />
-      <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setF({ ...f, from })} />
-      <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setF({ ...f, to })} />
+      <Select label="From" value={f.from} options={qList.map((q) => [q.start, q.label])} onChange={(from) => setRange(from, f.to)} testId="filter-from" />
+      <Select label="To" value={f.to} options={qList.map((q) => [q.end, q.label])} onChange={(to) => setRange(f.from, to)} testId="filter-to" />
     </>
   );
   // How many pickers narrow the view, on a phone's Filters button.
@@ -952,7 +1070,7 @@ export function SimpleRoadmap() {
       </span>
       {format === "gantt" && !phone && (
         <span className="flex items-center gap-1.5 text-sm text-text2">
-          Gantt scale
+          Scale
           {scaleSwitch}
         </span>
       )}
@@ -964,7 +1082,14 @@ export function SimpleRoadmap() {
       )}
     </div>
   );
-  const goalCounters = <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={setGoalPanel} />;
+  const pickedGoal = f.goal ? { key: f.goal, title: seen.goal.find(([k]) => k === f.goal)?.[1] ?? f.goal } : null;
+  // fix4 qa-simple-roadmap-17: a card's "N suggested features" opens the drawer on the tab that holds them.
+  const openCounted = (g: GoalBrief) => {
+    const { people, oracle } = goalRows(suggestions, g);
+    setGoalStart(!people.length && oracle.length ? "oracle" : undefined);
+    setGoalPanel(g);
+  };
+  const goalCounters = <GoalCounters data={data} byGoal={f.group === "goal" || f.group === "milestone"} suggestions={suggestions} onGoal={openCounted} only={pickedGoal} />;
   const draftBanner = (
     <DraftBanner
       drafts={drafts.data ?? []}
@@ -1051,9 +1176,11 @@ export function SimpleRoadmap() {
             })()}
         </div>
       )}
+      {/* fix4 qa-simple-roadmap-44: a phone's page actions sit near the top, as a desktop's do. */}
+      {phone && actions}
       {!phone && canChange && addable.length > 0 && <QuickAdd phone={false} options={addOptions} verb={addVerb} onAdd={onAdd} target={target?.title ?? null} roadmaps={askRoadmap ? addable.map((r) => r.roadmap) : []} />}
       {!phone && goalCounters}
-      <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" />
+      <StartSheet open={starting} onClose={() => setStarting(false)} origin="roadmap" prefer={reviewPrd} from={reviewFrom} />
       {draftBanner}
       {/* #36: on a phone, Roadmap/Goal/Track and Group by read before the chart, not after
        * the legend and goal cards at the page's foot. */}
@@ -1073,8 +1200,14 @@ export function SimpleRoadmap() {
           )}
         </p>
       )}
-      <div ref={wrap} className={blank ? "hidden" : "relative"}>
-        {format === "board" ? (
+            <div ref={wrap} className={blank ? "hidden" : "relative"}>
+        {filtered && !data.items.length ? (
+          // fix4 qa-simple-roadmap-12: no bare axis when the filters leave nothing: say so, and a way back.
+          <div data-testid="filters-empty" className="flex flex-col items-start gap-2 rounded-xl border border-dashed border-line-strong bg-surface px-4 py-6">
+            <p className="text-[15px] font-semibold">Nothing matches these filters</p>
+            <Button onClick={clearFilters}>Clear filters</Button>
+          </div>
+        ) : format === "board" ? (
           <Board
             data={data}
             phone={phone}
@@ -1205,42 +1338,46 @@ export function SimpleRoadmap() {
           />
         )}
       </div>
+      {/* fix4 qa-simple-roadmap-7/34/35: every format's legend in the Timeline's style (a
+       * swatch drawn as the mark is, then short words), naming only the marks shown. */}
       {blank ? null : format === "waterfall" ? (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text2" data-testid="legend">
-          {/* #23: only the phases a bar actually draws get a key (no Discover key when
-           * nothing is in discovery), and the wording after them is plain, not jargon. */}
-          {PHASES.filter((p) => (laned ?? data).items.some((i) => i.phases.some((x) => x.key === p.key))).map((p) => (
-            <span key={p.key} className="inline-flex items-center gap-1.5" data-testid="phase-key">
-              {/* #41: a hatch in the phase's own colour (not one pale stripe for every
-               * phase), so an estimated segment still reads as which phase it is. */}
-              {/* qa-simple-roadmap-23/41: the key draws what a bar does, its solid ink beside its
-               * hatch (the pattern's own soft and ink, as wide as the bar's stripes). */}
-              <span aria-hidden className="inline-flex h-3 w-7 overflow-hidden rounded-sm" data-ink={p.ink}>
-                <span className="h-full w-1/2" style={{ background: p.ink }} />
-                <span className="h-full w-1/2" style={{ background: `repeating-linear-gradient(45deg, ${p.soft} 0, ${p.soft} 2.6px, ${p.ink} 2.6px, ${p.ink} 5.6px)` }} />
-              </span>
-              {p.label}
-            </span>
-          ))}
-          <span>
-            solid: a milestone or gate dates the phase · hatched: estimated from the bar&rsquo;s span ·{" "}
-            {canChange
-              ? `drag a bar${phone ? " (press and hold first)" : ""} or use the arrow keys to move the whole item: its estimated phases are worked out again, a dated gate stays on its day (the phases before it may bunch up)`
-              : "a dated gate stays on its day when the item moves"}{" "}
-            · diamond and thin line: a key date
-          </span>
-        </p>
+        <LegendKeys
+          entries={[
+            /* #23: only the phases a bar actually draws get a key (no Discover key when
+             * nothing is in discovery). #41, qa-simple-roadmap-23/41: the key draws what a bar
+             * does, its solid ink beside its hatch in the phase's own colour. */
+            ...PHASES.filter((p) => (laned ?? data).items.some((i) => i.phases.some((x) => x.key === p.key))).map((p) => ({
+              key: p.key,
+              testId: "phase-key",
+              swatch: (
+                <span aria-hidden className="inline-flex h-3 w-7 flex-none overflow-hidden rounded-sm" data-ink={p.ink}>
+                  <span className="h-full w-1/2" style={{ background: p.ink }} />
+                  <span className="h-full w-1/2" style={{ background: `repeating-linear-gradient(45deg, ${p.soft} 0, ${p.soft} 2.6px, ${p.ink} 2.6px, ${p.ink} 5.6px)` }} />
+                </span>
+              ),
+              words: p.label,
+            })),
+            { key: "solid", swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "var(--accent)", borderColor: "var(--accent)" }} />, words: "Dated by a milestone or gate" },
+            {
+              key: "hatched",
+              swatch: <i aria-hidden className={LEGEND_SWATCH} style={{ background: "repeating-linear-gradient(45deg, var(--accent-soft) 0 2.6px, var(--accent) 2.6px 5.6px)", borderColor: "var(--accent)" }} />,
+              words: "Estimated",
+            },
+            {
+              key: "move",
+              swatch: null,
+              words: canChange ? `Drag a bar${phone ? " (press and hold first)" : ""} or use the arrow keys to move it; a dated gate stays on its day` : "A dated gate stays on its day when the item moves",
+            },
+            ...keyDateEntries(laned ?? data),
+            TODAY_ENTRY,
+          ]}
+        />
       ) : format === "board" ? (
-        <p className="text-sm text-text2" data-testid="legend">
-          Drag a card to another column{phone ? " (press and hold first)" : ""} to change its horizon · hatched dates: estimated (the horizon&rsquo;s window) · dashed: draft · red: a broken link
-        </p>
+        <LegendKeys entries={boardLegend(data, phone, canChange)} />
       ) : format === "gantt" ? (
-        <p className="text-sm text-text2" data-testid="legend">
-          {ganttLegend(laned ?? data, noWork, pulledIn.size)}
-        </p>
+        <LegendKeys entries={ganttLegend(laned ?? data, noWork, pulledIn.size)} />
       ) : null}
-      {/* D3: on a phone the chart's own filters lead (#36); the actions and goals follow it. */}
-      {phone && actions}
+      {/* D3: on a phone the chart's own filters lead (#36); the goals follow it. */}
       {phone && goalCounters}
       {tray && (
         <DecisionTray
@@ -1254,9 +1391,10 @@ export function SimpleRoadmap() {
           onClose={() => setTray(false)}
           phone={phone}
           suggestions={suggestions}
+          top={trayTop}
         />
       )}
-      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} onClose={() => setGoalPanel(null)} />}
+      {goalPanel && <GoalPanel goal={goalPanel} api={suggestions} start={goalStart} onClose={() => setGoalPanel(null)} />}
     </div>
   );
 }

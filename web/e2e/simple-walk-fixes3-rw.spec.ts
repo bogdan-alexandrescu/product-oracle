@@ -9,7 +9,7 @@ import { expect, test, type Locator, type Page } from "./test";
  * Card walk3-why-provenance: protects = an item card's "Why" line names where the item came
  * from as "From <PRD> (draft N): <code> <feature name>." ("From Usage alerts (draft 5): F-06
  * Weekly digest of fired alerts."), and an item imported from a section with no code reads
- * its own name ("From Usage alerts (draft 5): Alert rules engine."), never a lowercase
+ * its own name ("From Usage alerts: Alert rules engine."), never a lowercase
  * section anchor; fails_when = the line reads "section bets" / "section f-06", or misses the
  * PRD draft's number; no_claim = the other reasons (rationale, goal) and the API's rule
  * (api/tests/test_simple_walk_fixes3_rw_api.py).
@@ -34,19 +34,19 @@ for (const phone of [false, true]) {
       test.use({ viewport: phone ? PHONE : DESKTOP, colorScheme: scheme, hasTouch: phone, isMobile: phone });
 
       for (const email of ["admin@example.com", "viewer@example.com"]) {
-        test(`${email.split("@")[0]}: the card's Why line names the PRD, its draft, the code and the feature (${where})`, async ({ page }) => {
+        test(`${email.split("@")[0]}: the card's Why line names the PRD and the feature, no draft number or code (${where})`, async ({ page }) => {
           await login(page, email);
           await page.goto("/simple/roadmap");
           await openRoadmapItem(page, "alert-digest");
           let reasons = page.getByTestId("floating-card").getByTestId("card-reasons");
-          await expect(reasons).toContainText("From Usage alerts (draft 5): F-06 Weekly digest of fired alerts.");
+          await expect(reasons).toContainText("From Usage alerts: Weekly digest of fired alerts.");
           await expect(reasons).not.toContainText("section ");
           await page.getByTestId("floating-card").getByRole("button", { name: "Close" }).click();
           await expect(page.getByTestId("floating-card")).toHaveCount(0);
 
           await openRoadmapItem(page, "alert-rules");
           reasons = page.getByTestId("floating-card").getByTestId("card-reasons");
-          await expect(reasons).toContainText("From Usage alerts (draft 5): Alert rules engine.");
+          await expect(reasons).toContainText("From Usage alerts: Alert rules engine.");
           await expect(reasons).not.toContainText("section bets");
           await expect(reasons).not.toContainText("section ");
         });

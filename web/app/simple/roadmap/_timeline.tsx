@@ -25,6 +25,7 @@ import {
   scale,
   shortDay,
   sourceWord,
+  spanWords,
   type Format,
   type GanttUnit,
   type Item,
@@ -50,7 +51,8 @@ export interface Layout {
 
 /** The header above the rows (roadmap-milestones D): the ticks' line, then a line per row of marks
  * (milestone ends, key dates, track milestones, Today), then a gap: 54 px with one row of marks. */
-const TICK_H = 30;
+// fix4 qa-simple-roadmap-54: 36 px, so Today's pill and the marks sit clear of the quarters' header.
+const TICK_H = 36;
 const MARK_ROW = 16;
 const headerHeight = (markRows: number) => TICK_H + Math.max(1, markRows) * MARK_ROW + 8;
 const AXIS_H = headerHeight(1);
@@ -90,7 +92,17 @@ export function layout(data: Roadmap, compact: boolean, lane: Lane = data.group,
 /** A label's width in the chart's type (a canvas measures it; an estimate before there is one). */
 let measure: CanvasRenderingContext2D | null | undefined;
 let family = "";
+const widths = new Map<string, number>();
 function textWidth(s: string, size: number, weight: number): number {
+  // fix4 (500 items): each label's width once; a name is cut to fit by many measures (ellipsize).
+  const key = `${weight}|${size}|${s}`;
+  const known = widths.get(key);
+  if (known !== undefined) return known;
+  const w = measured(s, size, weight);
+  if (measure) widths.set(key, w);
+  return w;
+}
+function measured(s: string, size: number, weight: number): number {
   if (typeof document !== "undefined") {
     if (measure === undefined) measure = document.createElement("canvas").getContext("2d");
     if (measure) {
@@ -102,6 +114,29 @@ function textWidth(s: string, size: number, weight: number): number {
   }
   return Math.ceil(s.length * size * 0.64);
 }
+
+/** fix4 qa-simple-roadmap-2/6: `s` whole when it fits `room`, else cut at a word (or a letter) with "…" ("" when not even a few letters fit). */
+export function ellipsize(s: string, room: number, size: number, weight: number): string {
+  if (textWidth(s, size, weight) <= room) return s;
+  // The longest cut that fits, by halves (a few measures, not one per letter).
+  const cut = (n: number) => `${s.slice(0, n).trimEnd()}…`;
+  let lo = 3;
+  let hi = s.length - 1;
+  if (hi < lo || textWidth(cut(lo), size, weight) > room) return "";
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (textWidth(cut(mid), size, weight) <= room) lo = mid;
+    else hi = mid - 1;
+  }
+  return cut(lo);
+}
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** fix4 qa-simple-roadmap-30: a month tick's words: three letters ("Sep"), with the year on the first tick and each January. */
+export const monthTick = (day: string, first: boolean): string => {
+  const m = Number(day.slice(5, 7)) - 1;
+  return first || m === 0 ? `${MONTHS[m]} ${day.slice(0, 4)}` : MONTHS[m];
+};
 
 /** A mark on the time axis: a milestone's end, a key date, a track milestone or Today. */
 export type Mark = {
@@ -128,15 +163,15 @@ export function placeMarks(marks: Omit<Mark, "row" | "w" | "box">[], width: numb
   const out: Mark[] = [];
   for (const m of marks) {
     if (m.x < -1 || m.x > width + 1) continue;
-    const w = m.words ? textWidth(m.words, m.kind === "today" ? 10 : size, 700) : 0;
+    const w = m.words ? textWidth(m.words, m.kind === "today" ? 11 : size, 700) : 0;
     const g = GLYPH[m.kind];
     // Today's pill: 38 px right of the line (left of it at the chart's right edge). The
     // Timeline's milestone end is a flag and its words beside the line (timeline-overlap B2).
     const box = (side: Mark["side"]): [number, number] =>
       m.kind === "today"
         ? side === "after"
-          ? [m.x - 1, m.x + (w ? 41 : 1)]
-          : [m.x - (w ? 41 : 1), m.x + 1]
+          ? [m.x - 1, m.x + (w ? 45 : 1)]
+          : [m.x - (w ? 45 : 1), m.x + 1]
         : m.kind === "end" && flags
           ? side === "before"
             ? [m.x - 18 - w, m.x]
@@ -177,29 +212,47 @@ export const PHASES: { key: Item["phases"][number]["key"]; label: string; ink: s
 
 /** The chart's span and pixels per day: the timeline and the waterfall fit their quarters to
  * the width; the Gantt is a day or week scale around the items, scrolling sideways. */
-export function chartScale(data: Roadmap, format: Format, unit: GanttUnit, width: number, weeks = false): { scale: Scale; ticks: { day: string; label: string; major: boolean }[] } {
-  const starts = data.items.map((i) => i.start.date).concat(data.today);
-  const ends = data.items.map((i) => i.end.date).concat(data.today);
-  const lo = starts.reduce((a, b) => (a < b ? a : b));
-  const hi = ends.reduce((a, b) => (a > b ? a : b));
-  if (weeks) unit = "week";
+export function chartScale(data: Roadmap, format: Format, unit: GanttUnit, width: number, weeks = false, extra: string[] = []): { scale: Scale; ticks: { day: string; label: string; major: boolean }[] } {
+  // fix4 qa-simple-roadmap-5: the span takes every day the chart draws (a planned item's slices,
+  // a suggestion, a chat preview's ghost), not only the items' own dates: a slice past the last
+  // item's end no longer falls off the chart and leaves its row empty.
+  const days = data.items.flatMap((i) => [
+    i.start.date,
+    i.end.date,
+    ...i.slices.flatMap((x) => (x.start_date && x.end_date ? [x.start_date, x.end_date] : [])),
+    ...(i.suggestion && !closedItem(i) ? [i.suggestion.start_date, i.suggestion.end_date] : []),
+  ]);
+  days.push(data.today, ...extra);
+  const lo = days.reduce((a, b) => (a < b ? a : b));
+  const hi = days.reduce((a, b) => (a > b ? a : b));
+  if (weeks) {
+    // fix4 qa-simple-roadmap-6: a phone's Gantt reads by month (about 3.5 px a day, a month's
+    // tick and its name), not 2.5 weeks a screen; it fills the width when the span is short.
+    const s = `${lo.slice(0, 8)}01`;
+    const e = addDays(`${addDays(`${hi.slice(0, 8)}28`, 7).slice(0, 8)}01`, -1);
+    const sc = scale(s, e, Math.max(3.5, width / (daysBetween(s, e) + 1)));
+    const ticks: { day: string; label: string; major: boolean }[] = [];
+    for (let d = s, n = 0; d <= e && n < 120; d = `${addDays(`${d.slice(0, 8)}28`, 7).slice(0, 8)}01`, n++) ticks.push({ day: d, label: monthTick(d, n === 0), major: true });
+    return { scale: sc, ticks };
+  }
   if (format !== "gantt" && !weeks) {
     const qs = quarters(lo < data.windows.now.start ? lo : data.windows.now.start, hi);
     const s = qs[0].start;
     const e = qs[qs.length - 1].end;
-    const px = Math.max(0.5, width / (daysBetween(s, e) + 1));
+    // fix4 qa-simple-roadmap-6: a phone's quarter is never narrower than its squeezed header ("Q4 '26").
+    const px = Math.max(format === "waterfall" && width < 400 ? 0.6 : 0.5, width / (daysBetween(s, e) + 1));
     return { scale: scale(s, e, px), ticks: qs.map((q) => ({ day: q.start, label: q.label, major: true })) };
   }
   const ticks: { day: string; label: string; major: boolean }[] = [];
   if (unit === "week") {
     // roadmap-milestones D: whole weeks, Monday to Sunday, from the first item's week to the last
-    // one's; on a desktop they share the chart's width (a long span scrolls), on a phone a week
-    // is 52.5 px and the weeks scroll sideways. A month's first week draws a stronger line.
+    // one's; on a desktop they share the chart's width (a long span scrolls). A month's first
+    // week draws a stronger line.
     const s = addDays(lo, -((new Date(ms(lo)).getUTCDay() + 6) % 7));
     const e = addDays(hi, (7 - new Date(ms(hi)).getUTCDay()) % 7);
-    const days = daysBetween(s, e) + 1;
+    const span = daysBetween(s, e) + 1;
     // A span that fits at 5 px a day or more fills the width; a longer one scrolls at 7 px a day.
-    const sc = scale(s, e, weeks ? 7.5 : width / days >= 5 ? Math.min(14, width / days) : 7);
+    const sc = scale(s, e, width / span >= 5 ? Math.min(14, width / span) : 7);
     for (let d = s, n = 0; d <= e && n < 600; d = addDays(d, 7), n++) ticks.push({ day: d, label: shortDay(d), major: new Date(ms(d)).getUTCDate() <= 7 });
     return { scale: sc, ticks };
   }
@@ -247,6 +300,14 @@ export interface ChartProps {
 
 /** An item the plan dates by its slices: drawn one bar per slice, its dates the plan's (not dragged). */
 const planned = (i: Item): boolean => i.slices.some((x) => x.start_date && x.end_date);
+/** The days a row's bar (or its slices) cover. */
+function drawnSpan(i: Item, span?: [string, string]): [string, string] {
+  const d = i.slices.filter((x) => x.start_date && x.end_date);
+  if (d.length) return [d.map((x) => x.start_date!).reduce((a, b) => (a < b ? a : b)), d.map((x) => x.end_date!).reduce((a, b) => (a > b ? a : b))];
+  return span ?? barSpan(i);
+}
+/** fix4 qa-simple-roadmap-3: a place in the return queue in words ("1st", "2nd"), not "#1". */
+export const ordinal = (n: number): string => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 /** A milestone's code from its name ("M2 · Scale volume": "M2"). */
 const codeOf = (name: string): string => name.split(/[\s·]/)[0];
 
@@ -289,9 +350,13 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  // A phone's chart of planned work scrolls sideways by weeks (the names stay pinned on the left).
-  const weeks = compact && format !== "waterfall" && data.items.some((i) => i.slices.length > 0);
-  const { scale: sc, ticks } = useMemo(() => chartScale(data, format, unit, width, weeks), [data, format, unit, width, weeks]);
+  // A phone's Gantt scrolls sideways by months (the names stay pinned on the left; fix4
+  // qa-simple-roadmap-6: any phone Gantt, not only a plan's).
+  const weeks = compact && format === "gantt";
+  // fix4 qa-simple-roadmap-10: a chat card's preview is drawn where it lands, inside the chart.
+  const preview = usePreview();
+  const previewDays = useMemo(() => previewSpan(preview, data), [preview, data]);
+  const { scale: sc, ticks } = useMemo(() => chartScale(data, format, unit, width, weeks, previewDays), [data, format, unit, width, weeks, previewDays]);
   const axisFormat: Format = weeks ? "gantt" : format;
   // roadmap-milestones D: the Gantt draws one bar per slice in the accent, labelled with its code.
   const gantt = format === "gantt";
@@ -318,14 +383,24 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   }, [data, sc, chartW, compact, flags]);
   const top = headerHeight(Math.max(0, ...marks.map((m) => m.row + 1)));
   const l = useMemo(() => layout(data, compact, lane, top), [data, compact, lane, top]);
-  // findings 15/16: a row's code is a tooltip, not a visible prefix (some items have none, and
-  // a repeated code on two items would read as the same thing twice); it only ever shows when
-  // every row's code is its own.
-  const codeCounts = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const r of l.rows) if (r.kind === "item" && r.item.code) counts.set(r.item.code, (counts.get(r.item.code) ?? 0) + 1);
-    return counts;
-  }, [l.rows]);
+  // fix4 qa-simple-roadmap-5: the part of the chart in view (it scrolls sideways), so a row whose
+  // bar is out of view says where it lies, with a button that scrolls to it.
+  const [view, setView] = useState<[number, number] | null>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    let raf = 0;
+    const on = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => setView(el.scrollWidth > el.clientWidth + 1 ? [el.scrollLeft, el.scrollLeft + el.clientWidth] : null));
+    };
+    on();
+    el.addEventListener("scroll", on, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("scroll", on);
+    };
+  }, [sc, width]);
   // D3: on a phone, which milestone ends off screen to the right ("Swipe sideways for M3").
   useEffect(() => {
     const el = box.current;
@@ -529,7 +604,8 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
   return (
     <div className="flex border border-line bg-surface" data-testid="simple-chart" data-format={format} data-unit={format === "gantt" ? unit : undefined} data-weeks={weeks ? "true" : undefined}>
       <div className="min-w-0 flex-none border-r border-line" style={{ width: l.labelW }} data-testid="chart-labels">
-        <div style={{ height: l.top }} className="flex items-end px-3 pb-1.5 text-xs font-semibold tracking-[.05em] text-text2 uppercase">
+        {/* fix4 qa-simple-roadmap-34: the grouping as the Group by names it ("PRD", "Goal"), not in capitals. */}
+        <div style={{ height: l.top }} className="flex items-end px-3 pb-1.5 text-xs font-semibold text-text2">
           {LANE_WORDS[lane]}
         </div>
         {l.rows.map((r, n) =>
@@ -586,24 +662,20 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               onClick={() => onOpen(r.item, { x: sc.x((moved[r.item.id] ?? barSpan(r.item))[0]), y: (l.y.get(r.item.id) ?? 0) + l.rowH })}
               className={`flex w-full min-w-0 items-center text-left hover:bg-surface2 ${compact ? "gap-1 px-2 text-[13px]" : "gap-2 px-3 text-[15px]"} ${open === r.item.id ? "bg-accent-soft" : ""}`}
             >
+              {/* fix4 qa-simple-roadmap-3: no "#1" or "F-06" on a row: the place in the return
+                  queue in words ("1st"), the name alone (the code is in the item's card). The
+                  name gets the row's space first; the chips after it shrink (finding 7). */}
               {r.place != null && (
-                <span className="tnum flex-none text-xs text-text2" data-testid="return-place" title="Its place in the return queue">
-                  #{r.place}
-                </span>
-              )}
-              {/* findings 15/16: design D's code first (F-01), when it is this row's alone (codes
-                  are per PRD, so two PRDs on one view can both have an F-06; a repeated code
-                  would read as the same thing twice). The name always gets the row's space
-                  first; the chips after it shrink instead of squeezing it to nothing (finding 7). */}
-              {r.item.code && codeCounts.get(r.item.code) === 1 && (
-                <span className={`flex-none font-mono text-text2 ${compact ? "text-[11px]" : "text-xs"}`} data-testid="label-code">
-                  {r.item.code}
+                <span className="tnum flex-none text-xs text-text2" data-testid="return-place" title={`${ordinal(r.place)} to come back if room opens`}>
+                  {ordinal(r.place)}
                 </span>
               )}
               <span
                 data-testid="label-title"
-                title={r.item.code && codeCounts.get(r.item.code) === 1 ? `${r.item.code} ${r.item.title}` : r.item.title}
-                className={`min-w-[45%] flex-1 truncate ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
+                title={r.item.title}
+                // fix4 qa-simple-roadmap-6: a phone's name wraps onto two lines instead of being cut mid-word.
+                // (on a phone the name takes 60% of the row at least, room for two words a line beside its chips)
+                className={`flex-1 ${compact ? "line-clamp-2 min-w-[60%] text-[12.5px] leading-[14px] break-words" : "min-w-[45%] truncate"} ${closedItem(r.item) ? "text-text2 line-through" : ""}`}
               >
                 {r.item.title}
               </span>
@@ -671,7 +743,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               </marker>
             </defs>
             <rect x={0} y={0} width={chartW} height={l.height} fill="var(--surface)" />
-            <Axis ticks={ticks} sc={sc} height={l.height} format={axisFormat} drop={!!dropTargets && axisFormat !== "gantt"} compact={compact} />
+            <Axis ticks={ticks} sc={sc} height={l.height} format={axisFormat} drop={!!dropTargets && axisFormat !== "gantt"} compact={compact} monthly={weeks} />
             {/* D: holidays are grey columns under the rows. */}
             {noWork.map((h) => (
               <rect
@@ -776,7 +848,7 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
                 <Bar key={r.item.id} item={r.item} y={l.y.get(r.item.id)!} h={l.rowH} sc={sc} span={moved[r.item.id]} open={open === r.item.id} flash={flash.has(r.item.id)} canDrag={canDrag} phased={format === "waterfall"} gantt={gantt} compact={compact} pulled={gantt && !!pulled?.has(r.item.id)} width={chartW} {...bars} />
               ) : null,
             )}
-            <PreviewGhost l={l} sc={sc} items={items} />
+            <PreviewGhost l={l} sc={sc} items={items} preview={preview} data={data} />
             {/* D: Today is a red line with a red "Today" pill under the ticks (D3: the line only on a phone). */}
             <g data-testid="today-mark" pointerEvents="none">
               {/* finding 18: the line starts below the axis's own tick labels (never above
@@ -784,8 +856,9 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
               <line x1={today} x2={today} y1={compact ? l.top - 4 : lineTop(today, 0, Math.max(TICK_H + 2, baseline(0) - 25))} y2={l.height} stroke="var(--crit)" strokeWidth={1.5} data-testid="today-line" />
               {todayMark?.words && (
                 <>
-                  <rect x={todayMark.side === "after" ? today + 2 : today - 40} y={baseline(0) - 17} width={38} height={14} rx={7} fill="var(--crit)" />
-                  <text x={todayMark.side === "after" ? today + 21 : today - 21} y={baseline(0) - 6.5} fontSize={10} fontWeight={700} fill="var(--surface)" textAnchor="middle">
+                  {/* fix4 qa-simple-roadmap-54: 11 px words (were 10), clear of the header above. */}
+                  <rect x={todayMark.side === "after" ? today + 2 : today - 44} y={baseline(0) - 18} width={42} height={16} rx={8} fill="var(--crit)" />
+                  <text x={todayMark.side === "after" ? today + 23 : today - 23} y={baseline(0) - 6.5} fontSize={11} fontWeight={700} fill="var(--surface)" textAnchor="middle">
                     Today
                   </text>
                 </>
@@ -793,6 +866,30 @@ export function Chart({ data, format, unit, compact, canDrag, moved, open, onOpe
             </g>
           </svg>
           <div ref={live} hidden data-testid="drag-live" className="pointer-events-none absolute z-20 rounded bg-tip px-2 py-0.5 text-xs whitespace-nowrap text-tip-text" />
+          {view &&
+            l.rows.map((r) => {
+              if (r.kind !== "item") return null;
+              const [a, b] = drawnSpan(r.item, moved[r.item.id]);
+              const x0 = sc.x(a);
+              const x1 = Math.max(x0 + MIN_BAR_W, sc.x(b) + sc.px);
+              const right = x0 > view[1] - 8;
+              if (!right && x1 > view[0] + 8) return null;
+              const y = l.y.get(r.item.id) ?? 0;
+              return (
+                <button
+                  key={`off-${r.item.id}`}
+                  type="button"
+                  data-testid="row-offscreen"
+                  data-item={r.item.key}
+                  title={`${r.item.title}: ${spanWords(a, b, data.today, true)}`}
+                  onClick={() => box.current?.scrollTo({ left: Math.max(0, x0 - 24), behavior: "smooth" })}
+                  style={{ top: y + 5, height: l.rowH - 10, ...(right ? { left: view[1] - 6, transform: "translateX(-100%)" } : { left: view[0] + 6 }) }}
+                  className="absolute z-[5] flex items-center rounded-full border border-line bg-surface px-2 text-xs whitespace-nowrap text-text2 hover:bg-surface2"
+                >
+                  {right ? `${spanWords(a, b, data.today, true)} →` : `← ${spanWords(a, b, data.today, true)}`}
+                </button>
+              );
+            })}
           {overlay?.(l, sc)}
         </div>
       </div>
@@ -821,17 +918,18 @@ function drawPhases(g: SVGGElement, phases: Item["phases"], sc: Scale, x: number
   }
 }
 
-function Axis({ ticks, sc, height, format, drop, compact }: { ticks: { day: string; label: string; major: boolean }[]; sc: Scale; height: number; format: Format; drop: boolean; compact: boolean }) {
+function Axis({ ticks, sc, height, format, drop, compact, monthly = false }: { ticks: { day: string; label: string; major: boolean }[]; sc: Scale; height: number; format: Format; drop: boolean; compact: boolean; monthly?: boolean }) {
   // D: a week's date over each week (D3: every other week on a phone, or where a week is too
-  // narrow for its date); the day scale numbers its days.
-  const weekly = format === "gantt" && sc.px < 20;
+  // narrow for its date); the day scale numbers its days. fix4 qa-simple-roadmap-6: a phone's
+  // months each name themselves.
+  const weekly = format === "gantt" && sc.px < 20 && !monthly;
   const everyOther = compact || sc.px * 7 < 46;
   return (
     <g data-testid="chart-axis">
       {ticks.map((t, n) => {
         const x = sc.x(t.day);
         const next = ticks[n + 1] ? sc.x(ticks[n + 1].day) : sc.width;
-        const labelled = format !== "gantt" || (weekly ? !everyOther || n % 2 === 0 : t.major || sc.px >= 20);
+        const labelled = format !== "gantt" || monthly || (weekly ? !everyOther || n % 2 === 0 : t.major || sc.px >= 20);
         // finding 28: a narrow quarter header still names its year ("Q4 '26"), not just "Q4".
         const [qWord, qYear] = t.label.split(" ");
         const text = format !== "gantt" && next - x < 64 ? `${qWord}${qYear ? ` '${qYear.slice(-2)}` : ""}` : t.label;
@@ -890,7 +988,8 @@ function Arrows({ data, l, sc, moved }: { data: Roadmap; l: Layout; sc: Scale; m
       out.push(
         <path
           key={`${depId}-${it.id}`}
-          d={`M${x1},${y1} H${mid} V${y2} H${x2}`}
+          // Its last leg as an explicit point (x2,y2), the same line: the path's last pair is its head.
+          d={`M${x1},${y1} H${mid} V${y2} L${x2},${y2}`}
           fill="none"
           data-testid="dep-arrow"
           data-state={tone}
@@ -1147,11 +1246,15 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
         const pm = x.pm_owned || x.effort_weeks == null;
         const edge = gantt ? "var(--accent-ink)" : msEdge(x.milestone);
         const fill = pm ? "var(--surface)" : gantt ? "var(--accent)" : msFill(x.milestone);
-        const words = gantt ? (dated.length > 1 ? x.code : "") : `${x.code} ${x.name}`;
-        const tw = words ? textWidth(words, size, 650) : 0;
-        const inside = !!words && tw + (gantt ? 10 : 12) <= b.w;
-        // The Gantt's code too long for its bar sits just after it (D: "F-05b" beside a short bar).
-        const beside = gantt && !!words && !inside;
+        // fix4 qa-simple-roadmap-3: a slice is named by its name, not its code ("F-05b"): cut
+        // with "…" to its bar, or (the Gantt) beside a bar too short for it, up to the next slice.
+        const name = gantt ? (dated.length > 1 ? x.name : "") : x.name;
+        const inner = name ? ellipsize(name, b.w - (gantt ? 10 : 12), size, 650) : "";
+        const next = dated.find((o) => o.start_date! > x.start_date!);
+        const besideWords = gantt && name && inner.length < 4 ? ellipsize(name, Math.min(next ? sc.x(next.start_date!) : sc.width, sc.width) - (b.x + b.w) - 8, size, 400) : "";
+        const beside = besideWords.length >= 4;
+        const inside = !beside && inner.length >= 4;
+        const words = beside ? besideWords : inner;
         return (
           <g
             key={x.code}
@@ -1164,7 +1267,7 @@ function Slices({ item, y, h, sc, gantt, open, compact }: { item: Item; y: numbe
             data-estimated={x.estimated ? "true" : "false"}
             data-pm-owned={pm ? "true" : undefined}
           >
-            <title>{`${x.code} ${x.name} · ${x.milestone} ${x.milestone_name} · ${shortDay(x.start_date!)} – ${shortDay(x.end_date!)}${pm ? " · PM-owned" : ` · ${x.effort_weeks} engineer-weeks`}${x.estimated ? " · placed by Oracle" : ""}`}</title>
+            <title>{`${x.name} · ${x.milestone} ${x.milestone_name} · ${shortDay(x.start_date!)} – ${shortDay(x.end_date!)}${pm ? " · PM-owned" : ` · ${x.effort_weeks} engineer-weeks`}${x.estimated ? " · placed by Oracle" : ""}`}</title>
             <rect
               data-slice-body
               x={b.x}
@@ -1221,20 +1324,47 @@ export function useAppliedFlash(): ReadonlySet<string> {
   return flash;
 }
 
-/** S9: a chat card's Preview, ghosted on its bar ("simple:preview"): new dates, horizon, title, milestone, or a cut strike. */
-export function PreviewGhost({ l, sc, items }: { l: Pick<Layout, "y" | "rowH">; sc: Scale; items: Map<string, Item> }) {
+/** S9: the chat card's Preview showing now ("simple:preview"; null: none). */
+export function usePreview(): ChatPreview {
   const [preview, setPreview] = useState<ChatPreview>(() => lastPreview()?.preview ?? null);
   useEffect(() => {
     const on = (e: Event) => setPreview((e as CustomEvent<PreviewDetail>).detail?.preview ?? null);
     window.addEventListener(PREVIEW_EVENT, on);
     return () => window.removeEventListener(PREVIEW_EVENT, on);
   }, []);
+  return preview;
+}
+
+/** A horizon's window (a "move to Next" ghost is drawn there), when the roadmap has it. */
+function windowOf(data: Roadmap, horizon: string): { start: string; end: string } | null {
+  const w = (data.windows as unknown as Record<string, { start?: string | null; end?: string | null } | undefined>)[horizon];
+  return w?.start && w?.end ? { start: w.start, end: w.end } : null;
+}
+
+/** fix4 qa-simple-roadmap-10: the days a preview's ghost covers, so the chart's span takes them (a move to Q2 2027 ghosts in Apr–May, not off the chart). */
+export function previewSpan(preview: ChatPreview, data: Roadmap): string[] {
+  if (!preview || !data.items.some((i) => i.id === preview.item_id)) return [];
+  if (preview.kind === "dates") return [preview.start_date, preview.end_date];
+  if (preview.kind === "milestone") return [preview.date];
+  if (preview.kind === "horizon") {
+    const w = windowOf(data, preview.horizon);
+    return w ? [w.start, w.end] : [];
+  }
+  return [];
+}
+
+/** S9: a chat card's Preview, ghosted on its bar: new dates (or a horizon's window), title, milestone, or a cut strike.
+ * `inset`: the bar's top and height inside its row box (the lanes' pills: 4 and 20). */
+export function PreviewGhost({ l, sc, items, preview, data, inset }: { l: Pick<Layout, "y" | "rowH">; sc: Scale; items: Map<string, Item>; preview: ChatPreview; data: Roadmap; inset?: { top: number; h: number } }) {
   if (!preview) return null;
   const item = items.get(preview.item_id);
   const y = l.y.get(preview.item_id);
   if (!item || y === undefined) return null;
   const [start, end] = barSpan(item);
-  const pad = Math.round(l.rowH * 0.2);
+  // The bar's top and height inside its row box (a lanes' pill sits 4 px into its row).
+  const top = y + (inset ? inset.top : Math.round(l.rowH * 0.2));
+  const h = inset ? inset.h : l.rowH - 2 * Math.round(l.rowH * 0.2);
+  const mid = top + h / 2;
   const box = (a: string, b: string) => ({ x: sc.x(a), w: Math.max(sc.px, sc.x(b) - sc.x(a) + sc.px) });
   const cur = box(start, end);
   const common = { "data-testid": "preview-ghost", "data-kind": preview.kind, pointerEvents: "none" as const };
@@ -1242,20 +1372,20 @@ export function PreviewGhost({ l, sc, items }: { l: Pick<Layout, "y" | "rowH">; 
     const b = box(preview.start_date, preview.end_date);
     return (
       <g {...common} data-start={preview.start_date} data-end={preview.end_date}>
-        <rect x={b.x} y={y + pad} width={b.w} height={l.rowH - 2 * pad} rx={4} fill="var(--accent)" opacity={0.35} stroke="var(--accent-ink)" strokeDasharray="4 3" />
+        <rect x={b.x} y={top} width={b.w} height={h} rx={Math.min(4, h / 2)} fill="var(--accent)" opacity={0.35} stroke="var(--accent-ink)" strokeDasharray="4 3" />
       </g>
     );
   }
   if (preview.kind === "cut") {
     return (
       <g {...common}>
-        <line x1={cur.x} x2={cur.x + cur.w} y1={y + l.rowH / 2} y2={y + l.rowH / 2} stroke="var(--crit)" strokeWidth={3} />
+        <line x1={cur.x} x2={cur.x + cur.w} y1={mid} y2={mid} stroke="var(--crit)" strokeWidth={3} />
       </g>
     );
   }
   if (preview.kind === "milestone") {
     return (
-      <g {...common} transform={`translate(${sc.x(preview.date)}, ${y + l.rowH / 2})`}>
+      <g {...common} transform={`translate(${sc.x(preview.date)}, ${mid})`}>
         <rect x={-6} y={-6} width={12} height={12} transform="rotate(45)" fill="var(--warn)" opacity={0.5} stroke="var(--warn)" strokeDasharray="3 2" />
         <text x={10} y={4} fontSize={11} fill="var(--text2)">
           {preview.name}
@@ -1263,11 +1393,17 @@ export function PreviewGhost({ l, sc, items }: { l: Pick<Layout, "y" | "rowH">; 
       </g>
     );
   }
+  // fix4 qa-simple-roadmap-10: a move to another horizon ghosts over that horizon's window.
+  const win = preview.kind === "horizon" ? windowOf(data, preview.horizon) : null;
+  const at = win ? box(win.start, win.end) : cur;
   const words = preview.kind === "title" ? preview.title : `Moves to ${preview.horizon[0].toUpperCase()}${preview.horizon.slice(1)}`;
+  const tw = textWidth(words, 12, 600);
+  // The words after the ghost, or before it at the chart's right edge.
+  const after = at.x + at.w + 8 + tw <= sc.width;
   return (
-    <g {...common}>
-      <rect x={cur.x} y={y + pad} width={cur.w} height={l.rowH - 2 * pad} rx={4} fill="none" stroke="var(--accent-ink)" strokeDasharray="4 3" />
-      <text x={cur.x + cur.w + 8} y={y + l.rowH / 2 + 4} fontSize={12} fill="var(--accent-ink)" fontWeight={600}>
+    <g {...common} data-start={win?.start} data-end={win?.end}>
+      <rect x={at.x} y={top} width={at.w} height={h} rx={Math.min(4, h / 2)} fill={win ? "var(--accent)" : "none"} opacity={win ? 0.35 : 1} stroke="var(--accent-ink)" strokeDasharray="4 3" />
+      <text x={after ? at.x + at.w + 8 : Math.max(0, at.x - 8)} y={mid + 4} textAnchor={after ? "start" : "end"} fontSize={12} fill="var(--accent-ink)" fontWeight={600}>
         {words}
       </text>
     </g>

@@ -42,16 +42,14 @@ test.describe("desktop", () => {
   test.use(DESKTOP);
 
   for (const format of ["gantt", "waterfall"] as const) {
-    test(`${format}: a row shows its own code first, never a repeated one (findings 15, 16)`, async ({ page }) => {
+    test(`${format}: a row shows its name, never a code (findings 15, 16; fix4 qa-simple-roadmap-3)`, async ({ page }) => {
       await open(page, "simple-plan");
       await page.getByTestId(`format-${format}`).click();
       await expect(page.getByTestId("simple-chart")).toHaveAttribute("data-format", format);
-      // fix2 review: design D's "F-05 Team invites", the code first, when it is the row's alone.
-      await expect(row(page, "Team invites").getByTestId("label-code")).toHaveText("F-05");
-      await expect(row(page, "Team invites").getByTestId("label-title")).toHaveAttribute("title", "F-05 Team invites");
-      // A code two rows share (two PRDs' F-06) is never drawn: it would read as one item twice.
-      const codes = await page.getByTestId("label-code").allTextContents();
-      expect(new Set(codes).size).toBe(codes.length);
+      // fix4 qa-simple-roadmap-3: plain words, no internal ids: "Team invites", not "F-05 Team invites".
+      await expect(row(page, "Team invites").getByTestId("label-title")).toHaveAttribute("title", "Team invites");
+      await expect(page.getByTestId("label-code")).toHaveCount(0);
+      await expect(page.getByTestId("chart-labels")).not.toContainText(/\b[A-Z]-\d{2}\b/);
     });
   }
 

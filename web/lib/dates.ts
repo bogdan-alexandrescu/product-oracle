@@ -79,6 +79,19 @@ export function dayIn(at: Date | number | string, zone: string): string {
 /** Today in `zone`, as YYYY-MM-DD. */
 export const todayIn = (zone: string, now: number = Date.now()) => dayIn(now, zone);
 
+/** fix4 qa-simple-roadmap-29: a time in `zone` with no zone name: "7:02 PM" today, else
+ * "Oct 19, 8:00 AM" (its year when not this year's). Simple writes times this way. */
+export function plainClock(iso: string, zone: string, now: number = Date.now()): string {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return iso;
+  const day = dayIn(at, zone);
+  const today = todayIn(zone, now);
+  const t = fmt("en-US", zone, { hour: "numeric", minute: "2-digit" }).format(at);
+  if (day === today) return t;
+  const d = fmt("en-US", zone, day.slice(0, 4) === today.slice(0, 4) ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" }).format(at);
+  return `${d}, ${t}`;
+}
+
 /** `day` (YYYY-MM-DD) plus `n` days. */
 export function addDays(day: string, n: number): string {
   const [y, m, d] = day.split("-").map(Number);
