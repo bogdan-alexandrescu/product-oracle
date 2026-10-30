@@ -221,16 +221,9 @@ function InboxTabs({
   // qa-company-2: the Inbox opens on the tab that holds what waits: New when it has items,
   // else Seen (what I have seen and not handled yet), so "11 waiting" never opens on "Nothing new".
   const [chosen, setTab] = useState<InboxState>(() => (count("new") === 0 && count("open") > 0 ? "open" : "new"));
-  // Until the person picks a tab, the rule holds on every visit: a page kept from an earlier
-  // visit and shown again, whose New has emptied into Seen, shows Seen too.
+  // Until the person picks a tab on this visit, the rule holds as the rows load: New that
+  // empties into Seen shows Seen (qa-company-17: each visit reads its own arrival, lib/waiting).
   const [picked, setPicked] = useState(false);
-  // qa-company-17: Next keeps this page mounted while I am elsewhere and shows it again when I
-  // come back (its effects run again then): a tab picked on the earlier visit does not hold New
-  // open once it has emptied into Seen.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- the effect marks the page being shown again
-    setPicked(false);
-  }, []);
   const tab: InboxState = !picked && chosen === "new" && count("new") === 0 && count("open") > 0 ? "open" : chosen;
   const pick = (t: InboxState) => {
     setPicked(true);

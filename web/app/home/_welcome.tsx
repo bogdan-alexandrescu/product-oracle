@@ -107,7 +107,7 @@ export function WelcomePanel({
         </p>
         {pointsToSetup && (
           <p data-testid="welcome-setup" className="text-[15px] text-text">
-            Start with Set up, below: each step there opens where it is done.
+            Begin with Set up, below. Each step opens the page where you do it.
           </p>
         )}
         {steps.length > 0 && (

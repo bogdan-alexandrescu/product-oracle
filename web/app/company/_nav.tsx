@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { cloneElement, isValidElement, Suspense, type ReactElement, type ReactNode } from "react";
 
 import { Chip, InfoTip, PageHeader, PageTabsProvider, ScrollStrip, ViewOnly } from "@/components/ds";
-import { usePhone } from "@/components/ds/page-info";
 import { useMe } from "@/lib/me";
 
 import { COMPANY_TABS, type CompanyTab } from "./_tabs";
@@ -25,26 +24,22 @@ function useCurrentTab(): CompanyTab | undefined {
  * Company's tabs: a strip under the page title (PageHeader draws it, see the layout). On a
  * wider window the tabs scroll sideways inside their strip; on a phone they wrap onto a
  * second line, so every tab shows (qa-company-44), with the tab's add button, labelled, at
- * the end of the last line.
+ * the end of the last line. Both by CSS, so the first paint is already the phone's and
+ * nothing under the strip moves once the page has loaded (qa-company-34).
  */
 export function CompanyNav({ action }: { action?: ReactNode }) {
   const pathname = usePathname();
   const { can } = useMe();
-  const phone = usePhone();
   return (
     <nav aria-label="Company" data-testid="company-nav" className="rounded-panel border border-line bg-surface px-2 py-1.5 shadow-panel">
       {/* qa-company-33: the strip's edge stops at the last whole tab: no 12 px fade over the
           current tab when it ends at the edge, and no sliver of the next tab beside the
           chevron (the chevrons say there is more). */}
       <ScrollStrip
-        wrap={phone}
+        data-wrap="phone"
         itemsName="tabs"
         className="min-h-9"
-        stripClassName={
-          phone
-            ? "items-center gap-1"
-            : "items-center gap-1 [--fade-l0:var(--cut-l,0px)]! [--fade-l1:var(--cut-l,0px)]! [--fade-r0:var(--cut-r,0px)]! [--fade-r1:var(--cut-r,0px)]!"
-        }
+        stripClassName="items-center gap-1 max-[600px]:flex-wrap [--fade-l0:var(--cut-l,0px)]! [--fade-l1:var(--cut-l,0px)]! [--fade-r0:var(--cut-r,0px)]! [--fade-r1:var(--cut-r,0px)]!"
       >
         {visibleTabs(can).map((t) => {
           const on = pathname === t.href || pathname.startsWith(`${t.href}/`);
@@ -63,7 +58,7 @@ export function CompanyNav({ action }: { action?: ReactNode }) {
           );
         })}
         {action && (
-          <div data-testid="company-action" className="ml-auto flex flex-none [&>button]:h-8 [&>button]:px-3">
+          <div data-testid="company-action" className="ml-auto hidden flex-none max-[600px]:flex [&>button]:h-8 [&>button]:px-3">
             {action}
           </div>
         )}
@@ -113,14 +108,14 @@ function tabStatus(status: ReactNode, tab: CompanyTab | undefined): ReactNode {
  * tab's one primary action. The title row is as tall as the primary button whether or not
  * the tab has one, so the tab strip under it never moves between tabs (qa-company-33). On
  * a phone the action sits at the end of the tab strip, labelled in short ("+ Ritual"), not
- * on a row of its own above the tabs (qa-company-34, -44).
+ * on a row of its own above the tabs (qa-company-34, -44). Which of the two shows is CSS's
+ * choice, not a phone check after loading, so the page never shifts once drawn.
  */
 export function CompanyHeader({ status, action, testId }: { status?: ReactNode; action?: ReactNode; testId?: string }) {
-  const phone = usePhone();
   const tab = useCurrentTab();
   const title = <span className="inline-flex min-h-10 items-center">Company</span>;
   const shown = tabStatus(status, tab);
-  if (!phone || !action) return <PageHeader title={title} info={COMPANY_INFO} status={shown} action={action} testId={testId} />;
+  if (!action) return <PageHeader title={title} info={COMPANY_INFO} status={shown} testId={testId} />;
   return (
     <PageTabsProvider
       tabs={
@@ -129,7 +124,7 @@ export function CompanyHeader({ status, action, testId }: { status?: ReactNode; 
         </Suspense>
       }
     >
-      <PageHeader title={title} info={COMPANY_INFO} status={shown} testId={testId} />
+      <PageHeader title={title} info={COMPANY_INFO} status={shown} action={<div className="contents max-[600px]:hidden">{action}</div>} testId={testId} />
     </PageTabsProvider>
   );
 }

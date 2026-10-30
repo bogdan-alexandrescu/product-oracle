@@ -1429,9 +1429,12 @@ export function inboxNeeds(inbox: InboxOut, busy: string | null, act: Act, compa
           // qa-company-1 (round 3): spend is asked first, naming the amount, on Home as in the
           // Inbox; once approved, the page says so (the Inbox's act says it; Home's notice here).
           const amount = r.estimate_usd == null ? null : formatMoney(r.estimate_usd);
+          // The threshold is the API's own (the flow catalog's), never a figure written here.
+          const catalog = amount ? await unwrap(api.GET("/v1/flows")).catch(() => null) : null;
+          const threshold = catalog ? `the ${formatMoney(catalog.approval_threshold_usd)} approval threshold` : "the approval threshold";
           const asked = await confirmInPage({
             action: amount ? `Approve ${amount}` : "Approve run",
-            message: `Start ${runLabel(r)}? ${amount ? `Its estimated cost, ${amount}, is over the $50 approval threshold.` : "It has no cost estimate yet."} The run starts at once.`,
+            message: `Start ${runLabel(r)}? ${amount ? `Its estimated cost, ${amount}, is over ${threshold}.` : "It has no cost estimate yet."} The run starts at once.`,
           });
           if (!asked) return;
           void act(`approve-${r.id}`, async () => {

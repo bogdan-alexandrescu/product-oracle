@@ -56,8 +56,12 @@ function Market() {
   const [noAlternatives, setNoAlternatives] = useState(false);
   // qa-company-43: the header's Add alternative shows on the alternatives' own sub-tabs too
   // (Change log, Positioning), unless there is none yet: then the empty list's button is the one.
-  // Read again on each sub-tab, so one added on Alternatives counts on the Change log.
-  const competitors = useQuery(`competitors|${params.get("tab") ?? ""}`, () => unwrap(api.GET("/v1/competitors")), { keepPrevious: true });
+  // Read again on each of those sub-tabs, so one added on Alternatives counts on the Change log;
+  // Pricing and Win and loss show no such button and read nothing again for it.
+  const shownTab = params.get("tab") ?? "";
+  const [readOn, setReadOn] = useState(shownTab);
+  if (shownTab !== readOn && !NO_ADD_TABS.includes(shownTab)) setReadOn(shownTab);
+  const competitors = useQuery(`competitors|${readOn}`, () => unwrap(api.GET("/v1/competitors")), { keepPrevious: true });
   if (!capsReady && !capsError) return <Loading />;
   const pricing = can("list_pricing_memos");
   const winLoss = pricing && can("list_deal_outcomes");
@@ -125,6 +129,9 @@ function Market() {
  * pills (qa-company-38), their labels lined up with the cards' content (16 px in, 12 px on a
  * phone). On a phone they wrap onto a second line, so every sub-tab shows (qa-company-44).
  */
+/** The sub-tabs whose header has no Add alternative, so the alternatives are not read again for it. */
+const NO_ADD_TABS = ["pricing", "win-loss"];
+
 function MarketTabs({ tabs, value, onChange }: { tabs: { value: Tab; label: string; testId: string }[]; value: Tab; onChange: (v: Tab) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const phone = usePhone();
