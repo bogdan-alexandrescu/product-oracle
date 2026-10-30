@@ -43,7 +43,7 @@ test("an invited owner's first Home: welcome in an owner's words, pointing at Se
   // Set up is drawn below the welcome; the welcome points there instead of a second list.
   await expect(panel(page)).toBeVisible();
   await expect(panel(page).getByTestId("panel-count")).toHaveText("2 of 8");
-  await expect(w.getByTestId("welcome-setup")).toHaveText("Start with Set up, below: each step there opens where it is done.");
+  await expect(w.getByTestId("welcome-setup")).toHaveText("Begin with Set up, below. Each step opens the page where you do it.");
   await expect(w.getByTestId("welcome-step")).toHaveCount(0);
   await expect(w).not.toContainText("Invite your team");
   const [welcomeBottom, setupTop] = await page.evaluate(() => [

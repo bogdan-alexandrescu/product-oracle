@@ -85,7 +85,7 @@ test("qa2 onboarding: the owner of a new company walks Set up from 2 of 8 to don
   ]);
   await expect(notes.getByTestId("source-items")).toHaveText("1 item");
   await backToHome(page);
-  await seeDone(page, "sources", "1 source", 4);
+  await seeDone(page, "sources", "1 source read", 4);
 
   // 3. Engineering lead: the approver.
   await openStep(page, "eng_lead", /\/settings\/members\?from=setup#engineering-lead$/);

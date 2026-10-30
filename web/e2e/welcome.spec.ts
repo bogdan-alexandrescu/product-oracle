@@ -39,7 +39,7 @@ test("an invited commenter is welcomed on their first sign-in", async ({ page })
   // welcome points there; Pick sources is done (the mock's sources are the company's), so it
   // is never offered; the rest is the welcome's own.
   await expect(page.getByTestId("home-setup")).toBeVisible();
-  await expect(w.getByTestId("welcome-setup")).toHaveText("Start with Set up, below: each step there opens where it is done.");
+  await expect(w.getByTestId("welcome-setup")).toHaveText("Begin with Set up, below. Each step opens the page where you do it.");
   const steps = w.getByTestId("welcome-step");
   await expect(steps).toHaveText([/Read a PRD and comment/]);
   await steps.nth(0).getByRole("link").click();

@@ -183,9 +183,14 @@ test("qa-company-34 (phone): the (i) sits beside the cost text and each row's Wh
   await page.setViewportSize(PHONE);
   await openRituals(page);
   const line = page.getByTestId("ritual-summaries");
+  const first = await line.getByTestId("summaries-estimate").boundingBox();
+  // fix4-company review: the phone's layout is drawn from the first paint; nothing moves the
+  // page once it has loaded (the tabs wrapping, the add button joining them).
+  await page.waitForTimeout(800);
   const text = await line.getByTestId("summaries-estimate").boundingBox();
   const tip = await line.getByRole("button", { name: "About the summaries estimate" }).boundingBox();
-  expect(text && tip).toBeTruthy();
+  expect(text && tip && first).toBeTruthy();
+  expect(text!.y).toBe(first!.y);
   expect(tip!.y).toBeLessThan(text!.y + text!.height);
   expect(tip!.x).toBeGreaterThan(text!.x);
   for (const title of ["Investor update", "Weekly goals check-in"]) {

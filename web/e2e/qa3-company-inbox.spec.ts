@@ -55,6 +55,8 @@ async function approveCost(page: Page, row: Locator, yes: boolean) {
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole("heading")).toHaveText("Approve $53.00");
   await expect(dialog).toContainText("$53.00");
+  // The threshold is the API's flow catalog's, formatted as money, not a figure in the page.
+  await expect(dialog).toContainText("is over the $50.00 approval threshold.");
   await dialog.getByRole("button", { name: yes ? "Approve $53.00" : "Back" }).click();
   await expect(dialog).toHaveCount(0);
 }
