@@ -428,11 +428,12 @@ function YourList({ data, mayChange, onMove, changed, moved }: { data: Out; mayC
     if (to !== drag.from) onMove(rows[drag.from], dropRank(rows[to]));
   }
 
-  // Clamp above the line (BGD): with a dated plan, a row dropped onto a row above the line lands
-  // at the last rank still above it (as many ranks as rows make the line), never at the target's
-  // own rank when that rank is past them.
+  // Clamp above the line (BGD): with a dated plan, a row dropped onto the last row above the line
+  // lands at the last rank still above it (as many ranks as rows make the line), never at that
+  // row's own rank when it is past them. A drop onto any other row takes that row's rank.
   const aboveCount = data.rows.filter((r) => r.above_line).length;
-  const dropRank = (target: Row): number => (dateLine(data) && target.above_line ? Math.min(target.rank, aboveCount) : target.rank);
+  const lastAbove = rows.filter((r) => r.above_line).at(-1);
+  const dropRank = (target: Row): number => (dateLine(data) && target === lastAbove ? Math.min(target.rank, aboveCount) : target.rank);
 
   function key(e: KeyboardEvent, i: number) {
     const at = data.rows.indexOf(rows[i]);
