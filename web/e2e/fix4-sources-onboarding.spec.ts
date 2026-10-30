@@ -36,8 +36,9 @@ test.describe("desktop", () => {
     await domains.getByRole("button", { name: "Remove example.com" }).click();
     const dialog = page.getByRole("alertdialog", { name: "Remove example.com?" });
     await expect(dialog).toContainText("every doc in a picked Drive folder is skipped");
-    await expect(dialog).toContainText("Anyone at example.com who is not a member yet can no longer sign in with Google");
-    await expect(dialog).toContainText("Members already in keep their access.");
+    // example.com is also allowed by the mock deployment's own setup (fix4-review-settings.spec
+    // covers a domain only this list allows).
+    await expect(dialog).toContainText("People at example.com can still sign in with Google");
     await expect(dialog.getByRole("button", { name: "Back" })).toHaveCount(0);
     await expect(dialog.getByRole("button", { name: "Remove domain" })).toBeVisible();
 

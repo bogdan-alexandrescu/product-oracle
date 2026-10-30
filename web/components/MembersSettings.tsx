@@ -105,8 +105,9 @@ const pageTip = (
 );
 
 /**
- * While `dirty`, a link to another page first asks "Discard your changes?" (Keep editing or
- * Discard), as New request's dialog does: the rail, Settings' list, a Tokens count.
+ * While `dirty`, a link to another page or the browser's Back first asks "Discard your
+ * changes?" (Keep editing or Discard), as New request's dialog does: the rail, Settings'
+ * list, a Tokens count.
  */
 function useLeaveGuard(dirty: boolean) {
   const router = useRouter();
@@ -131,7 +132,31 @@ function useLeaveGuard(dirty: boolean) {
     };
     // Before the app's own link handlers (React's, at its root), so nothing moves first.
     document.addEventListener("click", onClick, true);
-    return () => document.removeEventListener("click", onClick, true);
+    // The browser's Back asks too: a copy of this page's history entry takes the Back, and
+    // Discard then goes back past the page itself.
+    const guarded = { ...(window.history.state ?? {}), poLeaveGuard: true };
+    if (!window.history.state?.poLeaveGuard) window.history.pushState(guarded, "", window.location.href);
+    let leaving = false;
+    const onPop = () => {
+      if (leaving) return;
+      void confirmInPage({
+        title: "Discard your changes?",
+        message: "The invite you started is not sent. Leaving this page throws it away.",
+        action: "Discard",
+        cancel: "Keep editing",
+        destructive: true,
+      }).then((yes) => {
+        if (yes) {
+          leaving = true;
+          window.history.back();
+        } else window.history.pushState(guarded, "", window.location.href);
+      });
+    };
+    window.addEventListener("popstate", onPop);
+    return () => {
+      document.removeEventListener("click", onClick, true);
+      window.removeEventListener("popstate", onPop);
+    };
   }, [dirty, router]);
 }
 

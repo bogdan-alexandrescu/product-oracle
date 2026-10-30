@@ -135,7 +135,7 @@ function WhereTokensComeFrom() {
         <li>
           <b>Personal</b>: each member makes their own on{" "}
           <Link href="/account" className={LINK}>
-            My account › API tokens
+            My account › Personal API tokens
           </Link>
           .
         </li>

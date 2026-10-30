@@ -287,6 +287,8 @@ function AllowlistEditor({
   const [picked, setPicked] = useState(source.config);
   const { act, error, busy, stale } = useAction();
   const notion = source.kind === "notion";
+  // Like Add source, a Slack source with no channel left says why Save waits.
+  const noChannels = source.kind === "slack" && entries(picked, "channels").length === 0;
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -313,16 +315,18 @@ function AllowlistEditor({
       {Picker && <Picker connectionId={source.connection_id} config={picked} onChange={setPicked} />}
       {error && <SaveError error={error} stale={stale} busy={busy} onReload={reload} />}
       <div className="flex items-center gap-1.5">
-        <Button type="submit" variant="solid" disabled={
-            busy || (notion && notionRoots(picked).length === 0) || (source.kind === "slack" && entries(picked, "channels").length === 0)
-          }
-        >
+        <Button type="submit" variant="solid" disabled={busy || (notion && notionRoots(picked).length === 0) || noChannels}>
           Save {spec.noun}
         </Button>
         {!notion && (
           <InfoTip label={`saving the ${spec.noun}`} align="start">
             {SAVE_TIP}
           </InfoTip>
+        )}
+        {noChannels && (
+          <span className="text-sm text-text2" data-testid="save-channels-reason">
+            Pick a channel to save
+          </span>
         )}
       </div>
     </form>

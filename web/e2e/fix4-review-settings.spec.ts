@@ -145,7 +145,7 @@ test("Time zone: focusing the picker keeps the saved zone, and the active option
   await expect(list.locator('[aria-selected="true"]')).toHaveCount(1);
   await expect(list.locator('[aria-selected="true"]')).toHaveAttribute("id", active!);
   // Typing still narrows the list.
-  await zone.pressSequentially("berl");
+  await zone.fill("berl");
   await expect(list.getByRole("option")).toHaveCount(1);
   await zone.press("Escape");
   await expect(zone).toHaveValue(/\(Tokyo\)/);

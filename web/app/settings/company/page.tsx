@@ -337,11 +337,13 @@ function ZonePicker({
   const [query, setQuery] = useState<string | null>(null);
   const [active, setActive] = useState(-1);
   const open = query !== null;
-  const q = (query ?? "").trim().toLowerCase();
+  const chosen = zone ? (options.common.find((o) => o.zone === zone) ?? options.rest.find((o) => o.zone === zone) ?? zoneOption(zone)) : null;
+  // Opening keeps the saved zone in the field, selected so typing replaces it; until then
+  // the whole list shows.
+  const q = query === null || query === chosen?.label ? "" : query.trim().toLowerCase();
   const common = options.common.filter((o) => matches(o, q));
   const rest = options.rest.filter((o) => matches(o, q));
   const list = [...common, ...rest];
-  const chosen = zone ? (options.common.find((o) => o.zone === zone) ?? options.rest.find((o) => o.zone === zone) ?? zoneOption(zone)) : null;
   const listId = `${id}-list`;
   const optionId = (i: number) => `${id}-option-${i}`;
 
@@ -362,7 +364,7 @@ function ZonePicker({
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      if (!open) return setQuery("");
+      if (!open) return setQuery(chosen?.label ?? "");
       if (list.length === 0) return;
       const step = e.key === "ArrowDown" ? 1 : -1;
       setActive((a) => (a < 0 ? (step > 0 ? 0 : list.length - 1) : (a + step + list.length) % list.length));
@@ -383,7 +385,7 @@ function ZonePicker({
       key={o.zone}
       id={optionId(i)}
       role="option"
-      aria-selected={o.zone === zone}
+      aria-selected={i === active}
       data-zone={o.zone}
       className={`flex min-h-9 cursor-pointer items-center px-3 py-1.5 text-[15px] ${i === active ? "bg-surface2" : "hover:bg-surface2"} ${
         o.zone === zone ? "font-semibold text-accent-ink" : "text-text"
@@ -411,8 +413,12 @@ function ZonePicker({
         placeholder={open ? "Type a city or zone" : ZONE_NOT_SET}
         title={chosen?.label}
         value={open ? (query ?? "") : (chosen?.label ?? "")}
-        onFocus={() => setQuery("")}
-        onClick={() => !open && setQuery("")}
+        onFocus={(e) => {
+          const input = e.currentTarget;
+          setQuery(chosen?.label ?? "");
+          requestAnimationFrame(() => input.select());
+        }}
+        onClick={() => !open && setQuery(chosen?.label ?? "")}
         onBlur={close}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -602,6 +608,14 @@ function PricingOwnerPanel() {
   }
 
   const loadError = settingQ.error ?? membersQ.error;
+  // Why Save waits: one owner has no one to pick; with none chosen yet, the earliest decides.
+  const earliest = owners[0] ? displayName(owners[0].email, owners[0].name) : "";
+  const pricingHint =
+    owners.length === 1
+      ? `${earliest} is the only owner: make another member an owner to choose someone else.`
+      : stored === null
+        ? `Not chosen yet: the earliest owner, ${earliest}, decides until you pick someone else.`
+        : "Pick another owner to save it.";
   return (
     <div id="pricing-owner" className="scroll-mt-4" data-testid="pricing-owner-panel">
       <Panel
@@ -656,7 +670,7 @@ function PricingOwnerPanel() {
               <Button type="submit" variant="solid" disabled={busy || !changed}>
                 Save
               </Button>
-              {!saved && !changed && <SaveHint testId="pricing-owner-save-reason">Pick another owner to save it.</SaveHint>}
+              {!saved && !changed && <SaveHint testId="pricing-owner-save-reason">{pricingHint}</SaveHint>}
               {saved && <SavedNote />}
             </div>
           </form>

@@ -221,7 +221,7 @@ function CompanySlack() {
         </Chip>
       </p>
       <p className="text-text2">
-        {s.connected && s.label ? <>Installed for the company in {s.label}: it </> : "Installed once for the company, it "}
+        {s.connected ? (s.label ? <>Installed for the company in {s.label}: it </> : "Installed for the company, it ") : "Once installed for the company, it "}
         posts the weekly report and mirrors discussions.{" "}
         {owner ? (
           <>

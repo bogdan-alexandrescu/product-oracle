@@ -83,7 +83,7 @@ test("qa-settings-13: every section enables Save only after a change, with the h
   // Pricing owner: one owner here, so nothing to change and Save waits (two owners: below).
   const pricing = page.getByTestId("pricing-owner-panel");
   await expect(pricing.getByRole("button", { name: "Save" })).toBeDisabled();
-  await expect(pricing.getByTestId("pricing-owner-save-reason")).toHaveText("Pick another owner to save it.");
+  await expect(pricing.getByTestId("pricing-owner-save-reason")).toHaveText("Admin is the only owner: make another member an owner to choose someone else.");
 
   // Time zone: waits for a pick, then for another one.
   const panel = timezone(page);
@@ -111,7 +111,7 @@ test("qa-settings-13: the pricing owner's Save waits for another owner", async (
   const field = pricing.getByRole("combobox", { name: "Decides prices" });
   await expect(field.locator("option:checked")).toHaveText("Admin");
   await expect(pricing.getByRole("button", { name: "Save" })).toBeDisabled();
-  await expect(pricing.getByTestId("pricing-owner-save-reason")).toHaveText("Pick another owner to save it.");
+  await expect(pricing.getByTestId("pricing-owner-save-reason")).toHaveText("Not chosen yet: the earliest owner, Admin, decides until you pick someone else.");
   await field.selectOption({ label: "Riley Park" });
   await expect(pricing.getByRole("button", { name: "Save" })).toBeEnabled();
   await expect(pricing.getByTestId("pricing-owner-save-reason")).toHaveCount(0);

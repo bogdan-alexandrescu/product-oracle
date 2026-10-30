@@ -115,7 +115,7 @@ test("a deep link to a hidden Settings tab says it is not available for the role
     await expect(page.getByRole("textbox")).toHaveCount(0);
   }
   // The way out goes to a tab the role can read.
-  await page.getByTestId("not-for-role").getByRole("link", { name: "Open Settings" }).click();
+  await page.getByTestId("not-for-role").getByRole("link", { name: "Open Members" }).click();
   await expect(page).toHaveURL(/\/settings\/members$/);
 });
 

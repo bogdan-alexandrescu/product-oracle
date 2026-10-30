@@ -67,9 +67,15 @@ export function sectionNames(titles: Map<string, string>, keys: string[]): strin
  * Theme names by key (qa-settings-26): templates suggest a theme by its key, people read its
  * name. Archived themes included, so an old suggestion still reads as a name.
  */
+const keyInWords = (key: string) => {
+  const words = key.replace(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 export function useThemeNames(): (key: string | null | undefined) => string {
   const q = useQuery("themes|all", () => unwrap(api.GET("/v1/themes", { params: { query: { include_archived: true } } })));
-  return (key) => (key ? (q.data?.find((t) => t.key === key)?.name ?? (q.data ? key : "…")) : "—");
+  // Until the names load, "…"; when they cannot load, the key in words, never "…" for good.
+  return (key) => (key ? (q.data?.find((t) => t.key === key)?.name ?? (q.data ? key : q.error ? keyInWords(key) : "…")) : "—");
 }
 
 const validateBody = (body: string) => unwrap(api.POST("/v1/templates/validate", { body: { body } }));

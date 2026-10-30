@@ -197,17 +197,22 @@ async def authenticate_user(email: str, password: str) -> User | None:
 
 
 async def _removed_message(removed: User) -> str:
-    """Who a removed member asks: the owner who removed them while still an active member,
-    else any owner (the same words as /access's "removed")."""
+    """Who a removed member asks: the owner who removed them while still an active owner,
+    else any owner (the same words as /access's "removed"). The refused sign-in is audited
+    on the removed member's row."""
+    from oracle.audit import record
+    from oracle.authz import has_role
     from oracle.members.names import display_name
     from oracle.tenancy import tenant_session
 
     who = "an owner"
-    if removed.disabled_by is not None:
-        async with tenant_session(removed.tenant_id) as s:
+    async with tenant_session(removed.tenant_id) as s:
+        if removed.disabled_by is not None:
             by = await s.get(User, removed.disabled_by)
-            if by is not None and may_sign_in(by):
+            if by is not None and may_sign_in(by) and has_role(by.role, "owner"):
                 who = display_name(by.email, by.name)
+        await record(s, None, "login_refused_removed", "user", removed.id)
+        await s.commit()
     return f"An owner removed you from this Oracle. Ask {who} to restore you."
 
 
