@@ -17,7 +17,7 @@ import { useQuery } from "@/lib/use-query";
 import { QuickAdd } from "./_add";
 import { Board, boardColumns, boardLegend, HORIZONS, LEGEND_SWATCH, LegendKeys, type Horizon, type LegendEntry } from "./_board";
 import { useKeyBurst } from "./_burst";
-import { Callout, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
+import { Callout, changeRowWords, FlagLine, FixButtons, FloatingCard, LooksLike, opWords, SuggestionPopover, type Act } from "./_card";
 import { boardPicture, chartPicture, exportView, type Brand } from "./_export";
 import { KeyDatesEditor } from "./_keydates";
 import { Lanes, pmItem } from "./_lanes";
@@ -289,7 +289,7 @@ function DraftBanner({ drafts, inReview, meId, onUndo, onSubmit }: { drafts: Dra
         <ol className="mt-2 space-y-1 text-sm text-text" data-testid="draft-changes">
           {log.map((c) => (
             <li key={c.id}>
-              {opWords(c.op)} · {c.by_name} · {time(c.at)}
+              {changeRowWords(c)} · {c.by_name} · {time(c.at)}
               {c.in_meeting && " · in a meeting"}
             </li>
           ))}

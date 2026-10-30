@@ -526,6 +526,7 @@ function record(db: MeetingsDb, ctx: MeetingsCtx, m: Meeting, title: string, sub
 const OP_WORDS: Record<string, string> = {
   move_dates: "New dates for", accept_date_suggestion: "Accepted Oracle's dates for", change_horizon: "Moved", reorder: "Reordered", cut: "Cut",
   restore: "Restored", edit_title: "Renamed", edit_outcome: "New outcome for", accept_risk: "Accepted a risk on", confirm_item: "Confirmed", edit_line: "New wording for",
+  cut_with_dependents: "Cut with its dependents:",
 };
 
 /** A change in words and the subjects it names (as meetings.describe). */

@@ -35,6 +35,11 @@ export function changePhrase(op: string, target: Values, before: Values, after: 
     case "reorder": return `reordered ${x}`;
     case "cut": return `cut ${x}`;
     case "restore": return `restored ${x}`;
+    case "cut_with_dependents": {
+      const rest = ((target.titles as string[] | undefined) ?? []).slice(1);
+      if (!rest.length) return `cut ${x} and its dependents`;
+      return `cut ${x} and its dependents ${rest.length === 1 ? rest[0] : `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}`}`;
+    }
     case "edit_title": return title ? `renamed ${x} to ${title}` : `renamed ${x}`;
     case "edit_outcome": return `changed the outcome of ${x}`;
     case "accept_risk": return `accepted a risk on ${x}`;

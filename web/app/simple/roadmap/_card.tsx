@@ -370,6 +370,7 @@ const OP_WORDS: Record<string, string> = {
   merge_item: "Merge a duplicate",
   keep_both: "Keep both",
   confirm_item: "Confirm the draft",
+  cut_with_dependents: "Cut it and its dependents",
 };
 
 /** S7: a draft's likely duplicates, "Looks like <code> <title>", with Merge and Keep both
@@ -444,6 +445,15 @@ export function LooksLike({
 
 export const opWords = (op: string): string =>
   OP_WORDS[op] ?? op.replace(/_/g, " ");
+
+/** fix5-cut-dependents: a draft's change-list row; a cut with its dependents names every item it cut
+ * ("Cut Alert rules engine and its dependents Weekly alert digest and Mobile alert push"). */
+export function changeRowWords(c: { op: string; titles?: string[] }): string {
+  const [first, ...rest] = c.titles ?? [];
+  if (c.op !== "cut_with_dependents" || !first) return opWords(c.op);
+  const names = rest.length > 1 ? `${rest.slice(0, -1).join(", ")} and ${rest[rest.length - 1]}` : (rest[0] ?? "");
+  return `Cut ${first} and its dependents${names ? ` ${names}` : ""}`;
+}
 
 /** Whether a proposal is for a new flow or feature (a draft item, D15's): only those carry
  * a flow thumbnail. */
