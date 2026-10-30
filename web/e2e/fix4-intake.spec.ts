@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "./test";
 
 import { MOCK_SCENARIO_KEY } from "../lib/api/mock/server";
+import { BEFORE_DRAFTING } from "../lib/api/mock/intake";
 import { V2_IDS } from "../lib/api/mock/v2";
 
 import { login } from "./helpers";
@@ -42,6 +43,16 @@ test("qa-work-2: an I don't know answer counts as answered, and the status chip 
   await expect(inspector(page).getByTestId("answered-unknown")).toHaveText(
     "1 answered “I don't know”: what it asks stays a gap until someone answers or decides",
   );
+});
+
+test("qa-work-2 (review): a brief with critical questions not asked yet does not wait for a decision", async ({ page }) => {
+  await page.addInitScript((key) => {
+    if (!localStorage.getItem(key)) localStorage.setItem(key, "before-drafting");
+  }, MOCK_SCENARIO_KEY);
+  await login(page);
+  await page.goto(`/intakes/${BEFORE_DRAFTING.intakeId}`);
+  await expect(page.getByRole("heading", { level: 1, name: BEFORE_DRAFTING.title })).toBeAttached();
+  await expect(page.getByTestId("intake-status")).toHaveText("Nothing asked yet");
 });
 
 test("qa-work-2, qa-work-29 (phone): the summary card says what the inspector says, with no second way to Gaps", async ({ page }) => {

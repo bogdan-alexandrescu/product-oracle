@@ -201,6 +201,19 @@ test("qa-work-37: filing a request under a title already filed warns, and opens 
   await expect(row(page, "Gift cards")).toHaveCount(2);
 });
 
+test("qa-work-37 (review): a title with end punctuation and a trailing space still warns", async ({ page }) => {
+  await login(page);
+  await openRequests(page);
+  await page.getByRole("button", { name: "New request" }).first().click();
+  const dialog = page.getByRole("dialog", { name: "New request" });
+  await dialog.getByLabel("Title").fill("Dark mode. ");
+  await dialog.getByLabel("What it is and why").fill("Night shifts need a dark screen.");
+  await dialog.getByRole("button", { name: "File request" }).click();
+  const warn = dialog.getByTestId("new-request-duplicate");
+  await expect(warn).toContainText("This looks like a request already filed");
+  await expect(warn).toContainText("Dark mode");
+});
+
 test("qa-work-38: Save links waits for a change; the two PRD labels differ", async ({ page }) => {
   await login(page, "approver@example.com");
   await openRequests(page);
