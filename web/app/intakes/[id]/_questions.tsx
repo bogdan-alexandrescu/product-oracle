@@ -222,6 +222,19 @@ function QuestionBubble({
     }
   }
 
+  // qa-work-28: a question that already has an answer (an "I don't know" too) offers to change it.
+  const actions = (className = "") => (
+    <div data-testid="question-actions" className={`${className} flex flex-wrap items-center gap-2`}>
+      {open && !mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
+      {(open ? mayAnswer : mayChange) && mode !== "answer" && (
+        <Button variant={mine && !standing ? "solid" : "secondary"} onClick={() => setMode("answer")}>
+          {standing ? "Change answer" : "Answer"}
+        </Button>
+      )}
+      {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
+    </div>
+  );
+
   return (
     <li id={`q-${q.id}`} className="flex min-w-0 scroll-mt-16 flex-col gap-2" data-testid="question">
       <div className="flex min-w-0 gap-2.5">
@@ -246,19 +259,8 @@ function QuestionBubble({
             {q.status === "researching" && <Chip kind="acc">Being researched</Chip>}
             {q.status === "retired" && <Chip kind="na">Retired</Chip>}
           </div>
-          {/* qa-docs-86: the question's actions sit in its card, not below it.
-              qa-work-28: a question that already has an answer (an "I don't know" too) offers to change it. */}
-          {(open || unsure) && !waiting && (
-            <div data-testid="question-actions" className="mt-2.5 flex flex-wrap items-center gap-2">
-              {open && !mine && <span className="text-sm text-text2">Waiting on {nameOf(people, me, q.asked_to)}</span>}
-              {(open ? mayAnswer : mayChange) && mode !== "answer" && (
-                <Button variant={mine && !standing ? "solid" : "secondary"} onClick={() => setMode("answer")}>
-                  {standing ? "Change answer" : "Answer"}
-                </Button>
-              )}
-              {!mine && mayMove && mode !== "reassign" && <Button onClick={() => setMode("reassign")}>Ask someone else</Button>}
-            </div>
-          )}
+          {/* qa-docs-86: an open question's actions sit in its card, not below it. */}
+          {open && !waiting && actions("mt-2.5")}
         </article>
       </div>
       {transcript.map((m) =>
@@ -273,6 +275,8 @@ function QuestionBubble({
       {card.answers.map((a) => (
         <AnswerBubble key={a.id} answer={a} people={people} me={me} />
       ))}
+      {/* qa-work-28: an "I don't know" offers Change answer after its answers. */}
+      {unsure && !waiting && <div className="ml-10 max-[600px]:ml-4">{actions()}</div>}
       {thinking && (
         <p data-testid="oracle-typing" role="status" className="ml-10 text-sm text-text2 max-[600px]:ml-4">
           Oracle is thinking…
