@@ -5,14 +5,14 @@ on every read and :func:`problem_check` on the job's answer.
 
 - **Who has it**: the PRD's users or personas section (:func:`who_has_it`); the problem
   block carries it (``who``), and a job answer whose problem names no one of it is asked
-  again (:func:`problem_check`).
+  again, once, and built either way (:func:`problem_check`).
 - **How it is measured**: each outcome line carries its measure and its source from the PRD
   (``measure``, ``measure_source``): "counted as ..." / "source: ..." words or a metrics
   table's definition and source columns (:func:`measures`).
 - **Codes with names**: a feature or ticket code (F-26, P0) gets the name the PRD gives it
   beside it (:func:`glossary`); a code the PRD never names is a "Needs a look" item.
-- **Footnotes**: a mark (†, ‡, §) stays only with its note (``footnotes``); a mark with no
-  note in the PRD is dropped.
+- **Footnotes**: a mark (†, ‡, §, a trailing *) stays only with its note (``footnotes``); a
+  mark with no note in the PRD is dropped.
 - **Numbers that don't add up** (:func:`numbers`): a per-unit target times the stated units
   against a company-wide target, and a count said in words against the items listed.
 
@@ -29,6 +29,13 @@ from oracle.docs.models import Section
 WHO_SAYS_NOTHING = "Who has it is not in the PRD yet"
 
 _WHO_HEAD = re.compile(r"\b(?:users?|personas?|who\b|audiences?|customers?)", re.I)
+# A heading that names the people first (ad-onepager review): personas, users, who has it.
+_WHO_BEST = re.compile(r"\b(?:personas?|users?|who has it)\b", re.I)
+# What people say or do is never who they are: "User stories", "Customer quotes".
+_WHO_NOT = re.compile(
+    r"\b(?:stor(?:y|ies)|flows?|quotes?|journeys?|scenarios?|problems?)\b",
+    re.I,
+)
 _BULLET = re.compile(r"^\s*(?:[-*+]|\d+[.)])\s+(.*\S)\s*$")
 _TABLE_SEP = re.compile(r"^\s*\|?\s*:?-+:?\s*(?:\|\s*:?-+:?\s*)*\|?\s*$")
 _MD = re.compile(r"[*_`]+|\[([^\]]*)\]\([^)]*\)|\{#[^}]*\}|<!--.*?-->")
@@ -106,10 +113,10 @@ def who_has_it(sections: list[Section]) -> str | None:
     """Who has the problem, from the PRD's users or personas section: each bullet's lead
     ("New admins: ..." -> "New admins"), else its first sentence. None when the PRD has
     no such section (the page says :data:`WHO_SAYS_NOTHING`)."""
-    for sec in sections:
-        head = sec.heading or ""
-        if not _WHO_HEAD.search(head) or re.search(r"problem", head, re.I):
-            continue
+    heads = [x for x in sections if _WHO_HEAD.search(x.heading or "")]
+    heads = [x for x in heads if not _WHO_NOT.search(x.heading or "")]
+    heads.sort(key=lambda x: not _WHO_BEST.search(x.heading or ""))
+    for sec in heads:
         bullets, rows, prose = _rows(_guidanceless(sec.body_md or ""))
         named = [re.split(r"\s*(?::|—|–| - )\s*", b, maxsplit=1)[0] for b in bullets]
         named += [r[0] for r in rows if r and r[0]]
@@ -215,7 +222,8 @@ def measure_for(text: str, name: str | None, found: list[Measure]) -> Measure | 
 
 # --------------------------------------------------------------------------- codes
 
-CODE = re.compile(r"\b(?:[A-Z]{1,3}-\d{1,4}|P[0-3])\b")
+# A standard's name (ISO-8601, RFC-3339) is not a feature or ticket code.
+CODE = re.compile(r"\b(?!(?:ISO|RFC|UTF|IEC|SHA|CVE|EN|IEEE)-)(?:[A-Z]{1,3}-\d{1,4}|P[0-3])\b")
 # A priority code the PRD never names reads as the usual words.
 PRIORITY = {"P0": "top priority", "P1": "high priority", "P2": "medium priority",
             "P3": "low priority"}  # fmt: skip
@@ -271,16 +279,25 @@ def with_names(text: str, names: dict[str, str]) -> tuple[str, list[str]]:
 
 # --------------------------------------------------------------------------- footnotes
 
-_MARK = re.compile(r"(?<=\S)([†‡§])")
+# A trailing "*" after a word or number is a mark too ("40%*"), never emphasis (``*a*``,
+# ``**a**``: an odd count of "*" before it opens one).
+_MARK = re.compile(r"(?<=[^\s*])([†‡§]|\\?\*(?![*\w]))")
 _NOTE = re.compile(r"^\s*(?:[-*+]\s+)?(?P<mark>[†‡§])\s*(?P<note>\S.*)$")
+_STAR_NOTE = re.compile(r"^\s*(?P<esc>\\)?\*\s+(?P<note>\S.*)$")
 
 
 def footnote_notes(sections: list[Section]) -> dict[str, str]:
     out: dict[str, str] = {}
     for sec in sections:
-        for raw in (sec.body_md or "").splitlines():
+        lines = (sec.body_md or "").splitlines()
+        for i, raw in enumerate(lines):
             if m := _NOTE.match(raw):
                 out.setdefault(m.group("mark"), _plain(m.group("note")))
+            elif m := _STAR_NOTE.match(raw):
+                # "\\* note", or a lone "* note" (a list of "*" bullets is no note).
+                near = lines[max(i - 1, 0) : i] + lines[i + 1 : i + 2]
+                if m.group("esc") or not any(_STAR_NOTE.match(x) for x in near):
+                    out.setdefault("*", _plain(m.group("note")))
     return out
 
 
@@ -289,7 +306,9 @@ def marked(text: str, notes: dict[str, str]) -> tuple[str, list[str]]:
     kept: list[str] = []
 
     def put(m: re.Match[str]) -> str:
-        mark = m.group(1)
+        mark = m.group(1).lstrip("\\")
+        if mark == "*" and text[: m.start()].count("*") % 2:
+            return m.group(1)  # closes emphasis
         if mark in notes:
             if f"{mark} {notes[mark]}" not in kept:
                 kept.append(f"{mark} {notes[mark]}")
@@ -433,6 +452,7 @@ def annotate(blocks: list[Any], sections: list[Section]) -> list[Look]:
         if b.key == "problem":
             b.who = who
         for x in b.lines:
+            said = x.full or x.text
             x.text, missing = with_names(x.text, names)
             if x.full:
                 x.full = with_names(x.full, names)[0]
@@ -444,6 +464,8 @@ def annotate(blocks: list[Any], sections: list[Section]) -> list[Look]:
             if x.metric is not None:
                 x.metric.name = marked(with_names(x.metric.name, names)[0], notes)[0]
                 x.metric.to = marked(x.metric.to, notes)[0]
+            # The Edit box starts from the PRD's words, not the names and marks put in.
+            x.words = said if (x.full or x.text) != said else None
             if b.kind == "metrics":
                 m = measure_for(x.full or x.text, x.metric.name if x.metric else None, found)
                 if m is not None:

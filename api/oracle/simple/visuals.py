@@ -200,7 +200,9 @@ async def bet_line(
         if line_subject(doc_id, key) == subject_id:
             return doc_id, text
     # A flow still keyed by a bet's words (one the migration did not move).
-    for _, text in bets + [(x.id, x.text) for x in shown.values()]:
+    said = [(x.id, x.text) for x in shown.values()]
+    said += [(x.id, x.words) for x in shown.values() if x.words]  # before codes got names
+    for _, text in bets + said:
         if words_subject(doc_id, text) == subject_id:
             return doc_id, text
     return None

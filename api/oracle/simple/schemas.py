@@ -1022,6 +1022,9 @@ class OnePagerLine(BaseModel):
     footnotes: list[str] = []
     # A bet with no flow yet that the caller may ask Oracle to draw ("Draw the flow").
     can_draw_flow: bool = False
+    # The line's words before codes got their names and marks with no note were dropped
+    # (the Edit box starts from them); null when those changed nothing.
+    words: str | None = None
 
 
 class OnePagerLook(BaseModel):

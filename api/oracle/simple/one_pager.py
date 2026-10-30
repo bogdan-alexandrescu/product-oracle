@@ -54,7 +54,13 @@ from oracle.simple import drafts, plan_strip
 from oracle.simple import one_pager_checks as checks
 from oracle.simple import plan as plan_model
 from oracle.simple.changes import IDLE, ChangeError, _session_for_change
-from oracle.simple.models import SimpleChange, SimpleDraft, SimpleOnePager, SimpleSession
+from oracle.simple.models import (
+    SimpleChange,
+    SimpleDraft,
+    SimpleOnePager,
+    SimpleSession,
+    SimpleVisual,
+)
 from oracle.simple.schemas import (
     OnePagerBlock,
     OnePagerDraft,
@@ -762,8 +768,10 @@ async def run_job(s: AsyncSession, job, ask) -> dict[str, Any]:
         if why is None:
             break
         payload["retry"] = why
-    if why is not None or blocks is None:
+    if blocks is None:
         return {"built": False, "reason": why}
+    # Still naming no one after the second answer: built anyway (ad-onepager review); the
+    # page shows who has it beside the problem.
     if await _lines_in_use(s, document):
         # Line ids are positions: replacing the lines under an open draft or proposal would
         # move its edit onto another line. The next version (a new hash) gets the answer.
@@ -1243,9 +1251,6 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
                 key=spec.key, title=spec.title, rules=spec.rules, kind=spec.kind, lines=lines
             )
         )  # type: ignore[arg-type]
-    # Reads clearly (2026-10-30): who has it, measures, codes with names, footnotes; the
-    # "Needs a look" items for the PRD's owners.
-    looks = checks.annotate(blocks, b.sections)
     # S10: each bet ("What we will build") carries its visual.
     bets = [x for blk in blocks for x in blk.lines if x.id.startswith("bets-")]
     keys = {x["id"]: visuals.bet_key(x) for blk in b.row.blocks for x in blk["lines"]}
@@ -1261,10 +1266,15 @@ async def read(db: AsyncSession, principal: Any, doc: str) -> OnePagerOut:
     }
     for sid, flow in (await visuals.flows_for(db, "one_pager_line", list(by_words))).items():
         by_words[sid].flow_subject, line_flows[sid] = sid, flow
-    draws = decides(principal, w)  # visuals.may_revise of a bet: who changes the PRD
+    # The request's own rule (visuals.may_revise of a bet: who changes the PRD directly).
+    draws = await visuals.may_revise(db, principal, SimpleVisual(document_id=document.id))
     for x in bets:
         x.flow = visuals.one_pager_flow(line_flows.get(x.flow_subject))
         x.can_draw_flow = x.flow is None and draws
+    # Reads clearly (2026-10-30): who has it, measures, codes with names, footnotes; the
+    # "Needs a look" items for the PRD's owners. After the flows: a flow still keyed by a
+    # bet's words is found by the words before codes got their names.
+    looks = checks.annotate(blocks, b.sections)
     slice_ = await service.build(db, principal, prd=str(document.id))
     items = [
         OnePagerItem(
