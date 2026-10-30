@@ -158,9 +158,9 @@ for (const who of ["commenter", "viewer"] as const) {
   test(`evidence: a ${who} reads the evidence with no Remove and no link form`, async ({ page }) => {
     await evidenceTab(page, `${who}@example.com`);
     // The header says View only to a viewer; a commenter (who can still discuss) sees their
-    // role's badge in the evidence toolbar instead (qa-docs-22).
+    // role's badge in the header instead (qa-docs-22).
     await expect(page.getByText("View only", { exact: true }).filter({ visible: true })).toHaveCount(who === "viewer" ? 1 : 0);
-    if (who === "commenter") await expect(page.getByTestId("evidence-toolbar").getByText(/Commenter/)).toBeVisible();
+    if (who === "commenter") await expect(page.getByTestId("role-badge").filter({ visible: true })).toHaveText("Commenter: can comment");
     await cell(page, "Guided setup", "scope").getByRole("button").click();
     const insp = page.getByRole("complementary", { name: "Guided setup" });
     await expect(insp.getByTestId("evidence-link")).toHaveCount(1);

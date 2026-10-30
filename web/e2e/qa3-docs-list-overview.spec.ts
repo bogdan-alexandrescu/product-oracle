@@ -61,8 +61,10 @@ test.describe("desktop", () => {
   test.use({ viewport: DESKTOP });
 
   test("qa-docs-23: who imported a version is a person or an integration, never a credential's name", async ({ page }) => {
+    await setUp(page);
     for (const doc of ["saved-carts", "checkout-redesign"]) {
-      await openDoc(page, doc);
+      await page.goto(`/documents/${doc}`);
+      await expect(page.getByTestId("versions-table")).toBeVisible();
       const by = versionInspector(page).getByTestId("version-importer");
       await expect(by).toHaveText("An integration");
       await expect(versionInspector(page)).not.toContainText("API token");
