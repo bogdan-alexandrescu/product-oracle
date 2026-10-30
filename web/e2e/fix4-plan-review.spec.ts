@@ -29,19 +29,25 @@ test("qa-plan-33: the Outcomes inspector's eyebrow says Outcome, not 'Outcome ·
   await expect(inspector).not.toContainText("· selected");
 });
 
-// protects=qa-plan-25: switching from a Plan tab to Launches or Changelog does not move the
-// tab strip; fails_when=their title line is a different height, so the strip shifts;
-// no_claim=phones (the title line is not padded there).
-test("qa-plan-25: the tab strip stands at one height on Plan, Launches and Changelog", async ({ page }) => {
+// protects=qa-plan-25: Launches and Changelog have the Plan tabs' 40 px title line, so the title
+// and what is under it do not move when a person switches between them; fails_when=their title
+// line is 32 px against the Plan tabs' 40; no_claim=phones (the title line is not padded there).
+test("qa-plan-25: the title line is one height on Plan, Dates, Launches and Changelog", async ({ page }) => {
   await start(page);
   await page.goto("/plan");
-  const at = async () => (await visible(page, "plan-tabs").boundingBox())!.y;
-  await expect(visible(page, "plan-tabs")).toBeVisible();
-  const plan = await at();
+  const title = () => page.locator("header[data-page-header] > h1").filter({ visible: true }).first();
+  const line = async () => (await title().boundingBox())!;
+  await expect(title()).toBeVisible();
+  const plan = await line();
+  expect(plan.height).toBeGreaterThanOrEqual(39);
+  await visible(page, "plan-tabs").getByTestId("plan-tab-dates").click();
+  await expect(page).toHaveURL(/\/plan\/dates$/);
   for (const name of ["Launches", "Changelog"]) {
     await visible(page, "plan-links").getByRole("link", { name }).click();
     await expect(page).toHaveURL(new RegExp(`/roadmap/${name.toLowerCase()}$`));
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    expect(Math.abs((await at()) - plan), `${name}'s strip`).toBeLessThanOrEqual(1);
+    await expect(title()).toBeVisible();
+    const l = await line();
+    expect(Math.abs(l.height - plan.height), `${name}'s title line`).toBeLessThanOrEqual(1);
+    expect(Math.abs(l.y - plan.y), `${name}'s title`).toBeLessThanOrEqual(1);
   }
 });
