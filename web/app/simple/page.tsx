@@ -121,6 +121,22 @@ function shiftMoves(b: BrokenLink, items: Schemas["SimpleRoadmapItem"][]): Schem
   return [...moved.filter((m) => m.id === b.item.id), ...moved.filter((m) => m.id !== b.item.id)];
 }
 
+const STATUS_TONE: Record<GoalTile["status"], string> = {
+  "At risk": "simple-status-risk",
+  "Not measured yet": "simple-status-quiet",
+  "Not counted yet": "simple-status-quiet",
+  Planned: "simple-status-ok",
+};
+
+/**
+ * Simple's Home (#723 S1, the owner's pick "Brief as cards"): the greeting, the goal band, the
+ * summary card and one card per section (decisions waiting for me, proposals on my items, the
+ * next review meeting, the plan this quarter, since my last visit), each loading and failing on
+ * its own. Every action goes through the API with the caller's permissions: decisions through
+ * H1's decide, proposals and the broken-link fixes through the change engine (owners and the
+ * decider apply with Undo, others propose, viewers read). Roles only through can() and the
+ * rows' own can_* fields.
+ */
 export default function SimpleHome() {
   const { me, can, capsReady } = useMe();
   const zone = useCompanyZone();
