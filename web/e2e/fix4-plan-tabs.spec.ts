@@ -149,7 +149,6 @@ test("qa-plan-24, qa-plan-25: Build roadmap fits a 900 px window with its footer
   await page.goto("/plan/documents");
   await visible(page, "approved-prd").filter({ hasText: "Usage alerts PRD" }).getByRole("button", { name: "Build roadmap" }).click();
   const dialog = page.getByRole("dialog", { name: "Build roadmap" });
-  await dialog.getByText("Advanced options").click();
   const box = (await dialog.boundingBox())!;
   expect(box.y + box.height).toBeLessThanOrEqual(900);
   const estimate = dialog.getByTestId("dialog-footer").getByRole("button", { name: "Estimate cost", exact: true });

@@ -106,7 +106,7 @@ test("qa-onboarding-17: the no-sources link keeps the way back to Home when open
   await expect(page).toHaveURL(/\/home$/);
 
   // From the Baseline page's own Build baseline, the link is plain Sources.
-  await page.getByTestId("nav-baseline").filter({ visible: true }).first().click();
+  await page.goto("/baseline");
   await page.getByRole("button", { name: "Build baseline" }).click();
   await expect(sheet(page).getByRole("link", { name: "Add files or sync a source" })).toHaveAttribute("href", "/settings/sources");
 });

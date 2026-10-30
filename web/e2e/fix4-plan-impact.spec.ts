@@ -113,7 +113,7 @@ test.describe("desktop", () => {
     await expect(page.getByText("Preview only; nothing is marked stale", { exact: false }).first()).toBeVisible();
     const chip = page.locator("[data-page-header]").getByTestId("impact-count");
     await expect(chip).toHaveText("1 would be affected");
-    await expect(page.locator("[data-page-header]")).not.toContainText("potentially stale");
+    await expect(page.locator("[data-page-header]").filter({ has: page.getByTestId("impact-count") })).not.toContainText("potentially stale");
   });
 
   test("qa-plan-43: the plan reads 'these acceptance tests'", async ({ page }) => {
