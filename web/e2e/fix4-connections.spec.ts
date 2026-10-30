@@ -8,8 +8,12 @@ import { login } from "./helpers";
  */
 
 async function openSettings(page: Page, nav: "connections" | "notifications") {
+  const from = page.url();
   await page.getByRole("navigation", { name: "Oracle" }).getByTestId("nav-settings").click();
-  await page.getByRole("navigation", { name: "Settings" }).getByTestId(`nav-${nav}`).click();
+  // Next keeps the Settings page just left mounted, hidden: a tab is picked once the rail's
+  // Settings has landed, never from the strip of the page going away.
+  await expect(page).not.toHaveURL(from);
+  await page.getByRole("navigation", { name: "Settings" }).filter({ visible: true }).getByTestId(`nav-${nav}`).click();
   await expect(page).toHaveURL(new RegExp(`/settings/${nav}`));
 }
 
