@@ -120,19 +120,22 @@ def _copy(bind, vid: uuid.UUID, subject: uuid.UUID) -> None:
 
 def _same(bind, a: uuid.UUID, b: uuid.UUID) -> bool:
     """Visual ``a`` is a copy of ``b`` (``_copy``): the same row but its id and subject,
-    the same drawings and comments."""
+    the same versions and comments, each exactly (every column but its id and visual)."""
     return bool(
         bind.scalar(
             sa.text(
                 "SELECT (SELECT to_jsonb(v) - 'id' - 'subject_id' FROM simple_visuals v"
                 "  WHERE v.id = :a) = (SELECT to_jsonb(v) - 'id' - 'subject_id'"
                 "  FROM simple_visuals v WHERE v.id = :b)"
-                " AND (SELECT array_agg(x.number || x.title ORDER BY x.number)"
+                " AND (SELECT array_agg(to_jsonb(x) - 'id' - 'visual_id' ORDER BY x.number)"
                 "  FROM simple_visual_versions x WHERE x.visual_id = :a)"
-                " IS NOT DISTINCT FROM (SELECT array_agg(x.number || x.title ORDER BY x.number)"
-                "  FROM simple_visual_versions x WHERE x.visual_id = :b)"
-                " AND (SELECT count(*) FROM simple_visual_comments c WHERE c.visual_id = :a)"
-                " = (SELECT count(*) FROM simple_visual_comments c WHERE c.visual_id = :b)"
+                " IS NOT DISTINCT FROM (SELECT array_agg(to_jsonb(x) - 'id' - 'visual_id'"
+                "  ORDER BY x.number) FROM simple_visual_versions x WHERE x.visual_id = :b)"
+                " AND (SELECT array_agg(to_jsonb(c) - 'id' - 'visual_id' ORDER BY c.created_at,"
+                "  c.body) FROM simple_visual_comments c WHERE c.visual_id = :a)"
+                " IS NOT DISTINCT FROM (SELECT array_agg(to_jsonb(c) - 'id' - 'visual_id'"
+                "  ORDER BY c.created_at, c.body) FROM simple_visual_comments c"
+                "  WHERE c.visual_id = :b)"
             ),
             {"a": a, "b": b},
         )

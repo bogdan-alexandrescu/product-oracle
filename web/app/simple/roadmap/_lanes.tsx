@@ -1135,8 +1135,12 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
             {pieces.map((p, n) => {
               const b = all[n];
               const c = look(p, item, cut);
-              // fix4 qa-simple-roadmap-2/3: the slice's name (never its code), cut with "…" to its pill.
-              const words = ellipsize(p.name, b.w - 16, 12, 650);
+              // fix4 qa-simple-roadmap-2/3: the slice's name, cut with "…" to its pill; qa-plan-55: a
+              // slice too short for it has it beside, up to the next slice (or pill) in its row; the
+              // last slice's starts past Oracle's "?" when that sits right of the pill (as PlainPiece's).
+              const last = n + 1 === all.length;
+              const at = last && s && mark > x1 ? mark + 12 : b.x + b.w + 6;
+              const { words, beside } = pillWords(p.name, p.code, b, last ? room : all[n + 1].x - 4, at);
               return (
                 <g
                   key={p.key}
@@ -1163,7 +1167,17 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
                     strokeDasharray={c.dash}
                   />
                   {words && (
-                    <text data-testid="slice-label" x={b.x + 8.5} y={y + BAR_H / 2} dominantBaseline="central" fontSize={12} fontWeight={650} fill={c.ink} pointerEvents="none">
+                    <text
+                      data-testid="slice-label"
+                      data-beside={beside ? "true" : undefined}
+                      x={beside ? at : b.x + 8.5}
+                      y={y + BAR_H / 2}
+                      dominantBaseline="central"
+                      fontSize={12}
+                      fontWeight={beside ? 600 : 650}
+                      fill={beside ? "var(--text2)" : c.ink}
+                      pointerEvents="none"
+                    >
                       {words}
                     </text>
                   )}
@@ -1172,7 +1186,7 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
             })}
           </>
         ) : (
-          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} stroke={strokeOf} strokeW={strokeW} besideAt={s && mark > x1 ? mark + 12 : x1 + 6} room={room} />
+          <PlainPiece item={item} piece={pieces[0]} b={all[0]} y={y} cut={cut} place={place} stroke={strokeOf} strokeW={strokeW} besideAt={s && mark > x1 ? mark + 12 : x1 + 6} room={room} stop={item.milestone?.date ? sc.x(item.milestone.date) : undefined} />
         )}
         {/* fix4 qa-simple-roadmap-4: a track's milestone sits on the pill's top edge at its date,
             above the pill's name, never over it. */}
@@ -1219,17 +1233,36 @@ const Pill = memo(function Pill({ unit, item, lane, y, sc, width, span, open, fl
   );
 });
 
+/** Half a milestone diamond's width (a 7px square turned 45°), and a little air. */
+const MARK_HALF = 5.5;
+
+/**
+ * qa-plan-55: a pill's words: its name inside when a real part of it fits, else beside it (from
+ * `besideAt` up to `room`); a milestone mark at `stop` ends either room, so a label never runs
+ * under it. With no room for any of its name, its code (inside, else beside): a pill is never
+ * left empty when its code fits.
+ */
+function pillWords(name: string, code: string | null | undefined, b: { x: number; w: number }, room: number, besideAt: number, stop?: number): { words: string; beside: boolean } {
+  const until = (left: number, w: number) => (stop == null || stop + MARK_HALF <= left ? w : Math.min(w, stop - MARK_HALF - left));
+  const inRoom = until(b.x + 8.5, b.w - 16);
+  const outRoom = until(besideAt, room - besideAt - 4);
+  const inner = ellipsize(name, inRoom, 12, 650);
+  const outer = ellipsize(name, outRoom, 12, 600);
+  if (inner.length < Math.min(name.length, 8) && outer.length > inner.length) return { words: outer, beside: true };
+  if (inner || !code) return { words: inner, beside: false };
+  if (textWidth(code, 12, 650) <= inRoom) return { words: code, beside: false };
+  return textWidth(code, 12, 600) <= outRoom ? { words: code, beside: true } : { words: "", beside: false };
+}
+
 /** An item with no plan as one pill: its title, cut with "…" to the pill, or beside a pill too short for it; a draft says so ("Draft · Setup tips"), a cut item is struck through (its place in the return queue on hover). */
-function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW, besideAt, room }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; stroke: (base: string) => string; strokeW: number; besideAt: number; room: number }) {
+function PlainPiece({ item, piece, b, y, cut, place, stroke, strokeW, besideAt, room, stop }: { item: Item; piece: Piece; b: { x: number; w: number }; y: number; cut: boolean; place?: number; stroke: (base: string) => string; strokeW: number; besideAt: number; room: number; stop?: number }) {
   const c = look(piece, item, cut);
   const draft = item.draft && !cut;
   // fix4 qa-simple-roadmap-3/15: the title alone (no "F-06", no "#1"); a draft's reads "Draft · <title>".
   const full = draft ? `Draft · ${piece.name}` : piece.name;
-  // fix4 qa-simple-roadmap-2: inside the pill when a real part of it fits; else beside it, up to the next pill.
-  const inner = ellipsize(full, b.w - 16, 12, 650);
-  const outer = ellipsize(full, room - besideAt - 4, 12, 600);
-  const beside = inner.length < Math.min(full.length, 8) && outer.length > inner.length;
-  const words = beside ? outer : inner;
+  // fix4 qa-simple-roadmap-2: inside the pill when a real part of it fits; else beside it, up to
+  // the next pill; qa-plan-55: the track's milestone mark ends either room.
+  const { words, beside } = pillWords(full, piece.code, b, room, besideAt, stop);
   const w = words ? textWidth(words, 12, beside ? 600 : 650) : 0;
   const tag = draft && words.startsWith("Draft");
   const hover = `${full}${place != null ? ` · ${ordinal(place)} to come back if room opens` : ""}`;
