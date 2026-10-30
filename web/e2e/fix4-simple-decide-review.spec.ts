@@ -94,6 +94,33 @@ test.describe("desktop", () => {
   });
 });
 
+test.describe("keyboard", () => {
+  test.use({ viewport: { width: 1512, height: 900 } });
+
+  test("By meeting: Tab goes down the meetings in the order they are drawn", async ({ page }) => {
+    // qa-simple-decide-34 (not reproduced): fails_when: focus jumps back up the page while tabbing through the meetings
+    await login(page);
+    await page.goto("/simple/decisions?view=meetings");
+    await expect(page.getByTestId("meeting-group").first()).toBeVisible();
+    await page.getByTestId("decisions-view-meetings").focus();
+    // Every stop inside a meeting or under Outside meetings, page position in order.
+    const seen: { where: string; y: number }[] = [];
+    for (let i = 0; i < 60; i++) {
+      await page.keyboard.press("Tab");
+      const at = await page.evaluate(() => {
+        const el = document.activeElement as HTMLElement | null;
+        const g = el?.closest('[data-testid="meeting-group"], section[aria-label="Outside meetings"]');
+        if (!el || !g) return null;
+        return { where: g.getAttribute("aria-label") ?? "", y: el.getBoundingClientRect().top + window.scrollY };
+      });
+      if (at) seen.push(at);
+    }
+    expect(seen.map((s) => s.where)).toContain("Review: Usage alerts");
+    expect(seen.length).toBeGreaterThan(1);
+    for (let i = 1; i < seen.length; i++) expect(seen[i].y).toBeGreaterThanOrEqual(seen[i - 1].y - 2);
+  });
+});
+
 test.describe("one column", () => {
   test.use({ viewport: { width: 800, height: 900 } });
 
