@@ -71,32 +71,30 @@ export function ExportButtons({ doc, n, hasBrief = false }: { doc: string; n: nu
   }
 
   const groups = GROUPS.filter((g) => hasBrief || g.layer === "full");
+  // qa-docs-75: a grid, so a format sits in the same column on every row: PDF, HTML, then the
+  // row's own (MD, PPTX). The panel opens clear of the review panel's totals.
+  const COLUMN: Record<Format, string> = { pdf: "col-start-2", html: "col-start-3", md: "col-start-4", pptx: "col-start-4" };
   return (
-    <Menu label="Export">
+    <Menu label="Export" avoid='[data-testid="review-panel"]'>
       <div className="flex flex-col gap-2.5">
-        {groups.map((g) => (
-          <div
-            key={g.layer}
-            role="group"
-            aria-label={`Export ${g.label.toLowerCase()}`}
-            className="flex items-center justify-between gap-4"
-          >
-            <span className="text-[13px] font-semibold tracking-[0.02em] text-text2">{g.label}</span>
-            <span className="flex gap-1.5">
+        <div className="grid grid-cols-[auto_repeat(3,minmax(3.5rem,auto))] items-center gap-x-1.5 gap-y-2.5">
+          {groups.map((g) => (
+            <div key={g.layer} role="group" aria-label={`Export ${g.label.toLowerCase()}`} className="contents">
+              <span className="col-start-1 pr-2.5 text-[13px] font-semibold tracking-[0.02em] text-text2">{g.label}</span>
               {g.formats.map((f) => (
                 <Button
                   key={f.format}
                   disabled={busy !== null}
                   onClick={() => download(g.layer, f.format)}
                   aria-label={g.layer === "full" ? `Export ${f.label}` : `Export ${g.layer} ${f.label}`}
-                  className="min-w-14"
+                  className={`${COLUMN[f.format]} min-w-14`}
                 >
                   {busy === `${g.layer}.${f.format}` ? "…" : f.label}
                 </Button>
               ))}
-            </span>
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
         {error && <InlineError>{error}</InlineError>}
       </div>
     </Menu>

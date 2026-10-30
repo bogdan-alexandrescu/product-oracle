@@ -45,6 +45,39 @@ POLICY_NOTE = (
     "security or policy check (unsupported third-party operation included). There is no "
     "numeric publish score."
 )
+
+# The other lanes' readiness checks, in plain words (qa-docs-57): what each one checks.
+OTHER_CHECKS: dict[str, tuple[str, str]] = {
+    "critical_blockers": (
+        "Critical blockers",
+        "Is any critical blocker still unresolved, with no accepted risk or approved "
+        "experiment behind it?",
+    ),
+    "review_approvals": (
+        "Review approvals",
+        "Are the approvals and required sections of this version current?",
+    ),
+    "intake.critical_blockers": (
+        "Critical open questions",
+        "Is a critical question about blockers or policy still unanswered?",
+    ),
+    "intake.open_decisions": (
+        "Open decisions",
+        "Is a decision this PRD depends on still open?",
+    ),
+}
+OTHER_CHECK_QUESTION = "Another readiness check this version must meet before it is published."
+
+
+def check_words(key: str) -> tuple[str, str]:
+    """A check's title and the question it answers, in plain words; never its key."""
+    info = criteria.BY_KEY.get(key)
+    if info:
+        return info.title, info.question
+    if key in OTHER_CHECKS:
+        return OTHER_CHECKS[key]
+    words = key.rsplit(".", 1)[-1].replace("_", " ").strip()
+    return words.capitalize() or "Readiness check", OTHER_CHECK_QUESTION
 STATUSES = ("pass", "warning", "critical", "not_applicable")
 
 
@@ -155,14 +188,14 @@ async def dashboard(
 
     items = []
     for r in report.results:
-        info = criteria.BY_KEY.get(r.key)
+        title, question = check_words(r.key)
         views = human.get(r.key, [])
         mv = model.get(r.key)
         items.append(
             ReadinessItem(
                 key=r.key,
-                title=info.title if info else r.key.replace("_", " ").capitalize(),
-                question=info.question if info else "A readiness check registered by Oracle.",
+                title=title,
+                question=question,
                 hard=r.hard,
                 status=r.status,
                 rationale=r.rationale,

@@ -9,6 +9,7 @@ import {
   Chip,
   CodeTag,
   confirmInPage,
+  Dialog,
   Icon,
   InfoTip,
   Inspector,
@@ -194,6 +195,107 @@ function NumberQuestion({
   );
 }
 
+// ---------------------------------------------------------------- leaving with typed work
+
+/**
+ * qa-onboarding-1: typed work asks "Discard your changes?" (Keep editing / Discard) before a
+ * link in the app (the rail, the tab bar, the back crumb) leaves the page, and the browser
+ * asks before a reload or a close. A draft sent (`markSent`) leaves without asking; Discard
+ * calls `onDiscard` (the form empties: the router keeps a left page's state) and goes on.
+ */
+function useLeaveGuard(dirty: boolean, onDiscard: () => void) {
+  const router = useRouter();
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const sent = useRef(false);
+  const live = useRef({ dirty, onDiscard });
+  useEffect(() => {
+    live.current = { dirty, onDiscard };
+  });
+  useEffect(() => {
+    // Shown again (the router keeps a left page): a draft sent before is no longer in flight.
+    sent.current = false;
+    const asks = () => live.current.dirty && !sent.current;
+    const onClick = (e: MouseEvent) => {
+      if (!asks() || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      const a = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>("a[href]") : null;
+      if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+      const url = new URL(a.href, window.location.href);
+      // Another site: the browser's own question (beforeunload, below) asks.
+      if (url.origin !== window.location.origin) return;
+      if (url.pathname === window.location.pathname && url.search === window.location.search) return;
+      // Before Next's Link sees the click: nothing navigates until the person answers.
+      e.preventDefault();
+      e.stopPropagation();
+      setLeaving(url.pathname + url.search + url.hash);
+    };
+    const onUnload = (e: BeforeUnloadEvent) => {
+      if (!asks()) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("click", onClick, true);
+    window.addEventListener("beforeunload", onUnload);
+    return () => {
+      window.removeEventListener("click", onClick, true);
+      window.removeEventListener("beforeunload", onUnload);
+    };
+  }, []);
+
+  const dialog = leaving ? (
+    <Dialog
+      title="Discard your changes?"
+      testId="leave-discard"
+      onClose={() => setLeaving(null)}
+      cancelLabel="Keep editing"
+      actions={
+        <Button
+          variant="danger"
+          onClick={() => {
+            const to = leaving;
+            setLeaving(null);
+            sent.current = true;
+            live.current.onDiscard();
+            router.push(to);
+          }}
+        >
+          Discard
+        </Button>
+      }
+    >
+      <p>What you typed here is not saved. Leave the page and lose it?</p>
+    </Dialog>
+  ) : null;
+  return {
+    dialog,
+    /** The draft went through: leaving now asks nothing. */
+    markSent: () => {
+      sent.current = true;
+    },
+  };
+}
+
+// ---------------------------------------------------------------- dark page (theme previews)
+
+const darkQuery = "(prefers-color-scheme: dark)";
+function subscribeScheme(cb: () => void) {
+  const media = window.matchMedia(darkQuery);
+  media.addEventListener("change", cb);
+  const watch = new MutationObserver(cb);
+  watch.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  return () => {
+    media.removeEventListener("change", cb);
+    watch.disconnect();
+  };
+}
+function readDark() {
+  const t = document.documentElement.dataset.theme;
+  return t === "dark" || (t !== "light" && window.matchMedia(darkQuery).matches);
+}
+/** The app is in dark mode (the user menu's choice, else the system's). */
+function useDarkPage() {
+  return useSyncExternalStore(subscribeScheme, readDark, () => false);
+}
+
 // ---------------------------------------------------------------- last choice (localStorage)
 
 const storageKey = (kind: Kind) => `po-new-draft-${kind}`;
@@ -261,7 +363,7 @@ export function useDraftChoice(input: Schemas["RecommendIn"], initial?: { templa
   else if (hasTheme(template?.suggested_theme)) themeKey = template!.suggested_theme;
   else themeKey = rec?.theme?.key ?? null;
 
-  return { kind, live, rec, themes, templates, template, templateKey, templateSource, themeKey, themePick, setTemplatePick, setThemePick };
+  return { kind, live, rec, answered, themes, templates, template, templateKey, templateSource, themeKey, themePick, setTemplatePick, setThemePick };
 }
 
 type DraftChoice = ReturnType<typeof useDraftChoice>;
@@ -300,6 +402,9 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
   // Unique per picker: Next keeps visited pages mounted, and same-named radios would share a group.
   const id = useId();
   const [tilesRef, tileCols] = useBalancedColumns(themes.data?.length ?? 0);
+  const dark = useDarkPage();
+  // qa-docs-39: one theme to offer is no choice; it is named, not drawn as a lone radio.
+  const onlyTheme = themes.data?.length === 1 ? themes.data[0] : null;
   return (
     <>
       <section aria-labelledby={`${id}-template`}>
@@ -374,40 +479,53 @@ export function TemplateThemePicker({ choice }: { choice: DraftChoice }) {
         </div>
         {themes.error && <ErrorNote>{themes.error}</ErrorNote>}
         {themes.loading && <Loading />}
-        {/* qa-docs-22: the tiles fill their rows evenly; no row holds a lone tile while two fit. */}
-        <div
-          ref={tilesRef}
-          role="radiogroup"
-          aria-labelledby={`${id}-theme`}
-          className="grid gap-3"
-          style={{ gridTemplateColumns: `repeat(${tileCols}, minmax(0, ${TILE_MAX}px))` }}
-        >
-          {themes.data?.map((t) => {
-            const checked = t.key === themeKey;
-            return (
-              <label
-                key={t.key}
-                data-testid={`theme-option-${t.key}`}
-                className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-button border bg-surface p-2 ${
-                  checked ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line hover:border-line-strong"
-                }`}
-              >
-                {/* A 400 x 300 page at 0.4: the sample's words stay legible at 160 x 120 (QA docs-64). */}
-                <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} page={{ width: 400, height: 300 }} fluid />
-                <span className="flex min-w-0 items-center gap-1.5">
-                  <input
-                    type="radio"
-                    name={`${id}-theme`}
-                    className="size-4 flex-none accent-[var(--accent)]"
-                    checked={checked}
-                    onChange={() => setThemePick({ key: t.key, source: "user" })}
-                  />
-                  <span className="min-w-0 text-sm font-semibold text-text [overflow-wrap:anywhere]">{t.name}</span>
-                </span>
-              </label>
-            );
-          })}
-        </div>
+        {onlyTheme ? (
+          <p data-testid="theme-only" className="text-[15px] font-semibold text-text">
+            {onlyTheme.name}
+          </p>
+        ) : (
+          /* qa-docs-22: the tiles fill their rows evenly; no row holds a lone tile while two fit. */
+          <div
+            ref={tilesRef}
+            role="radiogroup"
+            aria-labelledby={`${id}-theme`}
+            className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${tileCols}, minmax(0, ${TILE_MAX}px))` }}
+          >
+            {themes.data?.map((t) => {
+              const checked = t.key === themeKey;
+              return (
+                <label
+                  key={t.key}
+                  data-testid={`theme-option-${t.key}`}
+                  className={`flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-button border bg-surface p-2 ${
+                    checked ? "border-accent bg-accent-soft shadow-[inset_0_0_0_1px_var(--accent)]" : "border-line hover:border-line-strong"
+                  }`}
+                >
+                  {/* A 400 x 300 page at 0.4: the sample's words stay legible at 160 x 120 (QA docs-64).
+                      qa-onboarding-32: in dark mode the white page is dimmed, so it does not glare. */}
+                  <span
+                    data-testid="theme-preview-frame"
+                    className="block rounded"
+                    style={dark ? { filter: "brightness(0.78)" } : undefined}
+                  >
+                    <ThemeThumbnail tokens={t.tokens} css={t.css} kind={kind} page={{ width: 400, height: 300 }} fluid />
+                  </span>
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <input
+                      type="radio"
+                      name={`${id}-theme`}
+                      className="size-4 flex-none accent-[var(--accent)]"
+                      checked={checked}
+                      onChange={() => setThemePick({ key: t.key, source: "user" })}
+                    />
+                    <span className="min-w-0 text-sm font-semibold text-text [overflow-wrap:anywhere]">{t.name}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        )}
       </section>
     </>
   );
@@ -444,7 +562,7 @@ function RecommendationInspector({
   const [busy, setBusy] = useState(false);
   // QA docs-8: a saved company default says so and can be taken back (to the one before it).
   const [saved, setSaved] = useState<{ before: Choice | null } | null>(null);
-  const { live, rec, themes, templates, template, templateKey, themeKey, setTemplatePick, setThemePick } = choice;
+  const { live, rec, answered, themes, templates, template, templateKey, themeKey, setTemplatePick, setThemePick } = choice;
   const defaults = useQuery("draft-defaults", () => unwrap(api.GET("/v1/drafts/defaults")));
   const company = defaults.data?.[kind] ?? null;
 
@@ -530,7 +648,12 @@ function RecommendationInspector({
           >
             <div data-testid="recommendation">
               <p className="font-semibold text-text">
-                {rec.company_default?.template === rec.template.key ? "Company default" : "Fits your answers"}
+                {/* qa-docs-36: with every question still Not sure, nothing has been fitted yet. */}
+                {rec.company_default?.template === rec.template.key
+                  ? "Company default"
+                  : answered
+                    ? "Fits your answers"
+                    : "The usual start, until you answer the questions"}
               </p>
               {rec.warnings.length > 0 && (
                 <ul data-testid="recommendation-warnings" className="mt-2.5 flex flex-col gap-1.5">
@@ -546,7 +669,8 @@ function RecommendationInspector({
           </InspectorSection>
         )}
         <InspectorSection label="Selected">
-          <InspectorRow value={template ? `v${template.latest_version}` : undefined}>{template?.name ?? "–"}</InspectorRow>
+          {/* qa-docs-36: no bare "v1" beside the template; its version means nothing here. */}
+          <InspectorRow>{template?.name ?? "–"}</InspectorRow>
           <InspectorRow>{themeName ?? "No theme"}</InspectorRow>
         </InspectorSection>
         {(company || canSetDefault) && (
@@ -610,6 +734,9 @@ export function NewDraft({ kind }: { kind: Kind }) {
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // qa-docs-37: Create draft is always there to press (filled, as New PRD's Continue); early, it says what is missing.
+  const [checked, setChecked] = useState(false);
+  const titleRef = useRef<HTMLInputElement>(null);
 
   const choice = useDraftChoice(kind === "prd" ? { kind, prd } : { kind, roadmap });
   const { rec, templateKey, themeKey } = choice;
@@ -617,9 +744,24 @@ export function NewDraft({ kind }: { kind: Kind }) {
   const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => setPrd((a) => ({ ...a, [k]: v }));
   const setRoad = <K extends keyof RoadmapAnswers>(k: K, v: RoadmapAnswers[K]) => setRoadmap((a) => ({ ...a, [k]: v }));
 
+  const answers = kind === "prd" ? prd : roadmap;
+  const dirty = !!title.trim() || Object.values(answers).some((v) => v != null);
+  const guard = useLeaveGuard(dirty, () => {
+    setTitle("");
+    setPrd({});
+    setRoadmap({});
+    setChecked(false);
+    setError(null);
+  });
+
   async function create(e: FormEvent) {
     e.preventDefault();
-    if (!templateKey || !title.trim()) return;
+    if (!title.trim()) {
+      setChecked(true);
+      titleRef.current?.focus();
+      return;
+    }
+    if (!templateKey) return;
     setBusy(true);
     setError(null);
     try {
@@ -627,6 +769,7 @@ export function NewDraft({ kind }: { kind: Kind }) {
         api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }),
       );
       saveLastChoice(kind, templateKey, themeKey);
+      guard.markSent();
       router.push(`/documents/${out.slug}`);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : errorMessage(err));
@@ -652,23 +795,21 @@ export function NewDraft({ kind }: { kind: Kind }) {
         {!capsReady ? (
           <Loading />
         ) : (
-          <Notice
+          <NotAllowed
             testId="new-draft-not-allowed"
-            action={
-              <Link href={backHref} className="font-semibold underline-offset-2 hover:underline">
-                Back
-              </Link>
-            }
-          >
-            Only approvers and owners can start a {label}. Ask one of them to start it; you can read every {label}.
-          </Notice>
+            title={`You can't start a ${label}`}
+            reason={`Only approvers and owners can start a ${label}. Ask one of them to start it; you can read every ${label}.`}
+          />
         )}
       </Page>
     );
   }
 
+  const titleError = checked && !title.trim() ? `Give the ${label} a title.` : null;
+
   return (
     <Page>
+      {guard.dialog}
       <PageHeader
         back={back}
         title={`New ${label}`}
@@ -679,25 +820,28 @@ export function NewDraft({ kind }: { kind: Kind }) {
           </InfoTip>
         }
         action={
-          <Button form={formId} type="submit" variant="primary" icon="plus" disabled={busy || !templateKey || !title.trim()}>
+          <Button form={formId} type="submit" variant="primary" disabled={busy}>
             {busy ? "Creating…" : "Create draft"}
           </Button>
         }
       />
 
-      <form id={formId} onSubmit={create}>
+      <form id={formId} onSubmit={create} noValidate className="min-w-0">
         <Split inspector={inspector}>
           {error && <ErrorNote>{error}</ErrorNote>}
           <Panel bodyClassName="p-4">
             <label className="block">
               <span className="mb-1.5 block text-[15px] font-semibold text-text">Title</span>
               <input
+                ref={titleRef}
                 className={INPUT}
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder={kind === "prd" ? "Saved addresses at checkout" : "Product roadmap, next two quarters"}
+                aria-invalid={titleError ? true : undefined}
                 required
               />
+              {titleError && <span className="mt-1 block text-sm text-crit">{titleError}</span>}
             </label>
           </Panel>
 
@@ -733,12 +877,18 @@ export function NewDraft({ kind }: { kind: Kind }) {
                     <div className="flex flex-wrap gap-6">
                       {/* qa-docs-21: an example of the answer. */}
                       <NumberQuestion label="How many teams?" placeholder="e.g. 3" value={roadmap.teams} onChange={(v) => setRoad("teams", v)} />
-                      <NumberQuestion
-                        label="Confirmed goals"
-                        hint="From the baseline; change it to plan ahead."
-                        value={roadmap.confirmed_goals ?? rec?.confirmed_goals}
-                        onChange={(v) => setRoad("confirmed_goals", v)}
-                      />
+                      {/* qa-docs-39: the count is the baseline's, read here, not typed. */}
+                      <div data-testid="confirmed-goals">
+                        <span className="mb-1.5 block text-[15px] font-semibold text-text">Confirmed goals</span>
+                        <span className="flex h-9 items-center gap-1.5 text-[15px] text-text">
+                          <span className="tnum" data-testid="confirmed-goals-count">
+                            {rec?.confirmed_goals == null ? "–" : rec.confirmed_goals === 0 ? "None yet" : rec.confirmed_goals}
+                          </span>
+                          <InfoTip label="confirmed goals" align="start">
+                            The goals confirmed in the company&apos;s baseline. Confirm more there to plan for them here.
+                          </InfoTip>
+                        </span>
+                      </div>
                     </div>
                   </>
                 )}
@@ -752,6 +902,19 @@ export function NewDraft({ kind }: { kind: Kind }) {
         </Split>
       </form>
     </Page>
+  );
+}
+
+/** qa-docs-35: a role that may not start the draft reads why, as the page's empty state; the header's crumb is the one way back. */
+function NotAllowed({ testId, title, reason }: { testId: string; title: string; reason: string }) {
+  return (
+    <div data-testid={testId} role="status" className="flex flex-col items-center gap-3 rounded-panel border border-line bg-surface px-4 py-12 text-center">
+      <span aria-hidden className="grid size-12 place-items-center rounded-full bg-accent-soft text-accent-ink">
+        <Icon name="lock" size={24} />
+      </span>
+      <h2 className="font-display text-lg leading-6 font-bold tracking-heading text-text">{title}</h2>
+      <p className="max-w-md text-[15px] text-text2">{reason}</p>
+    </div>
   );
 }
 
@@ -891,6 +1054,25 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
   const { templateKey, themeKey } = choice;
   const setAnswer = <K extends keyof PrdAnswers>(k: K, v: PrdAnswers[K]) => setPrd((a) => ({ ...a, [k]: v }));
 
+  // qa-onboarding-1: typed words ask before they are left behind (the template and theme are picks, not typing).
+  const dirty =
+    !!title.trim() ||
+    !!problem.trim() ||
+    goalIds.length > 0 ||
+    outOfScope.some((l) => l.trim()) ||
+    Object.values(prd).some((v) => v != null) ||
+    requests.join(",") !== requestIds.join(",");
+  const guard = useLeaveGuard(dirty, () => {
+    setTitle("");
+    setProblem("");
+    setGoalIds([]);
+    setOutOfScope([""]);
+    setPrd({});
+    setRequests(requestIds);
+    setChecked(false);
+    setError(null);
+  });
+
   const problemLength = problem.trim().length;
   const titleProblem = title.trim() ? null : "Give the PRD a title.";
   const problemProblem =
@@ -928,6 +1110,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
     try {
       const out = await unwrap(api.POST("/v1/intakes", { body }));
       if (templateKey) saveLastChoice(kind, templateKey, themeKey);
+      guard.markSent();
       // The brief asks its first questions of me: the Inbox and its badge read them now, not a
       // count shared from before (lib/waiting.ts; #520, as Archive retires them).
       invalidateWaiting();
@@ -949,6 +1132,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
     try {
       const out = await unwrapProblems(api.POST("/v1/drafts", { body: { kind, title: title.trim(), template: templateKey, theme: themeKey } }));
       saveLastChoice(kind, templateKey, themeKey);
+      guard.markSent();
       router.push(`/documents/${out.slug}`);
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : errorMessage(err));
@@ -973,16 +1157,11 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
         {!capsReady ? (
           <Loading />
         ) : (
-          <Notice
+          <NotAllowed
             testId="new-prd-not-allowed"
-            action={
-              <Link href="/documents" className="font-semibold underline-offset-2 hover:underline">
-                Back to PRDs
-              </Link>
-            }
-          >
-            Only commenters, approvers and owners can start a PRD. Ask one of them to start it; you can read every PRD.
-          </Notice>
+            title="You can't start a PRD"
+            reason="Only commenters, approvers and owners can start a PRD. Ask one of them to start it; you can read every PRD."
+          />
         )}
       </Page>
     );
@@ -993,6 +1172,7 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
 
   return (
     <Page>
+      {guard.dialog}
       <PageHeader
         back={back}
         title="New PRD"
@@ -1124,6 +1304,13 @@ export function NewPrd({ requestIds = [] }: { requestIds?: string[] }) {
               </button>
             </p>
           )}
+
+          {/* qa-onboarding-28: the form ends with its Continue too, where the last answer is given. */}
+          <div className="flex justify-end">
+            <Button type="submit" variant="primary" disabled={busy !== null} data-testid="new-prd-continue-end">
+              {busy === "continue" ? "Saving…" : "Continue"}
+            </Button>
+          </div>
         </Split>
       </form>
     </Page>

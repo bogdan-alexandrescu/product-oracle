@@ -128,8 +128,11 @@ export function OutlineFilters({
   autoFocus?: boolean;
   compact?: boolean;
 }) {
-  const toReview = sections.filter((s) => !s.verdict).length;
-  const withFeedback = sections.filter((s) => (openCounts.get(s.section_key) ?? 0) > 0).length;
+  // qa-docs-73: the chips count what the filter box leaves, so "zzz" reads All 0.
+  const q = filter.query.trim().toLowerCase();
+  const shown = q ? sections.filter((s) => s.heading.toLowerCase().includes(q)) : sections;
+  const toReview = shown.filter((s) => !s.verdict).length;
+  const withFeedback = shown.filter((s) => (openCounts.get(s.section_key) ?? 0) > 0).length;
   return (
     <div className={`flex flex-col gap-2 ${compact ? "" : "px-3"}`}>
       <label className="relative flex items-center">
@@ -168,7 +171,7 @@ export function OutlineFilters({
         value={filter.chip}
         onChange={filter.setChip}
         items={[
-          { value: "all", label: "All", count: sections.length, testId: "chip-all" },
+          { value: "all", label: "All", count: shown.length, testId: "chip-all" },
           { value: "review", label: "To review", count: toReview, testId: "chip-review" },
           { value: "feedback", label: "With feedback", count: withFeedback, testId: "chip-feedback" },
         ]}
@@ -212,7 +215,15 @@ export function OutlineList({
   // section moves into a chapter they folded.
   const [folds, setFolds] = useState<Map<string, boolean>>(() => new Map());
   const [seenOpen, setSeenOpen] = useState(openKey);
-  const current = useMemo(() => ancestorsOf(byKey, openKey), [byKey, openKey]);
+  // qa-docs-73: the open section's own chapter is open too (a chapter can be the open section),
+  // and with a few chapters only (a brief and its full version), every chapter starts open.
+  const current = useMemo(() => {
+    const out = ancestorsOf(byKey, openKey);
+    if (openKey && byKey.has(openKey)) out.add(openKey);
+    const roots = nodes.filter((nd) => nd.parent === null);
+    if (roots.length <= 3) for (const r of roots) out.add(r.s.section_key);
+    return out;
+  }, [byKey, nodes, openKey]);
   if (seenOpen !== openKey) {
     setSeenOpen(openKey);
     if ([...current].some((k) => folds.get(k) === false)) {
@@ -365,7 +376,7 @@ export function OutlineList({
                 {s.heading}
               </span>
               {folded && (
-                <span className="tnum flex-none font-mono text-[13px] text-text2" data-testid="outline-folded-count">
+                <span className="tnum flex-none text-[13px] font-medium text-text2" data-testid="outline-folded-count">
                   {reviewed}/{nd.subtree.length}
                 </span>
               )}

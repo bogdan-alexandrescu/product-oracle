@@ -38,6 +38,9 @@ import { useQuery } from "@/lib/use-query";
 
 /** The one empty marker on this page (qa-docs-42). */
 const NONE = "–";
+/** A PRD with no template or theme says so in words, not a bare dash (qa-docs-33). */
+const NO_TEMPLATE = "No template";
+const NO_THEME = "No theme";
 
 type SortKey = "title" | "status" | "latest" | "updated";
 type Sort = { key: SortKey; desc: boolean };
@@ -101,18 +104,23 @@ function SortHeader({ label, k, sort, onSort }: { label: string; k: SortKey; sor
   const on = sort.key === k;
   const hint = on ? `, ${SORT_WORDS[k][sort.desc ? 1 : 0]}` : "";
   return (
-    <button
-      type="button"
-      data-testid={`sort-${k}`}
-      aria-label={`Sort by ${label}${hint}`}
-      title={on ? `Sorted ${SORT_WORDS[k][sort.desc ? 1 : 0]}` : `Sort by ${label}`}
-      onClick={() => onSort({ key: k, desc: on ? !sort.desc : k === "updated" || k === "latest" })}
-      // qa-docs-20: a 24 px tall target at the least, not the 16 px line of text.
-      className={`inline-flex min-h-6 items-center gap-1 rounded hover:text-text ${on ? "text-text" : ""}`}
-    >
-      {label}
-      {on && <Icon name={sort.desc ? "chevron-down" : "chevron-up"} size={16} />}
-    </button>
+    <>
+      <span className="hidden max-[600px]:inline">{label}</span>
+      <button
+        type="button"
+        data-testid={`sort-${k}`}
+        aria-label={`Sort by ${label}${hint}`}
+        title={on ? `Sorted ${SORT_WORDS[k][sort.desc ? 1 : 0]}` : `Sort by ${label}`}
+        onClick={() => onSort({ key: k, desc: on ? !sort.desc : k === "updated" || k === "latest" })}
+        // qa-docs-20: a 24 px tall target at the least, not the 16 px line of text.
+        // qa-docs-34: a phone sorts from the menu above the list, so the header button is not
+        // drawn there at all (only the column's name stays, for screen readers).
+        className={`inline-flex min-h-6 items-center gap-1 rounded hover:text-text max-[600px]:hidden ${on ? "text-text" : ""}`}
+      >
+        {label}
+        {on && <Icon name={sort.desc ? "chevron-down" : "chevron-up"} size={16} />}
+      </button>
+    </>
   );
 }
 
@@ -158,7 +166,7 @@ function docColumns(sort: Sort, onSort: (s: Sort) => void, names: TemplateNames)
       className: "text-text2",
       cell: (d) => {
         const name = names.template(d.template);
-        return name ? <span title={name}>{name}</span> : NONE;
+        return name ? <span title={name}>{name}</span> : <span data-testid="no-template">{NO_TEMPLATE}</span>;
       },
     },
     {
@@ -179,7 +187,9 @@ function docColumns(sort: Sort, onSort: (s: Sort) => void, names: TemplateNames)
       align: "right",
       phone: "action",
       className: "overflow-visible",
-      cell: (d) => <ArtifactMenu doc={{ ...d, kind: "prd" }} />,
+      // qa-docs-32: the row's title opens the PRD and its Latest opens the latest version, so
+      // the menu repeats no Open.
+      cell: (d) => <ArtifactMenu doc={{ ...d, kind: "prd" }} openItem={false} />,
     },
   ];
 }
@@ -274,8 +284,8 @@ function DocInspector({ d, canPublish, names }: { d: DocumentSummary; canPublish
       <InspectorSection label="Details">
         <InspectorRow value={d.latest_version != null ? `v${d.latest_version}` : NONE}>Latest version</InspectorRow>
         <InspectorRow value={<span data-testid="inspector-approved">{approvedText(d)}</span>}>Approved version</InspectorRow>
-        <InspectorRow value={<span data-testid="inspector-template">{names.template(d.template) ?? NONE}</span>}>Template</InspectorRow>
-        <InspectorRow value={<span data-testid="inspector-theme">{names.theme(d.theme) ?? NONE}</span>}>Theme</InspectorRow>
+        <InspectorRow value={<span data-testid="inspector-template">{names.template(d.template) ?? NO_TEMPLATE}</span>}>Template</InspectorRow>
+        <InspectorRow value={<span data-testid="inspector-theme">{names.theme(d.theme) ?? NO_THEME}</span>}>Theme</InspectorRow>
         <InspectorRow value={<span data-testid="inspector-created" title={formatDateTime(d.created_at)}>{formatDate(d.created_at)}</span>}>
           Created
         </InspectorRow>
@@ -292,8 +302,9 @@ function DocInspector({ d, canPublish, names }: { d: DocumentSummary; canPublish
       {d.latest_version != null && (
         <InspectorSection>
           <div className="flex flex-wrap gap-2">
+            {/* qa-docs-32: the head's Open opens the PRD; this one says it reads the latest version. */}
             <LinkButton href={`/documents/${d.slug}/v/${d.latest_version}`} variant="solid">
-              Read v{d.latest_version}
+              Read latest (v{d.latest_version})
             </LinkButton>
             {d.latest_version > 1 && (
               <LinkButton href={`/documents/${d.slug}/diff?from=${d.latest_version - 1}&to=${d.latest_version}`}>

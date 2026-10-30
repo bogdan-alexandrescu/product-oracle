@@ -20,6 +20,10 @@ if (typeof document !== "undefined") {
   );
 }
 
+/** qa-docs-28: `side` wider than a phone: the right edge, full height, a readable width. */
+const SIDE =
+  "min-[601px]:h-dvh min-[601px]:max-h-dvh min-[601px]:w-[min(480px,100vw)] min-[601px]:rounded-none min-[601px]:rounded-l-inspector min-[601px]:border-t-0 min-[601px]:border-l";
+
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 /**
@@ -40,6 +44,7 @@ export function Sheet({
   above = false,
   id,
   bare = false,
+  side = false,
 }: {
   open: boolean;
   title: string;
@@ -58,6 +63,8 @@ export function Sheet({
   id?: string;
   /** The whole screen with no handle or title row: the content draws its own head and close button (Simple's Ask sheet). */
   bare?: boolean;
+  /** qa-docs-28: wider than a phone, a panel at the right edge (full height, no handle); a bottom sheet on a phone. */
+  side?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; dy: number; captured?: boolean } | null>(null);
@@ -144,7 +151,9 @@ export function Sheet({
 
   return (
     <div
-      className={`fixed inset-x-0 top-0 z-50 flex flex-col justify-end ${above ? "bottom-[var(--phone-tab-bar)]" : "bottom-0"}`}
+      className={`fixed inset-x-0 top-0 z-50 flex flex-col justify-end ${above ? "bottom-[var(--phone-tab-bar)]" : "bottom-0"} ${
+        side ? "min-[601px]:flex-row" : ""
+      }`}
       data-testid={testId}
     >
       <div data-testid="sheet-scrim" aria-hidden className="absolute inset-0 bg-hero/50" onClick={onClose} />
@@ -162,7 +171,9 @@ export function Sheet({
         className={
           bare
             ? "relative flex h-dvh max-h-dvh min-h-0 flex-col bg-surface pt-[env(safe-area-inset-top)] text-text outline-none"
-            : `relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none`
+            : `relative flex ${full ? "h-dvh max-h-dvh" : "max-h-[85dvh]"} ${above ? "touch-none" : ""} min-h-0 touch-44 flex-col rounded-t-inspector border-t border-line bg-surface text-text shadow-tip outline-none ${
+                side ? SIDE : ""
+              }`
         }
       >
         {!bare && (
@@ -170,7 +181,7 @@ export function Sheet({
             <div
               data-testid="sheet-handle"
               aria-hidden
-              className="flex h-6 flex-none cursor-grab touch-none items-center justify-center"
+              className={`${side ? "min-[601px]:hidden" : ""} flex h-6 flex-none cursor-grab touch-none items-center justify-center`}
               onPointerDown={onDown}
               onPointerMove={onMove}
               onPointerUp={onUp}

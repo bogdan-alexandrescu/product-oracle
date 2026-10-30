@@ -24,6 +24,7 @@ import {
 } from "@/components/ds";
 import { INPUT } from "@/components/ui";
 import { api, unwrap, type Schemas } from "@/lib/api/client";
+import { blockedLabel } from "@/lib/blocked";
 import { dayIn, useCompanyZone, zoneDateTime, zoneDay } from "@/lib/dates";
 import { formatTime, formatUsd, JOB_STATUS_LABEL, NO_ACCOUNT_REASON, plural } from "@/lib/format";
 import { useMe } from "@/lib/me";
@@ -64,6 +65,10 @@ function useIsPhone(): boolean {
 }
 
 const Dash = ({ children }: { children: ReactNode }) => <span className="text-sm text-text2">{children}</span>;
+/** A cell's label on a phone, where the row is a stacked block (DataTable's phoneLabel, per row). */
+const PhoneLabel = ({ children }: { children: ReactNode }) => <span className="hidden font-semibold max-[600px]:inline">{children}</span>;
+/** A stat tile's next step where it has no number yet (qa-docs-60). */
+const Hint = ({ children }: { children: ReactNode }) => <span className="block pt-1 text-sm font-medium text-text2">{children}</span>;
 
 function StatusChip({ status, testId }: { status: Status; testId?: string }) {
   const s = STATUS[status];
@@ -146,6 +151,8 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   const idKey = [...new Set(ids)].sort().join(",");
   const peopleQ = useQuery(`people|${idKey}`, () => peopleByIds(idKey ? idKey.split(",") : []).catch(() => new Map<string, Person>()));
   const nameOf = (id: string | null | undefined) => (id ? (peopleQ.data?.get(id)?.name ?? "Someone") : "Oracle");
+  // qa-docs-2: the criterion's owner by name, the same for every reader; none when not a known person.
+  const ownerOf = (id: string | null | undefined) => (id ? (peopleQ.data?.get(id)?.name ?? null) : null);
 
   const [filter, setFilter] = useState<Filter>("all");
   const [picked, setPicked] = useState<string | null>(null);
@@ -154,7 +161,8 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   const [blind, setBlindState] = useState(() => typeof window !== "undefined" && localStorage.getItem(BLIND_KEY) === "1");
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [stored, setStored] = useState<string | null>(null);
+  // qa-docs-59: the confirmation of a submitted rating, shown under that criterion's Your rating.
+  const [stored, setStored] = useState<{ key: string; text: string } | null>(null);
   const [watched, setWatched] = useState<string | null>(null);
 
   const setBlind = (on: boolean) => {
@@ -264,7 +272,10 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
         return next;
       });
       const people = agreed(fresh.items.find((i) => i.key === item.key) ?? item);
-      setStored(`Rating saved at ${when(out.created_at, zone)}` + (people ? `; people agreement is now ${people.k}/${people.n}.` : "."));
+      setStored({
+        key: item.key,
+        text: `Rating saved at ${when(out.created_at, zone)}` + (people ? `; people agreement is now ${people.k}/${people.n}.` : "."),
+      });
     });
 
   const select = (key: string) => {
@@ -319,47 +330,50 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
       key: "model",
       header: "Model",
       width: "128px",
-      phoneLabel: "Model",
+      // qa-docs-57: a hard check says "Rules only" once, here; its People cell stays empty.
       cell: (i) => (
-        <span data-testid="model-cell">
-          {i.hard ? (
-            <Dash>Rules only</Dash>
-          ) : hidden(i) ? (
-            hiddenCell
-          ) : !hasModel ? (
-            <Dash>No model review</Dash>
-          ) : i.model ? (
-            <StatusChip status={i.model.status} />
-          ) : (
-            <Chip kind="na" className="border border-dashed border-line-strong">
-              Skipped
-            </Chip>
-          )}
-        </span>
+        <>
+          {!i.hard && <PhoneLabel>Model</PhoneLabel>}
+          <span data-testid="model-cell">
+            {i.hard ? (
+              <Dash>Rules only</Dash>
+            ) : hidden(i) ? (
+              hiddenCell
+            ) : !hasModel ? (
+              <Dash>No model review</Dash>
+            ) : i.model ? (
+              <StatusChip status={i.model.status} />
+            ) : (
+              <Chip kind="na" className="border border-dashed border-line-strong">
+                Skipped
+              </Chip>
+            )}
+          </span>
+        </>
       ),
     },
     {
       key: "people",
       header: "People",
       width: "148px",
-      phoneLabel: "People",
       wrap: true,
       cell: (i) => (
-        <span data-testid="people-cell" className="inline-flex flex-wrap gap-1">
-          {i.hard ? (
-            <Dash>Rules only</Dash>
-          ) : hidden(i) ? (
-            hiddenCell
-          ) : i.human.length === 0 ? (
-            <Dash>Not rated</Dash>
-          ) : (
-            ORDER.filter((s) => i.human.some((h) => h.status === s)).map((s) => (
-              <Chip key={s} kind={STATUS[s].kind}>
-                {`${i.human.filter((h) => h.status === s).length} ${STATUS[s].word}`}
-              </Chip>
-            ))
-          )}
-        </span>
+        <>
+          {!i.hard && <PhoneLabel>People</PhoneLabel>}
+          <span data-testid="people-cell" className="inline-flex flex-wrap gap-1">
+            {i.hard ? null : hidden(i) ? (
+              hiddenCell
+            ) : i.human.length === 0 ? (
+              <Dash>Not rated</Dash>
+            ) : (
+              ORDER.filter((s) => i.human.some((h) => h.status === s)).map((s) => (
+                <Chip key={s} kind={STATUS[s].kind}>
+                  {`${i.human.filter((h) => h.status === s).length} ${STATUS[s].word}`}
+                </Chip>
+              ))
+            )}
+          </span>
+        </>
       ),
     },
     {
@@ -374,16 +388,19 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
         const people = agreed(i);
         const m = i.agreement.model;
         if (m == null && !people) return <span data-testid="agreement-cell"><Dash>No comparison</Dash></span>;
+        // qa-docs-58: one labelled line each, never "Model agrees ·" broken from its count.
         return (
-          <span data-testid="agreement-cell" className="text-sm">
-            {m === false ? <Chip kind="warn">Model disagrees</Chip> : m === true ? "Model agrees" : "People"}
+          <span data-testid="agreement-cell" className="flex flex-col items-start gap-0.5 text-sm">
+            {m != null && (
+              <span className="whitespace-nowrap">{m === false ? <Chip kind="warn">Model disagrees</Chip> : "Model agrees"}</span>
+            )}
             {people && (
-              <>
-                {m != null ? " · " : " "}
+              <span className="whitespace-nowrap">
+                People{" "}
                 <b className="tnum">
                   {people.k}/{people.n}
                 </b>
-              </>
+              </span>
             )}
           </span>
         );
@@ -411,6 +428,10 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
       blind={blind}
       onBlind={setBlind}
       mayRate={mayRate}
+      mayQueue={mayQueue}
+      mine={me?.user_id ? (item.human.find((h) => h.rater_id === me.user_id) ?? null) : null}
+      stored={stored?.key === item.key ? stored.text : null}
+      owner={ownerOf(item.owner_id)}
       draft={draftOf(item.key)}
       onDraft={(dr) => setDrafts((prev) => ({ ...prev, [item.key]: dr }))}
       sections={versionQ.data?.sections ?? []}
@@ -437,7 +458,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
                 Advisory policy
               </Chip>
               <Chip kind={readiness.blocked ? "crit" : "pass"} dot data-testid="blocked-chip">
-                {readiness.blocked ? "Blocked" : "Not blocked"}
+                {blockedLabel(readiness.blocked)}
               </Chip>
               {hasModel && (
                 <Chip kind="line" data-testid="model-chip">
@@ -453,7 +474,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
           <>
             {maySnapshot && (
               <Button disabled={busy != null || !readiness} onClick={snapshot}>
-                Save this check
+                Save this check to History
               </Button>
             )}
             {mayQueue && (
@@ -492,42 +513,45 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
             {error}
           </Notice>
         )}
-        {stored && (
-          <Notice tone="pass" testId="rating-stored">
-            {stored}
-          </Notice>
-        )}
-        {readiness?.model_review ? (
+        {/* qa-docs-56: one banner for Oracle's review, with one Details: the finished job's
+            line (criteria judged, counts) when this page asked for it, else the stored review's time. */}
+        {readiness?.model_review || done ? (
           <Notice testId="model-disclaimer">
-            {readiness.model_review.disclaimer} Oracle reviewed this at {when(readiness.model_review.created_at, zone)}.
-            {admin && readiness.model_review.model && (
-              <details className="mt-1 text-[13px] text-text2" data-testid="model-details">
-                <summary className="cursor-pointer">Details</summary>
-                Model {readiness.model_review.model}
-              </details>
+            {readiness?.model_review && <>{readiness.model_review.disclaimer} </>}
+            {done ? (
+              <span data-testid="job-done">
+                Oracle reviewed this at {when(done.finished_at ?? done.created_at, zone)}: {plural(Number(done.output?.criteria ?? 0), "criterion", "criteria")} judged
+                {countsLine(done.output?.counts) && ` · ${countsLine(done.output?.counts)}`}.
+                {admin && (
+                  <details className="mt-1 text-[13px] text-text2" data-testid="job-details">
+                    <summary className="cursor-pointer">Details</summary>
+                    {[
+                      done.model && `Model ${done.model}`,
+                      done.input_tokens != null && `${tokens(done.input_tokens)} tokens in · ${tokens(done.output_tokens ?? 0)} out`,
+                      done.cost_usd != null && `Cost ${formatUsd(done.cost_usd)}`,
+                      typeof done.output?.report_id === "string" && `Report ${shortId(String(done.output.report_id))}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </details>
+                )}
+              </span>
+            ) : (
+              readiness?.model_review && (
+                <>
+                  Oracle reviewed this at {when(readiness.model_review.created_at, zone)}.
+                  {admin && readiness.model_review.model && (
+                    <details className="mt-1 text-[13px] text-text2" data-testid="model-details">
+                      <summary className="cursor-pointer">Details</summary>
+                      Model {readiness.model_review.model}
+                    </details>
+                  )}
+                </>
+              )
             )}
           </Notice>
         ) : (
           readiness && <Notice testId="no-model-review">No model review for v{n} yet.{mayQueue ? "" : " An approver can queue one."}</Notice>
-        )}
-        {done && (
-          <Notice tone="pass" testId="job-done">
-            Oracle reviewed this at {when(done.finished_at ?? done.created_at, zone)}: {plural(Number(done.output?.criteria ?? 0), "criterion", "criteria")} judged
-            {countsLine(done.output?.counts) && ` · ${countsLine(done.output?.counts)}`}
-            {admin && (
-              <details className="mt-1 text-[13px] text-text2" data-testid="job-details">
-                <summary className="cursor-pointer">Details</summary>
-                {[
-                  done.model && `Model ${done.model}`,
-                  done.input_tokens != null && `${tokens(done.input_tokens)} tokens in · ${tokens(done.output_tokens ?? 0)} out`,
-                  done.cost_usd != null && `Cost ${formatUsd(done.cost_usd)}`,
-                  typeof done.output?.report_id === "string" && `Report ${shortId(String(done.output.report_id))}`,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </details>
-            )}
-          </Notice>
         )}
       </div>
 
@@ -594,8 +618,10 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
             <p className="border-t border-line px-4 py-2.5 text-[13px] text-text2 max-[600px]:px-3" data-testid="latest-report">
               {/* The rules run each time the page opens (evaluated_at is the request's clock): the time shown is the last saved check's. */}
               {readiness.latest_report ? `Last saved check ${zoneDateTime(readiness.latest_report.created_at, zone)}` : "No saved check yet"}
-              {" · "}the rules check this version each time you open the page. No numeric score: the policy is advisory and only a
-              critical hard check blocks.
+              {" · "}the rules check this version each time you open the page
+              {/* qa-docs-60 / qa-docs-59: what saving keeps, and that a rating is not a saved check. */}
+              {maySnapshot && "; Save this check to History keeps this result to compare later"}. Ratings are kept on their own, in
+              History. No numeric score: the policy is advisory and only a critical hard check blocks.
             </p>
           )}
         </Panel>
@@ -610,6 +636,9 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
           zone={zone}
           mayRetry={mayRetry}
           mayCancel={mayCancel}
+          maySnapshot={maySnapshot}
+          mayRate={mayRate}
+          mayQueue={mayQueue}
           busy={busy != null}
           onRetry={retry}
           onCancel={cancel}
@@ -633,6 +662,10 @@ function CriterionInspector({
   blind,
   onBlind,
   mayRate,
+  mayQueue,
+  mine,
+  stored,
+  owner,
   draft,
   onDraft,
   sections,
@@ -649,6 +682,13 @@ function CriterionInspector({
   blind: boolean;
   onBlind: (on: boolean) => void;
   mayRate: boolean;
+  mayQueue: boolean;
+  /** The reader's own latest rating of this criterion. */
+  mine: Item["human"][number] | null;
+  /** The confirmation of the rating just submitted here. */
+  stored: string | null;
+  /** The criterion's owner by name, or null. */
+  owner: string | null;
   draft: Draft;
   onDraft: (d: Draft) => void;
   sections: { section_key: string; heading: string }[];
@@ -664,15 +704,24 @@ function CriterionInspector({
   const stats = item.hard || hidden
     ? undefined
     : [
-        // qa-docs-28: the tile says what the panel says when no model has reviewed this version.
+        // qa-docs-28: the tile says what the panel says when no model has reviewed this version;
+        // qa-docs-60: a tile with no number says what to do next, not a dash.
         !readiness.model_review
-          ? { label: "No model review yet", value: "—", testId: "stat-model-agrees" }
+          ? {
+              label: "No model review yet",
+              figure: <Hint>{mayQueue ? "Ask Oracle to review" : "An approver can ask Oracle"}</Hint>,
+              testId: "stat-model-agrees",
+            }
           : item.agreement.model == null
-            ? { label: "Model did not judge this", value: "—", testId: "stat-model-agrees" }
+            ? { label: "Model did not judge this", figure: <Hint>Rules and people only</Hint>, testId: "stat-model-agrees" }
             : { label: "Model agrees with rules", value: item.agreement.model ? "Yes" : "No", testId: "stat-model-agrees" },
         people
           ? { label: "People agree with rules", value: people.k, of: people.n, testId: "stat-people-agree" }
-          : { label: "No human ratings yet", value: "—", testId: "stat-people-agree" },
+          : {
+              label: "No human ratings yet",
+              figure: <Hint>{mayRate ? "Rate it below" : "A commenter can rate it"}</Hint>,
+              testId: "stat-people-agree",
+            },
       ];
   const tags = (keys: string[], evidence = 0) =>
     (keys.length > 0 || evidence > 0) && (
@@ -777,13 +826,31 @@ function CriterionInspector({
         )}
       </InspectorSection>
 
-      {item.owner_id && (
+      {owner && (
         <InspectorSection label="Owner">
-          <p className="text-[15px] font-medium">{nameOf(item.owner_id)}</p>
+          <p className="text-[15px] font-medium" data-testid="criterion-owner">
+            {owner}
+          </p>
         </InspectorSection>
       )}
 
       <InspectorSection label="Your rating">
+        {stored && (
+          <Notice tone="pass" testId="rating-stored">
+            {stored}
+          </Notice>
+        )}
+        {!item.hard && mine && (
+          <div data-testid="my-rating" className="flex flex-col gap-1.5 text-[15px]">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-text2">You rated this</span>
+              <StatusChip status={mine.status} />
+              <span className="text-[13px] text-text2">{zoneDay(mine.created_at, zone)}</span>
+            </span>
+            <p className="break-words">{mine.rationale}</p>
+            {mayRate && <p className="text-[13px] text-text2">Submit again to change your rating.</p>}
+          </div>
+        )}
         {item.hard ? (
           <p className="text-sm text-text2">Rules only: people do not rate hard checks.</p>
         ) : !mayRate ? (
@@ -926,6 +993,9 @@ function HistoryPanel({
   zone,
   mayRetry,
   mayCancel,
+  maySnapshot,
+  mayRate,
+  mayQueue,
   busy,
   onRetry,
   onCancel,
@@ -939,6 +1009,9 @@ function HistoryPanel({
   zone: string;
   mayRetry: boolean;
   mayCancel: boolean;
+  maySnapshot: boolean;
+  mayRate: boolean;
+  mayQueue: boolean;
   busy: boolean;
   onRetry: (id: string) => void;
   onCancel: (id: string) => void;
@@ -1081,8 +1154,26 @@ function HistoryPanel({
         rowKey={(r) => r.id}
         loading={loading && !all}
         rowProps={() => ({ "data-testid": "history-row" })}
-        empty={all && all.length === 0 ? `No evaluation reports for v${n} yet` : "No reports match this filter"}
+        empty={all && all.length === 0 ? <EmptyHistory n={n} maySnapshot={maySnapshot} mayRate={mayRate} mayQueue={mayQueue} /> : "No reports match this filter"}
       />
     </Panel>
+  );
+}
+
+/** qa-docs-60: an empty History says what puts a report here, in the reader's own actions. */
+function EmptyHistory({ n, maySnapshot, mayRate, mayQueue }: { n: number; maySnapshot: boolean; mayRate: boolean; mayQueue: boolean }) {
+  const steps = [maySnapshot && "save this check", mayRate && "rate a criterion", mayQueue && "ask Oracle to review"].filter(
+    (x): x is string => !!x,
+  );
+  const list = steps.length > 1 ? `${steps.slice(0, -1).join(", ")} or ${steps[steps.length - 1]}` : steps[0];
+  return (
+    <span data-testid="history-empty" className="flex flex-col gap-1">
+      <span>No evaluation reports for v{n} yet</span>
+      <span className="text-sm">
+        {list
+          ? `To add one, ${list}.`
+          : "A report appears here when someone saves this check, rates a criterion or asks Oracle to review."}
+      </span>
+    </span>
   );
 }

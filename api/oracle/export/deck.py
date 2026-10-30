@@ -101,6 +101,20 @@ class Deck:
     brand_logo: Markup = Markup("")
     brand_logo_png: bytes | None = None
     brand_logo_size: tuple[int, int] | None = None
+    # The title slide's kicker: what kind of document this is (qa-docs-63), not "Brief".
+    kicker: str = "Brief"
+
+
+# The title slide's kicker per document kind (qa-docs-63).
+KICKER = {
+    "prd": "PRD",
+    "roadmap": "Roadmap",
+    "spec": "Spec",
+    "vision": "Vision",
+    "strategy": "Strategy",
+    "update": "Update",
+    "pricing": "Pricing memo",
+}
 
 
 @cache
@@ -356,6 +370,7 @@ def build_deck(ev: ExportVersion) -> Deck:
         brand_logo=render_brand_logo(brand, dark=dark),
         brand_logo_png=logo_png,
         brand_logo_size=logo_size,
+        kicker=KICKER.get(ev.document.kind, "Brief"),
     )
     macro = _jinja().get_template("slide.html.j2").module.slide  # type: ignore[attr-defined]
     for slide in slides:

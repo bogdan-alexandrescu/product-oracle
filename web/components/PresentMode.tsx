@@ -94,43 +94,89 @@ function SlideCanvas({
   onExpand,
   onLink,
   testId,
+  fluid = false,
 }: {
   deck: DeckOut;
   index: number;
   onExpand?: (key: string) => void;
   onLink?: (key: string) => void;
   testId: string;
+  /** qa-docs-10: on a narrow, tall box the slide fills it at reading size instead of shrinking. */
+  fluid?: boolean;
 }) {
   const outer = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const [reflow, setReflow] = useState(false);
   useLayoutEffect(() => {
     const el = outer.current;
     if (!el) return;
-    const fit = () => setScale(Math.max(0.1, Math.min(el.clientWidth / SLIDE_W, el.clientHeight / SLIDE_H)));
+    const fit = () => {
+      setScale(Math.max(0.1, Math.min(el.clientWidth / SLIDE_W, el.clientHeight / SLIDE_H)));
+      setReflow(fluid && el.clientWidth < 600 && el.clientHeight > el.clientWidth);
+    };
     fit();
     const ro = new ResizeObserver(fit);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [fluid]);
   const slide = deck.slides[index];
   return (
-    <div ref={outer} className="flex h-full w-full min-w-0 items-center justify-center overflow-hidden" data-testid={`${testId}-box`}>
-      {slide && (
-        <div style={{ width: SLIDE_W * scale, height: SLIDE_H * scale }} className="shadow-[0_24px_64px_rgba(0,0,0,0.45)]">
+    <div
+      ref={outer}
+      className="flex h-full w-full min-w-0 items-center justify-center overflow-hidden"
+      data-testid={`${testId}-box`}
+      data-reflow={reflow ? "true" : undefined}
+    >
+      {slide &&
+        (reflow ? (
           <ShadowHtml
             css={deck.css}
             themeClass={deck.theme_class}
             html={slide.html}
+            extraCss={PRESENT_CSS + PHONE_CSS}
             onExpand={onExpand}
             onLink={onLink}
-            style={{ width: SLIDE_W, height: SLIDE_H, transform: `scale(${scale})`, transformOrigin: "top left" }}
-            className={testId}
+            style={{ width: "100%", height: "100%" }}
+            className={`${testId} shadow-[0_24px_64px_rgba(0,0,0,0.45)]`}
           />
-        </div>
-      )}
+        ) : (
+          <div style={{ width: SLIDE_W * scale, height: SLIDE_H * scale }} className="shadow-[0_24px_64px_rgba(0,0,0,0.45)]">
+            <ShadowHtml
+              css={deck.css}
+              themeClass={deck.theme_class}
+              html={slide.html}
+              extraCss={PRESENT_CSS}
+              onExpand={onExpand}
+              onLink={onLink}
+              style={{ width: SLIDE_W, height: SLIDE_H, transform: `scale(${scale})`, transformOrigin: "top left" }}
+              className={testId}
+            />
+          </div>
+        ))}
     </div>
   );
 }
+
+/** qa-docs-63: the bar under the slide counts the slides; the slide's own number is for the PDF. */
+const PRESENT_CSS = `.deck .slide-number{display:none}`;
+
+/**
+ * qa-docs-10: a phone's slide fills the screen's width and height (portrait) at reading size;
+ * long content scrolls inside the slide. After the theme's CSS, so it wins.
+ */
+const PHONE_CSS = `:host{height:100%}
+.deck{height:100%}
+.deck .slide{width:100% !important;height:100% !important;padding:22px 18px 64px !important;font-size:17px !important}
+.deck .slide-inner{overflow-y:auto !important}
+.deck .slide-kicker{margin:32px 0 12px !important;font-size:14px !important}
+.deck .slide-title{font-size:24px !important;margin-bottom:14px !important}
+.deck h1.slide-title{font-size:32px !important}
+.deck .slide-subtitle{font-size:16px !important}
+.deck .slide-source,.deck .slide-sources{font-size:15px !important}
+.deck .slide-body table{font-size:14px !important}
+.deck .slide-body th{font-size:13px !important}
+.deck .expand{font-size:13px !important}
+.deck .slide-footer{left:18px !important;right:18px !important;bottom:14px !important;font-size:13px !important;line-height:1.35}`;
 
 const OVERLAY_CSS = `.expand-body{box-sizing:border-box;padding:24px 32px;font-size:18px;line-height:1.5;
 background:var(--color-background);color:var(--color-text);font-family:var(--font-body)}
@@ -378,7 +424,7 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
               </div>
             ) : (
               <div className="min-h-0 min-w-0 flex-1 cursor-pointer p-4 max-[600px]:p-2.5" onClick={() => go(index + 1)} data-testid="audience-view">
-                <SlideCanvas deck={deck} index={index} onExpand={showOverlay} onLink={onLink} testId="current-slide" />
+                <SlideCanvas deck={deck} index={index} onExpand={showOverlay} onLink={onLink} testId="current-slide" fluid />
               </div>
             )}
             {overlay && <ExpandOverlay deck={deck} item={overlay} onClose={() => showOverlay(null)} />}
@@ -388,7 +434,8 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
               <Icon name="back" size={16} />
               <span className="max-[600px]:sr-only">Previous</span>
             </button>
-            <span className="tnum px-2 font-mono text-[15px] font-medium text-hero-text" data-testid="slide-counter">
+            {/* qa-docs-63: the one counter, in the app's font. */}
+            <span className="tnum px-2 text-[15px] font-medium text-hero-text" data-testid="slide-counter">
               {counter}
             </span>
             <button type="button" className={BAR_BTN} onClick={() => go(index + 1)} disabled={index >= total - 1} aria-label="Next slide">
@@ -409,7 +456,8 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
                   Open audience window
                 </button>
               )}
-              <button type="button" className={BAR_BTN} onClick={toggleFullscreen} aria-pressed={fullscreen}>
+              {/* qa-docs-63: the F key is the button's tooltip, not a second "Full screen" beside it. */}
+              <button type="button" className={BAR_BTN} onClick={toggleFullscreen} aria-pressed={fullscreen} title="Shortcut: F">
                 {fullscreen ? "Exit full screen" : "Full screen"}
               </button>
               <Link href={back} className={BAR_BTN} onClick={() => document.fullscreenElement && void document.exitFullscreen()}>
@@ -421,9 +469,7 @@ export function PresentMode({ doc, n, presenter: startPresenter, start }: { doc:
                 <Key>→</Key>
                 <span className="mr-2">Slides</span>
                 <Key>S</Key>
-                <span className="mr-2">Notes</span>
-                <Key>F</Key>
-                <span>Full screen</span>
+                <span>Notes</span>
               </span>
               <span className="hidden xl:inline-flex">
                 <InfoTip label="keys" hero>

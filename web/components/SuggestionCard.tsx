@@ -198,9 +198,12 @@ export function SuggestionCard({
   suggestion: s,
   canDecide,
   editing = false,
+  heading,
 }: {
   suggestion: Suggestion;
   canDecide: boolean;
+  /** qa-docs-72: the title of the section the text is for (never its internal key). */
+  heading?: string;
   /** The editor is open at the item's top: the text is not shown twice. */
   editing?: boolean;
 }) {
@@ -224,7 +227,7 @@ export function SuggestionCard({
       {shown && !editing && (
         <div className="mt-2">
           <p className="text-[13px] font-semibold tracking-[0.02em] text-text2">
-            {s.kind === "answer" ? "Suggested answer" : `Proposed text for #${s.section_key}`}
+            {s.kind === "answer" ? "Suggested answer" : heading ? `Proposed text for ${heading}` : "Proposed text for this section"}
             {s.edited_text && " (edited)"}
           </p>
           <div className="mt-1 rounded-lg border border-line bg-surface px-2.5 py-2">
