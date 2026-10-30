@@ -1028,11 +1028,12 @@ export async function routeIntake(db: V2Db, ctx: IntakeContext, req: Request, p:
     db.answers.push(answer);
     raiseLateAnswer(db, ctx, question, answer);
     const effects: Record<Schemas["AnswerIn"]["kind"], [Question["status"], Gap["status"] | null]> = {
-      answer: ["answered", "answered"], dont_know: ["answered", "unknown"], defer: ["deferred", "deferred"],
+      answer: ["answered", "answered"], dont_know: ["asked", "unknown"], defer: ["deferred", "deferred"],
       delegate: ["delegated", null], research: ["researching", "under_investigation"],
     };
     const [qs, effect] = effects[input.kind];
-    question.status = qs;
+    // As the API: "I don't know" leaves the question open (a delegated one stays delegated).
+    if (!(input.kind === "dont_know" && question.status === "delegated")) question.status = qs;
     if (input.kind === "delegate") question.asked_to = input.delegated_to ?? null;
     const gap = db.gaps.find((g) => g.id === question.gap_id) ?? null;
     const proposals: Proposal[] = [];
