@@ -180,6 +180,8 @@ test("criterion 14: the finished interview and its requests, as a member", async
   await expect(page.getByTestId("interview-requests").getByRole("link")).toHaveCount(3);
   await expect(page.getByRole("button", { name: "Withdraw link" })).toHaveCount(0);
 
+  // qa-work-44: the interview page draws no tabs; "← Interviews" is its way back.
+  await page.getByRole("link", { name: "Interviews" }).filter({ visible: true }).first().click();
   await page.getByTestId("requests-tab-new").filter({ visible: true }).click();
   await expect(page).toHaveURL(/\/requests\/to-decide$/);
   const fromInterview = page.getByTestId("request-row").filter({ hasText: "Ana Lima (Example Co)" });

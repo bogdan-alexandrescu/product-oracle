@@ -58,7 +58,7 @@ test("add and triage: add a gap by hand, set its fields, defer and reopen it", a
   const row = gapRow(page, "Is gift wrapping out of scope");
   await expect(row).toContainText("Non-goals");
   await expect(row).toContainText("High");
-  await expect(row).toContainText("scope.non_goals");
+  await expect(row).toContainText("Section: Scope non goals");
 
   await row.getByRole("button", { name: "Triage" }).click();
   const triage = row.getByTestId("gap-triage");
@@ -70,7 +70,7 @@ test("add and triage: add a gap by hand, set its fields, defer and reopen it", a
   await triage.getByRole("button", { name: "Save" }).click();
   await expect(triage).toHaveCount(0);
   await expect(row).toContainText("Medium");
-  await expect(row).toContainText("launch.rollout");
+  await expect(row).toContainText("Launch rollout");
   await expect(row).toContainText("Stop when: The team names what the first release leaves out.");
   await expect(row).toContainText("Owner: Approver");
 
