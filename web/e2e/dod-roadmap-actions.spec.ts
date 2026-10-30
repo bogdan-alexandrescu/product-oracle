@@ -97,13 +97,15 @@ async function expectCut(page: Page, key: string, cut: boolean) {
     return;
   }
   // The lane that holds it, opened (a cut moves it to "Below the line"): its row in the lane's list.
+  // Checked together: the roadmap reloads after the change, so the row first read may still be
+  // the one in the lane it is leaving; once it has left, the lane that now holds it opens.
   const name = page.locator(`[data-testid="lane-row"][data-item="${key}"]`).first().locator("span.min-w-0");
   await expect(async () => {
     if (!(await name.count())) await page.locator(`[data-testid="phone-lane"][data-items~="${key}"]`).click();
     await expect(name).toBeVisible({ timeout: 1000 });
+    if (cut) await expect(name).toHaveClass(/line-through/, { timeout: 1000 });
+    else await expect(name).not.toHaveClass(/line-through/, { timeout: 1000 });
   }).toPass();
-  if (cut) await expect(name).toHaveClass(/line-through/);
-  else await expect(name).not.toHaveClass(/line-through/);
 }
 
 for (const [where, use] of [
