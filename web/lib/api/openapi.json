@@ -91562,6 +91562,17 @@
             "type": "boolean",
             "title": "Can Draw Flow",
             "default": false
+          },
+          "words": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Words"
           }
         },
         "type": "object",

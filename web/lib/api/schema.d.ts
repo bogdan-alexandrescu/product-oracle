@@ -29895,6 +29895,8 @@ export interface components {
              * @default false
              */
             can_draw_flow: boolean;
+            /** Words */
+            words?: string | null;
         };
         /**
          * OnePagerLook

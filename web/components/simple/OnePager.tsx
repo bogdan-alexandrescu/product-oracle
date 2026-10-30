@@ -320,7 +320,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
 
   // qa-simple-prd-p3-2: leaving the editor puts the cursor back on the line's Edit; typed words ask first.
   function cancelEdit(l: Line, sure = false) {
-    if (!sure && draftText !== (l.full ?? l.text)) {
+    if (!sure && draftText !== (l.words ?? l.full ?? l.text)) {
       setDiscarding(true);
       return;
     }
@@ -555,7 +555,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                                   if (tap && e.detail > 0) return;
                                   setDiscarding(false);
                                   setEditing(l.id);
-                                  setDraftText(l.full ?? l.text);
+                                  setDraftText(l.words ?? l.full ?? l.text);
                                 }}
                               >
                                 <span aria-hidden data-testid="line-edit-word">{v.can_edit ? "Edit" : "Propose wording"}</span>

@@ -5550,7 +5550,17 @@ async function route(db: Db, req: Request): Promise<Response> {
   const visualsRes = await routeSimpleVisuals(
     db.simple_visuals,
     // As the API: an item is named with its code, or its title (subject_name).
-    { id: me.id, role: me.role, names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])), itemName: (id) => itemSubjectName(roadmapItems, id) },
+    {
+      id: me.id, role: me.role, names: Object.fromEntries(db.members.map((x) => [x.id, displayName(x.email, x.name)])), itemName: (id) => itemSubjectName(roadmapItems, id),
+      // As the one-pager's can_draw_flow (drafts.can_edit): Guided setup's decider, else its approver track owner.
+      edits: (doc) => {
+        if (me.role === "owner") return true;
+        if (doc !== db.simple_one_pager?.doc.id) return false;
+        const decider = db.members.find((x) => x.email === "dana.decider@example.com")?.id;
+        if (decider) return me.id === decider;
+        return mockApproverOwnsTrack() && me.email === "approver@example.com";
+      },
+    },
     req,
     p,
   );

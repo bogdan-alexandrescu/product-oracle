@@ -43,9 +43,15 @@ const overlap = (a: Set<string>, b: Set<string>) => [...a].filter((x) => b.has(x
 const guidanceless = (body: string) =>
   body.replace(/<!--[\s\S]*?(?:-->|$)/g, "").split("\n").filter((l) => /[^\W_]/.test(l.replace(/<[^<>\n]*>/g, "").replace(/^\s*(?:[-*+]|\d+[.)])\s+/, ""))).join("\n");
 
+/** ad-onepager review: a heading naming the people (personas, users, who has it) first; never "User stories" or "Customer quotes". */
+const WHO_HEAD = /\b(?:users?|personas?|who\b|audiences?|customers?)/i;
+const WHO_BEST = /\b(?:personas?|users?|who has it)\b/i;
+const WHO_NOT = /\b(?:stor(?:y|ies)|flows?|quotes?|journeys?|scenarios?|problems?)\b/i;
+
 export function whoHasIt(secs: Sec[]): string | null {
-  for (const s of secs) {
-    if (!/\b(?:users?|personas?|who\b|audiences?|customers?)/i.test(s.heading) || /problem/i.test(s.heading)) continue;
+  const heads = secs.filter((s) => WHO_HEAD.test(s.heading) && !WHO_NOT.test(s.heading));
+  heads.sort((a, b) => Number(!WHO_BEST.test(a.heading)) - Number(!WHO_BEST.test(b.heading)));
+  for (const s of heads) {
     const { bullets, cells, prose } = rows(guidanceless(s.body));
     let named = [...bullets.map((b) => b.split(/\s*(?::|—|–| - )\s*/)[0]), ...cells.map((r) => r[0]).filter(Boolean)];
     if (!named.length && prose.length) named = [sentences(prose.join(" "))[0].replace(/\.$/, "")];
@@ -106,7 +112,8 @@ function measureFor(text: string, name: string | null, found: Measure[]): Measur
   return best;
 }
 
-const CODE = /\b(?:[A-Z]{1,3}-\d{1,4}|P[0-3])\b/g;
+// A standard's name (ISO-8601, RFC-3339) is not a feature or ticket code.
+const CODE = /\b(?!(?:ISO|RFC|UTF|IEC|SHA|CVE|EN|IEEE)-)(?:[A-Z]{1,3}-\d{1,4}|P[0-3])\b/g;
 const PRIORITY: Record<string, string> = { P0: "top priority", P1: "high priority", P2: "medium priority", P3: "low priority" };
 const NAMED = /^\s*(?:[:=—–]|\s-\s|\()\s*([A-Za-z][^.;,()|:\n]*)/;
 const CAPITAL = /^\s+([A-Z][^.;,()|:\n]*)/;
@@ -151,16 +158,23 @@ function withNames(text: string, names: Record<string, string>): [string, string
 
 function footnoteNotes(secs: Sec[]): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const s of secs) for (const raw of s.body.split("\n")) {
+  const star = /^\s*(\\)?\*\s+(\S.*)$/;
+  for (const s of secs) s.body.split("\n").forEach((raw, i, lines) => {
     const m = /^\s*(?:[-*+]\s+)?([†‡§])\s*(\S.*)$/.exec(raw);
     if (m && !(m[1] in out)) out[m[1]] = plain(m[2]);
-  }
+    const st = m ? null : star.exec(raw);
+    // "\\* note", or a lone "* note" (a list of "*" bullets is no note).
+    if (st && !("*" in out) && (st[1] || ![lines[i - 1], lines[i + 1]].some((x) => x !== undefined && star.test(x)))) out["*"] = plain(st[2]);
+  });
   return out;
 }
 
 function marked(text: string, notes: Record<string, string>): [string, string[]] {
   const kept: string[] = [];
-  const out = text.replace(/(?<=\S)([†‡§])/g, (mark: string) => {
+  // A trailing "*" is a mark too ("40%*"), never emphasis (an odd count of "*" before it opens one).
+  const out = text.replace(/(?<=[^\s*])([†‡§]|\\?\*(?![*\w]))/g, (found: string, _m: string, at: number) => {
+    const mark = found.replace(/^\\/, "");
+    if (mark === "*" && text.slice(0, at).split("*").length % 2 === 0) return found;
     if (!(mark in notes)) return "";
     const n = `${mark} ${notes[mark]}`;
     if (!kept.includes(n)) kept.push(n);
@@ -238,6 +252,7 @@ export function annotate(blocks: Block[], secs: Sec[]): Look[] {
   for (const b of blocks) {
     if (b.key === "problem") b.who = who;
     for (const x of b.lines ?? []) {
+      const said = x.full ?? x.text;
       let missing: string[];
       [x.text, missing] = withNames(x.text, names);
       if (x.full) x.full = withNames(x.full, names)[0];
@@ -245,6 +260,8 @@ export function annotate(blocks: Block[], secs: Sec[]): Look[] {
       [x.text, x.footnotes] = marked(x.text, notes);
       if (x.full) x.full = marked(x.full, notes)[0];
       if (x.metric) x.metric = { ...x.metric, name: marked(withNames(x.metric.name, names)[0], notes)[0], to: marked(x.metric.to, notes)[0] };
+      // The Edit box starts from the PRD's words, not the names and marks put in.
+      x.words = (x.full ?? x.text) !== said ? said : null;
       if (b.kind === "metrics") {
         const m = measureFor(x.full ?? x.text, x.metric?.name ?? null, found);
         x.measure = m?.measure ?? null;
