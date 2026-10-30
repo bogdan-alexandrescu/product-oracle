@@ -87,14 +87,14 @@ test("qa-work-9, 10, 23, 25: names not slugs or ids, one waiting count, flows in
   await expect(overrun).not.toHaveClass(/font-mono/);
   await expect(row(page, "Awaiting cost approval").locator("[data-cost]")).toHaveText(/^\$[\d,.]+ estimated$/);
   // The inspector is titled by the run's name, not its slug.
-  await row(page, "team onboarding").locator("td").nth(1).click();
+  await row(page, "team onboarding").getByTestId("run-status").click();
   await expect(inspector(page)).toContainText("Team onboarding");
   await expect(inspector(page)).not.toContainText("team-onboarding");
 });
 
 test("qa-work-7: New run is a guide to where runs start, with no disabled Estimate or Start run", async ({ page }) => {
   await openRuns(page);
-  await page.getByRole("button", { name: "New run" }).click();
+  await page.getByRole("button", { name: "Start a run…" }).click();
   const dialog = page.getByRole("dialog", { name: "Where to start a run" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByTestId("flow-guide")).toBeVisible();

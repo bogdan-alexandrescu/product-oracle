@@ -90,9 +90,9 @@ test("sheet toggle: Engineering check is on with its help, and unchecking it low
   await expect(toggle).toBeChecked();
   await expect(sheet(page).getByTestId("stop-help").filter({ hasText: "feasibility" })).toHaveText("The engineering lead checks feasibility and sizes before the priority order.");
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet(page).getByTestId("draft-estimate")).toHaveText("Estimated $29.50");
+  await expect(sheet(page).getByTestId("draft-estimate")).toContainText("$29.50 estimated");
   await toggle.uncheck();
-  await expect(sheet(page).getByTestId("draft-estimate")).toHaveText("Estimated $24.50");
+  await expect(sheet(page).getByTestId("draft-estimate")).toContainText("$24.50 estimated");
 });
 
 test("lead decides: Approve waits for every verdict and the blocking answer, then the run moves on with the new size", async ({ page }) => {
@@ -136,7 +136,7 @@ test("started from the UI: a run from the sheet waits at its Engineering check a
   await login(page);
   await briefToSheet(page, "Faster checkout total");
   await sheet(page).getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet(page).getByTestId("draft-estimate")).toHaveText("Estimated $29.50");
+  await expect(sheet(page).getByTestId("draft-estimate")).toContainText("$29.50 estimated");
   await sheet(page).getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
 

@@ -140,11 +140,11 @@ test("new run: knobs, estimate before start, skipped checkpoints", async ({ page
   // F4: with its stop off, the Engineering check's segment is skipped and costs nothing.
   await sheet.getByRole("switch", { name: "Engineering check" }).uncheck();
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $31.50");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$31.50 estimated");
 
   // Changing a knob re-estimates the same draft run.
   await sheet.getByRole("group", { name: "Depth" }).getByRole("button", { name: "Quick" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $15.75");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$15.75 estimated");
 
   await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
@@ -166,8 +166,8 @@ async function estimateOverFifty(page: Page) {
   const sheet = await draftSheet(page, "Platform PRD");
   await sheet.getByRole("group", { name: "Depth" }).getByRole("button", { name: "Deep" }).click();
   await sheet.getByRole("button", { name: "Estimate" }).click();
-  await expect(sheet.getByTestId("draft-estimate")).toContainText("Estimated $73.00");
-  await expect(sheet.getByTestId("draft-estimate")).toContainText("Needs an owner's approval before it starts");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$73.00 estimated");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("an owner approves it before it starts");
   return sheet;
 }
 

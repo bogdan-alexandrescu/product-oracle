@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 test("new run: Escape closes the document suggestions first, then the dialog", async ({ page }) => {
   await login(page);
   await page.getByTestId("nav-runs").click();
-  await page.getByRole("button", { name: "New run" }).click();
+  await page.getByRole("button", { name: "Start a run…" }).click();
   const dialog = page.getByRole("dialog", { name: "New run" });
   await expect(dialog).toBeVisible();
 
@@ -42,7 +42,7 @@ test("new run: Escape closes the document suggestions first, then the dialog", a
 test("new run: picking a document suggestion fills the field", async ({ page }) => {
   await login(page);
   await page.getByTestId("nav-runs").click();
-  await page.getByRole("button", { name: "New run" }).click();
+  await page.getByRole("button", { name: "Start a run…" }).click();
   const dialog = page.getByRole("dialog", { name: "New run" });
   const field = dialog.getByRole("combobox", { name: "PRD document" });
   await field.fill("team-work");

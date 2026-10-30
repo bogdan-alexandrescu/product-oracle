@@ -121,7 +121,7 @@ test("already behind a brief or a PRD: such requests are not offered in the queu
   // "Share a board read-only" is linked to a PRD by an approver.
   await openRequests(page);
   await pick(page, "Share a board read-only");
-  await inspector(page).getByLabel("PRD").selectOption({ index: 1 });
+  await inspector(page).getByLabel("Linked PRD").selectOption({ index: 1 });
   await inspector(page).getByRole("button", { name: "Save links" }).click();
   const prd = inspector(page).locator('a[href^="/documents/"]');
   await expect(prd).toBeVisible();
@@ -187,7 +187,7 @@ test("the inspector shows a request's PRD once", async ({ page }) => {
   await login(page, "approver@example.com");
   await openRequests(page);
   await pick(page, "Weekly summary email");
-  await inspector(page).getByLabel("PRD").selectOption({ index: 1 });
+  await inspector(page).getByLabel("Linked PRD").selectOption({ index: 1 });
   await inspector(page).getByRole("button", { name: "Save links" }).click();
   await expect(inspector(page).locator('a[href^="/documents/"]')).toBeVisible();
   await signOut(page);

@@ -69,12 +69,12 @@ for (const role of ROLES) {
     if (approver) await page.getByTestId("triage-menu").click();
     await expect(page.getByRole("switch", { name: /^Auto-sort new requests daily/ })).toHaveCount(approver ? 1 : 0);
     await expect(page.getByRole("button", { name: "Sort now", exact: true })).toHaveCount(approver ? 1 : 0);
-    if (!approver) await expect(page.getByTestId("daily-triage-state")).toHaveText("Auto-sort off");
+    if (!approver) await expect(page.getByTestId("daily-triage-state")).toHaveText("Auto-sort: Off");
     await expectViewOnly(page, !commenter);
 
     // Runs: approvers start a run.
     await open(page, "/runs", "Runs");
-    await expect(page.getByRole("button", { name: "New run" })).toHaveCount(approver ? 1 : 0);
+    await expect(page.getByRole("button", { name: "Start a run…" })).toHaveCount(approver ? 1 : 0);
 
     // Company › Strategy: approvers waive drift, owners draft; others only read it.
     await open(page, "/company/strategy", "Company");
@@ -140,7 +140,7 @@ test("engineering lead: the flag shows what the lead may do, and nothing more", 
   await expectViewOnly(page, false);
   // Still a commenter everywhere else: no New run, Plan is read only.
   await open(page, "/runs", "Runs");
-  await expect(page.getByRole("button", { name: "New run" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Start a run…" })).toHaveCount(0);
   await open(page, "/plan", "Plan");
   await expectViewOnly(page, true);
 });

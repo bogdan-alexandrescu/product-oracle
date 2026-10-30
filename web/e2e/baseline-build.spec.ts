@@ -144,7 +144,7 @@ test("the New run dialog does not offer Build the baseline and points at the Bas
   // pointer line is missing or goes elsewhere; no_claim=the other flows' pointers.
   await login(page);
   await page.goto("/runs");
-  await page.getByRole("button", { name: "New run" }).click();
+  await page.getByRole("button", { name: "Start a run…" }).click();
   const dialog = page.getByRole("dialog", { name: "Start a run" });
   await expect(dialog.getByTestId("flow-pointers")).toBeVisible();
   await expect(dialog.getByRole("radio", { name: "Build the baseline" })).toHaveCount(0);

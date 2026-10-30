@@ -28,7 +28,7 @@ test("settings › sources: my sources, status and last error, sync, allowlist, 
   await chat.getByLabel("Channel ids (one per line)").fill("C0123PRODUCT\nC0789ROADMAP");
   await chat.getByRole("button", { name: "Save channels" }).click();
   await expect(chat.getByRole("status")).toHaveText("Channels saved.");
-  await expect(chat.getByTestId("source-picks")).toHaveText("#product, C0789ROADMAP");
+  await expect(chat.getByTestId("source-picks")).toHaveText("#product and 1 more");
 
   await chat.getByRole("button", { name: "Pause" }).click();
   await expect(chat).toContainText("Paused");

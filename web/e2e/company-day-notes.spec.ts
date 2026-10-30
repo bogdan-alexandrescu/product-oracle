@@ -75,7 +75,7 @@ test("reuse: the baseline's approval day is the Company day in the sheet and on 
   await expect(sheet.getByRole("radio", { name: `Use the current baseline (approved ${day})` })).toBeChecked();
   await sheet.getByRole("button", { name: "Estimate" }).click();
   // F4 (#181): the Engineering check and the Engineering dates are on by default, $5.00 each in the estimate (eng-review.spec.ts, eng-dates.spec.ts).
-  await expect(sheet.getByTestId("draft-estimate")).toHaveText("Estimated $29.50");
+  await expect(sheet.getByTestId("draft-estimate")).toContainText("$29.50 estimated");
   await sheet.getByRole("button", { name: "Start drafting" }).click();
   await expect(page).toHaveURL(/\/runs\/[0-9a-f-]+$/);
   await expect(page.getByTestId("segment-baseline").getByTestId("segment-state")).toHaveText(`Reused (approved ${day})`);

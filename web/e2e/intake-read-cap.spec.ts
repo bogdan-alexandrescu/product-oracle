@@ -35,12 +35,12 @@ test("read again until the cap: the fourth read waits for tomorrow, and says so"
   // The read on create finished; it is not one of today's three.
   await expect(readLine(page)).toContainText("Oracle assumed");
   await expect(readAgain(page)).toBeEnabled();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("3 of 3 left today");
+  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("3 analyses left today");
 
   await readAgain(page).click();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 of 3 left today");
+  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("2 analyses left today");
   await readAgain(page).click();
-  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("1 of 3 left today");
+  await expect(readLine(page).getByTestId("intake-read-count")).toHaveText("1 analysis left today");
   await expect(readAgain(page)).toBeEnabled();
   await expect(readLine(page)).not.toContainText(CAPPED);
 

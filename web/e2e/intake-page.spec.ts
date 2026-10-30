@@ -157,16 +157,16 @@ test("Inbox opens the page: an intake question's Open goes to Before drafting", 
   await expect(page.getByTestId("intake-thread")).toBeVisible();
 });
 
-test("phone: the thread is full width and the inspector opens from Gaps N open", async ({ page }) => {
+test("phone: the thread is full width and the inspector opens from Show details", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await login(page);
   await openIntake(page);
   const width = await thread(page).evaluate((el) => el.getBoundingClientRect().width);
   expect(width).toBeGreaterThan(390 - 2 * 16);
   await expect(page.getByTestId("intake-inspector")).toBeHidden();
-  const open = page.getByRole("button", { name: /^Gaps \d+ open$/ });
-  await expect(open).toHaveText("Gaps 15 open");
-  await open.click();
+  // qa-work-29: the Gaps tab is the one way to the gaps; the card opens the inspector.
+  await expect(page.getByRole("button", { name: /^Gaps \d+ open$/ })).toHaveCount(0);
+  await page.getByTestId("intake-readiness").getByRole("button", { name: "Show details" }).click();
   const sheet = page.getByTestId("intake-sheet");
   await expect(sheet.getByTestId("ready-to-draft")).toContainText("1 critical question holds the draft");
   await sheet.getByRole("button", { name: /^Close/ }).click();
