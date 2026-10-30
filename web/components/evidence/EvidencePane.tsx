@@ -20,7 +20,6 @@ import {
   Split,
   type Column,
 } from "@/components/ds";
-import { RoleBadge } from "@/components/RoleBadge";
 import { peopleByIds } from "@/components/PersonPicker";
 import { ErrorNote, INPUT, Loading } from "@/components/ui";
 import { api, unwrap } from "@/lib/api/client";
@@ -248,9 +247,6 @@ export function EvidencePane({ doc, n, title, latest }: { doc: string; n: number
           { value: "sections", label: "Sections" },
         ]}
       />
-      {/* The header shows View only to someone who can do nothing; a commenter sees what their
-          role may do here (qa-docs-22: they can still discuss, so not "View only"). */}
-      {capsReady && !canAdd && !approved && can("create_comment") && <RoleBadge />}
       {stale > 0 && (
         <Chip kind="warn">
           {stale} stale link{stale === 1 ? "" : "s"}

@@ -1,5 +1,6 @@
 "use client";
 
+import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 
@@ -18,7 +19,6 @@ import {
   Panel,
   Sheet,
   Split,
-  ViewOnly,
   type ChipKind,
   type Column,
 } from "@/components/ds";
@@ -177,7 +177,6 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
   const mayCancel = can("cancel_llm_job");
   // Model, tokens, cost and report ids are for the people who run Oracle's model accounts.
   const admin = can("add_claude_account");
-  const readOnly = !mayRate && !maySnapshot;
 
   const latestJob = jobs[0];
   const active = latestJob && ACTIVE.includes(latestJob.status) ? latestJob : null;
@@ -451,7 +450,7 @@ export function QualityView({ doc, n }: { doc: string; n: number }) {
       suffix={`v${n}`}
       status={
         <>
-          {readOnly && <ViewOnly />}
+          <RoleBadge />
           {readiness && (
             <>
               <Chip kind="line" data-testid="policy-chip">

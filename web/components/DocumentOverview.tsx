@@ -1,5 +1,6 @@
 "use client";
 
+import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -397,6 +398,7 @@ export function DocumentOverview({ doc }: { doc: string }) {
               status={
                 <>
                   <DocStatusChip status={d.status} />
+                  <RoleBadge />
                   {d.template && (
                     <span className={META} data-testid="doc-template" title={d.template_version ? `Template, its version ${d.template_version}` : "Template"}>
                       Template: {names.template(d.template)}

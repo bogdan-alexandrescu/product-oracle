@@ -1,5 +1,6 @@
 "use client";
 
+import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent } from "react";
@@ -9,7 +10,7 @@ import { CommentPopover, SelectionButton, type PageRect } from "@/components/Com
 import { DocStatusChip } from "@/app/documents/_components/DocStatusChip";
 import { DocCrumb } from "@/components/DocToolbar";
 import { PricingDecide } from "@/components/PricingDecide";
-import { Button, Chip, Empty, Icon, InfoTip, LinkButton, NotFoundPanel, Page, PageHeader, SegmentedControl, Sheet, ViewOnly } from "@/components/ds";
+import { Button, Chip, Empty, Icon, InfoTip, LinkButton, NotFoundPanel, Page, PageHeader, SegmentedControl, Sheet } from "@/components/ds";
 import { DocumentNotFound } from "@/components/DocumentNotFound";
 import { DiscussionThread } from "@/components/discuss/DiscussionThread";
 import { StartDiscussion, type DiscussionSubject } from "@/components/discuss/StartDiscussion";
@@ -1164,7 +1165,7 @@ export function VersionView({ doc, n, pane = "document" }: { doc: string; n: num
                 </Chip>
               )}
               {/* #370: someone who can do nothing on the version reads it with View only. */}
-              {capsReady && !canComment && !canDecide && !canApprove && <ViewOnly />}
+              {capsReady && <RoleBadge />}
             </>
           }
           action={

@@ -1,5 +1,6 @@
 "use client";
 
+import { RoleBadge } from "@/components/RoleBadge";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRef, useState, useSyncExternalStore } from "react";
@@ -23,7 +24,6 @@ import {
   Panel,
   SegmentedControl,
   Split,
-  ViewOnly,
   type Column,
 } from "@/components/ds";
 import { peopleByIds } from "@/components/PersonPicker";
@@ -359,7 +359,7 @@ export default function DocumentsPage() {
             versions, review it and publish it.
           </InfoTip>
         }
-        status={capsReady && !canPropose ? <ViewOnly /> : undefined}
+        status={capsReady ? <RoleBadge /> : undefined}
         action={
           // #370: a commenter writes the brief, an approver drafts; a viewer has no New PRD.
           canPropose && (

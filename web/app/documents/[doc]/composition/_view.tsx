@@ -1,5 +1,6 @@
 "use client";
 
+import { RoleBadge } from "@/components/RoleBadge";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 
@@ -372,10 +373,15 @@ export function CompositionView({ doc }: { doc: string }) {
         status={
           data && (
             <>
-              {role && (
-                <Chip kind="acc" data-testid="viewing-as">
-                  Viewing as {role}
-                </Chip>
+              {/* qa-docs-22: a viewer or commenter gets the same role badge as every Documents page. */}
+              {role === "viewer" || role === "commenter" ? (
+                <RoleBadge />
+              ) : (
+                role && (
+                  <Chip kind="acc" data-testid="viewing-as">
+                    Viewing as {role}
+                  </Chip>
+                )
               )}
               {data.current ? (
                 <Chip kind="pass" data-testid="composition-in-force">
