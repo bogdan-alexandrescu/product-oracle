@@ -136,6 +136,8 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
   const [wide, setWide] = useState<string | null>(null);
   // Lines shortened with "…" shown whole, in place (CLD's production walk, 2026-10-27).
   const [whole, setWhole] = useState<Set<string>>(new Set());
+  // 2026-10-30: the bets whose flow was asked for here ("Draw the flow"): their flow row shows while Oracle draws.
+  const [asked, setAsked] = useState<Set<string>>(new Set());
   const [presenting, setPresenting] = useState(false);
   const [saved, setSaved] = useState(false);
   // qa-simple-prd-25: "PDF downloaded" shows a few seconds, then goes.
@@ -267,6 +269,12 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
     }
   }
 
+  // 2026-10-30: "Draw the flow" asks Oracle for a bet's flow (the flow panel's own request), then shows its row.
+  const drawFlow = (line: Line) =>
+    act(async () => {
+      await unwrap(api.POST("/v1/simple/visuals/{kind}/{subject_id}/request", { params: { path: { kind: "one_pager_line", subject_id: line.flow_subject! } }, body: { brief: "", document_id: v.document.id } }));
+      setAsked((a) => new Set(a).add(line.id));
+    });
   const save = (line: Line) =>
     act(async () => {
       await unwrap(api.POST("/v1/simple/changes", {
@@ -438,6 +446,7 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
       {(!planShown || linesShown || sessionId || !!v.draft || v.changes_in_review > 0 || v.notes.length > 0) && (
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-6 md:grid-cols-[minmax(0,820px)_var(--simple-margin)]">
         <article aria-label="One-pager" className="rounded-md border border-[var(--simple-rule)] bg-[var(--simple-paper)] px-6 py-8 shadow-sm md:col-start-1 md:px-12">
+          {v.needs_look.length > 0 && !presenting && <NeedsALook items={v.needs_look} />}
           {v.blocks.filter((b) => !(planShown && b.kind === "timeline")).map((b) => (
             <section key={b.key} aria-label={b.title} className="mt-5">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-text-faint">{b.title}</h2>
@@ -510,6 +519,18 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                                   {whole.has(l.id) ? "Show less" : "Show all"}
                                 </button>
                               )}
+                              {l.can_draw_flow && l.flow_subject && !asked.has(l.id) && !presenting && (
+                                // 2026-10-30: a small link at the end of a bet's line, for those who may ask Oracle to draw its flow.
+                                <button
+                                  type="button"
+                                  className="simple-noprint ml-2 text-sm text-text2 underline max-md:min-h-11"
+                                  aria-label={`Draw the flow for ${words.get(l.id)}`}
+                                  disabled={busy}
+                                  onClick={() => void drawFlow(l)}
+                                >
+                                  Draw the flow
+                                </button>
+                              )}
                             </span>
                             {(v.can_edit || v.can_propose) && !presenting && (
                               // The owner's P6: "Edit" shows when the line is pointed at or tapped, not on every line.
@@ -543,8 +564,17 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                             )}
                           </div>
                         )}
-                        {l.flow_subject && (
-                          // The flows review: a bet's flow is the same row as a roadmap card's
+                        {b.kind === "metrics" && editing !== l.id && (
+                          // 2026-10-30: how the outcome is measured, from the PRD (what is counted and where).
+                          <p className="pl-3 text-sm text-text2" data-testid="outcome-measure">
+                            {l.measure ? `counted as: ${l.measure}${l.measure_source ? ` · from ${l.measure_source}` : ""}` : "How it is measured is not in the PRD yet"}
+                          </p>
+                        )}
+                        {l.footnotes.length > 0 && editing !== l.id && (
+                          <p className="pl-3 text-sm text-text2" data-testid="line-footnotes">{l.footnotes.join(" ")}</p>
+                        )}
+                        {l.flow_subject && (l.flow || asked.has(l.id)) && (
+                          // The flows review (2026-10-30: only once a flow exists or is being drawn): a bet's flow is the same row as a roadmap card's
                           // (the live thumbnail and its states), opened in place.
                           <div className="simple-noprint" aria-label={`User flow of ${words.get(l.id)}`} role="group">
                             <FlowPanel row subject={{ kind: "one_pager_line", id: l.flow_subject }} documentId={v.document.id} openLabel={`Flow for ${words.get(l.id)}`} />
@@ -592,6 +622,12 @@ export function OnePager({ doc, sessionId, refresh, onChanged }: { doc: string; 
                     </li>
                   ))}
                   {b.lines.length === 0 && <li className="list-none text-base text-text-faint" data-testid="one-pager-empty-block">Not written yet</li>}
+                  {b.key === "problem" && (
+                    // 2026-10-30: who has the problem, from the PRD's users or personas section.
+                    <li className="list-none px-2 text-base" data-testid="problem-who">
+                      {b.who ? `Who has it: ${b.who}` : "Who has it is not in the PRD yet"}
+                    </li>
+                  )}
                 </ul>
               )}
             </section>
@@ -817,4 +853,22 @@ function MarginNote({
   );
 }
 
-
+/**
+ * "Needs a look" (2026-10-30): a quiet note for the PRD's owners (the API sends the items to
+ * them only) naming what to look at and where. One list any of the one-pager's checks can add to.
+ */
+export function NeedsALook({ items }: { items: Schemas["OnePagerLook"][] }) {
+  return (
+    <section aria-label="Needs a look" className="simple-noprint mb-4 rounded border border-dashed border-[var(--simple-rule)] px-3 py-2 text-sm text-text2">
+      <h2 className="font-semibold">Needs a look</h2>
+      <ul className="mt-1 space-y-1">
+        {items.map((x, i) => (
+          <li key={i} data-kind={x.kind}>
+            {x.text}
+            {x.where.length > 0 && <span className="text-text-faint"> In: {x.where.join(", ")}</span>}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
