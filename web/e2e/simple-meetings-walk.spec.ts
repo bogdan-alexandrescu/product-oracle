@@ -163,7 +163,8 @@ for (const phone of [false, true]) {
         // Home's next review is Upcoming's first row; its Start meeting opens the sheet on it.
         await page.goto("/simple");
         await expect(page.getByTestId("home-meeting-next")).toContainText(firstTitle);
-        await page.getByTestId("home-meeting-next").getByRole("link", { name: "Start review" }).click();
+        // fix4 (qa-simple-home-27): days before the meeting, Home's start says it starts now.
+        await page.getByTestId("home-meeting-next").getByRole("link", { name: "Start now" }).click();
         const sheet = page.getByRole("dialog", { name: "Start a review" });
         await expect(sheet.getByTestId("start-occurrence")).toContainText(firstTitle);
         const ritual = firstTitle;
