@@ -82,7 +82,7 @@ def test_chains_on_mains_head():
     fixed number; no_claim=later lanes' re-chaining."""
     script = ScriptDirectory.from_config(_cfg())
     assert script.get_revision(REVISION).down_revision == PREVIOUS
-    assert script.get_heads() == ["0090_interview_new_link"]
+    assert script.get_heads() == ["0092_rituals_wait_for_goal"]
 
 
 def _tenant() -> uuid.UUID:

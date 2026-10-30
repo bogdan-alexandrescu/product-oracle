@@ -24,7 +24,7 @@ type Member = { id: string; email: string; role: Role; status?: string };
 
 /** A stored ritual: the API's record without what is derived on the way out. */
 /** `attendees_edited_at`: when an owner last edited the attendees (the API's column; not on the way out). */
-type Ritual = Omit<RitualOut, "last_pre_read" | "schedule"> & { schedule: Schedule; created_at: string; attendees_edited_at?: string | null };
+type Ritual = Omit<RitualOut, "last_pre_read" | "schedule" | "waits_for_goal"> & { schedule: Schedule; created_at: string; attendees_edited_at?: string | null; waits_for_goal?: boolean };
 /** A stored occurrence; the summary run finishes on its owner's `summary_reads`-th read. */
 type Occurrence = Omit<OccurrenceOut, "kind" | "title" | "duration_min" | "owner_id" | "attendee_ids" | "timezone" | "read_by_me" | "decisions" | "summary_offered"> & {
   summary_reads?: number;
@@ -352,8 +352,9 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
   const zone = ctx.companyTimezone();
   const db: RitualsDb = { rituals: [], occurrences: [], mode: "on_demand", zone };
   // A new company's built-ins wait paused (nothing to review yet): Simple's Home lists no
-  // meeting and its rail counts none, as Detailed's Home says no goals.
-  const fresh = newCompany();
+  // meeting and its rail counts none, as Detailed's Home says no goals. As service.seed, the
+  // ones on by default wait for the first confirmed goal (wakeOnFirstGoal).
+  const waits = newCompany() && !hasConfirmedGoal(ctx);
   for (const b of BUILTINS) {
     db.rituals.push({
       id: ctx.uuid(),
@@ -365,7 +366,8 @@ export function seedRituals(ctx: RitualsContext, scenario: boolean): RitualsDb {
       prep_hours: b.prep_hours,
       owner_id: owner.id,
       attendee_ids: attendees,
-      status: b.on && !fresh ? "active" : "paused",
+      status: b.on && !waits ? "active" : "paused",
+      waits_for_goal: b.on && waits,
       next_due_at: nextOccurrence({ ...b.schedule, timezone: zone }, t).toISOString(),
       lock_version: 1,
       created_at: t.toISOString(),
@@ -456,10 +458,30 @@ function occurrence(ctx: RitualsContext, r: Ritual, due: Date, fields: Partial<O
 // --- derived ------------------------------------------------------------------------------
 
 /** Marks ready occurrences missed 7 days after their end (the ticker's step 2). */
-function tick(db: RitualsDb) {
+function tick(db: RitualsDb, ctx: RitualsContext) {
   const t = now().getTime();
+  wakeOnFirstGoal(ctx, db);
   for (const o of db.occurrences) {
     if (o.status === "ready" && Date.parse(o.ends_at) + MISSED_AFTER_MS <= t) o.status = "missed";
+  }
+}
+
+const hasConfirmedGoal = (ctx: RitualsContext) => (ctx.goals?.() ?? []).some((e) => e.status === "confirmed");
+
+/**
+ * As service.wake_on_first_goal (owner decision 2026-10-29, "Start paused until goals"): the
+ * built-ins waiting for the first confirmed goal are turned on once there is one; one a person
+ * paused or resumed no longer waits.
+ */
+function wakeOnFirstGoal(ctx: RitualsContext, db: RitualsDb) {
+  const waiting = db.rituals.filter((r) => r.builtin && r.waits_for_goal);
+  if (!waiting.length || !hasConfirmedGoal(ctx)) return;
+  for (const r of waiting) {
+    r.waits_for_goal = false;
+    r.lock_version += 1;
+    if (r.status === "active") continue;
+    r.status = "active";
+    r.next_due_at = nextOccurrence(r.schedule, now()).toISOString();
   }
 }
 
@@ -521,6 +543,7 @@ function ritualOut(db: RitualsDb, r: Ritual, ctx?: RitualsContext): RitualOut {
     next_due_at: next,
     last_pre_read: last ? summaryOf(last) : null,
     next_pre_read: ready ? summaryOf(upcoming) : null,
+    waits_for_goal: !!r.waits_for_goal && r.status === "paused",
     prepare_usd: prepareUsd(ctx, db, r),
   };
   delete out.created_at;
@@ -556,7 +579,7 @@ function estimate(db: RitualsDb): Schemas["Estimate"] {
 
 /** The signed-in member's ritual rows of the Inbox (service.inbox_rows). */
 export function ritualInbox(ctx: RitualsContext, db: RitualsDb): Schemas["InboxRitual"][] {
-  tick(db);
+  tick(db, ctx);
   const t = now().getTime();
   const rows: Schemas["InboxRitual"][] = [];
   const me = ctx.me.id;
@@ -619,7 +642,7 @@ export function addMetricsReview(ctx: RitualsContext, db: RitualsDb, blocks: (oc
     lock_version: 1,
     created_at: t.toISOString(),
   };
-  Object.assign(checkin, { status: "paused", next_due_at: null, replaced_by: "Weekly metrics review" });
+  Object.assign(checkin, { status: "paused", next_due_at: null, replaced_by: "Weekly metrics review", waits_for_goal: false });
   db.rituals.push(review);
   // This week's: the first due after a day ago (Monday 09:00 in the Company time zone), prepared 6 hours before.
   const week = nextOccurrence(review.schedule, new Date(t.getTime() - DAY_MS));
@@ -651,7 +674,7 @@ const DIGEST_TEXT = [
 /** Handles /v1/rituals* and /v1/ritual-occurrences*; null for any other path. */
 export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Request, p: string[], q: URLSearchParams): Promise<Response | null> {
   if (p[1] !== "rituals" && p[1] !== "ritual-occurrences") return null;
-  tick(db);
+  tick(db, ctx);
   followZone(ctx, db);
   const m = req.method;
   const role = ctx.me.role;
@@ -744,6 +767,8 @@ export async function routeRituals(ctx: RitualsContext, db: RitualsDb, req: Requ
     if (p.length === 4 && m === "POST" && (p[3] === "pause" || p[3] === "resume")) {
       if (!owner) return notOwner();
       r.status = p[3] === "pause" ? "paused" : "active";
+      // A person's Pause or Resume: the first goal leaves it as it is.
+      r.waits_for_goal = false;
       if (r.status === "active") r.next_due_at = nextOccurrence(r.schedule, now()).toISOString();
       r.lock_version += 1;
       return json(200, ritualOut(db, r, ctx));

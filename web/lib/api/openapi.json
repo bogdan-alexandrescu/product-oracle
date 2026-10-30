@@ -104777,6 +104777,11 @@
             ],
             "title": "Replaced By"
           },
+          "waits_for_goal": {
+            "type": "boolean",
+            "title": "Waits For Goal",
+            "default": false
+          },
           "last_pre_read": {
             "anyOf": [
               {

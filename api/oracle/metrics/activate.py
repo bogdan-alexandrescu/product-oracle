@@ -63,6 +63,10 @@ async def activate_review(db: AsyncSession) -> bool:
     review.status = "active"
     review.next_due_at = next_occurrence(review.schedule, clock.now())
     review.lock_version += 1
+    if checkin is not None and checkin.waits_for_goal:
+        # Replaced while it waited for the first goal: that goal leaves it paused.
+        checkin.waits_for_goal = False
+        checkin.lock_version += 1
     if checkin is not None and checkin.status == "active":
         checkin.status, checkin.next_due_at = "paused", None
         checkin.lock_version += 1

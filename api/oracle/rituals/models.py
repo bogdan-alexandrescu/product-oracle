@@ -68,6 +68,10 @@ class Ritual(TenantScoped, Base):
     attendees_edited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="active")
     next_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # A built-in on by default, seeded paused while the company had no confirmed goal
+    # (owner decision 2026-10-29): the first confirmed goal turns it on. A person's Pause or
+    # Resume clears it, so a ritual paused by hand stays paused.
+    waits_for_goal: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     lock_version: Mapped[int] = _lock_version()
 

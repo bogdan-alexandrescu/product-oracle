@@ -34482,6 +34482,11 @@ export interface components {
             lock_version: number;
             /** Replaced By */
             replaced_by?: string | null;
+            /**
+             * Waits For Goal
+             * @default false
+             */
+            waits_for_goal: boolean;
             last_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
             next_pre_read?: components["schemas"]["OccurrenceSummary"] | null;
             /** Prepare Usd */
